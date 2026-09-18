@@ -27,7 +27,7 @@ use crate::cel::{Error, Expression, context, query};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{RecordedBodyHandle, apikey, basicauth, jwt};
+use crate::http::{Body, BodyInspection, RecordedBodyHandle, apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::guardrails::McpGuardrailsDynamicMetadata;
 use crate::mcp::{MCPInfo, MCPTool};
@@ -252,7 +252,7 @@ fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T
 	e.deref().is_none()
 }
 
-fn is_body_extension_or_direct_none(e: &BodyExtensionOrDirect) -> bool {
+fn is_body_view_none(e: &BodyView) -> bool {
 	e.is_none()
 }
 
@@ -567,9 +567,11 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 }
 
 impl<'a> Executor<'a> {
-	fn set_request<B>(&mut self, req: &'a ::http::Request<B>) {
+	fn set_request(&mut self, req: &'a crate::http::Request) {
 		self.request = Some(req.into());
-		let ext = req.extensions();
+		self.set_request_extensions(req.extensions());
+	}
+	fn set_request_extensions(&mut self, ext: &'a Extensions) {
 		self.api_key = ExtensionOrDirect::Extension(ext);
 		self.jwt = ExtensionOrDirect::Extension(ext);
 		self.llm = ExtensionOrDirect::Extension(ext);
@@ -630,10 +632,10 @@ impl<'a> Executor<'a> {
 		this.mcp = Some(mcp);
 		this
 	}
-	pub fn new_mcp_request<B>(req: &'a ::http::Request<B>, mcp: &'a MCPInfo) -> Self {
+	pub fn new_buffered_request(req: &'a ::http::Request<Option<Bytes>>) -> Self {
 		let mut this = Self::new_empty();
-		this.set_request(req);
-		this.mcp = Some(mcp);
+		this.request = Some(req.into());
+		this.set_request_extensions(req.extensions());
 		this
 	}
 	pub fn new_llm(req: Option<&'a RequestSnapshot>, llm_body: &'a serde_json::Value) -> Self {
@@ -644,7 +646,7 @@ impl<'a> Executor<'a> {
 		this.llm_request = Some(llm_body);
 		this
 	}
-	pub fn new_llm_request<B>(req: &'a ::http::Request<B>, llm_body: &'a serde_json::Value) -> Self {
+	pub fn new_llm_request(req: &'a crate::http::Request, llm_body: &'a serde_json::Value) -> Self {
 		let mut this = Self::new_empty();
 		this.set_request(req);
 		this.llm_request = Some(llm_body);
@@ -662,9 +664,15 @@ impl<'a> Executor<'a> {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
+			let request = this.request.as_mut().unwrap();
+			request.body.recorded = req.recorded_body.as_ref();
+			request.body_prefix = BodyPrefix(request.body.clone());
 		}
 		if let Some(resp) = resp {
 			this.set_response_snapshot(resp);
+			let response = this.response.as_mut().unwrap();
+			response.body.recorded = resp.recorded_body.as_ref();
+			response.body_prefix = BodyPrefix(response.body.clone());
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
@@ -825,6 +833,7 @@ fn ext<T: Clone + Send + Sync + 'static>(req: &mut crate::http::Request, clear: 
 		req.extensions_mut().get().cloned()
 	}
 }
+
 /// snapshot_request takes a request and returns a snapshot of its attributes.
 /// Conditionally, EXTENSIONS ARE CLEARED. Do not use this if you still need the extensions later.
 pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestSnapshot {
@@ -835,8 +844,8 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		scheme: req.uri().scheme().cloned(),
 		version: req.version(),
 		headers: req.headers().clone(),
-		body: ext::<BufferedBody>(req, clear),
-		recorded_body: ext::<RecordedBodyHandle>(req, clear),
+		body: req.body().inspection().map(BufferedBody::from),
+		recorded_body: req.body().recorded().cloned(),
 
 		jwt: ext::<jwt::Claims>(req, clear),
 		api_key: ext::<apikey::Claims>(req, clear),
@@ -861,8 +870,8 @@ pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 		code: resp.status(),
 		grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 		headers: resp.headers().clone(),
-		body: resp.extensions_mut().remove::<BufferedBody>(),
-		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
+		body: resp.body().inspection().map(BufferedBody::from),
+		recorded_body: resp.body().recorded().cloned(),
 		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
 		proxy: resp.extensions_mut().remove::<ProxyContext>(),
 	}
@@ -942,13 +951,13 @@ pub struct RequestRef<'a> {
 	/// The request's headers
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
-	pub body: BodyExtensionOrDirect<'a>,
+	#[serde(skip_serializing_if = "is_body_view_none")]
+	pub body: BodyView<'a>,
 
 	/// The request body buffered up to `maxBufferSize`. Unlike `body`, this remains available when
 	/// the complete body exceeds the limit and contains the first `maxBufferSize` bytes.
-	#[serde(skip_serializing_if = "BodyPrefixExtensionOrDirect::is_none")]
-	pub body_prefix: BodyPrefixExtensionOrDirect<'a>,
+	#[serde(skip_serializing_if = "BodyPrefix::is_none")]
+	pub body_prefix: BodyPrefix<'a>,
 
 	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
 	pub start_time: ExtensionOrDirect<'a, RequestTime>,
@@ -981,17 +990,14 @@ pub struct ResponseRef<'a> {
 	/// The headers of the response.
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
-	pub body: BodyExtensionOrDirect<'a>,
+	#[serde(skip_serializing_if = "is_body_view_none")]
+	pub body: BodyView<'a>,
 
 	/// The response body buffered up to `maxBufferSize`. Unlike `body`, this remains available when
 	/// the complete body exceeds the limit and contains the first `maxBufferSize` bytes.
-	#[serde(
-		rename = "bodyPrefix",
-		skip_serializing_if = "BodyPrefixExtensionOrDirect::is_none"
-	)]
+	#[serde(rename = "bodyPrefix", skip_serializing_if = "BodyPrefix::is_none")]
 	#[dynamic(rename = "bodyPrefix")]
-	pub body_prefix: BodyPrefixExtensionOrDirect<'a>,
+	pub body_prefix: BodyPrefix<'a>,
 }
 
 impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
@@ -1000,13 +1006,13 @@ impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 			code: value.code.as_u16(),
 			grpc_status: value.grpc_status,
 			headers: Headers::new(&value.headers),
-			body: BodyExtensionOrDirect::Direct {
-				buffered: value.body.as_ref(),
-				recorded: value.recorded_body.as_ref(),
+			body: BodyView {
+				inspection: value.body.as_ref().map(|body| body.0.clone()),
+				recorded: None,
 			},
-			body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Direct {
-				buffered: value.body.as_ref(),
-				recorded: value.recorded_body.as_ref(),
+			body_prefix: BodyPrefix(BodyView {
+				inspection: value.body.as_ref().map(|body| body.0.clone()),
+				recorded: None,
 			}),
 		}
 	}
@@ -1125,21 +1131,22 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			scheme: value.scheme.as_ref(),
 			version: value.version,
 			headers: Headers::new(&value.headers),
-			body: BodyExtensionOrDirect::Direct {
-				buffered: value.body.as_ref(),
-				recorded: value.recorded_body.as_ref(),
+			body: BodyView {
+				inspection: value.body.as_ref().map(|body| body.0.clone()),
+				recorded: None,
 			},
-			body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Direct {
-				buffered: value.body.as_ref(),
-				recorded: value.recorded_body.as_ref(),
+			body_prefix: BodyPrefix(BodyView {
+				inspection: value.body.as_ref().map(|body| body.0.clone()),
+				recorded: None,
 			}),
 			start_time: value.start_time.as_ref().into(),
 			end_time: None,
 		}
 	}
 }
-impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
-	fn from(req: &'a ::http::Request<B>) -> Self {
+
+impl<'a> RequestRef<'a> {
+	fn from_request<B>(req: &'a ::http::Request<B>, body: BodyView<'a>) -> Self {
 		Self {
 			method: req.method(),
 			uri: query::QueryAccessor::uri_from_uri(req.uri()),
@@ -1149,12 +1156,28 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			scheme: req.uri().scheme(),
 			version: req.version(),
 			headers: Headers::new(req.headers()),
-			body: BodyExtensionOrDirect::Extension(req.extensions()),
-			body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Extension(req.extensions())),
+			body_prefix: BodyPrefix(body.clone()),
+			body,
 			start_time: req.extensions().into(),
 			// Only known in snapshot phase...
 			end_time: None,
 		}
+	}
+}
+
+impl<'a> From<&'a crate::http::Request> for RequestRef<'a> {
+	fn from(req: &'a crate::http::Request) -> Self {
+		Self::from_request(req, BodyView::managed(req.body()))
+	}
+}
+
+impl<'a> From<&'a ::http::Request<Option<Bytes>>> for RequestRef<'a> {
+	fn from(req: &'a ::http::Request<Option<Bytes>>) -> Self {
+		let body = BodyView {
+			inspection: req.body().clone().map(BodyInspection::Complete),
+			recorded: None,
+		};
+		Self::from_request(req, body)
 	}
 }
 
@@ -1164,57 +1187,32 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 			code: resp.status().as_u16(),
 			grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 			headers: Headers::new(resp.headers()),
-			body: BodyExtensionOrDirect::Extension(resp.extensions()),
-			body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Extension(resp.extensions())),
+			body: BodyView::managed(resp.body()),
+			body_prefix: BodyPrefix(BodyView::managed(resp.body())),
 		}
 	}
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct BufferedBody(
-	#[cfg_attr(feature = "schema", schemars(with = "String"))] BufferedBodyState,
-);
-
-#[derive(Debug, Clone)]
-enum BufferedBodyState {
-	Complete(Bytes),
-	ExceededLimit(Bytes),
-}
+pub struct BufferedBody(#[cfg_attr(feature = "schema", schemars(with = "String"))] BodyInspection);
 
 impl BufferedBody {
 	pub fn complete(bytes: Bytes) -> Self {
-		Self(BufferedBodyState::Complete(bytes))
-	}
-
-	pub fn exceeded_limit(bytes: Bytes) -> Self {
-		Self(BufferedBodyState::ExceededLimit(bytes))
+		Self(BodyInspection::Complete(bytes))
 	}
 
 	pub fn bytes(&self) -> Option<&Bytes> {
 		match &self.0 {
-			BufferedBodyState::Complete(bytes) => Some(bytes),
-			BufferedBodyState::ExceededLimit(_) => None,
+			BodyInspection::Complete(bytes) => Some(bytes),
+			BodyInspection::Partial(_) => None,
 		}
-	}
-
-	fn prefix_bytes(&self) -> &Bytes {
-		match &self.0 {
-			BufferedBodyState::Complete(bytes) | BufferedBodyState::ExceededLimit(bytes) => bytes,
-		}
-	}
-
-	fn is_too_large(&self) -> bool {
-		matches!(&self.0, BufferedBodyState::ExceededLimit(_))
 	}
 }
 
-impl From<crate::http::BodyInspection> for BufferedBody {
-	fn from(inspection: crate::http::BodyInspection) -> Self {
-		match inspection {
-			crate::http::BodyInspection::Complete(bytes) => Self::complete(bytes),
-			crate::http::BodyInspection::Partial(bytes) => Self::exceeded_limit(bytes),
-		}
+impl From<BodyInspection> for BufferedBody {
+	fn from(inspection: BodyInspection) -> Self {
+		Self(inspection)
 	}
 }
 
@@ -1225,11 +1223,11 @@ impl Serialize for BufferedBody {
 	{
 		use base64::Engine;
 		match &self.0 {
-			BufferedBodyState::Complete(bytes) => {
+			BodyInspection::Complete(bytes) => {
 				let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
 				serializer.serialize_str(&encoded)
 			},
-			BufferedBodyState::ExceededLimit(_) => serializer.serialize_none(),
+			BodyInspection::Partial(_) => serializer.serialize_none(),
 		}
 	}
 }
@@ -1255,77 +1253,69 @@ impl DynamicType for BufferedBody {
 
 	fn materialize(&self) -> Value<'_> {
 		match &self.0 {
-			BufferedBodyState::Complete(bytes) => Value::Bytes(BytesValue::Bytes(bytes.clone())),
-			BufferedBodyState::ExceededLimit(_) => Value::Null,
+			BodyInspection::Complete(bytes) => Value::Bytes(BytesValue::Bytes(bytes.clone())),
+			BodyInspection::Partial(_) => Value::Null,
 		}
 	}
 }
 
-#[derive(Debug, Clone)]
-pub enum BodyExtensionOrDirect<'a> {
-	Extension(&'a http::Extensions),
-	Direct {
-		buffered: Option<&'a BufferedBody>,
-		recorded: Option<&'a RecordedBodyHandle>,
-	},
+/// CEL's body view combines two independent sources, not mutually exclusive variants:
+/// inspection captures content available at evaluation/snapshot time; recording observes
+/// bytes subsequently delivered and is exposed only to access-log evaluation.
+///
+/// Both can be present: a policy may inspect only a prefix, then forwarding records
+/// the rest. The logger retains the inspection and adds the recording handle rather
+/// than replacing one with the other. Complete inspection wins; otherwise recording
+/// supplies `body` unless its limit was exceeded, and can always supply `body_prefix`.
+/// Recorded bytes may be partial if delivery stopped early; observing EOF is not
+/// required for logging (Hyper can stop polling after Content-Length bytes).
+/// A complete snapshot is not necessarily the final wire content if a
+/// later policy rewrites the body.
+#[derive(Debug, Clone, Default)]
+pub struct BodyView<'a> {
+	// An owned snapshot of inspected bytes; it does not grow as forwarding proceeds.
+	inspection: Option<BodyInspection>,
+	// A live handle to passive recording, populated only by new_logger. Policies
+	// must not depend on how much of the body happens to have been forwarded yet.
+	recorded: Option<&'a RecordedBodyHandle>,
 }
 
-impl BodyExtensionOrDirect<'_> {
-	fn buffered(&self) -> Option<&BufferedBody> {
-		match self {
-			BodyExtensionOrDirect::Extension(e) => e.get::<BufferedBody>(),
-			BodyExtensionOrDirect::Direct { buffered, .. } => *buffered,
-		}
-	}
-
-	fn recorded(&self) -> Option<&RecordedBodyHandle> {
-		match self {
-			BodyExtensionOrDirect::Extension(e) => e.get::<RecordedBodyHandle>(),
-			BodyExtensionOrDirect::Direct { recorded, .. } => *recorded,
+impl BodyView<'_> {
+	fn managed(body: &Body) -> BodyView<'_> {
+		BodyView {
+			inspection: body.inspection(),
+			recorded: None,
 		}
 	}
 
 	fn bytes(&self) -> Option<Bytes> {
-		if self.too_large() {
-			return None;
+		// Complete inspected content wins, irrespective of the recording limit.
+		if let Some(BodyInspection::Complete(bytes)) = &self.inspection {
+			return Some(bytes.clone());
 		}
-		if let Some(buffered) = self.buffered() {
-			buffered.bytes().cloned()
-		} else {
-			self.recorded().map(RecordedBodyHandle::bytes)
-		}
+		self
+			.recorded
+			.filter(|recorded| !recorded.exceeded_limit())
+			.map(RecordedBodyHandle::bytes)
 	}
 
 	fn prefix_bytes(&self) -> Option<Bytes> {
-		if let Some(buffered) = self.buffered() {
-			Some(buffered.prefix_bytes().clone())
-		} else {
-			self.recorded().map(RecordedBodyHandle::bytes)
+		// Prefer complete inspection, then recording (even if truncated), then
+		// partial inspection. Policies never have a recording handle.
+		match (&self.inspection, self.recorded) {
+			(Some(BodyInspection::Complete(bytes)), _) => Some(bytes.clone()),
+			(_, Some(recorded)) => Some(recorded.bytes()),
+			(Some(BodyInspection::Partial(bytes)), None) => Some(bytes.clone()),
+			(None, None) => None,
 		}
 	}
 
 	fn is_none(&self) -> bool {
-		self.too_large() || (self.buffered().is_none() && self.recorded().is_none())
-	}
-
-	fn too_large(&self) -> bool {
-		self.buffered().is_some_and(BufferedBody::is_too_large)
-			|| self
-				.recorded()
-				.is_some_and(RecordedBodyHandle::exceeded_limit)
+		self.bytes().is_none()
 	}
 }
 
-impl Default for BodyExtensionOrDirect<'_> {
-	fn default() -> Self {
-		Self::Direct {
-			buffered: None,
-			recorded: None,
-		}
-	}
-}
-
-impl Serialize for BodyExtensionOrDirect<'_> {
+impl Serialize for BodyView<'_> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
@@ -1337,7 +1327,7 @@ impl Serialize for BodyExtensionOrDirect<'_> {
 	}
 }
 
-impl DynamicType for BodyExtensionOrDirect<'_> {
+impl DynamicType for BodyView<'_> {
 	fn auto_materialize(&self) -> bool {
 		true
 	}
@@ -1351,15 +1341,15 @@ impl DynamicType for BodyExtensionOrDirect<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub struct BodyPrefixExtensionOrDirect<'a>(BodyExtensionOrDirect<'a>);
+pub struct BodyPrefix<'a>(BodyView<'a>);
 
-impl BodyPrefixExtensionOrDirect<'_> {
+impl BodyPrefix<'_> {
 	fn is_none(&self) -> bool {
-		self.0.buffered().is_none() && self.0.recorded().is_none()
+		self.0.prefix_bytes().is_none()
 	}
 }
 
-impl Serialize for BodyPrefixExtensionOrDirect<'_> {
+impl Serialize for BodyPrefix<'_> {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: serde::Serializer,
@@ -1371,7 +1361,7 @@ impl Serialize for BodyPrefixExtensionOrDirect<'_> {
 	}
 }
 
-impl DynamicType for BodyPrefixExtensionOrDirect<'_> {
+impl DynamicType for BodyPrefix<'_> {
 	fn auto_materialize(&self) -> bool {
 		true
 	}
@@ -1427,16 +1417,16 @@ impl PartialEq for RequestRef<'_> {
 	}
 }
 
-/// Records one prompt-guard guardrail intervention.
+/// Records one prompt-guard guardrail evaluation.
 #[apply(schema!)]
 #[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct GuardrailInfo {
-	/// The phase the guardrail intervened in: `request` or `response`.
+	/// The phase the guardrail was evaluated in: `request` or `response`.
 	pub phase: Strng,
-	/// The guard kind that intervened, such as `bedrockGuardrails`.
+	/// The guard kind that was evaluated, such as `bedrockGuardrails`.
 	pub guard: Strng,
-	/// The action the guardrail took (mask/reject/audit/failOpen).
+	/// The action the guardrail took (allow/mask/reject/audit/failOpen).
 	pub action: Strng,
 	#[serde(flatten, default)]
 	#[dynamic(flatten)]
@@ -1463,7 +1453,7 @@ pub struct GuardDetail {
 }
 
 impl GuardrailInfo {
-	/// Minimal details about which guardrail fired, when it fired and what the action was.
+	/// Minimal details about which guardrail was evaluated, its phase and its action.
 	/// Does not include detailed reasons or assessments.
 	pub fn minimal(&self) -> serde_json::Value {
 		let mut entry = serde_json::json!({
@@ -1611,7 +1601,6 @@ pub struct LLMContext {
 
 impl LLMContext {
 	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::catalog::ModelCatalog>) -> Self {
-		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
 		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let normalized_input_tokens = value.normalized_input_tokens();
 		let cache_convention = value.request.cache_convention;
@@ -1636,35 +1625,41 @@ impl LLMContext {
 			input_audio_tokens: resp.input_audio_tokens,
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
-			service_tier: resp.service_tier.clone(),
-			response_model: resp.provider_model.clone(),
+			service_tier: resp.service_tier,
+			response_model: resp.provider_model,
 			// Not always set
-			completion: resp.completion.clone(),
-			tool_calls: resp
-				.output_messages
-				.as_ref()
-				.map(|msgs| msgs.iter().flat_map(|m| m.tool_calls()).collect()),
+			completion: resp.completion,
+			tool_calls: resp.output_messages.map(|msgs| {
+				msgs
+					.into_iter()
+					.flat_map(|m| m.content)
+					.map(|part| match part {
+						llm::OutputMessagePart::ToolCall {
+							id,
+							name,
+							arguments,
+						} => llm::ToolCall {
+							id,
+							name,
+							arguments,
+						},
+					})
+					.collect()
+			}),
 			..LLMContext::from(value.request)
 		};
 
-		if legacy_token_semantics {
-			base.input_tokens = base.provider_input_tokens.or(base.input_tokens);
-			base.total_tokens = base.provider_total_tokens;
-		} else {
-			base.input_tokens = normalized_input_tokens;
-		}
-		if !legacy_token_semantics {
-			base.total_tokens = match (base.input_tokens, base.output_tokens) {
-				(Some(input), Some(output)) => Some(input.saturating_add(output)),
-				_ => resp.total_tokens.map(|total| {
-					cache_convention.include_cache_tokens(
-						total,
-						resp.cached_input_tokens,
-						resp.cache_creation_input_tokens,
-					)
-				}),
-			};
-		}
+		base.input_tokens = normalized_input_tokens;
+		base.total_tokens = match (base.input_tokens, base.output_tokens) {
+			(Some(input), Some(output)) => Some(input.saturating_add(output)),
+			_ => resp.total_tokens.map(|total| {
+				cache_convention.include_cache_tokens(
+					total,
+					resp.cached_input_tokens,
+					resp.cache_creation_input_tokens,
+				)
+			}),
+		};
 
 		if let Some(projection) = projection {
 			base.cost = projection.cost;
@@ -1746,11 +1741,6 @@ impl From<llm::LLMRequest> for LLMContext {
 		}
 	}
 }
-
-static LEGACY_LLM_USAGE_TOKEN_SEMANTICS: Lazy<bool> = Lazy::new(|| {
-	std::env::var("AGENTGATEWAY_LEGACY_LLM_USAGE_TOKEN_SEMANTICS")
-		.is_ok_and(|value| value.eq_ignore_ascii_case("true"))
-});
 
 fn to_value_str<'a, T: AsRef<str>>(c: &'a &'a T) -> Value<'a> {
 	Value::String(c.as_ref().into())
@@ -2213,7 +2203,7 @@ pub struct ExecutorSerde {
 	)]
 	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 
-	/// `guardrails` contains one entry per prompt-guard guardrail intervention, in either the
+	/// `guardrails` contains entries for prompt-guard guardrail evaluations, in either the
 	/// request or response phase. Only present in CEL that runs after the request completes,
 	/// such as log and metric fields.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2271,12 +2261,16 @@ impl ExecutorSerde {
 				scheme: req.scheme.as_ref(),
 				version: req.version,
 				headers: Headers::new(&req.headers),
-				body: BodyExtensionOrDirect::Direct {
-					buffered: req.body.as_ref(),
+				body: BodyView {
+					inspection: req.body.as_ref().map(|body| body.0.clone()),
 					recorded: None,
 				},
-				body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Direct {
-					buffered: req.body_prefix.as_ref().or(req.body.as_ref()),
+				body_prefix: BodyPrefix(BodyView {
+					inspection: req
+						.body_prefix
+						.as_ref()
+						.or(req.body.as_ref())
+						.map(|body| body.0.clone()),
 					recorded: None,
 				}),
 				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
@@ -2290,12 +2284,16 @@ impl ExecutorSerde {
 				code: resp.code,
 				grpc_status: resp.grpc_status,
 				headers: Headers::new(&resp.headers),
-				body: BodyExtensionOrDirect::Direct {
-					buffered: resp.body.as_ref(),
+				body: BodyView {
+					inspection: resp.body.as_ref().map(|body| body.0.clone()),
 					recorded: None,
 				},
-				body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Direct {
-					buffered: resp.body_prefix.as_ref().or(resp.body.as_ref()),
+				body_prefix: BodyPrefix(BodyView {
+					inspection: resp
+						.body_prefix
+						.as_ref()
+						.or(resp.body.as_ref())
+						.map(|body| body.0.clone()),
 					recorded: None,
 				}),
 			});

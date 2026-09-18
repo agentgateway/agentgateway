@@ -133,7 +133,10 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
+			// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
+				{/** biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 				<section
 					className="startup-panel"
 					role="dialog"

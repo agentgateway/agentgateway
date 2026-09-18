@@ -1,0 +1,51 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/namespace-tools-long.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - toolUse:
+            toolUseId: call_2
+            name: mcp_long_namespace_long_namespace_long_namespace_long_nam_d28b84
+            input: {}
+  stopReason: tool_use
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "function_call",
+        "arguments": "{}",
+        "call_id": "call_2",
+        "namespace": "mcp.long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_",
+        "name": "js",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "provider_model": "input-model",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_2",
+            "name": "mcp.long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace___js",
+            "arguments": {}
+          }
+        ],
+        "finish_reason": "completed"
+      }
+    ]
+  }
+}

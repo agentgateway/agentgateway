@@ -22,7 +22,9 @@ use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
-use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
+use crate::types::agent::{
+	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+};
 use crate::*;
 
 #[tokio::test]
@@ -868,7 +870,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 
 	session
 		.stateless_send_and_initialize(
-			parts.clone(),
+			super::upstream::IncomingRequestContext::new(&parts),
 			ClientJsonRpcMessage::request(
 				rmcp::model::CallToolRequest::new(
 					rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
@@ -5696,7 +5698,7 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 }
 
 fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
-	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
+	crate::mcp::upstream::IncomingRequestContext::empty().into()
 }
 
 fn persisted_session(
@@ -6065,6 +6067,231 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 }
 
 #[test]
+fn test_mcp_server_overrides_validate_requires_name_and_version_together() {
+	let name_only = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: None,
+		title: None,
+		instructions: None,
+	};
+	assert!(name_only.validate().is_err());
+
+	let version_only = McpServerOverrides {
+		name: None,
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(version_only.validate().is_err());
+
+	let both_set = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(both_set.validate().is_ok());
+
+	let both_unset = McpServerOverrides {
+		name: None,
+		version: None,
+		title: Some("Custom Title".into()),
+		instructions: Some("Custom gateway preamble.".into()),
+	};
+	assert!(both_unset.validate().is_ok());
+}
+
+#[test]
+fn test_merge_initialize_uses_title_override_when_multiplexing() {
+	use agent_core::version::BuildInfo;
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30117)),
+			)],
+			server: Some(McpServerOverrides {
+				name: None,
+				version: None,
+				title: Some("Custom Title".into()),
+				instructions: None,
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0")),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	// Title is overridden; name, version and instructions preamble keep their defaults.
+	assert_eq!(info.server_info.name, "agentgateway");
+	assert_eq!(
+		info.server_info.version,
+		BuildInfo::new().version.to_string()
+	);
+	assert_eq!(
+		info.server_info.title.as_deref(),
+		Some("Custom Title"),
+		"title override should be applied"
+	);
+	let instructions = info.instructions.expect("instructions should be present");
+	assert_eq!(
+		instructions,
+		Relay::DEFAULT_GATEWAY_PREAMBLE,
+		"unset instructions override should keep the default preamble, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_uses_full_override_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30118)),
+			)],
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: Some("Custom Title".into()),
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0"))
+				.with_instructions("Alpha server instructions."),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	assert_eq!(info.server_info.name, "custom-gateway");
+	assert_eq!(info.server_info.version, "9.9.9");
+	assert_eq!(info.server_info.title.as_deref(), Some("Custom Title"));
+	let instructions = info.instructions.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("Alpha server instructions."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_discover_uses_full_override_when_multiplexing() {
+	use rmcp::model::{
+		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30119))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30120))),
+			],
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: None,
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let discover_merge = relay.merge_discover(true);
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::DiscoverResult({
+				let mut dr = DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("alpha-server", "1.0"));
+				dr.instructions = Some("Alpha guidance.".to_string());
+				dr
+			}),
+		),
+		(
+			"beta".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("beta-server", "1.0")),
+			),
+		),
+	];
+
+	let result = discover_merge(results, &empty_cel()).unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+
+	let server_info = discover
+		.server_info()
+		.expect("server_info should be present");
+	assert_eq!(server_info.name, "custom-gateway");
+	assert_eq!(server_info.version, "9.9.9");
+	let instructions = discover
+		.instructions
+		.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("[alpha]\nAlpha guidance."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
 fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 	use rmcp::model::{
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
@@ -6404,24 +6631,30 @@ async fn mcp_local_ratelimit() {
 		.await;
 	assert!(result2.is_ok(), "Second request should succeed");
 
-	// Third call should be rate limited
 	let result3 = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo")
 				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
 		)
-		.await;
-	let err = result3.expect_err("Third request should be rate limited");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
+		.await
+		.expect("a rate-limited tool call returns an errored result, not a protocol error");
 	assert_eq!(
-		e.code.0, -32003,
-		"rate limit should map to RESOURCE_EXHAUSTED"
+		result3.is_error,
+		Some(true),
+		"rate-limited tool call should be a tool-execution error"
 	);
-	let data = e.data.as_ref().expect("error should carry retry data");
-	assert_eq!(data["limit"], 2);
-	assert!(data.get("retryAfterSeconds").is_some());
+	let text = &result3.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert!(
+		text.contains("rate limit"),
+		"denial text should name the rate limit: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
 }
 
 #[tokio::test]
@@ -6645,6 +6878,94 @@ async fn mcp_ratelimit_jsonrpc_error() {
 	assert_eq!(body["error"]["data"]["limit"], 1);
 	assert_eq!(body["error"]["data"]["remaining"], 0);
 	assert!(body["error"]["data"].get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_tool_call_is_error() {
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// initialize consumes the only token
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp.headers().get("content-type").unwrap(),
+		"application/json"
+	);
+	assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "1");
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 7);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	assert!(
+		body["result"].get("resultType").is_none(),
+		"resultType must be omitted for pre-2026 client compatibility: {body}"
+	);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("rate limit"),
+		"unexpected denial text: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_tool_call_modern_emits_result_type() {
+	// modern client → resultType "complete"; the legacy test above omits it
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// initialize consumes the only token
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 8,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.header("mcp-protocol-version", "2026-07-28")
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["result"]["isError"], true);
+	assert_eq!(
+		body["result"]["resultType"], "complete",
+		"a modern client should get resultType: complete: {body}"
+	);
 }
 
 #[tokio::test]
@@ -6897,6 +7218,76 @@ async fn mcp_remote_ratelimit_retry_data() {
 	assert_eq!(body["error"]["data"]["retryAfterSeconds"], 7);
 }
 
+#[tokio::test]
+async fn mcp_remote_ratelimit_tool_call_is_error() {
+	struct DenyAllRateLimit;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"denied by mock rls".to_vec())
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 9,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 9);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	assert!(
+		body["result"].get("resultType").is_none(),
+		"resultType must be omitted for pre-2026 client compatibility: {body}"
+	);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("denied by mock rls"),
+		"the RLS body should reach the model: {text}"
+	);
+}
+
 // =========================== mcpGuardrails test helpers ============================
 
 mod guardrails_test_support {
@@ -7012,7 +7403,7 @@ async fn mcp_guardrails_pass_through() {
 }
 
 #[tokio::test]
-async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
+async fn mcp_guardrails_tool_call_reject_is_error() {
 	use protos::ext_mcp::authorization_error::Code;
 
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
@@ -7033,7 +7424,7 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;
-	let err = client
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
 				serde_json::json!({"hi": "world"})
@@ -7043,13 +7434,14 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 			),
 		)
 		.await
-		.expect_err("tool call should fail when mcpGuardrails rejects");
+		.expect("guardrail rejection returns a result, not a protocol error");
 
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
-	assert_eq!(e.message.as_ref(), "denied by mock mcpGuardrails");
+	assert_eq!(result.is_error, Some(true));
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert_eq!(text, "denied by mock mcpGuardrails");
 }
 
 #[tokio::test]
@@ -7090,21 +7482,25 @@ async fn mcp_guardrails_denies_tool_by_name() {
 	let client = mcp_streamable_client(io).await;
 
 	// Forbidden tool is rejected at the request phase, before reaching upstream.
-	let err = client
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("forbidden-tool")
 				.with_arguments(serde_json::Map::new()),
 		)
 		.await
-		.expect_err("forbidden tool call should be denied by mcpGuardrails");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+		.expect("guardrail rejection returns a result, not a protocol error");
+	assert_eq!(
+		result.is_error,
+		Some(true),
+		"forbidden tool call should be a tool-execution error"
+	);
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
 	assert!(
-		e.message.contains("forbidden-tool"),
-		"deny message should name the tool: {}",
-		e.message
+		text.contains("forbidden-tool"),
+		"deny message should name the tool: {text}"
 	);
 
 	// An allowed tool passes the request phase through to the upstream.
@@ -7887,9 +8283,7 @@ async fn mcp_guardrails_request_headers_visible_to_policy_server() {
 // mcpGuardrails processor metadata is readable as `guardrails.*` in an upstream-leg transformation.
 #[tokio::test]
 async fn mcp_guardrails_request_metadata_usable_in_backend_transformation() {
-	use crate::http::transformation_cel::{
-		LocalTransform, LocalTransformationConfig, Transformation,
-	};
+	use crate::http::transformation_cel::Transformation;
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
 
 	let extmcp_mock = closure_mock(
@@ -7902,19 +8296,11 @@ async fn mcp_guardrails_request_metadata_usable_in_backend_transformation() {
 	.spawn()
 	.await;
 
-	let xfm = Transformation::try_from_local_config(
-		LocalTransformationConfig {
-			request: Some(LocalTransform {
-				set: vec![(
-					strng::new("x-from-guardrails"),
-					strng::new("mcpGuardrails.tenant"),
-				)],
-				..Default::default()
-			}),
-			response: None,
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"set": { "x-from-guardrails": "mcpGuardrails.tenant" },
 		},
-		true,
-	)
+	}))
 	.unwrap();
 	let target_policy = BackendTrafficPolicy::Transformation(Arc::new(xfm));
 

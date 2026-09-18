@@ -1,5 +1,4 @@
 use axum::http::StatusCode;
-use axum::response::Response;
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use http::Method;
@@ -82,14 +81,18 @@ pub(crate) async fn handle_mcp_request(
 					warn!("client_registration error: {}", e);
 					StatusCode::INTERNAL_SERVER_ERROR
 				})
-				.into_response(),
+				.into_response()
+				.map(Body::new),
 		)),
 		path
 			if path == "/.well-known/oauth-protected-resource"
 				|| path.starts_with("/.well-known/oauth-protected-resource/") =>
 		{
 			Ok(Some(
-				protected_resource_metadata(req, auth).await.into_response(),
+				protected_resource_metadata(req, auth)
+					.await
+					.into_response()
+					.map(Body::new),
 			))
 		},
 		// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010), so the gateway
@@ -106,7 +109,8 @@ pub(crate) async fn handle_mcp_request(
 						warn!("entra authorize error: {}", e);
 						StatusCode::INTERNAL_SERVER_ERROR
 					})
-					.into_response(),
+					.into_response()
+					.map(Body::new),
 			))
 		},
 		path
@@ -121,7 +125,8 @@ pub(crate) async fn handle_mcp_request(
 						warn!("entra token error: {}", e);
 						StatusCode::INTERNAL_SERVER_ERROR
 					})
-					.into_response(),
+					.into_response()
+					.map(Body::new),
 			))
 		},
 		path
@@ -135,7 +140,8 @@ pub(crate) async fn handle_mcp_request(
 						warn!("authorization_server_metadata error: {}", e);
 						StatusCode::INTERNAL_SERVER_ERROR
 					})
-					.into_response(),
+					.into_response()
+					.map(Body::new),
 			))
 		},
 		_ => {
@@ -197,13 +203,13 @@ pub(super) async fn protected_resource_metadata(
 		.header("access-control-allow-origin", "*")
 		.header("access-control-allow-methods", "GET, OPTIONS")
 		.header("access-control-allow-headers", "content-type")
-		.body(axum::body::Body::from(Bytes::from(
+		.body(Body::from(Bytes::from(
 			serde_json::to_string(&json_body).unwrap_or_default(),
 		)))
 		.unwrap_or_else(|_| {
 			::http::Response::builder()
 				.status(StatusCode::INTERNAL_SERVER_ERROR)
-				.body(axum::body::Body::empty())
+				.body(Body::empty())
 				.unwrap()
 		})
 }
@@ -335,7 +341,7 @@ pub(super) async fn authorization_server_metadata(
 	};
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
-		.body(Body::empty())?;
+		.body(crate::http::Body::empty())?;
 	let upstream = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
 		.simple_call(ureq)
@@ -476,7 +482,7 @@ pub(super) async fn authorization_server_metadata(
 		.header("access-control-allow-origin", "*")
 		.header("access-control-allow-methods", "GET, OPTIONS")
 		.header("access-control-allow-headers", "content-type")
-		.body(axum::body::Body::from(Bytes::from(
+		.body(Body::from(Bytes::from(
 			serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
 		)))?;
 
@@ -494,7 +500,6 @@ pub(super) async fn client_registration(
 
 	// Normalize issuer URL by removing trailing slashes to avoid double-slash in path
 	let issuer = auth.issuer.trim_end_matches('/');
-	let body = std::mem::take(req.body_mut());
 	let registration_uri = match &auth.provider {
 		Some(McpIDP::Entra {}) => {
 			// Entra has no Dynamic Client Registration endpoint to proxy to; registration only
@@ -548,7 +553,7 @@ pub(super) async fn client_registration(
 	let ureq = ::http::Request::builder()
 		.uri(registration_uri)
 		.method(Method::POST)
-		.body(body)?;
+		.body(std::mem::take(req.body_mut()))?;
 
 	let mut upstream = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
@@ -594,10 +599,10 @@ pub(super) fn entra_authorize(
 	)
 	.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
 	Ok(
-		Response::builder()
+		::http::Response::builder()
 			.status(StatusCode::FOUND)
 			.header(::http::header::LOCATION, location.to_string())
-			.body(axum::body::Body::empty())?,
+			.body(Body::empty())?,
 	)
 }
 
@@ -619,10 +624,10 @@ pub(super) async fn entra_token(
 	// CORS (including preflight) is the responsibility of the route's cors policy.
 	if req.method() != Method::POST {
 		return Ok(
-			Response::builder()
+			::http::Response::builder()
 				.status(StatusCode::METHOD_NOT_ALLOWED)
 				.header(::http::header::ALLOW, "POST")
-				.body(axum::body::Body::empty())?,
+				.body(Body::empty())?,
 		);
 	}
 
@@ -747,10 +752,10 @@ async fn build_mock_dcr_response(
 		serde_json::to_vec(&response_json).map_err(|e| ProxyError::ProcessingString(e.to_string()))?,
 	);
 	Ok(
-		Response::builder()
+		::http::Response::builder()
 			.status(::http::StatusCode::CREATED)
 			.header(::http::header::CONTENT_TYPE, "application/json")
-			.body(body_bytes.into())?,
+			.body(Body::from(body_bytes))?,
 	)
 }
 

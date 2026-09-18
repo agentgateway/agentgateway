@@ -580,6 +580,7 @@ impl ResponseType for Response {
 			output_text_tokens: None,
 			output_audio_tokens: self.output_audio_tokens,
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
+			pages: None,
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
@@ -1231,6 +1232,9 @@ pub mod typed {
 		pub description: Option<String>,
 		/// JSON schema for tool input
 		pub input_schema: serde_json::Value,
+		/// Enforce the tool input schema strictly.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub strict: Option<bool>,
 		/// Create a cache control breakpoint at this content block
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
@@ -1353,6 +1357,7 @@ pub mod typed {
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				pages: None,
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),

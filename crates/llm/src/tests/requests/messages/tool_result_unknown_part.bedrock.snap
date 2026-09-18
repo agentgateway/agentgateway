@@ -39,6 +39,7 @@ info:
           content:
             - type: text
               text: 3 widgets found
+              citations: []
             - type: future_block
               foo: 1
 ---

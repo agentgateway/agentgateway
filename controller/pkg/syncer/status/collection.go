@@ -108,7 +108,6 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 	res := Resource{
 		GroupVersionKind: schema.GroupVersionKind{},
 		NamespacedName:   config.NamespacedName(obj),
-		ResourceVersion:  obj.GetResourceVersion(),
 	}
 	switch obj.(type) {
 	case *gwv1.Gateway:

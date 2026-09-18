@@ -1,5 +1,5 @@
 {
-  "model": "claude-sonnet-4-20250514",
+  "model": "gpt-5.6-terra",
   "max_tokens": 1024,
   "system": [
     {

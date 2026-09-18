@@ -1,0 +1,41 @@
+{
+  "id": "chatcmpl-namespaces",
+  "object": "chat.completion",
+  "created": 123,
+  "model": "input-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "mcp__node_repl__js",
+              "arguments": "{\"code\":\"1 + 1\"}"
+            }
+          },
+          {
+            "id": "call_2",
+            "type": "function",
+            "function": {
+              "name": "other_kernel__js",
+              "arguments": "{\"code\":\"1 + 1\"}"
+            }
+          },
+          {
+            "id": "call_3",
+            "type": "function",
+            "function": {
+              "name": "finish",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

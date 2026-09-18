@@ -18,7 +18,7 @@ async fn llm_openai() {
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -42,7 +42,7 @@ async fn llm_openai_tokenize() {
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		true,
@@ -101,7 +101,7 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 	let provider = llm_named_provider(
 		&mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -144,7 +144,7 @@ async fn llm_token_budget_persists_and_blocks_requests() {
 	let provider = llm_named_provider(
 		&mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -180,7 +180,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
 		name: "default".into(),
 		provider: AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		host_override: Some(Target::Address(*mock.address())),
@@ -241,7 +241,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
 		name: "default".into(),
 		provider: AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		host_override: Some(Target::Address(*mock.address())),
@@ -617,6 +617,75 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_model_router_prices_mistral_ocr_pages() {
+	// Mistral Document AI returns no token usage at all, /v1/ocr must resolve
+	// to the detect route so usage extraction and catalog pricing run.
+	let ocr_response = br#"{
+		"pages": [
+			{"index": 0, "markdown": "Title", "images": [], "dimensions": {"dpi": 200}},
+			{"index": 1, "markdown": "body", "images": [], "dimensions": {"dpi": 200}}
+		],
+		"model": "mistral-ocr-latest",
+		"usage_info": {"pages_processed": 4, "doc_size_bytes": 145349}
+	}"#;
+	let mock = body_mock(ocr_response).await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: mistral-ocr-latest
+    provider: openAI
+    params:
+      baseUrl: http://{}/v1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	t.pi
+		.model_catalog
+		.replace_sources(vec![agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"providers":{"openai":{"models":{"mistral-ocr-latest":{"rates":{"perPage":"0.005"}}}}}}"#
+				.to_string(),
+		}])
+		.await
+		.expect("inline catalog loads");
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/ocr")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{"model":"mistral-ocr-latest","document":{"type":"document_url","document_url":"https://example.com/doc.pdf"}}"#
+				.to_vec(),
+		))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		&request.url[Position::BeforePath..Position::AfterPath],
+		"/v1/ocr"
+	);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/ocr"),
+	])
+	.await
+	.unwrap();
+	// 4 pages at $0.005/page
+	let want = json!({
+		"gen_ai.provider.name": "openai",
+		"gen_ai.response.model": "mistral-ocr-latest",
+		"agw.ai.usage.cost.total": "0.020"
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
 async fn llm_model_router_rewrites_multipart_virtual_model() {
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/completions/basic.json"
@@ -782,7 +851,7 @@ async fn llm_custom_rerank() {
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
 		name: "default".into(),
 		provider: AIProvider::Custom(custom::Provider {
-			model: None,
+			model_override: None,
 			provider_override: None,
 			formats: vec![custom::ProviderFormatConfig {
 				format: custom::ProviderFormat::Rerank,
@@ -1274,7 +1343,7 @@ async fn llm_remote_ratelimit_response(#[case] check_requests: bool) {
 	let (mock, mut bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -1350,7 +1419,7 @@ async fn assert_llm_remote_rate_limit_cost(
 	let (_mock, mut bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -1427,7 +1496,7 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -1471,7 +1540,7 @@ async fn llm_final_transformation_applies_after_messages_translation() {
 	let (mock, mut bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -1546,7 +1615,7 @@ async fn llm_openai_passthrough_applies_path_prefix(
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		false,
@@ -1590,7 +1659,9 @@ async fn llm_non_openai_passthrough_prepends_path_prefix(
 	let mock = body_mock(b"{}").await;
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
-		AIProvider::Gemini(gemini::Provider { model: None }),
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		}),
 		false,
 	);
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -1637,7 +1708,7 @@ async fn llm_log_body() {
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		}),
 		true,

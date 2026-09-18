@@ -12,177 +12,68 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::{cel, *};
 
-#[derive(Default)]
+#[apply(schema!)]
+#[derive(Default, ::cel::DynamicType)]
+pub struct TransformationMetadata(pub serde_json::Map<String, serde_json::Value>);
+
 #[apply(schema_de!)]
-pub struct LocalTransformationConfig {
+#[derive(Default, Serialize)]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalTransformationConfig"))]
+pub struct Transformation {
 	/// Transform the request before it is forwarded.
 	#[serde(default)]
-	pub request: Option<LocalTransform>,
+	pub request: Option<Arc<TransformerConfig>>,
 	/// Transform the response before it is returned.
 	#[serde(default)]
-	pub response: Option<LocalTransform>,
+	pub response: Option<Arc<TransformerConfig>>,
 }
 
-#[derive(Default)]
-#[apply(schema_de!)]
-pub struct LocalTransform {
+#[serde_as]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalTransform"))]
+pub struct TransformerConfig {
 	/// Headers to append using CEL expressions for values.
-	#[serde(default)]
-	#[serde_as(as = "serde_with::Map<_, _>")]
-	pub add: Vec<(Strng, Strng)>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(deserialize_as = "serde_with::Map<_, _>")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::BTreeMap<String, String>")
+	)]
+	pub add: Vec<(HeaderOrPseudo, cel::Expression)>,
 	/// Headers to set using CEL expressions for values.
-	#[serde(default)]
-	#[serde_as(as = "serde_with::Map<_, _>")]
-	pub set: Vec<(Strng, Strng)>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(deserialize_as = "serde_with::Map<_, _>")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::BTreeMap<String, String>")
+	)]
+	pub set: Vec<(HeaderOrPseudo, cel::Expression)>,
 	/// Header names to remove.
-	#[serde(default)]
-	pub remove: Vec<Strng>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+	pub remove: Vec<HeaderName>,
 	/// CEL expression that computes the full set of headers, replacing all existing headers.
 	/// The expression must evaluate to a map of header name to value (a string, or a list of
 	/// strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;
 	/// set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,
 	/// so those still operate on top of the replaced headers.
-	#[serde(default)]
-	pub replace: Option<Strng>,
-	/// CEL expression that computes a replacement body.
-	#[serde(default)]
-	pub body: Option<Strng>,
-	/// Metadata values to add using CEL expressions.
-	#[serde(default)]
-	#[serde_as(as = "serde_with::Map<_, _>")]
-	pub metadata: Vec<(Strng, Strng)>,
-}
-
-#[apply(schema!)]
-#[derive(Default, ::cel::DynamicType)]
-pub struct TransformationMetadata(pub serde_json::Map<String, serde_json::Value>);
-
-impl TransformerConfig {
-	fn try_from_local_config<F>(
-		req: LocalTransform,
-		strict: bool,
-		warnings: &mut F,
-	) -> anyhow::Result<Self>
-	where
-		F: FnMut(&str, &cel::Error),
-	{
-		fn compile<F>(s: &str, strict: bool, warnings: &mut F) -> anyhow::Result<cel::Expression>
-		where
-			F: FnMut(&str, &cel::Error),
-		{
-			if strict {
-				Ok(cel::Expression::new_strict(s)?)
-			} else {
-				let (expression, err) = cel::Expression::new_permissive(s);
-				if let Some(err) = &err {
-					warnings(s, err);
-				}
-				Ok(expression)
-			}
-		}
-
-		let set = req
-			.set
-			.into_iter()
-			.map(|(k, v)| {
-				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = compile(v.as_str(), strict, warnings)?;
-				Ok::<_, anyhow::Error>((tk, tv))
-			})
-			.collect::<Result<_, _>>()?;
-		let add = req
-			.add
-			.into_iter()
-			.map(|(k, v)| {
-				let tk = HeaderOrPseudo::try_from(k.as_str())?;
-				let tv = compile(v.as_str(), strict, warnings)?;
-				Ok::<_, anyhow::Error>((tk, tv))
-			})
-			.collect::<Result<_, _>>()?;
-		let remove = req
-			.remove
-			.into_iter()
-			.map(|k| HeaderName::try_from(k.as_str()))
-			.collect::<Result<_, _>>()?;
-		let replace = req
-			.replace
-			.map(|b| compile(b.as_str(), strict, warnings))
-			.transpose()?;
-		let body = req
-			.body
-			.map(|b| compile(b.as_str(), strict, warnings))
-			.transpose()?;
-		let metadata = req
-			.metadata
-			.into_iter()
-			.map(|(k, v)| Ok::<_, anyhow::Error>((k, compile(v.as_str(), strict, warnings)?)))
-			.collect::<Result<_, _>>()?;
-		Ok(TransformerConfig {
-			set,
-			add,
-			remove,
-			replace,
-			body,
-			metadata,
-		})
-	}
-}
-
-impl Transformation {
-	pub fn try_from_local_config(
-		value: LocalTransformationConfig,
-		strict: bool,
-	) -> anyhow::Result<Self> {
-		Self::try_from_local_config_with_warnings(value, strict, |_, _| {})
-	}
-
-	pub fn try_from_local_config_with_warnings<F>(
-		value: LocalTransformationConfig,
-		strict: bool,
-		mut warnings: F,
-	) -> anyhow::Result<Self>
-	where
-		F: FnMut(&str, &cel::Error),
-	{
-		let LocalTransformationConfig { request, response } = value;
-		let request = if let Some(req) = request {
-			TransformerConfig::try_from_local_config(req, strict, &mut warnings)?
-		} else {
-			Default::default()
-		};
-		let response = if let Some(resp) = response {
-			TransformerConfig::try_from_local_config(resp, strict, &mut warnings)?
-		} else {
-			Default::default()
-		};
-		Ok(Transformation {
-			request: Arc::new(request),
-			response: Arc::new(response),
-		})
-	}
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct Transformation {
-	request: Arc<TransformerConfig>,
-	response: Arc<TransformerConfig>,
-}
-
-#[serde_as]
-#[derive(Debug, Default, Serialize)]
-pub struct TransformerConfig {
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub add: Vec<(HeaderOrPseudo, cel::Expression)>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub set: Vec<(HeaderOrPseudo, cel::Expression)>,
-	#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub remove: Vec<HeaderName>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub replace: Option<cel::Expression>,
+	/// CEL expression that computes a replacement body.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub body: Option<cel::Expression>,
+	/// Metadata values to add using CEL expressions.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(deserialize_as = "serde_with::Map<_, _>")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::BTreeMap<String, String>")
+	)]
 	pub metadata: Vec<(Strng, cel::Expression)>,
 }
 
@@ -250,7 +141,9 @@ fn json_to_header_value(v: &serde_json::Value) -> Option<HeaderValue> {
 
 impl Transformation {
 	pub fn apply_request(&self, req: &mut crate::http::Request) {
-		Self::apply(req.into(), self.request.as_ref(), None)
+		if let Some(config) = &self.request {
+			Self::apply(req.into(), config, None);
+		}
 	}
 
 	pub fn apply_response(
@@ -275,7 +168,9 @@ impl Transformation {
 				ext.insert(request_metadata.clone());
 			}
 		}
-		Self::apply(resp.into(), self.response.as_ref(), request)
+		if let Some(config) = &self.response {
+			Self::apply(resp.into(), config, request);
+		}
 	}
 
 	fn exec_header<'a>(
@@ -393,18 +288,18 @@ impl crate::store::RequestPolicyTrait for Transformation {
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		self
 			.request
-			.add
 			.iter()
-			.map(|v| &v.1)
-			.chain(self.request.set.iter().map(|v| &v.1))
-			.chain(self.request.replace.as_ref())
-			.chain(self.request.body.as_ref())
-			.chain(self.request.metadata.iter().map(|v| &v.1))
-			.chain(self.response.add.iter().map(|v| &v.1))
-			.chain(self.response.set.iter().map(|v| &v.1))
-			.chain(self.response.replace.as_ref())
-			.chain(self.response.body.as_ref())
-			.chain(self.response.metadata.iter().map(|v| &v.1))
+			.chain(self.response.iter())
+			.flat_map(|config| {
+				config
+					.add
+					.iter()
+					.map(|v| &v.1)
+					.chain(config.set.iter().map(|v| &v.1))
+					.chain(config.replace.as_ref())
+					.chain(config.body.as_ref())
+					.chain(config.metadata.iter().map(|v| &v.1))
+			})
 	}
 }
 

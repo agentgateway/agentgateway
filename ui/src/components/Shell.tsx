@@ -6,12 +6,14 @@ import {
 	Boxes,
 	Braces,
 	Cable,
+	ChevronDown,
 	Coins,
 	FileCode2,
 	GitFork,
 	Globe,
 	Home,
 	KeyRound,
+	LogOut,
 	Menu,
 	MessageSquarePlus,
 	Moon,
@@ -23,10 +25,13 @@ import {
 	Shield,
 	ShieldCheck,
 	SlidersHorizontal,
-	Sun
+	Sun,
+	UserRound
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { apiBase } from '@/api/base';
+import type { RuntimeUser } from '@/api/runtimeApi';
 import logoDark from '@/assets/agw-dark.svg';
 import logoLight from '@/assets/agw-light.svg';
 import { StatusBanner, Tooltip, useDismissiblePopover } from '@/components/Primitives';
@@ -117,6 +122,7 @@ export function Shell() {
 		document.documentElement.dataset.theme = theme;
 	}, [theme]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		setMobileNavOpen(false);
 	}, [router.location.pathname]);
@@ -138,7 +144,7 @@ export function Shell() {
 						/>
 					))}
 				</nav>
-				<div className="sidebar-links" aria-label="Project links">
+				<div className="sidebar-links">
 					{projectLinks.map(link => {
 						const Icon = link.icon;
 						return (
@@ -164,7 +170,6 @@ export function Shell() {
 							<button
 								className="mobile-nav-trigger"
 								type="button"
-								aria-haspopup="menu"
 								aria-expanded={mobileNavOpen}
 								onClick={() => setMobileNavOpen(open => !open)}
 							>
@@ -173,7 +178,7 @@ export function Shell() {
 								<span>{currentNav.label}</span>
 							</button>
 							{mobileNavOpen ? (
-								<nav className="mobile-nav-menu" aria-label="Primary" role="menu">
+								<nav className="mobile-nav-menu" aria-label="Primary">
 									{navGroups.map(group => (
 										<MobileNavSection
 											key={group.title}
@@ -188,6 +193,7 @@ export function Shell() {
 						<span className="eyebrow">{eyebrowForPath(router.location.pathname)}</span>
 					</div>
 					<div className="topbar-controls">
+						{runtime.data?.user && <UserMenu user={runtime.data.user} />}
 						<Tooltip content="Toggle theme">
 							<button
 								className="icon-button"
@@ -205,7 +211,7 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
-					{runtime.data?.ui.configStoreMode == 'readOnly' && (
+					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.
 						</StatusBanner>
@@ -213,6 +219,64 @@ export function Shell() {
 					<Outlet />
 				</main>
 			</div>
+		</div>
+	);
+}
+
+function UserMenu({ user }: { user: RuntimeUser }) {
+	const [open, setOpen] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
+	const ref = useDismissiblePopover<HTMLDivElement>(open, () => {
+		setOpen(false);
+		trigger.current?.focus();
+	});
+	const label = user.name || user.email || user.subject || 'Signed in';
+	const initials = user.name
+		? user.name
+				.split(/\s+/)
+				.slice(0, 2)
+				.map(part => Array.from(part)[0])
+				.join('')
+				.toLocaleUpperCase()
+		: Array.from(user.email || user.subject || '')
+				.slice(0, 1)
+				.join('')
+				.toLocaleUpperCase();
+
+	return (
+		<div className="user-menu" ref={ref}>
+			<button
+				ref={trigger}
+				className="user-menu-trigger"
+				type="button"
+				aria-label={`Account: ${label}`}
+				aria-expanded={open}
+				aria-controls="user-menu-panel"
+				onClick={() => setOpen(!open)}
+			>
+				<span className="user-avatar" aria-hidden="true">
+					{initials || <UserRound size={16} />}
+				</span>
+				<span className="user-menu-name">{label}</span>
+				<ChevronDown size={14} aria-hidden="true" />
+			</button>
+			{open && (
+				<section id="user-menu-panel" className="user-menu-panel" aria-label="Your account">
+					<div className="user-menu-identity">
+						<span className="user-menu-caption">Signed in as</span>
+						<strong>{label}</strong>
+						{user.email && user.email !== label && <span>{user.email}</span>}
+					</div>
+					{user.canLogout && (
+						<form action={`${apiBase}/api/auth/logout`} method="post">
+							<button className="user-menu-signout" type="submit">
+								<LogOut size={16} aria-hidden="true" />
+								Sign out
+							</button>
+						</form>
+					)}
+				</section>
+			)}
 		</div>
 	);
 }
@@ -391,7 +455,6 @@ function MobileNavItem(props: {
 			<button
 				type="button"
 				className={props.groupStart ? 'mobile-nav-item nav-group-start' : 'mobile-nav-item'}
-				role="menuitem"
 				onClick={() => void navigate({ to: props.to })}
 			>
 				<Icon size={16} />
@@ -403,7 +466,6 @@ function MobileNavItem(props: {
 		<Link
 			to={props.to}
 			className={`${active ? 'mobile-nav-item active' : 'mobile-nav-item'}${props.groupStart ? ' nav-group-start' : ''}`}
-			role="menuitem"
 		>
 			<Icon size={16} />
 			<span>{props.label}</span>

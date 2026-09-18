@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use agent_core::strng;
 use bytes::Bytes;
@@ -9,7 +9,7 @@ use rand::seq::IndexedRandom;
 use serde_json::Value;
 
 use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{self, Request, Response};
+use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
@@ -53,45 +53,49 @@ impl ModelVisibility {
 }
 
 pub fn default_route_types() -> Arc<llm::Policy> {
-	Arc::new(llm::Policy {
-		routes: [
-			(
-				strng::new("/v1/chat/completions"),
-				llm::RouteType::Completions,
-			),
-			(strng::new("/v1/messages"), llm::RouteType::Messages),
-			(
-				strng::new("/v1/messages/count_tokens"),
-				llm::RouteType::AnthropicTokenCount,
-			),
-			(strng::new(":rawPredict"), llm::RouteType::Messages),
-			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
-			(
-				strng::new(":generateContent"),
-				llm::RouteType::GenerateContent,
-			),
-			(
-				strng::new(":streamGenerateContent"),
-				llm::RouteType::GenerateContent,
-			),
-			(
-				strng::new(":countTokens"),
-				llm::RouteType::GeminiCountTokens,
-			),
-			(strng::new("/v1/responses"), llm::RouteType::Responses),
-			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
-			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
-			(strng::new("/v1/images/variations"), llm::RouteType::Detect),
-			(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
-			(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
-			(strng::new("/v1/rerank"), llm::RouteType::Rerank),
-			(strng::new("/v2/rerank"), llm::RouteType::Rerank),
-			(strng::new("*"), llm::RouteType::Passthrough),
-		]
-		.into_iter()
-		.collect(),
-		..Default::default()
-	})
+	static DEFAULT: LazyLock<Arc<llm::Policy>> = LazyLock::new(|| {
+		Arc::new(llm::Policy {
+			routes: [
+				(
+					strng::new("/v1/chat/completions"),
+					llm::RouteType::Completions,
+				),
+				(strng::new("/v1/messages"), llm::RouteType::Messages),
+				(
+					strng::new("/v1/messages/count_tokens"),
+					llm::RouteType::AnthropicTokenCount,
+				),
+				(strng::new(":rawPredict"), llm::RouteType::Messages),
+				(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+				(
+					strng::new(":generateContent"),
+					llm::RouteType::GenerateContent,
+				),
+				(
+					strng::new(":streamGenerateContent"),
+					llm::RouteType::GenerateContent,
+				),
+				(
+					strng::new(":countTokens"),
+					llm::RouteType::GeminiCountTokens,
+				),
+				(strng::new("/v1/responses"), llm::RouteType::Responses),
+				(strng::new("/v1/images/generations"), llm::RouteType::Detect),
+				(strng::new("/v1/images/edits"), llm::RouteType::Detect),
+				(strng::new("/v1/images/variations"), llm::RouteType::Detect),
+				(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+				(strng::new("/v1/ocr"), llm::RouteType::Detect),
+				(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
+				(strng::new("/v1/rerank"), llm::RouteType::Rerank),
+				(strng::new("/v2/rerank"), llm::RouteType::Rerank),
+				(strng::new("*"), llm::RouteType::Passthrough),
+			]
+			.into_iter()
+			.collect(),
+			..Default::default()
+		})
+	});
+	DEFAULT.clone()
 }
 
 #[apply(schema_ser_schema!)]
@@ -177,6 +181,18 @@ impl ModelRouter {
 	}
 
 	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
+		if is_responses_websocket(req) {
+			let mut response = llm_error_response(
+				::http::StatusCode::METHOD_NOT_ALLOWED,
+				"Responses WebSocket transport is not supported. Use HTTP POST instead.",
+				"websocket_not_supported",
+			);
+			response.headers_mut().insert(
+				::http::header::ALLOW,
+				::http::HeaderValue::from_static("POST"),
+			);
+			return ResolveResult::DirectResponse(response);
+		}
 		if is_model_list_request(req) {
 			return ResolveResult::DirectResponse(self.model_list_response(req));
 		}
@@ -210,6 +226,11 @@ impl ModelRouter {
 			"unable to find declared virtual model; trying concrete model routes",
 		);
 
+		if let RequestedModelLocation::Body(body) = requested_model.location {
+			req
+				.body_mut()
+				.insert_extension(crate::json::ParsedJson(body));
+		}
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
 			Ok(Some(route)) => ResolveResult::Backend(route),
 			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
@@ -268,6 +289,11 @@ impl ModelRouter {
 				}
 			},
 			VirtualModelRouting::Failover { backend } => {
+				if let RequestedModelLocation::Body(body) = location {
+					req
+						.body_mut()
+						.insert_extension(crate::json::ParsedJson(body));
+				}
 				return ResolveResult::Backend(ResolvedBackend {
 					backend: backend.clone(),
 					llm_policy: virtual_model.llm_policy.clone(),
@@ -471,6 +497,25 @@ fn model_list_entry(id: &str, created: u64) -> serde_json::Value {
 	})
 }
 
+fn is_responses_websocket(req: &Request) -> bool {
+	req.method() == ::http::Method::GET
+		&& req
+			.headers()
+			.typed_get::<headers::Connection>()
+			.is_some_and(|connection| connection.contains(::http::header::UPGRADE))
+		&& req
+			.headers()
+			.get_all(::http::header::UPGRADE)
+			.iter()
+			.filter_map(|value| value.to_str().ok())
+			.any(|value| {
+				value
+					.split(',')
+					.any(|protocol| protocol.trim().eq_ignore_ascii_case("websocket"))
+			})
+		&& default_route_types().resolve_route(req.uri().path()) == llm::RouteType::Responses
+}
+
 fn is_model_list_request(req: &Request) -> bool {
 	let path = req.uri().path().trim_end_matches('/');
 	path == "/v1/models"
@@ -571,7 +616,7 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Route
 		return Ok(());
 	};
 	obj.insert("model".to_string(), Value::String(target.to_string()));
-	let body = serde_json::to_vec(&body).map_err(|err| {
+	let bytes = serde_json::to_vec(&body).map_err(|err| {
 		tracing::debug!(%err, "failed to serialize rewritten LLM request body");
 		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
@@ -579,7 +624,10 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Route
 			"request_body_rewrite_failed",
 		))
 	})?;
-	http::replace_body_bytes(req, body.into());
+	req.replace_body_bytes(bytes.into());
+	req
+		.body_mut()
+		.insert_extension(crate::json::ParsedJson(body));
 	Ok(())
 }
 
@@ -693,8 +741,8 @@ pub(crate) async fn rewrite_multipart_request_model(
 	let Some(body) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
 		return Ok(());
 	};
+	req.replace_body_bytes(body);
 	req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
-	http::replace_body_bytes(req, body);
 	Ok(())
 }
 
@@ -829,66 +877,53 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
 	let content_encoding = req.headers().typed_get::<ContentEncoding>();
 	if content_encoding.is_some() {
-		let body = if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-			http::Body::from(
-				body
-					.bytes()
-					.cloned()
-					.ok_or_else(|| Box::new(request_body_too_large_response()))?,
-			)
-		} else {
-			std::mem::take(req.body_mut())
-		};
-		let (encoding, body) =
-			http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
-				.await
-				.map_err(|err| match err {
-					http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
-					err => {
-						tracing::debug!(%err, "failed to decode LLM request body");
-						Box::new(llm_error_response(
-							::http::StatusCode::BAD_REQUEST,
-							"Failed to decode LLM request body",
-							"request_body_decode_failed",
-						))
-					},
-				})?;
-		*req.body_mut() = http::Body::from(body.clone());
+		let mut encoding = None;
+		let mut decoded_bytes = Bytes::new();
+		req
+			.body_mut()
+			.try_modify(|body| async {
+				let (decoded_encoding, bytes) =
+					http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
+						.await?;
+				encoding = decoded_encoding;
+				decoded_bytes = bytes.clone();
+				Ok::<_, http::compression::Error>(bytes.into())
+			})
+			.await
+			.map_err(|err| match err {
+				http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
+				err => {
+					tracing::debug!(%err, "failed to decode LLM request body");
+					Box::new(llm_error_response(
+						::http::StatusCode::BAD_REQUEST,
+						"Failed to decode LLM request body",
+						"request_body_decode_failed",
+					))
+				},
+			})?;
 		if encoding.is_some() {
 			req.headers_mut().remove(::http::header::CONTENT_ENCODING);
 			req.headers_mut().remove(::http::header::CONTENT_LENGTH);
 			req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
 		}
-		req
-			.extensions_mut()
-			.insert(cel::BufferedBody::complete(body.clone()));
-		return Ok(body);
+		return Ok(decoded_bytes);
 	}
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		return body
-			.bytes()
-			.cloned()
-			.ok_or_else(|| Box::new(request_body_too_large_response()));
-	}
-	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
-		.await
-		.map_err(|err| {
-			tracing::debug!(%err, "failed to read LLM request body");
-			Box::new(llm_error_response(
-				::http::StatusCode::BAD_REQUEST,
-				"Failed to read LLM request body",
-				"request_body_read_failed",
-			))
-		})?;
+	// A prior partial inspection may have used a smaller limit. Inspection
+	// reuses known bytes and reads further only when this limit requires it.
+	let inspection = req.body_mut().inspect(limit).await.map_err(|err| {
+		tracing::debug!(%err, "failed to read LLM request body");
+		Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Failed to read LLM request body",
+			"request_body_read_failed",
+		))
+	})?;
 	let body = match inspection {
 		http::BodyInspection::Complete(body) => body,
 		http::BodyInspection::Partial(_) => {
 			return Err(Box::new(request_body_too_large_response()));
 		},
 	};
-	req
-		.extensions_mut()
-		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 
@@ -951,11 +986,18 @@ mod tests {
 			router.resolve(&mut req).await,
 			ResolveResult::Backend(_)
 		));
+		let cached = req
+			.body()
+			.extension::<crate::json::ParsedJson>()
+			.unwrap()
+			.0
+			.clone();
 		let body = http::read_body_with_limit(req.into_body(), 1024)
 			.await
 			.expect("rewritten request body");
 		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
 		assert_eq!(body["model"], "economy-model");
+		assert_eq!(cached, body);
 	}
 
 	#[tokio::test]
@@ -1392,9 +1434,8 @@ mod tests {
 			.header(::http::header::TRANSFER_ENCODING, "chunked")
 			.body(http::Body::from(body.clone()))
 			.expect("valid request");
-		req
-			.extensions_mut()
-			.insert(cel::BufferedBody::complete(body));
+		req.body_mut().record(1024);
+		let recorded = req.body().recorded().unwrap().clone();
 
 		rewrite_multipart_request_model(&mut req, "a-much-longer-model")
 			.await
@@ -1406,11 +1447,12 @@ mod tests {
 				.headers()
 				.contains_key(::http::header::TRANSFER_ENCODING)
 		);
+		assert_ne!(req.body().known_bytes(), Some(&body));
+		assert!(recorded.bytes().is_empty());
 		let buffered = req
-			.extensions()
-			.get::<cel::BufferedBody>()
-			.and_then(cel::BufferedBody::bytes)
-			.expect("rewritten request body remains buffered")
+			.body()
+			.known_bytes()
+			.expect("rewritten body is buffered")
 			.clone();
 		let rewritten = http::read_body_with_limit(req.into_body(), 1024)
 			.await
@@ -1447,7 +1489,7 @@ mod tests {
 		let request_body = br#"{"model":"real-model","messages":[{"role":"user","content":"this part is over the limit"}]}"#;
 		let mut req = ::http::Request::builder()
 			.uri("http://example.com/v1/chat/completions")
-			.body(http::Body::from(request_body.as_slice()))
+			.body(http::Body::from(request_body.to_vec()))
 			.unwrap();
 		req.extensions_mut().insert(BufferLimit(24));
 
@@ -1507,7 +1549,7 @@ mod tests {
 		] {
 			let mut req = ::http::Request::builder()
 				.uri(uri)
-				.body(http::Body::from(body.as_slice()))
+				.body(http::Body::from(body.to_vec()))
 				.unwrap();
 
 			let requested = requested_model(&mut req)
@@ -1545,6 +1587,16 @@ mod tests {
 				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-pro:generateContent"
 			),
 			llm::RouteType::GenerateContent
+		);
+	}
+
+	#[test]
+	fn default_routes_send_ocr_through_detect() {
+		// Without an explicit entry, `/v1/ocr` falls to the `*` passthrough route,
+		// skips usage extraction entirely and leaves per-page OCR requests unpriced.
+		assert_eq!(
+			default_route_types().resolve_route("/v1/ocr"),
+			llm::RouteType::Detect
 		);
 	}
 

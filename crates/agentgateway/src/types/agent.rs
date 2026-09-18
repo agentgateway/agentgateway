@@ -1849,6 +1849,11 @@ pub struct McpBackend {
 	/// agentgateway is typically not a browser-facing localhost MCP server.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
+	/// Overrides for the MCP `serverInfo` and gateway instructions reported to clients on
+	/// `initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall
+	/// back to the normal defaults.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server: Option<McpServerOverrides>,
 }
 
 impl McpBackend {
@@ -1858,6 +1863,40 @@ impl McpBackend {
 			.iter()
 			.find(|target| target.name.as_str() == name)
 			.cloned()
+	}
+}
+
+/// Overrides for the MCP `serverInfo` (`name`/`version`/`title`) and the gateway
+/// instructions preamble, applied only when multiplexing multiple targets.
+#[apply(schema!)]
+pub struct McpServerOverrides {
+	/// Overrides `serverInfo.name`. Must be set together with `version` — setting only one
+	/// would otherwise mix an overridden name with agentgateway's own version, or vice versa.
+	/// Defaults to `agentgateway` when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub name: Option<Strng>,
+	/// Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.
+	/// Defaults to the build version when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub version: Option<Strng>,
+	/// Overrides `serverInfo.title`. Unset by default.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub title: Option<Strng>,
+	/// Overrides the gateway preamble prepended to merged upstream instructions.
+	/// Defaults to a generic gateway description when unset.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub instructions: Option<Strng>,
+}
+
+impl McpServerOverrides {
+	pub fn validate(&self) -> Result<(), String> {
+		if self.name.is_some() != self.version.is_some() {
+			return Err(
+				"mcp server overrides: `name` and `version` must be set together, or left both unset"
+					.to_string(),
+			);
+		}
+		Ok(())
 	}
 }
 

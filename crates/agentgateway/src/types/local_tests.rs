@@ -111,6 +111,8 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			client_secret: SecretString::new("client-secret".into()),
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
+			login: None,
+			logout: None,
 		}),
 		..Default::default()
 	}
@@ -168,7 +170,8 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
 	let resources = crate::resource_manager::ResourceFetcher::direct(client);
-	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	let mut config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	config.oidc_cookie_encoder = test_config().oidc_cookie_encoder;
 
 	NormalizedLocalConfig::from(
 		&config,
@@ -492,6 +495,11 @@ async fn test_basic_config() {
 }
 
 #[tokio::test]
+async fn test_ui_oidc_config() {
+	test_config_parsing("ui_oidc").await;
+}
+
+#[tokio::test]
 async fn test_spiffe_tls_config_normalizes() {
 	// A SPIFFE-sourced HTTPS listener needs no cert/key files and should normalize without
 	// contacting the Workload API (the connection is established lazily at runtime). SPIFFE must be enabled
@@ -662,6 +670,11 @@ async fn test_llm_simple_config() {
 #[tokio::test]
 async fn test_llm_provider_reference_config() {
 	test_config_parsing("llm_provider_reference").await;
+}
+
+#[tokio::test]
+async fn test_keyed_rate_limit_config() {
+	test_config_parsing("keyed_rate_limit").await;
 }
 
 #[tokio::test]
@@ -1037,7 +1050,10 @@ llm:
 	let AIProvider::Custom(custom_provider) = &provider.provider else {
 		panic!("expected custom provider");
 	};
-	assert_eq!(custom_provider.model.as_deref(), Some("upstream-custom"));
+	assert_eq!(
+		custom_provider.model_override.as_deref(),
+		Some("upstream-custom")
+	);
 	assert_eq!(provider.path_prefix.as_deref(), Some("/"));
 	assert!(custom_provider.formats.iter().any(|format| format.format
 		== crate::llm::custom::ProviderFormat::Messages

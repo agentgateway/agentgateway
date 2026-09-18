@@ -11,7 +11,11 @@ info:
       call_id: call_1
       name: get_weather
       arguments: "{\"location\": \"Par"
-      status: completed
+      status: incomplete
+  object: response
+  created_at: 123
+  incomplete_details:
+    reason: max_output_tokens
 ---
 {
   "response": {
@@ -24,10 +28,15 @@ info:
         "call_id": "call_1",
         "name": "get_weather",
         "id": "[id]",
-        "status": "completed"
+        "status": "incomplete"
       }
     ],
-    "model": "gpt-x"
+    "model": "gpt-x",
+    "object": "response",
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_output_tokens"
+    }
   },
   "parsed": {
     "provider_model": "gpt-x",

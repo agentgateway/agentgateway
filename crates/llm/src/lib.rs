@@ -263,6 +263,10 @@ pub struct LLMRequest {
 pub enum ProviderState {
 	Bedrock {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
+		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
+	},
+	OpenAICompletions {
+		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
 }
@@ -384,6 +388,8 @@ pub struct LLMResponse {
 	pub output_audio_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub pages: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]

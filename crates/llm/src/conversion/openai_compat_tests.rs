@@ -4,8 +4,9 @@ use serde_json::{Value, json};
 use super::to_responses;
 
 fn translate(input: &[u8]) -> Value {
-	let response = to_responses::translate_response(&Bytes::copy_from_slice(input), "input-model")
-		.expect("Chat Completions response should translate");
+	let response =
+		to_responses::translate_response(&Bytes::copy_from_slice(input), "input-model", None)
+			.expect("Chat Completions response should translate");
 	serde_json::from_slice(&response.serialize().expect("response should serialize"))
 		.expect("translated response should be JSON")
 }

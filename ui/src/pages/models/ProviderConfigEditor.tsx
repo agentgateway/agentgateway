@@ -79,11 +79,18 @@ export function ProviderConfigEditor(props: {
 			{
 				...(props.params ?? {}),
 				apiKey: null,
-				...(nextProvider === 'azure' ? { azureResourceType: 'openAI' } : {})
+				...(nextProvider === 'azure' ? { azureResourceType: 'openAI' } : {}),
+				...(nextProvider === 'bedrock' && provider !== 'bedrock'
+					? {
+							bedrockEndpointPreference:
+								props.params?.bedrockEndpointPreference ?? 'mantlePreferred'
+						}
+					: {})
 			}
 		);
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (provider === 'azure' && !props.params?.azureResourceType) {
 			patchParams({ azureResourceType: 'openAI' });
@@ -198,6 +205,24 @@ export function ProviderConfigEditor(props: {
 								placeholder="us-west-2"
 							/>
 						</Field>
+					) : null}
+					{provider === 'bedrock' ? (
+						<FieldGroup
+							label="Bedrock endpoint"
+							tooltip="Mantle supports native Anthropic and OpenAI APIs, including supported server-side tools and background requests. It requires Mantle-specific AWS permissions. Choose Runtime for existing Bedrock deployments, Bedrock Guardrails, cross-region inference, or Claude structured outputs. Prefer modes automatically select the other endpoint for models the catalog lists as available only there; unknown models use your preference. Only modes force the selected endpoint for chat, so unsupported models fail. Neither mode retries failed requests on the other endpoint. Embeddings and reranking are unaffected."
+						>
+							<EnumSelector<NonNullable<LlmParams['bedrockEndpointPreference']>>
+								ariaLabel="Bedrock endpoint"
+								value={props.params?.bedrockEndpointPreference ?? 'runtimePreferred'}
+								onChange={bedrockEndpointPreference => patchParams({ bedrockEndpointPreference })}
+								options={[
+									{ value: 'mantlePreferred', label: 'Prefer Mantle' },
+									{ value: 'runtimePreferred', label: 'Prefer Runtime' },
+									{ value: 'mantleOnly', label: 'Mantle only (advanced)' },
+									{ value: 'runtimeOnly', label: 'Runtime only (advanced)' }
+								]}
+							/>
+						</FieldGroup>
 					) : null}
 					{provider === 'ollama' ? (
 						<Field

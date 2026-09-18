@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use agent_core::strng;
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::Bytes;
 use http::Response;
 use itertools::Itertools;
@@ -86,7 +86,7 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use itertools::Itertools;
 	use messages::{ToolResultContent, ToolResultContentPart};
@@ -192,7 +192,7 @@ pub mod from_messages {
 			Some(completions::FinishReason::Stop) => (messages::StopReason::EndTurn, true),
 			Some(completions::FinishReason::Length) => (messages::StopReason::MaxTokens, false),
 			Some(completions::FinishReason::ToolCalls) => (messages::StopReason::ToolUse, false),
-			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::EndTurn, false),
+			Some(completions::FinishReason::ContentFilter) => (messages::StopReason::Refusal, false),
 			Some(completions::FinishReason::FunctionCall) => (messages::StopReason::ToolUse, false),
 			None => (messages::StopReason::EndTurn, false),
 		};
@@ -807,23 +807,32 @@ pub mod from_messages {
 		} = req;
 
 		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
-		let supports_prompt_cache_breakpoint = model
-			.strip_prefix("gpt-")
-			.and_then(|model| model.split('-').next())
-			.and_then(|version| version.split_once('.'))
-			.and_then(|(major, minor)| Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?)))
-			.is_some_and(|version| version >= (5, 6));
+		let supports_prompt_cache_breakpoint =
+			crate::conversion::supports_prompt_cache_breakpoint(&model);
 		let cache_breakpoint = |cache_control: Option<messages::CacheControlEphemeral>| {
 			cache_control
 				.filter(|_| supports_prompt_cache_breakpoint)
 				.map(Into::into)
 		};
 
-		let adaptive_thinking_requested = thinking
+		let output_effort = output_config
 			.as_ref()
-			.is_some_and(|t| matches!(t, messages::ThinkingInput::Adaptive {}));
-		let output_effort = output_config.as_ref().and_then(|cfg| cfg.effort);
-		let reasoning_effort = if adaptive_thinking_requested {
+			.and_then(|cfg| cfg.effort)
+			.or_else(|| {
+				if let Some(messages::ThinkingInput::Enabled { budget_tokens }) = &thinking {
+					Some(crate::types::anthropic_effort_for_thinking_budget(
+						*budget_tokens,
+					))
+				} else {
+					None
+				}
+			});
+		let reasoning_requested = match thinking {
+			Some(messages::ThinkingInput::Disabled {}) => false,
+			Some(messages::ThinkingInput::Adaptive {}) => true,
+			_ => output_effort.is_some(),
+		};
+		let reasoning_effort = if reasoning_requested {
 			Some(match output_effort {
 				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
 				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
@@ -1120,7 +1129,7 @@ pub mod from_messages {
 							name: tool.name,
 							description: tool.description,
 							parameters: Some(tool.input_schema),
-							strict: None,
+							strict: tool.strict,
 						},
 					}))
 				},

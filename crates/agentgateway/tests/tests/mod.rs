@@ -8,6 +8,7 @@ mod connect;
 mod cors;
 mod dfp;
 mod direct_response;
+mod drain;
 mod hbone;
 mod llm;
 mod llm_providers;

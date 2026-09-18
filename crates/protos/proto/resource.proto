@@ -525,6 +525,9 @@ message AwsAssumeRole {
   // request is rejected. At most one of session_name and session_name_expression
   // may be set.
   string session_name_expression = 4;
+  // Set when the role's trust policy requires sts:ExternalId. Must match
+  // [\w+=,.@:/-]{2,1224}.
+  string external_id = 5;
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
@@ -1007,6 +1010,9 @@ message TrafficPolicySpec {
       uint64 tokens_per_fill = 2;
       google.protobuf.Duration fill_interval = 3;
       Type type = 4;
+      // CEL expression selecting the bucket, for example `jwt.sub`. Each distinct value gets its
+      // own bucket with the limits above; when unset, all requests share one bucket.
+      optional string key = 5;
     }
     // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
@@ -1872,6 +1878,13 @@ message AIBackend {
     string region = 2;
     optional string guardrail_identifier = 3;
     optional string guardrail_version = 4;
+    BedrockEndpointPreference endpoint_preference = 5;
+  }
+  enum BedrockEndpointPreference {
+    BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED = 0;
+    BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY = 1;
+    BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY = 2;
+    BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED = 3;
   }
   message AzureOpenAI {
     optional string model = 1;

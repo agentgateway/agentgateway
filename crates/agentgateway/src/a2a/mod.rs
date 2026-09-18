@@ -1,20 +1,20 @@
 use agent_core::strng::Strng;
-use http::{Request, Uri, header};
+use http::Uri;
 use serde::Deserialize;
 use serde_json::Value;
 use tracing::{debug, warn};
 
-use crate::http::{Body, BodyInspection, Response, filters};
+use crate::http::{Body, BodyInspection, Request, Response, ResponseBodyExt, filters};
 use crate::json;
 use crate::types::agent::A2aPolicy;
 
-pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request<Body>) -> RequestType {
+pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request) -> RequestType {
 	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
 	// For agent card, we will process only on the response
 	classify_request(req).await
 }
 
-async fn classify_request(req: &mut Request<Body>) -> RequestType {
+async fn classify_request(req: &mut Request) -> RequestType {
 	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
 	// For agent card, we will process only on the response
 	match (req.method(), req.uri().path()) {
@@ -167,60 +167,74 @@ pub async fn apply_to_response(
 			// For agent card, we need to mutate the request to insert the proper URL to reach it
 			// through the gateway.
 			let buffer_limit = crate::http::response_buffer_limit(resp);
-			let body = std::mem::replace(resp.body_mut(), Body::empty());
-			let Ok(mut agent_card) = json::from_body_with_limit::<Value>(body, buffer_limit).await else {
-				anyhow::bail!("agent card invalid JSON");
-			};
-			let gateway_base = build_agent_path(uri);
-
-			// Compute the backend agent base by stripping the agent-card suffix from the
-			// (possibly rewritten) backend request path. This lets us compute the *relative*
-			// part of interface URLs so they are anchored at the gateway path instead of
-			// being naively appended.
-			let backend_agent_path = strip_agent_card_suffix(&backend_path);
-
-			if let Some(interfaces) = agent_card.get_mut("supportedInterfaces") {
-				// A2A v1.0: rewrite url inside each AgentInterface entry.
-				let arr = interfaces
-					.as_array_mut()
-					.ok_or_else(|| anyhow::anyhow!("agent card supportedInterfaces is not an array"))?;
-				for iface in arr.iter_mut() {
-					if let Some(url_val) = iface.get_mut("url")
-						&& let Some(s) = url_val.as_str()
-						&& let Ok(iface_uri) = s.parse::<Uri>()
-					{
-						let iface_path = iface_uri
-							.path_and_query()
-							.map(|pq| pq.as_str())
-							.unwrap_or_else(|| iface_uri.path());
-						// Strip the backend agent base from the interface path so the
-						// result is relative to the agent card location. Then anchor
-						// that relative path at the gateway base.
-						// Only match complete path segments to avoid partial matches
-						// (e.g., /internal/weather should not match /internal/weather-v2).
-						let url = public_interface_url(
-							&gateway_base,
-							iface_path,
-							backend_agent_path,
-							rewrite.as_ref(),
-						);
-						*url_val = Value::String(url);
-					}
-				}
-			} else if let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) {
-				// A2A v0.3: rewrite the single top-level url.
-				*url_field = Value::String(gateway_base);
-			} else {
-				anyhow::bail!("agent card missing URL (no 'url' or 'supportedInterfaces' field)");
-			}
-
-			resp.headers_mut().remove(header::CONTENT_LENGTH);
-			*resp.body_mut() = json::to_body(agent_card)?;
+			resp
+				.try_modify_body(|body| async move {
+					rewrite_agent_card(body, buffer_limit, uri, backend_path, rewrite)
+						.await
+						.map(Into::into)
+				})
+				.await?;
 			Ok(None)
 		},
 		RequestType::Call(_) => Ok(inspect_call_response(resp).await),
 		RequestType::Unknown => Ok(None),
 	}
+}
+
+async fn rewrite_agent_card(
+	body: Body,
+	buffer_limit: usize,
+	uri: Uri,
+	backend_path: String,
+	rewrite: Option<filters::AppliedUrlRewrite>,
+) -> anyhow::Result<Vec<u8>> {
+	let Ok(mut agent_card) = json::from_body_with_limit::<Value>(body, buffer_limit).await else {
+		anyhow::bail!("agent card invalid JSON");
+	};
+	let gateway_base = build_agent_path(uri);
+
+	// Compute the backend agent base by stripping the agent-card suffix from the
+	// (possibly rewritten) backend request path. This lets us compute the *relative*
+	// part of interface URLs so they are anchored at the gateway path instead of
+	// being naively appended.
+	let backend_agent_path = strip_agent_card_suffix(&backend_path);
+
+	if let Some(interfaces) = agent_card.get_mut("supportedInterfaces") {
+		// A2A v1.0: rewrite url inside each AgentInterface entry.
+		let arr = interfaces
+			.as_array_mut()
+			.ok_or_else(|| anyhow::anyhow!("agent card supportedInterfaces is not an array"))?;
+		for iface in arr.iter_mut() {
+			if let Some(url_val) = iface.get_mut("url")
+				&& let Some(s) = url_val.as_str()
+				&& let Ok(iface_uri) = s.parse::<Uri>()
+			{
+				let iface_path = iface_uri
+					.path_and_query()
+					.map(|pq| pq.as_str())
+					.unwrap_or_else(|| iface_uri.path());
+				// Strip the backend agent base from the interface path so the
+				// result is relative to the agent card location. Then anchor
+				// that relative path at the gateway base.
+				// Only match complete path segments to avoid partial matches
+				// (e.g., /internal/weather should not match /internal/weather-v2).
+				let url = public_interface_url(
+					&gateway_base,
+					iface_path,
+					backend_agent_path,
+					rewrite.as_ref(),
+				);
+				*url_val = Value::String(url);
+			}
+		}
+	} else if let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) {
+		// A2A v0.3: rewrite the single top-level url.
+		*url_field = Value::String(gateway_base);
+	} else {
+		anyhow::bail!("agent card missing URL (no 'url' or 'supportedInterfaces' field)");
+	}
+
+	Ok(serde_json::to_vec(&agent_card)?)
 }
 
 async fn inspect_call_response(resp: &mut Response) -> Option<ResponseInfo> {
@@ -253,7 +267,7 @@ struct JsonRpcMethod {
 	method: Strng,
 }
 
-async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
+async fn inspect_method(req: &mut Request) -> anyhow::Result<Strng> {
 	Ok(json::inspect_body::<JsonRpcMethod>(req).await?.method)
 }
 

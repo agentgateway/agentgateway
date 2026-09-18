@@ -452,12 +452,7 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 			return nil
 		}
 
-		// Prefer the latest resourceVersion to avoid avoidable conflicts.
-		// Conflicts are still handled (and expected), but using the latest RV reduces churn.
-		rv := obj.ResourceVersion
-		if crv := current.GetResourceVersion(); crv != "" {
-			rv = crv
-		}
+		rv := current.GetResourceVersion()
 
 		// Pass only the status and minimal part of ObjectMetadata to find the resource and validate it.
 		// Passing Spec is ignored by the API server but has costs.

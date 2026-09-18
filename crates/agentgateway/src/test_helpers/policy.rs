@@ -5,6 +5,7 @@ pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn test_policy<P>(
 	policy: &P,
 	req: &mut crate::http::Request,

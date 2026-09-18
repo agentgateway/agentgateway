@@ -1,3 +1,4 @@
+import { useBlocker } from '@tanstack/react-router';
 import { Braces, ListChecks, Pencil, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -186,8 +187,7 @@ export function GuardrailsPage() {
 	const help = useSchemaHelp();
 	const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
 	const fileOwned = Boolean(
-		rawConfig.data?.llm?.policies &&
-			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'guardrails')
+		rawConfig.data?.llm?.policies && Object.hasOwn(rawConfig.data.llm.policies, 'guardrails')
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
@@ -288,6 +288,11 @@ function GuardrailsEditor(props: {
 	const [draft, setDraft] = useState<GuardrailDraft>(() => initialDraft);
 	const [error, setError] = useState<string | null>(null);
 	const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
+	const blocker = useBlocker({
+		shouldBlockFn: ({ current, next }) => dirty && current.pathname !== next.pathname,
+		enableBeforeUnload: dirty,
+		withResolver: true
+	});
 
 	function validateAndBuild(nextDraft: GuardrailDraft) {
 		setDraft(nextDraft);
@@ -314,6 +319,17 @@ function GuardrailsEditor(props: {
 
 	return (
 		<div className="guardrails-editor">
+			{blocker.status === 'blocked' ? (
+				<ConfirmDialog
+					title="Discard unsaved changes?"
+					destructive
+					confirmLabel="Discard changes"
+					onCancel={blocker.reset}
+					onConfirm={blocker.proceed}
+				>
+					<p>Your guardrail changes have not been saved and will be lost.</p>
+				</ConfirmDialog>
+			) : null}
 			{error ? (
 				<StatusBanner state="bad" title="Invalid guardrails">
 					{error}
@@ -408,6 +424,7 @@ function GuardrailSection(props: {
 				{props.guards.length === 0 ? <p className="muted-copy">No guards configured.</p> : null}
 				{props.guards.map((guard, index) => (
 					<GuardCard
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						key={index}
 						phase={props.phase}
 						guard={guard}
@@ -1188,6 +1205,7 @@ function PatternList(props: {
 			tooltip={props.help.field<RegexRules>('RegexRules', 'rules')}
 		>
 			{props.patterns.map((pattern, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<div className="guardrail-pattern-row" key={index}>
 					<input
 						className="mono-input"

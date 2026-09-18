@@ -429,6 +429,29 @@ mod tests {
 		assert_eq!(llm_response.output_tokens, Some(3));
 		assert_eq!(llm_response.total_tokens, Some(30550));
 	}
+
+	#[test]
+	fn to_llm_response_extracts_mistral_ocr_page_count() {
+		// Mistral Document AI bills pages, not tokens
+		let resp = Response::Json(serde_json::json!({
+			"pages": [
+				{"index": 0, "markdown": "# Title", "images": [], "dimensions": {"dpi": 200}},
+				{"index": 1, "markdown": "body", "images": [], "dimensions": {"dpi": 200}}
+			],
+			"model": "mistral-ocr-latest",
+			"usage_info": {
+				"pages_processed": 2,
+				"doc_size_bytes": 145349
+			}
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.pages, Some(2));
+		assert_eq!(llm_response.input_tokens, None);
+		assert_eq!(llm_response.output_tokens, None);
+		assert_eq!(llm_response.total_tokens, None);
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -501,6 +524,7 @@ mod lookups {
 		// Gemini generateContent via Cloud Code
 		&["response", "usageMetadata", "totalTokenCount"],
 	];
+	pub const PAGES: [&[&str]; 1] = [&["usage_info", "pages_processed"]];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
 	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
@@ -586,6 +610,7 @@ impl ResponseType for Response {
 			output_text_tokens: self.lookup(lookups::OUTPUT_TEXT_TOKENS, |v| v.as_u64()),
 			output_audio_tokens: self.lookup(lookups::OUTPUT_AUDIO_TOKENS, |v| v.as_u64()),
 			total_tokens: total_tokens.or_else(|| Some(input_tokens? + output_tokens?)),
+			pages: self.lookup(lookups::PAGES, |v| v.as_u64()),
 			reasoning_tokens: self.lookup(lookups::REASONING, |v| v.as_u64()),
 			cache_creation_input_tokens: self
 				.lookup(lookups::CACHE_CREATION_INPUT_TOKENS, |v| v.as_u64()),
@@ -747,17 +772,13 @@ pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamRespo
 
 pub fn passthrough_stream(
 	mut log: StreamingUsageGuard,
-	resp: http::Response<axum_core::body::Body>,
-) -> http::Response<axum_core::body::Body> {
+	resp: agent_http::Response,
+) -> agent_http::Response {
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
-			Some(Ok(f)) => {
-				amend_from_stream_response(&mut log, &f);
-			},
-			Some(Err(e)) => {
-				debug!("failed to parse streaming response: {e}");
-			},
+			Some(Ok(f)) => amend_from_stream_response(&mut log, &f),
+			Some(Err(e)) => debug!("failed to parse streaming response: {e}"),
 			None => {},
 		})
 	})
@@ -765,8 +786,8 @@ pub fn passthrough_stream(
 
 pub fn passthrough_aws_stream(
 	mut log: StreamingUsageGuard,
-	resp: http::Response<axum_core::body::Body>,
-) -> http::Response<axum_core::body::Body> {
+	resp: agent_http::Response,
+) -> agent_http::Response {
 	use base64::Engine;
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {

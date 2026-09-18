@@ -138,7 +138,7 @@ mod stop_sequence_reporting {
 			"message":{"role":"assistant","content":"..."}}],
 			"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
 		let out = translate(body);
-		assert_eq!(out.stop_reason, Some(messages::StopReason::EndTurn));
+		assert_eq!(out.stop_reason, Some(messages::StopReason::Refusal));
 		assert_eq!(out.stop_sequence, None);
 	}
 }
@@ -186,7 +186,7 @@ mod stop_sequence_reporting_streaming {
 }
 
 mod thinking_round_trip {
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use http_body_util::BodyExt;
 	use serde_json::{Value, json};
@@ -361,5 +361,28 @@ data: [DONE]
 			]
 		);
 		assert_eq!(events[2]["delta"]["signature"], "sig");
+	}
+}
+
+mod usage_reporting_streaming {
+	use crate::types::completions::typed as completions;
+
+	#[test]
+	fn final_chunk_without_delta_still_reports_usage() {
+		// GLM and friends end the stream with a choice that carries only `finish_reason` and
+		// `index`. `delta` used to be a required field, so the whole chunk failed to parse and the
+		// usage riding along with it was dropped on the floor.
+		let chunk: completions::StreamResponse = serde_json::from_str(
+			r#"{"id":"c","object":"chat.completion.chunk","created":0,"model":"m",
+			"choices":[{"index":0,"finish_reason":"tool_calls"}],
+			"usage":{"prompt_tokens":37031,"completion_tokens":44,"total_tokens":37075}}"#,
+		)
+		.expect("a chunk without `delta` should parse");
+
+		assert_eq!(chunk.choices[0].delta, Default::default());
+		let usage = chunk.usage.expect("usage should survive");
+		assert_eq!(usage.prompt_tokens, 37031);
+		assert_eq!(usage.completion_tokens, 44);
+		assert_eq!(usage.total_tokens, 37075);
 	}
 }

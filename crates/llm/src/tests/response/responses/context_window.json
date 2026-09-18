@@ -1,0 +1,23 @@
+{
+  "id": "resp_terminal",
+  "object": "response",
+  "created_at": 123,
+  "model": "gpt-5.6-luna",
+  "status": "incomplete",
+  "output": [],
+  "usage": {
+    "input_tokens": 100,
+    "output_tokens": 5,
+    "total_tokens": 105,
+    "input_tokens_details": {
+      "cached_tokens": 20,
+      "cache_write_tokens": 30
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 3
+    }
+  },
+  "incomplete_details": {
+    "reason": "max_context_length"
+  }
+}

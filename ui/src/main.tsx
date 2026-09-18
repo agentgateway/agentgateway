@@ -13,6 +13,7 @@ import { LlmGetStartedPage, McpGetStartedPage, TrafficGetStartedPage } from '@/p
 import { GuardrailsPage } from '@/pages/Guardrails';
 import { HomePage } from '@/pages/Home';
 import { KeysPage } from '@/pages/Keys';
+import { LoginPage } from '@/pages/Login';
 import { AnalyticsPage, LogsPage } from '@/pages/Logs';
 import { McpPlaygroundPage } from '@/pages/McpPlayground';
 import { McpServersPage } from '@/pages/McpServers';
@@ -37,150 +38,161 @@ const LazyRawConfigPage = React.lazy(() =>
 	}))
 );
 
-const rootRoute = createRootRoute({
+const rootRoute = createRootRoute();
+
+// Keep login outside Shell so it does not fetch protected application data.
+const loginRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/login',
+	component: LoginPage
+});
+
+const appRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	id: 'app',
 	component: Shell
 });
 
 const indexRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/',
 	component: HomePage
 });
 
 const dumpPoliciesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/policies',
 	component: DumpPoliciesPage
 });
 
 const modelsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/models',
 	component: ModelsPage
 });
 
 const llmGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/get-started',
 	component: LlmGetStartedPage
 });
 
 const providersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/providers',
 	component: ProvidersPage
 });
 
 const logsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/logs',
 	component: LogsPage
 });
 
 const analyticsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/analytics',
 	component: AnalyticsPage
 });
 
 const policiesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/policies',
 	component: PoliciesPage
 });
 
 const guardrailsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/guardrails',
 	component: GuardrailsPage
 });
 
 const costsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/costs',
 	component: CostsPage
 });
 
 const keysRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/keys',
 	component: KeysPage
 });
 
 const playgroundRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/playground',
 	component: PlaygroundPage
 });
 
 const clientSetupRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/client-setup',
 	component: ClientSetupPage
 });
 
 const mcpServersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/servers',
 	component: McpServersPage
 });
 
 const mcpPoliciesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/policies',
 	component: McpPoliciesPage
 });
 
 const mcpGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/get-started',
 	component: McpGetStartedPage
 });
 
 const mcpPlaygroundRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/playground',
 	component: McpPlaygroundPage
 });
 
 const trafficListenersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/listeners',
 	component: TrafficListenersPage
 });
 
 const trafficGatewaysRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/gateways',
 	component: TrafficGatewaysPage
 });
 
 const trafficGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/get-started',
 	component: TrafficGetStartedPage
 });
 
 const trafficRoutesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/routes',
 	component: TrafficRoutesPage
 });
 
 const celRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/cel',
 	component: CelPage
 });
 
 const rawConfigRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/raw-config',
 	component: RawConfigRoute
 });
 
 const rawSettingsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/settings',
 	component: RawSettingsPage
 });
@@ -202,30 +214,33 @@ function RawConfigRoute() {
 const router = createRouter({
 	basepath: routerBasePath(),
 	routeTree: rootRoute.addChildren([
-		indexRoute,
-		dumpPoliciesRoute,
-		llmGetStartedRoute,
-		modelsRoute,
-		providersRoute,
-		policiesRoute,
-		guardrailsRoute,
-		costsRoute,
-		logsRoute,
-		analyticsRoute,
-		keysRoute,
-		playgroundRoute,
-		clientSetupRoute,
-		mcpGetStartedRoute,
-		mcpServersRoute,
-		mcpPoliciesRoute,
-		mcpPlaygroundRoute,
-		trafficGetStartedRoute,
-		trafficGatewaysRoute,
-		trafficListenersRoute,
-		trafficRoutesRoute,
-		celRoute,
-		rawSettingsRoute,
-		rawConfigRoute
+		loginRoute,
+		appRoute.addChildren([
+			indexRoute,
+			dumpPoliciesRoute,
+			llmGetStartedRoute,
+			modelsRoute,
+			providersRoute,
+			policiesRoute,
+			guardrailsRoute,
+			costsRoute,
+			logsRoute,
+			analyticsRoute,
+			keysRoute,
+			playgroundRoute,
+			clientSetupRoute,
+			mcpGetStartedRoute,
+			mcpServersRoute,
+			mcpPoliciesRoute,
+			mcpPlaygroundRoute,
+			trafficGetStartedRoute,
+			trafficGatewaysRoute,
+			trafficListenersRoute,
+			trafficRoutesRoute,
+			celRoute,
+			rawSettingsRoute,
+			rawConfigRoute
+		])
 	])
 });
 
@@ -244,6 +259,7 @@ const queryClient = new QueryClient({
 	}
 });
 
+// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
 createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>

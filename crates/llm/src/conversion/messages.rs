@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use agent_core::strng::{self, Strng};
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
@@ -523,7 +523,7 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 
 	use crate::conversion::completions::parse_data_url;
@@ -857,6 +857,7 @@ pub mod from_completions {
 					completions::Tool::Function(function_tool) => {
 						Some(messages::Tool::Custom(messages::CustomTool {
 							name: function_tool.function.name.clone(),
+							strict: None,
 							description: function_tool.function.description.clone(),
 							input_schema: function_tool
 								.function

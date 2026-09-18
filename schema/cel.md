@@ -100,6 +100,7 @@
 |`llm.cost.reasoning`|number||
 |`llm.cost.inputAudio`|number||
 |`llm.cost.outputAudio`|number||
+|`llm.cost.pages`|number||
 |`llm.costRates`|object|Effective model catalog rates in USD per 1M tokens after tier selection.<br>Unset when the model could not be priced.|
 |`llm.costRates.input`|number||
 |`llm.costRates.output`|number||
@@ -108,6 +109,7 @@
 |`llm.costRates.reasoning`|number||
 |`llm.costRates.inputAudio`|number||
 |`llm.costRates.outputAudio`|number||
+|`llm.costRates.perPage`|number||
 |`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
@@ -162,10 +164,10 @@
 |`extproc.*`|any||
 |`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
 |`mcpGuardrails.*`|any||
-|`guardrails`|[]object|`guardrails` contains one entry per prompt-guard guardrail intervention, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
-|`guardrails[].phase`|string|The phase the guardrail intervened in: `request` or `response`.|
-|`guardrails[].guard`|string|The guard kind that intervened, such as `bedrockGuardrails`.|
-|`guardrails[].action`|string|The action the guardrail took (mask/reject/audit/failOpen).|
+|`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
+|`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
+|`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
+|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
 |`guardrails[].guardrailId`|string|The configured guardrail identifier.|
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|

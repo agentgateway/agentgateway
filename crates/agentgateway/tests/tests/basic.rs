@@ -584,6 +584,93 @@ async fn basic_http2() {
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
 }
 
+#[rstest::rstest]
+#[case::http1(Version::HTTP_11, Version::HTTP_11, false)]
+#[case::http2(Version::HTTP_2, Version::HTTP_2, false)]
+#[case::http2_to_http1(Version::HTTP_2, Version::HTTP_11, false)]
+#[case::http1_to_http2(Version::HTTP_11, Version::HTTP_2, false)]
+#[case::http2_content_length(Version::HTTP_2, Version::HTTP_2, true)]
+#[case::http2_to_http1_content_length(Version::HTTP_2, Version::HTTP_11, true)]
+#[tokio::test]
+async fn request_trailers(
+	#[case] version: Version,
+	#[case] backend_version: Version,
+	#[case] content_length: bool,
+) {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (tx, rx) = oneshot::channel();
+	let tx = Arc::new(StdMutex::new(Some(tx)));
+	let server = tokio::spawn(async move {
+		let (stream, _) = listener.accept().await.unwrap();
+		let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+			let tx = tx.clone();
+			async move {
+				let (parts, body) = req.into_parts();
+				let body = body.collect().await.unwrap();
+				let trailers = body.trailers().cloned();
+				tx.lock()
+					.unwrap()
+					.take()
+					.unwrap()
+					.send((parts, body.to_bytes(), trailers))
+					.unwrap();
+				Ok::<_, Infallible>(hyper::Response::new(Body::empty()))
+			}
+		});
+		hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+			.serve_connection(TokioIo::new(stream), svc)
+			.await
+			.unwrap();
+	});
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", addr), "".into()),
+				Target::Address(addr),
+			),
+			inline_policies: vec![BackendTrafficPolicy::HTTP(backend::HTTP {
+				version: Some(backend_version),
+				..Default::default()
+			})],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(addr));
+	let io = if version == Version::HTTP_2 {
+		t.serve_http2(BIND_KEY)
+	} else {
+		t.serve_http(BIND_KEY)
+	};
+	let mut trailers = HeaderMap::new();
+	trailers.insert("x-input-trailer", "input-done".parse().unwrap());
+	let body = Body::new(StreamBody::new(tokio_stream::iter([
+		Ok::<_, Infallible>(Frame::data(bytes::Bytes::from_static(b"grpc-payload"))),
+		Ok(Frame::trailers(trailers.clone())),
+	])));
+	let mut request = RequestBuilder::new(Method::POST, "http://lo")
+		.version(version)
+		.header(header::TRAILER, "x-input-trailer")
+		.body(body);
+	if content_length {
+		request = request.header(header::CONTENT_LENGTH, "12");
+	}
+	let res = request.send(io).await.unwrap();
+	assert_eq!(res.status(), 200);
+	let (parts, bytes, received_trailers) = rx.await.unwrap();
+	server.abort();
+	assert_eq!(parts.version, backend_version);
+	assert_eq!(parts.headers.get_all(header::TRAILER).iter().count(), 1);
+	if backend_version == Version::HTTP_11 {
+		assert!(!parts.headers.contains_key(header::CONTENT_LENGTH));
+		assert_eq!(parts.headers[header::TRANSFER_ENCODING], "chunked");
+	} else if content_length {
+		assert_eq!(parts.headers[header::CONTENT_LENGTH], "12");
+	}
+	assert_eq!(bytes, "grpc-payload");
+	assert_eq!(received_trailers, Some(trailers));
+}
+
 #[tokio::test]
 async fn http2_host_header_without_authority() {
 	let mock = simple_mock().await;

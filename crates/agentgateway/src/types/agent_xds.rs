@@ -27,7 +27,7 @@ use llm::{AIBackend, AIProvider, NamedAIProvider};
 use super::agent::*;
 use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind, GcpAuth};
 use crate::http::buffer::BufferBody;
-use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
+use crate::http::transformation_cel::{Transformation, TransformerConfig};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::RequestPolicy;
@@ -127,14 +127,14 @@ fn provider_preset_from_proto(
 fn override_ai_provider_model(provider: &mut AIProvider, model: &str) {
 	let model = Some(strng::new(model));
 	match provider {
-		AIProvider::Anthropic(provider) => provider.model = model,
-		AIProvider::OpenAI(provider) => provider.model = model,
-		AIProvider::Copilot(provider) => provider.model = model,
-		AIProvider::Gemini(provider) => provider.model = model,
-		AIProvider::Custom(provider) => provider.model = model,
-		AIProvider::Vertex(provider) => provider.model = model,
-		AIProvider::Bedrock(provider) => provider.model = model,
-		AIProvider::Azure(provider) => provider.model = model,
+		AIProvider::Anthropic(provider) => provider.model_override = model,
+		AIProvider::OpenAI(provider) => provider.model_override = model,
+		AIProvider::Copilot(provider) => provider.model_override = model,
+		AIProvider::Gemini(provider) => provider.model_override = model,
+		AIProvider::Custom(provider) => provider.model_override = model,
+		AIProvider::Vertex(provider) => provider.model_override = model,
+		AIProvider::Bedrock(provider) => provider.model_override = model,
+		AIProvider::Azure(provider) => provider.model_override = model,
 	}
 }
 
@@ -1322,11 +1322,19 @@ fn backend_auth_kind_from_proto(
 							));
 						},
 					};
+					let external_id = if assume_role.external_id.is_empty() {
+						None
+					} else {
+						auth::aws::validate_external_id(&assume_role.external_id)
+							.map_err(|e| ProtoError::Generic(format!("assumeRole externalId: {e}")))?;
+						Some(assume_role.external_id)
+					};
 					Ok(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
 						session_name,
 						tags: auth::aws::AwsSessionTags::try_new(tags)
 							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+						external_id,
 					})
 				})
 				.transpose()?;
@@ -1900,29 +1908,41 @@ pub(crate) fn backend_with_policies_from_proto(
 								.map(openai_moderation_from_proto)
 								.transpose()?;
 							AIProvider::OpenAI(llm::openai::Provider {
-								model: openai.model.as_deref().map(strng::new),
+								model_override: openai.model.as_deref().map(strng::new),
 								moderation,
 							})
 						},
 						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
-							model: gemini.model.as_deref().map(strng::new),
+							model_override: gemini.model.as_deref().map(strng::new),
 						}),
 						Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
-							model: vertex.model.as_deref().map(strng::new),
+							model_override: vertex.model.as_deref().map(strng::new),
 							region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
 							project_id: strng::new(&vertex.project_id),
 						}),
 						Some(provider::Provider::Anthropic(anthropic)) => {
 							AIProvider::Anthropic(llm::anthropic::Provider {
-								model: anthropic.model.as_deref().map(strng::new),
+								model_override: anthropic.model.as_deref().map(strng::new),
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
 							AIProvider::bedrock(llm::bedrock::Provider {
-								model: bedrock.model.as_deref().map(strng::new),
+								model_override: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
+								endpoint_preference: match bedrock.endpoint_preference() {
+									proto::agent::ai_backend::BedrockEndpointPreference::MantlePreferred => {
+										llm::bedrock::BedrockEndpointPreference::MantlePreferred
+									},
+									proto::agent::ai_backend::BedrockEndpointPreference::MantleOnly => {
+										llm::bedrock::BedrockEndpointPreference::MantleOnly
+									},
+									proto::agent::ai_backend::BedrockEndpointPreference::RuntimeOnly => {
+										llm::bedrock::BedrockEndpointPreference::RuntimeOnly
+									},
+									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
+								},
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1933,7 +1953,7 @@ pub(crate) fn backend_with_policies_from_proto(
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
 							AIProvider::azure(llm::azure::Provider {
-								model: azure.model.as_deref().map(strng::new),
+								model_override: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
@@ -1957,7 +1977,7 @@ pub(crate) fn backend_with_policies_from_proto(
 								.map(|format| convert_provider_format_config(format, provider_idx))
 								.collect::<Result<Vec<_>, _>>()?;
 							AIProvider::Custom(llm::custom::Provider {
-								model: custom.model.as_deref().map(strng::new),
+								model_override: custom.model.as_deref().map(strng::new),
 								provider_override: custom.provider_override.as_deref().map(strng::new),
 								formats,
 							})
@@ -2042,7 +2062,7 @@ pub(crate) fn backend_with_policies_from_proto(
 			}
 
 			let es = crate::types::loadbalancer::EndpointSet::new(provider_groups);
-			Backend::AI(name.into(), AIBackend { providers: es })
+			Backend::AI(name.into(), AIBackend::new(es))
 		},
 		Some(proto::agent::backend::Kind::Mcp(m)) => Backend::MCP(
 			name.into(),
@@ -2068,6 +2088,9 @@ pub(crate) fn backend_with_policies_from_proto(
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				sse_keep_alive: m.sse_keep_alive.map(convert_duration),
 				dns_rebinding_protection: false,
+				// Not yet exposed over xDS; only the local/static config surface
+				// (`LocalMcpBackend`) supports these overrides today.
+				server: None,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
@@ -2229,52 +2252,49 @@ fn transformation_from_proto(
 ) -> Result<Transformation, ProtoError> {
 	fn convert_transform(
 		t: &Option<proto::agent::traffic_policy_spec::transformation_policy::Transform>,
-	) -> LocalTransform {
-		let mut add = Vec::new();
-		let mut set = Vec::new();
-		let mut remove = Vec::new();
-		let mut body = None;
-		let mut metadata = Vec::new();
-
-		if let Some(t) = t {
-			for h in &t.add {
-				add.push((h.name.clone().into(), h.expression.clone().into()));
-			}
-			for h in &t.set {
-				set.push((h.name.clone().into(), h.expression.clone().into()));
-			}
-			for r in &t.remove {
-				remove.push(r.clone().into());
-			}
-			if let Some(b) = &t.body {
-				body = Some(b.expression.clone().into());
-			}
-			for (k, v) in &t.metadata {
-				metadata.push((k.clone().into(), v.clone().into()));
-			}
+		diagnostics: &mut Diagnostics,
+	) -> Result<Option<Arc<TransformerConfig>>, ProtoError> {
+		let Some(t) = t else {
+			return Ok(None);
+		};
+		let mut config = TransformerConfig::default();
+		for h in &t.set {
+			config.set.push((
+				crate::http::HeaderOrPseudo::try_from(h.name.as_str())
+					.map_err(|e| ProtoError::Generic(e.to_string()))?,
+				permissive_cel_expression(diagnostics, "transformation", &h.expression),
+			));
 		}
-
-		LocalTransform {
-			add,
-			set,
-			remove,
-			// `replace` is only available via local file config today; the XDS proto does not
-			// carry it yet, so dynamic configs leave it unset.
-			replace: None,
-			body,
-			metadata,
+		for h in &t.add {
+			config.add.push((
+				crate::http::HeaderOrPseudo::try_from(h.name.as_str())
+					.map_err(|e| ProtoError::Generic(e.to_string()))?,
+				permissive_cel_expression(diagnostics, "transformation", &h.expression),
+			));
 		}
+		for r in &t.remove {
+			config.remove.push(
+				::http::HeaderName::try_from(r.as_str()).map_err(|e| ProtoError::Generic(e.to_string()))?,
+			);
+		}
+		config.body = t
+			.body
+			.as_ref()
+			.map(|b| permissive_cel_expression(diagnostics, "transformation", &b.expression));
+		for (k, v) in &t.metadata {
+			config.metadata.push((
+				k.clone().into(),
+				permissive_cel_expression(diagnostics, "transformation", v),
+			));
+		}
+		// The xDS proto does not carry replace yet, so it remains unset.
+		Ok(Some(Arc::new(config)))
 	}
 
-	let request = Some(convert_transform(&spec.request));
-	let response = Some(convert_transform(&spec.response));
-	let config = LocalTransformationConfig { request, response };
-	Transformation::try_from_local_config_with_warnings(config, false, |expression, err| {
-		diagnostics.add_warning(format!(
-			"invalid CEL expression for transformation: {err}; replacing {expression:?} with an expression that always fails",
-		));
+	Ok(Transformation {
+		request: convert_transform(&spec.request, diagnostics)?,
+		response: convert_transform(&spec.response, diagnostics)?,
 	})
-	.map_err(|e| ProtoError::Generic(e.to_string()))
 }
 
 fn backend_policy_from_proto(
@@ -2559,10 +2579,11 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let convert = |max_tokens: u64,
-			               tokens_per_fill: u64,
-			               fill_interval: Option<prost_types::Duration>,
-			               limit_type: i32| {
+			let mut convert = |max_tokens: u64,
+			                   tokens_per_fill: u64,
+			                   fill_interval: Option<prost_types::Duration>,
+			                   limit_type: i32,
+			                   key: Option<&str>| {
 				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
 				http::localratelimit::RateLimitSpec {
 					max_tokens,
@@ -2574,6 +2595,9 @@ fn traffic_policy_from_proto(
 						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
 						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
 					},
+					key: key
+						.filter(|k| !k.is_empty())
+						.map(|k| permissive_cel_expression_arc(diagnostics, "localRateLimit.key", k)),
 				}
 				.try_into()
 				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
@@ -2584,6 +2608,7 @@ fn traffic_policy_from_proto(
 					lrl.tokens_per_fill,
 					lrl.fill_interval,
 					lrl.r#type,
+					None,
 				)?]
 			} else {
 				lrl
@@ -2595,9 +2620,10 @@ fn traffic_policy_from_proto(
 							rule.tokens_per_fill,
 							rule.fill_interval,
 							rule.r#type,
+							rule.key.as_deref(),
 						)
 					})
-					.collect::<Result<_, _>>()?
+					.collect::<Result<Vec<_>, _>>()?
 			};
 			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
@@ -4057,7 +4083,12 @@ fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
 ) -> Result<llm::policy::Webhook, ProtoError> {
-	let target = resolve_simple_reference(w.backend.as_ref());
+	// The xDS Webhook message carries no inline backend policies yet; a
+	// named Backend reference still brings its own policies with it.
+	let target = SimpleBackendReferenceWithPolicies {
+		target: Arc::new(resolve_simple_reference(w.backend.as_ref())),
+		policies: vec![],
+	};
 
 	let forward_header_matches = convert_header_match(
 		diagnostics,
@@ -4573,6 +4604,7 @@ mod tests {
 								nanos: 0,
 							}),
 							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+							key: None,
 						},
 						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
 							max_tokens: 5,
@@ -4582,6 +4614,7 @@ mod tests {
 								nanos: 0,
 							}),
 							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+							key: None,
 						},
 					],
 				},
@@ -5883,7 +5916,7 @@ mod tests {
 			panic!("Expected AIProvider::Custom");
 		};
 		assert_eq!(custom.provider_override.as_deref(), Some("ollama"));
-		assert_eq!(custom.model.as_deref(), Some("llama3.3"));
+		assert_eq!(custom.model_override.as_deref(), Some("llama3.3"));
 		assert!(custom.supports(llm::custom::ProviderFormat::Responses));
 		assert_eq!(
 			provider.host_override,

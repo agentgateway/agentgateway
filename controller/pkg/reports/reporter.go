@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,8 +35,9 @@ type ListenerReport struct {
 }
 
 type RouteReport struct {
-	Parents            map[ParentRefKey]*ParentRefReport
-	observedGeneration int64
+	sectionScopedParents bool
+	Parents              map[ParentRefKey]*ParentRefReport
+	observedGeneration   int64
 }
 
 // TODO: rename to e.g. RouteParentRefReport
@@ -44,8 +46,10 @@ type ParentRefReport struct {
 }
 
 type ParentRefKey struct {
-	Group string
-	Kind  string
+	SectionName gwv1.SectionName
+	Port        gwv1.PortNumber
+	Group       string
+	Kind        string
 	types.NamespacedName
 }
 
@@ -128,6 +132,7 @@ func (r *ReportMap) newRouteReport(obj metav1.Object) *RouteReport {
 	case *gwv1.GRPCRoute:
 		r.GRPCRoutes[key] = rr
 	case *agentgateway.AgentgatewayModel:
+		rr.sectionScopedParents = true
 		r.Models[key] = rr
 	default:
 		slog.Warn("unsupported route type", "route_type", fmt.Sprintf("%T", obj))
@@ -223,7 +228,7 @@ func (r *statusReporter) Route(obj metav1.Object) reporter.RouteReporter {
 }
 
 // TODO: flesh out
-func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
+func (r *RouteReport) getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 	var group string
 	if parentRef.Group != nil {
 		group = string(*parentRef.Group)
@@ -238,12 +243,18 @@ func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 	if parentRef.Namespace != nil {
 		ns = string(*parentRef.Namespace)
 	}
-	return ParentRefKey{
+	key := ParentRefKey{
 		Group:     group,
 		Kind:      kind,
-		Namespace: ns,
-		Name:      string(parentRef.Name),
+		Namespace: ns, Name: string(parentRef.Name),
 	}
+	// Model parents distinguish individual listener and HTTPRoute rule references.
+	// Other route translators still aggregate their reports by parent object.
+	if r.sectionScopedParents {
+		key.SectionName = ptr.OrEmpty(parentRef.SectionName)
+		key.Port = ptr.OrEmpty(parentRef.Port)
+	}
+	return key
 }
 
 func canonicalGroup(kind *gwv1.Kind) string {
@@ -257,7 +268,7 @@ func canonicalGroup(kind *gwv1.Kind) string {
 // that parentRef exists in the report (i.e. the parentRef was encountered during translation)
 // If no report is found, nil is returned, signaling this parentRef is unknown to the report
 func (r *RouteReport) getParentRefOrNil(parentRef *gwv1.ParentReference) *ParentRefReport {
-	key := getParentRefKey(parentRef)
+	key := r.getParentRefKey(parentRef)
 	if r.Parents == nil {
 		r.Parents = make(map[ParentRefKey]*ParentRefReport)
 	}
@@ -265,7 +276,7 @@ func (r *RouteReport) getParentRefOrNil(parentRef *gwv1.ParentReference) *Parent
 }
 
 func (r *RouteReport) parentRef(parentRef *gwv1.ParentReference) *ParentRefReport {
-	key := getParentRefKey(parentRef)
+	key := r.getParentRefKey(parentRef)
 	if r.Parents == nil {
 		r.Parents = make(map[ParentRefKey]*ParentRefReport)
 	}
@@ -293,6 +304,12 @@ func (r *RouteReport) parentRefs() []gwv1.ParentReference {
 			Kind:      new(gwv1.Kind(key.Kind)),
 			Name:      gwv1.ObjectName(key.Name),
 			Namespace: ns,
+		}
+		if key.SectionName != "" {
+			parentRef.SectionName = new(key.SectionName)
+		}
+		if key.Port != 0 {
+			parentRef.Port = new(key.Port)
 		}
 		refs = append(refs, parentRef)
 	}

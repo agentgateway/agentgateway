@@ -112,6 +112,19 @@ spec:
               bedrock:
                 description: Provider-specific settings for Amazon Bedrock.
                 properties:
+                  endpointPreference:
+                    default: RuntimePreferred
+                    description: |-
+                      EndpointPreference selects which Bedrock API surface to prefer.
+                      Defaults to preferring runtime over mantle.
+                      Decides which endpoint to pick mainly based on the catalog tags
+                      `mantle` and `runtime`.
+                    enum:
+                    - MantleOnly
+                    - MantlePreferred
+                    - RuntimeOnly
+                    - RuntimePreferred
+                    type: string
                   guardrail:
                     description: |-
                       Guardrail policy to use for the backend. See
@@ -368,6 +381,13 @@ spec:
                               AWS STS AssumeRole settings to use before signing backend requests.
                               Ambient AWS credentials are used as the source credentials for STS.
                             properties:
+                              externalId:
+                                description: ExternalID is set when the role's trust
+                                  policy requires sts:ExternalId.
+                                maxLength: 1224
+                                minLength: 2
+                                pattern: ^[\w+=,.@:/-]+$
+                                type: string
                               roleArn:
                                 description: AWS IAM role ARN to assume.
                                 minLength: 1
@@ -1781,6 +1801,14 @@ spec:
                                                 AWS STS AssumeRole settings to use before signing backend requests.
                                                 Ambient AWS credentials are used as the source credentials for STS.
                                               properties:
+                                                externalId:
+                                                  description: ExternalID is set when
+                                                    the role's trust policy requires
+                                                    sts:ExternalId.
+                                                  maxLength: 1224
+                                                  minLength: 2
+                                                  pattern: ^[\w+=,.@:/-]+$
+                                                  type: string
                                                 roleArn:
                                                   description: AWS IAM role ARN to
                                                     assume.
@@ -3597,6 +3625,14 @@ spec:
                                                 AWS STS AssumeRole settings to use before signing backend requests.
                                                 Ambient AWS credentials are used as the source credentials for STS.
                                               properties:
+                                                externalId:
+                                                  description: ExternalID is set when
+                                                    the role's trust policy requires
+                                                    sts:ExternalId.
+                                                  maxLength: 1224
+                                                  minLength: 2
+                                                  pattern: ^[\w+=,.@:/-]+$
+                                                  type: string
                                                 roleArn:
                                                   description: AWS IAM role ARN to
                                                     assume.

@@ -451,6 +451,7 @@ impl Provider {
 			};
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
+			validation.validate_nbf = true;
 			validation.algorithms = supported_algorithms;
 			// Override required_spec_claims with the user-configured set. A configured
 			// issuer or audience also implies that the corresponding claim must exist;

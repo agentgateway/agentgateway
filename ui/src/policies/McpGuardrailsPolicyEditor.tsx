@@ -151,6 +151,7 @@ export function McpGuardrailsPolicyEditor(props: {
 					{processors.map((processor, index) => (
 						<section
 							className={errors[index] ? 'mcp-processor-card invalid' : 'mcp-processor-card'}
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 						>
 							<div className="mcp-processor-header">

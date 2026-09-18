@@ -188,6 +188,7 @@ impl ResponseType for Response {
 			}),
 
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
+			pages: None,
 			count_tokens: None,
 
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
@@ -777,6 +778,10 @@ pub mod typed {
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
+		/// The delta for this chunk. Providers are inconsistent about the final chunk: some send an
+		/// empty object alongside `finish_reason`, others omit the field entirely, so treat a missing
+		/// delta as an empty one rather than failing the whole chunk.
+		#[serde(default)]
 		pub delta: StreamResponseDelta,
 		/// The reason the model stopped generating tokens. This will be
 		/// `stop` if the model hit a natural stop point or a provided

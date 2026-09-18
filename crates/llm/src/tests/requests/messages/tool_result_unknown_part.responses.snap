@@ -39,6 +39,7 @@ info:
           content:
             - type: text
               text: 3 widgets found
+              citations: []
             - type: future_block
               foo: 1
 ---
@@ -57,7 +58,6 @@ info:
       },
       {
         "type": "function_call",
-        "id": "toolu_01AAAA",
         "call_id": "toolu_01AAAA",
         "name": "ToolSearch",
         "arguments": "{\"query\":\"widgets\"}",
@@ -88,7 +88,8 @@ info:
           "required": [
             "query"
           ]
-        }
+        },
+        "strict": false
       },
       {
         "type": "function",
@@ -97,7 +98,8 @@ info:
         "parameters": {
           "type": "object",
           "properties": {}
-        }
+        },
+        "strict": false
       }
     ]
   },

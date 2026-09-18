@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+frontendPolicies:
+  accessLog:
+    database:
+      llm: full
+  tracing:
+    host: localhost:4317
+    randomSampling: true
+config:
+  modelCatalog:
+  - inline:
+      providers:
+        typesafe:
+          models:
+            # USD per million tokens: https://docs.typesafe.ai/models
+            jev-1.13.0:
+              rates:
+                input: "0.042"
+                output: "0"
+            jev-latest:
+              rates:
+                input: "0.042"
+                output: "0"
+            jev-preview:
+              rates:
+                input: "0.042"
+                output: "0"
+  database:
+    # In memory request storage only
+    url: 'sqlite::memory:'
+gateways:
+  default:
+    port: 4000
+ui: {}
+llm:
+  models:
+  - name: gpt-5.6-luna
+    provider: openai
+    params:
+      apiKey: $OPENAI_API_KEY
+    guardrails:
+      request:
+      - webhook:
+          target:
+            host: 127.0.0.1:8000
+      response:
+      - webhook:
+          target:
+            host: 127.0.0.1:8000
+  - name: jev-latest
+    provider:
+      custom:
+        providerOverride: typesafe
+        formats: []
+    # JEV uses its own /v1/systemone API, not a chat completion API.
+    passthrough: detect
+    params:
+      baseUrl: https://api.typesafe.ai
+      apiKey: $TYPESAFE_API_KEY

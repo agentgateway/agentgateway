@@ -82,7 +82,8 @@ pub fn router(
 ) -> Router {
 	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
 	Router::new()
-		// Redirect to the UI
+		// OIDC intercepts this path to start login; without OIDC, return to the UI.
+		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
 		.route("/api/config/effective", get(get_effective_config))
@@ -118,8 +119,19 @@ pub fn router(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeInfo {
+	user: Option<RuntimeUser>,
 	build: RuntimeBuildInfo,
 	ui: RuntimeUiInfo,
+}
+
+/// Display-only identity from standardAttributes.user, with optional JWT profile details.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RuntimeUser {
+	pub subject: Option<String>,
+	pub name: Option<String>,
+	pub email: Option<String>,
+	pub can_logout: bool,
 }
 
 #[derive(Serialize)]
@@ -204,25 +216,76 @@ impl From<ConfigResourcesResponse> for UiConfigResourcesResponse {
 	}
 }
 
-async fn get_runtime(State(app): State<App>) -> Json<RuntimeInfo> {
+async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> impl IntoResponse {
+	let req = req.map(crate::http::Body::new);
+	// Use the same compiled, reloadable mapping as request logs, even when log
+	// storage is disabled. This is display metadata, not an authentication check.
+	let attributes = app.state.logging.database_fields.load();
+	let executor = cel::Executor::new_request(&req);
+	let session = req
+		.extensions()
+		.get::<crate::http::oidc::AuthenticatedSession>();
+	let claims = req.extensions().get::<crate::http::jwt::Claims>();
+	let subject = attributes
+		.add
+		.iter()
+		.find(|(name, _)| name.as_ref() == "agentgateway.user")
+		.and_then(|(_, expression)| executor.eval(expression).ok())
+		.and_then(|value| match value {
+			cel::Value::String(value) => Some(value.trim().to_owned()),
+			_ => None,
+		})
+		.filter(|value| !value.is_empty())
+		.or_else(|| {
+			// A custom display mapping must not hide the account menu and logout
+			// for an authenticated OIDC session. Other identities retain that mapping.
+			session?;
+			claims?
+				.inner
+				.get("sub")?
+				.as_str()
+				.map(str::trim)
+				.filter(|value| !value.is_empty())
+				.map(str::to_owned)
+		});
+	let user = subject.map(|subject| {
+		let [name, email, username] = ["name", "email", "preferred_username"].map(|key| {
+			claims
+				.and_then(|claims| claims.inner.get(key))
+				.and_then(serde_json::Value::as_str)
+				.map(str::trim)
+				.filter(|v| !v.is_empty())
+				.map(str::to_owned)
+		});
+		RuntimeUser {
+			subject: Some(subject),
+			name: name.or(username),
+			email,
+			can_logout: session.is_some_and(|session| session.can_logout),
+		}
+	});
 	let build = BuildInfo::new();
-	Json(RuntimeInfo {
-		build: RuntimeBuildInfo {
-			version: build.version,
-			git_revision: build.git_revision,
-			rust_version: build.rust_version,
-			build_profile: build.build_profile,
-			build_target: build.build_target,
-		},
-		ui: RuntimeUiInfo {
-			gateway_mode: if app.state.xds.address.is_some() {
-				GatewayRuntimeMode::Xds
-			} else {
-				GatewayRuntimeMode::Standalone
+	(
+		[("cache-control", "no-store")],
+		Json(RuntimeInfo {
+			user,
+			build: RuntimeBuildInfo {
+				version: build.version,
+				git_revision: build.git_revision,
+				rust_version: build.rust_version,
+				build_profile: build.build_profile,
+				build_target: build.build_target,
 			},
-			config_store_mode: app.state.storage.mode,
-		},
-	})
+			ui: RuntimeUiInfo {
+				gateway_mode: if app.state.xds.address.is_some() {
+					GatewayRuntimeMode::Xds
+				} else {
+					GatewayRuntimeMode::Standalone
+				},
+				config_store_mode: app.state.storage.mode,
+			},
+		}),
+	)
 }
 
 async fn serve_ui_asset(
@@ -953,6 +1016,79 @@ mod tests {
 			resource_manager: crate::resource_manager::ResourceManager::new(client)
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
+		}
+	}
+
+	#[tokio::test]
+	async fn runtime_user_uses_standard_attributes_without_log_storage() {
+		let app = test_app(false);
+		assert!(app.state.logging.database.is_none());
+		for (expression, jwt, expected_subject, can_logout) in [
+			(None, true, Some("jwt-user"), false),
+			(None, true, Some("jwt-user"), true),
+			(None, false, Some("basic-user"), false),
+			(
+				Some("request.headers['x-display-user']"),
+				true,
+				Some("custom-user"),
+				false,
+			),
+			(Some("null"), true, None, false),
+			(Some("null"), true, Some("jwt-user"), true),
+			(
+				Some("request.headers['missing']"),
+				true,
+				Some("jwt-user"),
+				true,
+			),
+			(Some("42"), true, None, false),
+			(Some("request.headers['missing']"), true, None, false),
+		] {
+			// Reuse the app to verify updates replace the mapping used by the handler.
+			app.state.logging.database_fields.store(Arc::new(
+				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
+					user: expression.map(str::to_owned),
+					group: None,
+				}))
+				.unwrap(),
+			));
+			let mut req = axum::extract::Request::builder()
+				.uri("http://localhost/api/runtime")
+				.header("x-display-user", "custom-user")
+				.body(axum::body::Body::empty())
+				.unwrap();
+			if jwt {
+				req.extensions_mut().insert(crate::http::jwt::Claims {
+					inner: serde_json::json!({"sub": "jwt-user", "name": "Display Name", "email": "user@example.com"}).as_object().unwrap().clone(),
+					..Default::default()
+				});
+			} else {
+				req.extensions_mut().insert(crate::http::basicauth::Claims {
+					username: "basic-user".into(),
+				});
+			}
+			if can_logout {
+				req
+					.extensions_mut()
+					.insert(crate::http::oidc::AuthenticatedSession { can_logout });
+			}
+			let response = get_runtime(State(app.clone()), req).await.into_response();
+			assert_eq!(response.headers()["cache-control"], "no-store");
+			let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+				.await
+				.unwrap();
+			let runtime: Value = serde_json::from_slice(&body).unwrap();
+			let expected = expected_subject
+				.map(|subject| {
+					serde_json::json!({
+						"subject": subject,
+						"canLogout": can_logout,
+						"name": if jwt { Some("Display Name") } else { None },
+						"email": if jwt { Some("user@example.com") } else { None },
+					})
+				})
+				.unwrap_or(Value::Null);
+			assert_eq!(runtime["user"], expected, "expression: {expression:?}");
 		}
 	}
 

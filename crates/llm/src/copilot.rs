@@ -7,8 +7,8 @@ use crate::{ChatFormat, RouteType, apply};
 #[cfg_attr(feature = "schema", schemars(rename = "CopilotProvider"))]
 pub struct Provider {
 	/// Model ID to send to GitHub Copilot, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 }
 
 impl super::Provider for Provider {
@@ -16,17 +16,14 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	pub fn is_anthropic_model(request_model: Option<&str>) -> bool {
-		request_model.is_some_and(|model| model.to_ascii_lowercase().starts_with("claude-"))
+	pub fn is_anthropic_model(request_model: &str) -> bool {
+		request_model.to_ascii_lowercase().starts_with("claude-")
 	}
 	pub fn supported_formats_for_model(
-		request_model: Option<&str>,
+		request_model: &str,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Vec<ChatFormat> {
-		let Some(m) = request_model else {
-			// If we have no model not much we can do...
-			return vec![ChatFormat::OpenAICompletions];
-		};
+		let m = request_model;
 		let normalized_model = m.to_ascii_lowercase();
 		// TODO: also support endpoint parsing from copilot models and add a tool to grab specific setups in agctl
 		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(&normalized_model)) {
@@ -98,7 +95,7 @@ mod tests {
 		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
 		let catalog: Catalog = Some(&cat);
 		assert_eq!(
-			Provider::supported_formats_for_model(Some("grok-2"), catalog),
+			Provider::supported_formats_for_model("grok-2", catalog),
 			vec![ChatFormat::OpenAICompletions]
 		);
 	}
@@ -108,7 +105,7 @@ mod tests {
 		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
 		let catalog: Catalog = Some(&cat);
 		assert_eq!(
-			Provider::supported_formats_for_model(Some("Grok-2"), catalog),
+			Provider::supported_formats_for_model("Grok-2", catalog),
 			vec![ChatFormat::OpenAICompletions]
 		);
 	}
@@ -118,7 +115,7 @@ mod tests {
 		let cat = TestCatalog::new([("grok-2", &[][..])]);
 		let catalog: Catalog = Some(&cat);
 		assert_eq!(
-			Provider::supported_formats_for_model(Some("grok-2"), catalog),
+			Provider::supported_formats_for_model("grok-2", catalog),
 			vec![ChatFormat::OpenAIResponses]
 		);
 	}

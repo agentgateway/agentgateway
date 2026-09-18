@@ -177,3 +177,33 @@ extraVolumes: []
 
 # -- Additional volume mounts to add to the agentgateway proxy container.
 extraVolumeMounts: []
+
+# -- (object) podDisruptionBudget allows you to define minimum and maximum available pods during voluntary disruptions
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  maxUnavailable: ""
+  # -- UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction
+  unhealthyPodEvictionPolicy: ""
+
+# -- (object) Configures HorizontalPodAutoscaler for your Deployment
+autoscaling:
+  enabled: false
+  annotations: {}
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  behavior: {}
+  # scaleDown:
+  #   stabilizationWindowSeconds: 300
+  #   policies:
+  #   - type: Pods
+  #     value: 1
+  #     periodSeconds: 180
+  # scaleUp:
+  #   stabilizationWindowSeconds: 300
+  #   policies:
+  #   - type: Pods
+  #     value: 2
+  #     periodSeconds: 60

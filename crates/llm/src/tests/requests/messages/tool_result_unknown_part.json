@@ -59,7 +59,8 @@
           "content": [
             {
               "type": "text",
-              "text": "3 widgets found"
+              "text": "3 widgets found",
+              "citations": []
             },
             {
               "type": "future_block",

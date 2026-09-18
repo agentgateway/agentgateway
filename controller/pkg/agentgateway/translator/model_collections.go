@@ -325,11 +325,6 @@ func translateModelForParents(
 	parentRefs []RouteParentReference,
 	routeReporter reporter.RouteReporter,
 ) []agwir.AgwResource {
-	allowed := map[string]struct{}{}
-	for _, p := range FilteredReferences(parentRefs) {
-		allowed[modelParentKey(p)] = struct{}{}
-	}
-
 	type parentAgg struct {
 		anyAllowed bool
 		parentRefs []RouteParentReference
@@ -350,7 +345,7 @@ func translateModelForParents(
 	var resources []agwir.AgwResource
 	var conversionErr *reporter.RouteCondition
 	for _, parent := range parentRefs {
-		if _, ok := allowed[modelParentKey(parent)]; !ok {
+		if parent.DeniedReason != nil {
 			continue
 		}
 		if a := agg[parentStatusKey(parent)]; a != nil {
@@ -380,7 +375,6 @@ func translateModelForParents(
 			prStatusRef.Kind = new(gwv1.Kind(parent.ParentKey.Kind))
 			prStatusRef.Namespace = new(gwv1.Namespace(parent.ParentKey.Namespace))
 			prStatusRef.Name = gwv1.ObjectName(parent.ParentKey.Name)
-			prStatusRef.SectionName = nil
 
 			pr := routeReporter.ParentRef(&prStatusRef)
 			if a.anyAllowed {
@@ -421,11 +415,8 @@ func translateModelForParents(
 }
 
 func parentStatusKey(parent RouteParentReference) string {
-	return fmt.Sprintf("%s/%s/%s", parent.ParentKey.Namespace, parent.ParentKey.Name, parent.ParentKey.Kind)
-}
-
-func modelParentKey(parent RouteParentReference) string {
-	return fmt.Sprintf("%s/%s/%s/%s", parent.ParentKey.Namespace, parent.ParentKey.Name, parent.ParentKey.Kind, string(parent.ParentSection))
+	return fmt.Sprintf("%s/%s/%s/%s/%d", parent.ParentKey.Namespace, parent.ParentKey.Name, parent.ParentKey.Kind,
+		ptr.OrEmpty(parent.OriginalReference.SectionName), ptr.OrEmpty(parent.OriginalReference.Port))
 }
 
 func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.AgentgatewayModel, parent RouteParentReference) ([]*api.Resource, error) {
@@ -983,7 +974,13 @@ func translateModelVisibility(visibility agentgateway.ModelVisibility) api.Model
 }
 
 func modelRouteKey(model *agentgateway.AgentgatewayModel, parent RouteParentReference) string {
-	return config.NamespacedName(model).String() + modelRouteKeySuffix(parent)
+	key := config.NamespacedName(model).String() + modelRouteKeySuffix(parent)
+	if parent.ParentKey.Kind == wellknown.HTTPRouteKind {
+		// An HTTPRoute rule may attach to multiple listeners on the same Gateway.
+		// Backends can be shared, but model routes carry a specific listener key.
+		key += "." + parent.ListenerKey[strings.LastIndex(parent.ListenerKey, ".")+1:]
+	}
+	return key
 }
 
 func modelBackendKey(model *agentgateway.AgentgatewayModel, parent RouteParentReference, target string) string {

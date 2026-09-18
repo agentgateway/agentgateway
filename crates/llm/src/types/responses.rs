@@ -765,7 +765,21 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.arguments.clone()),
 			};
-			(&call.call_id, &call.name, arguments)
+			let name = call
+				.namespace
+				.as_ref()
+				.filter(|namespace| !namespace.is_empty())
+				.map_or_else(
+					|| call.name.clone(),
+					|namespace| {
+						format!(
+							"{namespace}{}{}",
+							crate::conversion::namespace_tools::NAMESPACE_SEPARATOR,
+							call.name
+						)
+					},
+				);
+			(&call.call_id, name, arguments)
 		},
 		OutputItem::CustomToolCall(call) => {
 			let arguments = match serde_json::from_str(&call.input) {
@@ -773,13 +787,13 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.input.clone()),
 			};
-			(&call.call_id, &call.name, arguments)
+			(&call.call_id, call.name.clone(), arguments)
 		},
 		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
 		id: strng::new(id),
-		name: strng::new(name),
+		name: strng::new(&name),
 		arguments,
 	})
 }
@@ -809,6 +823,7 @@ impl ResponseType for Response {
 				.usage
 				.as_ref()
 				.map(|u| u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens)),
+			pages: None,
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.output_tokens_details
 					.as_ref()
@@ -942,7 +957,7 @@ pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
+		Annotation, AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
 		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
 		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
 		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 use std::{env, thread};
 
@@ -38,7 +38,7 @@ pub struct RequestLogStore {
 }
 
 impl RequestLogStore {
-	pub fn emit(&self, record: StoredRequestLog) {
+	pub(super) fn emit(&self, record: PendingRequestLog) {
 		REQUEST_LOG_STORE_BACKLOG.fetch_add(1, Ordering::Relaxed);
 		if let Err(err) = self.tx.send(LogStoreMsg::Record(record)) {
 			REQUEST_LOG_STORE_BACKLOG.fetch_sub(1, Ordering::Relaxed);
@@ -83,7 +83,7 @@ pub async fn setup_with_pool(
 	})
 }
 
-pub fn emit(record: StoredRequestLog) {
+pub(super) fn emit(record: PendingRequestLog) {
 	if let Some(store) = REQUEST_LOG_STORE.get() {
 		store.emit(record);
 	}
@@ -161,7 +161,7 @@ const LOG_STORE_BATCH_SIZE_ENV: &str = "REQUEST_LOG_STORE_BATCH_SIZE";
 
 #[allow(clippy::large_enum_variant)] // The StoredRequestLog, which is used 99.9% of the time, is the large one
 enum LogStoreMsg {
-	Record(StoredRequestLog),
+	Record(PendingRequestLog),
 	Search {
 		request: SearchRequest,
 		tx: QueryResponse<SearchResponse>,
@@ -327,7 +327,14 @@ async fn process_log_store_msg(
 	msg: LogStoreMsg,
 ) -> bool {
 	match msg {
-		LogStoreMsg::Record(record) => {
+		LogStoreMsg::Record(pending) => {
+			let mut record = pending.record;
+			record.payload = super::log::database_llm_payload(
+				pending.llm_mode,
+				pending.input_messages.as_deref().map(Vec::as_slice),
+				pending.llm_response.as_ref(),
+			);
+			record.has_payload = record.payload.is_some();
 			batch.push(record);
 			false
 		},
@@ -375,6 +382,15 @@ async fn flush_log_store_batch(backend: &Backend, batch: &mut Vec<StoredRequestL
 		"flushed request log database batch"
 	);
 	batch.clear();
+}
+
+// Keep captured content in its original form until it reaches the database worker.
+// Normalization and JSON serialization can be expensive for large prompts and completions.
+pub(super) struct PendingRequestLog {
+	pub record: StoredRequestLog,
+	pub llm_mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	pub input_messages: Option<Arc<Vec<agent_llm::types::NormalizedMessage>>>,
+	pub llm_response: Option<crate::cel::LLMContext>,
 }
 
 #[derive(Clone, Debug)]

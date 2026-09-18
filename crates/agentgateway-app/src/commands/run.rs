@@ -7,7 +7,7 @@ use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, ConfigStoreMode, LoggingFormat, client, serdes};
 use tracing::{error, info};
 
-use crate::{RunArgs, read_config_contents};
+use crate::{RunArgs, read_config_contents, running_in_kubernetes};
 
 pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 	let RunArgs {
@@ -46,11 +46,17 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
-			info!("version: {}", build_info());
-			info!(
-				"running with config: {}",
-				serdes::yamlviajson::to_string(&config)?
-			);
+			if running_in_kubernetes() {
+				// These logs are 100s of lines. Handy when not used interactively, but for standalone usage
+				// they are just obscuring useful information.
+				info!("version: {}", build_info());
+				info!(
+					"running with config: {}",
+					serdes::yamlviajson::to_string(&config)?
+				);
+			} else {
+				info!("version: {}", version::BuildInfo::new().version);
+			}
 			let database_pool = match config.database.as_ref() {
 				Some(database) => Some(
 					agentgateway::database::DatabasePool::connect_with_max_connections(

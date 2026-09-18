@@ -14,7 +14,7 @@ use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
+use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReferenceWithPolicies};
 use crate::*;
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
@@ -39,7 +39,7 @@ fn record_guardrail(
 	detail: Option<GuardDetail>,
 ) {
 	let action = match action {
-		GuardrailAction::Allow => return,
+		GuardrailAction::Allow => strng::literal!("allow"),
 		GuardrailAction::FailOpen => strng::literal!("failOpen"),
 		GuardrailAction::Audit => strng::literal!("audit"),
 		GuardrailAction::Mask => strng::literal!("mask"),
@@ -614,8 +614,7 @@ impl PromptGuard {
 
 	/// Build one `StreamingEvaluator` per configured response guard.
 	///
-	/// Each evaluator is a stateless wrapper around the existing non-streaming
-	/// response-guard logic; the caller drives windowed batching.
+	/// Each evaluator tracks logged outcomes for one guard; the caller drives windowed batching.
 	pub fn begin_streaming_response_guard(
 		&self,
 		client: &crate::proxy::httpproxy::PolicyClient,
@@ -638,6 +637,7 @@ impl PromptGuard {
 			.collect()
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn evaluate_streaming_response_window(
 		guard: &ResponseGuard,
 		window: &str,
@@ -645,6 +645,7 @@ impl PromptGuard {
 		http_headers: &HeaderMap,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
+		allow_recorded: &mut bool,
 	) -> anyhow::Result<(Option<StreamingGuardrailOutcome>, GuardrailAction)> {
 		if window.is_empty() {
 			return Ok((None, GuardrailAction::Allow));
@@ -659,7 +660,7 @@ impl PromptGuard {
 			client,
 			original,
 			guardrail_log,
-			true,
+			Some(allow_recorded),
 		)
 		.await?;
 		let streaming = match rejection {
@@ -1871,7 +1872,7 @@ impl Policy {
 				client,
 				original,
 				guardrail_log,
-				false,
+				None,
 			)
 			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
@@ -1890,26 +1891,30 @@ impl Policy {
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
-		streaming: bool,
+		streaming_allow_recorded: Option<&mut bool>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let (outcome, detail) =
 			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await?;
 
-		let outcome = if streaming && matches!(outcome, GuardrailOutcome::Masked(_)) {
-			// mask is not supported for streaming; we should not record for logging
-			GuardrailOutcome::None
-		} else {
-			outcome
-		};
+		if streaming_allow_recorded.is_some() && matches!(outcome, GuardrailOutcome::Masked(_)) {
+			// Streaming cannot apply masking; do not report this as a passed check.
+			return Ok((GuardrailAction::Allow, None));
+		}
 
 		let (action, rejection) = Self::apply_response_guard_outcome(outcome, resp)?;
-		record_guardrail(
-			guardrail_log,
-			GuardrailPhase::Response,
-			guard.kind.name(),
-			action,
-			detail,
-		);
+		let record = match streaming_allow_recorded {
+			Some(recorded) if action == GuardrailAction::Allow => !std::mem::replace(recorded, true),
+			_ => true,
+		};
+		if record {
+			record_guardrail(
+				guardrail_log,
+				GuardrailPhase::Response,
+				guard.kind.name(),
+				action,
+				detail,
+			);
+		}
 		Ok((action, rejection))
 	}
 
@@ -2137,8 +2142,10 @@ pub enum FailureMode {
 
 #[apply(schema!)]
 pub struct Webhook {
-	/// Backend that receives guardrail webhook requests.
-	pub target: SimpleBackendReference,
+	/// Backend that receives guardrail webhook requests, and the backend policies
+	/// (such as `backendTLS`) used when connecting to it. A `host` with an
+	/// `https://` scheme enables TLS with system roots automatically.
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Headers to set on the webhook request, computed from CEL expressions.
 	/// Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;
 	/// setting `:path` replaces the default `/request` / `/response` path.

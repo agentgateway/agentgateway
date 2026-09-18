@@ -693,6 +693,10 @@
             "outputAudio": {
               "type": "number",
               "format": "double"
+            },
+            "pages": {
+              "type": "number",
+              "format": "double"
             }
           },
           "additionalProperties": false,
@@ -704,7 +708,8 @@
             "cacheWrite",
             "reasoning",
             "inputAudio",
-            "outputAudio"
+            "outputAudio",
+            "pages"
           ]
         },
         "costRates": {
@@ -757,6 +762,13 @@
               "format": "double"
             },
             "outputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "perPage": {
               "type": [
                 "number",
                 "null"
@@ -1130,25 +1142,25 @@
       "additionalProperties": true
     },
     "guardrails": {
-      "description": "`guardrails` contains one entry per prompt-guard guardrail intervention, in either the\nrequest or response phase. Only present in CEL that runs after the request completes,\nsuch as log and metric fields.",
+      "description": "`guardrails` contains entries for prompt-guard guardrail evaluations, in either the\nrequest or response phase. Only present in CEL that runs after the request completes,\nsuch as log and metric fields.",
       "type": [
         "array",
         "null"
       ],
       "items": {
-        "description": "Records one prompt-guard guardrail intervention.",
+        "description": "Records one prompt-guard guardrail evaluation.",
         "type": "object",
         "properties": {
           "phase": {
-            "description": "The phase the guardrail intervened in: `request` or `response`.",
+            "description": "The phase the guardrail was evaluated in: `request` or `response`.",
             "type": "string"
           },
           "guard": {
-            "description": "The guard kind that intervened, such as `bedrockGuardrails`.",
+            "description": "The guard kind that was evaluated, such as `bedrockGuardrails`.",
             "type": "string"
           },
           "action": {
-            "description": "The action the guardrail took (mask/reject/audit/failOpen).",
+            "description": "The action the guardrail took (allow/mask/reject/audit/failOpen).",
             "type": "string"
           },
           "guardrailId": {

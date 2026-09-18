@@ -7,7 +7,7 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), None).expect("translate ok");
+	let bytes = from_completions::translate(&req(v)).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -63,15 +63,12 @@ fn empty_messages_get_synthetic_user_entry() {
 
 #[test]
 fn gs_url_without_extension_or_hint_is_rejected() {
-	let err = from_completions::translate(
-		&req(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": [
-				{ "type": "image_url", "image_url": { "url": "gs://bucket/object" } }
-			]}]
-		})),
-		None,
-	);
+	let err = from_completions::translate(&req(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "image_url", "image_url": { "url": "gs://bucket/object" } }
+		]}]
+	})));
 	assert!(
 		err.is_err(),
 		"extension-less gs:// with no MIME hint must be rejected before egress"
@@ -130,12 +127,9 @@ fn file_gs_uri_takes_mime_from_filename() {
 
 #[test]
 fn file_gs_uri_without_extension_or_hint_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({
-			"file_data": "gs://bucket/object"
-		}))),
-		None,
-	);
+	let err = from_completions::translate(&req(file_content(json!({
+		"file_data": "gs://bucket/object"
+	}))));
 	assert!(
 		err.is_err(),
 		"extension-less gs:// file with no MIME hint must be rejected before egress"
@@ -156,12 +150,9 @@ fn data_url_without_media_type_falls_back_to_filename() {
 
 #[test]
 fn data_url_without_media_type_or_filename_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(
-			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
-		)),
-		None,
-	);
+	let err = from_completions::translate(&req(file_content(
+		json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
+	)));
 	assert!(
 		err.is_err(),
 		"an empty mimeType is rejected by Vertex, so it must not be sent"
@@ -181,10 +172,7 @@ fn raw_base64_file_data_takes_mime_from_filename() {
 
 #[test]
 fn raw_base64_file_data_without_a_mime_source_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
-		None,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))));
 	assert!(
 		err.is_err(),
 		"raw base64 with no filename or hint cannot yield the mimeType Vertex requires"
@@ -205,10 +193,7 @@ fn file_id_holding_a_gs_uri_becomes_file_data() {
 fn file_id_is_rejected_rather_than_dropped() {
 	// Vertex has no OpenAI Files store, so an opaque file_id cannot be resolved. It must
 	// error rather than silently vanish from the request (#3117).
-	let err = from_completions::translate(
-		&req(file_content(json!({ "file_id": "file-abc123" }))),
-		None,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "file_id": "file-abc123" }))));
 	let err = err.expect_err("opaque file_id must be rejected");
 	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
 	assert!(
@@ -223,10 +208,7 @@ fn file_id_is_rejected_rather_than_dropped() {
 
 #[test]
 fn file_part_without_data_or_id_is_rejected() {
-	let err = from_completions::translate(
-		&req(file_content(json!({ "filename": "report.pdf" }))),
-		None,
-	);
+	let err = from_completions::translate(&req(file_content(json!({ "filename": "report.pdf" }))));
 	assert!(
 		err.is_err(),
 		"a file part carrying no payload must be rejected"
@@ -246,15 +228,12 @@ fn empty_string_user_content_is_preserved() {
 
 #[test]
 fn http_image_url_is_rejected() {
-	let err = from_completions::translate(
-		&req(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": [
-				{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
-			]}]
-		})),
-		None,
-	);
+	let err = from_completions::translate(&req(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
+		]}]
+	})));
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
 
@@ -934,7 +913,63 @@ fn gemini_schema_array_without_items_gets_items() {
 	);
 }
 
-// Case 8: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
+// Case 8: minItems/maxItems on array types must be preserved so callers can enforce response
+// length constraints (e.g. "return exactly 3 items"). They were previously stripped because they
+// were absent from ALLOWED_SCHEMA_FIELDS.
+#[test]
+fn gemini_schema_preserves_array_length_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": {
+			"tags": {
+				"type": "array",
+				"items": { "type": "string" },
+				"minItems": 2,
+				"maxItems": 5
+			}
+		}
+	}));
+	assert_eq!(
+		s["properties"]["tags"]["minItems"], 2,
+		"minItems must be preserved: {s}"
+	);
+	assert_eq!(
+		s["properties"]["tags"]["maxItems"], 5,
+		"maxItems must be preserved: {s}"
+	);
+}
+
+// Case 9: minProperties/maxProperties constrain the number of keys on an object. Like minItems/
+// maxItems they were absent from ALLOWED_SCHEMA_FIELDS and were silently stripped.
+#[test]
+fn gemini_schema_preserves_object_property_count_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"minProperties": 1,
+		"maxProperties": 4,
+		"properties": { "a": { "type": "string" } }
+	}));
+	assert_eq!(
+		s["minProperties"], 1,
+		"minProperties must be preserved: {s}"
+	);
+	assert_eq!(
+		s["maxProperties"], 4,
+		"maxProperties must be preserved: {s}"
+	);
+}
+
+// Case 10: example provides a sample value for a schema node and is passed through to Gemini.
+#[test]
+fn gemini_schema_preserves_example() {
+	let s = response_schema(json!({
+		"type": "string",
+		"example": "hello"
+	}));
+	assert_eq!(s["example"], "hello", "example must be preserved: {s}");
+}
+
+// Case 11: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
 // it must be dropped (the open value typing is lost; that is the documented trade-off).
 #[test]
 fn gemini_schema_drops_open_dict_additional_properties() {
@@ -1527,7 +1562,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields {
@@ -1575,7 +1610,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields::default(),
@@ -1596,18 +1631,15 @@ mod passthrough {
 		);
 	}
 
-	fn body_from_frames(frames: &[&str]) -> axum_core::body::Body {
+	fn body_from_frames(frames: &[&str]) -> agent_http::Body {
 		let frames: Vec<Result<bytes::Bytes, std::convert::Infallible>> = frames
 			.iter()
 			.map(|f| Ok(bytes::Bytes::copy_from_slice(f.as_bytes())))
 			.collect();
-		axum_core::body::Body::from_stream(futures_util::stream::iter(frames))
+		agent_http::Body::from_stream(futures_util::stream::iter(frames))
 	}
 
-	async fn run_passthrough(
-		body: axum_core::body::Body,
-		captured: &Arc<Mutex<LLMInfo>>,
-	) -> bytes::Bytes {
+	async fn run_passthrough(body: agent_http::Body, captured: &Arc<Mutex<LLMInfo>>) -> bytes::Bytes {
 		passthrough_stream(
 			body,
 			1024 * 1024,
@@ -1658,7 +1690,7 @@ mod passthrough {
 			"\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n",
 		);
 		let captured = captured_info();
-		let out = run_passthrough(axum_core::body::Body::from(input), &captured).await;
+		let out = run_passthrough(agent_http::Body::from(input), &captured).await;
 
 		assert_eq!(out.as_ref(), input.as_bytes());
 		let info = captured.lock().unwrap();
@@ -1678,7 +1710,7 @@ mod passthrough {
 		for input in [non_sse, truncated] {
 			let captured = captured_info();
 			let err = passthrough_stream(
-				axum_core::body::Body::from(input),
+				agent_http::Body::from(input),
 				1024 * 1024,
 				StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 				LogContentFields::default(),

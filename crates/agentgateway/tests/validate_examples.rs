@@ -58,6 +58,7 @@ fn setup() {
 			);
 			std::env::set_var("OPENAI_API_KEY", TEST_LLM_API_KEY);
 			std::env::set_var("ANTHROPIC_API_KEY", TEST_LLM_API_KEY);
+			std::env::set_var("TYPESAFE_API_KEY", TEST_LLM_API_KEY);
 		}
 	});
 }

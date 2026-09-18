@@ -37,6 +37,7 @@ info:
       }
     ],
     "model": "anthropic.claude-3-sonnet",
+    "reasoning_effort": "high",
     "max_completion_tokens": 100,
     "response_format": {
       "type": "json_schema",

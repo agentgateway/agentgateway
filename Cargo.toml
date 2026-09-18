@@ -179,7 +179,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "rustls",
 ] }
-rstest = "0.26"
+rstest = "0.27"
 rust_decimal = { version = "1", default-features = false }
 mimalloc = { version = "0.1", features = ["v3", "no_thp"] }
 mime_guess = "2.0"

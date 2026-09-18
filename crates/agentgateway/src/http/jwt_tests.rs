@@ -419,6 +419,35 @@ fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
 	format!("{h}.{p}.{s}")
 }
 
+#[test]
+fn test_nbf_validation() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let now = jsonwebtoken::get_current_timestamp();
+	for required_claims in [
+		JWTValidationOptions::default().required_claims,
+		HashSet::new(),
+		HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+	] {
+		let (jwt, kid, issuer, aud) = setup_test_jwt_with_required_claims(required_claims);
+		for (nbf, accepted) in [(now - 600, true), (now + 30, true), (now + 864_000, false)] {
+			let token = build_signed_token_with_payload(
+				kid,
+				json!({ "iss": issuer, "aud": aud, "exp": now + 900_000, "nbf": nbf }),
+			);
+			let result = jwt.validate_claims(&token);
+			if accepted {
+				assert!(result.is_ok(), "nbf={nbf}: {result:?}");
+			} else {
+				assert!(matches!(
+					result,
+					Err(TokenError::Invalid(error)) if *error.kind() == ErrorKind::ImmatureSignature
+				));
+			}
+		}
+	}
+}
+
 // Validate specific rejection reasons for tokens: audience, issuer, expiry, missing kid, unknown kid
 #[test]
 pub fn test_jwt_rejections_table() {

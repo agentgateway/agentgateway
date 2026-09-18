@@ -1,0 +1,48 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/stop_sequences.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 64
+  messages:
+    - role: user
+      content: "Output exactly: BEFORE STOPPROBE AFTER"
+  stop_sequences:
+    - STOPPROBE
+  top_k: 40
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Output exactly: BEFORE STOPPROBE AFTER"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-luna",
+    "max_output_tokens": 64,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.6-luna",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Output exactly: BEFORE STOPPROBE AFTER"
+      }
+    ]
+  }
+}

@@ -54,7 +54,16 @@ pub(super) fn start_login(
 		let digest = crate::crypto::digest::sha256(pkce_verifier.as_bytes());
 		base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
 	};
-	let original_uri = normalize_original_uri(req.uri().path_and_query());
+	// Explicit login uses returnTo; automatic login returns to the interrupted request.
+	let original_uri = if policy
+		.login
+		.as_ref()
+		.is_some_and(|login| req.uri().path() == login.path)
+	{
+		policy.return_target(req.uri())
+	} else {
+		normalize_original_uri(req.uri().path_and_query())
+	};
 	let transaction = TransactionState {
 		policy_id: policy.policy_id.clone(),
 		transaction_id: transaction_id.clone(),

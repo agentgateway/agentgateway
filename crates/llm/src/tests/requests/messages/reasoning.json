@@ -1,5 +1,5 @@
 {
-  "model": "claude-opus-4-6",
+  "model": "gpt-5.6-terra",
   "max_tokens": 1024,
   "thinking": {
     "type": "adaptive"

@@ -8,6 +8,12 @@ This report will be privately reviewed by the Agentgateway security team.
 **Please do not report security vulnerabilities through public GitHub issues.**
 If you aren't sure if an issue is a security vulnerability, it's best to err on the side of caution and report it privately.
 
+## EU Cyber Resilience Act (CRA) Stewardship
+
+This project is supported under the Linux Foundation CRA stewardship framework, as described at https://www.linuxfoundation.org/security.
+Security vulnerabilities should be reported through the mechanisms described above, which we will coordinate with our CRA steward.
+For actively exploited vulnerabilities and severe incidents, please use the private reporting mechanism.
+
 ## Vulnerability Policy
 
 This policy describes how the project handles security reports.

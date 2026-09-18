@@ -568,7 +568,7 @@ impl LLMRequestPolicies {
 
 #[derive(Debug, Default)]
 pub struct LLMResponsePolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
+	pub local_rate_limit: Vec<http::localratelimit::ChargedBucket>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
@@ -774,6 +774,7 @@ impl Store {
 			"/v1/images/edits",
 			"/v1/images/variations",
 			"/v1/audio/transcriptions",
+			"/v1/ocr",
 			"/v1/embeddings",
 			"/v1/rerank",
 			"/v2/rerank",
@@ -4079,41 +4080,47 @@ mod tests {
 
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "10.1.2.3".parse().unwrap(),
-					port: 12345,
-					raw_address: "10.1.2.3".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-					connect_headers: http::HeaderMap::new(),
-				})
+				.apply(&crate::cel::Executor::new_source(
+					&crate::cel::SourceContext {
+						address: "10.1.2.3".parse().unwrap(),
+						port: 12345,
+						raw_address: "10.1.2.3".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+						connect_headers: http::HeaderMap::new(),
+					}
+				))
 				.is_ok()
 		);
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "192.168.1.2".parse().unwrap(),
-					port: 12345,
-					raw_address: "192.168.1.2".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-					connect_headers: http::HeaderMap::new(),
-				})
+				.apply(&crate::cel::Executor::new_source(
+					&crate::cel::SourceContext {
+						address: "192.168.1.2".parse().unwrap(),
+						port: 12345,
+						raw_address: "192.168.1.2".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+						connect_headers: http::HeaderMap::new(),
+					}
+				))
 				.is_ok()
 		);
 		assert!(
 			network_authz
-				.apply(&crate::cel::SourceContext {
-					address: "172.16.0.1".parse().unwrap(),
-					port: 12345,
-					raw_address: "172.16.0.1".parse().unwrap(),
-					raw_port: 12345,
-					tls: None,
-					unverified_workload: None,
-					connect_headers: http::HeaderMap::new(),
-				})
+				.apply(&crate::cel::Executor::new_source(
+					&crate::cel::SourceContext {
+						address: "172.16.0.1".parse().unwrap(),
+						port: 12345,
+						raw_address: "172.16.0.1".parse().unwrap(),
+						raw_port: 12345,
+						tls: None,
+						unverified_workload: None,
+						connect_headers: http::HeaderMap::new(),
+					}
+				))
 				.is_err()
 		);
 	}

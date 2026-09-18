@@ -6,8 +6,17 @@ use bytes::{Buf, Bytes};
 use http_body::{Body, Frame, SizeHint};
 use parking_lot::Mutex;
 
-use crate::http::buflist::BufList;
+use crate::{Body as ManagedBody, BufList};
 
+/// Shared view of bytes captured while a body is consumed.
+///
+/// Recording is passive: enabling it does not read the body. The managed body
+/// feeds it as frames are polled, so its bytes may be
+/// incomplete until consumption finishes. It is primarily used for logging
+/// after a body has been sent. In contrast, [`crate::BodyInspection`] is the
+/// immediate result of actively inspecting a body before forwarding. A managed
+/// [`ManagedBody`] retains this observer across content replacement and resets
+/// it to capture the replacement.
 #[derive(Clone, Debug)]
 pub struct RecordedBodyHandle {
 	inner: Arc<Mutex<RecordedBodyHandleInner>>,
@@ -34,17 +43,37 @@ impl Default for RecordedBodyState {
 }
 
 impl RecordedBodyHandle {
+	pub(crate) fn limit(&self) -> usize {
+		self.limit
+	}
+
+	pub(crate) fn new(limit: usize) -> Self {
+		Self {
+			inner: Arc::new(Mutex::new(RecordedBodyHandleInner {
+				state: RecordedBodyState::default(),
+				recorded: 0,
+				exceeded_limit: false,
+			})),
+			limit,
+		}
+	}
+
 	/// Returns whether recording observed more bytes than the configured limit.
 	pub fn exceeded_limit(&self) -> bool {
 		self.inner.lock().exceeded_limit
+	}
+
+	/// Whether recording reached the end of the body, rather than just a prefix.
+	pub fn is_complete(&self) -> bool {
+		matches!(self.inner.lock().state, RecordedBodyState::Complete(_))
 	}
 
 	pub fn bytes(&self) -> Bytes {
 		let mut inner = self.inner.lock();
 		match &mut inner.state {
 			RecordedBodyState::Recording(buffer) => {
-				// This *should* not happen... but that is a recommended pattern of the caller, not something
-				// we enforce.
+				// Logging interrupted delivery and debug tracing can request a prefix
+				// before completion. Leave the recording intact for subsequent frames.
 				let mut buffer = buffer.clone();
 				let len = buffer.remaining();
 				buffer.copy_to_bytes(len)
@@ -53,7 +82,7 @@ impl RecordedBodyHandle {
 		}
 	}
 
-	fn push(&self, bytes: Bytes) {
+	pub(crate) fn push(&self, bytes: Bytes) {
 		let mut inner = self.inner.lock();
 		let remaining = self.limit.saturating_sub(inner.recorded);
 		if bytes.len() > remaining {
@@ -71,7 +100,7 @@ impl RecordedBodyHandle {
 		}
 	}
 
-	fn complete(&self) {
+	pub(crate) fn complete(&self) {
 		let mut inner = self.inner.lock();
 		let RecordedBodyState::Recording(buffer) = &mut inner.state else {
 			return;
@@ -79,6 +108,13 @@ impl RecordedBodyHandle {
 		let mut buffer = std::mem::take(buffer);
 		let len = buffer.remaining();
 		inner.state = RecordedBodyState::Complete(buffer.copy_to_bytes(len));
+	}
+
+	pub(crate) fn reset(&self) {
+		let mut inner = self.inner.lock();
+		inner.state = RecordedBodyState::default();
+		inner.recorded = 0;
+		inner.exceeded_limit = false;
 	}
 }
 
@@ -89,7 +125,7 @@ impl RecordedBodyHandle {
 /// for consumers that inspect the captured bytes after the wrapped body has
 /// been fully drained.
 #[derive(Debug)]
-pub struct RecordedBody<B = crate::http::Body> {
+pub struct RecordedBody<B = ManagedBody> {
 	inner: B,
 	handle: RecordedBodyHandle,
 	finished: bool,
@@ -101,14 +137,7 @@ impl<B> RecordedBody<B> {
 	}
 
 	pub fn new_with_limit(inner: B, limit: usize) -> (Self, RecordedBodyHandle) {
-		let handle = RecordedBodyHandle {
-			inner: Arc::new(Mutex::new(RecordedBodyHandleInner {
-				state: RecordedBodyState::default(),
-				recorded: 0,
-				exceeded_limit: false,
-			})),
-			limit,
-		};
+		let handle = RecordedBodyHandle::new(limit);
 		(
 			Self {
 				inner,
@@ -140,7 +169,7 @@ where
 		if this.finished {
 			return Poll::Ready(None);
 		}
-		let frame = match futures::ready!(Pin::new(&mut this.inner).poll_frame(cx)) {
+		let frame = match std::task::ready!(Pin::new(&mut this.inner).poll_frame(cx)) {
 			Some(Ok(frame)) => frame,
 			Some(Err(error)) => {
 				this.finished = true;
@@ -192,11 +221,11 @@ mod tests {
 
 	use super::*;
 
-	fn mock_body(data: Vec<&'static [u8]>) -> crate::http::Body {
+	fn mock_body(data: Vec<&'static [u8]>) -> crate::Body {
 		let iter = data
 			.into_iter()
-			.map(|d| Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(d))));
-		crate::http::Body::new(StreamBody::new(futures_util::stream::iter(iter)))
+			.map(|d| Ok::<_, crate::Error>(Frame::data(Bytes::from_static(d))));
+		crate::Body::new(StreamBody::new(futures_util::stream::iter(iter)))
 	}
 
 	#[tokio::test]
@@ -205,11 +234,7 @@ mod tests {
 
 		assert!(recorded.bytes().is_empty());
 
-		let got = crate::http::Body::new(body)
-			.collect()
-			.await
-			.unwrap()
-			.to_bytes();
+		let got = crate::Body::new(body).collect().await.unwrap().to_bytes();
 
 		assert_eq!(got, Bytes::from_static(b"hello world"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hello world"));
@@ -217,13 +242,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn does_not_repoll_inner_after_eof() {
-		let inner = crate::http::Body::new(http_body_util::StreamBody::new(
+		let inner = crate::Body::new(http_body_util::StreamBody::new(
 			futures_util::stream::unfold(false, |emitted| async move {
 				if emitted {
 					None
 				} else {
 					Some((
-						Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(b"body"))),
+						Ok::<_, crate::Error>(Frame::data(Bytes::from_static(b"body"))),
 						true,
 					))
 				}
@@ -240,11 +265,7 @@ mod tests {
 	async fn reuses_completed_bytes() {
 		let (body, recorded) = RecordedBody::new(mock_body(vec![b"hello", b"world"]));
 
-		let got = crate::http::Body::new(body)
-			.collect()
-			.await
-			.unwrap()
-			.to_bytes();
+		let got = crate::Body::new(body).collect().await.unwrap().to_bytes();
 
 		assert_eq!(got, Bytes::from_static(b"helloworld"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"helloworld"));
@@ -255,11 +276,7 @@ mod tests {
 	async fn records_up_to_limit() {
 		let (body, recorded) = RecordedBody::new_with_limit(mock_body(vec![b"hello", b"world"]), 7);
 
-		let got = crate::http::Body::new(body)
-			.collect()
-			.await
-			.unwrap()
-			.to_bytes();
+		let got = crate::Body::new(body).collect().await.unwrap().to_bytes();
 
 		assert_eq!(got, Bytes::from_static(b"helloworld"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hellowo"));
@@ -270,11 +287,7 @@ mod tests {
 	async fn zero_limit_records_nothing() {
 		let (body, recorded) = RecordedBody::new_with_limit(mock_body(vec![b"hello"]), 0);
 
-		let got = crate::http::Body::new(body)
-			.collect()
-			.await
-			.unwrap()
-			.to_bytes();
+		let got = crate::Body::new(body).collect().await.unwrap().to_bytes();
 
 		assert_eq!(got, Bytes::from_static(b"hello"));
 		assert!(recorded.bytes().is_empty());
@@ -289,11 +302,7 @@ mod tests {
 		assert_eq!(first, Bytes::from_static(b"hello"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hello"));
 
-		let rest = crate::http::Body::new(body)
-			.collect()
-			.await
-			.unwrap()
-			.to_bytes();
+		let rest = crate::Body::new(body).collect().await.unwrap().to_bytes();
 
 		assert_eq!(rest, Bytes::from_static(b"world"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"helloworld"));
@@ -304,13 +313,13 @@ mod tests {
 		let mut trailers = http::HeaderMap::new();
 		trailers.insert("x-test", "value".parse().unwrap());
 		let frames = vec![
-			Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(b"hello"))),
-			Ok::<_, crate::http::Error>(Frame::trailers(trailers.clone())),
+			Ok::<_, crate::Error>(Frame::data(Bytes::from_static(b"hello"))),
+			Ok::<_, crate::Error>(Frame::trailers(trailers.clone())),
 		];
-		let body = crate::http::Body::new(StreamBody::new(futures_util::stream::iter(frames)));
+		let body = crate::Body::new(StreamBody::new(futures_util::stream::iter(frames)));
 		let (body, recorded) = RecordedBody::new(body);
 
-		let got = crate::http::Body::new(body).collect().await.unwrap();
+		let got = crate::Body::new(body).collect().await.unwrap();
 
 		assert_eq!(got.trailers(), Some(&trailers));
 		assert_eq!(got.to_bytes(), Bytes::from_static(b"hello"));

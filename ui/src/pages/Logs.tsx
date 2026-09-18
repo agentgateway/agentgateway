@@ -12,6 +12,9 @@ import {
 	MessageSquare,
 	RefreshCw,
 	Settings,
+	Shield,
+	ShieldBan,
+	ShieldEllipsis,
 	User,
 	Wrench
 } from 'lucide-react';
@@ -127,6 +130,7 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const filters = useMemo(
 		() => ({
 			...analyticsLogFilters(logFilters),
@@ -161,10 +165,12 @@ export function LogsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
 	}, [filters]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
 		filterOptionsSeqRef.current = loadSeq;
@@ -242,6 +248,7 @@ export function LogsPage() {
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (!linkedLogId) {
 			setExpandedId(null);
@@ -385,7 +392,7 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						Stream
-						{stream ? <span className="stream-live-dot" aria-label="streaming" /> : null}
+						{stream ? <span className="stream-live-dot" /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
@@ -447,6 +454,7 @@ export function LogsPage() {
 									entry={entry}
 									detail={expandedId === entry.id ? (expanded ?? entry) : entry}
 									expanded={expandedId === entry.id}
+									promptLoggingEnabled={promptLoggingEnabled}
 									loading={expandedId === entry.id && expandedLoading}
 									onToggle={() => void expand(entry)}
 									onOpenSettings={() => setSettings('logs')}
@@ -720,6 +728,7 @@ export function AnalyticsPage() {
 	const selectedGroupBy: AnalyticsDimension[] = groupBy;
 	const groupByKey = selectedGroupBy.join(',');
 	const filtersKey = analyticsFiltersKey(filters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const analyticsState = useMemo(
 		() => ({
 			timeRange,
@@ -780,10 +789,12 @@ export function AnalyticsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
 	}, [timeRange, groupByKey, filtersKey]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		setFilterOptionMap(emptyAnalyticsFilterOptions());
 	}, [timeRange, groupByKey]);
@@ -801,6 +812,7 @@ export function AnalyticsPage() {
 
 	const requestedRange = useMemo(() => logTimeRangeToApi(timeRange), [timeRange]);
 	const effectiveBucketSeconds = bucketSeconds ?? bucketSecondsForRange(timeRange);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const timeline = useMemo(
 		() =>
 			analyticsTimelineData(
@@ -1138,7 +1150,9 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		<Tooltip content={label}>
 			<span
 				className={`log-turn-badge ${common ? variant : 'other'}`}
+				role="img"
 				aria-label={label}
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				tabIndex={0}
 			>
 				{common ? (
@@ -1213,10 +1227,123 @@ function providerIconName(name: string | null | undefined) {
 	return match === 'xai' ? 'xAI' : match;
 }
 
+function logGuardrails(entry: LogEntry): Record<string, unknown>[] {
+	const value = parseMaybeJson(attributeValue(entry.attributes, 'agw.ai.guardrails'));
+	if (!Array.isArray(value)) return [];
+	return value.filter(
+		(item): item is Record<string, unknown> =>
+			item != null && typeof item === 'object' && !Array.isArray(item)
+	);
+}
+
+function LogGuardrailBadge(props: { entry: LogEntry }) {
+	const guards = logGuardrails(props.entry);
+	if (!guards.length) return null;
+	const rejected = guards.some(guard => guard.action === 'reject');
+	const masked = guards.some(guard => guard.action === 'mask');
+	const failedOpen = guards.some(guard => guard.action === 'failOpen');
+	const state = rejected ? 'rejected' : failedOpen ? 'failed-open' : masked ? 'masked' : 'inactive';
+	const label = rejected
+		? 'Guardrail rejected'
+		: failedOpen
+			? 'Guardrail failed open'
+			: masked
+				? 'Guardrail masked content'
+				: 'Guardrail present — no action taken';
+	const Icon = rejected ? ShieldBan : masked ? ShieldEllipsis : Shield;
+	return (
+		<Tooltip
+			content={
+				<>
+					<strong>{label}</strong>
+					{guards.map((guard, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
+						<div key={index}>
+							{String(guard.phase ?? '')}: {String(guard.guard ?? 'guardrail')} (
+							{String(guard.action ?? 'unknown')})
+						</div>
+					))}
+				</>
+			}
+		>
+			<span className={`log-guardrail-badge ${state}`} role="img" aria-label={label}>
+				<Icon size={15} aria-hidden="true" />
+			</span>
+		</Tooltip>
+	);
+}
+
+function LogGuardrailDetails(props: { entry: LogEntry }) {
+	const guards = logGuardrails(props.entry);
+	if (!guards.length) return null;
+	const outcomes: Record<string, { label: string; description: string }> = {
+		allow: { label: 'Allowed', description: 'Content passed without modification.' },
+		reject: { label: 'Rejected', description: 'The guardrail blocked the call.' },
+		mask: { label: 'Masked', description: 'The guardrail modified content before continuing.' },
+		audit: {
+			label: 'Audit only',
+			description: 'The guardrail flagged content without blocking or masking it.'
+		},
+		failOpen: {
+			label: 'Failed open',
+			description: 'The guardrail could not complete its check; the call continued.'
+		}
+	};
+	return (
+		<section className="log-detail-section">
+			<h4>Guardrails</h4>
+			<div className="log-guardrail-list">
+				{guards.map((guard, index) => {
+					const action = String(guard.action ?? 'unknown');
+					const outcome = outcomes[action];
+					const state =
+						action === 'reject'
+							? 'rejected'
+							: action === 'failOpen'
+								? 'failed-open'
+								: action === 'mask'
+									? 'masked'
+									: 'inactive';
+					const Icon =
+						action === 'reject' ? ShieldBan : action === 'mask' ? ShieldEllipsis : Shield;
+					return (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
+						<div className="log-guardrail-result" key={index}>
+							<span className={`log-guardrail-badge ${state}`}>
+								<Icon size={18} aria-hidden="true" />
+							</span>
+							<div className="log-guardrail-context">
+								<div className="log-guardrail-heading">
+									<strong>{String(guard.guard ?? 'Guardrail')}</strong>
+									<span className="log-op-chip">
+										{guard.phase === 'request'
+											? 'Request'
+											: guard.phase === 'response'
+												? 'Response'
+												: String(guard.phase ?? 'Unknown phase')}
+									</span>
+									<span className={`log-guardrail-badge ${state}`}>{outcome?.label ?? action}</span>
+								</div>
+								{outcome ? <p>{outcome.description}</p> : null}
+								{typeof guard.guardrailId === 'string' ? (
+									<p>
+										Guardrail ID: <code>{guard.guardrailId}</code>
+									</p>
+								) : null}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+	);
+}
+
 function LogCallRow(props: {
 	entry: LogEntry;
 	detail: LogEntry;
 	expanded: boolean;
+	promptLoggingEnabled: boolean;
 	loading: boolean;
 	onToggle: () => void;
 	onOpenSettings?: () => void;
@@ -1239,6 +1366,7 @@ function LogCallRow(props: {
 					: `log-row ${statusBad ? 'bad' : 'ok'}`
 			}
 		>
+			{/** biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<tr
 				className="log-row-summary"
 				tabIndex={0}
@@ -1259,8 +1387,11 @@ function LogCallRow(props: {
 					</span>
 				</td>
 				<td className="log-td-status">
-					<span className={statusBad ? 'log-status-pill bad' : 'log-status-pill ok'}>
-						{props.entry.httpStatus ?? 'err'}
+					<span className="log-status-indicators">
+						<span className={statusBad ? 'log-status-pill bad' : 'log-status-pill ok'}>
+							{props.entry.httpStatus ?? 'err'}
+						</span>
+						<LogGuardrailBadge entry={props.entry} />
 					</span>
 				</td>
 				<td className="log-td-model">
@@ -1305,7 +1436,11 @@ function LogCallRow(props: {
 					<td colSpan={11}>
 						<div className="expanded-log">
 							{props.loading ? <StatusBanner state="loading" title="Loading log payload" /> : null}
-							<LogDetailView entry={props.detail} onOpenSettings={props.onOpenSettings} />
+							<LogDetailView
+								entry={props.detail}
+								promptLoggingEnabled={props.promptLoggingEnabled}
+								onOpenSettings={props.onOpenSettings}
+							/>
 						</div>
 					</td>
 				</tr>
@@ -1382,7 +1517,11 @@ function logUsageDetail(entry: LogEntry): LogUsageDetail {
 	};
 }
 
-function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) {
+function LogDetailView(props: {
+	entry: LogEntry;
+	promptLoggingEnabled: boolean;
+	onOpenSettings?: () => void;
+}) {
 	const messages = logConversation(props.entry);
 	const trajectory = trajectoryEvents(messages);
 	const conversationRef = useRef<HTMLDetailsElement>(null);
@@ -1408,6 +1547,7 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		const anchorId = decodeURIComponent(window.location.hash.slice(1));
 		if (!trajectory.some(event => event.anchorId === anchorId)) return;
@@ -1510,6 +1650,8 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 				</section>
 			</div>
 
+			<LogGuardrailDetails entry={props.entry} />
+
 			{messages.length ? (
 				<details className="log-conversation" ref={conversationRef}>
 					<summary>
@@ -1524,11 +1666,19 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 							<LogMessageView
 								events={trajectory.filter(event => event.messageIndex === index)}
 								message={message}
-								key={`${message.role}-${index}`}
+								key={`${message.role}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))}
 					</div>
 				</details>
+			) : props.promptLoggingEnabled ? (
+				<StatusBanner state="info" title="No prompt or completion content recorded">
+					Prompt logging is enabled, but no content was captured for this request. This can happen
+					in passthrough mode.
+				</StatusBanner>
 			) : (
 				<StatusBanner state="info" title="Prompt logging is off">
 					Enable "Include prompts and completions in logs" in{' '}
@@ -1604,7 +1754,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 											aria-label={`Step ${index + 1}: ${event.label}`}
 											aria-pressed={selected === index}
 											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
-											key={`${lane}-${index}`}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+												index
+											}`}
 											title={`Step ${index + 1}: ${event.label}`}
 											type="button"
 											onClick={() => setSelected(current => (current === index ? null : index))}
@@ -1617,7 +1770,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 										<span
 											aria-hidden="true"
 											className="log-trajectory-gap"
-											key={`${lane}-${index}`}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+												index
+											}`}
 										/>
 									)
 								)}
@@ -1629,7 +1785,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			<div className="log-trajectory-caption" aria-live="polite">
 				<span>
 					{selectedEvent
-						? `Step ${selected! + 1} ${selectedEvent.label}`
+						? `Step ${
+								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
+								selected! + 1
+							} ${selectedEvent.label}`
 						: 'Width shows approximate tokens'}
 				</span>
 				{selectedEvent ? (
@@ -1909,7 +2068,9 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 						<div className="log-usage-bar-row">
 							<span className="log-usage-bar-label">Tokens</span>
 							<TokenBar
+								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								input={usage.inputTokens!}
+								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								output={usage.outputTokens!}
 								cacheRead={usage.cacheReadTokens ?? undefined}
 								cacheWrite={usage.cacheWriteTokens ?? undefined}
@@ -2016,7 +2177,10 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								anchorId={props.events.find(event => event.partIndex === index)?.anchorId}
 								part={part}
 								collapsed={part.type === 'text' && collapsed}
-								key={`${part.type}-${index}`}
+								key={`${part.type}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))}
 						{collapsible ? (
@@ -2048,30 +2212,42 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 					</>
 				) : null}
 				{!message.parts && hasToolCalls
-					? message.toolCalls!.map((call, index) => (
+					? message.toolCalls?.map((call, index) => (
 							<LogToolBlock
 								anchorId={toolCallEvents[index]?.anchorId}
 								kind="call"
 								name={call.name}
 								value={call.arguments}
-								key={`${call.name}-${index}`}
+								key={`${call.name}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasToolResults
-					? message.toolResults!.map((result, index) => (
+					? message.toolResults?.map((result, index) => (
 							<LogToolBlock
 								kind="result"
 								name={result.name ?? 'unknown'}
 								value={result.content}
 								isError={result.isError}
-								key={`${result.id ?? result.name ?? 'result'}-${index}`}
+								key={`${result.id ?? result.name ?? 'result'}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasReasoning
-					? message.reasoning!.map((reasoning, index) => (
-							<LogReasoningBlock content={reasoning} key={`reasoning-${index}`} />
+					? message.reasoning?.map((reasoning, index) => (
+							<LogReasoningBlock
+								content={reasoning}
+								key={`reasoning-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
+							/>
 						))
 					: null}
 				{!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (
@@ -2244,6 +2420,7 @@ function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: st
 	return (
 		<div
 			className={`log-msg-content log-markdown${props.collapsed ? ' collapsed' : ''}`}
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			dangerouslySetInnerHTML={{ __html: html }}
 			id={props.anchorId}
 		/>
@@ -2711,8 +2888,7 @@ function CostBar(props: { usage: LogUsageDetail }) {
 	const total = components.reduce((sum, [, cost]) => sum + Math.max(cost ?? 0, 0), 0);
 	if (!total) return null;
 	const title = components
-		.filter(([, cost]) => cost != null && cost > 0)
-		.map(([label, cost]) => `${label}: ${formatCost(cost!)}`)
+		.flatMap(([label, cost]) => (cost != null && cost > 0 ? [`${label}: ${formatCost(cost)}`] : []))
 		.join(' / ');
 	return (
 		<UsageBar

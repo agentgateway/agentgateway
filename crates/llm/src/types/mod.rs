@@ -67,6 +67,22 @@ pub(crate) fn thinking_budget_for_anthropic_effort(effort: messages::typed::Thin
 	}
 }
 
+/// Approximate a token budget using the same thresholds as effort-to-budget translation.
+pub(crate) fn anthropic_effort_for_thinking_budget(budget: u64) -> messages::typed::ThinkingEffort {
+	use messages::typed::ThinkingEffort;
+	for effort in [
+		ThinkingEffort::Max,
+		ThinkingEffort::Xhigh,
+		ThinkingEffort::High,
+		ThinkingEffort::Medium,
+	] {
+		if budget >= thinking_budget_for_anthropic_effort(effort) {
+			return effort;
+		}
+	}
+	ThinkingEffort::Low
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {

@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl_filtered",
+  "object": "chat.completion",
+  "created": 123,
+  "model": "gpt-5.6-luna",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": ""
+      },
+      "finish_reason": "content_filter"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 0,
+    "total_tokens": 10
+  }
+}

@@ -12,7 +12,7 @@ pub struct BufList<T = Bytes> {
 
 impl<T: Buf> BufList<T> {
 	#[inline]
-	pub(crate) fn push(&mut self, buf: T) {
+	pub fn push(&mut self, buf: T) {
 		debug_assert!(buf.has_remaining());
 		self.bufs.push_back(buf);
 	}

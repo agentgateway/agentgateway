@@ -6,7 +6,9 @@ metadata:
   labels:
     {{- include "agentgateway-standalone.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   {{- if not (kindIs "invalid" .Values.revisionHistoryLimit) }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   {{- end }}

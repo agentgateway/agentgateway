@@ -14,7 +14,6 @@ import (
 type Resource struct {
 	schema.GroupVersionKind
 	types.NamespacedName
-	ResourceVersion string
 }
 
 // WorkerQueue implements an expandable goroutine pool which executes at most one concurrent routine per target

@@ -6,13 +6,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use agent_http::BufList;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use http_body::{Body, Frame, SizeHint};
 use parking_lot::Mutex;
 use thiserror::Error;
-
-use crate::http::buflist::BufList;
 
 #[cfg(test)]
 #[path = "body_tests.rs"]

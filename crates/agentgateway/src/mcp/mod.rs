@@ -22,8 +22,8 @@ use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
-	CallToolRequestMethod, CancelTaskMethod, CompleteRequestMethod, ConstString,
-	DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
+	CallToolRequestMethod, CallToolResult, CancelTaskMethod, CompleteRequestMethod, ConstString,
+	ContentBlock, DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
 	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
 	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
 	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
@@ -53,33 +53,10 @@ pub enum FailureMode {
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
 
-/// An early parse paired with the exact body bytes it represents.
 #[derive(Clone)]
-pub(crate) struct CachedRequest {
-	source_body: bytes::Bytes,
-	message: rmcp::model::ClientJsonRpcMessage,
-}
+pub(crate) struct CachedRequest(pub rmcp::model::ClientJsonRpcMessage);
 
-impl CachedRequest {
-	pub fn new(source_body: bytes::Bytes, message: rmcp::model::ClientJsonRpcMessage) -> Self {
-		Self {
-			source_body,
-			message,
-		}
-	}
-
-	pub fn parse_body(
-		cached: Option<Self>,
-		body: &[u8],
-	) -> serde_json::Result<rmcp::model::ClientJsonRpcMessage> {
-		// Policies may have replaced the body after the early CEL parse. Exact byte equality makes
-		// reuse safe without requiring every possible body mutation to invalidate the cache.
-		match cached {
-			Some(cached) if cached.source_body.as_ref() == body => Ok(cached.message),
-			_ => serde_json::from_slice(body),
-		}
-	}
-}
+impl agent_http::BodyExtension for CachedRequest {}
 
 /// Application-defined "over quota" code (MCP defines none); shared with the guardrail mapping.
 pub(crate) const RESOURCE_EXHAUSTED: ErrorCode = ErrorCode(-32003);
@@ -189,15 +166,21 @@ pub enum Error {
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
 	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
-	#[error("mcpGuardrails rejected: {}", .1.message)]
-	McpGuardrails(RequestId, rmcp::ErrorData),
-	// rate limit denial with a request id; renders as HTTP 200 + JSON-RPC error
+	#[error("mcpGuardrails rejected: {}", .rej.message)]
+	McpGuardrails {
+		request_id: RequestId,
+		rej: rmcp::ErrorData,
+		was_tool_call: bool,
+		downstream_modern: bool,
+	},
 	#[error("{}", .message.as_deref().unwrap_or("rate limit exceeded"))]
 	RateLimited {
 		request_id: RequestId,
 		status: Option<crate::http::localratelimit::RateLimitStatus>,
 		message: Option<String>,
 		headers: Box<crate::http::HeaderMap>,
+		was_tool_call: bool,
+		downstream_modern: bool,
 	},
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
@@ -213,10 +196,58 @@ pub enum Error {
 	NoBackends,
 }
 
+fn tool_error_body(
+	request_id: &RequestId,
+	text: String,
+	downstream_modern: bool,
+) -> Option<String> {
+	let mut result = CallToolResult::error(vec![ContentBlock::text(text)]);
+	if !downstream_modern {
+		result.result_type = None;
+	}
+	serde_json::to_string(&serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": request_id,
+		"result": result,
+	}))
+	.ok()
+}
+
 impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
+		match self {
+			Error::RateLimited {
+				request_id,
+				status,
+				was_tool_call: true,
+				downstream_modern,
+				..
+			} => {
+				let mut text = self.to_string();
+				if let Some(status) = status {
+					let _ = write!(
+						text,
+						" (retry after {}s; limit {}, remaining {})",
+						status.reset_seconds, status.limit, status.remaining
+					);
+				}
+				return tool_error_body(request_id, text, *downstream_modern);
+			},
+			// internal error sure looks like a protocol error so making the decision to bubble it back up
+			Error::McpGuardrails {
+				request_id,
+				rej,
+				was_tool_call: true,
+				downstream_modern,
+			} if rej.code != ErrorCode::INTERNAL_ERROR => {
+				return tool_error_body(request_id, rej.message.to_string(), *downstream_modern);
+			},
+			_ => {},
+		}
 		let (id, error) = match self {
-			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::McpGuardrails {
+				request_id, rej, ..
+			} => (request_id.clone(), rej.clone()),
 			Error::RateLimited {
 				request_id: id,
 				status,
@@ -288,8 +319,7 @@ impl Error {
 	}
 }
 
-// convert policy errors on MCP POSTs into JSON-RPC errors, rendered as HTTP 200 like
-// guardrail rejections. anything we can't extract a request id for keeps the plain error.
+// a rate-limited MCP toolcall becomes an isError result others just have the top level json RPC error
 pub(crate) async fn maybe_convert_mcp_error<T>(
 	res: Result<T, crate::proxy::ProxyResponse>,
 	request_protocol: crate::proxy::httpproxy::RequestProtocol,
@@ -300,7 +330,6 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 		Err(ProxyResponse::Error(err)) => err,
 		other => return other,
 	};
-	// currently only rate limit denials have a JSON-RPC shape.
 	if !matches!(
 		err,
 		ProxyError::RateLimitExceeded { .. } | ProxyError::RemoteRateLimitExceeded { .. }
@@ -311,17 +340,23 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 		return Err(ProxyResponse::Error(err));
 	}
 	let limit = crate::http::buffer_limit(req);
-	let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
-	let id = match crate::http::read_body_with_limit(body, limit).await {
-		Ok(bytes) => serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes)
-			.ok()
-			.as_ref()
-			.and_then(streamablehttp::request_id),
-		Err(_) => None,
+	let parsed = match req.body_mut().inspect(limit).await {
+		Ok(crate::http::BodyInspection::Complete(bytes)) => {
+			serde_json::from_slice::<rmcp::model::ClientJsonRpcMessage>(&bytes).ok()
+		},
+		Ok(crate::http::BodyInspection::Partial(_)) | Err(_) => None,
 	};
-	let Some(request_id) = id else {
+	let Some(request_id) = parsed.as_ref().and_then(streamablehttp::request_id) else {
 		return Err(ProxyResponse::Error(err));
 	};
+	let was_tool_call =
+		parsed.as_ref().and_then(streamablehttp::message_method) == Some(CallToolRequestMethod::VALUE);
+	// runs earlier than the ctx stuff so tried to rederive is modern here. Perhaps there is a better place to centralize this call though.
+	let downstream_modern = streamablehttp::protocol_version_header(req.headers(), None, false)
+		.ok()
+		.flatten()
+		.as_ref()
+		.is_some_and(is_modern_version);
 	let converted = match err {
 		ProxyError::RateLimitExceeded {
 			limit,
@@ -338,6 +373,8 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 				status: Some(status),
 				message: None,
 				headers: Box::new(status.to_headers()),
+				was_tool_call,
+				downstream_modern,
 			}
 			.into()
 		},
@@ -350,6 +387,8 @@ pub(crate) async fn maybe_convert_mcp_error<T>(
 			status,
 			message: (!raw_body.is_empty()).then(|| String::from_utf8_lossy(&raw_body).into_owned()),
 			headers: response_headers,
+			was_tool_call,
+			downstream_modern,
 		}
 		.into(),
 		e => e,

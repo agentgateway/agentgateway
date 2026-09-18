@@ -129,7 +129,8 @@ export function cleanEmpty(value: unknown): unknown {
 		const cleaned = cleanEmpty(item);
 		if (cleaned !== undefined) next[key] = cleaned;
 	}
-	return Object.keys(next).length > 0 ? next : undefined;
+	// Empty objects can enable features or select configuration variants.
+	return next;
 }
 
 export function lines(values: string[] | undefined) {

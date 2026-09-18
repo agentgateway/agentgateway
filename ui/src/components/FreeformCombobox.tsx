@@ -27,9 +27,7 @@ export function FreeformCombobox(props: {
 	}, [browseAll, props.options, props.value]);
 
 	useEffect(() => {
-		const selectedIndex = browseAll
-			? filteredOptions.findIndex(option => option === props.value)
-			: -1;
+		const selectedIndex = browseAll ? filteredOptions.indexOf(props.value) : -1;
 		setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
 	}, [browseAll, filteredOptions, props.value]);
 

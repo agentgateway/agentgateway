@@ -2,12 +2,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use agent_http::BufList;
 use bytes::{Buf, Bytes};
 use http_body::{Body as HttpBody, Frame, SizeHint};
 use parking_lot::Mutex;
 use pin_project_lite::pin_project;
 
-use crate::http::buflist::BufList;
 use crate::*;
 
 #[cfg(test)]

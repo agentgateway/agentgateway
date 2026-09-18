@@ -1,0 +1,17 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "call_2",
+            "name": "mcp_long_namespace_long_namespace_long_namespace_long_nam_d28b84",
+            "input": {}
+          }
+        }
+      ]
+    }
+  },
+  "stopReason": "tool_use"
+}

@@ -5,13 +5,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use agent_core::drain::DrainWatcher;
 use agent_core::readiness;
+use agent_http::Response;
 use hyper::Request;
 use hyper::body::Incoming;
 use itertools::Itertools;
 
 use super::hyper_helpers;
 use crate::Address;
-use crate::http::Response;
 
 struct State {
 	ready: readiness::Ready,

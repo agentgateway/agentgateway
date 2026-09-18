@@ -2196,6 +2196,14 @@ type AwsAssumeRole struct {
 	// +listMapKey=key
 	// +kubebuilder:validation:MaxItems=50
 	Tags []AwsSessionTag `json:"tags,omitempty"`
+
+	// ExternalID is set when the role's trust policy requires sts:ExternalId.
+	//
+	// +optional
+	// +kubebuilder:validation:MinLength=2
+	// +kubebuilder:validation:MaxLength=1224
+	// +kubebuilder:validation:Pattern="^[\\w+=,.@:/-]+$"
+	ExternalID *string `json:"externalId,omitempty"`
 }
 
 // AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
@@ -3354,6 +3362,14 @@ type LocalRateLimit struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	Burst *int32 `json:"burst,omitempty"`
+
+	// CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+	// per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+	// the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+	// bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+	// of buckets per rule and drops the least used ones.
+	// +optional
+	Key *CELExpression `json:"key,omitempty"`
 }
 
 type CORS struct {
@@ -3397,10 +3413,10 @@ type Timeouts struct {
 	// +optional
 	Request *Duration `json:"request,omitempty"`
 
-	// Maximum time the response body may go without producing data. The window restarts on every
-	// body frame, so this bounds the gap between frames rather than the total time a response may
-	// take. It is what terminates a backend that stops producing data mid-stream without capping
-	// how long a legitimately long response may run.
+	// Maximum time to wait for a frame from the upstream response body.
+	//
+	// Limits how long the gateway waits for more response data from the backend.
+	// Time spent processing the response or waiting for the client to receive it does not count.
 	//
 	// This complements Request rather than overlapping it: Request stops applying once the response
 	// headers arrive, so it places no bound on how long the response body may take, and it cannot

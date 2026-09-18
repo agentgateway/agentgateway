@@ -8,16 +8,15 @@ use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use http::StatusCode;
-use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, DiscoverResult,
-	ExtensionCapabilities, Extensions, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	PaginatedRequestParams, ProtocolVersion, RequestId, RequestMetaObject, ResultType,
-	ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerRequest,
-	ServerResult, SubscriptionFilter,
+	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
+	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
+	RequestMetaObject, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -33,7 +32,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
-use crate::types::agent::{McpPrefixMode, ResourceName};
+use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
 
@@ -686,7 +685,11 @@ impl Relay {
 					message = %rej.message,
 					"mcpGuardrails: request rejected",
 				);
-				Err(UpstreamError::McpGuardrails(rej))
+				Err(UpstreamError::McpGuardrails {
+					rej,
+					was_tool_call: method == CallToolRequestMethod::VALUE,
+					downstream_modern: ctx_downstream_modern(ctx),
+				})
 			},
 		}
 	}
@@ -820,6 +823,7 @@ impl Relay {
 					resource_subscribe,
 					upstream_instructions,
 					upstreams.merged_extensions(&HashMap::new()),
+					upstreams.server_overrides(),
 				)
 				.into(),
 			)
@@ -873,6 +877,7 @@ impl Relay {
 				resource_subscribe,
 				upstream_instructions,
 				upstreams.merged_extensions(&upstream_extensions),
+				upstreams.server_overrides(),
 			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
@@ -1089,7 +1094,11 @@ impl Relay {
 			)
 			.await;
 			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::McpGuardrails(rej));
+				return Err(UpstreamError::McpGuardrails {
+					rej,
+					was_tool_call: r.request.method() == CallToolRequestMethod::VALUE,
+					downstream_modern: ctx_downstream_modern(ctx),
+				});
 			}
 		}
 
@@ -1275,7 +1284,7 @@ impl Relay {
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let mcp_log = mcp_log.or_else(|| ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned());
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(
@@ -1350,7 +1359,7 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
@@ -1438,7 +1447,7 @@ impl Relay {
 			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
 			.await?;
 
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		let streams = streams
 			.into_iter()
 			.map(|(name, s)| {
@@ -1569,11 +1578,14 @@ impl Relay {
 		Ok(accepted_response())
 	}
 
+	pub(crate) const DEFAULT_GATEWAY_PREAMBLE: &str = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+
 	fn get_info(
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
+		server_overrides: Option<McpServerOverrides>,
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
@@ -1592,7 +1604,10 @@ impl Relay {
 			capabilities.extensions = extensions;
 			capabilities
 		};
-		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+		let gateway_preamble = server_overrides
+			.as_ref()
+			.and_then(|o| o.instructions.as_deref())
+			.unwrap_or(Self::DEFAULT_GATEWAY_PREAMBLE);
 		let instructions = if upstream_instructions.is_empty() {
 			Some(gateway_preamble.to_string())
 		} else {
@@ -1602,12 +1617,24 @@ impl Relay {
 			}
 			Some(merged)
 		};
+		let mut server_info = Implementation::new(
+			server_overrides
+				.as_ref()
+				.and_then(|o| o.name.clone())
+				.map(|s| s.to_string())
+				.unwrap_or_else(|| "agentgateway".to_string()),
+			server_overrides
+				.as_ref()
+				.and_then(|o| o.version.clone())
+				.map(|s| s.to_string())
+				.unwrap_or_else(|| BuildInfo::new().version.to_string()),
+		);
+		if let Some(title) = server_overrides.as_ref().and_then(|o| o.title.clone()) {
+			server_info = server_info.with_title(title.to_string());
+		}
 		ServerInfo::new(capabilities)
 			.with_protocol_version(pv)
-			.with_server_info(Implementation::new(
-				"agentgateway",
-				BuildInfo::new().version.to_string(),
-			))
+			.with_server_info(server_info)
 			.with_instructions(instructions.unwrap_or_default())
 	}
 
@@ -1615,12 +1642,14 @@ impl Relay {
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
+		server_overrides: Option<McpServerOverrides>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
 			extensions,
+			server_overrides,
 		);
 		let mut result =
 			DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
@@ -1634,14 +1663,14 @@ impl Relay {
 	}
 }
 
-pub fn setup_request_log(http: Parts) -> (AsyncLog<MCPInfo>, CelExecWrapper) {
-	let log = http
-		.extensions
+pub fn setup_request_log(ctx: &IncomingRequestContext) -> (AsyncLog<MCPInfo>, CelExecWrapper) {
+	let log = ctx
+		.extensions()
 		.get::<AsyncLog<MCPInfo>>()
 		.cloned()
 		.unwrap_or_default();
 
-	let cel = CelExecWrapper::new(::http::Request::from_parts(http, ()));
+	let cel = CelExecWrapper::from(ctx.clone());
 	(log, cel)
 }
 

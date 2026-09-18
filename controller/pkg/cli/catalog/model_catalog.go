@@ -171,6 +171,7 @@ type Rates struct {
 	Reasoning   Money `json:"reasoning,omitempty"`
 	InputAudio  Money `json:"inputAudio,omitempty"`
 	OutputAudio Money `json:"outputAudio,omitempty"`
+	PerPage     Money `json:"perPage,omitempty"`
 }
 
 type Tier struct {
@@ -205,8 +206,9 @@ func (m Money) Decimal() (decimal.Decimal, error) {
 	return d, nil
 }
 
-// maxFractionalDigits bounds rate precision. Money is exact decimal, never float;
-// rates are USD per 1,000,000 tokens and never need more than micro-dollar precision.
+// maxFractionalDigits bounds rate precision. Money is exact decimal, never float; token rates are
+// USD per 1,000,000 tokens and perPage is USD per page, so neither needs more than micro-dollar
+// precision.
 const maxFractionalDigits = 6
 
 func (m Money) validate() error {

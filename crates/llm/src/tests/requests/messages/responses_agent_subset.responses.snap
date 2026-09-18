@@ -103,7 +103,6 @@ info:
       },
       {
         "type": "function_call",
-        "id": "call_weather",
         "call_id": "call_weather",
         "name": "get_weather",
         "arguments": "{\"location\":\"San Francisco\"}",
@@ -160,7 +159,8 @@ info:
           "required": [
             "location"
           ]
-        }
+        },
+        "strict": false
       }
     ],
     "tool_choice": {

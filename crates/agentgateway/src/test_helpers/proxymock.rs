@@ -8,7 +8,7 @@ use std::time::Instant;
 use agent_core::drain::{DrainTrigger, DrainWatcher};
 use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
-use axum::body::to_bytes;
+use agent_http::Body;
 use bytes::Bytes;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use hyper_util::client::legacy::Client;
@@ -25,8 +25,8 @@ use tracing::{info, trace};
 use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::http::Response;
 use crate::http::backendtls::BackendTLS;
-use crate::http::{Body, Response};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
@@ -227,7 +227,7 @@ pub fn custom_llm_backend_with_formats(
 	let provider = NamedAIProvider {
 		name: "default".into(),
 		provider: AIProvider::Custom(crate::llm::custom::Provider {
-			model: None,
+			model_override: None,
 			provider_override: None,
 			formats,
 		}),
@@ -241,7 +241,7 @@ pub fn custom_llm_backend_with_formats(
 	let providers = EndpointSet::new(vec![vec![(provider.name.clone(), provider)]]);
 	Backend::AI(
 		ResourceName::new(name.into(), "".into()),
-		AIBackend { providers },
+		AIBackend::new(providers),
 	)
 	.into()
 }
@@ -771,6 +771,7 @@ impl TestBind {
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				sse_keep_alive: None,
 				dns_rebinding_protection,
+				server: None,
 			},
 		);
 		{
@@ -891,6 +892,7 @@ impl TestBind {
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 				sse_keep_alive: None,
 				dns_rebinding_protection: false,
+				server: None,
 			},
 		);
 		{
@@ -1401,6 +1403,23 @@ impl TestBind {
 		addr
 	}
 
+	/// Only listeners started with `serve_gateway_listener` release their drain handle; other serve_*
+	/// helpers hold one for the life of the test, so a drain after them never completes.
+	pub async fn start_drain(self) {
+		let Self {
+			_drain_tx: drain_tx,
+			drain_rx,
+			..
+		} = self;
+		drop(drain_rx);
+		tokio::time::timeout(
+			std::time::Duration::from_secs(30),
+			drain_tx.start_drain_and_wait(drain::DrainMode::Graceful),
+		)
+		.await
+		.expect("drain did not complete; something still holds a DrainWatcher")
+	}
+
 	pub async fn serve_gateway_listener(&self, bind_name: BindKey) -> SocketAddr {
 		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
 		listener.set_nonblocking(true).unwrap();
@@ -1477,11 +1496,11 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 	}
 }
 
-pub async fn read_body_raw(body: axum_core::body::Body) -> Bytes {
-	to_bytes(body, 2_097_152).await.unwrap()
+pub async fn read_body_raw(body: impl Into<crate::http::Body>) -> Bytes {
+	body.into().into_bytes(2_097_152).await.unwrap()
 }
 
-pub async fn read_body(body: axum_core::body::Body) -> RequestDump {
+pub async fn read_body(body: impl Into<crate::http::Body>) -> RequestDump {
 	let b = read_body_raw(body).await;
 	serde_json::from_slice(&b).unwrap()
 }

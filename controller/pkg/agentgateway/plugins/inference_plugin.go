@@ -78,7 +78,7 @@ func translatePoliciesForInferencePool(
 	}
 
 	failureMode := api.BackendPolicySpec_InferenceRouting_FAIL_CLOSED
-	if epr.FailureMode == inf.EndpointPickerFailOpen {
+	if epr != nil && epr.FailureMode == inf.EndpointPickerFailOpen {
 		failureMode = api.BackendPolicySpec_InferenceRouting_FAIL_OPEN
 	}
 
@@ -144,6 +144,9 @@ func translatePoliciesForInferencePool(
 
 func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf.InferencePool, services krt.Collection[*corev1.Service]) error {
 	epr := pool.Spec.EndpointPickerRef
+	if epr == nil {
+		return fmt.Errorf("endpointPickerRef must be specified")
+	}
 	var errs []string
 
 	if epr.Group != nil && *epr.Group != "" {
@@ -242,6 +245,12 @@ func buildInferencePoolStatus(
 	}
 
 	conditions := inferencePoolConditionMap(controllerName, validationErr)
+	if pool.Spec.EndpointPickerRef == nil {
+		conditions[string(inf.InferencePoolConditionAccepted)].Error = &ConfigError{
+			Reason:  string(inf.InferencePoolReasonEndpointPickerRefMissing),
+			Message: "endpointPickerRef must be specified",
+		}
+	}
 	for _, ref := range desiredInferencePoolParentRefs(attachedGateways, validationErr) {
 		existingConds := []metav1.Condition(nil)
 		if existing, found := existingOurs[inferencePoolParentMergeKey(ref)]; found {

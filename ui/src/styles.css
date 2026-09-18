@@ -79,6 +79,7 @@ samp,
 	--shadow-drawer: -8px 0 18px rgb(0 0 0 / 0.22);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 * {
 	box-sizing: border-box;
 }
@@ -311,6 +312,116 @@ a {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
+}
+
+.user-menu {
+	position: relative;
+}
+
+.user-menu-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 36px;
+	padding: 3px 8px 3px 4px;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+}
+
+.user-menu-trigger:hover,
+.user-menu-trigger[aria-expanded='true'] {
+	border-color: var(--line);
+	background: var(--surface);
+}
+
+.user-menu-trigger:focus-visible,
+.user-menu-signout:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.user-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 28px;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background: var(--accent-soft);
+	color: var(--primary);
+	font-size: 11px;
+	font-weight: 650;
+}
+
+.user-menu-name {
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.user-menu-panel {
+	position: absolute;
+	top: calc(100% + 8px);
+	right: 0;
+	z-index: 30;
+	width: min(280px, calc(100vw - 32px));
+	padding: 6px;
+	border: 1px solid var(--line-strong);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow-popover);
+}
+
+.user-menu-identity {
+	display: grid;
+	gap: 4px;
+	margin-bottom: 6px;
+	padding: 10px 10px 14px;
+	border-bottom: 1px solid var(--line);
+	color: var(--muted);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.user-menu-identity strong {
+	color: var(--text);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.user-menu-caption {
+	margin-bottom: 4px;
+}
+
+.user-menu-signout {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+}
+
+.user-menu-signout:hover {
+	background: var(--surface-2);
+}
+
+@media (max-width: 600px) {
+	.user-menu-name {
+		display: none;
+	}
 }
 
 .export-dropdown {
@@ -768,6 +879,7 @@ a {
 	gap: 5px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .field-label svg {
 	color: var(--muted);
 }
@@ -1109,6 +1221,7 @@ a {
 	border-radius: 6px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .client-svg-icon svg {
 	width: 22px;
 	height: 22px;
@@ -1132,6 +1245,7 @@ a {
 	height: 16px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .client-svg-icon .provider-icon {
 	width: 22px;
 	height: 22px;
@@ -1480,6 +1594,7 @@ a {
 	margin-bottom: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .policy-form-section {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -1588,6 +1703,7 @@ a {
 	gap: 8px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .guardrail-rule-title > svg {
 	color: var(--muted);
 	flex: 0 0 16px;
@@ -1640,6 +1756,7 @@ a {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .transform-section-toggle > svg {
 	color: var(--muted);
 }
@@ -1863,6 +1980,7 @@ a {
 	width: 118px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .authz-effect-select .custom-select-trigger {
 	min-height: 30px;
 	padding: 0 8px;
@@ -2144,6 +2262,7 @@ a {
 	margin-top: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .config-option-row {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
@@ -2362,6 +2481,7 @@ a {
 	min-width: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .surface-row-title svg {
 	color: var(--primary);
 }
@@ -2456,6 +2576,7 @@ a {
 	margin-top: 4px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .muted-copy {
 	color: var(--muted);
 	font-size: 13px;
@@ -2541,6 +2662,7 @@ a {
 	opacity: 1;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .startup-chip svg {
 	color: var(--muted);
 }
@@ -2589,7 +2711,9 @@ a {
 	margin-bottom: 22px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .onboarding-hero > svg,
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .onboarding-complete > svg {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -2799,6 +2923,7 @@ table {
 }
 
 th,
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 td {
 	border-bottom: 1px solid var(--line);
 	padding: 11px 10px;
@@ -2819,6 +2944,7 @@ tbody tr:hover {
 	background: var(--surface-2);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .expanded-row td {
 	background: var(--surface-2);
 	max-width: 0;
@@ -2989,6 +3115,7 @@ tbody tr:hover {
 	gap: 12px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-detail-title .provider-icon {
 	width: 26px;
 	height: 26px;
@@ -3378,6 +3505,7 @@ tbody tr:hover {
 	margin-top: 12px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-thread {
 	display: flex;
 	min-width: 0;
@@ -3721,7 +3849,7 @@ tbody tr:hover {
 }
 
 .log-table col.col-status {
-	width: 62px;
+	width: 88px;
 }
 
 .log-table col.col-model {
@@ -3765,6 +3893,7 @@ tbody tr:hover {
 	text-transform: uppercase;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-table thead th:first-child {
 	padding-left: 18px;
 }
@@ -3781,12 +3910,14 @@ tbody tr:hover {
 	cursor: pointer;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-row-summary td {
 	border-bottom: 1px solid var(--line);
 	padding: 9px 10px;
 	vertical-align: middle;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-row-summary td:first-child {
 	padding-left: 18px;
 }
@@ -3795,6 +3926,7 @@ tbody tr:hover {
 	box-shadow: inset 2.5px 0 0 var(--bad);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-row-summary:hover td {
 	background: var(--surface-2);
 }
@@ -3804,15 +3936,18 @@ tbody tr:hover {
 	outline-offset: -2px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-row.expanded .log-row-summary td {
 	border-bottom-color: transparent;
 	background: color-mix(in srgb, var(--surface-2) 42%, var(--surface));
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-table > tbody:last-child > tr:last-child > td {
 	border-bottom: 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-row-detail td {
 	border-bottom: 1px solid var(--line);
 	background: color-mix(in srgb, var(--surface-2) 42%, var(--surface));
@@ -3853,6 +3988,7 @@ tbody tr:hover {
 	gap: 9px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-model-cell .provider-icon {
 	width: 16px;
 	height: 16px;
@@ -3896,6 +4032,7 @@ tbody tr:hover {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-meta-item svg {
 	flex: 0 0 auto;
 }
@@ -3955,6 +4092,67 @@ tbody tr:hover {
 .log-turn-badge.other {
 	background: var(--surface-2);
 	color: var(--muted);
+}
+
+.log-guardrail-list {
+	display: grid;
+	gap: 12px;
+}
+
+.log-guardrail-result {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.log-guardrail-context {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.log-guardrail-heading {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.log-guardrail-context p {
+	margin: 4px 0 0;
+	color: var(--muted);
+	font-size: 12px;
+}
+
+.log-status-indicators {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+}
+
+.log-status-indicators > :nth-child(2) {
+	position: absolute;
+	left: calc(100% + 6px);
+	display: inline-flex;
+}
+
+.log-guardrail-badge {
+	display: inline-flex;
+	align-items: center;
+	color: var(--muted);
+}
+
+.log-guardrail-badge.rejected {
+	color: var(--bad);
+}
+
+.log-guardrail-badge.masked,
+.log-guardrail-badge.failed-open {
+	color: var(--warn);
+}
+
+.log-guardrail-result > .log-guardrail-badge {
+	padding-top: 2px;
 }
 
 .log-status-pill {
@@ -4061,6 +4259,7 @@ tbody tr:hover {
 }
 
 /* Copy button */
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .copy-button {
 	display: inline-flex;
 	align-items: center;
@@ -4090,6 +4289,7 @@ tbody tr:hover {
 	font-weight: 700;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .mono,
 .json-block,
 .mono-input {
@@ -4138,6 +4338,7 @@ tbody tr:hover {
 	color: var(--bad);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .form-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4189,6 +4390,7 @@ tbody tr:hover {
 	overflow: auto;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .field {
 	display: flex;
 	flex-direction: column;
@@ -4284,6 +4486,7 @@ tbody tr:hover {
 	font-family: var(--mono);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .mono-input.compact {
 	min-height: 74px;
 	resize: vertical;
@@ -4408,6 +4611,7 @@ textarea {
 	font-weight: 650;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .chat-avatar {
 	display: grid;
 	place-items: center;
@@ -4419,6 +4623,7 @@ textarea {
 	color: var(--muted);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .chat-bubble {
 	max-width: 100%;
 	border: 1px solid var(--line);
@@ -5087,6 +5292,7 @@ textarea {
 	padding-right: 42px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .freeform-combobox {
 	position: relative;
 	min-width: 0;
@@ -5204,6 +5410,7 @@ textarea {
 	gap: 7px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .provider-icon {
 	width: 18px;
 	height: 18px;
@@ -5263,6 +5470,7 @@ textarea {
 	position: relative;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .custom-select-trigger {
 	display: flex;
 	align-items: center;
@@ -5284,11 +5492,13 @@ textarea {
 	gap: 8px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .custom-select-value > svg,
 .custom-select-value > img {
 	flex: 0 0 auto;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .custom-select-value > svg {
 	color: var(--muted);
 }
@@ -5342,6 +5552,7 @@ textarea {
 	font-weight: 500;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .custom-select-menu {
 	position: absolute;
 	top: calc(100% + 6px);
@@ -5462,6 +5673,7 @@ textarea {
 	font-size: 13px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .traffic-policy-section {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -5671,6 +5883,7 @@ textarea {
 	width: 18%;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .keys-table td {
 	vertical-align: middle;
 }
@@ -5885,6 +6098,7 @@ textarea {
 	gap: 6px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .table-action {
 	display: inline-flex;
 	align-items: center;
@@ -5901,10 +6115,12 @@ textarea {
 	white-space: nowrap;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .table-action:hover {
 	background: var(--surface-2);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .table-action.copied {
 	border-color: color-mix(in srgb, var(--ok) 45%, var(--line-strong));
 	color: var(--ok);
@@ -6394,6 +6610,7 @@ textarea {
 	}
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 details summary {
 	cursor: pointer;
 	color: var(--muted);
@@ -6401,6 +6618,7 @@ details summary {
 	margin: 10px 0;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .empty-state {
 	display: grid;
 	place-items: center;
@@ -6413,6 +6631,7 @@ details summary {
 	margin-top: 14px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .muted {
 	color: var(--muted);
 }
@@ -6512,6 +6731,7 @@ details summary {
 	.two-column.wide-left,
 	.playground-shell,
 	.client-setup-layout,
+	/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 	.form-grid,
 	.filter-bar,
 	.logs-filter-bar,
@@ -6576,6 +6796,7 @@ details summary {
 	.advanced-setting-header .button,
 	.authz-rule-toolbar .button,
 	.authz-rule-header .row-actions,
+	/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 	.kv-row .table-action,
 	.kv-add-row .button {
 		grid-column: 1 / -1;
@@ -6706,4 +6927,48 @@ details summary {
 }
 .link-button:hover {
 	opacity: 0.8;
+}
+
+.login-page {
+	min-height: 100svh;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+}
+
+.login-card {
+	width: min(400px, 100%);
+	padding: 32px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--surface);
+	box-shadow: var(--shadow);
+}
+
+.login-brand {
+	margin-bottom: 32px;
+}
+
+.login-brand .brand-logo {
+	width: 200px;
+	max-width: 100%;
+	height: auto;
+}
+
+.login-card h1 {
+	margin: 0 0 8px;
+	font-size: 24px;
+	font-weight: 600;
+	letter-spacing: -0.025em;
+}
+
+.login-card p {
+	margin: 0 0 24px;
+	color: var(--muted);
+	line-height: 1.6;
+}
+
+.login-card .button {
+	width: 100%;
+	justify-content: center;
 }

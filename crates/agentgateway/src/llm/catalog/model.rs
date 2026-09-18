@@ -130,6 +130,9 @@ pub struct Rates {
 	/// Cost per 1M output audio tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub output_audio: Option<Money>,
+	/// Cost per page, for document/OCR models.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub per_page: Option<Money>,
 }
 
 impl Rates {
@@ -147,6 +150,7 @@ impl Rates {
 			reasoning: pick(&self.reasoning, &delta.reasoning),
 			input_audio: pick(&self.input_audio, &delta.input_audio),
 			output_audio: pick(&self.output_audio, &delta.output_audio),
+			per_page: pick(&self.per_page, &delta.per_page),
 		}
 	}
 }
@@ -218,6 +222,7 @@ pub struct Usage {
 	pub reasoning: u64,
 	pub input_audio: u64,
 	pub output_audio: u64,
+	pub pages: u64,
 }
 
 impl Usage {
@@ -239,6 +244,7 @@ pub struct Breakdown {
 	pub reasoning: Decimal,
 	pub input_audio: Decimal,
 	pub output_audio: Decimal,
+	pub pages: Decimal,
 }
 
 impl Breakdown {
@@ -250,6 +256,7 @@ impl Breakdown {
 			+ self.reasoning
 			+ self.input_audio
 			+ self.output_audio
+			+ self.pages
 	}
 }
 
@@ -269,6 +276,7 @@ impl Rates {
 			reasoning: line(usage.reasoning, reasoning_rate) / unit,
 			input_audio: line(usage.input_audio, input_audio_rate) / unit,
 			output_audio: line(usage.output_audio, output_audio_rate) / unit,
+			pages: line(usage.pages, self.per_page.as_ref()),
 		}
 	}
 }
@@ -299,9 +307,10 @@ impl Model {
 	}
 }
 
-fn line(tokens: u64, rate: Option<&Money>) -> Decimal {
+// count: [tokens|pages] and rate: [per n tokens|per page].
+fn line(count: u64, rate: Option<&Money>) -> Decimal {
 	match rate {
-		Some(Money(r)) => Decimal::from(tokens) * *r,
+		Some(Money(r)) => Decimal::from(count) * *r,
 		None => Decimal::ZERO,
 	}
 }
@@ -497,6 +506,7 @@ mod tests {
 				reasoning: Some(m("15")),
 				input_audio: Some(m("40")),
 				output_audio: Some(m("80")),
+				per_page: None,
 			},
 			vec![],
 		);
@@ -508,6 +518,7 @@ mod tests {
 			reasoning: 100,
 			input_audio: 50,
 			output_audio: 25,
+			pages: 0,
 		};
 		let b = e.breakdown(&u);
 		assert_eq!(b.input, d("0.003"));
@@ -682,5 +693,60 @@ mod tests {
 			..Default::default()
 		};
 		assert_eq!(e.price(&u), d("0.000024975"));
+	}
+
+	fn page_rate(price: &str) -> Rates {
+		Rates {
+			per_page: Some(m(price)),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn page_rate_is_priced_per_page_not_per_million() {
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&Usage {
+			pages: 4,
+			..Default::default()
+		});
+		assert_eq!(b.pages, d("0.02"), "a perPage rate is not divided by 1M");
+		assert_eq!(b.total(), d("0.02"));
+	}
+
+	#[test]
+	fn page_and_token_pricing_do_not_leak_into_each_other() {
+		// A token-priced model is unaffected by a page count it has no rate for.
+		let b = entry(rates("3", "15"), vec![]).breakdown(&Usage {
+			input: 1000,
+			pages: 4,
+			..Default::default()
+		});
+		assert_eq!(b.pages, Decimal::ZERO, "no page rate -> pages not billed");
+		assert_eq!(b.total(), d("0.003"), "token cost unchanged by page count");
+
+		// And a page-priced model does not bill tokens.
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&Usage {
+			input: 1000,
+			output: 500,
+			..Default::default()
+		});
+		assert_eq!(b.total(), Decimal::ZERO);
+	}
+
+	#[test]
+	fn per_page_rate_round_trips_through_json() {
+		let json = r#"{"providers":{"mistral":{"models":{"ocr":{"rates":{"perPage":"0.005"}}}}}}"#;
+		let c = super::from_json(json).unwrap();
+		let model = &c.providers["mistral"].models["ocr"];
+		assert_eq!(model.rates.per_page, Some(m("0.005")));
+		assert_eq!(serde_json::to_string(&c).unwrap(), json);
+	}
+
+	#[test]
+	fn tier_can_override_the_page_rate() {
+		let overlaid = page_rate("0.005").overlay(&page_rate("0.004"));
+		assert_eq!(overlaid.per_page, Some(m("0.004")));
+		// An overlay that sets no page rate keeps the base one.
+		let kept = page_rate("0.005").overlay(&rates("3", "15"));
+		assert_eq!(kept.per_page, Some(m("0.005")));
 	}
 }

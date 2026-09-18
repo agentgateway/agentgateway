@@ -1,9 +1,7 @@
 use std::borrow::Cow;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, ready};
 use std::time::{Duration, Instant, SystemTime};
 
 use agent_core::metrics::CustomField;
@@ -13,10 +11,10 @@ use agent_core::telemetry::{
 	quoted,
 };
 use agent_core::{Timestamp, strng};
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 use crossbeam::atomic::AtomicCell;
 use frozen_collections::FzHashSet;
-use http_body::{Body, Frame, SizeHint};
+use http_body::Frame;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
@@ -142,7 +140,7 @@ impl<'a> HttpSemconvAttributes<'a> {
 	}
 }
 
-fn database_llm_payload(
+pub(super) fn database_llm_payload(
 	mode: Option<crate::types::frontend::DatabaseLlmMode>,
 	input_messages: Option<&[agent_llm::types::NormalizedMessage]>,
 	info: Option<&LLMContext>,
@@ -379,7 +377,7 @@ impl<T: Debug> Debug for AsyncLog<T> {
 	}
 }
 
-/// Per-request accumulator of prompt-guard guardrail interventions.
+/// Per-request accumulator of prompt-guard guardrail evaluations.
 pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
 #[derive(serde::Serialize, Debug, Default, Clone)]
@@ -1413,7 +1411,7 @@ impl Drop for DropOnLog {
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
-			// trailer-only grpc-status values are learned later by LogBody. Copy the final
+			// Trailer-only grpc-status values are learned later by the body observer. Copy the final
 			// value back into the snapshot before evaluating access-log CEL fields.
 			if let Some(grpc_status) = log.grpc_status.load()
 				&& let Some(resp) = log.response_snapshot.as_mut()
@@ -1544,7 +1542,8 @@ impl Drop for DropOnLog {
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
-				&& (llm_response.is_some()
+				&& (log.llm_request.is_some()
+					|| llm_response.is_some()
 					|| log
 						.listener_name
 						.as_ref()
@@ -1582,6 +1581,7 @@ impl Drop for DropOnLog {
 						("agw.ai.usage.cost.reasoning", b.reasoning.to_string()),
 						("agw.ai.usage.cost.input_audio", b.input_audio.to_string()),
 						("agw.ai.usage.cost.output_audio", b.output_audio.to_string()),
+						("agw.ai.usage.cost.pages", b.pages.to_string()),
 					]
 				})
 			} else {
@@ -2112,6 +2112,7 @@ impl Drop for DropOnLog {
 							("agw.ai.usage.cost.reasoning", cost.reasoning),
 							("agw.ai.usage.cost.inputAudio", cost.input_audio),
 							("agw.ai.usage.cost.outputAudio", cost.output_audio),
+							("agw.ai.usage.cost.pages", cost.pages),
 						];
 						db_kv.reserve(cost_raws.len());
 						for (k, v) in &cost_raws {
@@ -2120,18 +2121,12 @@ impl Drop for DropOnLog {
 						}
 					}
 					let attributes = database_attributes(&db_kv);
-					let payload = database_llm_payload(
-						log.database_llm,
-						log.input_messages.as_deref().map(Vec::as_slice),
-						llm_response.as_ref(),
-					);
-					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
 							.total_tokens
 							.or_else(|| Some(llm.input_tokens?.saturating_add(llm.output_tokens?)))
 					});
-					log_store::emit(log_store::StoredRequestLog {
+					let record = log_store::StoredRequestLog {
 						id: uuid::Uuid::now_v7().to_string(),
 						started_at: log.start.as_datetime().with_timezone(&chrono::Utc),
 						completed_at: end_time.as_datetime().with_timezone(&chrono::Utc),
@@ -2165,9 +2160,15 @@ impl Drop for DropOnLog {
 						agentgateway_user: attributes.agentgateway_user,
 						agentgateway_group: attributes.agentgateway_group,
 						user_agent_name: attributes.user_agent_name,
-						has_payload,
+						has_payload: false,
 						attributes_json: attributes.json,
-						payload,
+						payload: None,
+					};
+					log_store::emit(log_store::PendingRequestLog {
+						record,
+						llm_mode: log.database_llm,
+						input_messages: log.input_messages.take(),
+						llm_response,
 					});
 				}
 			}
@@ -2175,73 +2176,26 @@ impl Drop for DropOnLog {
 	}
 }
 
-pin_project_lite::pin_project! {
-		/// A data stream created from a [`Body`].
-		#[derive(Debug)]
-		pub struct LogBody<B> {
-				#[pin]
-				body: B,
-				log: DropOnLog,
-		}
-}
-
-impl<B> LogBody<B> {
-	/// Create a new `LogBody`
-	pub fn new(body: B, log: DropOnLog) -> Self {
-		Self { body, log }
-	}
-}
-
-impl<B: Body + Debug> Body for LogBody<B>
-where
-	B::Data: Debug,
-	B::Error: Display,
-{
-	type Data = B::Data;
-	type Error = B::Error;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let this = self.project();
-		let result = ready!(this.body.poll_frame(cx));
-		match result {
-			Some(Ok(frame)) => {
-				if let Some(trailer) = frame.trailers_ref()
-					&& let Some(grpc) = this.log.as_mut().map(|log| log.grpc_status.clone())
-				{
-					crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
-				}
-				if let Some(log) = this.log.as_mut()
-					&& let Some(data) = frame.data_ref()
-				{
-					// Count the bytes in this data frame
-					log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
-				}
-				Poll::Ready(Some(Ok(frame)))
-			},
-			Some(Err(e)) => {
-				// The head is long gone by the time the body fails, so nothing else records this:
-				// without it a stream torn down mid-flight is logged as whatever status we already
-				// sent, indistinguishable from one the client read to completion.
-				if let Some(log) = this.log.as_mut()
-					&& log.error.is_none()
-				{
-					log.error = Some(format!("response body failed: {e}"));
-				}
-				Poll::Ready(Some(Err(e)))
-			},
-			None => Poll::Ready(None),
+impl agent_http::BodyObserver for DropOnLog {
+	fn on_error(&mut self, error: &crate::http::Error) {
+		// Response headers have already been sent; retain the body failure in the log.
+		if let Some(log) = self.as_mut()
+			&& log.error.is_none()
+		{
+			log.error = Some(format!("response body failed: {error}"));
 		}
 	}
-
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
+	fn on_frame(&mut self, frame: &Frame<Bytes>) {
+		if let Some(trailer) = frame.trailers_ref()
+			&& let Some(grpc) = self.as_mut().map(|log| log.grpc_status.clone())
+		{
+			crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
+		}
+		if let Some(log) = self.as_mut()
+			&& let Some(data) = frame.data_ref()
+		{
+			log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
+		}
 	}
 }
 
@@ -3343,7 +3297,7 @@ mod tests {
 		let catalog_file = tempfile::NamedTempFile::new().unwrap();
 		fs_err::write(
 			catalog_file.path(),
-			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2"}}}}}}"#,
+			r#"{"providers":{"openai":{"models":{"my-model":{"rates":{"input":"1","output":"2","perPage":"0.005"}}}}}}"#,
 		)
 		.unwrap();
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
@@ -3365,6 +3319,7 @@ mod tests {
 		let response = llm::LLMResponse {
 			input_tokens: Some(1_000_000),
 			output_tokens: Some(0),
+			pages: Some(4),
 			..Default::default()
 		};
 		for _ in 0..20 {
@@ -3402,6 +3357,16 @@ mod tests {
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.to_string())
+		};
+		// 1M input tokens at $1/1M plus 4 pages at $0.005/page: the page line is priced per page.
+		assert_eq!(value("agw.ai.usage.cost.pages").as_deref(), Some("0.020"));
+		assert_eq!(value("agw.ai.usage.cost.total").as_deref(), Some("1.020"));
 		assert!(
 			span
 				.attributes

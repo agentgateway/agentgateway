@@ -26,6 +26,7 @@ use crate::*;
 // https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#responses
 const GRPC_MESSAGE_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'%');
 
+#[allow(clippy::result_large_err)]
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyResponse {
 	#[error("{0}")]
@@ -504,7 +505,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Unavailable(_, _)) => StatusCode::SERVICE_UNAVAILABLE,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
-			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
+			ProxyError::MCP(mcp::Error::McpGuardrails { .. }) => StatusCode::OK,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));

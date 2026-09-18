@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use agent_core::strng::{self, Strng};
-use axum_core::body::Body;
+use agent_http::Body;
 use serde::Deserialize;
 
 use crate::types::detect;
@@ -146,7 +146,7 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 	use rand::RngExt;
 	use serde_json::{Map, Value, json};
@@ -161,13 +161,15 @@ pub mod from_messages {
 	};
 
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		validate_raw_request(req)?;
-		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed)?;
+		let xlated = translate_request(req)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
-	fn translate_internal(req: messages::Request) -> Result<types::responses::Request, AIError> {
+	pub fn translate_request(
+		req: &types::messages::Request,
+	) -> Result<types::responses::Request, AIError> {
+		validate_raw_request(req)?;
+		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
 		let messages::Request {
 			messages,
 			system,
@@ -183,20 +185,21 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
-		} = req;
+		} = typed;
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are
 		// accepted and dropped rather than failing the conversion (see #2662).
 		let _ = (stop_sequences, top_k);
 
-		let (instructions, mut input) = translate_system_prompt(system)?;
+		let supports_cache = crate::conversion::supports_prompt_cache_breakpoint(&model);
+		let (instructions, mut input) = translate_system_prompt(system, supports_cache)?;
 		let mut rest = Map::new();
 		if let Some(instructions) = instructions.filter(|s| !s.is_empty()) {
 			rest.insert("instructions".to_string(), Value::String(instructions));
 		}
 
 		let output_config = output_config.unwrap_or_default();
-		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort)? {
+		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort) {
 			rest.insert(
 				"reasoning".to_string(),
 				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
@@ -229,7 +232,7 @@ pub mod from_messages {
 		}
 
 		for msg in messages {
-			translate_message(msg, &mut input)?;
+			translate_message(msg, &mut input, supports_cache)?;
 		}
 
 		let max_output_tokens = u32::try_from(max_tokens).map_err(|_| {
@@ -254,6 +257,7 @@ pub mod from_messages {
 
 	fn translate_system_prompt(
 		system: Option<messages::SystemPrompt>,
+		supports_cache: bool,
 	) -> Result<(Option<String>, Vec<types::responses::RawInputItem>), AIError> {
 		let Some(system) = system else {
 			return Ok((None, Vec::new()));
@@ -264,7 +268,7 @@ pub mod from_messages {
 				let has_cache_control = blocks.iter().any(|block| match block {
 					messages::SystemContentBlock::Text { cache_control, .. } => cache_control.is_some(),
 				});
-				if has_cache_control {
+				if supports_cache && has_cache_control {
 					let mut parts = Vec::new();
 					for block in blocks {
 						match block {
@@ -276,7 +280,7 @@ pub mod from_messages {
 									"type": "input_text",
 									"text": text,
 								});
-								add_prompt_cache_breakpoint(&mut part, cache_control);
+								add_prompt_cache_breakpoint(&mut part, cache_control, supports_cache);
 								parts.push(part);
 							},
 						}
@@ -300,8 +304,10 @@ pub mod from_messages {
 	fn add_prompt_cache_breakpoint(
 		value: &mut Value,
 		cache_control: Option<messages::CacheControlEphemeral>,
+		supports_cache: bool,
 	) {
-		if cache_control.is_some()
+		if supports_cache
+			&& cache_control.is_some()
 			&& let Some(object) = value.as_object_mut()
 		{
 			object
@@ -313,34 +319,25 @@ pub mod from_messages {
 	fn translate_reasoning(
 		thinking: Option<messages::ThinkingInput>,
 		effort: Option<messages::ThinkingEffort>,
-	) -> Result<Option<responses::Reasoning>, AIError> {
+	) -> Option<responses::Reasoning> {
+		let effort = effort.or_else(|| {
+			if let Some(messages::ThinkingInput::Enabled { budget_tokens }) = &thinking {
+				Some(crate::types::anthropic_effort_for_thinking_budget(
+					*budget_tokens,
+				))
+			} else {
+				None
+			}
+		});
 		match thinking {
-			Some(messages::ThinkingInput::Adaptive {}) => Ok(Some(responses::Reasoning {
+			Some(messages::ThinkingInput::Disabled {}) => None,
+			None if effort.is_none() => None,
+			_ => Some(responses::Reasoning {
 				context: None,
 				effort: translate_effort(effort),
 				mode: None,
 				summary: None,
-			})),
-			Some(messages::ThinkingInput::Disabled {}) => {
-				if effort.is_some() {
-					unsupported("messages output_config.effort requires adaptive thinking")
-				} else {
-					Ok(None)
-				}
-			},
-			Some(messages::ThinkingInput::Enabled { .. }) => Ok(Some(responses::Reasoning {
-				context: None,
-				effort: translate_effort(effort),
-				mode: None,
-				summary: None,
-			})),
-			None => {
-				if effort.is_some() {
-					unsupported("messages output_config.effort requires adaptive thinking")
-				} else {
-					Ok(None)
-				}
-			},
+			}),
 		}
 	}
 
@@ -381,6 +378,11 @@ pub mod from_messages {
 						value.insert("description".to_string(), Value::String(description));
 					}
 					value.insert("parameters".to_string(), tool.input_schema);
+					// Responses defaults to strict schemas, making optional properties required.
+					value.insert(
+						"strict".to_string(),
+						Value::Bool(tool.strict.unwrap_or(false)),
+					);
 					out.push(Value::Object(value));
 				},
 				// OpenAI Responses has no equivalent of an Anthropic server-executed
@@ -434,33 +436,34 @@ pub mod from_messages {
 	fn translate_message(
 		msg: messages::Message,
 		out: &mut Vec<types::responses::RawInputItem>,
+		supports_cache: bool,
 	) -> Result<(), AIError> {
 		match msg.role {
-			messages::Role::User => translate_user_message(msg.content, out),
-			messages::Role::Assistant => translate_assistant_message(msg.content, out),
-			messages::Role::System => translate_system_message(msg.content, out),
+			messages::Role::User => translate_user_message(msg.content, out, supports_cache),
+			messages::Role::Assistant => translate_assistant_message(msg.content, out, supports_cache),
+			messages::Role::System => translate_system_message(msg.content, out, supports_cache),
 		}
 	}
 
 	fn translate_user_message(
 		content: Vec<messages::ContentBlock>,
 		out: &mut Vec<types::responses::RawInputItem>,
+		supports_cache: bool,
 	) -> Result<(), AIError> {
 		let mut parts = Vec::new();
 		for block in content {
 			match block {
 				messages::ContentBlock::Text(text) => {
-					validate_text_block(&text)?;
 					let mut part = json!({
 						"type": "input_text",
 						"text": text.text,
 					});
-					add_prompt_cache_breakpoint(&mut part, text.cache_control);
+					add_prompt_cache_breakpoint(&mut part, text.cache_control, supports_cache);
 					parts.push(part);
 				},
 				messages::ContentBlock::Image(image) => {
 					let mut part = translate_image_source(&image.source)?;
-					add_prompt_cache_breakpoint(&mut part, image.cache_control);
+					add_prompt_cache_breakpoint(&mut part, image.cache_control, supports_cache);
 					parts.push(part);
 				},
 				messages::ContentBlock::ToolResult {
@@ -475,7 +478,7 @@ pub mod from_messages {
 					} else {
 						"completed"
 					};
-					let output = translate_tool_result_content(content, cache_control)?;
+					let output = translate_tool_result_content(content, cache_control, supports_cache)?;
 					out.push(types::responses::RawInputItem::from_value(json!({
 						"type": "function_call_output",
 						"call_id": tool_use_id,
@@ -490,9 +493,7 @@ pub mod from_messages {
 				| messages::ContentBlock::Thinking { .. }
 				| messages::ContentBlock::RedactedThinking { .. }
 				| messages::ContentBlock::ToolUse { .. }
-				| messages::ContentBlock::Unknown => {
-					return unsupported("messages user content block cannot be represented by responses");
-				},
+				| messages::ContentBlock::Unknown => {},
 			}
 		}
 		flush_input_message("user", &mut parts, out);
@@ -502,17 +503,19 @@ pub mod from_messages {
 	fn translate_assistant_message(
 		content: Vec<messages::ContentBlock>,
 		out: &mut Vec<types::responses::RawInputItem>,
+		supports_cache: bool,
 	) -> Result<(), AIError> {
 		let mut text_parts = Vec::new();
 		for block in content {
 			match block {
 				messages::ContentBlock::Text(text) => {
-					validate_text_block(&text)?;
-					text_parts.push(json!({
+					let mut part = json!({
 						"type": "output_text",
 						"text": text.text,
 						"annotations": [],
-					}));
+					});
+					add_prompt_cache_breakpoint(&mut part, text.cache_control, supports_cache);
+					text_parts.push(part);
 				},
 				messages::ContentBlock::ToolUse {
 					id,
@@ -522,24 +525,19 @@ pub mod from_messages {
 				} => {
 					flush_output_message(&mut text_parts, out);
 					let arguments = serde_json::to_string(&input).map_err(AIError::RequestMarshal)?;
+					// Messages preserves the call ID, not the optional Responses item ID.
 					out.push(types::responses::RawInputItem::from_value(json!({
 						"type": "function_call",
-						"id": id,
 						"call_id": id,
 						"name": name,
 						"arguments": arguments,
 						"status": "completed",
 					})));
 				},
-				messages::ContentBlock::Thinking { .. }
-				| messages::ContentBlock::RedactedThinking { .. } => {
-					return unsupported("messages thinking history cannot be represented by responses");
-				},
-				_ => {
-					return unsupported(
-						"messages assistant content block cannot be represented by responses",
-					);
-				},
+				// TODO: Preserve reasoning summaries and round-trip OpenAI encrypted reasoning
+				// through Messages signature/data using a marker like LiteLLM's
+				// ENCRYPTED_REASONING_SIGNATURE_PREFIX, distinguishing it from foreign signatures.
+				_ => {},
 			}
 		}
 		flush_output_message(&mut text_parts, out);
@@ -549,22 +547,17 @@ pub mod from_messages {
 	fn translate_system_message(
 		content: Vec<messages::ContentBlock>,
 		out: &mut Vec<types::responses::RawInputItem>,
+		supports_cache: bool,
 	) -> Result<(), AIError> {
 		let mut parts = Vec::new();
 		for block in content {
-			match block {
-				messages::ContentBlock::Text(text) => {
-					validate_text_block(&text)?;
-					let mut part = json!({
-						"type": "input_text",
-						"text": text.text,
-					});
-					add_prompt_cache_breakpoint(&mut part, text.cache_control);
-					parts.push(part);
-				},
-				_ => {
-					return unsupported("messages system content block cannot be represented by responses");
-				},
+			if let messages::ContentBlock::Text(text) = block {
+				let mut part = json!({
+					"type": "input_text",
+					"text": text.text,
+				});
+				add_prompt_cache_breakpoint(&mut part, text.cache_control, supports_cache);
+				parts.push(part);
 			}
 		}
 		flush_input_message("system", &mut parts, out);
@@ -597,13 +590,6 @@ pub mod from_messages {
 			"content": std::mem::take(parts),
 			"status": "completed",
 		})));
-	}
-
-	fn validate_text_block(text: &messages::ContentTextBlock) -> Result<(), AIError> {
-		reject_option(
-			&text.citations,
-			"messages text citations cannot be represented by responses",
-		)
 	}
 
 	fn translate_image_source(source: &Value) -> Result<Value, AIError> {
@@ -663,7 +649,9 @@ pub mod from_messages {
 	fn translate_tool_result_content(
 		content: messages::ToolResultContent,
 		cache_control: Option<messages::CacheControlEphemeral>,
+		supports_cache: bool,
 	) -> Result<Value, AIError> {
+		let cache_control = cache_control.filter(|_| supports_cache);
 		match content {
 			messages::ToolResultContent::Text(text) => {
 				if cache_control.is_some() {
@@ -671,7 +659,7 @@ pub mod from_messages {
 						"type": "input_text",
 						"text": text,
 					});
-					add_prompt_cache_breakpoint(&mut part, cache_control);
+					add_prompt_cache_breakpoint(&mut part, cache_control, supports_cache);
 					Ok(json!([part]))
 				} else {
 					Ok(Value::String(text))
@@ -680,42 +668,43 @@ pub mod from_messages {
 			messages::ToolResultContent::Array(parts) => {
 				let mut text_parts = Vec::new();
 				let mut text_values = Vec::new();
-				let has_cache_control = cache_control.is_some();
+				let mut requires_array = cache_control.is_some();
 				for part in parts {
-					let (text, citations, cache_control) = match part {
+					let (text, cache_control) = match part {
 						messages::ToolResultContentPart::Text {
 							text,
-							citations,
 							cache_control,
-						} => (text, citations, cache_control),
+							..
+						} => (text, cache_control),
 						messages::ToolResultContentPart::ToolReference {
 							tool_name,
 							cache_control,
-						} => (tool_name, None, cache_control),
-						messages::ToolResultContentPart::Unknown => continue,
-						messages::ToolResultContentPart::Image { .. }
-						| messages::ToolResultContentPart::Document { .. }
-						| messages::ToolResultContentPart::SearchResult { .. } => {
-							return unsupported(
-								"messages non-text tool_result content cannot be represented by responses",
-							);
+						} => (tool_name, cache_control),
+						messages::ToolResultContentPart::Image {
+							source,
+							cache_control,
+						} => {
+							let mut value = translate_image_source(&source)?;
+							add_prompt_cache_breakpoint(&mut value, cache_control, supports_cache);
+							text_values.push(value);
+							requires_array = true;
+							continue;
 						},
+						messages::ToolResultContentPart::Unknown
+						| messages::ToolResultContentPart::Document { .. }
+						| messages::ToolResultContentPart::SearchResult { .. } => continue,
 					};
-					reject_option(
-						&citations,
-						"messages tool_result citations cannot be represented by responses",
-					)?;
 					let mut value = json!({
 						"type": "input_text",
 						"text": &text,
 					});
-					add_prompt_cache_breakpoint(&mut value, cache_control);
+					add_prompt_cache_breakpoint(&mut value, cache_control, supports_cache);
 					text_parts.push(text);
 					text_values.push(value);
 				}
 				if let Some(cache_control) = cache_control {
 					if let Some(last) = text_values.last_mut() {
-						add_prompt_cache_breakpoint(last, Some(cache_control));
+						add_prompt_cache_breakpoint(last, Some(cache_control), supports_cache);
 					} else {
 						text_values.push(json!({
 							"type": "input_text",
@@ -724,7 +713,7 @@ pub mod from_messages {
 						}));
 					}
 				}
-				if has_cache_control
+				if requires_array
 					|| text_values
 						.iter()
 						.any(|part| part.get("prompt_cache_breakpoint").is_some())
@@ -776,19 +765,27 @@ pub mod from_messages {
 					for part in message.content {
 						match part {
 							responses::OutputMessageContent::OutputText(text) => {
-								if !text.annotations.is_empty()
-									|| text
-										.logprobs
-										.as_ref()
-										.is_some_and(|logprobs| !logprobs.is_empty())
-								{
-									return unsupported(
-										"responses text annotations/logprobs cannot be represented by messages",
-									);
-								}
+								let citations: Vec<_> = text
+									.annotations
+									.into_iter()
+									.filter_map(|annotation| {
+										let responses::Annotation::UrlCitation(citation) = annotation else {
+											return None;
+										};
+										// Responses provides a source link, not the source excerpt or
+										// Anthropic's opaque replay index. Do not fabricate either.
+										Some(json!({
+											"type": "web_search_result_location",
+											"url": citation.url,
+											"title": citation.title,
+											"cited_text": "",
+											"encrypted_index": "",
+										}))
+									})
+									.collect();
 								content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
 									text: text.text,
-									citations: None,
+									citations: (!citations.is_empty()).then_some(Value::Array(citations)),
 									cache_control: None,
 								}));
 							},
@@ -814,7 +811,7 @@ pub mod from_messages {
 							"in-progress responses function call cannot be represented by messages",
 						);
 					}
-					let input = parse_tool_arguments(&call.arguments)?;
+					let input = crate::conversion::tool_arguments_to_input(&call.arguments);
 					saw_tool_call = true;
 					content.push(messages::ContentBlock::ToolUse {
 						id: call.call_id,
@@ -874,12 +871,13 @@ pub mod from_messages {
 		struct StreamState {
 			sent_message_start: bool,
 			sent_message_stop: bool,
-			sent_first_token: bool,
+			last_token_at: Option<Instant>,
 			next_block_index: usize,
 			response_id: Option<String>,
 			model: Option<String>,
 			text_blocks: HashMap<(u32, u32), usize>,
 			open_text_blocks: HashSet<(u32, u32)>,
+			emitted_refusals: HashSet<(u32, u32)>,
 			tool_blocks: HashMap<u32, ToolBlock>,
 			pending_usage: Option<responses::ResponseUsage>,
 			pending_stop_reason: Option<messages::StopReason>,
@@ -938,14 +936,17 @@ pub mod from_messages {
 			}
 		}
 
-		fn maybe_set_first_token(state: &mut StreamState, log: &StreamingUsageGuard) {
-			if state.sent_first_token {
-				return;
+		fn record_token(state: &mut StreamState, log: &StreamingUsageGuard) {
+			let now = Instant::now();
+			if let Some(prev) = state.last_token_at.replace(now) {
+				log.update(|r| {
+					r.response
+						.inter_chunk_latencies
+						.record(now.duration_since(prev))
+				});
+			} else {
+				log.update(|r| r.response.first_token = Some(now));
 			}
-			state.sent_first_token = true;
-			log.update(|r| {
-				r.response.first_token = Some(Instant::now());
-			});
 		}
 
 		fn close_text_block(
@@ -961,6 +962,35 @@ pub mod from_messages {
 					messages::MessagesStreamEvent::ContentBlockStop { index: *index },
 				);
 			}
+		}
+
+		fn finish_refusal(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			log: &StreamingUsageGuard,
+			completion: &mut Option<String>,
+			key: (u32, u32),
+			text: String,
+		) {
+			state.saw_refusal = true;
+			state.pending_stop_reason = Some(messages::StopReason::Refusal);
+			// Final events repeat the full refusal; only emit it when no delta was sent.
+			if !text.is_empty() && state.emitted_refusals.insert(key) {
+				ensure_message_start(state, events, log);
+				let index = open_text_block(state, events, key);
+				record_token(state, log);
+				if let Some(c) = completion.as_mut() {
+					c.push_str(&text);
+				}
+				push_event(
+					events,
+					messages::MessagesStreamEvent::ContentBlockDelta {
+						index,
+						delta: messages::ContentBlockDelta::TextDelta { text },
+					},
+				);
+			}
+			close_text_block(state, events, key);
 		}
 
 		fn close_text_blocks_for_output(
@@ -1248,7 +1278,7 @@ pub mod from_messages {
 								Some(call.call_id),
 								Some(call.name),
 							);
-							maybe_set_first_token(&mut state, &log);
+							record_token(&mut state, &log);
 						}
 					},
 					responses::ResponseStreamEvent::ResponseContentPartAdded(added) => {
@@ -1283,7 +1313,7 @@ pub mod from_messages {
 							&mut events,
 							(delta.output_index, delta.content_index),
 						);
-						maybe_set_first_token(&mut state, &log);
+						record_token(&mut state, &log);
 						if let Some(c) = completion.as_mut() {
 							c.push_str(&delta.delta);
 						}
@@ -1307,7 +1337,7 @@ pub mod from_messages {
 						let block = state.tool_blocks.entry(delta.output_index).or_default();
 						block.arguments.push_str(&delta.delta);
 						block.emitted_arguments = true;
-						maybe_set_first_token(&mut state, &log);
+						record_token(&mut state, &log);
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::ContentBlockDelta {
@@ -1333,7 +1363,7 @@ pub mod from_messages {
 						}
 						if !block.emitted_arguments && !done.arguments.is_empty() {
 							block.emitted_arguments = true;
-							maybe_set_first_token(&mut state, &log);
+							record_token(&mut state, &log);
 							push_event(
 								&mut events,
 								messages::MessagesStreamEvent::ContentBlockDelta {
@@ -1351,7 +1381,8 @@ pub mod from_messages {
 						let key = (delta.output_index, delta.content_index);
 						let index = open_text_block(&mut state, &mut events, key);
 						if !delta.delta.is_empty() {
-							maybe_set_first_token(&mut state, &log);
+							state.emitted_refusals.insert(key);
+							record_token(&mut state, &log);
 							if let Some(c) = completion.as_mut() {
 								c.push_str(&delta.delta);
 							}
@@ -1365,41 +1396,29 @@ pub mod from_messages {
 						}
 					},
 					responses::ResponseStreamEvent::ResponseRefusalDone(done) => {
-						state.saw_refusal = true;
-						state.pending_stop_reason = Some(messages::StopReason::Refusal);
-						close_text_block(
+						finish_refusal(
 							&mut state,
 							&mut events,
+							&log,
+							&mut completion,
 							(done.output_index, done.content_index),
+							done.refusal,
 						);
 					},
 					responses::ResponseStreamEvent::ResponseContentPartDone(done) => {
+						let key = (done.output_index, done.content_index);
 						if let responses::OutputContent::Refusal(refusal) = done.part {
-							state.saw_refusal = true;
-							state.pending_stop_reason = Some(messages::StopReason::Refusal);
-							let key = (done.output_index, done.content_index);
-							let index = open_text_block(&mut state, &mut events, key);
-							if !refusal.refusal.is_empty() {
-								maybe_set_first_token(&mut state, &log);
-								if let Some(c) = completion.as_mut() {
-									c.push_str(&refusal.refusal);
-								}
-								push_event(
-									&mut events,
-									messages::MessagesStreamEvent::ContentBlockDelta {
-										index,
-										delta: messages::ContentBlockDelta::TextDelta {
-											text: refusal.refusal,
-										},
-									},
-								);
-							}
+							finish_refusal(
+								&mut state,
+								&mut events,
+								&log,
+								&mut completion,
+								key,
+								refusal.refusal,
+							);
+						} else {
+							close_text_block(&mut state, &mut events, key);
 						}
-						close_text_block(
-							&mut state,
-							&mut events,
-							(done.output_index, done.content_index),
-						);
 					},
 					responses::ResponseStreamEvent::ResponseOutputItemDone(done) => match done.item {
 						responses::OutputItem::FunctionCall(call) => {
@@ -1624,7 +1643,9 @@ pub mod from_messages {
 
 	fn incomplete_reason_to_stop_reason(reason: &str) -> Result<messages::StopReason, AIError> {
 		let reason = reason.to_ascii_lowercase();
-		if reason.contains("max") || reason.contains("token") {
+		if reason == "content_filter" {
+			Ok(messages::StopReason::Refusal)
+		} else if reason.contains("max") || reason.contains("token") {
 			Ok(messages::StopReason::MaxTokens)
 		} else if reason.contains("context") {
 			Ok(messages::StopReason::ModelContextWindowExceeded)
@@ -1633,14 +1654,6 @@ pub mod from_messages {
 				"responses incomplete reason {reason:?} cannot be represented by messages"
 			)))
 		}
-	}
-
-	fn parse_tool_arguments(arguments: &str) -> Result<Value, AIError> {
-		serde_json::from_str(arguments).map_err(|_| {
-			AIError::UnsupportedConversion(strng::literal!(
-				"responses function call arguments are not valid JSON"
-			))
-		})
 	}
 
 	fn validate_raw_request(req: &types::messages::Request) -> Result<(), AIError> {
@@ -1673,14 +1686,6 @@ pub mod from_messages {
 			}
 		}
 		Ok(())
-	}
-
-	fn reject_option<T>(value: &Option<T>, reason: &'static str) -> Result<(), AIError> {
-		if value.is_some() {
-			unsupported(reason)
-		} else {
-			Ok(())
-		}
 	}
 
 	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {

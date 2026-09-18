@@ -348,6 +348,14 @@ spec:
                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                   properties:
+                                                    externalId:
+                                                      description: ExternalID is set
+                                                        when the role's trust policy
+                                                        requires sts:ExternalId.
+                                                      maxLength: 1224
+                                                      minLength: 2
+                                                      pattern: ^[\w+=,.@:/-]+$
+                                                      type: string
                                                     roleArn:
                                                       description: AWS IAM role ARN
                                                         to assume.
@@ -2199,6 +2207,14 @@ spec:
                                                     AWS STS AssumeRole settings to use before signing backend requests.
                                                     Ambient AWS credentials are used as the source credentials for STS.
                                                   properties:
+                                                    externalId:
+                                                      description: ExternalID is set
+                                                        when the role's trust policy
+                                                        requires sts:ExternalId.
+                                                      maxLength: 1224
+                                                      minLength: 2
+                                                      pattern: ^[\w+=,.@:/-]+$
+                                                      type: string
                                                     roleArn:
                                                       description: AWS IAM role ARN
                                                         to assume.
@@ -3577,6 +3593,13 @@ spec:
                               AWS STS AssumeRole settings to use before signing backend requests.
                               Ambient AWS credentials are used as the source credentials for STS.
                             properties:
+                              externalId:
+                                description: ExternalID is set when the role's trust
+                                  policy requires sts:ExternalId.
+                                maxLength: 1224
+                                minLength: 2
+                                pattern: ^[\w+=,.@:/-]+$
+                                type: string
                               roleArn:
                                 description: AWS IAM role ARN to assume.
                                 minLength: 1
@@ -10207,6 +10230,16 @@ spec:
                                         format: int32
                                         minimum: 0
                                         type: integer
+                                      key:
+                                        description: |-
+                                          CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+                                          per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+                                          the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+                                          bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+                                          of buckets per rule and drops the least used ones.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
                                       requests:
                                         description: |-
                                           Number of HTTP requests per unit of time that
@@ -10438,6 +10471,16 @@ spec:
                               format: int32
                               minimum: 0
                               type: integer
+                            key:
+                              description: |-
+                                CEL expression selecting the bucket the request counts against, for example `jwt.sub` for a
+                                per-user limit or `jwt.team` for a per-team limit. Each distinct value gets its own bucket with
+                                the limit above. Requests without a value, or whose expression cannot be evaluated, share one
+                                bucket. When unset, all requests share one bucket. Each proxy instance keeps a bounded number
+                                of buckets per rule and drops the least used ones.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
                             requests:
                               description: |-
                                 Number of HTTP requests per unit of time that
@@ -10575,10 +10618,10 @@ spec:
                           rule: duration(self) >= duration('1ms')
                       responseIdle:
                         description: |-
-                          Maximum time the response body may go without producing data. The window restarts on every
-                          body frame, so this bounds the gap between frames rather than the total time a response may
-                          take. It is what terminates a backend that stops producing data mid-stream without capping
-                          how long a legitimately long response may run.
+                          Maximum time to wait for a frame from the upstream response body.
+
+                          Limits how long the gateway waits for more response data from the backend.
+                          Time spent processing the response or waiting for the client to receive it does not count.
 
                           This complements Request rather than overlapping it: Request stops applying once the response
                           headers arrive, so it places no bound on how long the response body may take, and it cannot

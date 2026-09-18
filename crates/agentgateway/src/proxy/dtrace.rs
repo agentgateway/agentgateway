@@ -16,16 +16,10 @@ tokio::task_local! {
 		static ACTIVE: Option<DebugTracer>;
 }
 
-pub struct TracingBody {
-	stage: &'static str,
-	id: u64,
-	start: Instant,
-	body: RecordedBodyHandle,
-	tracer: DebugTracer,
-}
+pub struct TracingBody;
 
 impl TracingBody {
-	pub fn maybe_wrap(stage: &'static str, b: Body, limit: usize) -> Body {
+	pub fn maybe_wrap(stage: &'static str, b: agent_http::Body, limit: usize) -> agent_http::Body {
 		if let Some(tracer) = ACTIVE.try_with(|f| f.clone()).ok().flatten() {
 			let tracer = tracer.detached();
 			let id = NEXT_BODY_SNAPSHOT_ID.fetch_add(1, Ordering::Relaxed);
@@ -38,35 +32,20 @@ impl TracingBody {
 					stage: stage.to_string(),
 				},
 			);
-			// RecordBody will get us the Bytes of the request. Note this doesn't block the body, just
-			// records.
-			let (b, handle) = RecordedBody::new_with_limit(b, limit);
-			let t = TracingBody {
-				stage,
-				id,
-				start,
-				body: handle,
-				tracer,
-			};
-			// Now, we store it in a DropBody so when the body is done we can emit an event.
-			DropBody::new(b, t)
+			b.trace_content(limit, move |body| {
+				tracer.send_with_timings(
+					Some(start),
+					Instant::now(),
+					MessageType::BodySnapshot {
+						id,
+						stage: stage.to_string(),
+						body,
+					},
+				);
+			})
 		} else {
 			b
 		}
-	}
-}
-
-impl Drop for TracingBody {
-	fn drop(&mut self) {
-		self.tracer.send_with_timings(
-			Some(self.start),
-			Instant::now(),
-			MessageType::BodySnapshot {
-				id: self.id,
-				stage: self.stage.to_string(),
-				body: self.body.bytes(),
-			},
-		)
 	}
 }
 
@@ -270,8 +249,6 @@ macro_rules! pol_result_timed {
 }
 
 pub(crate) use pol_result_timed;
-
-use crate::http::{Body, DropBody, RecordedBody, RecordedBodyHandle};
 
 #[derive(Debug, Serialize)]
 #[allow(non_snake_case)]

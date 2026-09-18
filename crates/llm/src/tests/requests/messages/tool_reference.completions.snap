@@ -2,7 +2,7 @@
 source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/messages/tool_reference.json
 info:
-  model: claude-sonnet-4-6
+  model: gpt-5.6-terra
   max_tokens: 1024
   tools:
     - name: ToolSearch
@@ -72,13 +72,17 @@ info:
         "content": [
           {
             "type": "text",
-            "text": "mcp__example__list_widgets"
+            "text": "mcp__example__list_widgets",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
         ],
         "tool_call_id": "toolu_01AAAA"
       }
     ],
-    "model": "claude-sonnet-4-6",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "none",
     "max_completion_tokens": 1024,
     "stream": false,
     "tools": [
@@ -116,7 +120,7 @@ info:
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
-    "request_model": "claude-sonnet-4-6",
+    "request_model": "gpt-5.6-terra",
     "provider": "openai",
     "streaming": false,
     "params": {

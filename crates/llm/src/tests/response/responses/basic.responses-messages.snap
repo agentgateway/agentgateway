@@ -23,8 +23,26 @@ info:
       status: completed
       content:
         - type: output_text
-          annotations: []
-          logprobs: []
+          annotations:
+            - type: url_citation
+              start_index: 0
+              end_index: 5
+              title: Example
+              url: "https://example.com"
+            - type: file_citation
+              file_id: file_example
+              filename: example.txt
+              index: 0
+          logprobs:
+            - token: Hello
+              logprob: -0.1
+              bytes:
+                - 72
+                - 101
+                - 108
+                - 108
+                - 111
+              top_logprobs: []
           text: Hello! How can I assist you today?
       role: assistant
   parallel_tool_calls: true
@@ -67,7 +85,16 @@ info:
     "content": [
       {
         "type": "text",
-        "text": "Hello! How can I assist you today?"
+        "text": "Hello! How can I assist you today?",
+        "citations": [
+          {
+            "type": "web_search_result_location",
+            "url": "https://example.com",
+            "title": "Example",
+            "cited_text": "",
+            "encrypted_index": ""
+          }
+        ]
       }
     ],
     "model": "gpt-4o-2024-08-06",

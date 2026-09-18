@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/tool_history_without_tools.json
+info:
+  model: "anthropic.claude-sonnet-4-20250514-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_1
+          name: get_weather
+          input:
+            location: Seattle
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_1
+          content: rain
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "function_call",
+        "call_id": "call_1",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"Seattle\"}",
+        "status": "completed"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "call_1",
+        "output": "rain",
+        "status": "completed"
+      }
+    ],
+    "model": "anthropic.claude-sonnet-4-20250514-v1:0",
+    "max_output_tokens": 1024,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-sonnet-4-20250514-v1:0",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}

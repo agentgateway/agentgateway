@@ -1,20 +1,12 @@
-use agent_core::strng;
-use itertools::Itertools;
-
 use super::*;
 
 fn build<const N: usize>(items: [(&str, &str); N]) -> Transformation {
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			add: items
-				.iter()
-				.map(|(k, v)| (strng::new(k), strng::new(v)))
-				.collect_vec(),
-			..Default::default()
-		}),
-		response: None,
-	};
-	Transformation::try_from_local_config(c, true).unwrap()
+	serde_json::from_value(serde_json::json!({
+		"request": {
+			"add": items.into_iter().collect::<std::collections::BTreeMap<_, _>>(),
+		},
+	}))
+	.unwrap()
 }
 
 #[test]
@@ -37,14 +29,13 @@ async fn test_transformation_body() {
 		.uri("https://www.rust-lang.org/")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: None,
-		response: Some(super::LocalTransform {
-			body: Some("\"hello\" + request.method".into()),
-			..Default::default()
-		}),
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": "\"hello\" + request.method",
+		},
+	}))
+	.unwrap();
 
 	let mut resp = ::http::Response::builder()
 		.status(200)
@@ -67,13 +58,10 @@ async fn test_transformation_form_urlencoded_body_merge() {
 		.header("content-length", "0")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req
-		.extensions_mut()
-		.insert(crate::cel::BufferedBody::complete(bytes::Bytes::new()));
 
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			body: Some(
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"body":
 				r#"
 request.path == "/oauth/devicecode" ?
 	form.encode(form.decode(request.body).merge({
@@ -83,14 +71,11 @@ request.path == "/oauth/devicecode" ?
 request.path == "/oauth/token" ?
 	form.encode(form.decode(request.body).merge({"client_id": "app-id"})) :
 request.body
-"#
-				.into(),
-			),
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+"#,
+		},
+		"response": null,
+	}))
+	.unwrap();
 
 	xfm.apply_request(&mut req);
 
@@ -114,13 +99,9 @@ request.body
 		.header("content-length", "0")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req
-		.extensions_mut()
-		.insert(crate::cel::BufferedBody::complete(
-			bytes::Bytes::from_static(
-				b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
-			),
-		));
+	req.body_mut().replace_bytes(bytes::Bytes::from_static(
+		b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
+	));
 
 	xfm.apply_request(&mut req);
 
@@ -146,10 +127,10 @@ async fn test_transformation_response_json_body_rewrite() {
 		.uri("https://gateway.example.com/oauth/devicecode")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: None,
-		response: Some(super::LocalTransform {
-			body: Some(
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body":
 				r#"
 json(response.body).with(body,
 	body.merge({
@@ -157,13 +138,9 @@ json(response.body).with(body,
 		"verification_uri_complete": "https://gateway.example.com/oauth/verify?user_code=" + body.user_code
 	})
 )
-	"#
-					.into(),
-				),
-			..Default::default()
-		}),
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	"#,
+		},
+	})).unwrap();
 	let mut resp = ::http::Response::builder()
 		.status(200)
 		.header("content-type", "application/json")
@@ -171,11 +148,6 @@ json(response.body).with(body,
 			r#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
 		))
 		.unwrap();
-	resp.extensions_mut().insert(crate::cel::BufferedBody::complete(
-		bytes::Bytes::from_static(
-			br#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
-		),
-	));
 
 	let snap = cel::snapshot_request(&mut req, true);
 	xfm.apply_response(&mut resp, Some(&snap));
@@ -236,14 +208,13 @@ fn test_transformation_replace_headers() {
 		.header("x-keep-src", "kept-value")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			replace: Some(r#"{"x-kept": request.headers["x-keep-src"], "x-static": "hi"}"#.into()),
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"replace": r#"{"x-kept": request.headers["x-keep-src"], "x-static": "hi"}"#,
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	// Headers not present in the replacement map are dropped.
 	assert!(req.headers().get("x-remove-me").is_none());
@@ -259,15 +230,14 @@ fn test_transformation_replace_then_set_overrides() {
 		.header("x-old", "1")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			replace: Some(r#"{"x-a": "from-replace", "x-b": "b"}"#.into()),
-			set: vec![("x-a".into(), r#""from-set""#.into())],
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"replace": r#"{"x-a": "from-replace", "x-b": "b"}"#,
+			"set": {"x-a": r#""from-set""#},
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	// replace runs first; set then overrides on top of the replaced headers.
 	assert_eq!(req.headers().get("x-a").unwrap(), "from-set");
@@ -282,14 +252,13 @@ fn test_transformation_replace_repeated_header() {
 		.uri("https://www.rust-lang.org/")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			replace: Some(r#"{"x-multi": ["a", "b"]}"#.into()),
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"replace": r#"{"x-multi": ["a", "b"]}"#,
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	let values: Vec<_> = req
 		.headers()
@@ -307,14 +276,13 @@ fn test_transformation_replace_ignores_pseudo_headers() {
 		.uri("https://www.rust-lang.org/")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			replace: Some(r#"{":method": "POST", "x-real": "y"}"#.into()),
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"replace": r#"{":method": "POST", "x-real": "y"}"#,
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	// Pseudo-header keys are ignored; the method is unchanged and no `:method` header exists.
 	assert_eq!(req.method().as_str(), "GET");
@@ -330,14 +298,13 @@ fn test_transformation_replace_non_map_leaves_headers() {
 		.header("x-orig", "keep")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			replace: Some(r#""not a map""#.into()),
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"replace": r#""not a map""#,
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	// A non-map result must not wipe the existing headers.
 	assert_eq!(req.headers().get("x-orig").unwrap(), "keep");
@@ -350,17 +317,16 @@ fn test_transformation_metadata() {
 		.uri("https://www.rust-lang.org/example")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			metadata: vec![
-				("originalPath".into(), "request.path".into()),
-				("isGet".into(), "request.method == 'GET'".into()),
-			],
-			..Default::default()
-		}),
-		response: None,
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"metadata": {
+				"originalPath": "request.path",
+				"isGet": "request.method == 'GET'",
+			},
+		},
+		"response": null,
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	let md = req
 		.extensions()
@@ -384,30 +350,28 @@ fn test_response_transformation_metadata_available_to_headers() {
 		.status(200)
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let c = super::LocalTransformationConfig {
-		request: Some(super::LocalTransform {
-			metadata: vec![
-				("requestVal".into(), r#""from-request""#.into()),
-				("shared".into(), r#""request""#.into()),
-			],
-			..Default::default()
-		}),
-		response: Some(super::LocalTransform {
-			metadata: vec![
-				("staticVal".into(), r#""hello-world""#.into()),
-				("copied".into(), "metadata.requestVal".into()),
-				("shared".into(), r#""response""#.into()),
-			],
-			set: vec![
-				("x-static".into(), "metadata.staticVal".into()),
-				("x-copied".into(), "metadata.copied".into()),
-				("x-shared".into(), "metadata.shared".into()),
-				("x-inline-static".into(), r#""hello-world""#.into()),
-			],
-			..Default::default()
-		}),
-	};
-	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"metadata": {
+				"requestVal": r#""from-request""#,
+				"shared": r#""request""#,
+			},
+		},
+		"response": {
+			"metadata": {
+				"staticVal": r#""hello-world""#,
+				"copied": "metadata.requestVal",
+				"shared": r#""response""#,
+			},
+			"set": {
+				"x-static": "metadata.staticVal",
+				"x-copied": "metadata.copied",
+				"x-shared": "metadata.shared",
+				"x-inline-static": r#""hello-world""#,
+			},
+		},
+	}))
+	.unwrap();
 	xfm.apply_request(&mut req);
 	let snap = cel::snapshot_request(&mut req, true);
 

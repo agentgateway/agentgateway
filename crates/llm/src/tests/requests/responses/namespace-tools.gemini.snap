@@ -1,0 +1,189 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/namespace-tools.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input:
+    - role: user
+      content: Run JavaScript in both kernels.
+    - type: function_call
+      call_id: call_1
+      namespace: mcp__node_repl
+      name: js
+      arguments: "{\"code\":\"1 + 1\"}"
+    - type: function_call_output
+      call_id: call_1
+      output: "2"
+    - type: function_call
+      call_id: call_2
+      namespace: other_kernel
+      name: js
+      arguments: "{\"code\":\"2 + 2\"}"
+    - type: function_call_output
+      call_id: call_2
+      output: "4"
+  tools:
+    - type: namespace
+      name: mcp__node_repl
+      description: Run JavaScript in the persistent Node kernel.
+      tools:
+        - type: function
+          name: js
+          description: Run JavaScript.
+          parameters:
+            type: object
+            properties:
+              code:
+                type: string
+            required:
+              - code
+            additionalProperties: false
+          strict: false
+    - type: namespace
+      name: other_kernel
+      description: Run JavaScript in another kernel.
+      tools:
+        - type: function
+          name: js
+          description: Run JavaScript.
+          parameters:
+            type: object
+            properties:
+              code:
+                type: string
+            required:
+              - code
+            additionalProperties: false
+          strict: false
+    - type: function
+      name: finish
+      description: Finish the task.
+      parameters:
+        type: object
+        properties: {}
+        additionalProperties: false
+      strict: true
+  tool_choice: auto
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Run JavaScript in both kernels."
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "call_1",
+            "function": {
+              "name": "mcp__node_repl__js",
+              "arguments": "{\"code\":\"1 + 1\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "2",
+        "tool_call_id": "call_1"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "call_2",
+            "function": {
+              "name": "other_kernel__js",
+              "arguments": "{\"code\":\"2 + 2\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "4",
+        "tool_call_id": "call_2"
+      }
+    ],
+    "model": "gpt-4o",
+    "max_completion_tokens": 1024,
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "mcp__node_repl__js",
+          "description": "Run JavaScript in the persistent Node kernel.\n\nRun JavaScript.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "other_kernel__js",
+          "description": "Run JavaScript in another kernel.\n\nRun JavaScript.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "additionalProperties": false
+          },
+          "strict": false
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "finish",
+          "description": "Finish the task.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          },
+          "strict": true
+        }
+      }
+    ],
+    "tool_choice": "auto"
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Run JavaScript in both kernels."
+      }
+    ]
+  }
+}

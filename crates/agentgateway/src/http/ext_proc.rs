@@ -880,13 +880,12 @@ impl ExtProcInstance {
 		&mut self,
 		req: http::Request,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
-		let rebuffer = req.extensions().get::<cel::BufferedBody>().is_some();
+		let rebuffer = req.body().needs_inspection();
 		let (mut req, response) = self.mutate_request_inner(req).await?;
 		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
-			let body = http::inspect_body(&mut req)
+			let _ = http::inspect_body(&mut req)
 				.await
 				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
-			req.extensions_mut().insert(cel::BufferedBody::from(body));
 		}
 		Ok((req, response))
 	}
@@ -1168,8 +1167,7 @@ impl ExtProcInstance {
 						if let Some(original_body) =
 							BufferedBodyPhase::take_deferred_body(&mut pending_buffered_body)
 						{
-							let (parts, _) = req.into_parts();
-							let req = http::Request::from_parts(parts, original_body);
+							req.body_mut().restore_content(original_body);
 							debug_assert_preserved_request_body(
 								&req,
 								had_body,
@@ -1417,17 +1415,14 @@ impl ExtProcInstance {
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
-		let rebuffer = response.extensions().get::<cel::BufferedBody>().is_some();
+		let rebuffer = response.body().needs_inspection();
 		let (mut response, policy_response) = self
 			.mutate_response_inner(response, request, resolved_destination_metadata)
 			.await?;
 		if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
-			let body = http::inspect_response_body(&mut response)
+			let _ = http::inspect_response_body(&mut response)
 				.await
 				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
-			response
-				.extensions_mut()
-				.insert(cel::BufferedBody::from(body));
 		}
 		Ok((response, policy_response))
 	}
@@ -1517,12 +1512,14 @@ impl ExtProcInstance {
 		}
 
 		let tx = self.tx_req.clone();
-		let mut pending_response_body = Some(body);
+		let mut managed_body = body;
+		let mut pending_response_body = Some(managed_body.take_content());
 		let mut pending_response_buffer = None;
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
-		let mut resp = http::Response::from_parts(parts, http::Body::new(body));
+		managed_body.replace_content(agent_http::RawBody::new(body).into());
+		let mut resp = http::Response::from_parts(parts, managed_body);
 
 		// FULL_DUPLEX_STREAMED sends response body chunks as they arrive. The ext_proc server may
 		// buffer the response headers and complete body before sending any response, so do not wait
@@ -1656,12 +1653,12 @@ impl ExtProcInstance {
 						if let Some(original_body) =
 							BufferedBodyPhase::take_deferred_body(&mut pending_response_buffer)
 						{
-							let (parts, _) = resp.into_parts();
-							return Ok((http::Response::from_parts(parts, original_body), None));
+							resp.body_mut().restore_content(original_body);
+							return Ok((resp, None));
 						}
 						if let Some(original_body) = pending_response_body.take() {
-							let (parts, _) = resp.into_parts();
-							return Ok((http::Response::from_parts(parts, original_body), None));
+							resp.body_mut().restore_content(original_body);
+							return Ok((resp, None));
 						}
 					},
 					_ => {},

@@ -292,10 +292,10 @@ impl Gateway {
 		// Therefor, we should have a minimum drain time and a maximum drain time.
 		// No matter what, we will continue accepting connections for <min time>. Any new connections will
 		// be "discouraged" via disabling keepalive.
-		// After that, we will continue processing connections as long as there are any remaining open.
-		// This handles gracefully serving any long-running requests.
-		// New connections may still be made during this time which we will attempt to serve, though they
-		// are at increased risk of early termination.
+		// After that, we close the listener and stop accepting new connections. A refused connection can be
+		// retried transparently; a request cut mid-flight cannot.
+		// Existing connections keep serving until they close or the maximum drain time passes, whichever
+		// comes first. This handles gracefully serving any long-running requests.
 		let accept = |drain: DrainWatcher, force_shutdown: watch::Receiver<()>| async move {
 			// We will need to be able to watch for drains, so take a copy
 			let drain_watch = drain.clone();
@@ -303,8 +303,6 @@ impl Gateway {
 			// However, we don't want to block from our listen() loop, or we would never finish.
 			// Having a weak reference allows us to listen() forever without blocking, but create blockers for accepted connections.
 			let (mut upgrader, weak) = drain.into_weak();
-			let (inner_trigger, inner_drain) = drain::new();
-			drop(inner_drain);
 			let admission = pi.admission.bind(&name);
 			let connection_shed = pi
 				.metrics
@@ -389,55 +387,12 @@ impl Gateway {
 					}
 				}
 			};
+			drop(listener);
 			upgrader.disable();
-			// Now we are draining. We need to immediately start draining the inner requests
-			// Wait for Min_duration complete AND inner join complete
-			let mode = drain_mode.mode(); // TODO: handle mode differently?
 			drop(drain_mode);
-			let drained_for_minimum = async move {
-				tokio::join!(
-					inner_trigger.start_drain_and_wait(mode),
-					tokio::time::sleep(min_deadline)
-				);
-			};
-			tokio::pin!(drained_for_minimum);
-			// We still need to accept new connections during this time though, so race them
-			backoff = BACKOFF_INITIAL;
-			loop {
-				tokio::select! {
-					res = listener.accept() => match res {
-						Ok((stream, _peer)) => {
-							backoff = BACKOFF_INITIAL;
-							handle_stream(stream, &upgrader);
-						}
-						Err(e) => {
-							if is_accept_error_permanent(&e) {
-								error!(bind=?name, "fatal accept error during drain, stopping listener: {e}");
-								return;
-							}
-							if is_accept_error_per_connection(&e) {
-								debug!(bind=?name, "per-connection accept error during drain: {e}");
-								continue;
-							}
-							warn!(bind=?name, "accept error during drain: {e}");
-							let jittered = Duration::from_millis(
-								rand::rng().random_range(0..=backoff.as_millis() as u64)
-							);
-							tokio::select! {
-								_ = tokio::time::sleep(jittered) => {},
-								_ = &mut drained_for_minimum => { return; }
-							}
-							backoff = (backoff * 2).min(BACKOFF_MAX);
-							continue;
-						}
-					},
-					_ = &mut drained_for_minimum => {
-						// We are done! exit.
-						// This will stop accepting new connections
-						return;
-					}
-				}
-			}
+			// Returning here would force-close every spawned connection. Park instead, so run_with_drain
+			// decides when to stop: once every tracked connection has finished or the deadline passes.
+			std::future::pending::<()>().await;
 		};
 
 		drain::run_with_drain(component, drain, max_deadline, min_deadline, accept).await;
@@ -784,18 +739,11 @@ impl Gateway {
 					};
 					// Snapshot the CONNECT request headers so they can be surfaced to CEL
 					// policies on the tunneled request via `source.connectHeaders`. Mark
-					// well-known sensitive headers so their values are redacted in debug logs
+					// configured and well-known sensitive headers so their values are redacted in debug logs
 					// (SourceContext derives Debug and is printed via DebugExtensions) and by
 					// the CEL `source.connectHeaders.redacted()` accessor.
-					let mut connect_headers = req.headers().clone();
-					for (name, value) in connect_headers.iter_mut() {
-						if matches!(
-							name.as_str(),
-							"authorization" | "proxy-authorization" | "cookie" | "set-cookie"
-						) {
-							value.set_sensitive(true);
-						}
-					}
+					crate::http::mark_sensitive_headers(&mut req, &inputs.cfg.sensitive_headers);
+					let connect_headers = req.headers().clone();
 					let authority = match req.uri().authority() {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
@@ -808,8 +756,7 @@ impl Gateway {
 							// bind for this port; otherwise fall back to the explicit internal wildcard
 							// bind, preserving the requested address as the tunnel target.
 							let Some(bind) = binds
-								.find_bind(addr)
-								.filter(|b| b.address.ip().is_unspecified())
+								.find_bind_by_port(addr.port())
 								.or_else(|| binds.find_wildcard_bind())
 							else {
 								return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
@@ -960,7 +907,7 @@ impl Gateway {
 			src.connect_headers = ch.0;
 		}
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
-			&& let Err(e) = network_authorization.apply(&src)
+			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
 		{
 			anyhow::bail!("network authorization denied: {e}");
 		}
@@ -1046,7 +993,7 @@ impl Gateway {
 						.assert_size::<{ 18 * 1024 }>(),
 					)
 					.await?;
-					Ok(response.map(|body| crate::http::DropBody::new(body, request_permit)))
+					Ok(response.map(|body| body.with_drop_guard(request_permit)))
 				})
 			}),
 		);
@@ -1678,7 +1625,9 @@ impl Gateway {
 				return;
 			},
 		};
-		let Some(bind) = pi.stores.read_binds().find_bind(socket_addr) else {
+		// HBONE re-entry bypasses the listening socket, so it must not expose binds
+		// scoped to a concrete address (for example, a loopback-only listener).
+		let Some(bind) = pi.stores.read_binds().find_bind_by_port(socket_addr.port()) else {
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))

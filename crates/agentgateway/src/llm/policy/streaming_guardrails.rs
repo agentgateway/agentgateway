@@ -107,6 +107,8 @@ pub fn make_evaluator(
 		guardrail_log,
 		worst_action: GuardrailAction::Allow,
 		audit_recorded: false,
+		allow_recorded: false,
+		fail_open_recorded: false,
 	})
 }
 
@@ -120,6 +122,9 @@ struct ResponseGuardEvaluator {
 	worst_action: GuardrailAction,
 	// Only log the audit action once per stream, even if triggered by multiple windows.
 	audit_recorded: bool,
+	// Deduplicate passing windows
+	allow_recorded: bool,
+	fail_open_recorded: bool,
 }
 
 impl ResponseGuardEvaluator {
@@ -157,6 +162,7 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 			&self.http_headers,
 			self.original.as_deref(),
 			log,
+			&mut self.allow_recorded,
 		)
 		.await
 		{
@@ -172,6 +178,16 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 					FailureMode::FailClosed => GuardrailAction::Reject,
 					FailureMode::FailOpen => GuardrailAction::FailOpen,
 				};
+				if action != GuardrailAction::FailOpen || !self.fail_open_recorded {
+					super::record_guardrail(
+						Some(&self.guardrail_log),
+						GuardrailPhase::Response,
+						self.guard.kind.name(),
+						action,
+						None,
+					);
+					self.fail_open_recorded |= action == GuardrailAction::FailOpen;
+				}
 				self.observe_action(action);
 				Err(e)
 			},
@@ -220,7 +236,7 @@ pin_project! {
 	// An `http_body::Body` wrapper that implements windowed guardrail evaluation.
 	pub struct GuardedSseBody {
 		#[pin]
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		eval_threshold: usize,
 		buffer_limit: usize,
@@ -247,11 +263,11 @@ impl GuardedSseBody {
 	// We do actually return Self; just wrapped in an http_body::Body. The annotation silences a false positive from clippy about that.
 	#[allow(clippy::new_ret_no_self)]
 	pub fn new(
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		buffer_limit: usize,
 		logger: Option<crate::llm::AmendOnDrop>,
-	) -> crate::http::Body {
+	) -> agent_http::RawBody {
 		Self::with_threshold(
 			inner,
 			evaluators,
@@ -263,13 +279,13 @@ impl GuardedSseBody {
 
 	/// Like [`GuardedSseBody::new`] but with an explicit evaluation threshold.
 	pub fn with_threshold(
-		inner: crate::http::Body,
+		inner: agent_http::RawBody,
 		evaluators: Vec<Box<dyn StreamingEvaluator>>,
 		buffer_limit: usize,
 		logger: Option<crate::llm::AmendOnDrop>,
 		eval_threshold: usize,
-	) -> crate::http::Body {
-		crate::http::Body::new(Self {
+	) -> agent_http::RawBody {
+		agent_http::RawBody::new(Self {
 			inner,
 			evaluators,
 			eval_threshold,
@@ -581,12 +597,12 @@ mod tests {
 		))
 	}
 
-	fn make_body(chunks: Vec<Bytes>) -> crate::http::Body {
+	fn make_body(chunks: Vec<Bytes>) -> agent_http::RawBody {
 		use std::convert::Infallible;
 
 		use futures_util::stream;
 		let stream = stream::iter(chunks.into_iter().map(Ok::<Bytes, Infallible>));
-		crate::http::Body::from_stream(stream)
+		agent_http::RawBody::from_stream(stream)
 	}
 
 	fn contains(haystack: &[u8], needle: &[u8]) -> bool {

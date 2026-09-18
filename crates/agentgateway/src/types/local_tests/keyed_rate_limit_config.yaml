@@ -1,0 +1,37 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        localRateLimit:
+        - type: requests
+          maxTokens: 60
+          tokensPerFill: 60
+          fillInterval: 60s
+          key: jwt.sub
+        - type: tokens
+          maxTokens: 100000
+          tokensPerFill: 100000
+          fillInterval: 1h
+          key: jwt.team
+        - type: tokens
+          maxTokens: 20000
+          tokensPerFill: 20000
+          fillInterval: 1h
+          key: jwt.sub + "/" + llm.requestModel
+      backends:
+      - host: 127.0.0.1:8000
+    - policies:
+        localRateLimit:
+          conditional:
+          - condition: jwt.tier == "gold"
+            maxTokens: 600
+            tokensPerFill: 600
+            fillInterval: 60s
+            key: jwt.sub
+          - maxTokens: 60
+            tokensPerFill: 60
+            fillInterval: 60s
+            key: jwt.sub
+      backends:
+      - host: 127.0.0.1:8000
