@@ -933,6 +933,11 @@ impl HTTPProxy {
 			},
 		};
 
+		// Set X-Forwarded-Proto based on the listener's protocol.
+		// This must be done after listener resolution so we can use the listener's
+		// protocol configuration rather than the connection state.
+		set_forwarded_proto(&mut req, selected_listener.protocol.clone());
+
 		let gateway_policies = inputs
 			.stores
 			.read_binds()
@@ -4539,6 +4544,38 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 	Ok(())
 }
 
+/// Set `X-Forwarded-Proto` based on the listener's protocol.
+///
+/// Only sets the header if it's not already present, preserving any value set by
+/// upstream proxies. This matches the behavior of Envoy, Traefik, and Caddy, which
+/// require explicit opt-in to overwrite. Users who need to force a specific value
+/// can use transformation policies.
+///
+/// The protocol is determined by the listener configuration rather than the
+/// connection state, which correctly represents the original client's scheme.
+/// This is important in scenarios like Istio waypoints where the connection to
+/// the gateway may be TLS even when the original client used HTTP.
+fn set_forwarded_proto(req: &mut Request, protocol: ListenerProtocol) {
+	let proto = match protocol {
+		ListenerProtocol::HTTPS(_) => "https",
+		ListenerProtocol::HTTP => "http",
+		// For non-HTTP protocols (TLS passthrough, TCP, HBONE), don't set the header
+		// as these aren't HTTP requests.
+		_ => return,
+	};
+
+	// Only set if not already present - preserve upstream proxy values
+	if !req
+		.headers()
+		.contains_key(http::x_headers::X_FORWARDED_PROTO)
+		&& let Ok(value) = HeaderValue::from_str(proto)
+	{
+		req
+			.headers_mut()
+			.insert(http::x_headers::X_FORWARDED_PROTO, value);
+	}
+}
+
 /// Record the normalized HTTP request hostname in the destination CEL context.
 fn set_destination_hostname(req: &mut Request) {
 	let hostname = req
@@ -4588,6 +4625,109 @@ mod destination_context_tests {
 				.get::<cel::DestinationContext>()
 				.and_then(|destination| destination.hostname.as_deref()),
 			Some("api.example.com")
+		);
+	}
+}
+
+#[cfg(test)]
+mod forwarded_proto_tests {
+	use super::*;
+
+	#[test]
+	fn https_listener_sets_x_forwarded_proto_https() {
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+
+		set_forwarded_proto(&mut req, ListenerProtocol::HTTP);
+
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"http"
+		);
+	}
+
+	#[test]
+	fn http_listener_sets_x_forwarded_proto_http() {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+
+		set_forwarded_proto(&mut req, ListenerProtocol::HTTP);
+
+		assert_eq!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.unwrap()
+				.to_str()
+				.unwrap(),
+			"http"
+		);
+	}
+
+	#[test]
+	fn preserves_existing_x_forwarded_proto() {
+		// An upstream proxy may have already set X-Forwarded-Proto.
+		// The gateway should preserve it (non-destructive behavior).
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.header("x-forwarded-proto", "https")
+			.body(http::Body::empty())
+			.unwrap();
+
+		set_forwarded_proto(&mut req, ListenerProtocol::HTTP);
+
+		// The existing value should be preserved
+		let values: Vec<_> = req
+			.headers()
+			.get_all(http::x_headers::X_FORWARDED_PROTO)
+			.iter()
+			.collect();
+		assert_eq!(values.len(), 1);
+		assert_eq!(values[0].to_str().unwrap(), "https");
+	}
+
+	#[test]
+	fn non_http_listener_does_not_set_header() {
+		// For non-HTTP protocols (TLS passthrough, TCP, HBONE), don't set the header
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+
+		set_forwarded_proto(&mut req, ListenerProtocol::TCP);
+
+		assert!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.is_none()
+		);
+	}
+
+	#[test]
+	fn tls_listener_does_not_set_header() {
+		// TLS passthrough listener should not set X-Forwarded-Proto
+		let mut req = ::http::Request::builder()
+			.uri("https://example.com/test")
+			.body(http::Body::empty())
+			.unwrap();
+
+		set_forwarded_proto(&mut req, ListenerProtocol::TLS(None));
+
+		assert!(
+			req
+				.headers()
+				.get(http::x_headers::X_FORWARDED_PROTO)
+				.is_none()
 		);
 	}
 }
