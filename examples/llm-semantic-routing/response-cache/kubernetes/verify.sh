@@ -80,95 +80,20 @@ curl -fsS http://127.0.0.1:18081/healthz >/dev/null
 
 echo "Resetting the dedicated example data"
 curl -fsS -X POST http://127.0.0.1:18081/admin/reset >/dev/null
-kubectl exec -n "${NAMESPACE}" statefulset/redis-semantic-cache -- \
-  redis-cli EVAL \
-  "local k=redis.call('keys',ARGV[1]); if #k>0 then return redis.call('del',unpack(k)) end return 0" \
-  0 'semantic-cache:*' >/dev/null
-
 backend_count() {
   curl -fsS http://127.0.0.1:18081/stats | jq -er '.invocations'
 }
 
-cache_header() {
-  awk 'BEGIN {IGNORECASE=1} /^x-vsr-cache-hit:/ {gsub("\r", "", $2); print tolower($2)}' "$1" | tail -n 1
-}
-
-decision_header() {
-  awk 'BEGIN {IGNORECASE=1} /^x-vsr-selected-decision:/ {gsub("\r", "", $2); print $2}' "$1" | tail -n 1
-}
-
-send_request() {
-  local name=$1
-  local prompt=$2
-  jq -n --arg prompt "${prompt}" '{
-    model: "auto",
-    messages: [{role: "user", content: $prompt}],
-    max_tokens: 96
-  }' >"${WORK_DIR}/${name}-request.json"
-  curl -fsS -D "${WORK_DIR}/${name}-headers.txt" \
-    -o "${WORK_DIR}/${name}-body.json" \
-    http://127.0.0.1:18080/v1/chat/completions \
-    -H 'Content-Type: application/json' \
-    -H 'X-VSR-Debug: true' \
-    -H "X-Request-ID: semantic-cache-${name}" \
-    --data-binary "@${WORK_DIR}/${name}-request.json"
-  jq -e '.choices[0].message.content | type == "string"' \
-    "${WORK_DIR}/${name}-body.json" >/dev/null
-}
-
-assert_count() {
-  local expected=$1
-  local actual
-  actual=$(backend_count)
-  if [[ "${actual}" != "${expected}" ]]; then
-    echo "expected backend count ${expected}, got ${actual}" >&2
-    exit 1
-  fi
-}
-
-assert_hit() {
-  local name=$1
-  local hit
-  hit=$(cache_header "${WORK_DIR}/${name}-headers.txt")
-  if [[ "${hit}" != true ]]; then
-    echo "expected ${name} to be a cache hit" >&2
-    sed -n '1,40p' "${WORK_DIR}/${name}-headers.txt" >&2
-    exit 1
-  fi
-}
-
-assert_uncached_decision() {
-  local name=$1
-  local decision
-  decision=$(decision_header "${WORK_DIR}/${name}-headers.txt")
-  if [[ "${decision}" != uncached_homehub_support ]]; then
-    echo "expected ${name} to select uncached_homehub_support, got ${decision}" >&2
-    exit 1
-  fi
-}
-
-echo "Verifying initial miss"
-send_request warm "How do I factory-reset my HomeHub X2?"
-assert_count 1
-
-echo "Verifying exact hit"
-send_request exact "How do I factory-reset my HomeHub X2?"
-assert_hit exact
-assert_count 1
-
-echo "Verifying paraphrase hit"
-send_request paraphrase "What is the procedure for restoring a HomeHub X2 to factory settings?"
-assert_hit paraphrase
-assert_count 1
-
-echo "Verifying semantically different miss"
-send_request different "Can a HomeHub be used outdoors in freezing rain?"
-assert_uncached_decision different
-assert_count 2
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+GATEWAY_URL=http://127.0.0.1:18080
+# shellcheck source=examples/llm-semantic-routing/response-cache/shared/verify-homehub.sh
+source "${SCRIPT_DIR}/../shared/verify-homehub.sh"
+redis_cli() { kubectl exec -n "${NAMESPACE}" statefulset/redis-semantic-cache -- redis-cli "$@"; }
+reset_cache
+verify_requests
 
 echo "Inspecting the Redis Search index"
-kubectl exec -n "${NAMESPACE}" statefulset/redis-semantic-cache -- \
-  redis-cli FT.INFO semantic_cache_idx >/dev/null
+check_redis_indexes
 
 if [[ "${RUN_SHARED_VSR}" == true ]]; then
   echo "Verifying cache sharing across vSR replicas"
@@ -208,4 +133,4 @@ if [[ "${RUN_REDIS_RESTART}" == true ]]; then
   assert_count 2
 fi
 
-echo "Semantic-cache verification passed"
+echo "Response-cache verification passed"

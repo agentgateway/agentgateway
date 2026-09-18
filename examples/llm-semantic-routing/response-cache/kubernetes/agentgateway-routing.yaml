@@ -62,7 +62,8 @@ spec:
       failureMode: FailClosed
       processingOptions:
         requestHeaderMode: Send
-        requestBodyMode: FullDuplexStreamed
+        # HomeHub uses complete JSON requests and non-streaming responses.
+        requestBodyMode: Buffered
         responseHeaderMode: Send
         # vSR needs the complete successful response to populate the cache.
         responseBodyMode: Buffered
