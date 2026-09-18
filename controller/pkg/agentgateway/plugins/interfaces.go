@@ -63,7 +63,12 @@ func (p AgwPolicy) Equals(in AgwPolicy) bool {
 }
 
 func (p AgwPolicy) ResourceName() string {
-	return p.Gateway.String() + "/" + p.Policy.Key
+	// Keep the key identical to its AgwResource projection so MapCollection
+	// can expose that wrapper without retaining another collection of policies.
+	if p.Gateway == nil || *p.Gateway == (types.NamespacedName{}) {
+		return "policy/" + p.Policy.Key
+	}
+	return p.Gateway.String() + "/policy/" + p.Policy.Key
 }
 
 type AddResourcesPlugin struct {
