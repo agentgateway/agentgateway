@@ -553,6 +553,7 @@ type AnthropicConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.guardrail) || !has(self.endpointPreference) || !(self.endpointPreference in ['MantlePreferred', 'MantleOnly'])",message="Bedrock guardrails cannot be used with MantlePreferred or MantleOnly"
 type BedrockSettings struct {
 	// AWS region to use for the backend.
 	// Defaults to `us-east-1` if not specified.

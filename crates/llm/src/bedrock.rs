@@ -92,6 +92,12 @@ impl Provider {
 		match self.endpoint_preference {
 			RuntimeOnly => Runtime,
 			MantleOnly => Mantle,
+			// Inline guardrails require Runtime, even when the model only advertises Mantle.
+			RuntimePreferred
+				if self.guardrail_identifier.is_some() || self.guardrail_version.is_some() =>
+			{
+				Runtime
+			},
 			// Prefer Runtime; use Mantle only for models tagged Mantle but not Runtime.
 			RuntimePreferred if has(tags::MANTLE) && !has(tags::RUNTIME) => Mantle,
 			RuntimePreferred => Runtime,
@@ -244,7 +250,7 @@ mod tests {
 	#[test]
 	fn resolve_endpoint_runtime_preferred_uses_catalog_tags() {
 		use crate::model_catalog::{TestCatalog, tags};
-		let p = provider(BedrockEndpointPreference::RuntimePreferred);
+		let mut p = provider(BedrockEndpointPreference::RuntimePreferred);
 		let cat = TestCatalog::new([("openai.gpt-oss-120b", &[tags::MANTLE][..])]);
 		let catalog: crate::model_catalog::Catalog = Some(&cat);
 		assert_eq!(
@@ -257,6 +263,12 @@ mod tests {
 				Some("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 				catalog
 			),
+			BedrockEndpoint::Runtime
+		);
+		p.guardrail_identifier = Some(strng::new("test-guardrail"));
+		p.guardrail_version = Some(strng::new("1"));
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("openai.gpt-oss-120b"), catalog),
 			BedrockEndpoint::Runtime
 		);
 	}

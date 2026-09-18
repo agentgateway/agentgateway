@@ -249,6 +249,12 @@ spec:
                                     pattern: ^[a-z0-9-]+$
                                     type: string
                                 type: object
+                                x-kubernetes-validations:
+                                - message: Bedrock guardrails cannot be used with
+                                    MantlePreferred or MantleOnly
+                                  rule: '!has(self.guardrail) || !has(self.endpointPreference)
+                                    || !(self.endpointPreference in [''MantlePreferred'',
+                                    ''MantleOnly''])'
                               custom:
                                 description: |-
                                   Custom provider configures a non-managed or self-hosted LLM provider.
@@ -7359,6 +7365,12 @@ spec:
                             pattern: ^[a-z0-9-]+$
                             type: string
                         type: object
+                        x-kubernetes-validations:
+                        - message: Bedrock guardrails cannot be used with MantlePreferred
+                            or MantleOnly
+                          rule: '!has(self.guardrail) || !has(self.endpointPreference)
+                            || !(self.endpointPreference in [''MantlePreferred'',
+                            ''MantleOnly''])'
                       custom:
                         description: |-
                           Custom provider configures a non-managed or self-hosted LLM provider.

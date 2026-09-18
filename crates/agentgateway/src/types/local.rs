@@ -1603,6 +1603,15 @@ impl LocalAIBackend {
 		for g in providers {
 			let mut group = vec![];
 			for p in g {
+				if let AIProvider::Bedrock(bedrock) = &p.provider
+					&& (bedrock.guardrail_identifier.is_some() || bedrock.guardrail_version.is_some())
+					&& matches!(
+						bedrock.endpoint_preference,
+						crate::llm::bedrock::BedrockEndpointPreference::MantlePreferred
+							| crate::llm::bedrock::BedrockEndpointPreference::MantleOnly
+					) {
+					bail!("Bedrock guardrails cannot be used with MantlePreferred or MantleOnly");
+				}
 				validate_inference_routing_scope(
 					p.policies.as_ref(),
 					InferenceRoutingScope::AIProviderPolicies,
