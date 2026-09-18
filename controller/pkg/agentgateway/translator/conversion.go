@@ -1237,6 +1237,7 @@ func ListenerProtocolAndTLSConfig(obj *GatewayListener) (api.Protocol, *api.TLSC
 			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
 		} else if obj.TLSInfo.Spiffe {
 			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
+			tlsConfig.SpiffeAdditionalTrustDomains = obj.TLSInfo.SpiffeAdditionalTrustDomains
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
@@ -1322,7 +1323,25 @@ var dummyTls = &TLSInfo{
 const (
 	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
 	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
+	// Comma-separated federated trust domains accepted for inbound client SVIDs. Only valid on a
+	// listener whose certificate source is SPIFFE; the local trust domain is always implicit.
+	agentgatewaySpiffeAdditionalTrustDomainsKey = "agentgateway.dev/spiffe-additional-trust-domains"
 )
+
+// parseAdditionalTrustDomains splits a comma-separated trust-domain list, trimming whitespace and
+// dropping empty entries. (Ordering/duplication are not semantically meaningful end-to-end; the dataplane canonicalizes.)
+func parseAdditionalTrustDomains(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+	var out []string
+	for part := range strings.SplitSeq(csv, ",") {
+		if td := strings.TrimSpace(part); td != "" {
+			out = append(out, td)
+		}
+	}
+	return out
+}
 
 func validateTLS(certInfo *TLSInfo) *ConfigError {
 	if certInfo.IstioWorkloadCert || certInfo.Spiffe {
@@ -1441,7 +1460,17 @@ func buildTLS(
 						Message: "certificateRefs cannot be configured with SPIFFE TLS certificate source",
 					}
 				}
-				return &TLSInfo{Spiffe: true}, nil
+				return &TLSInfo{
+					Spiffe:                       true,
+					SpiffeAdditionalTrustDomains: parseAdditionalTrustDomains(string(tls.Options[agentgatewaySpiffeAdditionalTrustDomainsKey])),
+				}, nil
+			}
+			// Accepted trust domains only make sense when the identity is SPIFFE-sourced.
+			if tls.Options[agentgatewaySpiffeAdditionalTrustDomainsKey] != "" {
+				return dummyTls, &ConfigError{
+					Reason:  InvalidTLS,
+					Message: fmt.Sprintf("%s is only valid when %s is SPIFFE", agentgatewaySpiffeAdditionalTrustDomainsKey, agentgatewayTLSCertificateSourceKey),
+				}
 			}
 			switch terminateMode {
 			case "ISTIO_SIMPLE":
