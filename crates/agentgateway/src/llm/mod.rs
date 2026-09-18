@@ -458,14 +458,15 @@ fn render_anthropic_messages(
 
 fn render_vertex_gemini(
 	req: types::ChatRequest,
-	_ctx: &ChatRequestContext<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
 		// not depend on Vertex specifics; the Gemini API provider renders through here too.
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			conversion::vertex_gemini::from_completions::translate(&req)
+			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
+			conversion::vertex_gemini::from_completions::translate(&req, is_vertex)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"
