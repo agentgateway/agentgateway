@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-17T08:35:47Z"
+    "generatedAt": "2026-09-18T08:34:37Z"
   },
   "providers": {
     "anthropic": {
@@ -1606,6 +1606,11 @@
             "runtime"
           ]
         },
+        "moonshotai.kimi-k3": {
+          "tags": [
+            "runtime"
+          ]
+        },
         "nvidia.nemotron-nano-12b-v2": {
           "rates": {
             "input": "0.2",
@@ -2972,6 +2977,20 @@
           }
         },
         "gpt-image-2": {
+          "rates": {
+            "input": "5",
+            "output": "30",
+            "cacheRead": "1.25"
+          }
+        },
+        "gpt-image-2.5-flare": {
+          "rates": {
+            "input": "5",
+            "output": "30",
+            "cacheRead": "1.25"
+          }
+        },
+        "gpt-image-2.5-sunburst": {
           "rates": {
             "input": "5",
             "output": "30",
@@ -5769,6 +5788,13 @@
           }
         },
         "zai-glm-5-2": {
+          "rates": {
+            "input": "1.4",
+            "output": "4.4",
+            "cacheRead": "0.14"
+          }
+        },
+        "zai-glm-5-3": {
           "rates": {
             "input": "1.4",
             "output": "4.4",
