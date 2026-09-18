@@ -1,0 +1,102 @@
+# Doc comments across this repo cite absolute agentgateway.dev URLs. When the docs site
+# reorganises, it keeps serving the old path through a redirect, so nothing here looks
+# broken and the stale link stays until that redirect is retired.
+#
+# A 301 is not an error, so this is invisible from inside the repo. This workflow asks the
+# live site instead: it follows each link and repoints any that has permanently moved.
+#
+# Fixing them here promptly matters because the docs site generates its reference pages
+# from a release TAG. A link fixed after a tag is cut cannot reach the published docs until
+# the next release, so the repo is the only place the fix can start.
+name: Check doc links
+
+on:
+  schedule:
+    # Weekly on Monday. Pages move on the scale of a docs reorganisation, not daily.
+    - cron: '0 9 * * 1'
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: check-doc-links
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Repoint moved doc links
+    # Forks inherit workflows but not the intent to open pull requests here.
+    if: github.repository == 'agentgateway/agentgateway'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # Push the fixes to the automation branch.
+      pull-requests: write # Open or update the pull request.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Only the standard library is used, so the runner's Python needs no setup and there
+      # is nothing to install or pin.
+      - name: Check and repoint doc links
+        id: links
+        shell: bash
+        run: |
+          python3 tools/check_doc_links.py \
+            --write \
+            --summary "$RUNNER_TEMP/doc-links-body.md"
+
+      # The script replaces one URL with another and touches nothing else, so anything
+      # outside that shape means it misfired and the run should stop rather than open a
+      # pull request nobody can trust.
+      - name: Validate changes
+        if: steps.links.outputs.changed == 'true'
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'script reported changes but the tree is clean' >&2
+            exit 1
+          fi
+          if ! git diff -U0 | grep -qE '^[-+].*agentgateway\.dev'; then
+            echo 'changes do not touch any agentgateway.dev link:' >&2
+            git diff --stat >&2
+            exit 1
+          fi
+
+      - name: Commit and open or update pull request
+        if: steps.links.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: automation/refresh-doc-links
+          TITLE: 'Repoint doc links that have moved'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git diff --cached --check
+          git commit -m "${TITLE}"
+
+          gh auth setup-git
+          remote_sha="$(git ls-remote --heads origin "refs/heads/$BRANCH" | cut -f1)"
+          if [ -n "$remote_sha" ]; then
+            git push --force-with-lease="refs/heads/$BRANCH:$remote_sha" origin "HEAD:refs/heads/$BRANCH"
+          else
+            git push origin "HEAD:refs/heads/$BRANCH"
+          fi
+
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$pr" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$BRANCH" \
+              --title "${TITLE}" \
+              --body-file "$RUNNER_TEMP/doc-links-body.md"
+          else
+            gh pr edit "$pr" --repo "$GITHUB_REPOSITORY" \
+              --body-file "$RUNNER_TEMP/doc-links-body.md"
+            echo "Updated pull request #$pr"
+          fi
