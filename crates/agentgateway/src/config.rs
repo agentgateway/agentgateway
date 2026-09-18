@@ -245,7 +245,7 @@ pub fn parse_config(
 	let spiffe = raw.spiffe.and_then(|cfg| {
 		cfg.endpoint.map(|endpoint| crate::control::spiffe::Config {
 			endpoint,
-			federated_trust_domains: cfg.federated_trust_domains,
+			allow_additional_trust_domains: cfg.allow_additional_trust_domains,
 		})
 	});
 

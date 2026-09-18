@@ -956,24 +956,20 @@ spec:
                   (via the `agentgateway.dev/tls-certificate-source: SPIFFE` listener option and the
                   AgentgatewayPolicy `backend.tls.certificateSource: SPIFFE` field respectively).
                 properties:
+                  allowAdditionalTrustDomains:
+                    description: |-
+                      AllowAdditionalTrustDomains controls whether this gateway may accept additional (federated,
+                      non-local) SPIFFE trust domains — the local trust domain is always implicitly accepted — in
+                      per-flow `additionalTrustDomains` lists (listener option or backend policy). It does not
+                      control which bundles are delivered - SPIRE decides that via `federatesWith`. When false or
+                      unset, only the local trust domain may be accepted.
+                    type: boolean
                   enabled:
                     description: |-
                       Explicitly turns SPIFFE integration on or off for this gateway. When unset, the presence
                       of the spiffe block opts in. Set to false on a Gateway-level AgentgatewayParameters to opt
                       a gateway out of SPIFFE enabled at the GatewayClass level.
                     type: boolean
-                  federatedTrustDomains:
-                    description: |-
-                      FederatedTrustDomains declares the federated SPIFFE trust domains this gateway may accept,
-                      in addition to its own local trust domain (which is always implicitly accepted). It does not
-                      control which bundles are delivered - SPIRE decides that via `federatesWith` - it is the set
-                      a per-flow accepted list (listener option or backend `acceptedTrustDomains`) is validated
-                      against. When empty, only the local trust domain may be accepted. Each entry is a trust
-                      domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
-                    items:
-                      type: string
-                    type: array
-                    x-kubernetes-list-type: set
                   source:
                     description: |-
                       Volume source for the SPIFFE Workload API socket. When omitted (i.e. `spiffe: {}`),

@@ -1353,7 +1353,7 @@ pub struct LocalSpiffeConfig {
 	/// Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;
 	/// the local trust domain is always implicit.
 	#[serde(default)]
-	pub accepted_trust_domains: Vec<String>,
+	pub additional_trust_domains: Vec<String>,
 }
 
 #[apply(schema_de!)]
@@ -5720,7 +5720,7 @@ impl LocalTLSServerConfig {
 			}
 			return Ok(ServerTLSConfig::spiffe(
 				vec![b"h2".to_vec(), b"http/1.1".to_vec()],
-				spiffe.accepted_trust_domains.clone(),
+				spiffe.additional_trust_domains.clone(),
 			));
 		}
 		let cert_pem = resources

@@ -320,7 +320,7 @@ message TLSConfig {
   CertificateSource certificate_source = 9;
   // Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted.
   // The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
-  repeated string spiffe_accepted_trust_domains = 10;
+  repeated string spiffe_additional_trust_domains = 10;
 }
 
 enum Protocol {
@@ -1658,7 +1658,7 @@ message BackendPolicySpec {
     CertificateSource certificate_source = 9;
     // Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted.
     // The local trust domain is always implicit. Only applicable when certificate_source is SPIFFE.
-    repeated string spiffe_accepted_trust_domains = 10;
+    repeated string spiffe_additional_trust_domains = 10;
   }
   message BackendHTTP {
     enum HttpVersion {

@@ -104,7 +104,7 @@ pub struct SpiffeBackendTLS {
 	pub verify_sans: Vec<String>,
 	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
 	/// local trust domain is always implicit. Combine with `verify_sans` to pin exact IDs.
-	pub accepted_trust_domains: Vec<String>,
+	pub additional_trust_domains: Vec<String>,
 }
 
 impl BackendTLS {
@@ -257,7 +257,7 @@ pub struct LocalSpiffeBackendTLS {
 	/// Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the
 	/// local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.
 	#[serde(default)]
-	pub accepted_trust_domains: Vec<String>,
+	pub additional_trust_domains: Vec<String>,
 }
 
 #[derive(Default, Debug)]
@@ -274,7 +274,7 @@ pub struct ResolvedBackendTLS {
 	pub key_exchange_groups: Option<Vec<tls::KeyExchangeGroup>>,
 	pub spiffe: bool,
 	/// Federated trust domains accepted for a SPIFFE-sourced backend, when configured.
-	pub spiffe_accepted_trust_domains: Option<Vec<String>>,
+	pub spiffe_additional_trust_domains: Option<Vec<String>>,
 }
 
 impl ResolvedBackendTLS {
@@ -295,7 +295,7 @@ impl ResolvedBackendTLS {
 			BackendTLSSource::Spiffe(SpiffeBackendTLS {
 				alpn: self.alpn,
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
-				accepted_trust_domains: self.spiffe_accepted_trust_domains.unwrap_or_default(),
+				additional_trust_domains: self.spiffe_additional_trust_domains.unwrap_or_default(),
 			})
 		} else {
 			let mut roots = rustls::RootCertStore::empty();
@@ -397,10 +397,10 @@ impl LocalBackendTLS {
 			None => None,
 		};
 
-		let spiffe_accepted_trust_domains = self
+		let spiffe_additional_trust_domains = self
 			.spiffe
 			.as_ref()
-			.map(|s| s.accepted_trust_domains.clone())
+			.map(|s| s.additional_trust_domains.clone())
 			.filter(|domains| !domains.is_empty());
 		ResolvedBackendTLS {
 			cert,
@@ -413,7 +413,7 @@ impl LocalBackendTLS {
 			subject_alt_names: self.subject_alt_names,
 			key_exchange_groups: self.key_exchange_groups,
 			spiffe: self.spiffe.is_some(),
-			spiffe_accepted_trust_domains,
+			spiffe_additional_trust_domains,
 		}
 		.try_into()
 	}

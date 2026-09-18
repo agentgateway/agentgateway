@@ -2121,13 +2121,13 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
-                                        acceptedTrustDomains:
+                                        additionalTrustDomains:
                                           description: |-
-                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
-                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            Only valid when certificateSource is SPIFFE and allowAdditionalTrustDomains is set to true. The gateway's own local trust domain is always
+                                            implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                                            them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                                            deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                             domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
@@ -2303,9 +2303,9 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
-                                      - message: acceptedTrustDomains may only be
+                                      - message: additionalTrustDomains may only be
                                           set when certificateSource is SPIFFE
-                                        rule: '!has(self.acceptedTrustDomains) ||
+                                        rule: '!has(self.additionalTrustDomains) ||
                                           (has(self.certificateSource) && self.certificateSource
                                           == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
@@ -2608,13 +2608,13 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
-                                        acceptedTrustDomains:
+                                        additionalTrustDomains:
                                           description: |-
-                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
                                             Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                                            them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                                            deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                             domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
@@ -2790,9 +2790,9 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
-                                      - message: acceptedTrustDomains may only be
+                                      - message: additionalTrustDomains may only be
                                           set when certificateSource is SPIFFE
-                                        rule: '!has(self.acceptedTrustDomains) ||
+                                        rule: '!has(self.additionalTrustDomains) ||
                                           (has(self.certificateSource) && self.certificateSource
                                           == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
@@ -3115,13 +3115,13 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
-                                        acceptedTrustDomains:
+                                        additionalTrustDomains:
                                           description: |-
-                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
                                             Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                                            them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                                            deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                             domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
@@ -3297,9 +3297,9 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
-                                      - message: acceptedTrustDomains may only be
+                                      - message: additionalTrustDomains may only be
                                           set when certificateSource is SPIFFE
-                                        rule: '!has(self.acceptedTrustDomains) ||
+                                        rule: '!has(self.additionalTrustDomains) ||
                                           (has(self.certificateSource) && self.certificateSource
                                           == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
@@ -3999,13 +3999,13 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
-                                        acceptedTrustDomains:
+                                        additionalTrustDomains:
                                           description: |-
-                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
                                             Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                                            them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                                            deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                             domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
@@ -4181,9 +4181,9 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
-                                      - message: acceptedTrustDomains may only be
+                                      - message: additionalTrustDomains may only be
                                           set when certificateSource is SPIFFE
-                                        rule: '!has(self.acceptedTrustDomains) ||
+                                        rule: '!has(self.additionalTrustDomains) ||
                                           (has(self.certificateSource) && self.certificateSource
                                           == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
@@ -4486,13 +4486,13 @@ spec:
                                         When set, TLS is originated to the backend using the system trusted CA
                                         certificates, and SNI is inferred from the destination.
                                       properties:
-                                        acceptedTrustDomains:
+                                        additionalTrustDomains:
                                           description: |-
-                                            AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                                            AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
                                             Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                                            implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                                            them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                                            the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                                            implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                                            them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                                            deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                             domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
@@ -4668,9 +4668,9 @@ spec:
                                         rule: '!has(self.certificateSource) || self.certificateSource
                                           != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
                                           && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
-                                      - message: acceptedTrustDomains may only be
+                                      - message: additionalTrustDomains may only be
                                           set when certificateSource is SPIFFE
-                                        rule: '!has(self.acceptedTrustDomains) ||
+                                        rule: '!has(self.additionalTrustDomains) ||
                                           (has(self.certificateSource) && self.certificateSource
                                           == ''SPIFFE'')'
                                       - message: at most one of the fields in [verifySubjectAltNames
@@ -5003,13 +5003,13 @@ spec:
                   tls:
                     description: TLS settings for connections to this model provider.
                     properties:
-                      acceptedTrustDomains:
+                      additionalTrustDomains:
                         description: |-
-                          AcceptedTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
+                          AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
                           Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
-                          implicitly accepted; listing federated trust domains here additionally accepts SVIDs from
-                          them (each must be declared in the gateway's `spiffe.federatedTrustDomains` and delivered by
-                          the Workload API, otherwise the connection fails closed). When empty, only the local trust
+                          implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
+                          them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
+                          deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                           domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
                           is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                         items:
@@ -5176,9 +5176,9 @@ spec:
                       rule: '!has(self.certificateSource) || self.certificateSource
                         != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
                         && !has(self.insecureSkipVerify))'
-                    - message: acceptedTrustDomains may only be set when certificateSource
+                    - message: additionalTrustDomains may only be set when certificateSource
                         is SPIFFE
-                      rule: '!has(self.acceptedTrustDomains) || (has(self.certificateSource)
+                      rule: '!has(self.additionalTrustDomains) || (has(self.certificateSource)
                         && self.certificateSource == ''SPIFFE'')'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set

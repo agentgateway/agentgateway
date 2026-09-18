@@ -1237,7 +1237,7 @@ func ListenerProtocolAndTLSConfig(obj *GatewayListener) (api.Protocol, *api.TLSC
 			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
 		} else if obj.TLSInfo.Spiffe {
 			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
-			tlsConfig.SpiffeAcceptedTrustDomains = obj.TLSInfo.SpiffeAcceptedTrustDomains
+			tlsConfig.SpiffeAdditionalTrustDomains = obj.TLSInfo.SpiffeAdditionalTrustDomains
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
@@ -1325,17 +1325,17 @@ const (
 	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
 	// Comma-separated federated trust domains accepted for inbound client SVIDs. Only valid on a
 	// listener whose certificate source is SPIFFE; the local trust domain is always implicit.
-	agentgatewaySpiffeAcceptedTrustDomainsKey = "agentgateway.dev/spiffe-accepted-trust-domains"
+	agentgatewaySpiffeAdditionalTrustDomainsKey = "agentgateway.dev/spiffe-additional-trust-domains"
 )
 
-// parseAcceptedTrustDomains splits a comma-separated trust-domain list, trimming whitespace and
+// parseAdditionalTrustDomains splits a comma-separated trust-domain list, trimming whitespace and
 // dropping empty entries. Order is preserved; the dataplane tolerates duplicates.
-func parseAcceptedTrustDomains(csv string) []string {
+func parseAdditionalTrustDomains(csv string) []string {
 	if csv == "" {
 		return nil
 	}
 	var out []string
-	for _, part := range strings.Split(csv, ",") {
+	for part := range strings.SplitSeq(csv, ",") {
 		if td := strings.TrimSpace(part); td != "" {
 			out = append(out, td)
 		}
@@ -1461,15 +1461,15 @@ func buildTLS(
 					}
 				}
 				return &TLSInfo{
-					Spiffe:                     true,
-					SpiffeAcceptedTrustDomains: parseAcceptedTrustDomains(string(tls.Options[agentgatewaySpiffeAcceptedTrustDomainsKey])),
+					Spiffe:                       true,
+					SpiffeAdditionalTrustDomains: parseAdditionalTrustDomains(string(tls.Options[agentgatewaySpiffeAdditionalTrustDomainsKey])),
 				}, nil
 			}
 			// Accepted trust domains only make sense when the identity is SPIFFE-sourced.
-			if tls.Options[agentgatewaySpiffeAcceptedTrustDomainsKey] != "" {
+			if tls.Options[agentgatewaySpiffeAdditionalTrustDomainsKey] != "" {
 				return dummyTls, &ConfigError{
 					Reason:  InvalidTLS,
-					Message: fmt.Sprintf("%s is only valid when %s is SPIFFE", agentgatewaySpiffeAcceptedTrustDomainsKey, agentgatewayTLSCertificateSourceKey),
+					Message: fmt.Sprintf("%s is only valid when %s is SPIFFE", agentgatewaySpiffeAdditionalTrustDomainsKey, agentgatewayTLSCertificateSourceKey),
 				}
 			}
 			switch terminateMode {

@@ -458,7 +458,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		p.CertificateSource = api.BackendPolicySpec_BackendTLS_SPIFFE
 		// Federated trust domains this backend accepts (beyond the local one, which is implicit).
 		// The dataplane fails closed if a listed domain isn't declared/delivered via the Workload API.
-		p.SpiffeAcceptedTrustDomains = tls.AcceptedTrustDomains
+		p.SpiffeAdditionalTrustDomains = tls.AdditionalTrustDomains
 	} else {
 		if len(tls.MtlsCertificateRef) > 0 {
 			// Currently we only support one, and enforce this in the API
