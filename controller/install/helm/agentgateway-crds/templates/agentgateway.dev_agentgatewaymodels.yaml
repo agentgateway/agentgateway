@@ -2124,7 +2124,7 @@ spec:
                                         additionalTrustDomains:
                                           description: |-
                                             AdditionalTrustDomains restricts which SPIFFE trust domains an upstream SVID may chain to.
-                                            Only valid when certificateSource is SPIFFE and allowAdditionalTrustDomains is set to true. The gateway's own local trust domain is always
+                                            Only valid when certificateSource is SPIFFE. The gateway's own local trust domain is always
                                             implicitly accepted; listing additional trust domains here additionally accepts SVIDs from
                                             them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                             deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
@@ -2132,6 +2132,8 @@ spec:
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
                                             type: string
+                                          maxItems: 64
+                                          minItems: 1
                                           type: array
                                           x-kubernetes-list-type: set
                                         alpnProtocols:
@@ -2619,6 +2621,8 @@ spec:
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
                                             type: string
+                                          maxItems: 64
+                                          minItems: 1
                                           type: array
                                           x-kubernetes-list-type: set
                                         alpnProtocols:
@@ -3126,6 +3130,8 @@ spec:
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
                                             type: string
+                                          maxItems: 64
+                                          minItems: 1
                                           type: array
                                           x-kubernetes-list-type: set
                                         alpnProtocols:
@@ -4010,6 +4016,8 @@ spec:
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
                                             type: string
+                                          maxItems: 64
+                                          minItems: 1
                                           type: array
                                           x-kubernetes-list-type: set
                                         alpnProtocols:
@@ -4497,6 +4505,8 @@ spec:
                                             is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                           items:
                                             type: string
+                                          maxItems: 64
+                                          minItems: 1
                                           type: array
                                           x-kubernetes-list-type: set
                                         alpnProtocols:
@@ -5014,6 +5024,8 @@ spec:
                           is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                         items:
                           type: string
+                        maxItems: 64
+                        minItems: 1
                         type: array
                         x-kubernetes-list-type: set
                       alpnProtocols:

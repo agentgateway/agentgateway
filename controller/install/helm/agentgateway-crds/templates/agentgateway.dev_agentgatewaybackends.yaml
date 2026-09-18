@@ -1163,6 +1163,8 @@ spec:
                                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                                               items:
                                                                 type: string
+                                                              maxItems: 64
+                                                              minItems: 1
                                                               type: array
                                                               x-kubernetes-list-type: set
                                                             alpnProtocols:
@@ -1741,6 +1743,8 @@ spec:
                                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                                               items:
                                                                 type: string
+                                                              maxItems: 64
+                                                              minItems: 1
                                                               type: array
                                                               x-kubernetes-list-type: set
                                                             alpnProtocols:
@@ -2338,6 +2342,8 @@ spec:
                                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                                               items:
                                                                 type: string
+                                                              maxItems: 64
+                                                              minItems: 1
                                                               type: array
                                                               x-kubernetes-list-type: set
                                                             alpnProtocols:
@@ -3369,6 +3375,8 @@ spec:
                                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                                               items:
                                                                 type: string
+                                                              maxItems: 64
+                                                              minItems: 1
                                                               type: array
                                                               x-kubernetes-list-type: set
                                                             alpnProtocols:
@@ -3947,6 +3955,8 @@ spec:
                                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                                               items:
                                                                 type: string
+                                                              maxItems: 64
+                                                              minItems: 1
                                                               type: array
                                                               x-kubernetes-list-type: set
                                                             alpnProtocols:
@@ -6724,6 +6734,8 @@ spec:
                                           is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                         items:
                                           type: string
+                                        maxItems: 64
+                                        minItems: 1
                                         type: array
                                         x-kubernetes-list-type: set
                                       alpnProtocols:
@@ -9990,6 +10002,8 @@ spec:
                                         is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                       items:
                                         type: string
+                                      maxItems: 64
+                                      minItems: 1
                                       type: array
                                       x-kubernetes-list-type: set
                                     alpnProtocols:
@@ -10903,6 +10917,8 @@ spec:
                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                               items:
                                                 type: string
+                                              maxItems: 64
+                                              minItems: 1
                                               type: array
                                               x-kubernetes-list-type: set
                                             alpnProtocols:
@@ -11398,6 +11414,8 @@ spec:
                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                               items:
                                                 type: string
+                                              maxItems: 64
+                                              minItems: 1
                                               type: array
                                               x-kubernetes-list-type: set
                                             alpnProtocols:
@@ -11916,6 +11934,8 @@ spec:
                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                               items:
                                                 type: string
+                                              maxItems: 64
+                                              minItems: 1
                                               type: array
                                               x-kubernetes-list-type: set
                                             alpnProtocols:
@@ -12816,6 +12836,8 @@ spec:
                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                               items:
                                                 type: string
+                                              maxItems: 64
+                                              minItems: 1
                                               type: array
                                               x-kubernetes-list-type: set
                                             alpnProtocols:
@@ -13311,6 +13333,8 @@ spec:
                                                 is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                                               items:
                                                 type: string
+                                              maxItems: 64
+                                              minItems: 1
                                               type: array
                                               x-kubernetes-list-type: set
                                             alpnProtocols:
@@ -16548,6 +16572,8 @@ spec:
                           is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
                         items:
                           type: string
+                        maxItems: 64
+                        minItems: 1
                         type: array
                         x-kubernetes-list-type: set
                       alpnProtocols:

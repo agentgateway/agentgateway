@@ -49,10 +49,6 @@ pub enum Error {
 	InvalidSan(String),
 	#[error("no SPIFFE trust bundle available for local trust domain {0:?}")]
 	MissingLocalBundle(String),
-	#[error(
-		"SPIFFE trust domain {0:?} is not local but spiffe.allowAdditionalTrustDomains is not enabled"
-	)]
-	AdditionalTrustDomainNotAllowed(String),
 	#[error("invalid SPIFFE trust domain {0:?}: {1}")]
 	InvalidTrustDomain(String, String),
 }
@@ -321,8 +317,10 @@ fn trust_domain_names(tds: &[TrustDomain]) -> Vec<String> {
 
 /// Per-trust-domain root stores used to verify peer SVIDs. `additional` holds the non-local trust
 /// domains requested by the listener/backend; the gateway's own (local) trust domain is always
-/// prepended. Each `additional` domain must be present in the bundle set delivered by the Workload
-/// API, otherwise it is skipped; the local bundle is required.
+/// prepended. When `allow_additional_trust_domains` is false the additional entries are logged and
+/// skipped (leaving local-only roots) so that traffic in the local trust domain is unaffected by an
+/// unrelated listener/backend still declaring an additional trust domain — a federated peer then
+/// fails cleanly at TLS chain validation instead of taking out local traffic.
 ///
 /// Bundles are kept per trust domain and never pooled: SPIFFE Federation spec §7.3 requires an SVID
 /// to be validated against only the bundle for the trust domain named in its own SPIFFE ID; pooling
@@ -342,9 +340,16 @@ fn roots_by_trust_domain(
 		if *td == local_td || wanted.contains(td) {
 			continue;
 		}
-		// A non-local trust domain is only allowed when the gateway enables federation.
+		// A non-local trust domain is only added when the gateway enables federation. Otherwise
+		// skip it (warn); the local trust domain stays valid and federated peers will be refused at
+		// chain validation.
 		if !allow_additional_trust_domains {
-			return Err(Error::AdditionalTrustDomainNotAllowed(td.to_string()));
+			warn!(
+				purpose,
+				trust_domain = %td,
+				"spiffe.allowAdditionalTrustDomains is not enabled; skipping additional trust domain"
+			);
+			continue;
 		}
 		wanted.push(td.clone());
 	}
@@ -956,10 +961,10 @@ mod tests {
 		(client, dir, handle)
 	}
 
-	/// Federation, inbound: a client SVID from an accepted+delivered federated trust domain is
-	/// accepted, the local trust domain stays implicitly accepted, a federated CA cannot impersonate
+	/// Federation, inbound: a client SVID from an allowed+delivered additional trust domain is
+	/// allowed, the local trust domain stays implicitly allowed, a federated CA cannot impersonate
 	/// the local trust domain (SPIFFE Federation spec §7.3 — bundles are never pooled), and a
-	/// federated domain that is not in the accepted list is not accepted.
+	/// federated domain that is not in the listener's `additional` list is not accepted.
 	#[tokio::test]
 	async fn spiffe_federation_ingress_accepts_and_isolates() {
 		let local = TestCa::new(); // example.org — the gateway's own trust domain
@@ -973,7 +978,7 @@ mod tests {
 		.await;
 		let ctx = client.source.x509_context().unwrap();
 		let now = UnixTime::now();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
+		let additional = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
 
 		let fed_peer = CertificateDer::from(
 			fed
@@ -986,10 +991,10 @@ mod tests {
 				.leaf_der,
 		);
 
-		let v = build_client_verifier(&ctx, &accepted, true, transport::tls::provider()).unwrap();
+		let v = build_client_verifier(&ctx, &additional, true, transport::tls::provider()).unwrap();
 		assert!(
 			v.verify_client_cert(&fed_peer, &[], now).is_ok(),
-			"an accepted federated trust domain's SVID is accepted"
+			"an additional trust domain's SVID is accepted when declared and allowed"
 		);
 		assert!(
 			v.verify_client_cert(&local_peer, &[], now).is_ok(),
@@ -1006,19 +1011,20 @@ mod tests {
 			"a federated CA must not be able to impersonate the local trust domain"
 		);
 
-		// Federation enabled but this flow does not accept the domain ⇒ still rejected.
+		// Federation enabled but this flow does not declare the domain ⇒ still rejected.
 		let local_only = build_client_verifier(&ctx, &[], true, transport::tls::provider()).unwrap();
 		assert!(
 			local_only.verify_client_cert(&fed_peer, &[], now).is_err(),
-			"a federated SVID is rejected unless the trust domain is in the accepted list"
+			"a federated SVID is rejected unless the trust domain is in the listener's additional list"
 		);
 		handle.abort();
 	}
 
-	/// A per-flow additional trust domain fails closed at config-build time when the gateway
-	/// has not enabled `allowAdditionalTrustDomains`.
+	/// A per-flow additional trust domain is skipped when the gateway has not enabled
+	/// `allowAdditionalTrustDomains`, leaving the local trust domain valid and federated peers
+	/// refused at chain validation.
 	#[tokio::test]
-	async fn spiffe_federation_rejected_when_not_allowed() {
+	async fn spiffe_federation_skipped_when_not_allowed() {
 		let local = TestCa::new();
 		let fed = TestCa::new();
 		let (client, _dir, handle) = connect_with_federated(
@@ -1029,13 +1035,121 @@ mod tests {
 		)
 		.await;
 		let ctx = client.source.x509_context().unwrap();
+		let now = UnixTime::now();
 		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
-		let err = build_client_verifier(&ctx, &accepted, false, transport::tls::provider())
-			.expect_err("a federated accepted trust domain must fail when federation is disabled");
-		assert!(
-			matches!(err, Error::AdditionalTrustDomainNotAllowed(_)),
-			"got {err:?}"
+
+		let v = build_client_verifier(&ctx, &accepted, false, transport::tls::provider())
+			.expect("verifier must build with local-only roots when federation is disabled");
+
+		let local_peer = CertificateDer::from(
+			local
+				.issue("spiffe://example.org/ns/default/sa/peer")
+				.leaf_der,
 		);
+		assert!(
+			v.verify_client_cert(&local_peer, &[], now).is_ok(),
+			"local trust domain must remain accepted when federation is disabled"
+		);
+
+		let fed_peer = CertificateDer::from(
+			fed
+				.issue("spiffe://federated.example/ns/default/sa/peer")
+				.leaf_der,
+		);
+		assert!(
+			v.verify_client_cert(&fed_peer, &[], now).is_err(),
+			"federated SVID must be rejected when federation is disabled"
+		);
+		handle.abort();
+	}
+
+	/// The local trust domain is always allowed, independent of the gateway-wide
+	/// `allow_additional_trust_domains` switch and independent of whether the listener
+	/// additionally declares a federated trust domain. The federated peer is only allowed
+	/// when both the switch is on (in AgentgatewayParameters) and the listener declares its
+	/// trust domain.
+	#[tokio::test]
+	async fn spiffe_local_trust_domain_is_always_allowed() {
+		let local = TestCa::new();
+		let fed = TestCa::new();
+
+		let local_peer = CertificateDer::from(
+			local
+				.issue("spiffe://example.org/ns/default/sa/peer")
+				.leaf_der,
+		);
+		let fed_peer = CertificateDer::from(
+			fed
+				.issue("spiffe://federated.example/ns/default/sa/peer")
+				.leaf_der,
+		);
+
+		// (allow, listener declares "federated.example"?, expected local ok, expected fed ok)
+		let cases: &[(bool, bool, bool, bool)] = &[
+			(true, true, true, true),    // federation on + declared -> both work
+			(true, false, true, false),  // federation on + not declared -> only local works
+			(false, true, true, false),  // federation off + declared -> only local works
+			(false, false, true, false), // federation off + not declared -> only local works
+		];
+
+		for &(allow, declare, expect_local, expect_fed) in cases {
+			let (client, _dir, handle) = connect_with_federated(
+				"spiffe://example.org/ns/default/sa/gateway",
+				&local,
+				std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
+				allow,
+			)
+			.await;
+			let ctx = client.source.x509_context().unwrap();
+			let now = UnixTime::now();
+			let additional = if declare {
+				normalize_trust_domains(&["federated.example".to_string()]).unwrap()
+			} else {
+				vec![]
+			};
+
+			let v = build_client_verifier(&ctx, &additional, allow, transport::tls::provider()).expect(
+				"verifier must build regardless of switch/declaration so local traffic is unaffected",
+			);
+
+			assert_eq!(
+				v.verify_client_cert(&local_peer, &[], now).is_ok(),
+				expect_local,
+				"local peer (allow={allow}, declare={declare}) must be {}",
+				if expect_local { "accepted" } else { "rejected" }
+			);
+			assert_eq!(
+				v.verify_client_cert(&fed_peer, &[], now).is_ok(),
+				expect_fed,
+				"federated peer (allow={allow}, declare={declare}) must be {}",
+				if expect_fed { "accepted" } else { "rejected" }
+			);
+			handle.abort();
+		}
+	}
+
+	/// When AllowAdditionalTrustDomains is false but the listener still declares an additional
+	/// trust domain, `Manager::server_config` must still return `Ok` so the listener stays live
+	/// for the local trust domain.
+	#[tokio::test]
+	async fn spiffe_server_config_ok_with_declared_additional_when_switch_off() {
+		let local = TestCa::new();
+		let fed = TestCa::new();
+		let (client, _dir, handle) = connect_with_federated(
+			"spiffe://example.org/ns/default/sa/gateway",
+			&local,
+			std::collections::HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
+			false, // switch OFF
+		)
+		.await;
+
+		let alpns = vec![b"h2".to_vec()];
+		let additional = vec!["federated.example".to_string()];
+
+		client
+			.server_config(alpns, additional)
+			.expect("listener must remain usable for local traffic when the switch is off");
+
 		handle.abort();
 	}
 
