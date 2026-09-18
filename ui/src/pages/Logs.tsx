@@ -1784,11 +1784,8 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			</div>
 			<div className="log-trajectory-caption" aria-live="polite">
 				<span>
-					{selectedEvent
-						? `Step ${
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								selected! + 1
-							} ${selectedEvent.label}`
+					{selected != null && selectedEvent
+						? `Step ${selected + 1} ${selectedEvent.label}`
 						: 'Width shows approximate tokens'}
 				</span>
 				{selectedEvent ? (
@@ -1952,6 +1949,7 @@ function ModelRouteStep(props: { label: string; value: string; last?: boolean })
 
 function LogUsagePanel(props: { usage: LogUsageDetail }) {
 	const usage = props.usage;
+	const { inputTokens, outputTokens } = usage;
 	const inputBreakdown =
 		usage.inputTokens != null
 			? splitInputTokens(
@@ -1968,10 +1966,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 		usage.outputTokens != null && !outputBreakdownUnavailable
 			? splitOutputTokens(usage.outputTokens, usage.reasoningTokens, usage.outputAudioTokens)
 			: null;
-	const showBar =
-		usage.inputTokens != null &&
-		usage.outputTokens != null &&
-		usage.inputTokens + usage.outputTokens > 0;
+	const showBar = inputTokens != null && outputTokens != null && inputTokens + outputTokens > 0;
 	const showCostBar = [
 		usage.inputCost,
 		usage.cacheReadCost,
@@ -2068,10 +2063,8 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 						<div className="log-usage-bar-row">
 							<span className="log-usage-bar-label">Tokens</span>
 							<TokenBar
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								input={usage.inputTokens!}
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								output={usage.outputTokens!}
+								input={inputTokens}
+								output={outputTokens}
 								cacheRead={usage.cacheReadTokens ?? undefined}
 								cacheWrite={usage.cacheWriteTokens ?? undefined}
 								inputAudio={usage.inputAudioTokens ?? undefined}
