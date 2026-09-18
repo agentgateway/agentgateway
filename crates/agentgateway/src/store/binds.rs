@@ -2464,11 +2464,12 @@ mod tests {
 
 	#[test]
 	fn xds_invalid_gcp_credential_warns_without_blocking_other_backends() {
+		use agent_xds::{Handler, XdsResource};
+
 		use crate::types::proto::agent::{
 			BackendAuthPolicy, BackendPolicySpec, Gcp, ResourceName, StaticBackend, backend,
 			backend_auth_policy, backend_policy_spec,
 		};
-		use agent_xds::{Handler, XdsResource};
 
 		fn backend(key: &str, credential: Option<&str>) -> XdsBackend {
 			XdsBackend {
