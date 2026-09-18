@@ -593,6 +593,8 @@ type BackendTLS struct {
 	// is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
 	//
 	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
 	// +listType=set
 	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
 

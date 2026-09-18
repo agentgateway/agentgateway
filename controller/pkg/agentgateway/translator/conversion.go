@@ -1329,7 +1329,7 @@ const (
 )
 
 // parseAdditionalTrustDomains splits a comma-separated trust-domain list, trimming whitespace and
-// dropping empty entries. Order is preserved; the dataplane tolerates duplicates.
+// dropping empty entries. (Ordering/duplication are not semantically meaningful end-to-end; the dataplane canonicalizes.)
 func parseAdditionalTrustDomains(csv string) []string {
 	if csv == "" {
 		return nil
