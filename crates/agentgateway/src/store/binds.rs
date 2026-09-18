@@ -2462,6 +2462,80 @@ mod tests {
 		}
 	}
 
+	#[test]
+	fn xds_invalid_gcp_credential_warns_without_blocking_other_backends() {
+		use crate::types::proto::agent::{
+			BackendAuthPolicy, BackendPolicySpec, Gcp, ResourceName, StaticBackend, backend,
+			backend_auth_policy, backend_policy_spec,
+		};
+		use agent_xds::{Handler, XdsResource};
+
+		fn backend(key: &str, credential: Option<&str>) -> XdsBackend {
+			XdsBackend {
+				key: key.to_string(),
+				name: Some(ResourceName {
+					name: key.rsplit_once('/').expect("key has name").1.to_string(),
+					namespace: key
+						.split_once('/')
+						.expect("key has namespace")
+						.0
+						.to_string(),
+				}),
+				kind: Some(backend::Kind::Static(StaticBackend {
+					host: "backend.example.com".to_string(),
+					port: 80,
+					unix_path: String::new(),
+				})),
+				inline_policies: credential
+					.map(|credential| BackendPolicySpec {
+						kind: Some(backend_policy_spec::Kind::Auth(BackendAuthPolicy {
+							kind: Some(backend_auth_policy::Kind::Gcp(Gcp {
+								credential: Some(credential.to_string()),
+								token_type: None,
+							})),
+							credentials: vec![],
+						})),
+					})
+					.into_iter()
+					.collect(),
+			}
+		}
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let mut updates = vec![
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("backend/default/bad-gcp"),
+				resource: ADPResource {
+					kind: Some(XdsKind::Backend(backend(
+						"default/bad-gcp",
+						Some(
+							r#"{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"PRIVATE_KEY"}"#,
+						),
+					))),
+				},
+			}),
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("backend/default/healthy"),
+				resource: ADPResource {
+					kind: Some(XdsKind::Backend(backend("default/healthy", None))),
+				},
+			}),
+		]
+		.into_iter();
+
+		let rejects = updater
+			.handle(Box::new(&mut updates))
+			.expect_err("the invalid GCP credential should produce a warning");
+		let rejects = RejectedConfig::format_json(&rejects);
+		assert!(rejects.contains("\"warn\":"));
+		assert!(!rejects.contains("\"error\":"));
+		assert!(!rejects.contains("PRIVATE_KEY"));
+
+		let store = updater.read();
+		assert!(store.backend(&strng::literal!("default/bad-gcp")).is_some());
+		assert!(store.backend(&strng::literal!("default/healthy")).is_some());
+	}
+
 	#[tokio::test]
 	async fn bind_mode_changes_reconcile_listener_events() {
 		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve an available port");

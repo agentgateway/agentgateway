@@ -1235,11 +1235,19 @@ fn backend_auth_kind_from_proto(
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
-			let credential = g
-				.credential
-				.map(|credential| auth::gcp::GcpCredential::new(credential.into()))
-				.transpose()
-				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			let credential =
+				g.credential.map(
+					|credential| match auth::gcp::GcpCredential::new(credential.into()) {
+						Ok(credential) => credential,
+						Err(error) => {
+							let reason = auth::gcp::sanitize_credential_error(&error);
+							diagnostics.add_warning(format!(
+								"GCP credential is invalid; requests using this policy will be rejected: {reason}"
+							));
+							auth::gcp::GcpCredential::new_invalid(reason)
+						},
+					},
+				);
 			BackendAuthKind::Gcp(match g.token_type {
 				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
 					r#type: Some(auth::gcp::AccessToken),
@@ -5306,6 +5314,77 @@ mod tests {
 		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
 		assert_eq!(region.as_deref(), Some("us-east-1"));
 		Ok(())
+	}
+
+	#[test]
+	fn invalid_gcp_credential_becomes_runtime_invalid() {
+		for token_type in [
+			None,
+			Some(proto::agent::gcp::TokenType::IdToken(
+				proto::agent::gcp::IdToken {
+					audience: Some("https://aud.example".to_string()),
+				},
+			)),
+		] {
+			let mut diagnostics = Diagnostics::default();
+			let auth = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::Gcp(
+						proto::agent::Gcp {
+							credential: Some(
+								r#"{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"PRIVATE_KEY"}"#.to_string(),
+							),
+							token_type,
+						},
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid credentials should not reject the resource");
+			let credential = match auth {
+				Some(BackendAuthKind::Gcp(
+					GcpAuth::AccessToken { credential, .. } | GcpAuth::IdToken { credential, .. },
+				)) => credential.expect("explicit credential must be retained"),
+				_ => panic!("expected GCP auth"),
+			};
+			assert_eq!(
+				credential.invalid_reason(),
+				Some("GCP credential is missing required field `client_email`")
+			);
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1);
+			assert!(warnings[0].contains("client_email"));
+			assert!(!warnings[0].contains("PRIVATE_KEY"));
+		}
+	}
+
+	#[test]
+	fn malformed_and_unsupported_gcp_credentials_warn_without_leaking_values() {
+		for (credential, expected_warning) in [
+			("{MARKER", "failed to parse GCP credential JSON"),
+			(r#"{"type":"MARKER"}"#, "unsupported GCP credential type"),
+		] {
+			let mut diagnostics = Diagnostics::default();
+			let auth = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::Gcp(
+						proto::agent::Gcp {
+							credential: Some(credential.to_string()),
+							token_type: None,
+						},
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid credentials should not reject the resource");
+			assert!(matches!(auth, Some(BackendAuthKind::Gcp(_))));
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1);
+			assert!(warnings[0].contains(expected_warning));
+			assert!(!warnings[0].contains("MARKER"));
+		}
 	}
 
 	#[test]
