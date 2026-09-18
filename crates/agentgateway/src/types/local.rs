@@ -945,8 +945,8 @@ pub struct LocalLLMParams {
 	/// Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
 	/// The URL path is the upstream base path and defaults to / when omitted.
 	/// Provider-specific endpoint paths are appended to this base path.
-	/// For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,
-	/// while https://api.openai.com sends them to /chat/completions.
+	/// For example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,
+	/// while `https://api.openai.com` sends them to `/chat/completions`.
 	#[serde(default)]
 	base_url: Option<Strng>,
 	/// Override the upstream host for this provider.

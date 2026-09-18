@@ -80629,7 +80629,7 @@
 |`llm.providers[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`llm.providers[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.providers[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
-|`llm.providers[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.<br>The URL path is the upstream base path and defaults to / when omitted.<br>Provider-specific endpoint paths are appended to this base path.<br>For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,<br>while https://api.openai.com sends them to /chat/completions.|
+|`llm.providers[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.<br>The URL path is the upstream base path and defaults to / when omitted.<br>Provider-specific endpoint paths are appended to this base path.<br>For example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,<br>while `https://api.openai.com` sends them to `/chat/completions`.|
 |`llm.providers[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.providers[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.providers[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -81357,7 +81357,7 @@
 |`llm.models[].params.azureResourceType`|enum|For Azure: the type of Azure endpoint (openAI or foundry)<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`llm.models[].params.azureApiVersion`|string|For Azure: the API version to use|
 |`llm.models[].params.azureProjectName`|string|For Azure: the Foundry project name (required for foundry resource type)|
-|`llm.models[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.<br>The URL path is the upstream base path and defaults to / when omitted.<br>Provider-specific endpoint paths are appended to this base path.<br>For example, https://api.openai.com/v1 sends completions to /v1/chat/completions,<br>while https://api.openai.com sends them to /chat/completions.|
+|`llm.models[].params.baseUrl`|string|Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.<br>The URL path is the upstream base path and defaults to / when omitted.<br>Provider-specific endpoint paths are appended to this base path.<br>For example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,<br>while `https://api.openai.com` sends them to `/chat/completions`.|
 |`llm.models[].params.hostOverride`|string|Override the upstream host for this provider.|
 |`llm.models[].params.pathOverride`|string|Override the upstream path for this provider.|
 |`llm.models[].params.pathPrefix`|string|Override the default base path prefix for this provider.|
