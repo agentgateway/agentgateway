@@ -273,7 +273,10 @@ async fn test_call_tool_full_url_server_prefix() {
 		result.is_ok(),
 		"full-URL server prefix should not cause invalid authority"
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -306,7 +309,10 @@ async fn test_call_tool_path_prefix_server() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -332,7 +338,10 @@ async fn test_call_tool_get_simple_success() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -361,7 +370,10 @@ async fn test_call_tool_get_with_query() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -389,7 +401,10 @@ async fn test_call_tool_get_with_header() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -416,7 +431,10 @@ async fn test_call_tool_post_with_body() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -451,7 +469,10 @@ async fn test_call_tool_post_all_params() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -499,7 +520,7 @@ async fn test_call_tool_upstream_error() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), error_response);
+	assert_eq!(result.unwrap().structured_content.unwrap(), error_response);
 }
 
 #[tokio::test]
@@ -561,7 +582,10 @@ async fn test_call_tool_invalid_header_value() {
 		)
 		.await;
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[tokio::test]
@@ -592,7 +616,10 @@ async fn test_call_tool_invalid_query_param_value() {
 		)
 		.await;
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[tokio::test]
@@ -648,7 +675,10 @@ async fn test_call_tool_with_compressed_response() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -703,8 +733,80 @@ async fn test_call_tool_response_wrapping() {
 		} else {
 			response.clone()
 		};
-		assert_eq!(result.unwrap(), expected);
+		assert_eq!(result.unwrap().structured_content.unwrap(), expected);
 	}
+}
+
+#[tokio::test]
+async fn test_call_tool_image_response() {
+	let (server, handler) = setup().await;
+
+	// PNG signature followed by bytes that are not valid UTF-8
+	let png: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe";
+
+	Mock::given(method("GET"))
+		.and(path("/users/img"))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("content-type", "image/png; charset=binary")
+				.set_body_bytes(png.to_vec()),
+		)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": "img" } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+
+	assert!(result.structured_content.is_none());
+	assert_eq!(result.content.len(), 1);
+	let rmcp::model::ContentBlock::Image(image) = &result.content[0] else {
+		panic!("expected image content, got {:?}", result.content[0]);
+	};
+	use base64::Engine;
+	assert_eq!(image.mime_type, "image/png");
+	assert_eq!(
+		image.data,
+		base64::engine::general_purpose::STANDARD.encode(png)
+	);
+}
+
+#[tokio::test]
+async fn test_call_tool_text_response_ignores_content_type() {
+	let (server, handler) = setup().await;
+
+	Mock::given(method("GET"))
+		.and(path("/users/txt"))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("content-type", "text/plain")
+				.set_body_string("plain text response"),
+		)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": "txt" } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+
+	let expected = json!({"code": 200, "message": "plain text response"});
+	assert_eq!(result.structured_content, Some(expected.clone()));
+	let rmcp::model::ContentBlock::Text(text) = &result.content[0] else {
+		panic!("expected text content, got {:?}", result.content[0]);
+	};
+	assert_eq!(serde_json::from_str::<Value>(&text.text).unwrap(), expected);
 }
 
 #[tokio::test]
@@ -1275,7 +1377,10 @@ async fn test_query_param_types(
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[rstest]
@@ -1312,7 +1417,10 @@ async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: 
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[rstest]
@@ -1442,7 +1550,10 @@ async fn test_schema_defined_headers_work() {
 		"Schema-defined headers should work: {:?}",
 		result.err()
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 // Custom matcher to verify a header is NOT present
@@ -1502,7 +1613,10 @@ async fn test_blocked_headers_are_ignored() {
 
 	// The request should succeed with the correct headers (blocked headers ignored)
 	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -1543,7 +1657,10 @@ async fn test_headers_not_in_schema_are_ignored() {
 		"Request should succeed with schema-defined headers: {:?}",
 		result.err()
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -2145,5 +2262,8 @@ async fn test_call_tool_with_binary_body() {
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
