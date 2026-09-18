@@ -139,6 +139,8 @@ pub struct OidcPolicy {
 	pub client: ClientConfig,
 	pub redirect_uri: RedirectUri,
 	pub session: SessionConfig,
+	#[serde(skip_serializing)]
+	browser_session_store: Arc<dyn session::BrowserSessionStore>,
 	pub scopes: Vec<String>,
 }
 
@@ -218,7 +220,7 @@ impl OidcPolicy {
 		}
 
 		if let Some(cookie) = crate::http::read_request_cookie(req, &self.session.cookie_name) {
-			match self.session.decode_browser_session(&cookie) {
+			match self.browser_session_store.load(&cookie).await {
 				Ok(browser_session) => {
 					if browser_session.policy_id == self.policy_id
 						&& let Ok(claims) = self
@@ -249,7 +251,7 @@ impl OidcPolicy {
 					}
 				},
 				Err(err) => {
-					debug!(error=%err, "failed to decode oidc browser session cookie");
+					debug!(error=%err, "failed to load oidc browser session");
 				},
 			}
 		}
