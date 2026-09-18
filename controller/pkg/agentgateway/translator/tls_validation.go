@@ -1,11 +1,11 @@
 package translator
 
 import (
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 
+	"github.com/cespare/xxhash/v2"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -14,9 +14,9 @@ import (
 const tlsValidationCacheCapacity = 1024
 
 type tlsValidationCacheKey struct {
-	cert   [sha256.Size]byte
-	key    [sha256.Size]byte
-	caCert [sha256.Size]byte
+	cert   uint64
+	key    uint64
+	caCert uint64
 	// CA presence controls whether CA validation is attempted, so nil and empty differ.
 	caCertPresent bool
 }
@@ -67,9 +67,9 @@ func (v *tlsValidator) validate(certInfo *TLSInfo) *ConfigError {
 func newTLSValidationCacheKey(certInfo *TLSInfo) tlsValidationCacheKey {
 	// Separate hashes preserve field boundaries and avoid retaining sensitive bytes.
 	return tlsValidationCacheKey{
-		cert:          sha256.Sum256(certInfo.Cert),
-		key:           sha256.Sum256(certInfo.Key),
-		caCert:        sha256.Sum256(certInfo.CaCert),
+		cert:          xxhash.Sum64(certInfo.Cert),
+		key:           xxhash.Sum64(certInfo.Key),
+		caCert:        xxhash.Sum64(certInfo.CaCert),
 		caCertPresent: certInfo.CaCert != nil,
 	}
 }
