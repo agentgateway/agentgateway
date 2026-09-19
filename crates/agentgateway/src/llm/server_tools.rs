@@ -714,6 +714,8 @@ struct Turn {
 	events: Vec<SseEvent>,
 	parts: ::http::response::Parts,
 	raw: Bytes,
+	/// The upstream body owner, with its content already extracted into `raw`.
+	managed_body: Body,
 }
 
 enum TurnOutcome {
@@ -863,6 +865,7 @@ impl LoopState {
 			mut message,
 			mut events,
 			parts,
+			managed_body,
 			..
 		} = turn;
 		if strip {
@@ -880,6 +883,7 @@ impl LoopState {
 			parts,
 			events,
 			message,
+			managed_body,
 		}
 	}
 }
@@ -916,11 +920,15 @@ impl AIProvider {
 		if !buffered.parts.status.is_success() {
 			return Ok(TurnOutcome::Failed(buffered));
 		}
-		let BufferedResponse { parts, bytes } = buffered;
+		let BufferedResponse {
+			parts,
+			bytes,
+			managed_body,
+		} = buffered;
 		let (message, events) = if req.streaming {
 			let translation = self.chat_translation(
 				req.input_format,
-				Some(&req.request_model),
+				&req.request_model,
 				catalog.map(|c| c.as_handle()),
 			)?;
 			let translated = translation.stream(
@@ -931,6 +939,7 @@ impl AIProvider {
 					model: req.request_model.to_string(),
 					log_content: LogContentFields::default(),
 					tool_name_map: bedrock_tool_name_map(req).cloned(),
+					namespaces: namespace_tool_map(req).cloned(),
 				},
 			);
 			let body = translated
@@ -956,6 +965,7 @@ impl AIProvider {
 			events,
 			parts,
 			raw: bytes,
+			managed_body,
 		}))
 	}
 
@@ -968,7 +978,7 @@ impl AIProvider {
 	) -> Result<Vec<u8>, AIError> {
 		let translation = self.chat_translation(
 			req.input_format,
-			Some(&req.request_model),
+			&req.request_model,
 			catalog.map(|c| c.as_handle()),
 		)?;
 		let rendered = translation.render_request(
@@ -1147,6 +1157,7 @@ enum Outcome {
 		parts: ::http::response::Parts,
 		events: Vec<SseEvent>,
 		message: Value,
+		managed_body: Body,
 	},
 	/// The client went away while the turn was held back.
 	Gone,
@@ -1225,9 +1236,15 @@ impl AIProvider {
 			Outcome::Untouched(turn) => BufferedResponse {
 				parts: turn.parts,
 				bytes: turn.raw,
+				managed_body: turn.managed_body,
 			},
 			Outcome::Failed(buffered) => buffered,
-			Outcome::Message { parts, message, .. } => {
+			Outcome::Message {
+				parts,
+				message,
+				managed_body,
+				..
+			} => {
 				let translated = interception.wire().parse_final(message)?;
 				return self
 					.finish_translated_response(
@@ -1238,6 +1255,7 @@ impl AIProvider {
 						logging,
 						catalog,
 						parts,
+						managed_body,
 						translated,
 					)
 					.await;
@@ -1369,7 +1387,7 @@ impl AIProvider {
 		let body = if evaluators.is_empty() {
 			body
 		} else {
-			GuardedSseBody::new(body, evaluators, buffer, None)
+			body.transform_stream(|b| GuardedSseBody::new(b, evaluators, buffer, None))
 		};
 		Ok(Response::from_parts(client_parts, body))
 	}

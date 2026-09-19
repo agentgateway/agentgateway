@@ -212,7 +212,7 @@ impl ToolRuntime {
 	) -> anyhow::Result<CallOutcome> {
 		self.ensure_initialized().await?;
 		let method: Strng = strng::literal!("tools/call");
-		let cel = rbac::CelExecWrapper::new(self.ctx.as_request().map(|_| ()));
+		let cel = rbac::CelExecWrapper::from(self.ctx.clone());
 		let resource = rbac::ResourceType::Tool(rbac::ResourceId::new(
 			self.target.to_string(),
 			tool.to_string(),
