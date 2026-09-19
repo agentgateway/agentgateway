@@ -41,6 +41,25 @@ pub enum TokenError {
 	CredentialRemoval(String),
 }
 
+impl TokenError {
+	/// The `WWW-Authenticate` challenge to send with the `401` this error produces.
+	///
+	/// RFC 6750 §3 requires a bearer-protected resource to challenge rejected requests, and
+	/// RFC 7235 §4.1 requires every `401` to carry the header.
+	pub fn challenge(&self) -> &'static str {
+		match self {
+			// RFC 6750 §3.1: only report `invalid_token` when a presented token was rejected.
+			// A request with no credentials -- or one whose token validated but could not be
+			// stripped -- gets a bare challenge, so clients do not loop refreshing a good token.
+			TokenError::Missing | TokenError::CredentialRemoval(_) => "Bearer",
+			TokenError::Invalid(_)
+			| TokenError::InvalidHeader(_)
+			| TokenError::MissingKeyId
+			| TokenError::UnknownKeyId(_) => r#"Bearer error="invalid_token""#,
+		}
+	}
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum JwkError {
 	#[error("failed to load JWKS: {0}")]
