@@ -21,7 +21,7 @@ use rmcp::model::{
 use tracing::{debug, info, warn};
 
 use crate::http::Response;
-use crate::http::sessionpersistence::MCPSession;
+use crate::http::sessionpersistence::{Encoder, MCPSession};
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
@@ -35,6 +35,16 @@ use crate::telemetry::log::AsyncLog;
 use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
+
+// Pagination state is carried by the client using the same base64/AES encoder as sessions.
+// Encode a list of per-target cursors; absent targets are finished.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ListCursor {
+	#[serde(rename = "t")]
+	target_name: String,
+	#[serde(rename = "c")]
+	cursor: String,
+}
 
 fn resource_name(prefix_names: bool, target: &str, name: &str) -> String {
 	if prefix_names {
@@ -1430,21 +1440,117 @@ impl Relay {
 		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
-		self.send_fanout_to(r, ctx, merge, None).await
+		self
+			.send_fanout_to(r, ctx, merge, None, |_, r| r.clone())
+			.await
 	}
 
-	pub async fn send_fanout_to(
+	pub async fn send_list(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		ctx: IncomingRequestContext,
+		mut merge: Box<MergeFn>,
+		encoder: Encoder,
+	) -> Result<Response, UpstreamError> {
+		let mut upstream_cursors = HashMap::new();
+		let multiplex = self.is_multiplexing();
+		let mut target_names = None;
+		let params = match &r.request {
+			ClientRequest::ListToolsRequest(r) => &r.params,
+			ClientRequest::ListPromptsRequest(r) => &r.params,
+			ClientRequest::ListResourcesRequest(r) => &r.params,
+			ClientRequest::ListResourceTemplatesRequest(r) => &r.params,
+			_ => {
+				return Err(UpstreamError::InvalidRequest(
+					"expected a list request".into(),
+				));
+			},
+		};
+		let method = r.request.method().to_string();
+		if multiplex && let Some(cursor) = params.as_ref().and_then(|p| p.cursor.as_ref()) {
+			let invalid = || UpstreamError::InvalidRequest("invalid list cursor".to_string());
+			let decoded = encoder.decrypt(cursor).map_err(|_| invalid())?;
+			let cursors: Vec<ListCursor> = serde_json::from_slice(&decoded).map_err(|_| invalid())?;
+			if cursors.is_empty() {
+				return Err(invalid());
+			}
+			for entry in cursors {
+				if self.upstreams.get_name(&entry.target_name).is_none()
+					|| upstream_cursors
+						.insert(entry.target_name, entry.cursor)
+						.is_some()
+				{
+					return Err(invalid());
+				}
+			}
+			target_names = Some(upstream_cursors.keys().cloned().collect());
+		}
+		merge = Box::new(move |results, cel| {
+			let mut cursors = Vec::new();
+			for (name, result) in &results {
+				let cursor = match result {
+					ServerResult::ListToolsResult(r) => &r.next_cursor,
+					ServerResult::ListPromptsResult(r) => &r.next_cursor,
+					ServerResult::ListResourcesResult(r) => &r.next_cursor,
+					ServerResult::ListResourceTemplatesResult(r) => &r.next_cursor,
+					_ => return Err(incompatible_upstream_result(&method)),
+				};
+				if let Some(cursor) = cursor {
+					cursors.push(ListCursor {
+						target_name: name.to_string(),
+						cursor: cursor.clone(),
+					});
+				}
+			}
+			let mut result = merge(results, cel)?;
+			let cursor = if cursors.is_empty() {
+				None
+			} else if !multiplex {
+				cursors.pop().map(|entry| entry.cursor)
+			} else {
+				let json = serde_json::to_string(&cursors).map_err(ClientError::new)?;
+				Some(encoder.encrypt(&json).map_err(ClientError::new)?)
+			};
+			match &mut result {
+				ServerResult::ListToolsResult(r) => r.next_cursor = cursor,
+				ServerResult::ListPromptsResult(r) => r.next_cursor = cursor,
+				ServerResult::ListResourcesResult(r) => r.next_cursor = cursor,
+				ServerResult::ListResourceTemplatesResult(r) => r.next_cursor = cursor,
+				_ => return Err(incompatible_upstream_result(&method)),
+			}
+			Ok(result)
+		});
+		self
+			.send_fanout_to(r, ctx, merge, target_names, |name, r| {
+				let mut r = r.clone();
+				if let Some(cursor) = upstream_cursors.get(name) {
+					let params = match &mut r.request {
+						ClientRequest::ListToolsRequest(r) => &mut r.params,
+						ClientRequest::ListPromptsRequest(r) => &mut r.params,
+						ClientRequest::ListResourcesRequest(r) => &mut r.params,
+						ClientRequest::ListResourceTemplatesRequest(r) => &mut r.params,
+						_ => unreachable!("cursor only applies to list requests"),
+					};
+					params.get_or_insert_default().cursor = Some(cursor.clone());
+				}
+				r
+			})
+			.await
+	}
+
+	async fn send_fanout_to(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
 		mut ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 		target_names: Option<Vec<String>>,
+		request_for_target: impl Fn(&str, &JsonRpcRequest<ClientRequest>) -> JsonRpcRequest<ClientRequest>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		// Preserve discovery errors through the merge for protocol fallback.
 		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
 		let (streams, service_names) = self
-			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
+			.fanout_open_streams(&r, &mut ctx, target_names, request_for_target)
 			.await?;
 
 		let cel = CelExecWrapper::from(ctx.clone());

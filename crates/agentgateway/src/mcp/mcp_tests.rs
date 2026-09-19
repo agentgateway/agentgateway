@@ -668,6 +668,60 @@ async fn multiplex_never_prefix_drops_ambiguous_names() {
 }
 
 #[tokio::test]
+async fn list_tools_follows_gateway_cursor() {
+	let paging = mock_paging_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	for stateful in [false, true] {
+		for multiplex in [false, true] {
+			let mut targets = vec![("paging", paging.addr, false)];
+			if multiplex {
+				targets.push(("other", other.addr, false));
+			}
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_multiplex_mcp_backend("mcp", targets, stateful)
+				.with_bind(simple_bind())
+				.with_route(basic_named_route(strng::new("/mcp")));
+			let io = t.serve_real_listener(BIND_KEY).await;
+			let client = mcp_streamable_client(io).await;
+			let prefix = if multiplex { "paging_" } else { "" };
+
+			let first = client.list_tools(None).await.unwrap();
+			assert!(
+				first
+					.tools
+					.iter()
+					.any(|t| t.name == format!("{prefix}first_page_tool"))
+			);
+			if multiplex {
+				assert!(first.tools.iter().any(|t| t.name.starts_with("other_")));
+			} else {
+				assert_eq!(first.tools.len(), 1);
+			}
+			let cursor = first.next_cursor.expect("gateway must preserve pagination");
+			if multiplex {
+				assert_ne!(cursor, "page2");
+			} else {
+				assert_eq!(cursor, "page2");
+			}
+			let second = client
+				.list_tools(Some(
+					rmcp::model::PaginatedRequestParams::default().with_cursor(Some(cursor)),
+				))
+				.await
+				.unwrap();
+			// Only the unfinished target should be queried on the next page.
+			assert_eq!(
+				second.tools.iter().map(|t| t.name.as_ref()).collect_vec(),
+				vec![format!("{prefix}paged_echo")]
+			);
+			assert!(second.next_cursor.is_none());
+			client.cancel().await.unwrap();
+		}
+	}
+}
+
+#[tokio::test]
 async fn multiplex_never_prefix_resolves_names_on_later_pages() {
 	let paging = mock_paging_streamable_http_server().await;
 	let other = mock_streamable_http_server(true).await;
