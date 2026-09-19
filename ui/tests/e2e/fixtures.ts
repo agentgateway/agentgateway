@@ -1,6 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { mcpSettingsFields } from '../../src/config';
+import type { DumpModel, StoresDump } from '../../src/gateway-admin';
 
 export type TestConfig = Record<string, unknown>;
 
@@ -245,6 +246,142 @@ export function implicitDefaultGatewayConfig(): TestConfig {
 	delete mcpPolicies?.cors;
 
 	return config;
+}
+
+// Key formats follow the controller golden files in
+// controller/pkg/agentgateway/translator/testdata/models/.
+export function xdsDumpModels(): DumpModel[] {
+	const listenerKey = 'default/model-gateway.llm';
+	return [
+		{
+			listenerKey,
+			key: 'default/gpt-4o.llm',
+			name: 'gpt-4o',
+			routerKey: '',
+			kind: {
+				concrete: {
+					name: 'gpt-4o',
+					created: 1783641600,
+					visibility: 'public',
+					headerMatches: [],
+					backend: { weight: 1, backend: 'default/gpt-4o/backend.llm' },
+					policies: { llm: {} },
+					backendPolicies: []
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/llama.llm',
+			name: 'llama',
+			routerKey: '',
+			kind: {
+				concrete: {
+					name: 'llama',
+					created: 1783641600,
+					visibility: 'internal',
+					headerMatches: [],
+					backend: { weight: 1, backend: 'default/llama/backend.llm' },
+					policies: { llm: {} },
+					backendPolicies: []
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/smart.llm',
+			name: 'smart',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'smart',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						weighted: [
+							{ model: 'gpt-4o', weight: 80 },
+							{ model: 'does-not-exist', weight: 20, invalid: true }
+						]
+					}
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/tiered.llm',
+			name: 'tiered',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'tiered',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						conditional: [
+							{ model: 'gpt-4o', when: 'request.headers["x-tier"] == "premium"' },
+							{ model: 'llama', when: null }
+						]
+					}
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/resilient.llm',
+			name: 'resilient',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'resilient',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						failover: { backend: { weight: 1, backend: 'default/resilient/backend.llm' } }
+					}
+				}
+			}
+		}
+	];
+}
+
+export function xdsDump(models: DumpModel[] = xdsDumpModels()): StoresDump {
+	return {
+		workloads: [],
+		services: [],
+		binds: [],
+		routes: { httpMesh: {}, tcpMesh: {}, routeGroups: {} },
+		policies: [],
+		backends: [],
+		models
+	};
+}
+
+export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
+	const writeRequests: string[] = [];
+	page.on('request', request => {
+		if (request.method() !== 'GET' && request.method() !== 'HEAD') {
+			writeRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+		}
+	});
+
+	await page.route('**/api/runtime', async route => {
+		await json(route, {
+			build: {
+				version: 'test',
+				gitRevision: 'test',
+				rustVersion: 'test',
+				buildProfile: 'test',
+				buildTarget: 'test'
+			},
+			ui: { gatewayMode: 'xds', configStoreMode: 'file' }
+		});
+	});
+
+	await page.route('**/config_dump', async route => {
+		await json(route, dump);
+	});
+
+	return { writeRequests };
 }
 
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {

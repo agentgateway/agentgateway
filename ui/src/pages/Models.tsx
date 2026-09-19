@@ -50,7 +50,12 @@ import type {
 	LocalLLMParams,
 	LocalLLMWeightedRouting
 } from '@/gateway-config';
-import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	useConfigDumpMode,
+	useDeleteConfigResource,
+	useLlmConfigData,
+	useUpsertConfigResource
+} from '@/hooks';
 import {
 	concreteModelName,
 	isWildcardModelName,
@@ -59,6 +64,7 @@ import {
 	wildcardModelPrefix,
 	wildcardResolvedSuffix
 } from '@/modelResolution';
+import { DumpModelsView } from '@/pages/models/DumpModelsView';
 import { ModelMatchesEditor, normalizeMatches } from '@/pages/models/ModelMatchesEditor';
 import {
 	HeaderModifierEditor,
@@ -86,6 +92,7 @@ import {
 	virtualModelStrategy,
 	virtualModelSummary
 } from '@/pages/models/virtualModelUtils';
+import { ReadonlyModeBanner } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
@@ -102,6 +109,36 @@ type ConditionalVirtualTarget = NonNullable<
 >['targets'][number];
 
 export function ModelsPage() {
+	const mode = useConfigDumpMode();
+	if (mode.isLoading) {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="LLM Models"
+					description="Onboard provider-backed models and configure model-specific behavior."
+				/>
+				<Panel>
+					<StatusBanner state="loading" title="Detecting model configuration mode" />
+				</Panel>
+			</div>
+		);
+	}
+	if (mode.data?.mode === 'dump') {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="LLM Models"
+					description="Read-only model inventory from the active gateway dump."
+				/>
+				<ReadonlyModeBanner />
+				<DumpModelsView models={mode.data.dump.models ?? []} />
+			</div>
+		);
+	}
+	return <ModelsEditorPage />;
+}
+
+function ModelsEditorPage() {
 	const { config, hybrid, resources, models, virtualModels, providers, isLoading, error } =
 		useLlmConfigData();
 	const upsertResource = useUpsertConfigResource();

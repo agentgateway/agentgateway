@@ -354,6 +354,11 @@ function navigationGroups(options: {
 						}
 					]
 		});
+	} else {
+		groups.push({
+			title: 'LLM',
+			items: [{ to: '/llm/models', label: 'Models', icon: Bot }]
+		});
 	}
 	groups.push({
 		title: 'Traffic',
