@@ -15,8 +15,9 @@ use crate::{serde_dur_option, *};
 #[apply(schema_ser!)]
 #[derive(Default)]
 pub struct Eviction {
-	/// Base ejection time. When absent, falls back to `Retry-After` header (e.g. 429)
-	/// or retry policy backoff, then a default (e.g. 3s).
+	/// Base duration to remove an unhealthy backend from the active set, scaled by the number of
+	/// prior ejections. When absent, it is derived from the response's `Retry-After`, else from the
+	/// retry backoff plus a fixed margin, else from a short default.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -60,7 +61,7 @@ pub struct Policy {
 	pub eviction: Option<Eviction>,
 }
 
-const DEFAULT_EVICTION_SECS: u64 = 3;
+pub(crate) const DEFAULT_EVICTION_DURATION: Duration = Duration::from_secs(3);
 
 impl Policy {
 	pub fn register_expressions(&self, ctx: &mut ContextBuilder) {
@@ -98,7 +99,7 @@ impl Policy {
 					.or(fallback_duration)
 					.or(if self.eviction.is_some() {
 						// If we have eviction, but no duration set, use the default
-						Some(Duration::from_secs(DEFAULT_EVICTION_SECS))
+						Some(DEFAULT_EVICTION_DURATION)
 					} else {
 						// Else there is no eviction
 						None
