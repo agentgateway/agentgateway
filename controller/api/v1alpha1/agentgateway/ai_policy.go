@@ -511,3 +511,183 @@ type PromptCachingConfig struct {
 	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
 }
+
+// Fulfils server tools that the client declared, such as a coding agent's `web_search`, by calling an
+// MCP tool and continuing the turn. This applies to Anthropic Messages, OpenAI Responses and OpenAI Chat
+// Completions requests, and only to what the client declared as server-executed: Anthropic server tools,
+// Responses built-in tools and `mcp` servers, and the Chat Completions `web_search_options` field.
+// Client tools are never touched.
+// +kubebuilder:validation:XValidation:rule="(has(self.tools) && size(self.tools) > 0) || (has(self.mcpServers) && size(self.mcpServers) > 0)",message="serverTools needs at least one tool or mcpServer"
+type ServerTools struct {
+	// Server tools to fulfil, matched by the tool `type` the client declares, for example
+	// `web_search_20250305` (Messages), `web_search`, `file_search` and `code_interpreter` (Responses),
+	// or `web_search_options` (Chat Completions, exposed to the model as `web_search`).
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Tools []ServerToolMapping `json:"tools,omitempty"`
+
+	// Remote MCP servers a Responses client may declare as `{"type": "mcp"}` tools, mapped to
+	// configured MCP backends. The backend's tools are exposed to the model by name.
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	MCPServers []ServerToolMCPServer `json:"mcpServers,omitempty"`
+
+	// Maximum number of follow-up model calls for one client request.
+	// The client's `max_uses` is honoured as a lower cap.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=32
+	// +kubebuilder:default=3
+	// +optional
+	MaxIterations *int32 `json:"maxIterations,omitempty"`
+
+	// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:default=65536
+	// +optional
+	MaxResultBytes *int32 `json:"maxResultBytes,omitempty"`
+
+	// Interval between keepalive `ping` events while a streaming turn is held back.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="keepaliveInterval must be at least 1 second"
+	// +kubebuilder:default="15s"
+	// +optional
+	KeepaliveInterval *Duration `json:"keepaliveInterval,omitempty"`
+
+	// What happens when a tool call fails. `FailClosed` (default) ends the turn with an error;
+	// `FailOpen` reports the failure to the model as an error tool result and lets it continue.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// What happens to a declared server tool that no mapping covers. `Drop` (default) leaves it to
+	// the provider, which usually drops it; `Reject` answers the request with a 400 that names the
+	// tool type.
+	// +kubebuilder:validation:Enum=Drop;Reject
+	// +optional
+	Unmapped UnmappedServerTools `json:"unmapped,omitempty"`
+
+	// How executed calls appear in the response the client gets. `Native` (default) adds the wire
+	// format's own items ahead of the answer: `server_tool_use` and `web_search_tool_result` for a
+	// web search whose output reads as results, `mcp_tool_use` and `mcp_tool_result` for other
+	// Messages calls, `web_search_call` and `mcp_call` items on Responses. `Strip` removes every trace
+	// of the gateway's calls and returns the text alone.
+	// +kubebuilder:validation:Enum=Native;Strip
+	// +optional
+	Results ServerToolResults `json:"results,omitempty"`
+
+	// Tool types that share the server tool shape but are executed by the client, so a mapping
+	// that matches them is ignored. A trailing `*` matches a prefix. When unset, the vendor-defined
+	// client tools are guarded: Anthropic `bash_*`, `text_editor_*`, `computer_*` and `memory_*`,
+	// and the Responses `local_shell`, `shell`, `apply_patch`, `computer_use_preview` and
+	// `computer` tools. An empty list lets every mapping apply; more entries guard more.
+	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=253
+	// +optional
+	ClientExecuted *[]string `json:"clientExecuted,omitempty"`
+}
+
+// How executed server tool calls appear in the response.
+type ServerToolResults string
+
+const (
+	ServerToolResultsNative ServerToolResults = "Native"
+	ServerToolResultsStrip  ServerToolResults = "Strip"
+)
+
+// What happens to a declared server tool that no mapping covers.
+type UnmappedServerTools string
+
+const (
+	UnmappedServerToolsDrop   UnmappedServerTools = "Drop"
+	UnmappedServerToolsReject UnmappedServerTools = "Reject"
+)
+
+// Maps one server tool type to the MCP tool that fulfils it.
+type ServerToolMapping struct {
+	// The server tool `type` to fulfil, such as `web_search_20250305`. A trailing `*` matches any
+	// type with that prefix.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +required
+	Type string `json:"type"`
+
+	// The MCP tool that fulfils the server tool.
+	// +required
+	MCP ServerToolMCP `json:"mcp"`
+
+	// Description shown to the model. Defaults to the MCP tool's description.
+	// +kubebuilder:validation:MaxLength=4096
+	// +optional
+	Description *string `json:"description,omitempty"`
+
+	// JSON schema of the tool input shown to the model. Defaults to the MCP tool's input schema.
+	// +optional
+	InputSchema *apiextensionsv1.JSON `json:"inputSchema,omitempty"`
+}
+
+// Maps a remote MCP server a Responses client declares to a configured MCP backend.
+// +kubebuilder:validation:XValidation:rule="has(self.label) || has(self.url)",message="an mcpServer needs a label or a url to match"
+type ServerToolMCPServer struct {
+	// Matches the client's `server_label`.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	Label *string `json:"label,omitempty"`
+
+	// Matches the client's `server_url`.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	URL *string `json:"url,omitempty"`
+
+	// The MCP backend to call.
+	//
+	// Supported types: Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Target within the backend. Required when the backend has more than one target.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Target *string `json:"target,omitempty"`
+
+	// Run tools even when the client asks for approval before each call, which is the Responses API
+	// default. Off by default, in which case such requests are rejected with a 400, since the gateway
+	// cannot pause a turn for approval.
+	// +optional
+	SkipApproval *bool `json:"skipApproval,omitempty"`
+
+	// Arguments added to every call of this server's tools, as CEL expressions over
+	// `serverTool.input`, `serverTool.declaration` (the client's `mcp` descriptor), `serverTool.name`
+	// and `serverTool.type`. A value that fails to evaluate or is null is left out.
+	// +kubebuilder:validation:MaxProperties=32
+	// +optional
+	Arguments map[string]CELExpression `json:"arguments,omitempty"`
+}
+
+// An MCP tool on a configured MCP backend.
+type ServerToolMCP struct {
+	// The MCP backend to call.
+	//
+	// Supported types: Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Target within the backend. Required when the backend has more than one target.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Target *string `json:"target,omitempty"`
+
+	// Name of the tool on the MCP backend.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Tool string `json:"tool"`
+
+	// Arguments added to every call, as CEL expressions over `serverTool.input` (the model's
+	// arguments), `serverTool.declaration` (the client's tool entry as declared, with fields such as
+	// `allowed_domains`, `user_location` or `max_uses`), `serverTool.name` and `serverTool.type`. A
+	// value that fails to evaluate or is null is left out. This is how a declared option reaches the
+	// MCP tool.
+	// +kubebuilder:validation:MaxProperties=32
+	// +optional
+	Arguments map[string]CELExpression `json:"arguments,omitempty"`
+}

@@ -557,6 +557,10 @@ impl LLMRequestPolicies {
 				.prompt_caching
 				.clone()
 				.or_else(|| fallback.prompt_caching.clone()),
+			server_tools: preferred
+				.server_tools
+				.clone()
+				.or_else(|| fallback.server_tools.clone()),
 			routes: if preferred.routes.is_empty() {
 				fallback.routes.clone()
 			} else {
