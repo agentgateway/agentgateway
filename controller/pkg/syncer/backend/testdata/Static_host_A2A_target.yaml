@@ -1,0 +1,17 @@
+- key: test-ns/a2a-static-host/external-agent
+  name:
+    name: a2a-static-host
+    namespace: test-ns
+  static:
+    host: external.example.com
+    port: 9090
+- a2a:
+    targets:
+    - backend:
+        backend: test-ns/a2a-static-host/external-agent
+      name: external-agent
+      namespace: test-ns
+  key: test-ns/a2a-static-host
+  name:
+    name: a2a-static-host
+    namespace: test-ns

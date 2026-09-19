@@ -58,20 +58,197 @@ spec:
                 description: A2A backend.
                 properties:
                   host:
-                    description: Hostname or IP address of the A2A backend.
+                    description: |-
+                      Hostname or IP address of a single A2A backend.
+                      Deprecated: Use Targets with a static entry instead.
                     maxLength: 256
                     minLength: 1
                     type: string
                   port:
-                    description: Port number of the A2A backend.
+                    description: |-
+                      Port number used as default for all targets.
+                      Can be overridden per-target in static configurations.
                     format: int32
                     maximum: 65535
                     minimum: 1
                     type: integer
+                  targets:
+                    description: |-
+                      Targets defines the A2A targets to route to.
+                      When specified, the legacy Host field is ignored.
+                    items:
+                      description: 'A2A target selection: either a label selector
+                        or a static destination.'
+                      properties:
+                        name:
+                          description: |-
+                            Name of the A2A target group.
+                            Used for policy targeting via sectionName.
+                          maxLength: 253
+                          minLength: 1
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                          type: string
+                        selector:
+                          description: Label selector for discovering A2A services.
+                          properties:
+                            namespaces:
+                              description: |-
+                                Namespaces selects namespaces by label.
+                                If unset, only the AgentgatewayBackend's own namespace is searched.
+                              properties:
+                                matchExpressions:
+                                  description: matchExpressions is a list of label
+                                    selector requirements. The requirements are ANDed.
+                                  items:
+                                    description: |-
+                                      A label selector requirement is a selector that contains values, a key, and an operator that
+                                      relates the key and values.
+                                    properties:
+                                      key:
+                                        description: key is the label key that the
+                                          selector applies to.
+                                        type: string
+                                      operator:
+                                        description: |-
+                                          operator represents a key's relationship to a set of values.
+                                          Valid operators are In, NotIn, Exists and DoesNotExist.
+                                        type: string
+                                      values:
+                                        description: |-
+                                          values is an array of string values. If the operator is In or NotIn,
+                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                          the values array must be empty. This array is replaced during a strategic
+                                          merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                  type: object
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            services:
+                              description: Services selects services by label within
+                                the matched namespaces.
+                              properties:
+                                matchExpressions:
+                                  description: matchExpressions is a list of label
+                                    selector requirements. The requirements are ANDed.
+                                  items:
+                                    description: |-
+                                      A label selector requirement is a selector that contains values, a key, and an operator that
+                                      relates the key and values.
+                                    properties:
+                                      key:
+                                        description: key is the label key that the
+                                          selector applies to.
+                                        type: string
+                                      operator:
+                                        description: |-
+                                          operator represents a key's relationship to a set of values.
+                                          Valid operators are In, NotIn, Exists and DoesNotExist.
+                                        type: string
+                                      values:
+                                        description: |-
+                                          values is an array of string values. If the operator is In or NotIn,
+                                          the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                          the values array must be empty. This array is replaced during a strategic
+                                          merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-type: atomic
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: |-
+                                    matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                    map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                    operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                  type: object
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                          x-kubernetes-validations:
+                          - message: at least one of the fields in [namespaces services]
+                              must be set
+                            rule: '[has(self.namespaces),has(self.services)].filter(x,x==true).size()
+                              >= 1'
+                        static:
+                          description: Static A2A destination.
+                          properties:
+                            backendRef:
+                              description: Namespace-local Service reference by name.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: Name of the referent
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            host:
+                              description: Hostname or IP address of an external A2A
+                                backend.
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                            path:
+                              description: |-
+                                Base path to strip before forwarding.
+                                Default: "/" (no stripping beyond the target routing prefix).
+                              maxLength: 1024
+                              minLength: 1
+                              type: string
+                            port:
+                              description: |-
+                                Port overrides the default port for this target.
+                                If unset, uses the parent A2ABackend.Port.
+                              format: int32
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                          type: object
+                          x-kubernetes-validations:
+                          - message: exactly one of the fields in [host backendRef]
+                              must be set
+                            rule: (has(self.host)?1:0)+(has(self.backendRef)?1:0)
+                              == 1
+                      required:
+                      - name
+                      type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of the fields in [selector static] must
+                          be set
+                        rule: (has(self.selector)?1:0)+(has(self.static)?1:0) == 1
+                    maxItems: 128
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
                 required:
-                - host
                 - port
                 type: object
+                x-kubernetes-validations:
+                - message: at least one of [host targets] must be set
+                  rule: has(self.targets) || has(self.host)
               ai:
                 description: LLM backend.
                 properties:
