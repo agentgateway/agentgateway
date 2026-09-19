@@ -120,6 +120,7 @@ backends:
         name: "llm:router"
         namespace: ""
         target:
+          discovery: catalog
           models:
             - name: qwen3
               created: 0
@@ -129,25 +130,7 @@ backends:
                 backend: "/llm:model:qwen3:0"
                 weight: 1
               policies:
-                llm:
-                  routes:
-                    "*": passthrough
-                    /v1/chat/completions: completions
-                    /v1/embeddings: embeddings
-                    /v1/images/edits: detect
-                    /v1/images/generations: detect
-                    /v1/images/variations: detect
-                    /v1/messages: messages
-                    /v1/messages/count_tokens: anthropicTokenCount
-                    /v1/rerank: rerank
-                    /v1/responses: responses
-                    /v1/responses/compact: detect
-                    /v2/rerank: rerank
-                    ":countTokens": geminiCountTokens
-                    ":generateContent": generateContent
-                    ":rawPredict": messages
-                    ":streamGenerateContent": generateContent
-                    ":streamRawPredict": messages
+                llm: {}
                 authorization: ~
               backendPolicies: []
           virtualModels: []

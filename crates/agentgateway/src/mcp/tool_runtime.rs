@@ -91,16 +91,18 @@ impl ToolRuntime {
 			.mcp_authorization
 			.clone()
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
-		let mut relay = Relay::new(
+		let ctx = IncomingRequestContext::new(parts);
+		let mut relay = Relay::new_for_request(
 			group,
 			authorization,
 			crate::proxy::httpproxy::PolicyClient::new(inputs.clone()),
+			&ctx,
 		)?;
 		relay.mcp_guardrails = backend_policies.mcp_guardrails.clone();
 		Ok(Self {
 			relay,
 			target: target_name,
-			ctx: IncomingRequestContext::new(parts),
+			ctx,
 			initialized: tokio::sync::OnceCell::new(),
 			next_id: AtomicI64::new(1),
 		})
@@ -212,7 +214,7 @@ impl ToolRuntime {
 	) -> anyhow::Result<CallOutcome> {
 		self.ensure_initialized().await?;
 		let method: Strng = strng::literal!("tools/call");
-		let cel = rbac::CelExecWrapper::new(self.ctx.as_request().map(|_| ()));
+		let cel = rbac::CelExecWrapper::from(self.ctx.clone());
 		let resource = rbac::ResourceType::Tool(rbac::ResourceId::new(
 			self.target.to_string(),
 			tool.to_string(),
