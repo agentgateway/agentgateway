@@ -19,7 +19,6 @@ type Authorization struct {
 	// The effect of this rule when it matches.
 	// If unspecified, defaults to `Allow`.
 	// `Require` rules are cumulative: all require rules must match.
-	// +kubebuilder:default=Allow
 	// +optional
 	Action AuthorizationPolicyAction `json:"action,omitempty"`
 }

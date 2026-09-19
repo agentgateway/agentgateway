@@ -65,6 +65,7 @@ output:
                 headers:
                   x-session-id: not( valid cel
             - regex:
+                action: MASK
                 rules:
                 - regex: secret
             - webhook:

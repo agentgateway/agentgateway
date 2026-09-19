@@ -113,10 +113,9 @@ spec:
                 description: Provider-specific settings for Amazon Bedrock.
                 properties:
                   endpointPreference:
-                    default: RuntimePreferred
                     description: |-
                       EndpointPreference selects which Bedrock API surface to prefer.
-                      Defaults to preferring runtime over mantle.
+                      Defaults to `RuntimePreferred`, preferring runtime over mantle.
                       Decides which endpoint to pick mainly based on the catalog tags
                       `mantle` and `runtime`.
                     enum:
@@ -148,7 +147,6 @@ spec:
                     - version
                     type: object
                   region:
-                    default: us-east-1
                     description: |-
                       AWS region to use for the backend.
                       Defaults to `us-east-1` if not specified.
@@ -167,15 +165,13 @@ spec:
                       If unset, host and port must be set on the parent provider.
                     properties:
                       group:
-                        default: ""
                         description: |-
                           API group of the referenced resource. For example, `gateway.networking.k8s.io`.
-                          When unspecified or empty string, core API group is inferred.
+                          Defaults to the empty string, which identifies the core API group.
                         maxLength: 253
                         pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                       kind:
-                        default: Service
                         description: |-
                           Kind of the referenced resource. For example, `Service`.
                           Defaults to "Service" when not specified.
@@ -201,8 +197,8 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: Must have port for Service reference
-                      rule: '(size(self.group) == 0 && self.kind == ''Service'') ?
-                        has(self.port) : true'
+                      rule: '((!has(self.group) || size(self.group) == 0) && (!has(self.kind)
+                        || self.kind == ''Service'')) ? has(self.port) : true'
                   formats:
                     description: Provider-native API formats this provider supports.
                     items:
@@ -1380,7 +1376,6 @@ spec:
                       use this model.
                     properties:
                       action:
-                        default: Allow
                         description: |-
                           The effect of this rule when it matches.
                           If unspecified, defaults to `Allow`.
@@ -1700,7 +1695,6 @@ spec:
                             minimum: 0
                             type: integer
                           duration:
-                            default: 3s
                             description: |-
                               Base time a backend should be evicted after being marked unhealthy.
                               Subsequent evictions use multiplicative backoff (duration * times_evicted).
@@ -1765,7 +1759,6 @@ spec:
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether the guardrail's verdict is enforced or only
                                     observed. `Reject` (the default) enforces the guardrail: a blocked
@@ -2146,7 +2139,6 @@ spec:
                                               An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
                                               key:
-                                                default: ca.crt
                                                 description: |-
                                                   Key within the referenced source holding the PEM-encoded CA bundle.
                                                   Omitted defaults to `ca.crt`.
@@ -2155,7 +2147,6 @@ spec:
                                                 pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                                                 type: string
                                               kind:
-                                                default: ConfigMap
                                                 description: Kind of the referenced
                                                   CA certificate source. Omitted defaults
                                                   to ConfigMap.
@@ -2177,7 +2168,6 @@ spec:
                                           type: array
                                           x-kubernetes-list-type: atomic
                                         certificateSource:
-                                          default: Inline
                                           description: Source for the gateway's client
                                             identity and trust roots (`Inline` default,
                                             or `SPIFFE`).
@@ -2351,7 +2341,6 @@ spec:
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
                                         mode:
-                                          default: Auto
                                           description: |-
                                             How requests are sent through the proxy.
                                             Defaults to `Auto`.
@@ -2408,7 +2397,6 @@ spec:
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether flagged content is rejected or only observed.
                                     `Reject` (the default) rejects flagged content; `Audit` records the
@@ -2418,7 +2406,6 @@ spec:
                                   - Reject
                                   type: string
                                 location:
-                                  default: us-central1
                                   description: |-
                                     Google Cloud location, for example `us-central1`.
                                     Defaults to `us-central1` if not specified.
@@ -2615,7 +2602,6 @@ spec:
                                               An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
                                               key:
-                                                default: ca.crt
                                                 description: |-
                                                   Key within the referenced source holding the PEM-encoded CA bundle.
                                                   Omitted defaults to `ca.crt`.
@@ -2624,7 +2610,6 @@ spec:
                                                 pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                                                 type: string
                                               kind:
-                                                default: ConfigMap
                                                 description: Kind of the referenced
                                                   CA certificate source. Omitted defaults
                                                   to ConfigMap.
@@ -2646,7 +2631,6 @@ spec:
                                           type: array
                                           x-kubernetes-list-type: atomic
                                         certificateSource:
-                                          default: Inline
                                           description: Source for the gateway's client
                                             identity and trust roots (`Inline` default,
                                             or `SPIFFE`).
@@ -2820,7 +2804,6 @@ spec:
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
                                         mode:
-                                          default: Auto
                                           description: |-
                                             How requests are sent through the proxy.
                                             Defaults to `Auto`.
@@ -2875,7 +2858,6 @@ spec:
                                 See https://developers.openai.com/api/reference/resources/moderations for more information.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether flagged content is rejected or only observed.
                                     `Reject` (the default) rejects flagged content; `Audit` records the
@@ -3104,7 +3086,6 @@ spec:
                                               An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
                                               key:
-                                                default: ca.crt
                                                 description: |-
                                                   Key within the referenced source holding the PEM-encoded CA bundle.
                                                   Omitted defaults to `ca.crt`.
@@ -3113,7 +3094,6 @@ spec:
                                                 pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                                                 type: string
                                               kind:
-                                                default: ConfigMap
                                                 description: Kind of the referenced
                                                   CA certificate source. Omitted defaults
                                                   to ConfigMap.
@@ -3135,7 +3115,6 @@ spec:
                                           type: array
                                           x-kubernetes-list-type: atomic
                                         certificateSource:
-                                          default: Inline
                                           description: Source for the gateway's client
                                             identity and trust roots (`Inline` default,
                                             or `SPIFFE`).
@@ -3309,7 +3288,6 @@ spec:
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
                                         mode:
-                                          default: Auto
                                           description: |-
                                             How requests are sent through the proxy.
                                             Defaults to `Auto`.
@@ -3349,7 +3327,6 @@ spec:
                                 prompt guards and data masking.
                               properties:
                                 action:
-                                  default: Mask
                                   description: |-
                                     The action to take if a regex pattern is matched in a request or response.
                                     The action applies to request and response matches alike. Note that
@@ -3394,14 +3371,11 @@ spec:
                                 `The request was rejected due to inappropriate content`.
                               properties:
                                 message:
-                                  default: The request was rejected due to inappropriate
-                                    content
                                   description: |-
                                     Custom response message to return to the client. If not specified, defaults to
                                     `The request was rejected due to inappropriate content`.
                                   type: string
                                 statusCode:
-                                  default: 403
                                   description: Status code to return to the client.
                                     Defaults to 403.
                                   format: int32
@@ -3409,11 +3383,6 @@ spec:
                                   minimum: 200
                                   type: integer
                               type: object
-                              x-kubernetes-validations:
-                              - message: at least one of the fields in [message statusCode]
-                                  must be set
-                                rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
-                                  >= 1'
                             scope:
                               description: |-
                                 Which parts of the request this guard inspects. When unset, defaults to
@@ -3440,7 +3409,6 @@ spec:
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether the webhook's verdict is enforced or only observed.
                                     `Reject` (the default) enforces it; `Audit` records the would-be action
@@ -3589,7 +3557,6 @@ spec:
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether the guardrail's verdict is enforced or only
                                     observed. `Reject` (the default) enforces the guardrail: a blocked
@@ -3970,7 +3937,6 @@ spec:
                                               An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
                                               key:
-                                                default: ca.crt
                                                 description: |-
                                                   Key within the referenced source holding the PEM-encoded CA bundle.
                                                   Omitted defaults to `ca.crt`.
@@ -3979,7 +3945,6 @@ spec:
                                                 pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                                                 type: string
                                               kind:
-                                                default: ConfigMap
                                                 description: Kind of the referenced
                                                   CA certificate source. Omitted defaults
                                                   to ConfigMap.
@@ -4001,7 +3966,6 @@ spec:
                                           type: array
                                           x-kubernetes-list-type: atomic
                                         certificateSource:
-                                          default: Inline
                                           description: Source for the gateway's client
                                             identity and trust roots (`Inline` default,
                                             or `SPIFFE`).
@@ -4175,7 +4139,6 @@ spec:
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
                                         mode:
-                                          default: Auto
                                           description: |-
                                             How requests are sent through the proxy.
                                             Defaults to `Auto`.
@@ -4232,7 +4195,6 @@ spec:
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether flagged content is rejected or only observed.
                                     `Reject` (the default) rejects flagged content; `Audit` records the
@@ -4242,7 +4204,6 @@ spec:
                                   - Reject
                                   type: string
                                 location:
-                                  default: us-central1
                                   description: |-
                                     Google Cloud location, for example `us-central1`.
                                     Defaults to `us-central1` if not specified.
@@ -4439,7 +4400,6 @@ spec:
                                               An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                                             properties:
                                               key:
-                                                default: ca.crt
                                                 description: |-
                                                   Key within the referenced source holding the PEM-encoded CA bundle.
                                                   Omitted defaults to `ca.crt`.
@@ -4448,7 +4408,6 @@ spec:
                                                 pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                                                 type: string
                                               kind:
-                                                default: ConfigMap
                                                 description: Kind of the referenced
                                                   CA certificate source. Omitted defaults
                                                   to ConfigMap.
@@ -4470,7 +4429,6 @@ spec:
                                           type: array
                                           x-kubernetes-list-type: atomic
                                         certificateSource:
-                                          default: Inline
                                           description: Source for the gateway's client
                                             identity and trust roots (`Inline` default,
                                             or `SPIFFE`).
@@ -4644,7 +4602,6 @@ spec:
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
                                         mode:
-                                          default: Auto
                                           description: |-
                                             How requests are sent through the proxy.
                                             Defaults to `Auto`.
@@ -4697,7 +4654,6 @@ spec:
                                 prompt guards and data masking.
                               properties:
                                 action:
-                                  default: Mask
                                   description: |-
                                     The action to take if a regex pattern is matched in a request or response.
                                     The action applies to request and response matches alike. Note that
@@ -4742,14 +4698,11 @@ spec:
                                 `The response was rejected due to inappropriate content`.
                               properties:
                                 message:
-                                  default: The request was rejected due to inappropriate
-                                    content
                                   description: |-
                                     Custom response message to return to the client. If not specified, defaults to
                                     `The request was rejected due to inappropriate content`.
                                   type: string
                                 statusCode:
-                                  default: 403
                                   description: Status code to return to the client.
                                     Defaults to 403.
                                   format: int32
@@ -4757,17 +4710,11 @@ spec:
                                   minimum: 200
                                   type: integer
                               type: object
-                              x-kubernetes-validations:
-                              - message: at least one of the fields in [message statusCode]
-                                  must be set
-                                rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
-                                  >= 1'
                             webhook:
                               description: Webhook that receives responses for prompt
                                 guarding.
                               properties:
                                 action:
-                                  default: Reject
                                   description: |-
                                     Action controls whether the webhook's verdict is enforced or only observed.
                                     `Reject` (the default) enforces it; `Audit` records the would-be action
@@ -4938,7 +4885,6 @@ spec:
                             An omitted kind defaults to ConfigMap, and an omitted key to `ca.crt`.
                           properties:
                             key:
-                              default: ca.crt
                               description: |-
                                 Key within the referenced source holding the PEM-encoded CA bundle.
                                 Omitted defaults to `ca.crt`.
@@ -4947,7 +4893,6 @@ spec:
                               pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
                               type: string
                             kind:
-                              default: ConfigMap
                               description: Kind of the referenced CA certificate source.
                                 Omitted defaults to ConfigMap.
                               enum:
@@ -4967,7 +4912,6 @@ spec:
                         type: array
                         x-kubernetes-list-type: atomic
                       certificateSource:
-                        default: Inline
                         description: Source for the gateway's client identity and
                           trust roots (`Inline` default, or `SPIFFE`).
                         enum:
@@ -5157,7 +5101,6 @@ spec:
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
                       mode:
-                        default: Auto
                         description: |-
                           How requests are sent through the proxy.
                           Defaults to `Auto`.
@@ -5226,7 +5169,6 @@ spec:
                     minLength: 1
                     type: string
                   region:
-                    default: global
                     description: |-
                       The location of the Google Cloud Project that you use for the Vertex AI.
                       Special values: `global` uses the global endpoint, while `us` and `eu` use restricted
@@ -5363,7 +5305,6 @@ spec:
                               type: object
                               x-kubernetes-map-type: atomic
                             weight:
-                              default: 1
                               description: Relative traffic weight. Defaults to 1.
                               format: int32
                               maximum: 1000000
@@ -5385,7 +5326,6 @@ spec:
                   rule: (has(self.weighted)?1:0)+(has(self.failover)?1:0)+(has(self.conditional)?1:0)
                     == 1
               visibility:
-                default: Public
                 description: |-
                   Controls whether clients can request this model directly. Internal models
                   can only be selected by virtual models. Defaults to Public.
@@ -5402,7 +5342,8 @@ spec:
             - message: policies cannot be used with virtualModel
               rule: '!has(self.virtualModel) || !has(self.policies)'
             - message: virtual models must be public
-              rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
+              rule: '!has(self.virtualModel) || !has(self.visibility) || self.visibility
+                != ''Internal'''
             - message: virtual model match.model must be an exact name
               rule: '!has(self.virtualModel) || !has(self.match) || !has(self.match.model)
                 || !self.match.model.contains(''*'')'

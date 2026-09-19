@@ -766,7 +766,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_JWT_OPTIONAL
-	case agentgateway.JWTAuthenticationModeStrict:
+	case agentgateway.JWTAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_JWT_STRICT
 	case agentgateway.JWTAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_JWT_PERMISSIVE
@@ -861,7 +861,7 @@ func processBasicAuthenticationPolicy(
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_OPTIONAL
-	case agentgateway.BasicAuthenticationModeStrict:
+	case agentgateway.BasicAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_STRICT
 	}
 
@@ -937,7 +937,7 @@ func processAPIKeyAuthenticationPolicy(
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_APIKey_OPTIONAL
-	case agentgateway.APIKeyAuthenticationModeStrict:
+	case agentgateway.APIKeyAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_APIKey_STRICT
 	case agentgateway.APIKeyAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
@@ -1431,9 +1431,13 @@ func processExtProcTraffic(
 	}
 	if extProc.ProcessingOptions != nil {
 		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
-			RequestBodyMode:   api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			ResponseBodyMode:  api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			AllowModeOverride: extProc.ProcessingOptions.AllowModeOverride,
+			RequestBodyMode:     api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			ResponseBodyMode:    api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			RequestHeaderMode:   api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseHeaderMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			RequestTrailerMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseTrailerMode: api.TrafficPolicySpec_ExtProc_SEND,
+			AllowModeOverride:   extProc.ProcessingOptions.AllowModeOverride,
 		}
 		if extProc.ProcessingOptions.RequestBodyMode != nil {
 			spec.ProcessingOptions.RequestBodyMode = toBodySendMode(*extProc.ProcessingOptions.RequestBodyMode)

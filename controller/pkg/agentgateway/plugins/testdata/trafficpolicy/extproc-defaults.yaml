@@ -44,7 +44,11 @@ output:
         extProc:
           processingOptions:
             requestBodyMode: FULL_DUPLEX_STREAMED
+            requestHeaderMode: SEND
+            requestTrailerMode: SEND
             responseBodyMode: FULL_DUPLEX_STREAMED
+            responseHeaderMode: SEND
+            responseTrailerMode: SEND
           target:
             port: 4444
             service:

@@ -82,6 +82,8 @@ linters:
                   type: All
             forbiddenmarkers:
               markers:
+                # Apply defaults in controller translation instead of persisting them in API objects.
+                - identifier: "kubebuilder:default"
                 - identifier: "+kubebuilder:pruning:PreserveUnknownFields"
                 - identifier: "+kubebuilder:validation:XPreserveUnknownFields"
                 - identifier: "+kubebuilder:validation:items:XPreserveUnknownFields"

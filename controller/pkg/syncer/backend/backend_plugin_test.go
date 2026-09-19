@@ -620,8 +620,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model:  new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								Region: "us-east-1",
+								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 							},
 						},
 					},

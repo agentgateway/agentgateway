@@ -4,6 +4,7 @@ ai:
     - name: backend
       vertex:
         model: gemini-pro
+        region: global
 key: test-ns/vertex-backend
 name:
   name: vertex-backend

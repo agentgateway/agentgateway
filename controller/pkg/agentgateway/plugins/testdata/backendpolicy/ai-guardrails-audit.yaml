@@ -75,6 +75,7 @@ output:
                 - builtin: CREDIT_CARD
               rejection:
                 body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+                status: 403
             - openaiModeration:
                 action: REJECT_AUDIT_ACTION_AUDIT
             - bedrockGuardrails:

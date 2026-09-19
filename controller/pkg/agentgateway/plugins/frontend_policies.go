@@ -168,7 +168,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 	case agentgateway.OTLPProtocolHttp:
 		protocol = api.FrontendPolicySpec_Tracing_HTTP
 	default:
-		// default to HTTP
+		// Default to GRPC.
 		protocol = api.FrontendPolicySpec_Tracing_GRPC
 	}
 	if parsedURL != nil && parsedURL.EscapedPath() != "" && protocol != api.FrontendPolicySpec_Tracing_HTTP {

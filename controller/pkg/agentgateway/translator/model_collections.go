@@ -486,7 +486,7 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 			}
 			targets = append(targets, &api.ModelRoute_VirtualModel_Weighted_Target{
 				Model:   modelName,
-				Weight:  uint32(target.Weight), //nolint:gosec // CEL constrains this to positive int32.
+				Weight:  uint32(ptr.NonEmptyOrDefault(target.Weight, 1)), //nolint:gosec // CEL constrains this to positive int32.
 				Invalid: err != nil,
 			})
 		}
@@ -691,7 +691,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		provider.Provider = &api.AIBackend_Provider_Gemini{Gemini: &api.AIBackend_Gemini{Model: providerModel(selectedModel, llm.Gemini.Model)}}
 	case llm.VertexAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Vertex{Vertex: &api.AIBackend_Vertex{
-			Region:    llm.VertexAI.Region,
+			Region:    ptr.NonEmptyOrDefault(llm.VertexAI.Region, "global"),
 			Model:     providerModel(selectedModel, llm.VertexAI.Model),
 			ProjectId: llm.VertexAI.ProjectId,
 		}}
@@ -703,7 +703,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		}
 		provider.Provider = &api.AIBackend_Provider_Bedrock{Bedrock: &api.AIBackend_Bedrock{
 			Model:               providerModel(selectedModel, llm.Bedrock.Model),
-			Region:              llm.Bedrock.Region,
+			Region:              ptr.NonEmptyOrDefault(llm.Bedrock.Region, "us-east-1"),
 			GuardrailIdentifier: guardrailIdentifier,
 			GuardrailVersion:    guardrailVersion,
 		}}

@@ -1,0 +1,117 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: defaults
+  namespace: default
+spec:
+  targetRefs:
+  - kind: HTTPRoute
+    name: test
+    group: gateway.networking.k8s.io
+  backend:
+    health:
+      eviction:
+        duration: 5s
+    ai:
+      promptCaching:
+        cacheSystem: false
+        cacheMessages: false
+        minTokens: 0
+      promptGuard:
+        request:
+        - regex:
+            matches: [blocked]
+            action: Reject
+          response:
+            message: ""
+            statusCode: 200
+        response:
+        - regex:
+            matches: [blocked]
+            action: Audit
+          response:
+            message: ""
+            statusCode: 200
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          promptCaching:
+            minTokens: 0
+          promptGuard:
+            request:
+            - regex:
+                action: REJECT
+                rules:
+                - regex: blocked
+              rejection:
+                status: 200
+            response:
+            - regex:
+                action: AUDIT
+                rules:
+                - regex: blocked
+              rejection:
+                status: 200
+      key: backend/default/defaults:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: defaults
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        health:
+          eviction:
+            duration: 5s
+      key: default/defaults:health:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: defaults
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: defaults
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

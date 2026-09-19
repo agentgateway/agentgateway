@@ -167,6 +167,7 @@ output:
           targets:
           - invalid: true
             model: wildcard-model
+            weight: 1
 - gateway:
     Name: virtual-model-errors
     Namespace: default

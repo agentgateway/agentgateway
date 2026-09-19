@@ -161,7 +161,6 @@ type Regex struct {
 	// `Mask` is not applied to streamed responses: matched content in a
 	// streamed response is passed through unmodified.
 	// Defaults to `Mask`.
-	// +kubebuilder:default=Mask
 	// +optional
 	Action *Action `json:"action,omitempty"`
 }
@@ -195,23 +194,19 @@ type Webhook struct {
 	// Action controls whether the webhook's verdict is enforced or only observed.
 	// `Reject` (the default) enforces it; `Audit` records the would-be action
 	// without blocking or masking.
-	// +kubebuilder:default=Reject
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
 }
 
 // Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
-// +kubebuilder:validation:AtLeastOneFieldSet
 type CustomResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
-	// +kubebuilder:default="The request was rejected due to inappropriate content"
 	// +optional
-	Message string `json:"message,omitempty"`
+	Message *string `json:"message,omitempty"`
 
 	// Status code to return to the client. Defaults to 403.
-	// +kubebuilder:default=403
 	// +kubebuilder:validation:Minimum=200
 	// +kubebuilder:validation:Maximum=599
 	// +optional
@@ -226,7 +221,6 @@ type OpenAIModeration struct {
 	// Action controls whether flagged content is rejected or only observed.
 	// `Reject` (the default) rejects flagged content; `Audit` records the
 	// would-be rejection without blocking.
-	// +kubebuilder:default=Reject
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
 	// Policies for communicating with OpenAI.
@@ -254,7 +248,6 @@ type BedrockGuardrails struct {
 	// the matched content. `Audit` runs the guardrail in observe mode: it is
 	// invoked and its assessment recorded (metrics + structured log), but the
 	// request/response is never blocked or masked.
-	// +kubebuilder:default=Reject
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
 
@@ -274,14 +267,12 @@ type GoogleModelArmor struct {
 
 	// Google Cloud location, for example `us-central1`.
 	// Defaults to `us-central1` if not specified.
-	// +kubebuilder:default="us-central1"
 	// +optional
 	Location *ShortString `json:"location,omitempty"`
 
 	// Action controls whether flagged content is rejected or only observed.
 	// `Reject` (the default) rejects flagged content; `Audit` records the
 	// would-be rejection without blocking.
-	// +kubebuilder:default=Reject
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
 
@@ -476,31 +467,27 @@ type FieldTransformation struct {
 // - Without caching: 10,000 tokens × $3/MTok = $0.03
 // - With caching (90% cached): 1,000 × $3/MTok + 9,000 × $0.30/MTok = $0.0057 (81% savings)
 type PromptCachingConfig struct {
-	// Enables caching for system prompts.
+	// Enables caching for system prompts. Defaults to true.
 	// Inserts a cache point after all system messages.
 	// +optional
-	// +kubebuilder:default=true
-	CacheSystem bool `json:"cacheSystem,omitempty"`
+	CacheSystem *bool `json:"cacheSystem,omitempty"`
 
-	// Enables caching for conversation messages.
+	// Enables caching for conversation messages. Defaults to true.
 	// Caches all messages in the conversation for cost savings.
 	// +optional
-	// +kubebuilder:default=true
-	CacheMessages bool `json:"cacheMessages,omitempty"`
+	CacheMessages *bool `json:"cacheMessages,omitempty"`
 
-	// Enables caching for tool definitions.
+	// Enables caching for tool definitions. Defaults to false.
 	// Inserts a cache point after all tool specifications.
 	// +optional
-	// +kubebuilder:default=false
 	CacheTools bool `json:"cacheTools,omitempty"`
 
 	// Minimum estimated token count
 	// before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
-	// Bedrock requires at least 1,024 tokens for caching to be effective.
+	// Defaults to 1024. Bedrock requires at least 1,024 tokens for caching to be effective.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:default=1024
-	MinTokens int `json:"minTokens,omitempty"`
+	MinTokens *int `json:"minTokens,omitempty"`
 
 	// Shifts the message cache point further back in the
 	// conversation. 0 (default) places it at the second-to-last message.
@@ -508,6 +495,5 @@ type PromptCachingConfig struct {
 	// to bounds.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
 }

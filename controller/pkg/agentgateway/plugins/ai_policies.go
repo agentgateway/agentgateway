@@ -45,8 +45,8 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 
 		if req.CustomResponse != nil {
 			pgReq.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
-				Body:   []byte(req.CustomResponse.Message),
-				Status: uint32(req.CustomResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Body:   []byte(ptr.OrDefault(req.CustomResponse.Message, "The request was rejected due to inappropriate content")),
+				Status: uint32(ptr.NonEmptyOrDefault(req.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 			}
 		}
 		for _, scope := range req.Scope {
@@ -102,8 +102,8 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 
 		if req.CustomResponse != nil {
 			pgReq.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
-				Body:   []byte(req.CustomResponse.Message),
-				Status: uint32(req.CustomResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Body:   []byte(ptr.OrDefault(req.CustomResponse.Message, "The request was rejected due to inappropriate content")),
+				Status: uint32(ptr.NonEmptyOrDefault(req.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 			}
 		}
 		res = append(res, pgReq)
@@ -235,7 +235,7 @@ func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRule
 		return nil
 	}
 
-	rules := &api.BackendPolicySpec_Ai_RegexRules{}
+	rules := &api.BackendPolicySpec_Ai_RegexRules{Action: api.BackendPolicySpec_Ai_MASK}
 	if regex.Action != nil {
 		switch *regex.Action {
 		case agentgateway.MASK:
