@@ -2794,7 +2794,8 @@ a {
 	min-width: 920px;
 }
 
-.dump-policies-table {
+.dump-policies-table,
+.dump-models-table {
 	min-width: 860px;
 }
 

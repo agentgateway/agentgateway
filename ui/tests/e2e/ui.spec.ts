@@ -4,8 +4,10 @@ import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
 	mockGateway,
+	mockXdsGateway,
 	populatedConfig,
-	sameOriginGatewayConfig
+	sameOriginGatewayConfig,
+	xdsDump
 } from './fixtures';
 
 const pages = [
@@ -508,6 +510,55 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 			}
 		}
 	});
+});
+
+test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/models');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Models' })).toBeVisible();
+	await expect(nav.getByRole('link', { name: 'Providers' })).toHaveCount(0);
+	await expect(
+		page.getByText('Read-only model inventory from the active gateway dump.')
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add model' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add virtual model' })).toHaveCount(0);
+
+	const rows = page.locator('.dump-models-table tbody tr');
+	await expect(rows).toHaveCount(5);
+	const row = (key: string) => rows.filter({ has: page.getByText(key, { exact: true }) });
+
+	await expect(row('default/gpt-4o.llm')).toContainText('Concrete');
+	await expect(row('default/gpt-4o.llm')).toContainText('public');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/gpt-4o/backend.llm');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/model-gateway.llm');
+	await expect(row('default/llama.llm')).toContainText('internal');
+	await expect(row('default/llama.llm')).toContainText('default/llama/backend.llm');
+	await expect(row('default/smart.llm')).toContainText('Virtual');
+	await expect(row('default/smart.llm')).toContainText('2 weighted targets');
+	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) invalid');
+	await expect(row('default/tiered.llm')).toContainText('1 rule, fallback');
+	await expect(row('default/tiered.llm')).toContainText('gpt-4o, llama');
+	await expect(row('default/resilient.llm')).toContainText('Failover');
+	await expect(row('default/resilient.llm')).toContainText('default/resilient/backend.llm');
+
+	await page.getByRole('button', { name: 'View smart' }).click();
+	const drawer = page.getByRole('dialog', { name: 'smart' });
+	await expect(drawer).toBeVisible();
+	await expect(drawer).toContainText('does-not-exist');
+	await drawer.getByRole('button', { name: 'Close' }).click();
+	await expect(drawer).toHaveCount(0);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode shows an empty model inventory', async ({ page }) => {
+	await mockXdsGateway(page, xdsDump([]));
+	await page.goto('/llm/models');
+
+	await expect(page.getByText('No models are present in the active gateway dump.')).toBeVisible();
+	await expect(page.locator('.dump-models-table')).toHaveCount(0);
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {
