@@ -39,6 +39,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -224,6 +225,13 @@ func TranslateAgentgatewayPolicy(
 			Kind: gk.Kind,
 		}
 
+		if gk.Kind == wellknown.GatewayGVK.Kind {
+			if attachmentErr := unmanagedGatewayTarget(ctx, agw, targetObject.NamespacedName); attachmentErr != "" {
+				attachmentErrors = append(attachmentErrors, attachmentErr)
+				return
+			}
+		}
+
 		for _, policyTarget := range policyTargets {
 			// For backend-like targets, skip gateway resolution when the target doesn't resolve.
 			// A missing backend could still resolve via PolicyAttachments if another backend
@@ -403,6 +411,24 @@ func resolvePolicyAncestorRefs(
 		return strings.Compare(reports.ParentString(a), reports.ParentString(b))
 	})
 	return refs, ""
+}
+
+// unmanagedGatewayTarget returns an attachment error when the Gateway is not managed by this controller.
+func unmanagedGatewayTarget(ctx krt.HandlerContext, agw *AgwCollections, gateway types.NamespacedName) string {
+	gw := krtutil.FetchOneSpec(ctx, agw.Gateways, func(gw *gwv1.Gateway) gwv1.ObjectName {
+		return gw.Spec.GatewayClassName
+	}, krt.FilterKey(gateway.String()))
+	if gw == nil {
+		return ""
+	}
+	gc := ptr.Flatten(krt.FetchOne(ctx, agw.GatewayClasses, krt.FilterKey(string(gw.Spec))))
+	if gc == nil {
+		return fmt.Sprintf("Policy is not attached: Gateway %s/%s references GatewayClass %q, which was not found", gateway.Namespace, gateway.Name, gw.Spec)
+	}
+	if string(gc.Spec.ControllerName) != agw.ControllerName {
+		return fmt.Sprintf("Policy is not attached: Gateway %s/%s uses GatewayClass %q, which is managed by controller %q", gateway.Namespace, gateway.Name, gc.Name, gc.Spec.ControllerName)
+	}
+	return ""
 }
 
 // TranslatePolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
