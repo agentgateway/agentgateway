@@ -756,7 +756,23 @@ pub mod from_messages {
 	}
 
 	pub fn translate_error(bytes: &Bytes, status: ::http::StatusCode) -> Result<Bytes, AIError> {
-		let res = super::parse_chat_completion_error(bytes)?;
+		let mut res = super::parse_chat_completion_error(bytes)?;
+		// Claude Code uses this marker to compact and retry a rejected prompt.
+		// Do not override an existing capability marker or a different structured code.
+		let context_overflow = status == ::http::StatusCode::BAD_REQUEST
+			&& match res.error.code.as_ref().and_then(Value::as_str) {
+				Some(code) => code == "context_length_exceeded",
+				None => {
+					res.error.message
+						== "Your input exceeds the context window of this model. Please adjust your input and try again."
+				},
+			};
+		if context_overflow {
+			res.error.r#type = Some("invalid_request_error".to_string());
+			if !res.error.message.contains("capability_rejected:") {
+				res.error.message = "capability_rejected: prompt_too_long".to_string();
+			}
+		}
 		let m = messages::MessagesErrorResponse {
 			r#type: "error".to_string(),
 			error: messages::MessagesError {
