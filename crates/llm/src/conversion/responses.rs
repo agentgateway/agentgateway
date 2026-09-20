@@ -361,6 +361,7 @@ pub mod from_messages {
 					"type": "json_schema",
 					"name": "structured_output",
 					"schema": schema,
+					"strict": false,
 				}
 			}),
 		})

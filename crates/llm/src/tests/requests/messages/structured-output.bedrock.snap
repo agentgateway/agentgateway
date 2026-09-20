@@ -16,6 +16,8 @@ info:
         properties:
           answer:
             type: number
+          explanation:
+            type: string
         required:
           - answer
         additionalProperties: false
@@ -45,7 +47,7 @@ info:
         "type": "json_schema",
         "structure": {
           "jsonSchema": {
-            "schema": "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"number\"}},\"required\":[\"answer\"],\"additionalProperties\":false}"
+            "schema": "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"number\"},\"explanation\":{\"type\":\"string\"}},\"required\":[\"answer\"],\"additionalProperties\":false}"
           }
         }
       }

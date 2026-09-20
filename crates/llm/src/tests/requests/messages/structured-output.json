@@ -11,7 +11,8 @@
       "schema": {
         "type": "object",
         "properties": {
-          "answer": { "type": "number" }
+          "answer": { "type": "number" },
+          "explanation": { "type": "string" }
         },
         "required": ["answer"],
         "additionalProperties": false
