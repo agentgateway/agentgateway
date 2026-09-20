@@ -5213,6 +5213,7 @@ spec:
                 - OpenAI
                 - Openrouter
                 - TogetherAI
+                - TrustedRouter
                 - VertexAI
                 - XAI
                 type: string

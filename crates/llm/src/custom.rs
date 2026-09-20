@@ -60,6 +60,7 @@ pub enum ProviderPreset {
 	Huggingface,
 	Mistral,
 	Openrouter,
+	Trustedrouter,
 	Togetherai,
 	#[serde(rename = "xai")]
 	XAI,
@@ -79,6 +80,7 @@ impl ProviderPreset {
 			Self::Huggingface => "https://router.huggingface.co/v1",
 			Self::Mistral => "https://api.mistral.ai/v1",
 			Self::Openrouter => "https://openrouter.ai/api/v1",
+			Self::Trustedrouter => "https://api.trustedrouter.com/v1",
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
@@ -143,6 +145,16 @@ impl ProviderPreset {
 			),
 			Self::Openrouter => (
 				"openrouter",
+				vec![
+					format(Completions, None),
+					format(Messages, None),
+					format(Responses, None),
+					format(Embeddings, None),
+					format(Rerank, None),
+				],
+			),
+			Self::Trustedrouter => (
+				"trustedrouter",
 				vec![
 					format(Completions, None),
 					format(Messages, None),

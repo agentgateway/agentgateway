@@ -2630,20 +2630,21 @@ func (AIBackend_ProviderFormat) EnumDescriptor() ([]byte, []int) {
 type AIBackend_ProviderPreset int32
 
 const (
-	AIBackend_PROVIDER_PRESET_UNSPECIFIED AIBackend_ProviderPreset = 0
-	AIBackend_PROVIDER_PRESET_COHERE      AIBackend_ProviderPreset = 1
-	AIBackend_PROVIDER_PRESET_OLLAMA      AIBackend_ProviderPreset = 2
-	AIBackend_PROVIDER_PRESET_BASETEN     AIBackend_ProviderPreset = 3
-	AIBackend_PROVIDER_PRESET_CEREBRAS    AIBackend_ProviderPreset = 4
-	AIBackend_PROVIDER_PRESET_DEEPINFRA   AIBackend_ProviderPreset = 5
-	AIBackend_PROVIDER_PRESET_DEEPSEEK    AIBackend_ProviderPreset = 6
-	AIBackend_PROVIDER_PRESET_GROQ        AIBackend_ProviderPreset = 7
-	AIBackend_PROVIDER_PRESET_HUGGINGFACE AIBackend_ProviderPreset = 8
-	AIBackend_PROVIDER_PRESET_MISTRAL     AIBackend_ProviderPreset = 9
-	AIBackend_PROVIDER_PRESET_OPENROUTER  AIBackend_ProviderPreset = 10
-	AIBackend_PROVIDER_PRESET_TOGETHERAI  AIBackend_ProviderPreset = 11
-	AIBackend_PROVIDER_PRESET_XAI         AIBackend_ProviderPreset = 12
-	AIBackend_PROVIDER_PRESET_FIREWORKS   AIBackend_ProviderPreset = 13
+	AIBackend_PROVIDER_PRESET_UNSPECIFIED   AIBackend_ProviderPreset = 0
+	AIBackend_PROVIDER_PRESET_COHERE        AIBackend_ProviderPreset = 1
+	AIBackend_PROVIDER_PRESET_OLLAMA        AIBackend_ProviderPreset = 2
+	AIBackend_PROVIDER_PRESET_BASETEN       AIBackend_ProviderPreset = 3
+	AIBackend_PROVIDER_PRESET_CEREBRAS      AIBackend_ProviderPreset = 4
+	AIBackend_PROVIDER_PRESET_DEEPINFRA     AIBackend_ProviderPreset = 5
+	AIBackend_PROVIDER_PRESET_DEEPSEEK      AIBackend_ProviderPreset = 6
+	AIBackend_PROVIDER_PRESET_GROQ          AIBackend_ProviderPreset = 7
+	AIBackend_PROVIDER_PRESET_HUGGINGFACE   AIBackend_ProviderPreset = 8
+	AIBackend_PROVIDER_PRESET_MISTRAL       AIBackend_ProviderPreset = 9
+	AIBackend_PROVIDER_PRESET_OPENROUTER    AIBackend_ProviderPreset = 10
+	AIBackend_PROVIDER_PRESET_TOGETHERAI    AIBackend_ProviderPreset = 11
+	AIBackend_PROVIDER_PRESET_XAI           AIBackend_ProviderPreset = 12
+	AIBackend_PROVIDER_PRESET_FIREWORKS     AIBackend_ProviderPreset = 13
+	AIBackend_PROVIDER_PRESET_TRUSTEDROUTER AIBackend_ProviderPreset = 14
 )
 
 // Enum value maps for AIBackend_ProviderPreset.
@@ -2663,22 +2664,24 @@ var (
 		11: "PROVIDER_PRESET_TOGETHERAI",
 		12: "PROVIDER_PRESET_XAI",
 		13: "PROVIDER_PRESET_FIREWORKS",
+		14: "PROVIDER_PRESET_TRUSTEDROUTER",
 	}
 	AIBackend_ProviderPreset_value = map[string]int32{
-		"PROVIDER_PRESET_UNSPECIFIED": 0,
-		"PROVIDER_PRESET_COHERE":      1,
-		"PROVIDER_PRESET_OLLAMA":      2,
-		"PROVIDER_PRESET_BASETEN":     3,
-		"PROVIDER_PRESET_CEREBRAS":    4,
-		"PROVIDER_PRESET_DEEPINFRA":   5,
-		"PROVIDER_PRESET_DEEPSEEK":    6,
-		"PROVIDER_PRESET_GROQ":        7,
-		"PROVIDER_PRESET_HUGGINGFACE": 8,
-		"PROVIDER_PRESET_MISTRAL":     9,
-		"PROVIDER_PRESET_OPENROUTER":  10,
-		"PROVIDER_PRESET_TOGETHERAI":  11,
-		"PROVIDER_PRESET_XAI":         12,
-		"PROVIDER_PRESET_FIREWORKS":   13,
+		"PROVIDER_PRESET_UNSPECIFIED":   0,
+		"PROVIDER_PRESET_COHERE":        1,
+		"PROVIDER_PRESET_OLLAMA":        2,
+		"PROVIDER_PRESET_BASETEN":       3,
+		"PROVIDER_PRESET_CEREBRAS":      4,
+		"PROVIDER_PRESET_DEEPINFRA":     5,
+		"PROVIDER_PRESET_DEEPSEEK":      6,
+		"PROVIDER_PRESET_GROQ":          7,
+		"PROVIDER_PRESET_HUGGINGFACE":   8,
+		"PROVIDER_PRESET_MISTRAL":       9,
+		"PROVIDER_PRESET_OPENROUTER":    10,
+		"PROVIDER_PRESET_TOGETHERAI":    11,
+		"PROVIDER_PRESET_XAI":           12,
+		"PROVIDER_PRESET_FIREWORKS":     13,
+		"PROVIDER_PRESET_TRUSTEDROUTER": 14,
 	}
 )
 
@@ -19295,7 +19298,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xfd!\n" +
+	"_qualifier\"\xa0\"\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -19416,7 +19419,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x05\x12\f\n" +
 	"\bREALTIME\x10\x06\x12\n" +
 	"\n" +
-	"\x06RERANK\x10\a\"\xb1\x03\n" +
+	"\x06RERANK\x10\a\"\xd4\x03\n" +
 	"\x0eProviderPreset\x12\x1f\n" +
 	"\x1bPROVIDER_PRESET_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROVIDER_PRESET_COHERE\x10\x01\x12\x1a\n" +
@@ -19432,7 +19435,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x12\x1e\n" +
 	"\x1aPROVIDER_PRESET_TOGETHERAI\x10\v\x12\x17\n" +
 	"\x13PROVIDER_PRESET_XAI\x10\f\x12\x1d\n" +
-	"\x19PROVIDER_PRESET_FIREWORKS\x10\r\"\xb9\x04\n" +
+	"\x19PROVIDER_PRESET_FIREWORKS\x10\r\x12!\n" +
+	"\x1dPROVIDER_PRESET_TRUSTEDROUTER\x10\x0e\"\xb9\x04\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +

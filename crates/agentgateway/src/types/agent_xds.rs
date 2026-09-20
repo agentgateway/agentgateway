@@ -115,6 +115,7 @@ fn provider_preset_from_proto(
 		ProviderPreset::Huggingface => Ok(llm::custom::ProviderPreset::Huggingface),
 		ProviderPreset::Mistral => Ok(llm::custom::ProviderPreset::Mistral),
 		ProviderPreset::Openrouter => Ok(llm::custom::ProviderPreset::Openrouter),
+		ProviderPreset::Trustedrouter => Ok(llm::custom::ProviderPreset::Trustedrouter),
 		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
 		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
 		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
