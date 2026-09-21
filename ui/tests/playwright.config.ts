@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-	testDir: './tests/e2e',
+	testDir: './e2e',
+	outputDir: './test-results',
 	timeout: 30_000,
 	expect: {
 		timeout: 5_000
@@ -14,6 +15,7 @@ export default defineConfig({
 		trace: 'retain-on-failure'
 	},
 	webServer: {
+		cwd: '..',
 		command: 'pnpm preview:e2e',
 		url: 'http://127.0.0.1:19100',
 		reuseExistingServer: !process.env.CI,

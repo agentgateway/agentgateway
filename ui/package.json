@@ -14,7 +14,9 @@
 		"lint": "pnpm typecheck && pnpm check",
 		"preview": "pnpm build && vite preview",
 		"preview:e2e": "pnpm build --mode e2e && vite preview --mode e2e",
-		"test:e2e": "playwright test",
+		"test:e2e": "playwright test --config tests/playwright.config.ts",
+		"test:visual-regressions": "playwright test --config tests/playwright.visual-regressions.config.ts",
+		"test:visual-regressions:linux": "node tests/visual-regression/run-linux.ts",
 		"typecheck": "pnpm generate-schema && tsc -b"
 	},
 	"dependencies": {
