@@ -5,6 +5,7 @@ pub mod timeout;
 pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
+pub mod concurrencylimit;
 pub mod cors;
 pub mod delay;
 pub mod jwt;

@@ -1,0 +1,87 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: concurrency-limit
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    rateLimit:
+      concurrency:
+      - maxConcurrent: 32
+      - maxConcurrent: 4
+        key: jwt.sub
+      - maxConcurrent: 2
+        key: jwt.sub + "/" + llm.requestModel
+        limitOverride: 'jwt.team == "research" ? 8 : 2'
+      - maxConcurrent: 16
+        key: jwt.team
+        shared:
+          redis:
+            url: redis://redis.default.svc:6379/0
+          lease: 30s
+          keyPrefix: prod
+          failureMode: FailClosed
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/concurrency-limit:concurrency:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: concurrency-limit
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        concurrencyLimit:
+          rules:
+          - maxConcurrent: 32
+          - key: jwt.sub
+            maxConcurrent: 4
+          - key: jwt.sub + "/" + llm.requestModel
+            limitOverride: 'jwt.team == "research" ? 8 : 2'
+            maxConcurrent: 2
+          - key: jwt.team
+            maxConcurrent: 16
+            shared:
+              failureMode: DENY
+              keyPrefix: prod
+              lease: 30s
+              redisUrl: redis://redis.default.svc:6379/0
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: concurrency-limit
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
