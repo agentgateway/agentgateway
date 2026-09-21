@@ -83,8 +83,32 @@ pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
 	} = resp;
 	match result {
 		Some(mcp_request_result::Result::Pass(_)) => {
+			// Read allowed_targets from metadata before apply_request_side consumes it.
+			// The ext-mcp-server sets metadata.allowed_targets = ["backend-a", ...] to
+			// restrict which upstreams the gateway fans out to. Absent or empty means
+			// allow all — fully backward-compatible with processors that do not set it.
+			let allowed_targets: Vec<String> = metadata
+				.as_ref()
+				.and_then(|m| m.fields.get("allowed_targets"))
+				.and_then(|v| match &v.kind {
+					Some(prost_wkt_types::value::Kind::ListValue(l)) => Some(
+						l.values
+							.iter()
+							.filter_map(|v| match &v.kind {
+								Some(prost_wkt_types::value::Kind::StringValue(s)) => Some(s.clone()),
+								_ => None,
+							})
+							.collect(),
+					),
+					_ => None,
+				})
+				.unwrap_or_default();
 			apply_request_side(method, backends, header_mutation, metadata, req_ctx);
-			Outcome::Pass
+			if allowed_targets.is_empty() {
+				Outcome::Pass
+			} else {
+				Outcome::PassFiltered(allowed_targets)
+			}
 		},
 		Some(mcp_request_result::Result::Mutated(b)) => match body {
 			// `*/list` carries no params to rewrite; the mutation is discarded by

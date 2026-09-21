@@ -44,6 +44,10 @@ pub use phase::Phase;
 #[derive(Debug)]
 pub enum Outcome<T> {
 	Pass,
+	/// The request is allowed but fanout must be restricted to this backend subset.
+	/// Populated when the ext-mcp-server returns `metadata.allowed_targets`.
+	/// Empty list is never produced — the client returns `Pass` for allow-all.
+	PassFiltered(Vec<String>),
 	Mutated(T),
 	Reject(rmcp::model::ErrorData),
 }
@@ -232,25 +236,45 @@ impl Processor {
 /// Processors fire in order; first `Reject` short-circuits leaving `ctx` in whatever
 /// partially-mutated state earlier processors produced. When `ctx.params` is `None`
 /// (e.g. `*/list`) mutations are discarded — list filtering belongs in the response phase.
+///
+/// Returns `(outcome, allowed_targets)` where the two axes are independent:
+/// - `outcome` is `Pass`, `Mutated`, or `Reject` — never `PassFiltered` (filter
+///   is returned separately so a `Mutated` result does not silently drop it).
+/// - `allowed_targets` is `Some(targets)` if any processor expressed a backend
+///   filter; multiple filters are intersected (narrowed). `None` means allow all.
 pub async fn run_call_request<P: serde::de::DeserializeOwned>(
 	ext: &McpGuardrails,
 	ctx: &mut CallRequestCtx<'_>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
-) -> Outcome<P> {
+) -> (Outcome<P>, Option<Vec<String>>) {
 	let client = client.with_parent_extensions(req_ctx.extensions());
-	let mut composed = Outcome::Pass;
+	let mut composed: Outcome<P> = Outcome::Pass;
+	// Track the accumulated target filter separately from the pass/mutate axis.
+	// - Multiple PassFiltered results are intersected (narrowed) — a target must
+	//   be allowed by every processor that expressed a filter.
+	// - A Mutated result does NOT clear the filter: if an earlier processor set
+	//   allowed_targets and a later one mutates the body, both effects apply.
+	let mut allowed_targets: Option<Vec<String>> = None;
 	for processor in &ext.processors {
 		if !processor.runs_request(ctx.method) {
 			continue;
 		}
 		match processor.call_request::<P>(ctx, req_ctx, &client).await {
 			Outcome::Pass => {},
+			Outcome::PassFiltered(targets) => {
+				allowed_targets = Some(match allowed_targets.take() {
+					// First filter — accept as-is.
+					None => targets,
+					// Subsequent filter — intersect: keep only targets allowed by both.
+					Some(prior) => prior.into_iter().filter(|t| targets.contains(t)).collect(),
+				});
+			},
 			Outcome::Mutated(p) => composed = Outcome::Mutated(p),
-			Outcome::Reject(e) => return Outcome::Reject(e),
+			Outcome::Reject(e) => return (Outcome::Reject(e), None),
 		}
 	}
-	composed
+	(composed, allowed_targets)
 }
 
 /// Processors fire in order; first `Reject` short-circuits.
@@ -272,7 +296,7 @@ pub async fn run_response(
 			.response(method, backends, &mut body, req_ctx, &client)
 			.await
 		{
-			Outcome::Pass => {},
+			Outcome::Pass | Outcome::PassFiltered(_) => {},
 			Outcome::Mutated(r) => composed = Outcome::Mutated(r),
 			Outcome::Reject(e) => return Outcome::Reject(e),
 		}
