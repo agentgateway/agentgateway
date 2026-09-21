@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-18T08:34:37Z"
+    "generatedAt": "2026-09-21T08:38:52Z"
   },
   "providers": {
     "anthropic": {
@@ -325,12 +325,6 @@
         "anthropic.claude-mythos-5-1": {
           "tags": [
             "runtime"
-          ]
-        },
-        "anthropic.claude-mythos-preview": {
-          "tags": [
-            "anthropic_messages",
-            "mantle"
           ]
         },
         "anthropic.claude-opus-4-1-20250805-v1:0": {
