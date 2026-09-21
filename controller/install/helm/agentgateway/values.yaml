@@ -321,3 +321,8 @@ monitoring:
     # -- Labels that the Grafana sidecar uses to discover dashboards.
     labels:
       grafana_dashboard: "1"
+    # -- Annotations on the dashboard ConfigMap. Provisioners that place a dashboard
+    #    by display name read the folder, and sometimes the organization, from an
+    #    annotation rather than a label, because a label value admits no spaces
+    #    (e.g. grafana_folder: "Platform gateways").
+    annotations: {}

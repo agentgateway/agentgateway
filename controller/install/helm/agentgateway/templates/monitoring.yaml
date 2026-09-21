@@ -69,6 +69,10 @@ metadata:
     {{- with .Values.monitoring.grafanaDashboard.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+  {{- with .Values.monitoring.grafanaDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 data:
   agentgateway.json: |
 {{ .Files.Get "files/agentgateway-dashboard.json" | indent 4 }}
