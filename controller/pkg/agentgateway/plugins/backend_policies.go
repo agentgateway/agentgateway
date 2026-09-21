@@ -896,6 +896,14 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 	}
 
+	if aiSpec.ServerTools != nil {
+		st, err := processServerTools(ctx, agwPolicy.Namespace, aiSpec.ServerTools)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		translatedAIPolicy.ServerTools = st
+	}
+
 	if aiSpec.Routes != nil {
 		r := make(map[string]api.BackendPolicySpec_Ai_RouteType)
 		for path, routeType := range aiSpec.Routes {
