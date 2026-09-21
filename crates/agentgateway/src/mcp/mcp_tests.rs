@@ -8437,6 +8437,187 @@ async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
 	assert!(text.contains("Business Intelligence Memo"));
 }
 
+// ── mcpGuardrails allowed_targets fanout filtering ───────────────────────────
+//
+// When CheckRequest returns `metadata.allowed_targets`, the gateway restricts
+// the fanout to only the named backends.  Backends absent from the list are
+// never contacted — no TCP connection is opened, no `initialize` is sent.
+
+#[tokio::test]
+async fn mcp_guardrails_allowed_targets_restricts_fanout_to_subset() {
+	// Two upstream backends: "a" and "b".  The guardrail allows only "a".
+	// After initialize the mock for "b" must not have received any request.
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, pass_request_with_allowed_targets, pass_response,
+	};
+
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+
+	// Capture which backend names the guardrail saw so the test can confirm
+	// the full set was forwarded to the policy server before filtering.
+	let seen_backends: Arc<std::sync::Mutex<Vec<String>>> = Arc::new(std::sync::Mutex::new(vec![]));
+	let guardrail_calls = Arc::new(AtomicUsize::new(0));
+
+	let extmcp_mock = {
+		let seen = seen_backends.clone();
+		let calls = guardrail_calls.clone();
+		closure_mock(
+			move |req| {
+				calls.fetch_add(1, Ordering::SeqCst);
+				seen.lock().unwrap().extend(req.service_names.clone());
+				// Allow only backend "a"; "b" is intentionally absent.
+				pass_request_with_allowed_targets(&["a"])
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await
+	};
+
+	let fanout_methods: std::collections::HashMap<String, guardrails::Phase> =
+		[("initialize", guardrails::Phase::Request)]
+			.into_iter()
+			.map(|(m, p)| (m.to_string(), p))
+			.collect();
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		guardrails::FailureMode::FailClosed,
+		fanout_methods,
+		std::collections::HashMap::new(),
+	);
+
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![policy],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+
+	// Send `initialize` as a raw HTTP request so we can inspect init_count
+	// without the rmcp client panicking on the post-initialize notification
+	// transport close (only one backend is reachable after filtering).
+	let http = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&http, &url, &mcp_initialize_body())
+		.header("MCP-Protocol-Version", "2025-06-18")
+		.send()
+		.await
+		.expect("initialize request should succeed");
+	assert!(resp.status().is_success(), "initialize should return 2xx");
+
+	// Give the proxy a moment to complete the upstream fanout.
+	tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+	let a_init_after = mock_a.init_count().await;
+	let b_init_after = mock_b.init_count().await;
+
+	// Guardrail fired exactly once (one fanout call covering both backends).
+	assert_eq!(
+		guardrail_calls.load(Ordering::SeqCst),
+		1,
+		"CheckRequest should fire once for the fanout initialize"
+	);
+	// Both backend names were forwarded to the policy server.
+	let seen = seen_backends.lock().unwrap().clone();
+	assert!(
+		seen.contains(&"a".to_string()),
+		"backend 'a' should appear in service_names"
+	);
+	assert!(
+		seen.contains(&"b".to_string()),
+		"backend 'b' should appear in service_names"
+	);
+
+	// Only the allowed backend ("a") received initialize.
+	assert_eq!(
+		a_init_after,
+		a_init_before + 1,
+		"backend 'a' (allowed) should have been initialized"
+	);
+	assert_eq!(
+		b_init_after, b_init_before,
+		"backend 'b' (not in allowed_targets) must not have been contacted"
+	);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_empty_allowed_targets_keeps_all_backends() {
+	// When CheckRequest returns Pass with no allowed_targets metadata, the
+	// gateway falls back to the original behaviour: all backends are contacted.
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+
+	let extmcp_mock = closure_mock(
+		// Plain Pass — no allowed_targets in metadata.
+		|_| pass_request(),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let fanout_methods: std::collections::HashMap<String, guardrails::Phase> =
+		[("initialize", guardrails::Phase::Request)]
+			.into_iter()
+			.map(|(m, p)| (m.to_string(), p))
+			.collect();
+	let policy = guardrails_test_support::policy_with(
+		extmcp_mock.address,
+		guardrails::FailureMode::FailClosed,
+		fanout_methods,
+		std::collections::HashMap::new(),
+	);
+
+	let a_init_before = mock_a.init_count().await;
+	let b_init_before = mock_b.init_count().await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
+			true,
+			vec![policy],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+
+	let http = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&http, &url, &mcp_initialize_body())
+		.header("MCP-Protocol-Version", "2025-06-18")
+		.send()
+		.await
+		.expect("initialize request should succeed");
+	assert!(resp.status().is_success(), "initialize should return 2xx");
+
+	tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+	assert_eq!(
+		mock_a.init_count().await,
+		a_init_before + 1,
+		"backend 'a' should have been initialized (no filter applied)"
+	);
+	assert_eq!(
+		mock_b.init_count().await,
+		b_init_before + 1,
+		"backend 'b' should also have been initialized (no filter applied)"
+	);
+}
+
 // Regression for https://github.com/agentgateway/agentgateway/issues/3357.
 #[tokio::test]
 async fn modern_multi_target_resolve_propagates_meta() {

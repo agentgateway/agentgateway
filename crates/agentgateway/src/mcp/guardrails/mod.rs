@@ -44,6 +44,10 @@ pub use phase::Phase;
 #[derive(Debug)]
 pub enum Outcome<T> {
 	Pass,
+	/// The request is allowed but fanout must be restricted to this backend subset.
+	/// Populated when the ext-mcp-server returns `metadata.allowed_targets`.
+	/// Empty list is never produced — the client returns `Pass` for allow-all.
+	PassFiltered(Vec<String>),
 	Mutated(T),
 	Reject(rmcp::model::ErrorData),
 }
@@ -246,6 +250,7 @@ pub async fn run_call_request<P: serde::de::DeserializeOwned>(
 		}
 		match processor.call_request::<P>(ctx, req_ctx, &client).await {
 			Outcome::Pass => {},
+			Outcome::PassFiltered(targets) => composed = Outcome::PassFiltered(targets),
 			Outcome::Mutated(p) => composed = Outcome::Mutated(p),
 			Outcome::Reject(e) => return Outcome::Reject(e),
 		}
@@ -272,7 +277,7 @@ pub async fn run_response(
 			.response(method, backends, &mut body, req_ctx, &client)
 			.await
 		{
-			Outcome::Pass => {},
+			Outcome::Pass | Outcome::PassFiltered(_) => {},
 			Outcome::Mutated(r) => composed = Outcome::Mutated(r),
 			Outcome::Reject(e) => return Outcome::Reject(e),
 		}
