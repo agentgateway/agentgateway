@@ -2663,6 +2663,54 @@ async fn make_backend_call(
 			return res.map_err(ProxyResponse::from);
 		},
 		Backend::LLMRouter(_, _) => unreachable!("LLMRouter is resolved before backend calls"),
+		Backend::A2A(_name, a2a_backend) => {
+			// Extract target name from path: /a2a/{target_name}/...
+			let path = req.uri().path();
+			let rest = path.strip_prefix("/a2a/").ok_or_else(|| {
+				ProxyError::ProcessingString("A2A backend requires /a2a/ path prefix".to_string())
+			})?;
+			let (target_name, remaining_path) = match rest.find('/') {
+				Some(idx) => (&rest[..idx], &rest[idx..]),
+				None => (rest, "/"),
+			};
+			let target = a2a_backend
+				.find(target_name)
+				.ok_or_else(|| ProxyError::RouteNotFound)?;
+			// Rewrite path: strip /a2a/{target_name} prefix, apply target.path
+			let new_path = if target.path == "/" {
+				remaining_path.to_string()
+			} else {
+				format!("{}{}", target.path.trim_end_matches('/'), remaining_path)
+			};
+			let mut parts = req.uri().clone().into_parts();
+			let mut pqb = http::uri::PathAndQuery::from_maybe_shared(new_path)
+				.map_err(|e| ProxyError::ProcessingString(format!("invalid path: {e}")))?;
+			if let Some(q) = req.uri().query() {
+				let mut s = String::from(pqb.path());
+				s.push('?');
+				s.push_str(q);
+				pqb = http::uri::PathAndQuery::from_maybe_shared(s)
+					.map_err(|e| ProxyError::ProcessingString(format!("invalid path: {e}")))?;
+			}
+			parts.path_and_query = Some(pqb);
+			*req.uri_mut() = http::Uri::from_parts(parts)
+				.map_err(|e| ProxyError::ProcessingString(format!("invalid URI: {e}")))?;
+			// Resolve target's backend reference
+			let target_backend =
+				super::resolve_simple_backend_with_policies(&target.backend, inputs.as_ref())?;
+			let simple = target_backend.backend;
+			build_simple_backend_call(
+				&inputs,
+				policy_client.clone(),
+				&simple,
+				policies,
+				&mut req,
+				&mut log,
+				response_policies,
+				hbone_source,
+			)
+			.await?
+		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
 	log.add(|l| l.health_policy = backend_call.backend_policies.health.clone());
@@ -3302,6 +3350,7 @@ fn build_connect_backend_call(
 		Backend::AI(_, _)
 		| Backend::LLMRouter(_, _)
 		| Backend::MCP(_, _)
+		| Backend::A2A(_, _)
 		| Backend::Aws(_, _)
 		| Backend::Internal(_, _) => Err(ProxyError::InvalidBackendType),
 	}

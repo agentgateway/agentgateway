@@ -1,0 +1,68 @@
+# Two A2A agent services with appProtocol: agentgateway.dev/a2a
+# and an AgentgatewayBackend using a selector to discover them.
+# These services select the existing testbox pods deployed by the e2e framework.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-alpha
+  namespace: agentgateway-base
+  labels:
+    app: a2a-agent
+    agent-name: alpha
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - name: a2a
+      port: 9999
+      appProtocol: agentgateway.dev/a2a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-beta
+  namespace: agentgateway-base
+  labels:
+    app: a2a-agent
+    agent-name: beta
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - name: a2a
+      port: 9999
+      appProtocol: agentgateway.dev/a2a
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: a2a-agents
+  namespace: agentgateway-base
+spec:
+  a2a:
+    port: 9999
+    targets:
+      - name: agents
+        selector:
+          services:
+            matchLabels:
+              app: a2a-agent
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: a2a-selector-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /a2a
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: a2a-agents

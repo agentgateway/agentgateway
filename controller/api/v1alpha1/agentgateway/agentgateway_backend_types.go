@@ -132,17 +132,83 @@ type StaticBackend struct {
 	UnixPath *string `json:"unixPath,omitempty"`
 }
 
-// A2A backend endpoint.
+// A2A backend configuration.
+// Supports both legacy static host+port and multi-target with selector-based discovery.
+// +kubebuilder:validation:XValidation:rule="has(self.targets) || has(self.host)",message="at least one of [host targets] must be set"
 type A2ABackend struct {
-	// Hostname or IP address of the A2A backend.
-	// +required
-	Host ShortString `json:"host"`
-
-	// Port number of the A2A backend.
+	// Port number used as default for all targets.
+	// Can be overridden per-target in static configurations.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +required
 	Port int32 `json:"port"`
+
+	// Targets defines the A2A targets to route to.
+	// When specified, the legacy Host field is ignored.
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MaxItems=128
+	// +optional
+	Targets []A2ATargetSelector `json:"targets,omitempty"`
+
+	// Hostname or IP address of a single A2A backend.
+	// Deprecated: Use Targets with a static entry instead.
+	// +optional
+	Host ShortString `json:"host,omitempty"`
+}
+
+// A2A target selection: either a label selector or a static destination.
+// +kubebuilder:validation:ExactlyOneOf=selector;static
+type A2ATargetSelector struct {
+	// Name of the A2A target group.
+	// Used for policy targeting via sectionName.
+	// +required
+	Name gwv1.SectionName `json:"name"`
+
+	// Label selector for discovering A2A services.
+	// +optional
+	Selector *A2ASelector `json:"selector,omitempty"`
+
+	// Static A2A destination.
+	// +optional
+	Static *A2ATarget `json:"static,omitempty"`
+}
+
+// Label selectors for discovering A2A services.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type A2ASelector struct {
+	// Namespaces selects namespaces by label.
+	// If unset, only the AgentgatewayBackend's own namespace is searched.
+	// +optional
+	Namespaces *metav1.LabelSelector `json:"namespaces,omitempty"`
+
+	// Services selects services by label within the matched namespaces.
+	// +optional
+	Services *metav1.LabelSelector `json:"services,omitempty"`
+}
+
+// Static A2A destination.
+// +kubebuilder:validation:ExactlyOneOf=host;backendRef
+type A2ATarget struct {
+	// Hostname or IP address of an external A2A backend.
+	// +optional
+	Host *ShortString `json:"host,omitempty"`
+
+	// Namespace-local Service reference by name.
+	// +optional
+	BackendRef *corev1.LocalObjectReference `json:"backendRef,omitempty"`
+
+	// Port overrides the default port for this target.
+	// If unset, uses the parent A2ABackend.Port.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port *int32 `json:"port,omitempty"`
+
+	// Base path to strip before forwarding.
+	// Default: "/" (no stripping beyond the target routing prefix).
+	// +optional
+	Path *LongString `json:"path,omitempty"`
 }
 
 // AI backend configuration.

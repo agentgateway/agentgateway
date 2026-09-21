@@ -18,6 +18,15 @@ const MCPServiceHTTPPath = "agentgateway.dev/mcp-path"
 // The value must be a valid Gateway API SectionName.
 const MCPServiceTargetName = "agentgateway.dev/mcp-target-name"
 
+// A2AServiceTargetName is the annotation used to override the target name
+// for a discovered A2A service. If unset, the Service name is used.
+// The value must be a valid DNS-1123 subdomain.
+const A2AServiceTargetName = "agentgateway.dev/a2a-target-name"
+
+// A2AServiceHTTPPath is the annotation used to specify the base path
+// for an A2A service. If unset, defaults to "/".
+const A2AServiceHTTPPath = "agentgateway.dev/a2a-path"
+
 // InternalPorts is a comma-separated list of ports whose bind should be internal
 // (routing-only: no OS listener socket, no Service port, no container port). It may
 // be set on a Gateway or a ListenerSet and may only reference ports defined by that

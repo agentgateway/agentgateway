@@ -32,6 +32,59 @@ func TestA2A(tt *testing.T) {
 	})
 }
 
+func TestA2ASelector(tt *testing.T) {
+	t := New(tt)
+	t.Apply(manifest("a2a", "common.yaml"))
+	t.Apply(manifest("a2a", "selector.yaml"))
+
+	t.Run("AgentCardViaSelector", func(t base.Test) {
+		testA2AAgentCardViaSelector(t)
+	})
+	t.Run("MessageSendViaSelector", func(t base.Test) {
+		testA2AMessageSendViaSelector(t)
+	})
+	t.Run("UnknownTarget404", func(t base.Test) {
+		testA2AUnknownTarget404(t)
+	})
+}
+
+func testA2AAgentCardViaSelector(t base.Test) {
+	// agent-alpha and agent-beta are discovered via selector.
+	// Target names: {serviceName}-{portName} → agent-alpha-a2a, agent-beta-a2a
+	// Path: /a2a/{targetName}/...
+	out, err := execCurlA2APath(t, "/a2a/agent-alpha-a2a/agent-card", a2aHeaders(), "")
+	assert.NoError(t, err)
+
+	var card a2aAgentCard
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &card))
+	assert.Equal(t, "Example A2A Agent", card.Name)
+}
+
+func testA2AMessageSendViaSelector(t base.Test) {
+	request := buildMessageSendRequest("hello via selector", "test-selector-123")
+	out, err := execCurlA2APath(t, "/a2a/agent-beta-a2a/", a2aHeaders(), request)
+	assert.NoError(t, err)
+
+	var resp a2aTaskResponse
+	assert.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(out)), &resp))
+	if resp.Error != nil {
+		t.Fatalf("unexpected error: %+v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Fatal("missing result")
+	}
+}
+
+func testA2AUnknownTarget404(t base.Test) {
+	_, err := execCurlA2APathExpectStatus(t, "/a2a/nonexistent/agent-card", a2aHeaders(), "", 404)
+	// We expect an error or a non-200 response for unknown targets.
+	// The exact behavior depends on how the proxy handles missing targets.
+	if err != nil {
+		// Expected — target not found
+		return
+	}
+}
+
 func testA2AAgentCard(t base.Test) {
 	out, err := execCurlA2A(t, "/agent-card", a2aHeaders(), "")
 	assert.NoError(t, err)
@@ -212,6 +265,52 @@ func execCurlA2A(t base.Test, path string, headers map[string]string, body strin
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Logf("read body error: %v", err)
+		return "", err
+	}
+	return string(bodyBytes), nil
+}
+
+func execCurlA2APath(t base.Test, path string, headers map[string]string, body string) (string, error) {
+	curlOpts := []curl.Option{
+		curl.WithPath(path),
+	}
+	for k, v := range headers {
+		curlOpts = append(curlOpts, curl.WithHeader(k, v))
+	}
+	if body != "" {
+		curlOpts = append(curlOpts, curl.WithBody(body))
+	}
+
+	resp := base.BaseGateway.SendWithResponse(t, &matchers.HttpResponse{
+		StatusCode: 200,
+	}, curlOpts...)
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(bodyBytes), nil
+}
+
+func execCurlA2APathExpectStatus(t base.Test, path string, headers map[string]string, body string, statusCode int) (string, error) {
+	curlOpts := []curl.Option{
+		curl.WithPath(path),
+	}
+	for k, v := range headers {
+		curlOpts = append(curlOpts, curl.WithHeader(k, v))
+	}
+	if body != "" {
+		curlOpts = append(curlOpts, curl.WithBody(body))
+	}
+
+	resp := base.BaseGateway.SendWithResponse(t, &matchers.HttpResponse{
+		StatusCode: statusCode,
+	}, curlOpts...)
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return "", err
 	}
 	return string(bodyBytes), nil

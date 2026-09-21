@@ -1,0 +1,9 @@
+- inlinePolicies:
+  - a2a: {}
+  key: test-ns/a2a-legacy
+  name:
+    name: a2a-legacy
+    namespace: test-ns
+  static:
+    host: a2a.example.com
+    port: 9090

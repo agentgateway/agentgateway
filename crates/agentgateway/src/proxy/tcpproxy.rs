@@ -300,6 +300,7 @@ impl TCPProxy {
 			},
 			Backend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 			Backend::MCP(_, _)
+			| Backend::A2A(_, _)
 			| Backend::AI(_, _)
 			| Backend::LLMRouter(_, _)
 			| Backend::Internal(_, _) => return Err(ProxyError::InvalidBackendType),

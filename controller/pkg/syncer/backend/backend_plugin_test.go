@@ -1019,6 +1019,291 @@ func TestBuildStaticIr(t *testing.T) {
 	}
 }
 
+func TestBuildA2A(t *testing.T) {
+	tests := []struct {
+		name          string
+		backend       *agentgateway.AgentgatewayBackend
+		expectError   bool
+		errorContains string
+		inputs        []any
+	}{
+		{
+			name: "Legacy A2A host+port",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-legacy",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Host: "a2a.example.com",
+						Port: 9090,
+					},
+				},
+			},
+		},
+		{
+			name: "Static backendRef A2A target",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-static-ref",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "my-agent",
+							Static: &agentgateway.A2ATarget{
+								BackendRef: &corev1.LocalObjectReference{Name: "agent-svc"},
+							},
+						}},
+					},
+				},
+			},
+			inputs: []any{
+				&corev1.Service{
+					Name:      "agent-svc",
+					Namespace: "test-ns",
+					Spec: corev1.ServiceSpec{
+						Ports: []corev1.ServicePort{{Port: 8080}},
+					},
+				},
+			},
+		},
+		{
+			name: "Static host A2A target",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-static-host",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "external-agent",
+							Static: &agentgateway.A2ATarget{
+								Host: shortStringPtr("external.example.com"),
+								Port: int32Ptr(9090),
+							},
+						}},
+					},
+				},
+			},
+		},
+		{
+			name: "Service selector A2A backend - same namespace",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-selector-same-ns",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "agents",
+							Selector: &agentgateway.A2ASelector{
+								Services: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"agent": "true"},
+								},
+							},
+						}},
+					},
+				},
+			},
+			inputs: []any{
+				createMockA2AService("test-ns", "agent-a", map[string]string{"agent": "true"}),
+				createMockA2AService("test-ns", "agent-b", map[string]string{"agent": "true"}),
+				// Service with matching labels but no a2a appProtocol — should be skipped.
+				&corev1.Service{
+					Name:      "not-a2a",
+					Namespace: "test-ns",
+					Labels:    map[string]string{"agent": "true"},
+					Spec:      corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 8080}}},
+				},
+			},
+		},
+		{
+			name: "Service selector with target name annotation",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-selector-target-name",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "agents",
+							Selector: &agentgateway.A2ASelector{
+								Services: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"agent": "true"},
+								},
+							},
+						}},
+					},
+				},
+			},
+			inputs: []any{
+				createMockA2AServiceWithAnnotations("test-ns", "agent-a",
+					map[string]string{"agent": "true"},
+					map[string]string{apiannotations.A2AServiceTargetName: "custom-name"}),
+			},
+		},
+		{
+			name: "Service selector with path annotation",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-selector-path",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "agents",
+							Selector: &agentgateway.A2ASelector{
+								Services: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"agent": "true"},
+								},
+							},
+						}},
+					},
+				},
+			},
+			inputs: []any{
+				createMockA2AServiceWithAnnotations("test-ns", "agent-a",
+					map[string]string{"agent": "true"},
+					map[string]string{apiannotations.A2AServiceHTTPPath: "/custom/path"}),
+			},
+		},
+		{
+			name: "Namespace selector A2A backend",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-ns-selector",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "all-agents",
+							Selector: &agentgateway.A2ASelector{
+								Namespaces: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"env": "prod"},
+								},
+								Services: &metav1.LabelSelector{
+									MatchLabels: map[string]string{"agent": "true"},
+								},
+							},
+						}},
+					},
+				},
+			},
+			inputs: []any{
+				&corev1.Namespace{
+					Name:   "prod-ns",
+					Labels: map[string]string{"env": "prod"},
+				},
+				createMockA2AService("prod-ns", "agent-x", map[string]string{"agent": "true"}),
+			},
+		},
+		{
+			name: "Mixed static and selector targets",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-mixed",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{
+							{
+								Name: "discovered",
+								Selector: &agentgateway.A2ASelector{
+									Services: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"agent": "true"},
+									},
+								},
+							},
+							{
+								Name: "legacy",
+								Static: &agentgateway.A2ATarget{
+									Host: shortStringPtr("legacy-agent.external.com"),
+									Port: int32Ptr(9090),
+								},
+							},
+						},
+					},
+				},
+			},
+			inputs: []any{
+				createMockA2AService("test-ns", "agent-auto", map[string]string{"agent": "true"}),
+			},
+		},
+		{
+			name: "Error - invalid service selector",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "a2a-invalid-selector",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					A2A: &agentgateway.A2ABackend{
+						Port: 8080,
+						Targets: []agentgateway.A2ATargetSelector{{
+							Name: "agents",
+							Selector: &agentgateway.A2ASelector{
+								Services: &metav1.LabelSelector{
+									MatchExpressions: []metav1.LabelSelectorRequirement{{
+										Key:      "invalid",
+										Operator: "InvalidOperator",
+										Values:   []string{"value"},
+									}},
+								},
+							},
+						}},
+					},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := testutils.BuildMockPolicyContext(t, tt.inputs)
+			result, err := agentgatewaybackend.BuildAgwBackend(ctx, tt.backend)
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Fatalf("expected error to contain %q, got %v", tt.errorContains, err)
+				}
+				return
+			}
+			assert.NoError(t, err)
+
+			b, err := yaml.Marshal(slices.Map(result, func(e *api.Backend) jsonMarshalProto {
+				return jsonMarshalProto{e}
+			}))
+			assert.NoError(t, err)
+			testutils.CompareGolden(t, b, fmt.Sprintf("testdata/%v.yaml", tt.name))
+		})
+	}
+}
+
+func createMockA2AService(namespace, name string, svcLabels map[string]string) *corev1.Service {
+	return &corev1.Service{
+		Name:      name,
+		Namespace: namespace,
+		Labels:    svcLabels,
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{{
+				Name:        "a2a",
+				Port:        8080,
+				AppProtocol: new("agentgateway.dev/a2a"),
+			}},
+		},
+	}
+}
+
+func createMockA2AServiceWithAnnotations(namespace, name string, svcLabels, annotations map[string]string) *corev1.Service {
+	svc := createMockA2AService(namespace, name, svcLabels)
+	svc.Annotations = annotations
+	return svc
+}
+
+//go:fix inline
+func int32Ptr(v int32) *int32 {
+	return new(v)
+}
+
 func TestGetSecretValue(t *testing.T) {
 	tests := []struct {
 		name         string
