@@ -2428,6 +2428,118 @@ async fn modern_malformed_known_method_params_are_not_method_not_found() {
 }
 
 #[tokio::test]
+async fn streamable_http_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn streamable_http_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn streamable_http_body_at_configured_limit_succeeds() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_body_at_configured_limit_reaches_session_lookup() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn modern_request_missing_gateway_protocol_version_returns_invalid_params() {
 	let mock = mock_modern_streamable_http_server().await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -3760,6 +3872,40 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 			.listener_frontend_policies(&listener_name, None, None)
 			.access_log
 			.is_some()
+	);
+	(t, io)
+}
+
+async fn setup_proxy_with_max_buffer_size(
+	mock: &MockServer,
+	max_buffer_size: usize,
+) -> (TestBind, SocketAddr) {
+	let (mut t, io) = setup_proxy(mock, true, false).await;
+	t.with_policy(TargetedPolicy {
+		key: "frontend/http".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::HTTP(crate::types::frontend::HTTP {
+			max_buffer_size: Some(max_buffer_size),
+			..Default::default()
+		})
+		.into(),
+	});
+	assert_eq!(
+		t.pi
+			.stores
+			.read_binds()
+			.frontend_policies(t.pi.cfg.gateway_ref())
+			.http
+			.and_then(|h| h.max_buffer_size),
+		Some(max_buffer_size)
 	);
 	(t, io)
 }

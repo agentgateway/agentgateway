@@ -124,6 +124,8 @@ pub enum Error {
 	InvalidContentType,
 	#[error("fail to deserialize request body: {0}")]
 	Deserialize(crate::http::Error),
+	#[error("request body exceeds the maximum buffer size of {0} bytes")]
+	PayloadTooLarge(usize),
 	#[error("fail to create session: {0}")]
 	StartSession(crate::http::Error),
 	#[error("session not found")]

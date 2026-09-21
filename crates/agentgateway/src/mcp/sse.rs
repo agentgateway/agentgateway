@@ -58,10 +58,13 @@ impl LegacySSEService {
 		};
 		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let bytes = body
-			.into_bytes(limit)
-			.await
-			.map_err(mcp::Error::Deserialize)?;
+		let bytes = body.into_bytes(limit).await.map_err(|e| {
+			if agent_http::is_length_limit_error(&e) {
+				mcp::Error::PayloadTooLarge(limit)
+			} else {
+				mcp::Error::Deserialize(e)
+			}
+		})?;
 		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
 			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
 		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);

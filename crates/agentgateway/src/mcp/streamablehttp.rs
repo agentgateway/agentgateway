@@ -131,6 +131,9 @@ impl StreamableHttpService {
 		let cached = body.remove_extension::<mcp::CachedRequest>();
 		let bytes = match http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,
+			Err(e) if agent_http::is_length_limit_error(&e) => {
+				return mcp::Error::PayloadTooLarge(limit).into();
+			},
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
 		let message = match cached

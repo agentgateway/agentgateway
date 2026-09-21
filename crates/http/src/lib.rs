@@ -100,6 +100,14 @@ pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<bytes::Byt
 	body.into_bytes(limit).await
 }
 
+pub fn is_length_limit_error(err: &Error) -> bool {
+	use std::error::Error as _;
+
+	err
+		.source()
+		.is_some_and(|source| source.is::<http_body_util::LengthLimitError>())
+}
+
 pub mod x_headers {
 	use http::uri::Scheme;
 	use http::{HeaderMap, HeaderName, HeaderValue, Uri};

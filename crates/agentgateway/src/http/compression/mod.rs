@@ -254,11 +254,7 @@ fn map_body_error(err: axum_core::Error) -> Error {
 }
 
 fn is_length_limit_error(err: &axum_core::Error) -> bool {
-	use std::error::Error as _;
-
-	err
-		.source()
-		.is_some_and(|source| source.is::<http_body_util::LengthLimitError>())
+	agent_http::is_length_limit_error(err)
 }
 
 #[cfg(test)]
