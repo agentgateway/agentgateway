@@ -450,6 +450,13 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 	}
 }
 
+pub(crate) fn string_array(v: &ValueBag) -> Option<Vec<String>> {
+	v.to_str_seq::<Vec<_>>()?
+		.into_iter()
+		.map(|v| v.map(|s| s.into_owned()))
+		.collect()
+}
+
 pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 	if let Some(b) = v.to_str() {
 		opentelemetry::Value::String(b.to_string().into())
@@ -457,6 +464,10 @@ pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
 		opentelemetry::Value::I64(b)
 	} else if let Some(b) = v.to_f64() {
 		opentelemetry::Value::F64(b)
+	} else if let Some(strings) = string_array(v) {
+		opentelemetry::Value::Array(opentelemetry::Array::String(
+			strings.into_iter().map(Into::into).collect(),
+		))
 	} else {
 		opentelemetry::Value::String(v.to_string().into())
 	}

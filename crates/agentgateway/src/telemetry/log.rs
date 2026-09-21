@@ -1795,6 +1795,12 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.response_model.display()),
 				),
+				(
+					"gen_ai.response.finish_reasons",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.finish_reasons.quoted()),
+				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
 					"gen_ai.usage.cache_creation.input_tokens",
@@ -2224,6 +2230,13 @@ fn to_any_value(v: &ValueBag) -> AnyValue {
 		AnyValue::Double(b)
 	} else if let Some(b) = v.to_bool() {
 		AnyValue::Boolean(b)
+	} else if let Some(strings) = super::trc::string_array(v) {
+		AnyValue::ListAny(Box::new(
+			strings
+				.into_iter()
+				.map(|s| AnyValue::String(s.into()))
+				.collect(),
+		))
 	} else {
 		AnyValue::String(v.to_string().into())
 	}
@@ -3216,6 +3229,133 @@ mod tests {
 	}
 
 	#[test]
+	fn string_arrays_remain_arrays_in_otlp_and_stored_logs() {
+		for values in [vec![], vec!["stop", "length", "stop"]] {
+			let bag = ValueBag::from_serde1(&values);
+			assert_eq!(
+				to_any_value(&bag),
+				AnyValue::ListAny(Box::new(
+					values
+						.iter()
+						.map(|s| AnyValue::String((*s).into()))
+						.collect()
+				))
+			);
+			assert_eq!(
+				trc::to_otel(&bag),
+				opentelemetry::Value::Array(opentelemetry::Array::String(
+					values.iter().map(|s| (*s).into()).collect()
+				))
+			);
+			let attrs = database_attributes(&[("gen_ai.response.finish_reasons", Some(bag))]);
+			assert_eq!(
+				serde_json::from_str::<Value>(&attrs.json).unwrap()["gen_ai.response.finish_reasons"],
+				serde_json::json!(values)
+			);
+		}
+		for value in [
+			serde_json::json!(["stop", 1]),
+			serde_json::json!([null, "stop"]),
+			serde_json::json!({"reason":"stop"}),
+			serde_json::json!([["stop"]]),
+			serde_json::json!([1, 2]),
+		] {
+			let bag = ValueBag::from_serde1(&value);
+			assert_eq!(to_any_value(&bag), AnyValue::String(bag.to_string().into()));
+			assert_eq!(
+				trc::to_otel(&bag),
+				opentelemetry::Value::String(bag.to_string().into())
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn final_stream_finish_reasons_reach_optional_metric_labels() {
+		use http_body_util::BodyExt;
+		struct Reporter(AsyncLog<llm::LLMInfo>);
+		impl agent_llm::StreamingUsageReporter for Reporter {
+			fn update(&self, f: &mut dyn FnMut(&mut llm::LLMInfo)) {
+				self.0.non_atomic_mutate(|info| f(info));
+			}
+			fn report_usage(&mut self) {}
+		}
+		for custom in [false, true] {
+			for terminal in [false, true] {
+				let request = llm::LLMRequest {
+					input_tokens: None,
+					input_format: InputFormat::Completions,
+					cache_convention: llm::CacheTokenConvention::InputIncludesCache,
+					request_model: "test".into(),
+					provider: "openai".into(),
+					streaming: true,
+					params: Default::default(),
+					prompt: None,
+					provider_state: None,
+				};
+				let mut registry = Registry::default();
+				let mut log = test_request_log();
+				log.metrics = Arc::new(Metrics::new(
+					&mut registry,
+					Default::default(),
+					Default::default(),
+				));
+				if custom {
+					let expr = Arc::new(cel::Expression::new_strict("llm != null && has(llm.finishReasons) && size(llm.finishReasons) > 0 ? llm.finishReasons[0] : 'unknown'").unwrap());
+					log.cel.cel_context.register_expression(&expr);
+					log.cel.metric_fields.add =
+						Arc::new(OrderedStringMap::from_iter([("finish_reason", expr)]));
+				}
+				log.llm_request = Some(request.clone());
+				log.llm_response.store(Some(llm::LLMInfo::new(
+					request,
+					llm::LLMResponse {
+						input_tokens: Some(1),
+						output_tokens: Some(2),
+						..Default::default()
+					},
+				)));
+				let reporter =
+					agent_llm::StreamingUsageGuard::new(Box::new(Reporter(log.llm_response.clone())));
+				let chunk = if terminal {
+					r#"{"choices":[{"index":0,"finish_reason":"length"}]}"#
+				} else {
+					r#"{"choices":[{"index":0,"delta":{"content":"partial"}}]}"#
+				};
+				let body = agent_llm::conversion::completions::passthrough_stream(
+					reporter,
+					Default::default(),
+					::http::Response::new(crate::http::Body::from(format!("data: {chunk}\n\n"))),
+				)
+				.into_body();
+				body
+					.with_observer(DropOnLog::from(log))
+					.collect()
+					.await
+					.unwrap();
+				let mut encoded = String::new();
+				prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+				let metrics: Vec<_> = encoded
+					.lines()
+					.filter(|l| l.starts_with("gen_ai_client_token_usage_"))
+					.collect();
+				assert!(!metrics.is_empty());
+				for metric in metrics {
+					if custom {
+						let want = if terminal {
+							"finish_reason=\"length\""
+						} else {
+							"finish_reason=\"error\""
+						};
+						assert!(metric.contains(want), "{metric}");
+					} else {
+						assert!(!metric.contains("finish_reason"), "{metric}");
+					}
+				}
+			}
+		}
+	}
+
+	#[test]
 	fn llm_span_uses_cache_inclusive_input_tokens() {
 		let request = llm::LLMRequest {
 			input_tokens: None,
@@ -3229,6 +3369,7 @@ mod tests {
 			provider_state: None,
 		};
 		let response = llm::LLMResponse {
+			finish_reasons: Some(vec!["stop".into(), "stop".into()]),
 			input_tokens: Some(50),
 			cached_input_tokens: Some(40),
 			cache_creation_input_tokens: Some(10),
@@ -3241,7 +3382,15 @@ mod tests {
 		};
 
 		let (tracer, exporter) = test_tracer();
+		let log_exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(log_exporter.clone())
+			.build();
+		let logger = provider.logger("test");
 		let mut log = test_request_log();
+		log.otel_logger = Some(Arc::new(OtelAccessLogger {
+			inner: super::super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
+		}));
 		log.tracer = Some(tracer.clone());
 		let mut outgoing = trc::TraceParent::new();
 		outgoing.flags = 1;
@@ -3253,6 +3402,22 @@ mod tests {
 
 		drop(DropOnLog::from(log));
 		let _ = tracer.provider.force_flush();
+
+		let records = log_exporter.records.lock().unwrap();
+		assert_eq!(records.len(), 1);
+		assert!(
+			records[0]
+				.0
+				.attributes_iter()
+				.any(
+					|(key, value)| key.as_str() == "gen_ai.response.finish_reasons"
+						&& *value
+							== AnyValue::ListAny(Box::new(vec![
+								AnyValue::String("stop".into()),
+								AnyValue::String("stop".into())
+							]))
+				)
+		);
 
 		let spans = exporter.finished_spans();
 		let span = spans
@@ -3266,6 +3431,12 @@ mod tests {
 				.find(|attr| attr.key.as_str() == key)
 				.map(|attr| &attr.value)
 		};
+		assert_eq!(
+			value("gen_ai.response.finish_reasons"),
+			Some(&opentelemetry::Value::Array(opentelemetry::Array::String(
+				vec!["stop".into(), "stop".into()]
+			)))
+		);
 		assert_eq!(
 			value("gen_ai.usage.input_tokens"),
 			Some(&opentelemetry::Value::I64(100))

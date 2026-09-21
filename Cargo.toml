@@ -266,7 +266,7 @@ serde_with = { version = "3.20", features = [
     "macros",
     "alloc",
 ], default-features = false }
-value-bag = { version = "1.12", features = ["serde", "value-bag-serde1"] }
+value-bag = { version = "1.12", features = ["serde", "value-bag-serde1", "seq"] }
 time = "0.3"
 tikv-jemallocator = { version = "0.7", features = [
     "profiling",

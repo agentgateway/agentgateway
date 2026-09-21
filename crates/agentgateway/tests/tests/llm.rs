@@ -30,10 +30,23 @@ async fn llm_openai() {
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
+}
+
+#[tokio::test]
+async fn llm_streaming_finish_reasons_without_content_logging() {
+	for (response, want) in [
+        (llm_body!("response/completions/stream.json").as_slice(), json!(["stop"])),
+        (b"data: {\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n".as_slice(), json!(["error"])),
+    ] {
+        let mock = body_mock(response).await;
+        let (_mock, _bind, io) = setup_llm_mock(mock, AIProvider::OpenAI(openai::Provider { model_override: None, moderation: None }), false, "{}");
+        assert_llm(io, &completions_request_body(true), json!({"gen_ai.response.finish_reasons": want})).await;
+    }
 }
 
 #[tokio::test]
@@ -54,6 +67,7 @@ async fn llm_openai_tokenize() {
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23
 	});
@@ -229,6 +243,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23
 	});
@@ -292,6 +307,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23
 	});
@@ -610,6 +626,7 @@ llm:
 	let want = json!({
 		"gen_ai.provider.name": "openai",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23
 	});
@@ -1720,6 +1737,7 @@ async fn llm_log_body() {
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.response.finish_reasons": ["stop"],
 		"gen_ai.usage.input_tokens": 17,
 		"gen_ai.usage.output_tokens": 23,
 		"completion": ["Sorry, I couldn't find the name of the LLM provider. Could you please provide more information or context?"],
