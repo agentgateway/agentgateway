@@ -24,6 +24,9 @@ data: {"type":"message_stop"}
 
 
 {
+  "finish_reasons": [
+    "tool_use"
+  ],
   "input_tokens": 15,
   "output_tokens": 8,
   "total_tokens": 23,

@@ -680,6 +680,7 @@ impl StreamResponse {
 }
 
 pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamResponse) {
+	log.observe_finish_reasons(&f.rest);
 	let input_tokens = f.set_if(
 		log,
 		lookups::USAGE_INPUT_TOKENS,
@@ -796,6 +797,9 @@ pub fn passthrough_aws_stream(
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::aws_sse::inspect(b, buffer_limit, move |msg| {
+			if let Ok(event) = crate::types::bedrock::ConverseStreamOutput::deserialize(msg.clone()) {
+				log.observe_bedrock(&event, crate::types::serialize_str);
+			}
 			if let Ok(parsed) = serde_json::from_slice::<StreamResponse>(msg.payload()) {
 				// Unfortunately bedrock invoke double-nests the actual content in an inner `bytes` key base64 encoded.
 				if let Some(obj) = parsed.rest.as_object()

@@ -40,6 +40,9 @@ data: [DONE]
 
 
 {
+  "finish_reasons": [
+    "completed"
+  ],
   "input_tokens": 12,
   "output_tokens": 8,
   "total_tokens": 20,

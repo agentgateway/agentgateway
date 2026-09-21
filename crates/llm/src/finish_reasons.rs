@@ -1,6 +1,11 @@
-//! Finish metadata is independent of content capture and token usage.
+//! Finish metadata is independent of content capture and token usage. Keep a slot for every
+//! observed generation until the stream ends, including when the body is dropped early.
+use std::collections::BTreeMap;
+
 use agent_core::strng::{self, Strng};
 use serde_json::Value;
+
+use crate::{StreamingUsageGuard, types};
 
 pub(crate) fn error() -> Strng {
 	strng::literal!("error")
@@ -19,6 +24,101 @@ pub(crate) fn response_status(status: Option<&str>) -> Option<Strng> {
 		Some("completed" | "incomplete") => status.map(strng::new),
 		Some("failed" | "cancelled") => Some(error()),
 		_ => None,
+	}
+}
+
+#[derive(Default)]
+pub(crate) struct FinishReasons(BTreeMap<u64, Option<Strng>>);
+
+impl FinishReasons {
+	fn observe(&mut self, index: u64, reason: Option<Strng>) {
+		// The first terminal reason wins. A repeated terminal event or a later usage-only
+		// chunk must not erase it or create another generation.
+		let entry = self.0.entry(index).or_default();
+		if entry.is_none() {
+			*entry = reason;
+		}
+	}
+
+	fn complete(&self) -> Option<Vec<Strng>> {
+		if self.0.is_empty() {
+			return None;
+		}
+		self.0.values().cloned().collect()
+	}
+
+	fn finalized(&self) -> Option<Vec<Strng>> {
+		buffered(self.0.values().cloned())
+	}
+}
+
+impl StreamingUsageGuard {
+	pub(crate) fn record_finish_reason(&self, index: u64, reason: Option<Strng>) {
+		let mut reasons = self.finish_reasons.borrow_mut();
+		reasons.observe(index, reason);
+		if let Some(complete) = reasons.complete() {
+			self.update(|info| info.response.finish_reasons = Some(complete.clone()));
+		}
+	}
+
+	pub(crate) fn finalize_finish_reasons(&self) {
+		if let Some(reasons) = self.finish_reasons.borrow().finalized() {
+			self.update(|info| info.response.finish_reasons = Some(reasons.clone()));
+		}
+	}
+
+	pub(crate) fn observe_finish_reasons(&self, value: &Value) {
+		observe_json(value, true, &mut |i, r| self.record_finish_reason(i, r));
+	}
+
+	pub(crate) fn observe_messages(
+		&self,
+		event: &types::messages::typed::MessagesStreamEvent,
+		map: impl Fn(&types::messages::typed::StopReason) -> Option<Strng>,
+	) {
+		use types::messages::typed::MessagesStreamEvent as E;
+		match event {
+			E::MessageStart { message } => {
+				self.record_finish_reason(0, message.stop_reason.as_ref().and_then(map))
+			},
+			E::MessageDelta { delta, .. } => {
+				self.record_finish_reason(0, delta.stop_reason.as_ref().and_then(map))
+			},
+			E::ContentBlockStart { .. }
+			| E::ContentBlockDelta { .. }
+			| E::ContentBlockStop { .. }
+			| E::MessageStop => self.record_finish_reason(0, None),
+			E::Ping | E::Error { .. } => {},
+		}
+	}
+
+	pub(crate) fn observe_bedrock(
+		&self,
+		event: &types::bedrock::ConverseStreamOutput,
+		map: impl Fn(&types::bedrock::StopReason) -> Option<Strng>,
+	) {
+		use types::bedrock::ConverseStreamOutput as E;
+		match event {
+			E::MessageStop(stop) => self.record_finish_reason(0, map(&stop.stop_reason)),
+			E::Metadata(_) => {},
+			_ => self.record_finish_reason(0, None),
+		}
+	}
+
+	pub(crate) fn observe_responses(&self, event: &types::responses::typed::ResponseStreamEvent) {
+		use types::responses::typed::ResponseStreamEvent as E;
+		let reason = match event {
+			E::ResponseCompleted(e) => {
+				types::serialize_str(&e.response.status).and_then(|s| response_status(Some(&s)))
+			},
+			E::ResponseIncomplete(e) => {
+				types::serialize_str(&e.response.status).and_then(|s| response_status(Some(&s)))
+			},
+			E::ResponseFailed(_) => Some(error()),
+			E::ResponseError(_) => return,
+			_ => None,
+		};
+		self.record_finish_reason(0, reason);
 	}
 }
 

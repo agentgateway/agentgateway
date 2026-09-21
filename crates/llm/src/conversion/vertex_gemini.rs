@@ -49,6 +49,12 @@ pub fn passthrough_stream(
 		let Some(Ok(chunk)) = f else {
 			return;
 		};
+		for (position, candidate) in chunk.candidates.iter().enumerate() {
+			log.record_finish_reason(
+				candidate.index.map(u64::from).unwrap_or(position as u64),
+				candidate.finish_reason.as_deref().map(strng::new),
+			);
+		}
 		if !saw_token {
 			saw_token = true;
 			log.update(|r| r.response.first_token = Some(Instant::now()));

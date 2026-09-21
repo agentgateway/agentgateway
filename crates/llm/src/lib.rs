@@ -490,11 +490,15 @@ pub trait StreamingUsageReporter: Send {
 
 pub struct StreamingUsageGuard {
 	reporter: Box<dyn StreamingUsageReporter>,
+	finish_reasons: std::cell::RefCell<finish_reasons::FinishReasons>,
 }
 
 impl StreamingUsageGuard {
 	pub fn new(reporter: Box<dyn StreamingUsageReporter>) -> Self {
-		Self { reporter }
+		Self {
+			reporter,
+			finish_reasons: Default::default(),
+		}
 	}
 
 	pub fn update(&self, mut f: impl FnMut(&mut LLMInfo)) {
@@ -503,6 +507,12 @@ impl StreamingUsageGuard {
 
 	pub fn report_usage(&mut self) {
 		self.reporter.report_usage();
+	}
+}
+
+impl Drop for StreamingUsageGuard {
+	fn drop(&mut self) {
+		self.finalize_finish_reasons();
 	}
 }
 

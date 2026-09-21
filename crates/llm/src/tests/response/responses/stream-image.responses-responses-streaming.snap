@@ -53,6 +53,9 @@ data: {"type":"response.completed","response":{"id":"","object":"response","crea
 
 
 {
+  "finish_reasons": [
+    "completed"
+  ],
   "input_tokens": 1755,
   "output_tokens": 1314,
   "total_tokens": 3069,

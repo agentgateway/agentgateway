@@ -51,6 +51,7 @@ pub fn passthrough_stream(
 				return;
 			},
 		};
+		log.observe_responses(&event);
 		match event {
 			types::responses::typed::ResponseStreamEvent::ResponseCreated(created) => {
 				log.update(|r| {

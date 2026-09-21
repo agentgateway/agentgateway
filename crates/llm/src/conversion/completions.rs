@@ -1329,6 +1329,12 @@ pub fn passthrough_stream(
 			move |f| {
 				match f {
 					Some(Ok(f)) => {
+						for choice in &f.choices {
+							log.record_finish_reason(
+								u64::from(choice.index),
+								choice.finish_reason.as_ref().and_then(types::serialize_str),
+							);
+						}
 						if let Some(reason) = f
 							.choices
 							.first()

@@ -1105,6 +1105,7 @@ pub fn passthrough_stream(
 			return;
 		};
 
+		log.observe_messages(&f, crate::types::serialize_str);
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
