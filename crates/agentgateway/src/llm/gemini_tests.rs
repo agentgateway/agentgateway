@@ -930,6 +930,7 @@ fn non_streaming_response_is_forwarded_and_usage_extracted() {
 				model: "gemini-2.5-flash",
 				tool_name_map: None,
 				namespaces: None,
+				custom_tools: None,
 			},
 		)
 		.expect("response should parse");
@@ -964,6 +965,7 @@ async fn streaming_response_is_forwarded_byte_for_byte() {
 				log_content: Default::default(),
 				tool_name_map: None,
 				namespaces: None,
+				custom_tools: None,
 			},
 		)
 		.into_body()

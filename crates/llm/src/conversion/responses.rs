@@ -1557,6 +1557,8 @@ pub mod from_messages {
 					responses::ResponseStreamEvent::ResponseInProgress(_) => {},
 					// Text finalization is handled by ResponseContentPartDone.
 					responses::ResponseStreamEvent::ResponseOutputTextDone(_) => {},
+					// Custom tool calls are currently unsupported by the Messages converter.
+					responses::ResponseStreamEvent::ResponseCustomToolCallInputDone(_) => {},
 				},
 			}
 			events

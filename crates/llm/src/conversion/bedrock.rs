@@ -2418,6 +2418,18 @@ pub mod from_responses {
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
+		// Bedrock Converse cannot declare free-form custom tools. Reject them here rather than
+		// silently dropping the definition while still forwarding matching history as toolUse.
+		if typed
+			.tools
+			.iter()
+			.flatten()
+			.any(|tool| matches!(tool, responses::Tool::Custom(_)))
+		{
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"custom tools cannot be converted to Bedrock Converse"
+			)));
+		}
 		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) = translate_internal(

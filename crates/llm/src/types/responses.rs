@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub(crate) const ADDITIONAL_TOOLS_TYPE: &str = "additional_tools";
+
 use self::typed::{
 	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
 	InputTextContent, OutputItem, OutputMessageContent as Content, OutputTextContent as OutputText,
@@ -181,7 +183,7 @@ fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut 
 			visit_json_at(value, &["reason"], ContentScope::ToolInput, f);
 		},
 		// Client-authored tool definitions, unscanned like the request's `tools` field.
-		Some("additional_tools") => {},
+		Some(ADDITIONAL_TOOLS_TYPE) => {},
 		// No readable text: references, triggers, base64 image results.
 		Some("item_reference" | "compaction_trigger" | "image_generation_call") => {},
 		// `encrypted_content`/fingerprint the API verifies on replay; a mask would break the
@@ -758,6 +760,19 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let namespaced_name = |namespace: Option<&str>, name: &str| {
+		namespace
+			.filter(|namespace| !namespace.is_empty())
+			.map_or_else(
+				|| name.to_string(),
+				|namespace| {
+					format!(
+						"{namespace}{}{name}",
+						crate::conversion::namespace_tools::NAMESPACE_SEPARATOR
+					)
+				},
+			)
+	};
 	let (id, name, arguments) = match item {
 		OutputItem::FunctionCall(call) => {
 			let arguments = match serde_json::from_str(&call.arguments) {
@@ -765,20 +780,7 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.arguments.clone()),
 			};
-			let name = call
-				.namespace
-				.as_ref()
-				.filter(|namespace| !namespace.is_empty())
-				.map_or_else(
-					|| call.name.clone(),
-					|namespace| {
-						format!(
-							"{namespace}{}{}",
-							crate::conversion::namespace_tools::NAMESPACE_SEPARATOR,
-							call.name
-						)
-					},
-				);
+			let name = namespaced_name(call.namespace.as_deref(), &call.name);
 			(&call.call_id, name, arguments)
 		},
 		OutputItem::CustomToolCall(call) => {
@@ -787,7 +789,11 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
 				Err(_) => serde_json::Value::String(call.input.clone()),
 			};
-			(&call.call_id, call.name.clone(), arguments)
+			(
+				&call.call_id,
+				namespaced_name(call.namespace.as_deref(), &call.name),
+				arguments,
+			)
 		},
 		_ => return None,
 	};
@@ -957,19 +963,21 @@ pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		Annotation, AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
+		Annotation, AssistantRole, CreateResponse, CustomToolCall, CustomToolCallOutput,
+		CustomToolCallOutputOutput, CustomToolParam, CustomToolParamFormat, EasyInputContent,
+		EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall, IncompleteDetails,
+		InputContent, InputItem, InputMessage, InputParam, InputRole, InputTextContent,
+		InputTokenDetails, Item, MessageItem, NamespaceToolParamTool, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
 		Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
 		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
-		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseCreatedEvent, ResponseCustomToolCallInputDoneEvent, ResponseErrorEvent,
+		ResponseFailedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
+		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent,
+		ResponseRefusalDoneEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam,
+		ResponseUsage, Role, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -1008,6 +1016,10 @@ pub mod typed {
 		/// Emitted when function-call arguments are finalized.
 		#[serde(rename = "response.function_call_arguments.done")]
 		ResponseFunctionCallArgumentsDone(openai_responses::ResponseFunctionCallArgumentsDoneEvent),
+		/// Emitted when custom-tool input is finalized. Chat Completions arguments are JSON
+		/// fragments, so this compatibility path emits only the completed raw input.
+		#[serde(rename = "response.custom_tool_call_input.done")]
+		ResponseCustomToolCallInputDone(openai_responses::ResponseCustomToolCallInputDoneEvent),
 		/// Emitted when a content part is done.
 		#[serde(rename = "response.content_part.done")]
 		ResponseContentPartDone(openai_responses::ResponseContentPartDoneEvent),
@@ -1109,6 +1121,40 @@ mod tests {
 			tool_calls[0].arguments,
 			serde_json::json!({"location":"San Francisco"})
 		);
+	}
+
+	#[test]
+	fn namespaced_custom_tool_calls_are_distinct_in_logs() {
+		let output = ["shell", "admin"]
+			.into_iter()
+			.map(|namespace| {
+				serde_json::from_value(serde_json::json!({
+					"type": "custom_tool_call",
+					"id": format!("ctc_{namespace}"),
+					"call_id": format!("call_{namespace}"),
+					"namespace": namespace,
+					"name": "exec",
+					"input": "pwd"
+				}))
+				.unwrap()
+			})
+			.collect();
+		let response = response_with_output(output);
+
+		let messages = response
+			.to_llm_response(crate::LogContentFields {
+				completion: true,
+				tool_calls: true,
+			})
+			.output_messages
+			.unwrap();
+		let names: Vec<_> = messages[0]
+			.tool_calls()
+			.into_iter()
+			.map(|call| call.name.to_string())
+			.collect();
+
+		assert_eq!(names, ["shell__exec", "admin__exec"]);
 	}
 
 	#[test]
