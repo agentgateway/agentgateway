@@ -262,3 +262,125 @@ fn buffered_background_responses_have_no_finish_reasons() {
 		}
 	}
 }
+
+#[tokio::test]
+async fn translations_record_client_reasons_before_usage() {
+	for (reason, messages, responses) in [
+		("stop", "end_turn", "completed"),
+		("length", "max_tokens", "incomplete"),
+		("tool_calls", "tool_use", "completed"),
+		("content_filter", "refusal", "error"),
+	] {
+		let input = sse(&[
+			json!({"id":"test","model":"test","choices":[{"index":0,"delta":{},"finish_reason":reason}]}),
+		]);
+		for (target, want) in [(0, messages), (1, responses)] {
+			let (log, info) = reporter();
+			let body = Body::from(input.clone());
+			let body = if target == 0 {
+				conversion::completions::from_messages::translate_stream(
+					body,
+					1024 * 1024,
+					log,
+					LogContentFields::default(),
+				)
+			} else {
+				conversion::openai_compat::to_responses::translate_stream(
+					body,
+					1024 * 1024,
+					log,
+					LogContentFields::default(),
+					None,
+				)
+			};
+			body.collect().await.unwrap();
+			assert_eq!(reasons(&info), expected(&[want]));
+		}
+	}
+}
+
+#[test]
+fn buffered_translations_do_not_hide_missing_reasons() {
+	let mut value: Value =
+		serde_json::from_str(include_str!("tests/response/completions/basic.json")).unwrap();
+	value["choices"][0]["finish_reason"] = Value::Null;
+	let bytes = Bytes::from(serde_json::to_vec(&value).unwrap());
+	for response in [
+		conversion::completions::from_messages::translate_response(&bytes).unwrap(),
+		conversion::openai_compat::to_responses::translate_response(&bytes, "test", None).unwrap(),
+	] {
+		assert_eq!(
+			response
+				.to_llm_response(LogContentFields::default())
+				.finish_reasons,
+			expected(&["error"])
+		);
+		// Existing compatibility terminals are still serialized on the wire.
+		assert!(
+			!String::from_utf8(response.serialize().unwrap())
+				.unwrap()
+				.contains("\"error\"")
+		);
+	}
+}
+
+#[tokio::test]
+async fn bedrock_reasons_survive_missing_metadata() {
+	let input = include_bytes!("tests/response/bedrock/basic.bin");
+	// Keep complete AWS frames up to messageStop, dropping the trailing metadata frame.
+	let mut end = 0;
+	while end < input.len() {
+		let len = u32::from_be_bytes(input[end..end + 4].try_into().unwrap()) as usize;
+		let frame = &input[end..end + len];
+		end += len;
+		if frame
+			.windows(b"messageStop".len())
+			.any(|w| w == b"messageStop")
+		{
+			break;
+		}
+	}
+	assert!(end < input.len());
+	for (target, want) in [
+		(0, "stop"),
+		(1, "end_turn"),
+		(2, "completed"),
+		(3, "end_turn"),
+	] {
+		let (log, info) = reporter();
+		let body = Body::from(Bytes::copy_from_slice(&input[..end]));
+		let body = match target {
+			0 => conversion::bedrock::from_completions::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+			),
+			1 => conversion::bedrock::from_messages::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+			),
+			2 => conversion::bedrock::from_responses::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+				None,
+			),
+			_ => types::detect::passthrough_aws_stream(log, http::Response::new(body)).into_body(),
+		};
+		body.collect().await.unwrap();
+		assert_eq!(reasons(&info), expected(&[want]));
+	}
+}

@@ -114,8 +114,17 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let missing = vec![
+			resp
+				.choices
+				.first()
+				.is_some_and(|c| c.finish_reason.is_none()),
+		];
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(crate::finish_reasons::with_missing_reasons(
+			Box::new(anthropic),
+			missing,
+		))
 	}
 
 	/// First string among the candidate extension values, in precedence order.
@@ -580,6 +589,9 @@ pub mod from_messages {
 					return events;
 				},
 				SseJsonEvent::Data(Ok(f)) => {
+					if !f.choices.is_empty() {
+						log.record_finish_reason(0, None);
+					}
 					if !state.sent_message_start {
 						state.sent_message_start = true;
 						push_event(
@@ -732,6 +744,7 @@ pub mod from_messages {
 								stop_reason = messages::StopReason::StopSequence;
 								state.pending_stop_sequence = Some(seq);
 							}
+							log.record_finish_reason(0, crate::types::serialize_str(&stop_reason));
 							state.pending_stop_reason = Some(stop_reason);
 						}
 					}

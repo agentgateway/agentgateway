@@ -218,6 +218,50 @@ fn observe_json(value: &Value, streaming: bool, observe: &mut impl FnMut(u64, Op
 	}
 }
 
+/// Some translations synthesize a terminal wire value for compatibility. Preserve the fact
+/// that the provider never supplied that reason without changing the serialized response.
+pub(crate) fn with_missing_reasons(
+	inner: Box<dyn crate::ResponseType>,
+	missing: Vec<bool>,
+) -> Box<dyn crate::ResponseType> {
+	if !missing.iter().any(|missing| *missing) {
+		return inner;
+	}
+	struct Response {
+		inner: Box<dyn crate::ResponseType>,
+		missing: Vec<bool>,
+	}
+	impl crate::ResponseType for Response {
+		fn to_llm_response(&self, content: crate::LogContentFields) -> crate::LLMResponse {
+			let mut response = self.inner.to_llm_response(content);
+			if let Some(reasons) = response.finish_reasons.as_mut() {
+				for (reason, missing) in reasons.iter_mut().zip(&self.missing) {
+					if *missing {
+						*reason = error();
+					}
+				}
+			}
+			response
+		}
+		fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
+			self.inner.to_webhook_choices()
+		}
+		fn set_webhook_choices(
+			&mut self,
+			choices: Vec<crate::webhook::ResponseChoice>,
+		) -> anyhow::Result<()> {
+			self.inner.set_webhook_choices(choices)
+		}
+		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+			self.inner.serialize()
+		}
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+			self.inner.visit_text_mut(f);
+		}
+	}
+	Box::new(Response { inner, missing })
+}
+
 #[cfg(test)]
 #[path = "finish_reasons_tests.rs"]
 mod tests;

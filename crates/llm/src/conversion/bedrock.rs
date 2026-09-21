@@ -1236,6 +1236,9 @@ pub mod from_completions {
 		let message_id = message_id.to_string();
 		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
+			log.observe_bedrock(&res, |r| {
+				crate::types::serialize_str(&translate_stop_reason(r))
+			});
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
 				Some(completions::StreamResponse {
 					id: message_id.to_string(),
@@ -2054,6 +2057,9 @@ pub mod from_messages {
 				},
 			};
 
+			log.observe_bedrock(&event, |r| {
+				crate::types::serialize_str(&translate_stop_reason(*r))
+			});
 			match event {
 				bedrock::ConverseStreamOutput::MessageStart(_start) => {
 					let event = messages::MessagesStreamEvent::MessageStart {
@@ -3215,6 +3221,17 @@ pub mod from_responses {
 				},
 			};
 
+			log.observe_bedrock(&event, |r| {
+				Some(match r {
+					bedrock::StopReason::MaxTokens | bedrock::StopReason::ModelContextWindowExceeded => {
+						strng::literal!("incomplete")
+					},
+					bedrock::StopReason::ContentFiltered | bedrock::StopReason::GuardrailIntervened => {
+						crate::finish_reasons::error()
+					},
+					_ => strng::literal!("completed"),
+				})
+			});
 			let mut events = match event {
 				bedrock::ConverseStreamOutput::MessageStart(_start) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();

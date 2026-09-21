@@ -26,6 +26,9 @@ data: {"type":"message_stop"}
 
 
 {
+  "finish_reasons": [
+    "refusal"
+  ],
   "input_tokens": 5,
   "output_tokens": 3,
   "total_tokens": 8,

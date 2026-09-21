@@ -53,6 +53,9 @@ data: {"type":"response.completed","sequence_number":16,"response":{"created_at"
 
 
 {
+  "finish_reasons": [
+    "completed"
+  ],
   "input_tokens": 10,
   "output_tokens": 10,
   "total_tokens": 20,

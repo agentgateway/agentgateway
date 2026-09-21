@@ -1201,6 +1201,9 @@ pub mod from_messages {
 			}
 			ensure_message_start(state, events, log);
 
+			if let Some(reason) = state.pending_stop_reason.as_ref() {
+				log.record_finish_reason(0, types::serialize_str(reason));
+			}
 			let stop_reason = state.pending_stop_reason.take().unwrap_or({
 				if state.saw_tool_call {
 					messages::StopReason::ToolUse
@@ -1246,6 +1249,11 @@ pub mod from_messages {
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
+			if let SseJsonEvent::Data(Ok(event)) = &evt
+				&& !matches!(event, responses::ResponseStreamEvent::ResponseError(_))
+			{
+				log.record_finish_reason(0, None);
+			}
 			match evt {
 				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {

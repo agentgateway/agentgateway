@@ -17,6 +17,9 @@ data: {"type":"error","error":{"type":"api_error","message":"responses stream fa
 
 
 {
+  "finish_reasons": [
+    "error"
+  ],
   "input_tokens": 100,
   "output_tokens": 5,
   "total_tokens": 105,

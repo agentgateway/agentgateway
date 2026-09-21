@@ -733,6 +733,9 @@ pub mod from_completions {
 			};
 			// ignore errors... what else can we do?
 			let f = f.ok()?;
+			log.observe_messages(&f, |r| {
+				crate::types::serialize_str(&super::translate_stop_reason(r))
+			});
 
 			// Extract info we need
 			match f {
