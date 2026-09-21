@@ -38,6 +38,18 @@ pub fn json_passthrough<F: DeserializeOwned>(
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
 ) -> Body {
+	data_passthrough(b, buffer_limit, move |data| {
+		f(data.map(|data| serde_json::from_slice::<F>(&data).map_err(anyhow::Error::from)))
+	})
+}
+
+/// Inspect SSE payloads without pre-parsing them, preserving the original wire bytes.
+/// `None` denotes the protocol's `[DONE]` event.
+pub(crate) fn data_passthrough(
+	b: Body,
+	buffer_limit: usize,
+	mut f: impl FnMut(Option<Bytes>) + Send + 'static,
+) -> Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 
 	passthrough_parser(b, decoder, move |o| {
@@ -48,8 +60,7 @@ pub fn json_passthrough<F: DeserializeOwned>(
 			f(None);
 			return;
 		}
-		let obj = serde_json::from_slice::<F>(&data);
-		f(Some(obj.map_err(anyhow::Error::from)))
+		f(Some(data))
 	})
 }
 

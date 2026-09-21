@@ -110,6 +110,54 @@ async fn completions_interleaved_reasons_survive_usage_and_repeated_terminals() 
 }
 
 #[tokio::test]
+async fn completions_without_indexes_use_position_and_keep_duplicates() {
+	for (choices, want) in [
+		(
+			json!([{"finish_reason":"tool_calls"},{"finish_reason":"tool_calls"},{}]),
+			["tool_calls", "tool_calls", "error"],
+		),
+		(
+			json!([{"index":4,"finish_reason":"length"},{"finish_reason":"stop"},{"index":0,"finish_reason":"tool_calls"}]),
+			["tool_calls", "stop", "length"],
+		),
+	] {
+		let (log, info) = reporter();
+		completions(Body::from(sse(&[json!({"choices":choices})])), log)
+			.collect()
+			.await
+			.unwrap();
+		assert_eq!(reasons(&info), expected(&want));
+	}
+}
+
+#[tokio::test]
+async fn completions_raw_fallback_preserves_reasons_and_wire_bytes() {
+	let mut input = sse(&[
+		json!({"choices":[{"index":0,"delta":{"content":"hello"}}]}),
+		json!({"choices":[{"index":1,"finish_reason":"provider_extension"}]}),
+		json!({"choices":[{"index":2,"delta":{"content":7},"finish_reason":"length"}]}),
+	]);
+	input.push_str("data: {invalid json\n\n");
+	input.push_str(&sse(&[
+		json!({"choices":[{"index":0,"finish_reason":"stop"}]}),
+		json!({"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}),
+	]));
+	input.push_str("data: [DONE]\n\n");
+	let (log, info) = reporter();
+	let output = completions(Body::from(input.clone()), log)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(output, input);
+	assert_eq!(
+		reasons(&info),
+		expected(&["stop", "provider_extension", "length"])
+	);
+	assert_eq!(info.lock().unwrap().response.total_tokens, Some(5));
+}
+
+#[tokio::test]
 async fn disconnect_and_body_error_finalize_pending_choices() {
 	for fail in [false, true] {
 		let (log, info) = reporter();
@@ -152,6 +200,34 @@ async fn gemini_indexes_and_missing_reasons() {
 		};
 		body.collect().await.unwrap();
 		assert_eq!(reasons(&info), expected(&["STOP", "MAX_TOKENS", "error"]));
+	}
+}
+
+#[tokio::test]
+async fn messages_reasons_are_independent_of_usage_and_content() {
+	for (reason, want) in [
+		(Some("max_tokens"), "max_tokens"),
+		(Some("tool_use"), "tool_use"),
+		(None, "error"),
+	] {
+		let mut values = vec![
+			json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}),
+		];
+		if let Some(reason) = reason {
+			values.push(json!({"type":"message_delta","delta":{"stop_reason":reason}}));
+		}
+		values.push(json!({"type":"error","error":{"type":"api_error","message":"failed"}}));
+		let (log, info) = reporter();
+		conversion::messages::passthrough_stream(
+			Body::from(sse(&values)),
+			1024 * 1024,
+			log,
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap();
+		assert_eq!(reasons(&info), expected(&[want]));
 	}
 }
 

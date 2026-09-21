@@ -1080,6 +1080,15 @@ impl StreamingToolCalls {
 	}
 }
 
+// Preserve finish reasons from provider extensions and events that omit usage.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
+enum PassthroughStreamEvent {
+	Typed(messages::MessagesStreamEvent),
+	Raw(crate::types::detect::StreamResponse),
+}
+
 pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
@@ -1091,7 +1100,7 @@ pub fn passthrough_stream(
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
-	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
+	parse::sse::json_passthrough::<PassthroughStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
 		let Some(Ok(f)) = f else {
 			// Stream ended ([DONE]): flush completion if not already set via MessageDelta
@@ -1106,6 +1115,15 @@ pub fn passthrough_stream(
 				});
 			}
 			return;
+		};
+
+		let f = match f {
+			PassthroughStreamEvent::Typed(event) => event,
+			PassthroughStreamEvent::Raw(raw) => {
+				// Partial usage must not consume the reporter's one-shot rate-limit amendment.
+				log.observe_finish_reasons(&raw.rest);
+				return;
+			},
 		};
 
 		log.observe_messages(&f, crate::types::serialize_str);

@@ -1310,6 +1310,26 @@ pub fn passthrough_stream(
 	log_content: crate::LogContentFields,
 	resp: Response<Body>,
 ) -> Response<Body> {
+	// Parse the fields used by passthrough telemetry directly from the SSE payload.
+	// Unlike the translation type, keep missing indexes distinct from explicit zero.
+	#[derive(serde::Deserialize)]
+	struct PassthroughResponse {
+		#[serde(rename = "id")]
+		_id: String,
+		choices: Vec<PassthroughChoice>,
+		model: String,
+		service_tier: Option<String>,
+		usage: Option<types::completions::typed::Usage>,
+	}
+
+	#[derive(serde::Deserialize)]
+	struct PassthroughChoice {
+		index: Option<u64>,
+		#[serde(default)]
+		delta: types::completions::typed::StreamResponseDelta,
+		finish_reason: Option<types::completions::typed::FinishReason>,
+	}
+
 	#[derive(Default)]
 	struct PendingPassthroughToolCall {
 		id: Option<String>,
@@ -1336,118 +1356,123 @@ pub fn passthrough_stream(
 		let mut seen_provider = false;
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
-		parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
-			b,
-			buffer_limit,
-			move |f| {
-				match f {
-					Some(Ok(f)) => {
-						for choice in &f.choices {
-							log.record_finish_reason(
-								u64::from(choice.index),
-								choice.finish_reason.as_ref().and_then(types::serialize_str),
-							);
-						}
-						if let Some(reason) = f
-							.choices
-							.first()
-							.and_then(|choice| choice.finish_reason.as_ref())
-						{
-							finish_reason = crate::types::serialize_str(reason);
-						}
-						if let Some(c) = completion.as_mut()
-							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
-						{
-							c.push_str(delta);
-						}
-						if let Some(pending) = pending_tool_calls.as_mut()
-							&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
-						{
-							for chunk in deltas {
-								let entry = pending.entry(chunk.index).or_default();
-								if let Some(id) = &chunk.id {
-									entry.id = Some(id.clone());
+		parse::sse::data_passthrough(b, buffer_limit, move |f| {
+			match f {
+				Some(data) => {
+					let f = match serde_json::from_slice::<PassthroughResponse>(&data) {
+						Ok(f) => f,
+						Err(e) => {
+							debug!("failed to parse streaming response: {e}");
+							// Preserve finish metadata for provider extensions and malformed typed
+							// events. Only the error path allocates a JSON tree for the whole chunk.
+							if let Ok(raw) = serde_json::from_slice::<serde_json::Value>(&data) {
+								log.observe_finish_reasons(&raw);
+							}
+							return;
+						},
+					};
+					for (position, choice) in f.choices.iter().enumerate() {
+						log.record_finish_reason(
+							choice.index.unwrap_or(position as u64),
+							choice.finish_reason.as_ref().and_then(types::serialize_str),
+						);
+					}
+					if let Some(reason) = f
+						.choices
+						.first()
+						.and_then(|choice| choice.finish_reason.as_ref())
+					{
+						finish_reason = crate::types::serialize_str(reason);
+					}
+					if let Some(c) = completion.as_mut()
+						&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
+					{
+						c.push_str(delta);
+					}
+					if let Some(pending) = pending_tool_calls.as_mut()
+						&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
+					{
+						for chunk in deltas {
+							let entry = pending.entry(chunk.index).or_default();
+							if let Some(id) = &chunk.id {
+								entry.id = Some(id.clone());
+							}
+							if let Some(function) = &chunk.function {
+								if let Some(name) = &function.name {
+									entry.name = Some(name.clone());
 								}
-								if let Some(function) = &chunk.function {
-									if let Some(name) = &function.name {
-										entry.name = Some(name.clone());
-									}
-									if let Some(args) = &function.arguments {
-										entry.arguments.push_str(args);
-									}
+								if let Some(args) = &function.arguments {
+									entry.arguments.push_str(args);
 								}
 							}
 						}
-						let now = Instant::now();
-						if !saw_token {
-							saw_token = true;
-							last_token_at = Some(now);
-							log.update(|r| {
-								r.response.first_token = Some(now);
-							});
-						} else if let Some(prev) = last_token_at.replace(now) {
-							let gap = now.duration_since(prev);
-							log.update(|r| r.response.inter_chunk_latencies.record(gap));
-						}
-						if !seen_provider {
-							seen_provider = true;
-							log.update(|r| {
-								r.response.provider_model = Some(strng::new(&f.model));
-								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
-							});
-						}
-						if let Some(u) = f.usage {
-							log.update(|r| {
-								r.response.input_tokens = Some(u.prompt_tokens as u64);
-								r.response.input_audio_tokens = u
-									.prompt_tokens_details
-									.as_ref()
-									.and_then(|d| d.audio_tokens);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
-								r.response.output_audio_tokens = u
-									.completion_tokens_details
-									.as_ref()
-									.and_then(|d| d.audio_tokens);
-								r.response.total_tokens = Some(u.total_tokens as u64);
-								r.response.cached_input_tokens = u
-									.prompt_tokens_details
-									.as_ref()
-									.and_then(|d| d.cached_tokens);
-								r.response.cache_creation_input_tokens = u
-									.prompt_tokens_details
-									.as_ref()
-									.and_then(|d| d.cache_write_tokens)
-									.or(u.cache_creation_input_tokens);
-								r.response.reasoning_tokens = u
-									.completion_tokens_details
-									.as_ref()
-									.and_then(|d| d.reasoning_tokens);
-								if let Some(c) = completion.take() {
-									r.response.completion = Some(vec![c]);
-								}
-								let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
-								build_output_messages(&mut r.response, tool_parts, finish_reason.take());
-							});
-
-							log.report_usage();
-						}
-					},
-					Some(Err(e)) => {
-						debug!("failed to parse streaming response: {e}");
-					},
-					None => {
-						// We are done, try to set completion if we haven't already
-						// This is useful in case we never see "usage"
+					}
+					let now = Instant::now();
+					if !saw_token {
+						saw_token = true;
+						last_token_at = Some(now);
 						log.update(|r| {
+							r.response.first_token = Some(now);
+						});
+					} else if let Some(prev) = last_token_at.replace(now) {
+						let gap = now.duration_since(prev);
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
+					}
+					if !seen_provider {
+						seen_provider = true;
+						log.update(|r| {
+							r.response.provider_model = Some(strng::new(&f.model));
+							r.response.service_tier = f.service_tier.as_deref().map(Into::into);
+						});
+					}
+					if let Some(u) = f.usage {
+						log.update(|r| {
+							r.response.input_tokens = Some(u.prompt_tokens as u64);
+							r.response.input_audio_tokens = u
+								.prompt_tokens_details
+								.as_ref()
+								.and_then(|d| d.audio_tokens);
+							r.response.output_tokens = Some(u.completion_tokens as u64);
+							r.response.output_audio_tokens = u
+								.completion_tokens_details
+								.as_ref()
+								.and_then(|d| d.audio_tokens);
+							r.response.total_tokens = Some(u.total_tokens as u64);
+							r.response.cached_input_tokens = u
+								.prompt_tokens_details
+								.as_ref()
+								.and_then(|d| d.cached_tokens);
+							r.response.cache_creation_input_tokens = u
+								.prompt_tokens_details
+								.as_ref()
+								.and_then(|d| d.cache_write_tokens)
+								.or(u.cache_creation_input_tokens);
+							r.response.reasoning_tokens = u
+								.completion_tokens_details
+								.as_ref()
+								.and_then(|d| d.reasoning_tokens);
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}
 							let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
 							build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 						});
-					},
-				}
-			},
-		)
+
+						log.report_usage();
+					}
+				},
+				None => {
+					// We are done, try to set completion if we haven't already
+					// This is useful in case we never see "usage"
+					log.update(|r| {
+						if let Some(c) = completion.take() {
+							r.response.completion = Some(vec![c]);
+						}
+						let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
+						build_output_messages(&mut r.response, tool_parts, finish_reason.take());
+					});
+				},
+			}
+		})
 	})
 }
