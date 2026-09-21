@@ -38,6 +38,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "stop_sequence"
+    ],
     "input_tokens": 4,
     "output_tokens": 2,
     "total_tokens": 6,

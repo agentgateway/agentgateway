@@ -64,6 +64,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "tool_use"
+    ],
     "input_tokens": 20,
     "output_tokens": 5,
     "total_tokens": 25,

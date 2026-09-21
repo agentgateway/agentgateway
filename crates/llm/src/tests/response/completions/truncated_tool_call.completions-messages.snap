@@ -45,6 +45,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "max_tokens"
+    ],
     "input_tokens": 20,
     "output_tokens": 15,
     "total_tokens": 35,

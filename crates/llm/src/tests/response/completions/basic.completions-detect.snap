@@ -68,6 +68,9 @@ info:
     "system_fingerprint": null
   },
   "parsed": {
+    "finish_reasons": [
+      "stop"
+    ],
     "input_tokens": 17,
     "input_audio_tokens": 0,
     "output_tokens": 23,

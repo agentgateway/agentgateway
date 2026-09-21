@@ -41,6 +41,9 @@ info:
     "modelVersion": "gemini-2.5-pro"
   },
   "parsed": {
+    "finish_reasons": [
+      "STOP"
+    ],
     "input_tokens": 8,
     "output_tokens": 6,
     "total_tokens": 14,

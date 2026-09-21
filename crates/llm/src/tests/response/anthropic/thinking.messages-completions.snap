@@ -56,6 +56,9 @@ info:
     "object": "chat.completion"
   },
   "parsed": {
+    "finish_reasons": [
+      "stop"
+    ],
     "input_tokens": 47,
     "output_tokens": 251,
     "total_tokens": 298,

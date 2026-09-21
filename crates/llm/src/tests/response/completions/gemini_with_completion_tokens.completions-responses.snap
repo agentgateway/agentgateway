@@ -56,6 +56,9 @@ info:
     "object": "response"
   },
   "parsed": {
+    "finish_reasons": [
+      "incomplete"
+    ],
     "input_tokens": 7,
     "output_tokens": 12,
     "total_tokens": 402,

@@ -14,6 +14,7 @@ pub mod bedrock;
 pub mod conversion;
 pub mod copilot;
 pub mod custom;
+mod finish_reasons;
 pub mod gemini;
 pub mod model_catalog;
 pub mod openai;
@@ -366,6 +367,9 @@ impl LLMInfo {
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct LLMResponse {
+	/// Client-facing reasons for each observed generation, independent of content capture.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finish_reasons: Option<Vec<Strng>>,
 	/// Provider-reported input tokens. Whether this includes cache tokens is described by the
 	/// corresponding request's [`CacheTokenConvention`].
 	#[serde(skip_serializing_if = "Option::is_none")]

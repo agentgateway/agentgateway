@@ -55,6 +55,9 @@ info:
     ]
   },
   "parsed": {
+    "finish_reasons": [
+      "tool_use"
+    ],
     "input_tokens": 558,
     "output_tokens": 48,
     "total_tokens": 606,

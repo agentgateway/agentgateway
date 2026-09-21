@@ -79,6 +79,9 @@ info:
     "system_fingerprint": null
   },
   "parsed": {
+    "finish_reasons": [
+      "stop"
+    ],
     "input_tokens": 320,
     "input_audio_tokens": 240,
     "output_tokens": 180,

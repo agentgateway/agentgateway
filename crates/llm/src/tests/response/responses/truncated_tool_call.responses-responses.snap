@@ -39,6 +39,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "incomplete"
+    ],
     "provider_model": "gpt-x",
     "output_messages": [
       {
