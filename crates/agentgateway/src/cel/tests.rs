@@ -700,3 +700,35 @@ fn log_guardrails_binding() {
 	.unwrap();
 	assert!(exec.eval_bool(&exp));
 }
+
+#[test]
+fn guarded_finish_reason_access() {
+	let expression = Expression::new_strict("llm != null && has(llm.finishReasons) && size(llm.finishReasons) > 0 ? llm.finishReasons[0] : 'unknown'").unwrap();
+	let mut context = full_example_executor();
+	for (reasons, want) in [
+		(None, "unknown"),
+		(Some(vec![]), "unknown"),
+		(Some(vec!["length".into(), "stop".into()]), "length"),
+	] {
+		context.llm.as_mut().unwrap().finish_reasons = reasons;
+		assert_eq!(
+			context
+				.as_executor()
+				.eval(&expression)
+				.unwrap()
+				.json()
+				.unwrap(),
+			json!(want)
+		);
+	}
+	context.llm = None;
+	assert_eq!(
+		context
+			.as_executor()
+			.eval(&expression)
+			.unwrap()
+			.json()
+			.unwrap(),
+		json!("unknown")
+	);
+}

@@ -355,6 +355,16 @@
         "null"
       ],
       "properties": {
+        "finishReasons": {
+          "description": "Client-facing finish reasons, one per observed generation. Missing expected reasons become `error` when the response ends. Available without content logging.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "streaming": {
           "description": "Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.",
           "type": "boolean"

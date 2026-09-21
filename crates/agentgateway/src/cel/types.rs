@@ -1471,6 +1471,10 @@ impl GuardrailInfo {
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct LLMContext {
+	/// Client-facing finish reasons, one per observed generation. Missing expected reasons become `error` when the response ends. Available without content logging.
+	#[dynamic(rename = "finishReasons")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finish_reasons: Option<Vec<Strng>>,
 	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
 	/// The model requested for the LLM request. This may differ from the actual model used.
@@ -1607,6 +1611,7 @@ impl LLMContext {
 
 		let resp = value.response;
 		let mut base = LLMContext {
+			finish_reasons: resp.finish_reasons.clone(),
 			provider_input_tokens: resp.input_tokens,
 			output_tokens: resp.output_tokens,
 			output_image_tokens: resp.output_image_tokens,
@@ -1706,6 +1711,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			provider_state: _,
 		} = info;
 		LLMContext {
+			finish_reasons: None,
 			streaming,
 			request_model,
 			provider,
@@ -2430,6 +2436,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			"model": "provider/model"
 		})),
 		llm: Some(LLMContext {
+			finish_reasons: None,
 			streaming: false,
 			request_model: "gpt-4".into(),
 			response_model: Some("gpt-4-turbo".into()),
