@@ -1,0 +1,87 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: be
+  namespace: default
+spec:
+  static:
+    host: be.example.com
+    port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: be
+      group: agentgateway.dev
+  backend:
+    health:
+      eviction:
+        restoreHealth: 100
+      active:
+        path: /healthz
+        interval: 5s
+        timeout: 2s
+        healthyThreshold: 2
+        unhealthyThreshold: 4
+        expectedStatuses: [200, 204]
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        health:
+          active:
+            expectedStatuses:
+            - 200
+            - 204
+            healthyThreshold: 2
+            interval: 5s
+            path: /healthz
+            timeout: 2s
+            unhealthyThreshold: 4
+          eviction:
+            restoreHealth: 1
+      key: default/agw:health:default/be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        backend:
+          name: be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
