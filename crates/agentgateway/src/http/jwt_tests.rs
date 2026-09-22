@@ -754,12 +754,19 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 }
 
 fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
+	setup_test_multi_jwt_with_kids("kid-1", "kid-2")
+}
+
+fn setup_test_multi_jwt_with_kids(
+	kid1: &'static str,
+	kid2: &'static str,
+) -> (Jwt, ProviderInfo, ProviderInfo) {
 	let jwks1 = json!({
 		"keys": [
 			{
 				"use": "sig",
 				"kty": "EC",
-				"kid": "kid-1",
+				"kid": kid1,
 				"crv": "P-256",
 				"alg": "ES256",
 				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
@@ -772,7 +779,7 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			{
 				"use": "sig",
 				"kty": "EC",
-				"kid": "kid-2",
+				"kid": kid2,
 				"crv": "P-256",
 				"alg": "ES256",
 				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
@@ -787,8 +794,6 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	let issuer2 = "https://issuer-2.example.com";
 	let aud1 = "aud-1";
 	let aud2 = "aud-2";
-	let kid1 = "kid-1";
-	let kid2 = "kid-2";
 
 	let provider1 = Provider::from_jwks(
 		jwks1,
@@ -833,6 +838,181 @@ pub fn test_validate_claims_multi_providers_accepts_both() {
 
 	assert!(jwt.validate_claims(&token1).is_ok());
 	assert!(jwt.validate_claims(&token2).is_ok());
+}
+
+// Multiple providers that publish the same key with the same kid.
+// Multiple tokens are validated, one per issuer, and both are accepted.
+#[test]
+pub fn test_validate_claims_multi_providers_shared_kid_accepts_both() {
+	let (jwt, (kid1, iss1, aud1), (kid2, iss2, aud2)) =
+		setup_test_multi_jwt_with_kids("shared-kid", "shared-kid");
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for (kid, iss, aud) in [(kid1, iss1, aud1), (kid2, iss2, aud2)] {
+		let token = build_signed_token(kid, iss, aud, now + 600);
+		let claims = jwt
+			.validate_claims(&token)
+			.unwrap_or_else(|e| panic!("token from {iss} should validate: {e:?}"));
+		assert_eq!(claims.inner.get("iss"), Some(&json!(iss)));
+	}
+}
+
+// Multiple providers that publish the same key under the same kid.
+// The token's aud does not match either provider, so the token is rejected with InvalidAudience by the correct issuer.
+#[test]
+pub fn test_validate_claims_multi_providers_shared_kid_reports_matching_provider_error() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let (jwt, (kid1, iss1, aud1), (kid2, iss2, _)) =
+		setup_test_multi_jwt_with_kids("shared-kid", "shared-kid");
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for (kid, iss) in [(kid1, iss1), (kid2, iss2)] {
+		let token = build_signed_token(kid, iss, "wrong-aud", now + 600);
+		let result = jwt.validate_claims(&token);
+		assert!(
+			matches!(
+				result,
+				Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidAudience
+			),
+			"{iss}: expected InvalidAudience, got {result:?}"
+		);
+	}
+
+	// No provider for the issuer, but the kid matches both providers.
+	let token = build_signed_token(kid1, "https://unknown.example.com", aud1, now + 600);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		matches!(
+			result,
+			Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidIssuer
+		),
+		"expected InvalidIssuer, got {result:?}"
+	);
+
+	// No provider for the kid, but the issuer matches one provider.
+	let token = build_signed_token("non-existent-kid", iss1, aud1, now + 600);
+	assert!(matches!(
+		jwt.validate_claims(&token),
+		Err(TokenError::UnknownKeyId(_))
+	));
+}
+
+// Multiple provider with the same kid but have different issuers.
+// The provider with the matching issuer is used to validate the token, not just the kid.
+#[test]
+pub fn test_validate_claims_multi_providers_colliding_kid_different_keys() {
+	let ed25519_jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "OKP",
+				"kid": "shared-kid",
+				"crv": "Ed25519",
+				"x": "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8"
+			}
+		]
+	});
+	let ec_jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "shared-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}
+		]
+	});
+	let ed25519_provider = Provider::from_jwks(
+		serde_json::from_value(ed25519_jwks).unwrap(),
+		"https://issuer-1.example.com".to_string(),
+		Some(vec!["aud-1".to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let ec_provider = Provider::from_jwks(
+		serde_json::from_value(ec_jwks).unwrap(),
+		"https://issuer-2.example.com".to_string(),
+		Some(vec!["aud-2".to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![ed25519_provider, ec_provider],
+		location: bearer_location(),
+		preserve_token: false,
+	};
+
+	// Sign with the second provider's key and validate with the second provider's iss and aud.
+	let token = build_signed_token(
+		"shared-kid",
+		"https://issuer-2.example.com",
+		"aud-2",
+		jsonwebtoken::get_current_timestamp() + 600,
+	);
+	let result = jwt.validate_claims(&token);
+	assert!(result.is_ok(), "expected token to validate, got {result:?}");
+}
+
+// Multiple providers share the same issuer and kid, but the audiences are different.
+// The provider with the matching audience, issuer, and kid is used to validate the token, not just the iss/kid.
+#[test]
+pub fn test_validate_claims_multi_providers_same_issuer() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "shared-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}
+		]
+	});
+	let issuer = "https://issuer.example.com";
+	let providers = ["aud-1", "aud-2"].map(|aud| {
+		Provider::from_jwks(
+			serde_json::from_value(jwks.clone()).unwrap(),
+			issuer.to_string(),
+			Some(vec![aud.to_string()]),
+			JWTValidationOptions::default(),
+		)
+		.unwrap()
+	});
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: providers.into(),
+		location: bearer_location(),
+		preserve_token: false,
+	};
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for aud in ["aud-1", "aud-2"] {
+		let token = build_signed_token("shared-kid", issuer, aud, now + 600);
+		let result = jwt.validate_claims(&token);
+		assert!(
+			result.is_ok(),
+			"{aud}: expected token to validate, got {result:?}"
+		);
+	}
+
+	let token = build_signed_token("shared-kid", issuer, "aud-3", now + 600);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		matches!(
+			result,
+			Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidAudience
+		),
+		"expected InvalidAudience, got {result:?}"
+	);
 }
 
 // Empty required_claims accepts tokens without exp claim
