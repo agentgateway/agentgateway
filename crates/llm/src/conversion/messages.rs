@@ -29,7 +29,10 @@ fn insert_cache_control(value: &mut serde_json::Value) -> bool {
 	let Some(object) = value.as_object_mut() else {
 		return false;
 	};
-	if object.contains_key("cache_control") {
+	if object
+		.get("cache_control")
+		.is_some_and(|value| !value.is_null())
+	{
 		return false;
 	}
 	object.insert("cache_control".to_string(), cache_control_value());
@@ -39,15 +42,34 @@ fn insert_cache_control(value: &mut serde_json::Value) -> bool {
 fn raw_text_part_has_cache_control(part: &raw_messages::TextPart) -> bool {
 	match part {
 		raw_messages::TextPart::Text { rest, .. } => has_cache_control(rest),
-		raw_messages::TextPart::Unknown(value) => has_cache_control(value),
+		raw_messages::TextPart::Unknown(_) => false,
+	}
+}
+
+fn raw_content_part_can_cache(part: &raw_messages::ContentPart) -> bool {
+	match part {
+		raw_messages::ContentPart::Text { .. } => true,
+		raw_messages::ContentPart::Unknown(value) => matches!(
+			value.get("type").and_then(serde_json::Value::as_str),
+			Some(
+				"document"
+					| "image"
+					| "search_result"
+					| "tool_result"
+					| "tool_use"
+					| "server_tool_use"
+					| "web_search_tool_result"
+			)
+		),
 	}
 }
 
 fn raw_content_part_has_cache_control(part: &raw_messages::ContentPart) -> bool {
-	match part {
-		raw_messages::ContentPart::Text { rest, .. } => has_cache_control(rest),
-		raw_messages::ContentPart::Unknown(value) => has_cache_control(value),
-	}
+	raw_content_part_can_cache(part)
+		&& match part {
+			raw_messages::ContentPart::Text { rest, .. } => has_cache_control(rest),
+			raw_messages::ContentPart::Unknown(value) => has_cache_control(value),
+		}
 }
 
 fn raw_system_prompt_tokens(system: &raw_messages::TextBlock) -> usize {
@@ -68,11 +90,14 @@ fn raw_system_prompt_tokens(system: &raw_messages::TextBlock) -> usize {
 fn raw_add_cache_control_to_text_part(part: &mut raw_messages::TextPart) -> bool {
 	match part {
 		raw_messages::TextPart::Text { rest, .. } => insert_cache_control(rest),
-		raw_messages::TextPart::Unknown(value) => insert_cache_control(value),
+		raw_messages::TextPart::Unknown(_) => false,
 	}
 }
 
 fn raw_add_cache_control_to_content_part(part: &mut raw_messages::ContentPart) -> bool {
+	if !raw_content_part_can_cache(part) {
+		return false;
+	}
 	match part {
 		raw_messages::ContentPart::Text { rest, .. } => insert_cache_control(rest),
 		raw_messages::ContentPart::Unknown(value) => insert_cache_control(value),
@@ -471,6 +496,60 @@ mod tests {
 			output["messages"][0]["content"][0]["cache_control"]["type"],
 			"ephemeral"
 		);
+	}
+
+	#[test]
+	fn native_prompt_caching_replaces_null_cache_control() {
+		let mut request: raw_messages::Request = serde_json::from_value(json!({
+			"messages": [
+				{"role": "assistant", "content": [{
+					"type": "text",
+					"text": "previous",
+					"cache_control": null
+				}]},
+				{"role": "user", "content": "current"}
+			]
+		}))
+		.unwrap();
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 0,
+		};
+
+		apply_prompt_caching(&mut request, &caching);
+		let output = serde_json::to_value(&request).unwrap();
+		assert_eq!(
+			output["messages"][0]["content"][0]["cache_control"]["type"],
+			"ephemeral"
+		);
+	}
+
+	#[test]
+	fn native_prompt_caching_skips_unsupported_unknown_blocks() {
+		let mut request: raw_messages::Request = serde_json::from_value(json!({
+			"messages": [
+				{"role": "assistant", "content": [{
+					"type": "thinking",
+					"thinking": "signed content"
+				}]},
+				{"role": "user", "content": "current"}
+			]
+		}))
+		.unwrap();
+		let caching = PromptCachingConfig {
+			cache_system: false,
+			cache_messages: true,
+			cache_tools: false,
+			min_tokens: None,
+			cache_message_offset: 0,
+		};
+
+		apply_prompt_caching(&mut request, &caching);
+		let output = serde_json::to_value(&request).unwrap();
+		assert!(output["messages"][0]["content"][0]["cache_control"].is_null());
 	}
 }
 
