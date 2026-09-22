@@ -3091,44 +3091,122 @@ mod tests {
 	}
 
 	#[test]
-	fn gen_ai_duration_uses_response_policy_replacement_outcome() {
+	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
+		use crate::http::transformation_cel::TransformationMetadata;
+		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
 		use crate::proxy::{ProxyError, ProxyResponse};
-		for direct in [true, false] {
-			let (mut log, registry) = test_request_log_with_registry();
-			log.llm_request = Some(metric_test_llm_request());
-			log.status = Some(http::StatusCode::OK);
-			log.reason = Some(ProxyResponseReason::Upstream);
-			let failure = if direct {
-				ProxyResponse::DirectResponse(Box::new(
-					::http::Response::builder()
-						.status(http::StatusCode::TOO_MANY_REQUESTS)
-						.body(crate::http::Body::empty())
-						.unwrap(),
-				))
-			} else {
-				ProxyError::ProcessingString("response policy failed".to_string()).into()
-			};
-			let expected_reason = failure.as_reason();
-			let response = crate::proxy::httpproxy::response_policy_failure(&mut log, failure, false);
-			assert_eq!(log.reason, Some(expected_reason));
-			assert_ne!(log.reason, Some(ProxyResponseReason::Upstream));
-			assert_eq!(log.status, Some(response.status()));
-			assert_eq!(log.error.is_some(), !direct);
-			assert_eq!(
-				response
-					.extensions()
-					.get::<cel::ProxyContext>()
-					.and_then(|context| context.error.as_ref())
-					.is_some(),
-				!direct
-			);
-			drop(DropOnLog::from(log));
-			let encoded = encoded_metrics(&registry);
-			let count = encoded
-				.lines()
-				.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
-				.unwrap();
-			assert_eq!(count.contains("error_type=\"_OTHER\""), !direct, "{count}");
+
+		for upstream_failed in [false, true] {
+			for policy in ["none", "error", "direct"] {
+				let (mut log, registry) = test_request_log_with_registry();
+				log.llm_request = Some(metric_test_llm_request());
+				log
+					.cel
+					.ctx()
+					.register_log_expression(&Expression::new_strict("proxy.error").unwrap());
+				let initial = if upstream_failed {
+					Err(ProxyError::NoHealthyEndpoints.into())
+				} else {
+					Ok(::http::Response::new(crate::http::Body::empty()))
+				};
+				let (mut response, mut reason) = resolve_response(initial, &mut log, false);
+				let original_reason = reason;
+				let metadata = TransformationMetadata(serde_json::Map::from_iter([(
+					"marker".to_string(),
+					serde_json::json!("retained"),
+				)]));
+				response.extensions_mut().insert(metadata.clone());
+				match policy {
+					"error" => {
+						(response, reason) = resolve_response(
+							Err(ProxyError::ProcessingString("policy failed".to_string()).into()),
+							&mut log,
+							false,
+						);
+						response.extensions_mut().insert(metadata.clone());
+					},
+					"direct" => {
+						let mut replacement = ::http::Response::builder()
+							.status(http::StatusCode::TOO_MANY_REQUESTS)
+							.body(crate::http::Body::empty())
+							.unwrap();
+						replacement.extensions_mut().insert(metadata.clone());
+						(response, reason) = resolve_response(
+							Err(ProxyResponse::DirectResponse(Box::new(replacement))),
+							&mut log,
+							false,
+						);
+					},
+					_ => {},
+				}
+				let expected_reason = match policy {
+					"error" => ProxyError::ProcessingString("policy failed".to_string()).as_reason(),
+					"direct" => ProxyResponseReason::DirectResponse,
+					_ => original_reason,
+				};
+				assert_eq!(reason, expected_reason);
+				let failed = upstream_failed || policy == "error";
+				assert_eq!(log.error.is_some(), failed);
+				if upstream_failed {
+					assert!(
+						log
+							.error
+							.as_ref()
+							.unwrap()
+							.contains(&ProxyError::NoHealthyEndpoints.to_string())
+					);
+				}
+				if policy == "error" {
+					assert!(log.error.as_ref().unwrap().contains("policy failed"));
+				}
+				// Resolution must leave extensions intact for the single final snapshot.
+				assert!(log.response_snapshot.is_none());
+				assert_eq!(
+					response
+						.extensions()
+						.get::<TransformationMetadata>()
+						.unwrap()
+						.0,
+					metadata.0
+				);
+				assert_eq!(
+					response
+						.extensions()
+						.get::<cel::ProxyContext>()
+						.and_then(|context| context.error.as_ref())
+						.is_some(),
+					failed
+				);
+				set_final_response_fields(&mut log, &reason, &mut response);
+				assert_eq!(log.status, Some(response.status()));
+				assert_eq!(log.reason, Some(reason));
+				let snapshot = log.response_snapshot.as_ref().unwrap();
+				assert_eq!(snapshot.metadata.as_ref().unwrap().0, metadata.0);
+				let error = snapshot
+					.proxy
+					.as_ref()
+					.and_then(|context| context.error.as_ref());
+				assert_eq!(error.is_some(), failed);
+				if let Some(error) = error {
+					assert_eq!(Some(&error.message), log.error.as_ref());
+					assert_eq!(
+						error.reason,
+						if policy == "direct" {
+							original_reason
+						} else {
+							reason
+						}
+						.to_string()
+					);
+				}
+				drop(DropOnLog::from(log));
+				let encoded = encoded_metrics(&registry);
+				let count = encoded
+					.lines()
+					.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
+					.unwrap();
+				assert_eq!(count.contains("error_type=\"_OTHER\""), failed, "{count}");
+			}
 		}
 	}
 

@@ -746,48 +746,18 @@ impl HTTPProxy {
 			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
-		let error = ret.as_ref().err().and_then(|e| match e {
-			ProxyResponse::Error(e) => Some(cel::ErrorContext {
-				reason: e.as_reason().to_string(),
-				message: e.to_string(),
-			}),
-			ProxyResponse::DirectResponse(_) => None,
-		});
-
-		log.with(|l| l.error = error.as_ref().map(|e| e.message.clone()));
-		let mut reason = match &ret {
-			Ok(_) => ProxyResponseReason::Upstream,
-			Err(e) => e.as_reason(),
-		};
+		let (mut resp, mut reason) = resolve_response(ret, log.as_mut().unwrap(), is_grpc_request);
 		let is_upstream_response = reason == ProxyResponseReason::Upstream;
-		let mut resp = ret.unwrap_or_else(|err| match err {
-			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-			ProxyResponse::DirectResponse(dr) => *dr,
-		});
-		if let Some(error) = error {
-			if let Some(proxy) = resp.extensions_mut().get_mut::<cel::ProxyContext>() {
-				proxy.error = Some(error);
-			} else {
-				resp.extensions_mut().insert(cel::ProxyContext {
-					error: Some(error),
-					..Default::default()
-				});
-			}
-		}
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;
 		}
 
-		let mut resp = match response_policies
+		if let Err(failure) = response_policies
 			.apply(&mut resp, log.as_mut().unwrap(), is_upstream_response)
 			.await
 		{
-			Ok(_) => resp,
-			Err(e) => {
-				reason = e.as_reason();
-				response_policy_failure(log.as_mut().unwrap(), e, is_grpc_request)
-			},
-		};
+			(resp, reason) = resolve_response(Err(failure), log.as_mut().unwrap(), is_grpc_request);
+		}
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
 		llm::encode_deferred_response(&mut resp);
@@ -3661,37 +3631,52 @@ fn resolved_workload_target_hostname<'a>(
 	}
 }
 
-pub(crate) fn response_policy_failure(
+// Resolve both the initial request and any response-policy replacement without consuming
+// response extensions. Final response fields must be captured once, after all policies run.
+pub(crate) fn resolve_response(
+	result: Result<Response, ProxyResponse>,
 	log: &mut RequestLog,
-	failure: ProxyResponse,
 	is_grpc_request: bool,
-) -> Response {
-	let reason = failure.as_reason();
-	let error = match &failure {
-		ProxyResponse::Error(error) => Some(cel::ErrorContext {
-			reason: reason.to_string(),
-			message: error.to_string(),
-		}),
-		ProxyResponse::DirectResponse(_) => None,
+) -> (Response, ProxyResponseReason) {
+	let reason = match &result {
+		Ok(_) => ProxyResponseReason::Upstream,
+		Err(failure) => failure.as_reason(),
 	};
+	let error = match &result {
+		Err(ProxyResponse::Error(error)) => Some(cel::ErrorContext {
+			reason: reason.to_string(),
+			message: match log.error.as_ref() {
+				Some(original) => {
+					format!("response policy failed: {error}; original request failed: {original}")
+				},
+				None => error.to_string(),
+			},
+		}),
+		_ => log.error.as_ref().map(|message| cel::ErrorContext {
+			reason: log.reason.unwrap_or(reason).to_string(),
+			message: message.clone(),
+		}),
+	};
+	log.reason = Some(reason);
 	log.error = error.as_ref().map(|error| error.message.clone());
-	let mut response = match failure {
+	let mut response = result.unwrap_or_else(|failure| match failure {
 		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
 		ProxyResponse::DirectResponse(response) => *response,
-	};
-	if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
-		context.error = error;
-	} else if error.is_some() {
-		response.extensions_mut().insert(cel::ProxyContext {
-			error,
-			..Default::default()
-		});
+	});
+	if let Some(error) = error {
+		if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
+			context.error = Some(error);
+		} else {
+			response.extensions_mut().insert(cel::ProxyContext {
+				error: Some(error),
+				..Default::default()
+			});
+		}
 	}
-	set_final_response_fields(log, &reason, &mut response);
-	response
+	(response, reason)
 }
 
-fn set_final_response_fields(
+pub(crate) fn set_final_response_fields(
 	log: &mut RequestLog,
 	reason: &ProxyResponseReason,
 	resp: &mut Response,
