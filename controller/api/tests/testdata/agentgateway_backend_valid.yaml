@@ -1,6 +1,39 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
+  name: copilot-default
+spec:
+  ai:
+    provider:
+      copilot: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-model
+spec:
+  ai:
+    provider:
+      copilot:
+        model: gpt-test
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-group
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: default
+        copilot: {}
+      - name: override
+        copilot:
+          model: gpt-test
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
   name: ai-simple
 spec:
   ai:
