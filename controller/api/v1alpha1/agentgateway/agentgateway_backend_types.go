@@ -212,7 +212,7 @@ type NamedLLMProvider struct {
 }
 
 // Large language model provider that the backend routes requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock;custom
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock;custom;copilot
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) ? has(self.custom.backendRef) != has(self.host) : true",message="custom providers must specify exactly one of backendRef or host and port"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
@@ -222,6 +222,10 @@ type LLMProvider struct {
 	// OpenAI provider settings.
 	// +optional
 	OpenAI *OpenAIConfig `json:"openai,omitempty"`
+
+	// GitHub Copilot provider settings.
+	// +optional
+	Copilot *CopilotConfig `json:"copilot,omitempty"`
 
 	// Azure OpenAI provider settings.
 	// +optional
@@ -505,6 +509,14 @@ type AzureConfig struct {
 	AzureSettings `json:",inline"`
 
 	// Model name override, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+}
+
+// Settings for the GitHub Copilot LLM provider.
+type CopilotConfig struct {
+	// Model name override.
 	// If unset, the model name is taken from the request.
 	// +optional
 	Model *ShortString `json:"model,omitempty"`

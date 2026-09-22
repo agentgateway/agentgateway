@@ -380,8 +380,7 @@ async fn apply_backend_policies(
 		tcp: _,
 		// Applied elsewhere
 		tunnel: _,
-		// Applied elsewhere
-		llm_provider: _,
+		llm_provider,
 		// Applied elsewhere
 		llm: _,
 		// Applied elsewhere
@@ -424,6 +423,16 @@ async fn apply_backend_policies(
 		.apply("backend ext authz", &client, log, req, rp.headers())
 		.await?;
 
+	if llm_provider
+		.as_ref()
+		.is_some_and(|provider| matches!(provider.provider, llm::AIProvider::Copilot(_)))
+		&& !matches!(
+			backend_auth.as_ref().and_then(|auth| auth.kind.as_ref()),
+			Some(auth::BackendAuthKind::Copilot)
+		) {
+		// Explicit credential locations override defaults. Copilot auth inserts its own defaults.
+		auth::copilot::insert_protocol_headers(req);
+	}
 	if let Some(auth) = backend_auth {
 		auth::apply_backend_auth(&backend_info, auth, req).await?;
 		dtrace::snapshot!(Request, "backend auth", &req);
@@ -4205,6 +4214,422 @@ mod tests {
 			Some("trailers")
 		);
 		assert!(!req.headers().contains_key("x-original-url"));
+	}
+
+	#[rstest::rstest]
+	#[case::explicit_key("copilot", "configured-token", false, true)]
+	#[case::empty_key("copilot", "", false, true)]
+	#[case::policy_precedence("copilot", "configured-token", true, true)]
+	#[case::other_provider("openAI", "configured-token", false, false)]
+	#[tokio::test]
+	async fn copilot_backend_headers(
+		#[case] provider: &str,
+		#[case] credential: &str,
+		#[case] overrides: bool,
+		#[case] copilot: bool,
+	) {
+		let mock = wiremock::MockServer::start().await;
+		Mock::given(wiremock::matchers::any())
+			.respond_with(ResponseTemplate::new(200).set_body_raw(
+				include_bytes!("../../../llm/src/tests/response/completions/basic.json").to_vec(),
+				"application/json",
+			))
+			.mount(&mock)
+			.await;
+		let mut policies = json!({
+			"backendAuth": {"key": credential},
+			"ai": {"routes": {"/v1/chat/completions": "completions"}}
+		});
+		if overrides {
+			policies["backendAuth"] = json!({
+				"key": {"value": credential},
+				"credentials": [{"location": {"header": {"name": "x-initiator"}}, "key": "credential-initiator"}]
+			});
+			policies["transformations"] = json!({"request": {"set": {
+				"x-default-initiator": "request.headers['x-initiator']",
+				"X-Initiator": "'transformed'",
+				"Editor-Version": "'custom-editor'"
+			}}});
+			policies["requestHeaderModifier"] =
+				json!({"set": {"X-Initiator": "policy"}, "remove": ["OpenAI-Intent"]});
+		}
+		let mut bind = proxymock::setup_proxy_test("{}").unwrap();
+		bind
+			.attach_route(json!({
+				"name": "copilot",
+				"backends": [{"ai": {
+					"name": "provider",
+					"hostOverride": mock.address().to_string(),
+					"provider": {(provider): {"model": "gpt-4o"}}
+				}, "policies": policies}]
+			}))
+			.await;
+		let bind = bind.with_bind(proxymock::simple_bind());
+		let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+			.header("Authorization", "Bearer incoming-token")
+			.header("X-Initiator", "incoming")
+			.body(http::Body::from(
+				json!({"model": "request-model", "messages": [{"role": "user", "content": "hello"}]})
+					.to_string(),
+			))
+			.send(bind.serve_http(proxymock::BIND_KEY))
+			.await
+			.unwrap();
+		assert_eq!(response.status(), 200);
+		proxymock::read_body_raw(response.into_body()).await;
+		let requests = mock.received_requests().await.unwrap();
+		assert_eq!(requests.len(), 1);
+		let req = &requests[0];
+		assert_eq!(
+			req.headers["authorization"].to_str().unwrap().trim_end(),
+			format!("Bearer {credential}").trim_end()
+		);
+		assert_eq!(
+			req.body_json::<serde_json::Value>().unwrap()["model"],
+			"gpt-4o"
+		);
+		if copilot {
+			assert_eq!(req.url.path(), "/v1/chat/completions");
+			assert_eq!(req.headers["content-type"], "application/json");
+			assert_eq!(req.headers["x-github-api-version"], "2025-10-01");
+			assert_eq!(req.headers["x-interaction-type"], "conversation-agent");
+			assert_eq!(
+				req.headers["x-initiator"],
+				if overrides { "policy" } else { "agent" }
+			);
+			assert_eq!(
+				req.headers["editor-version"],
+				if overrides {
+					"custom-editor"
+				} else {
+					concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+				}
+			);
+			if overrides {
+				assert_eq!(req.headers["x-default-initiator"], "credential-initiator");
+				assert!(!req.headers.contains_key("openai-intent"));
+			} else {
+				assert_eq!(req.headers["openai-intent"], "conversation-agent");
+			}
+		} else {
+			assert_eq!(req.headers["x-initiator"], "incoming");
+			assert!(!req.headers.contains_key("editor-version"));
+			assert!(!req.headers.contains_key("x-github-api-version"));
+			assert!(!req.headers.contains_key("x-interaction-type"));
+			assert!(!req.headers.contains_key("openai-intent"));
+		}
+	}
+
+	#[rstest::rstest]
+	#[case::key(Some("configured-token"), None)]
+	#[case::empty_key(Some(""), None)]
+	#[case::credentials_only(None, None)]
+	#[case::primary_custom_header(Some("primary-credential"), Some("openai-intent"))]
+	#[tokio::test]
+	async fn copilot_configured_credential_headers(
+		#[case] key: Option<&str>,
+		#[case] primary_header: Option<&str>,
+	) {
+		use crate::http::auth::{
+			AuthorizationLocation, BackendAuth, BackendAuthCredential, BackendAuthKind, BackendInfo,
+		};
+		use crate::store::BackendPolicies;
+		use crate::types::agent::BackendTarget;
+
+		let bind = proxymock::setup_proxy_test("{}").unwrap();
+		let provider = llm::AIProvider::Copilot(llm::copilot::Provider {
+			model_override: None,
+		});
+		let policies = provider
+			.default_connector_policies()
+			.unwrap()
+			.merge(BackendPolicies {
+				backend_auth: Some(BackendAuth {
+					kind: key.map(|value| BackendAuthKind::Key {
+						value: value.into(),
+						location: primary_header.map(|name| AuthorizationLocation::Header {
+							name: name.parse().unwrap(),
+							prefix: None,
+						}),
+					}),
+					credentials: [
+						("x-initiator", "credential-initiator"),
+						("editor-version", "credential-editor"),
+					]
+					.into_iter()
+					.map(|(name, value)| BackendAuthCredential {
+						location: AuthorizationLocation::Header {
+							name: name.parse().unwrap(),
+							prefix: None,
+						},
+						key: value.into(),
+					})
+					.collect(),
+				}),
+				llm_provider: Some(Arc::new(llm::NamedAIProvider {
+					name: "copilot".into(),
+					provider,
+					provider_backend: None,
+					host_override: None,
+					path_override: None,
+					path_prefix: None,
+					tokenize: false,
+					inline_policies: vec![],
+				})),
+				..Default::default()
+			});
+		let call = super::BackendCall::new(Target::from(("api.githubcopilot.com", 443)), policies);
+		let mut request = ::http::Request::new(http::Body::empty());
+		super::apply_backend_policies(
+			BackendInfo {
+				target: BackendTarget::Invalid,
+				call_target: call.target.clone(),
+				inputs: bind.inputs(),
+			},
+			super::PolicyClient::new(bind.inputs()),
+			&call,
+			&mut request,
+			&mut None,
+			&mut Default::default(),
+		)
+		.await
+		.unwrap();
+		let headers = request.headers();
+		assert_eq!(headers["x-initiator"], "credential-initiator");
+		assert_eq!(headers["editor-version"], "credential-editor");
+		assert!(headers["x-initiator"].is_sensitive());
+		assert!(headers["editor-version"].is_sensitive());
+		assert_eq!(headers["content-type"], "application/json");
+		assert_eq!(headers["x-github-api-version"], "2025-10-01");
+		assert_eq!(headers["x-interaction-type"], "conversation-agent");
+		if let Some(name) = primary_header {
+			assert_eq!(headers[name], key.unwrap());
+			assert!(headers[name].is_sensitive());
+			assert!(!headers.contains_key("authorization"));
+		} else {
+			assert_eq!(headers["openai-intent"], "conversation-agent");
+			if let Some(key) = key {
+				assert_eq!(headers["authorization"], format!("Bearer {key}"));
+				assert!(headers["authorization"].is_sensitive());
+			} else {
+				assert!(!headers.contains_key("authorization"));
+			}
+		}
+	}
+
+	#[test]
+	fn copilot_standalone_auth_headers() {
+		const CHILD: &str = "AGENTGATEWAY_TEST_COPILOT_AUTH";
+		if std::env::var_os(CHILD).is_none() {
+			let output = std::process::Command::new(std::env::current_exe().unwrap())
+				.args([
+					"--exact",
+					"proxy::httpproxy::tests::copilot_standalone_auth_headers",
+					"--nocapture",
+				])
+				.env(CHILD, "1")
+				.env("GH_COPILOT_TOKEN", "standalone-synthetic-token")
+				.env("COPILOT_GITHUB_TOKEN", "unused-synthetic-token")
+				.env_remove("AGENTGATEWAY_E2E")
+				.output()
+				.unwrap();
+			assert!(
+				output.status.success(),
+				"{}\n{}",
+				String::from_utf8_lossy(&output.stdout),
+				String::from_utf8_lossy(&output.stderr)
+			);
+			return;
+		}
+		tokio::runtime::Runtime::new().unwrap().block_on(async {
+			use crate::http::auth::{AuthorizationLocation, BackendAuth, BackendAuthCredential, BackendAuthKind, BackendInfo};
+			use crate::store::BackendPolicies;
+			use crate::types::agent::BackendTarget;
+			let provider = llm::AIProvider::Copilot(llm::copilot::Provider { model_override: None });
+			for key in [None, Some("configured-token"), Some("")] {
+				let bind = proxymock::setup_proxy_test("{}").unwrap();
+				let mut policies = provider.default_connector_policies().unwrap();
+				if let Some(key) = key {
+					policies = policies.merge(BackendPolicies {
+						backend_auth: Some(BackendAuth::new(BackendAuthKind::Key { value: key.into(), location: None })),
+						..Default::default()
+					});
+				}
+				policies.backend_auth.as_mut().unwrap().credentials.push(BackendAuthCredential {
+					location: AuthorizationLocation::Header { name: "x-initiator".parse().unwrap(), prefix: None },
+					key: "credential-initiator".into(),
+				});
+				policies.llm_provider = Some(Arc::new(llm::NamedAIProvider {
+					name: "copilot".into(), provider: provider.clone(), provider_backend: None,
+					host_override: None, path_override: None, path_prefix: None, tokenize: false, inline_policies: vec![],
+				}));
+				let call = super::BackendCall::new(Target::from(("api.githubcopilot.com", 443)), policies);
+				let mut request = ::http::Request::new(http::Body::empty());
+				super::apply_backend_policies(
+					BackendInfo { target: BackendTarget::Invalid, call_target: call.target.clone(), inputs: bind.inputs() },
+					super::PolicyClient::new(bind.inputs()), &call, &mut request, &mut None, &mut Default::default(),
+				).await.unwrap();
+				assert_eq!(request.headers()["authorization"], format!("Bearer {}", key.unwrap_or("standalone-synthetic-token")));
+				assert!(request.headers()["authorization"].is_sensitive());
+				assert_eq!(request.headers()["x-initiator"], "credential-initiator");
+			}
+			for provider in [None, Some("openAI"), Some("copilot")] {
+				let mock = wiremock::MockServer::start().await;
+				Mock::given(wiremock::matchers::any()).respond_with(ResponseTemplate::new(200).set_body_raw(
+					include_bytes!("../../../llm/src/tests/response/completions/basic.json").to_vec(), "application/json",
+				)).mount(&mock).await;
+				let mut backend = match provider {
+					None => json!({"host": mock.address().to_string()}),
+					Some(provider) => json!({"ai": {"name": "provider", "hostOverride": mock.address().to_string(), "provider": {(provider): {}}}}),
+				};
+				backend["policies"] = json!({"backendAuth": "copilot"});
+				let mut bind = proxymock::setup_proxy_test("{}").unwrap();
+				bind.attach_route(json!({"name": "copilot-auth", "backends": [backend]})).await;
+				let bind = bind.with_bind(proxymock::simple_bind());
+				let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+					.body(http::Body::from(json!({"model": "gpt-4o", "messages": [{"role": "user", "content": "hello"}]}).to_string()))
+					.send(bind.serve_http(proxymock::BIND_KEY)).await.unwrap();
+				assert_eq!(response.status(), 200);
+				proxymock::read_body_raw(response.into_body()).await;
+				let requests = mock.received_requests().await.unwrap();
+				assert_eq!(requests.len(), 1);
+				let headers = &requests[0].headers;
+				assert_eq!(headers["authorization"], "Bearer standalone-synthetic-token");
+				assert_eq!(headers["content-type"], "application/json");
+				assert_eq!(headers["editor-version"], concat!("agentgateway/", env!("CARGO_PKG_VERSION")));
+				assert_eq!(headers["x-github-api-version"], "2025-10-01");
+				assert_eq!(headers["x-initiator"], "agent");
+				assert_eq!(headers["x-interaction-type"], "conversation-agent");
+				assert_eq!(headers["openai-intent"], "conversation-agent");
+			}
+		});
+	}
+
+	#[rstest::rstest]
+	#[case::completions("completions", false, 200)]
+	#[case::completions_stream("completions", true, 200)]
+	#[case::messages("messages", false, 200)]
+	#[case::messages_stream("messages", true, 200)]
+	#[case::responses("responses", false, 200)]
+	#[case::responses_stream("responses", true, 200)]
+	#[case::unauthorized("completions", false, 401)]
+	#[case::forbidden("completions", false, 403)]
+	#[case::throttled("completions", false, 429)]
+	#[tokio::test]
+	async fn copilot_backend_inference(
+		#[case] format: &str,
+		#[case] stream: bool,
+		#[case] status: u16,
+	) {
+		let mock = wiremock::MockServer::start().await;
+		let (path, model, mut request, response) = match format {
+			"messages" => (
+				"/v1/messages",
+				"claude-sonnet-4",
+				json!({"messages": [{"role": "user", "content": "hello"}], "max_tokens": 64}),
+				if stream {
+					include_str!("../../../llm/src/tests/response/anthropic/stream_basic.json")
+				} else {
+					include_str!("../../../llm/src/tests/response/anthropic/basic.json")
+				},
+			),
+			"responses" => (
+				"/v1/responses",
+				"gpt-5.4",
+				json!({"input": "hello"}),
+				if stream {
+					include_str!("../../../llm/src/tests/response/responses/stream.json")
+				} else {
+					include_str!("../../../llm/src/tests/response/responses/basic.json")
+				},
+			),
+			_ => (
+				"/v1/chat/completions",
+				"gpt-4o",
+				json!({"messages": [{"role": "user", "content": "hello"}]}),
+				if stream {
+					include_str!("../../../llm/src/tests/response/completions/stream.json")
+				} else {
+					include_str!("../../../llm/src/tests/response/completions/basic.json")
+				},
+			),
+		};
+		request["model"] = json!(model);
+		request["stream"] = json!(stream);
+		let response = if status == 200 {
+			response
+		} else {
+			r#"{"error":{"message":"synthetic upstream rejection","type":"access_error","code":"denied"}}"#
+		};
+		Mock::given(wiremock::matchers::any())
+			.respond_with(
+				ResponseTemplate::new(status)
+					.insert_header("retry-after", "60")
+					.set_body_raw(
+						response,
+						if stream {
+							"text/event-stream"
+						} else {
+							"application/json"
+						},
+					),
+			)
+			.mount(&mock)
+			.await;
+		let mut bind = proxymock::setup_proxy_test("{}").unwrap();
+		bind.attach_route(json!({"name": "copilot-inference", "backends": [{
+			"ai": {"name": "copilot", "hostOverride": mock.address().to_string(), "provider": {"copilot": {}}},
+			"policies": {"backendAuth": {"key": "synthetic-inference-token"}, "ai": {"routes": {(path): format}}}
+		}]})).await;
+		let bind = bind.with_bind(proxymock::simple_bind());
+		let result = RequestBuilder::new(Method::POST, &format!("http://lo{path}"))
+			.header("content-type", "application/json")
+			.body(http::Body::from(request.to_string()))
+			.send(bind.serve_http(proxymock::BIND_KEY))
+			.await
+			.unwrap();
+		assert_eq!(result.status(), status);
+		if status == 429 {
+			assert_eq!(result.headers()["retry-after"], "60");
+		}
+		let body = proxymock::read_body_raw(result.into_body()).await;
+		if status != 200 {
+			assert!(String::from_utf8_lossy(&body).contains("synthetic upstream rejection"));
+		} else if stream {
+			let body = String::from_utf8_lossy(&body);
+			assert!(body.contains("data:"));
+			assert!(body.contains(match format {
+				"messages" => "message_stop",
+				"responses" => "response.completed",
+				_ => "[DONE]",
+			}));
+		} else {
+			let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+			assert!(
+				body
+					.get(match format {
+						"messages" => "content",
+						"responses" => "output",
+						_ => "choices",
+					})
+					.is_some()
+			);
+		}
+		let requests = mock.received_requests().await.unwrap();
+		assert_eq!(
+			requests.len(),
+			1,
+			"upstream errors must not switch accounts or retry by default"
+		);
+		assert_eq!(
+			requests[0].headers["authorization"],
+			"Bearer synthetic-inference-token"
+		);
+		assert_eq!(
+			requests[0].body_json::<serde_json::Value>().unwrap()["model"],
+			model
+		);
+		assert_eq!(requests[0].url.path(), path);
 	}
 
 	#[tokio::test]

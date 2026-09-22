@@ -821,6 +821,53 @@ func TestBuildAIBackend(t *testing.T) {
 	}
 }
 
+func TestBuildAIBackendCopilot(t *testing.T) {
+	for _, grouped := range []bool{false, true} {
+		for _, model := range []string{"", "gpt-test"} {
+			t.Run(fmt.Sprintf("grouped=%t/model=%s", grouped, model), func(t *testing.T) {
+				provider := map[string]any{
+					"copilot": map[string]any{},
+					"host":    "copilot.example.com", "port": 8443,
+					"pathPrefix": "/inference",
+				}
+				if model != "" {
+					provider["copilot"] = map[string]any{"model": model}
+				}
+				ai := map[string]any{"provider": provider}
+				if grouped {
+					provider["name"] = "copilot"
+					ai = map[string]any{"groups": []any{map[string]any{"providers": []any{provider}}}}
+				}
+				input, err := yaml.Marshal(map[string]any{
+					"metadata": map[string]any{"name": "copilot", "namespace": "test-ns"},
+					"spec":     map[string]any{"ai": ai},
+				})
+				assert.NoError(t, err)
+				var backend agentgateway.AgentgatewayBackend
+				assert.NoError(t, yaml.Unmarshal(input, &backend))
+				result, err := agentgatewaybackend.BuildAgwBackend(testutils.BuildMockPolicyContext(t, nil), &backend)
+				assert.NoError(t, err)
+				if len(result) != 1 {
+					t.Fatalf("got %d backends, want one", len(result))
+				}
+				providers := result[0].GetAi().GetProviderGroups()[0].GetProviders()
+				if len(providers) != 1 {
+					t.Fatalf("got %d providers, want one", len(providers))
+				}
+				got := providers[0]
+				if got.GetCopilot() == nil {
+					t.Fatal("expected Copilot provider")
+				}
+				assert.Equal(t, got.GetCopilot().GetModel(), model)
+				assert.Equal(t, got.GetCopilot().Model != nil, model != "")
+				assert.Equal(t, got.GetHostOverride().GetHost(), "copilot.example.com")
+				assert.Equal(t, got.GetHostOverride().GetPort(), int32(8443))
+				assert.Equal(t, got.GetPathPrefix(), "/inference")
+			})
+		}
+	}
+}
+
 func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T) {
 	backend := &agentgateway.AgentgatewayBackend{
 		Name:      "custom-backend",

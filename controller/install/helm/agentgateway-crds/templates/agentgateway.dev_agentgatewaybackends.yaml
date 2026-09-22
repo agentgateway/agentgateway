@@ -247,6 +247,17 @@ spec:
                                     pattern: ^[a-z0-9-]+$
                                     type: string
                                 type: object
+                              copilot:
+                                description: GitHub Copilot provider settings.
+                                properties:
+                                  model:
+                                    description: |-
+                                      Model name override.
+                                      If unset, the model name is taken from the request.
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                type: object
                               custom:
                                 description: |-
                                   Custom provider configures a non-managed or self-hosted LLM provider.
@@ -7162,9 +7173,9 @@ spec:
                             - message: pathPrefix requires host to be set
                               rule: 'has(self.pathPrefix) ? has(self.host) : true'
                             - message: exactly one of the fields in [openai azureopenai
-                                azure anthropic gemini vertexai bedrock custom] must
-                                be set
-                              rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)
+                                azure anthropic gemini vertexai bedrock custom copilot]
+                                must be set
+                              rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)+(has(self.copilot)?1:0)
                                 == 1
                           maxItems: 16
                           minItems: 1
@@ -7331,6 +7342,17 @@ spec:
                             maxLength: 63
                             minLength: 1
                             pattern: ^[a-z0-9-]+$
+                            type: string
+                        type: object
+                      copilot:
+                        description: GitHub Copilot provider settings.
+                        properties:
+                          model:
+                            description: |-
+                              Model name override.
+                              If unset, the model name is taken from the request.
+                            maxLength: 256
+                            minLength: 1
                             type: string
                         type: object
                       custom:
@@ -7588,8 +7610,9 @@ spec:
                     - message: pathPrefix requires host to be set
                       rule: 'has(self.pathPrefix) ? has(self.host) : true'
                     - message: exactly one of the fields in [openai azureopenai azure
-                        anthropic gemini vertexai bedrock custom] must be set
-                      rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)
+                        anthropic gemini vertexai bedrock custom copilot] must be
+                        set
+                      rule: (has(self.openai)?1:0)+(has(self.azureopenai)?1:0)+(has(self.azure)?1:0)+(has(self.anthropic)?1:0)+(has(self.gemini)?1:0)+(has(self.vertexai)?1:0)+(has(self.bedrock)?1:0)+(has(self.custom)?1:0)+(has(self.copilot)?1:0)
                         == 1
                 type: object
                 x-kubernetes-validations:

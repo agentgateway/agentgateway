@@ -5184,6 +5184,7 @@ spec:
                 - Bedrock
                 - Cerebras
                 - Cohere
+                - Copilot
                 - Custom
                 - Deepinfra
                 - Deepseek

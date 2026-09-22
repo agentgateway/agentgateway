@@ -33,6 +33,30 @@ type TestExpectation struct {
 	WantErr string `json:"_err,omitempty"`
 }
 
+func TestCopilotKubernetesExample(t *testing.T) {
+	v := NewAgentgatewayValidatorStrict(t)
+	content, err := os.ReadFile("../../../examples/llm-copilot/kubernetes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backends := 0
+	for _, item := range splitString(string(content)) {
+		obj := &unstructured.Unstructured{}
+		if err := yaml.Unmarshal([]byte(item), obj); err != nil {
+			t.Fatal(err)
+		}
+		if obj.GetKind() == "AgentgatewayBackend" {
+			backends++
+			if err := v.ValidateCustomResource(obj); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if backends != 1 {
+		t.Fatalf("validated %d Copilot backends, want one", backends)
+	}
+}
+
 func TestCRDs(t *testing.T) {
 	v := NewAgentgatewayValidatorStrict(t)
 	base := "testdata"
