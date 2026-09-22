@@ -54,6 +54,22 @@ enum ResourceKind {
 	Backend(ListenerKey),
 }
 
+fn xds_resource_kind(resource: &ADPResource) -> &'static str {
+	match resource.kind.as_ref() {
+		Some(XdsKind::Bind(_)) => "bind",
+		Some(XdsKind::Listener(_)) => "listener",
+		Some(XdsKind::Route(_)) => "route",
+		Some(XdsKind::TcpRoute(_)) => "tcp_route",
+		Some(XdsKind::ModelRoute(_)) => "model_route",
+		Some(XdsKind::Backend(_)) => "backend",
+		Some(XdsKind::Policy(_)) => "policy",
+		Some(XdsKind::Workload(_)) => "workload",
+		Some(XdsKind::Service(_)) => "service",
+		Some(XdsKind::RouteGroup(_)) => "route_group",
+		None => "unknown",
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum RouteTarget {
 	Listener(ListenerKey),
@@ -1966,7 +1982,7 @@ impl Store {
 		res: ADPResource,
 		diagnostics: &mut Diagnostics,
 	) -> anyhow::Result<()> {
-		trace!(%name, "insert resource {res:?}");
+		trace!(%name, kind = %xds_resource_kind(&res), "insert resource");
 		match res.kind {
 			Some(XdsKind::Bind(w)) => {
 				self
@@ -2460,6 +2476,99 @@ mod tests {
 			listener_name: strng::literal!("listener"),
 			listener_set: None,
 		}
+	}
+
+	#[test]
+	fn xds_insert_trace_logs_identity_without_api_key() {
+		use agent_xds::{Handler, XdsResource};
+
+		const SENTINEL: &str = "trace-must-not-contain-subscription-key";
+
+		#[derive(Clone)]
+		struct LogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+		impl std::io::Write for LogWriter {
+			fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+				self.0.lock().unwrap().extend_from_slice(buf);
+				Ok(buf.len())
+			}
+
+			fn flush(&mut self) -> std::io::Result<()> {
+				Ok(())
+			}
+		}
+
+		let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+		let writer = LogWriter(logs.clone());
+		let subscriber = tracing_subscriber::fmt()
+			.with_ansi(false)
+			.without_time()
+			.with_max_level(tracing::Level::TRACE)
+			.with_writer(move || writer.clone())
+			.finish();
+
+		tracing::subscriber::with_default(subscriber, || {
+			let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+			let policy = XdsPolicy {
+				key: "gateways/default/policies/subscriptions".to_string(),
+				target: Some(crate::types::proto::agent::PolicyTarget {
+					kind: Some(crate::types::proto::agent::policy_target::Kind::Gateway(
+						crate::types::proto::agent::policy_target::GatewayTarget {
+							name: "default".to_string(),
+							namespace: "default".to_string(),
+							listener: Some("default".to_string()),
+							port: None,
+						},
+					)),
+				}),
+				kind: Some(crate::types::proto::agent::policy::Kind::Traffic(
+					crate::types::proto::agent::TrafficPolicySpec {
+						kind: Some(
+							crate::types::proto::agent::traffic_policy_spec::Kind::ApiKeyAuth(
+								crate::types::proto::agent::traffic_policy_spec::ApiKey {
+									api_keys: vec![
+										crate::types::proto::agent::traffic_policy_spec::api_key::User {
+											key: SENTINEL.to_string(),
+											..Default::default()
+										},
+									],
+									mode: crate::types::proto::agent::traffic_policy_spec::api_key::Mode::Strict
+										as i32,
+									authorization_location: Some(crate::types::proto::agent::AuthorizationLocation {
+										kind: Some(
+											crate::types::proto::agent::authorization_location::Kind::Header(
+												crate::types::proto::agent::authorization_location::Header {
+													name: "api-key".to_string(),
+													prefix: None,
+												},
+											),
+										),
+									}),
+								},
+							),
+						),
+						..Default::default()
+					},
+				)),
+				..Default::default()
+			};
+			let mut updates = vec![XdsUpdate::Update(XdsResource {
+				name: strng::literal!("policy/subscriptions"),
+				resource: ADPResource {
+					kind: Some(XdsKind::Policy(policy)),
+				},
+			})]
+			.into_iter();
+
+			updater
+				.handle(Box::new(&mut updates))
+				.expect("subscription policy accepted");
+		});
+
+		let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+		assert!(logs.contains("name=policy/subscriptions"), "{logs}");
+		assert!(logs.contains("kind=policy"), "{logs}");
+		assert!(!logs.contains(SENTINEL), "{logs}");
 	}
 
 	#[test]
