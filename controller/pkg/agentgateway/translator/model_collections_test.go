@@ -197,6 +197,33 @@ func TestGetAgentgatewayModelStatus(t *testing.T) {
 	}
 }
 
+func TestModelLLMProviderCopilot(t *testing.T) {
+	for _, selected := range []*string{nil, new("selected-model")} {
+		model := &agentgateway.AgentgatewayModelSpec{
+			Provider: new(agentgateway.ModelProviderCopilot),
+			BaseURL:  new("https://copilot.example.com/inference"),
+		}
+		provider, err := translateModelLLMProvider(RouteContext{}, "default", model, "copilot", selected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if provider.Name != "copilot" || provider.GetBaseUrl() != *model.BaseURL {
+			t.Fatalf("provider endpoint or name lost: %v", provider)
+		}
+		copilot := provider.GetCopilot()
+		if copilot == nil {
+			t.Fatal("expected Copilot provider")
+		}
+		if selected == nil {
+			if copilot.Model != nil {
+				t.Fatal("request model must not be overridden")
+			}
+		} else if got := copilot.GetModel(); got != *selected {
+			t.Fatalf("model = %q, want selected model %q", got, *selected)
+		}
+	}
+}
+
 func TestModelLLMProvider(t *testing.T) {
 	t.Run("default provider", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderOpenAI

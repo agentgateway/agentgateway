@@ -1,3 +1,49 @@
+_err: exactly one of the fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-multiple-providers
+spec:
+  ai:
+    provider:
+      copilot: {}
+      openai: {}
+---
+_err: exactly one of the fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-group-multiple-providers
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: invalid
+        copilot: {}
+        openai: {}
+---
+_err: at least 1 chars long
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-empty-model
+spec:
+  ai:
+    provider:
+      copilot:
+        model: ""
+---
+_err: may not be more than 256 bytes
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot-overlong-model
+spec:
+  ai:
+    provider:
+      copilot:
+        model: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+---
 _err: deploymentName is required for this apiVersion
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

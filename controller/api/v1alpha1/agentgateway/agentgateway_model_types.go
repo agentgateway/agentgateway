@@ -260,6 +260,7 @@ type ModelProvider string
 
 const (
 	ModelProviderOpenAI      ModelProvider = "OpenAI"
+	ModelProviderCopilot     ModelProvider = "Copilot"
 	ModelProviderAzure       ModelProvider = "Azure"
 	ModelProviderAnthropic   ModelProvider = "Anthropic"
 	ModelProviderGemini      ModelProvider = "Gemini"
