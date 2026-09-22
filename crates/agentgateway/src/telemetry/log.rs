@@ -2221,7 +2221,7 @@ impl std::fmt::Debug for OtelAccessLogger {
 	}
 }
 
-fn to_any_value(v: &ValueBag) -> AnyValue {
+fn to_any_value(key: &str, v: &ValueBag) -> AnyValue {
 	if let Some(b) = v.to_str() {
 		AnyValue::String(b.to_string().into())
 	} else if let Some(b) = v.to_i64() {
@@ -2230,7 +2230,7 @@ fn to_any_value(v: &ValueBag) -> AnyValue {
 		AnyValue::Double(b)
 	} else if let Some(b) = v.to_bool() {
 		AnyValue::Boolean(b)
-	} else if let Some(strings) = super::trc::string_array(v) {
+	} else if let Some(strings) = super::trc::otel_string_array(key, v) {
 		AnyValue::ListAny(Box::new(
 			strings
 				.into_iter()
@@ -2450,7 +2450,7 @@ impl OtelLogSink for OtelAccessLogger {
 					{
 						trace_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+					record.add_attribute(Key::new(k.to_string()), to_any_value(k, v));
 				},
 				"span.id" => {
 					if let Some(s) = v.to_str()
@@ -2458,10 +2458,10 @@ impl OtelLogSink for OtelAccessLogger {
 					{
 						span_id_val = Some(id);
 					}
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+					record.add_attribute(Key::new(k.to_string()), to_any_value(k, v));
 				},
 				_ => {
-					record.add_attribute(Key::new(k.to_string()), to_any_value(v));
+					record.add_attribute(Key::new(k.to_string()), to_any_value(k, v));
 				},
 			}
 		}
@@ -3229,11 +3229,71 @@ mod tests {
 	}
 
 	#[test]
-	fn string_arrays_remain_arrays_in_otlp_and_stored_logs() {
+	fn custom_cel_string_lists_remain_strings_in_otlp() {
+		let fields = LoggingFields {
+			add: Arc::new(OrderedStringMap::from_iter([
+				(
+					"custom.reasons",
+					Arc::new(cel::Expression::new_strict("['stop', 'length', 'stop']").unwrap()),
+				),
+				(
+					"custom.empty",
+					Arc::new(cel::Expression::new_strict("[]").unwrap()),
+				),
+			])),
+			..Default::default()
+		};
+		let (mut tracer, span_exporter) = test_tracer();
+		Arc::get_mut(&mut tracer).unwrap().fields = Arc::new(fields.clone());
+		let log_exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(log_exporter.clone())
+			.build();
+		let mut log = test_request_log();
+		log.otel_logger = Some(Arc::new(OtelAccessLogger::from_provider(provider)));
+		log.tracer = Some(tracer.clone());
+		log.outgoing_span = Some(traceparent(true));
+		log.cel.register(&fields);
+		log.cel.otlp_fields = fields;
+
+		drop(DropOnLog::from(log));
+		tracer.provider.force_flush().unwrap();
+
+		let records = log_exporter.records.lock().unwrap();
+		assert_eq!(records.len(), 1);
+		let spans = span_exporter.finished_spans();
+		assert_eq!(spans.len(), 1);
+		for (key, values) in [
+			("custom.reasons", vec!["stop", "length", "stop"]),
+			("custom.empty", vec![]),
+		] {
+			let expected = ValueBag::from_serde1(&values).to_string();
+			assert_eq!(
+				records[0]
+					.0
+					.attributes_iter()
+					.find(|(k, _)| k.as_str() == key)
+					.map(|(_, v)| v),
+				Some(&AnyValue::String(expected.clone().into()))
+			);
+			assert_eq!(
+				spans[0]
+					.attributes
+					.iter()
+					.find(|attribute| attribute.key.as_str() == key)
+					.map(|attribute| &attribute.value),
+				Some(&opentelemetry::Value::String(expected.into()))
+			);
+		}
+	}
+
+	#[test]
+	fn finish_reasons_remain_arrays_in_otlp_and_stored_logs() {
+		let key = "gen_ai.response.finish_reasons";
 		for values in [vec![], vec!["stop", "length", "stop"]] {
 			let bag = ValueBag::from_serde1(&values);
 			assert_eq!(
-				to_any_value(&bag),
+				to_any_value(key, &bag),
 				AnyValue::ListAny(Box::new(
 					values
 						.iter()
@@ -3242,14 +3302,14 @@ mod tests {
 				))
 			);
 			assert_eq!(
-				trc::to_otel(&bag),
+				trc::to_otel(key, &bag),
 				opentelemetry::Value::Array(opentelemetry::Array::String(
 					values.iter().map(|s| (*s).into()).collect()
 				))
 			);
-			let attrs = database_attributes(&[("gen_ai.response.finish_reasons", Some(bag))]);
+			let attrs = database_attributes(&[(key, Some(bag))]);
 			assert_eq!(
-				serde_json::from_str::<Value>(&attrs.json).unwrap()["gen_ai.response.finish_reasons"],
+				serde_json::from_str::<Value>(&attrs.json).unwrap()[key],
 				serde_json::json!(values)
 			);
 		}
@@ -3261,9 +3321,12 @@ mod tests {
 			serde_json::json!([1, 2]),
 		] {
 			let bag = ValueBag::from_serde1(&value);
-			assert_eq!(to_any_value(&bag), AnyValue::String(bag.to_string().into()));
 			assert_eq!(
-				trc::to_otel(&bag),
+				to_any_value(key, &bag),
+				AnyValue::String(bag.to_string().into())
+			);
+			assert_eq!(
+				trc::to_otel(key, &bag),
 				opentelemetry::Value::String(bag.to_string().into())
 			);
 		}
