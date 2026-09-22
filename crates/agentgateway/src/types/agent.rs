@@ -2976,13 +2976,17 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
 		if let Some(auth) = &self.mcp {
 			if !crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
-				self.jwt.apply(Some(log), req).await.map_err(|e| {
-					crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
-						crate::proxy::ProxyError::JwtAuthenticationFailure(e),
-						req,
-						auth,
-					))
-				})?;
+				self
+					.jwt
+					.apply(Some(log), req, Some(client))
+					.await
+					.map_err(|e| {
+						crate::proxy::ProxyResponse::from(crate::mcp::auth::create_auth_required_response(
+							crate::proxy::ProxyError::JwtAuthenticationFailure(e),
+							req,
+							auth,
+						))
+					})?;
 			}
 
 			if let Some(resp) = crate::mcp::auth::handle_mcp_request(req, auth, client).await? {
@@ -2993,7 +2997,7 @@ impl store::RequestPolicyTrait for JwtAuthentication {
 
 		self
 			.jwt
-			.apply(Some(log), req)
+			.apply(Some(log), req, Some(client))
 			.await
 			.map_err(crate::proxy::ProxyError::JwtAuthenticationFailure)
 			.map_err(crate::proxy::ProxyResponse::from)?;
@@ -3081,6 +3085,44 @@ pub struct LocalMcpAuthentication {
 	/// client secret at the token endpoint.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub client_secret: Option<SecretString>,
+	/// RFC 7662 Token Introspection configuration for opaque access tokens.
+	/// When set, tokens that cannot be parsed as JWTs are introspected against
+	/// the configured endpoint.
+	#[serde(default)]
+	pub introspection: Option<LocalIntrospectionConfig>,
+}
+
+/// RFC 7662 Token Introspection configuration for local (file/env) configs.
+#[apply(schema_de!)]
+pub struct LocalIntrospectionConfig {
+	/// Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).
+	pub url: Option<String>,
+	/// OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate
+	/// the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the
+	/// client whose token is being validated.
+	pub client_id: String,
+	/// OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.
+	/// Must belong to a confidential client registered with the introspecting IdP.
+	/// Only `client_secret_basic` is supported; `private_key_jwt` is not.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub client_secret: Option<SecretString>,
+	/// Cache duration for introspection results. Default: 30s.
+	#[serde(default = "default_introspection_cache_duration")]
+	pub cache_duration: Duration,
+	/// HTTP request timeout. Default: 5s.
+	#[serde(default = "default_introspection_timeout")]
+	pub timeout: Duration,
+	/// Failure mode when introspection endpoint is unreachable. Default: FailClosed.
+	#[serde(default)]
+	pub failure_mode: http::introspection::FailureMode,
+}
+
+fn default_introspection_cache_duration() -> Duration {
+	Duration::from_secs(30)
+}
+
+fn default_introspection_timeout() -> Duration {
+	Duration::from_secs(5)
 }
 
 impl LocalMcpAuthentication {
@@ -3160,8 +3202,25 @@ impl LocalMcpAuthentication {
 		&self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<McpAuthentication> {
+		// Build JWKS provider first (if configured)
 		let jwt_cfg = self.as_jwt()?;
-		let jwt = jwt_cfg.try_into(resources).await?;
+		let mut jwt = jwt_cfg.try_into(resources).await?;
+
+		// Add introspection on top if configured
+		if let Some(intro) = &self.introspection {
+			let config = crate::http::introspection::IntrospectionConfig {
+				endpoint: intro.url.clone(),
+				client_id: intro.client_id.clone(),
+				client_secret: intro.client_secret.clone(),
+				cache_duration: intro.cache_duration,
+				timeout: intro.timeout,
+				failure_mode: intro.failure_mode,
+				expected_issuer: self.issuer.clone(),
+				expected_audiences: self.audiences.clone().unwrap_or_default(),
+			};
+			jwt = jwt.with_introspection_for_all_providers(config);
+		}
+
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: self.audiences.clone().unwrap_or_default(),
