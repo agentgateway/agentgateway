@@ -763,14 +763,27 @@ pub mod from_messages {
 			&& match res.error.code.as_ref().and_then(Value::as_str) {
 				Some(code) => code == "context_length_exceeded",
 				None => {
-					res.error.message
-						== "Your input exceeds the context window of this model. Please adjust your input and try again."
+					let message = res.error.message.to_ascii_lowercase();
+					[
+						"prompt is too long",
+						"input is too long for requested model",
+						"exceeds the context window",
+						"exceed context limit",
+						"maximum context length is",
+						"model's maximum context limit",
+						"is longer than the model's context length",
+						"input tokens exceed the configured limit",
+						"exceeds the available context size",
+					]
+					.iter()
+					.any(|pattern| message.contains(pattern))
 				},
 			};
 		if context_overflow {
 			res.error.r#type = Some("invalid_request_error".to_string());
 			if !res.error.message.contains("capability_rejected:") {
-				res.error.message = "capability_rejected: prompt_too_long".to_string();
+				// Keep a whitespace boundary after the capability token.
+				res.error.message = format!("capability_rejected: prompt_too_long {}", res.error.message);
 			}
 		}
 		let m = messages::MessagesErrorResponse {

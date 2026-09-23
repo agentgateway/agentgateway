@@ -30,33 +30,43 @@ mod context_overflow {
 			json!({"type": "invalid_request", "code": "context_length_exceeded", "message": "input rejected"}),
 			StatusCode::BAD_REQUEST,
 			"invalid_request_error",
-			"capability_rejected: prompt_too_long",
+			"capability_rejected: prompt_too_long input rejected",
 		);
 	}
 
 	#[test]
-	fn exact_message_enables_compaction_without_a_usable_code() {
-		let mut error = json!({"message": OVERFLOW});
-		check(
-			error.clone(),
-			StatusCode::BAD_REQUEST,
-			"invalid_request_error",
-			"capability_rejected: prompt_too_long",
-		);
-		for code in [Value::Null, json!(400), json!(false), json!([]), json!({})] {
-			error["code"] = code;
+	fn provider_messages_enable_compaction_without_a_usable_code() {
+		for message in [
+			OVERFLOW,
+			"Prompt is too long: 213000 tokens > 200000 maximum",
+			"Input is too long for requested model.",
+			"Request would exceed context limit of 8192 tokens",
+			"This model's maximum context length is 8192 tokens. You requested 9000 tokens.",
+			"Request exceeds model's maximum context limit of 8192 tokens",
+			"Input is longer than the model's context length of 8192 tokens",
+			"INPUT TOKENS EXCEED THE CONFIGURED LIMIT of 8192 tokens",
+			"Request (9000 tokens) exceeds the available context size (8192 tokens)",
+		] {
 			check(
-				error.clone(),
+				json!({"message": message}),
 				StatusCode::BAD_REQUEST,
 				"invalid_request_error",
-				"capability_rejected: prompt_too_long",
+				&format!("capability_rejected: prompt_too_long {message}"),
+			);
+		}
+		for code in [Value::Null, json!(400), json!(false), json!([]), json!({})] {
+			check(
+				json!({"message": OVERFLOW, "code": code}),
+				StatusCode::BAD_REQUEST,
+				"invalid_request_error",
+				&format!("capability_rejected: prompt_too_long {OVERFLOW}"),
 			);
 		}
 	}
 
 	#[test]
 	fn unrelated_codes_and_messages_are_not_context_overflow() {
-		for code in ["invalid_value", "request_body_too_large", ""] {
+		for code in ["invalid_value", "request_body_too_large", "bad_request", ""] {
 			check(
 				json!({"code": code, "message": OVERFLOW}),
 				StatusCode::BAD_REQUEST,
@@ -67,9 +77,10 @@ mod context_overflow {
 		for message in [
 			"bad request",
 			"request body too large",
-			"Your input exceeds the context window",
-			"Prompt is too long",
-			"Input is too long for requested model.",
+			"too many tokens per minute",
+			"token limit exceeded for this account",
+			"max_tokens exceeds the maximum output token limit",
+			"string too long. expected a string with maximum length 64",
 		] {
 			for code in [Value::Null, json!(400), json!({})] {
 				check(

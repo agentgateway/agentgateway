@@ -2673,7 +2673,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
-	for (provider, model, format, error) in [
+	for (provider, model, format, error, expected_message) in [
 		(
 			AIProvider::Copilot(copilot::Provider {
 				model_override: None,
@@ -2681,6 +2681,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 			"gpt-6-astra",
 			ChatFormat::OpenAIResponses,
 			json!({"message": "Your input exceeds the context window of this model. Please adjust your input and try again."}),
+			"capability_rejected: prompt_too_long Your input exceeds the context window of this model. Please adjust your input and try again.",
 		),
 		(
 			AIProvider::OpenAI(openai::Provider {
@@ -2690,6 +2691,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 			"gpt-4o",
 			ChatFormat::OpenAICompletions,
 			json!({"type": "invalid_request_error", "code": "context_length_exceeded", "message": "input rejected"}),
+			"capability_rejected: prompt_too_long input rejected",
 		),
 	] {
 		assert_eq!(
@@ -2732,7 +2734,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 				body,
 				json!({
 					"type": "error",
-					"error": {"type": "invalid_request_error", "message": "capability_rejected: prompt_too_long"}
+					"error": {"type": "invalid_request_error", "message": expected_message}
 				})
 			);
 		}
