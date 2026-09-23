@@ -4137,6 +4137,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 		mode: crate::types::agent::McpAuthenticationMode::Strict,
 		client_id: None,
 		client_secret: None,
+		relay_signing_key: None,
 	};
 
 	let mut t = setup_proxy_test("{}")
@@ -4249,6 +4250,7 @@ async fn mcp_authentication_after_route_jwt(
 		mode,
 		client_id: None,
 		client_secret: None,
+		relay_signing_key: None,
 	};
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
