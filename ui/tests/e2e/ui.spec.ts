@@ -561,6 +561,51 @@ test('XDS mode shows an empty model inventory', async ({ page }) => {
 	await expect(page.locator('.dump-models-table')).toHaveCount(0);
 });
 
+test('XDS mode offers Client Setup with models from the config dump', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/client-setup');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Client Setup' })).toBeVisible();
+	await expect(page.getByText('This page configures the client only')).toBeVisible();
+	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
+
+	const modelInput = page.getByRole('textbox', { name: 'Model' });
+	await expect(modelInput).toHaveValue('gpt-4o');
+	await page.getByRole('button', { name: 'Show Model options' }).click();
+	const modelOptions = page.getByRole('listbox', { name: 'Model' });
+	await expect(modelOptions.getByRole('option')).toHaveText([
+		'gpt-4o',
+		'resilient',
+		'smart',
+		'tiered'
+	]);
+	await modelOptions.getByRole('option', { name: 'smart' }).click();
+	await expect(modelInput).toHaveValue('smart');
+
+	await modelInput.fill('custom/model-x');
+	await expect(page.locator('.client-setup-summary')).toContainText('custom/model-x');
+
+	await page.getByLabel('Gateway base URL').fill('https://gw.example.com/llm');
+	await expect(page.getByText('Enter the gateway base URL')).toHaveCount(0);
+	await expect(page.locator('.client-setup-summary')).toContainText(
+		'https://gw.example.com/llm/v1'
+	);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('Client Setup hides client snippets until the gateway URL is set', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/client-setup');
+
+	await expect(page.getByText('Enter the gateway base URL')).toHaveCount(0);
+	await page.getByLabel('Gateway base URL').fill('');
+
+	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
+	await expect(page.locator('.client-setup-summary')).toContainText('Not set');
+});
+
 test('hybrid model edits use the unified resource API', async ({ page }) => {
 	const config = emptyConfig();
 	const llm = config.llm as { models: Array<Record<string, unknown>> };
