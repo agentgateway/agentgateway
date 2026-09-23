@@ -13,6 +13,7 @@ use crate::http::oauth::{
 use crate::http::*;
 use crate::json;
 use crate::json::from_body_with_limit;
+use crate::mcp::relay_state;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
@@ -130,6 +131,52 @@ pub(crate) async fn handle_mcp_request(
 			))
 		},
 		path
+			if matches!(auth.provider, Some(McpIDP::Keycloak { .. }))
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/authorize") =>
+		{
+			Ok(Some(
+				keycloak_authorize(req, auth)
+					.map_err(|e| {
+						warn!("keycloak authorize error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response()
+					.map(Body::new),
+			))
+		},
+		path
+			if matches!(auth.provider, Some(McpIDP::Keycloak { .. }))
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/callback") =>
+		{
+			Ok(Some(
+				keycloak_callback(req, auth)
+					.map_err(|e| {
+						warn!("keycloak callback error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response()
+					.map(Body::new),
+			))
+		},
+		path
+			if matches!(auth.provider, Some(McpIDP::Keycloak { .. }))
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/token") =>
+		{
+			Ok(Some(
+				keycloak_token(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("keycloak token error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response()
+					.map(Body::new),
+			))
+		},
+		path
 			if path == "/.well-known/oauth-authorization-server"
 				|| path.starts_with("/.well-known/oauth-authorization-server/") =>
 		{
@@ -179,6 +226,10 @@ pub(crate) fn create_auth_required_response(
 	ProxyError::McpJwtAuthenticationFailure(Box::new(inner), www_authenticate_value)
 }
 
+fn keycloak_unterminated(auth: &McpAuthentication) -> bool {
+	matches!(auth.provider, Some(McpIDP::Keycloak { .. })) && auth.client_id.is_none()
+}
+
 pub(super) async fn protected_resource_metadata(
 	req: &mut Request,
 	auth: &McpAuthentication,
@@ -187,11 +238,12 @@ pub(super) async fn protected_resource_metadata(
 
 	// Determine the issuer to use - either use the same request URL and path that it was initially with,
 	// or else keep the auth.issuer
-	let issuer = if auth.provider.is_some() {
-		// When a provider is configured, use the same request URL with the well-known prefix stripped
+	let issuer = if auth.provider.is_some() && !keycloak_unterminated(auth) {
+		// When a provider is configured (and, for Keycloak, actually terminates the flow), use
+		// the same request URL with the well-known prefix stripped
 		strip_oauth_protected_resource_prefix(req)
 	} else {
-		// No provider configured, use the original issuer
+		// No provider configured, or an unterminated Keycloak config: use the original issuer
 		auth.issuer.clone()
 	};
 
@@ -259,6 +311,9 @@ fn rewrite_authorization_server_issuer(
 		// authorization server issuer.
 		return Ok(());
 	}
+	if keycloak_unterminated(auth) {
+		return Ok(());
+	}
 	let Some(issuer) = issuer_from_authorization_server_metadata_request(req) else {
 		return Ok(());
 	};
@@ -283,6 +338,44 @@ fn issuer_path_from_metadata_path<'a>(path: &'a str, prefix: &str) -> Option<&'a
 	path
 		.strip_suffix(prefix)
 		.or_else(|| path.strip_suffix(&format!("{prefix}/")))
+}
+
+fn keycloak_resource_uri(req: &Request) -> Result<Uri, ProxyError> {
+	const OAUTH_PREFIX: &str = "/.well-known/oauth-authorization-server";
+	let external_uri = request_uri_for_oauth_metadata(req);
+
+	// Determine the issuer path (owned, to break lifetime dependency on external_uri)
+	let issuer_path: String = {
+		let external_path = external_uri.path();
+		let req_path = req.uri().path();
+
+		issuer_path_from_metadata_path(external_path, OAUTH_PREFIX)
+			.or_else(|| issuer_path_from_metadata_path(req_path, OAUTH_PREFIX))
+			.ok_or_else(|| {
+				ProxyError::ProcessingString(format!(
+					"request path {:?} is not under {OAUTH_PREFIX}",
+					req_path
+				))
+			})?
+			.to_string()
+	};
+
+	let resource_path = issuer_path
+		.strip_suffix("/callback")
+		.or_else(|| issuer_path.strip_suffix("/authorize"))
+		.or_else(|| issuer_path.strip_suffix("/token"))
+		.unwrap_or(issuer_path.as_str());
+
+	uri_with_path(external_uri, resource_path)
+		.parse()
+		.map_err(|e| ProxyError::ProcessingString(format!("invalid resource uri: {e}")))
+}
+
+fn keycloak_callback_uri(req: &Request) -> Result<String, ProxyError> {
+	Ok(format!(
+		"{}/callback",
+		authorization_server_metadata_url(&keycloak_resource_uri(req)?.to_string())
+	))
 }
 
 fn uri_with_path(uri: Uri, path: &str) -> String {
@@ -312,6 +405,42 @@ fn request_uri_for_oauth_metadata(req: &Request) -> Uri {
 		.unwrap_or_else(|| req.uri().clone());
 
 	crate::http::x_headers::apply_forwarded_scheme(uri, req.headers())
+}
+
+fn apply_keycloak_registration_rewrite(
+	current_uri: &Uri,
+	resp: &mut serde_json::Value,
+) -> Result<(), ProxyError> {
+	let Some(serde_json::Value::String(re)) = json::traverse_mut(resp, &["registration_endpoint"])
+	else {
+		return Err(ProxyError::ProcessingString(
+			"registration_endpoint missing".to_string(),
+		));
+	};
+	*re = format!("{current_uri}/client-registration");
+	Ok(())
+}
+
+fn apply_keycloak_endpoint_rewrites(
+	current_uri: &Uri,
+	resp: &mut serde_json::Value,
+) -> Result<(), ProxyError> {
+	let Some(serde_json::Value::String(ae)) = json::traverse_mut(resp, &["authorization_endpoint"])
+	else {
+		return Err(ProxyError::ProcessingString(
+			"authorization_endpoint missing".to_string(),
+		));
+	};
+	*ae = format!("{current_uri}/authorize");
+
+	let Some(serde_json::Value::String(te)) = json::traverse_mut(resp, &["token_endpoint"]) else {
+		return Err(ProxyError::ProcessingString(
+			"token_endpoint missing".to_string(),
+		));
+	};
+	*te = format!("{current_uri}/token");
+
+	apply_keycloak_registration_rewrite(current_uri, resp)
 }
 
 pub(super) async fn authorization_server_metadata(
@@ -408,14 +537,13 @@ pub(super) async fn authorization_server_metadata(
 			// We can workaround this by proxying it
 
 			let current_uri = request_uri_for_oauth_metadata(req);
-			let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
-			else {
-				return Err(ProxyError::ProcessingString(
-					"registration_endpoint missing".to_string(),
-				));
-			};
-			*re = format!("{current_uri}/client-registration");
+			if auth.client_id.is_some() {
+				apply_keycloak_endpoint_rewrites(&current_uri, &mut resp)?;
+			} else {
+			// No configured client_id: per-client DCR is handled directly by Keycloak.
+			// Keep Keycloak's authorize/token endpoints unchanged; only proxy registration.
+				apply_keycloak_registration_rewrite(&current_uri, &mut resp)?;
+			}
 		},
 		Some(McpIDP::Authentik {}) => {
 			// authentik does not support RFC 8707, and has no audience query parameter workaround.
@@ -606,6 +734,307 @@ pub(super) fn entra_authorize(
 	)
 }
 
+/// Allows loopback HTTP callbacks for native/CLI clients (RFC 8252), or HTTPS
+/// callbacks on the gateway's own origin.
+///
+/// Keycloak validates only the gateway's substituted callback in this flow, so
+/// the client's original redirect URI must be restricted here to prevent an
+/// authorization code from being redirected to an arbitrary host.
+fn is_allowed_client_redirect_uri(uri: &str, gateway_origin: &str) -> bool {
+	let Ok(parsed) = url::Url::parse(uri) else {
+		return false;
+	};
+	match parsed.scheme() {
+		// `url::Url::host_str()` serializes IPv6 hosts bracketed (`"[::1]"`), so a naive
+		// `Some("::1")` match would never fire for the IPv6 loopback form RFC 8252 native
+		// clients are told to try alongside `127.0.0.1`. Reuse the shared host check
+		// (`super::is_localhost_host`), which already strips brackets, rather than
+		// duplicating that logic here.
+		"http" => parsed.host_str().is_some_and(super::is_localhost_host),
+		"https" => parsed.origin().ascii_serialization() == gateway_origin,
+		_ => false,
+	}
+}
+
+pub(super) fn keycloak_authorize(
+	req: &Request,
+	auth: &McpAuthentication,
+) -> Result<Response, ProxyError> {
+	let relay_signing_key = auth.relay_signing_key.as_ref().ok_or_else(|| {
+		ProxyError::ProcessingString(
+			"keycloak provider requires relaySigningKey to encrypt the relay-state token".to_string(),
+		)
+	})?;
+
+	let query: std::collections::HashMap<String, String> =
+		url::form_urlencoded::parse(req.uri().query().unwrap_or("").as_bytes())
+			.into_owned()
+			.collect();
+	let client_redirect_uri = query.get("redirect_uri").cloned().ok_or_else(|| {
+		ProxyError::ProcessingString("authorize request missing redirect_uri".to_string())
+	})?;
+	let client_state = query.get("state").cloned();
+
+	let gateway_origin = {
+		let resource_uri = keycloak_resource_uri(req)?.to_string();
+		url::Url::parse(&resource_uri)
+			.map_err(|e| ProxyError::ProcessingString(format!("invalid gateway origin: {e}")))?
+			.origin()
+			.ascii_serialization()
+	};
+	if !is_allowed_client_redirect_uri(&client_redirect_uri, &gateway_origin) {
+		return Err(ProxyError::ProcessingString(format!(
+			"redirect_uri {client_redirect_uri:?} is not an allowed client callback (must be a loopback http callback or same-origin as the gateway)"
+		)));
+	}
+
+	let relay_token = relay_state::encode(
+		relay_signing_key,
+		&relay_state::RelayState {
+			client_redirect_uri,
+			client_state,
+			expires_at_unix: now_unix().saturating_add(300),
+		},
+	)?;
+
+	let callback_uri = keycloak_callback_uri(req)?;
+
+	let base = format!(
+		"{}/protocol/openid-connect/auth",
+		auth.issuer.trim_end_matches('/')
+	);
+	let mut location: Uri = match req.uri().query() {
+		Some(query) => format!("{base}?{query}")
+			.parse()
+			.map_err(|e| ProxyError::ProcessingString(format!("invalid authorize URL: {e}")))?,
+		None => base
+			.parse()
+			.map_err(|e| ProxyError::ProcessingString(format!("invalid authorize URL: {e}")))?,
+	};
+	crate::http::modify_query_parameters(
+		&mut location,
+		[
+			("redirect_uri", callback_uri.as_str()),
+			("state", relay_token.as_str()),
+			("response_mode", "query"),
+			// The callback relay reads code/state from the query string, so other response
+			// modes (e.g. fragment or form_post) would bypass the relay.
+		],
+		std::iter::empty::<&str>(),
+	)
+	.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+
+	Ok(
+		::http::Response::builder()
+			.status(StatusCode::FOUND)
+			.header(::http::header::LOCATION, location.to_string())
+			.body(Body::empty())?,
+	)
+}
+
+pub(super) fn keycloak_callback(
+	req: &Request,
+	auth: &McpAuthentication,
+) -> Result<Response, ProxyError> {
+	let relay_signing_key = auth.relay_signing_key.as_ref().ok_or_else(|| {
+		ProxyError::ProcessingString(
+			"keycloak provider requires relaySigningKey to decrypt the relay-state token".to_string(),
+		)
+	})?;
+
+	let query: std::collections::HashMap<String, String> =
+		url::form_urlencoded::parse(req.uri().query().unwrap_or("").as_bytes())
+			.into_owned()
+			.collect();
+	let relay_token = query
+		.get("state")
+		.cloned()
+		.ok_or_else(|| ProxyError::ProcessingString("callback missing state".to_string()))?;
+	let relay = relay_state::decode(relay_signing_key, &relay_token)?;
+
+	let mut location: Uri = relay
+		.client_redirect_uri
+		.parse()
+		.map_err(|e| ProxyError::ProcessingString(format!("invalid client redirect_uri: {e}")))?;
+
+	if let Some(error) = query.get("error").cloned() {
+		let gateway_issuer = keycloak_resource_uri(req)?.to_string();
+		let error_description = query.get("error_description").cloned();
+		let error_uri = query.get("error_uri").cloned();
+
+		let mut extra = vec![("error", error.as_str())];
+		if let Some(ed) = error_description.as_deref() {
+			extra.push(("error_description", ed));
+		}
+		if let Some(eu) = error_uri.as_deref() {
+			extra.push(("error_uri", eu));
+		}
+		extra.push(("iss", gateway_issuer.as_str()));
+		if let Some(state) = relay.client_state.as_deref() {
+			extra.push(("state", state));
+		}
+		crate::http::modify_query_parameters(&mut location, extra, std::iter::empty::<&str>())
+			.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+
+		return Ok(
+			::http::Response::builder()
+				.status(StatusCode::FOUND)
+				.header(::http::header::LOCATION, location.to_string())
+				.body(Body::empty())?,
+		);
+	}
+
+	let code = query
+		.get("code")
+		.cloned()
+		.ok_or_else(|| ProxyError::ProcessingString("callback missing code".to_string()))?;
+	let gateway_issuer = keycloak_resource_uri(req)?.to_string();
+
+	let mut extra = vec![("code", code.as_str()), ("iss", gateway_issuer.as_str())];
+	if let Some(state) = relay.client_state.as_deref() {
+		extra.push(("state", state));
+	}
+	crate::http::modify_query_parameters(&mut location, extra, std::iter::empty::<&str>())
+		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+
+	Ok(
+		::http::Response::builder()
+			.status(StatusCode::FOUND)
+			.header(::http::header::LOCATION, location.to_string())
+			.body(Body::empty())?,
+	)
+}
+
+/// Rewrites `redirect_uri` in a token-exchange form to the gateway's `/callback` URL.
+/// Keycloak requires it to match the `redirect_uri` used by `/authorize`, which
+/// [`keycloak_authorize`] replaces with the gateway callback. Forms without a
+/// `redirect_uri` (for example, a `refresh_token` grant) are left unchanged.
+fn rewrite_keycloak_token_form(body: &[u8], callback_uri: &str) -> String {
+	url::form_urlencoded::Serializer::new(String::new())
+		.extend_pairs(url::form_urlencoded::parse(body).map(|(k, v)| {
+			if k == "redirect_uri" {
+				(k.into_owned(), callback_uri.to_string())
+			} else {
+				(k.into_owned(), v.into_owned())
+			}
+		}))
+		.finish()
+}
+
+struct KeycloakTokenFormFields {
+	grant_type: Option<String>,
+	client_id: Option<String>,
+	has_client_secret: bool,
+	/// Whether `grant_type`, `client_id`, or `client_secret` appears more than once.
+	/// Duplicate fields could cause this validation to inspect a different value from
+	/// the one ultimately used by Keycloak.
+	has_duplicate_injection_fields: bool,
+}
+
+fn keycloak_token_form_fields(body: &[u8]) -> KeycloakTokenFormFields {
+	let mut grant_type = None;
+	let mut client_id = None;
+	let mut has_client_secret = false;
+	let mut grant_type_count = 0u32;
+	let mut client_id_count = 0u32;
+	let mut client_secret_count = 0u32;
+	for (k, v) in url::form_urlencoded::parse(body) {
+		match k.as_ref() {
+			"grant_type" => {
+				grant_type = Some(v.into_owned());
+				grant_type_count += 1;
+			},
+			"client_id" => {
+				client_id = Some(v.into_owned());
+				client_id_count += 1;
+			},
+			"client_secret" => {
+				has_client_secret = true;
+				client_secret_count += 1;
+			},
+			_ => {},
+		}
+	}
+	KeycloakTokenFormFields {
+		grant_type,
+		client_id,
+		has_client_secret,
+		has_duplicate_injection_fields: grant_type_count > 1
+			|| client_id_count > 1
+			|| client_secret_count > 1,
+	}
+}
+
+/// Proxies a token-exchange request to Keycloak, rewriting `redirect_uri` to the gateway's
+/// `/callback` URL. If the configured client is confidential and the request does not already
+/// authenticate the client, the configured `clientSecret` is injected when allowed.
+pub(super) async fn keycloak_token(
+	req: &mut Request,
+	auth: &McpAuthentication,
+	client: PolicyClient,
+) -> Result<Response, ProxyError> {
+	if req.method() != Method::POST {
+		return Ok(
+			::http::Response::builder()
+				.status(StatusCode::METHOD_NOT_ALLOWED)
+				.header(::http::header::ALLOW, "POST")
+				.body(Body::empty())?,
+		);
+	}
+
+	let callback_uri = keycloak_callback_uri(req)?;
+	let limit = crate::http::buffer_limit(req);
+	let body = std::mem::take(req.body_mut());
+	let bytes = crate::http::read_body_with_limit(body, limit)
+		.await
+		.map_err(ProxyError::Body)?;
+	let mut form = rewrite_keycloak_token_form(&bytes, &callback_uri);
+
+	let authorization = req.headers().get(::http::header::AUTHORIZATION).cloned();
+	let fields = keycloak_token_form_fields(&bytes);
+	let client_id_matches = auth.client_id.is_some() && fields.client_id == auth.client_id;
+	if authorization.is_none()
+		&& !fields.has_client_secret
+		&& !fields.has_duplicate_injection_fields
+		&& client_id_matches
+		&& entra_grant_may_use_client_secret(fields.grant_type.as_deref())
+		&& let Some(secret) = &auth.client_secret
+	{
+		form = url::form_urlencoded::Serializer::new(form)
+			.append_pair("client_secret", secret.expose_secret())
+			.finish();
+	}
+
+	let token_endpoint = format!(
+		"{}/protocol/openid-connect/token",
+		auth.issuer.trim_end_matches('/')
+	);
+	let mut builder = ::http::Request::builder()
+		.uri(token_endpoint)
+		.method(Method::POST)
+		.header(
+			::http::header::CONTENT_TYPE,
+			"application/x-www-form-urlencoded",
+		);
+	if let Some(authorization) = authorization {
+		builder = builder.header(::http::header::AUTHORIZATION, authorization);
+	}
+	let ureq = builder.body(Body::from(form))?;
+	let upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
+
+	Ok(upstream)
+}
+
+fn now_unix() -> u64 {
+	std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap_or_default()
+		.as_secs()
+}
+
 /// Proxy an OAuth token request to Entra, stripping the RFC 8707 `resource` parameter
 /// (see [`entra_authorize`]) and injecting the configured client secret when the client did
 /// not supply one. Entra app registrations under the Web platform are confidential clients
@@ -614,7 +1043,7 @@ pub(super) fn entra_authorize(
 /// The secret is only attached when the request is for the configured `clientId` (the app
 /// registration the secret belongs to) and uses a user-delegated grant (`authorization_code`,
 /// `refresh_token`). This endpoint is reachable pre-authentication, so injecting the secret
-/// into other grant types — notably `client_credentials` — would let any caller mint
+/// into other grant types, notably `client_credentials`, would let any caller mint
 /// app-level tokens with the gateway's credential.
 pub(super) async fn entra_token(
 	req: &mut Request,
@@ -763,6 +1192,9 @@ async fn build_mock_dcr_response(
 mod tests {
 	use std::sync::Arc;
 
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
 	use super::*;
 
 	#[test]
@@ -910,6 +1342,221 @@ mod tests {
 	}
 
 	#[test]
+	fn keycloak_metadata_rewrites_authorization_and_token_endpoints_to_gateway() {
+		let current_uri: Uri = "https://gateway.example.com/.well-known/oauth-authorization-server/mcp"
+			.parse()
+			.expect("uri should parse");
+		let mut metadata = serde_json::json!({
+			"authorization_endpoint": "https://login.example.com/auth/realms/example/protocol/openid-connect/auth",
+			"token_endpoint": "https://login.example.com/auth/realms/example/protocol/openid-connect/token",
+			"registration_endpoint": "https://login.example.com/auth/realms/example/clients-registrations/openid-connect",
+		});
+
+		apply_keycloak_endpoint_rewrites(&current_uri, &mut metadata)
+			.expect("keycloak metadata should be rewritable");
+
+		assert_eq!(
+			metadata["authorization_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize"
+		);
+		assert_eq!(
+			metadata["token_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token"
+		);
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn keycloak_metadata_rewrite_rejects_missing_authorization_endpoint() {
+		let current_uri: Uri = "https://gateway.example.com/mcp"
+			.parse()
+			.expect("uri should parse");
+		let mut metadata = serde_json::json!({});
+
+		assert!(apply_keycloak_endpoint_rewrites(&current_uri, &mut metadata).is_err());
+	}
+
+	#[tokio::test]
+	async fn keycloak_metadata_terminated_rewrites_authorize_and_token_endpoints() {
+		// Real example deployment shape: client_id set, no client_secret.
+		let mock = MockServer::start().await;
+		let issuer = format!("{}/auth/realms/example", mock.uri());
+		Mock::given(method("GET"))
+			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"issuer": issuer,
+				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
+				"token_endpoint": format!("{issuer}/protocol/openid-connect/token"),
+				"registration_endpoint": format!("{issuer}/clients-registrations/openid-connect"),
+				"jwks_uri": format!("{issuer}/protocol/openid-connect/certs"),
+			})))
+			.mount(&mock)
+			.await;
+
+		let auth = keycloak_auth_with_issuer(issuer);
+		assert!(
+			auth.client_secret.is_none(),
+			"fixture should match the real public-client deployment shape (no client_secret)"
+		);
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = authorization_server_metadata(&mut req, &auth, client)
+			.await
+			.expect("metadata should build");
+		let json = response_body_to_json(resp).await;
+
+		assert_eq!(
+			json["authorization_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize"
+		);
+		assert_eq!(
+			json["token_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token"
+		);
+		assert_eq!(
+			json["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+		// The gateway does terminate the flow here, so it may (and should) claim to be the
+		// issuer, the mirror image of the pure-DCR case below, which must not.
+		assert_eq!(json["issuer"], "https://gateway.example.com/mcp");
+	}
+
+	#[tokio::test]
+	async fn keycloak_metadata_pure_dcr_keeps_real_issuer_and_endpoints() {
+		// No client_id: OAuth authorization remains with Keycloak, so keep its issuer
+		// and authorize/token endpoints unchanged. Registration is still proxied.
+		let mock = MockServer::start().await;
+		let issuer = format!("{}/auth/realms/example", mock.uri());
+		Mock::given(method("GET"))
+			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"issuer": issuer,
+				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
+				"token_endpoint": format!("{issuer}/protocol/openid-connect/token"),
+				"registration_endpoint": format!("{issuer}/clients-registrations/openid-connect"),
+				"jwks_uri": format!("{issuer}/protocol/openid-connect/certs"),
+			})))
+			.mount(&mock)
+			.await;
+
+		let mut auth = keycloak_auth_with_issuer(issuer.clone());
+		auth.client_id = None;
+		auth.relay_signing_key = None;
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = authorization_server_metadata(&mut req, &auth, client)
+			.await
+			.expect("metadata should build");
+		let json = response_body_to_json(resp).await;
+
+		assert_eq!(
+			json["authorization_endpoint"],
+			format!("{issuer}/protocol/openid-connect/auth")
+		);
+		assert_eq!(
+			json["token_endpoint"],
+			format!("{issuer}/protocol/openid-connect/token")
+		);
+		// Registration is still proxied because Keycloak does not support CORS for it.
+		assert_eq!(
+			json["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+		assert_eq!(
+			json["issuer"], issuer,
+			"pure-DCR Keycloak metadata must advertise Keycloak's real issuer, not the gateway's"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_metadata_client_secret_alone_does_not_terminate() {
+		// client_secret does not control flow termination; without client_id, keep
+		// Keycloak's issuer and authorize/token endpoints unchanged.
+		let mock = MockServer::start().await;
+		let issuer = format!("{}/auth/realms/example", mock.uri());
+		Mock::given(method("GET"))
+			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"issuer": issuer,
+				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
+				"token_endpoint": format!("{issuer}/protocol/openid-connect/token"),
+				"registration_endpoint": format!("{issuer}/clients-registrations/openid-connect"),
+				"jwks_uri": format!("{issuer}/protocol/openid-connect/certs"),
+			})))
+			.mount(&mock)
+			.await;
+
+		let mut auth = keycloak_auth_with_issuer(issuer.clone());
+		auth.client_id = None;
+		auth.relay_signing_key = None;
+		auth.client_secret = Some(secrecy::SecretString::new(
+			"kc-client-secret".to_string().into_boxed_str(),
+		));
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = authorization_server_metadata(&mut req, &auth, client)
+			.await
+			.expect("metadata should build");
+		let json = response_body_to_json(resp).await;
+
+		assert_eq!(
+			json["authorization_endpoint"],
+			format!("{issuer}/protocol/openid-connect/auth")
+		);
+		assert_eq!(
+			json["token_endpoint"],
+			format!("{issuer}/protocol/openid-connect/token")
+		);
+		assert_eq!(
+			json["registration_endpoint"],
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
+		assert_eq!(
+			json["issuer"], issuer,
+			"client_secret alone (no client_id) must not make Keycloak metadata advertise the gateway as issuer"
+		);
+	}
+
+	#[tokio::test]
+	async fn protected_resource_metadata_pure_dcr_uses_keycloak_issuer() {
+		// For pure DCR, protected-resource metadata must identify the same issuer
+		// advertised by the authorization server metadata (RFC 8414 §3.3).
+		let issuer = "https://login.example.com/auth/realms/example".to_string();
+		let mut auth = keycloak_auth_with_issuer(issuer.clone());
+		auth.client_id = None;
+		auth.relay_signing_key = None;
+		let mut req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-protected-resource/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = protected_resource_metadata(&mut req, &auth).await;
+		let json = response_body_to_json(resp).await;
+
+		assert_eq!(
+			json["authorization_servers"],
+			serde_json::json!([issuer]),
+			"pure-DCR Keycloak protected-resource metadata must name Keycloak as the authorization server, not the gateway"
+		);
+	}
+
+	#[test]
 	fn well_known_endpoint_requires_root_and_slash_delimited_suffix() {
 		assert!(is_well_known_endpoint(
 			"/.well-known/oauth-protected-resource"
@@ -983,6 +1630,7 @@ mod tests {
 				mode: crate::types::agent::McpAuthenticationMode::Strict,
 				client_id: None,
 				client_secret: None,
+				relay_signing_key: None,
 			},
 		);
 
@@ -1018,6 +1666,7 @@ mod tests {
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: None,
 			client_secret: None,
+			relay_signing_key: None,
 		}
 	}
 
@@ -1162,7 +1811,41 @@ mod tests {
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: Some("client-id-guid".to_string()),
 			client_secret: None,
+			relay_signing_key: None,
 		}
+	}
+
+	/// Returns a valid 32-byte hex-encoded relay signing key.
+	/// `seed` makes keys deterministic and distinct across tests.
+	fn relay_signing_key(seed: u8) -> secrecy::SecretString {
+		secrecy::SecretString::new(hex::encode([seed; 32]).into_boxed_str())
+	}
+
+	/// Creates a Keycloak authentication config for a pre-registered public client
+	/// (`client_id` and `relay_signing_key` set, no `client_secret`).
+	fn keycloak_auth_with_issuer(issuer: String) -> McpAuthentication {
+		McpAuthentication {
+			issuer,
+			audiences: vec!["mcp".to_string()],
+			provider: Some(McpIDP::Keycloak {}),
+			resource_metadata: crate::types::agent::ResourceMetadata {
+				extra: Default::default(),
+			},
+			jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+				vec![],
+				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
+				false,
+			)),
+			mode: crate::types::agent::McpAuthenticationMode::Strict,
+			client_id: Some("mcp-gateway".to_string()),
+			client_secret: None,
+			relay_signing_key: Some(relay_signing_key(0x42)),
+		}
+	}
+
+	fn keycloak_auth() -> McpAuthentication {
+		keycloak_auth_with_issuer("https://login.example.com/auth/realms/example".to_string())
 	}
 
 	#[test]
@@ -1278,5 +1961,631 @@ mod tests {
 			"urn:ietf:params:oauth:grant-type:jwt-bearer"
 		)));
 		assert!(!entra_grant_may_use_client_secret(None));
+	}
+
+	#[rstest::rstest]
+	#[case::bare_metadata("https://gateway.example.com/.well-known/oauth-authorization-server/mcp")]
+	#[case::authorize(
+		"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize"
+	)]
+	#[case::token("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")]
+	#[case::callback(
+		"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback"
+	)]
+	fn keycloak_resource_uri_strips_provider_adapter_suffixes(#[case] uri: &'static str) {
+		let req = ::http::Request::builder()
+			.uri(uri)
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert_eq!(
+			keycloak_resource_uri(&req)
+				.expect("resource uri should resolve")
+				.to_string(),
+			"https://gateway.example.com/mcp"
+		);
+	}
+
+	#[test]
+	fn keycloak_authorize_swaps_redirect_uri_and_state_for_relay() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&redirect_uri=http%3A%2F%2F127.0.0.1%3A33418%2Fcallback&state=client-csrf&code_challenge=ccc&code_challenge_method=S256")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = keycloak_authorize(&req, &keycloak_auth()).expect("authorize should redirect");
+
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+
+		assert!(
+			location.starts_with("https://login.example.com/auth/realms/example"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("client_id=abc"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("code_challenge_method=S256"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains(
+				"redirect_uri=https%3A%2F%2Fgateway.example.com%2F.well-known%2Foauth-authorization-server%2Fmcp%2Fcallback"
+			),
+			"expected redirect_uri swapped to gateway callback, got: {location}"
+		);
+		assert!(
+			!location.contains("state=client-csrf"),
+			"client's real state must not reach Keycloak unwrapped: {location}"
+		);
+
+		let query: std::collections::HashMap<_, _> =
+			url::form_urlencoded::parse(location.split('?').nth(1).unwrap().as_bytes())
+				.into_owned()
+				.collect();
+		let relay_token = query.get("state").expect("state param present");
+		let decoded = crate::mcp::relay_state::decode(
+			keycloak_auth()
+				.relay_signing_key
+				.as_ref()
+				.expect("relay_signing_key set"),
+			relay_token,
+		)
+		.expect("relay state should decode");
+		assert_eq!(
+			decoded.client_redirect_uri,
+			"http://127.0.0.1:33418/callback"
+		);
+		assert_eq!(decoded.client_state.as_deref(), Some("client-csrf"));
+	}
+
+	#[test]
+	fn keycloak_authorize_forces_response_mode_to_query() {
+		// The callback relay only handles query parameters, so force Keycloak to use query mode.
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&redirect_uri=http%3A%2F%2F127.0.0.1%3A33418%2Fcallback&state=client-csrf&response_mode=form_post")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = keycloak_authorize(&req, &keycloak_auth()).expect("authorize should redirect");
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+
+		assert!(
+			location.contains("response_mode=query"),
+			"expected response_mode forced to query, got: {location}"
+		);
+		assert!(
+			!location.contains("form_post"),
+			"form_post must never reach keycloak: {location}"
+		);
+	}
+
+	#[test]
+	fn keycloak_authorize_requires_relay_signing_key() {
+		// The gateway-managed authorization flow requires a relay signing key.
+		let mut auth = keycloak_auth();
+		auth.relay_signing_key = None;
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?redirect_uri=http%3A%2F%2F127.0.0.1%2Fcb&state=s")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let err = keycloak_authorize(&req, &auth)
+			.expect_err("missing relaySigningKey must be rejected, not silently succeed");
+		// Assert on the specific guard so this doesn't pass because of an unrelated validation error.
+		assert!(
+			err.to_string().contains("relaySigningKey"),
+			"expected the missing-relaySigningKey error, got: {err}"
+		);
+	}
+
+	fn percent_encode(value: &str) -> String {
+		percent_encoding::utf8_percent_encode(value, percent_encoding::NON_ALPHANUMERIC).to_string()
+	}
+
+	#[rstest::rstest]
+	#[case::loopback_v4("http://127.0.0.1:33418/callback", true)]
+	#[case::loopback_localhost("http://localhost:4000/cb", true)]
+	#[case::loopback_v6("http://[::1]:33418/callback", true)]
+	#[case::same_origin("https://gateway.example.com/somewhere", true)]
+	#[case::remote_https("https://evil.example/cb", false)]
+	#[case::remote_http("http://evil.example/cb", false)]
+	#[case::non_http_scheme("custom-scheme://cb", false)]
+	// `origin()` ignores userinfo, so `gateway.example.com@evil.example` has
+	// origin `https://evil.example` and must be rejected.
+	#[case::userinfo_confusion("https://gateway.example.com@evil.example/", false)]
+	// WHATWG URL parsing normalizes the decimal IPv4 form to 127.0.0.1.
+	#[case::decimal_ip_loopback("http://2130706433/", true)]
+	// Must not accept a domain that merely starts with the loopback address.
+	#[case::loopback_lookalike_domain("http://127.0.0.1.evil.example/", false)]
+	fn is_allowed_client_redirect_uri_cases(#[case] uri: &str, #[case] expected: bool) {
+		assert_eq!(
+			is_allowed_client_redirect_uri(uri, "https://gateway.example.com"),
+			expected,
+			"unexpected result for {uri}"
+		);
+	}
+
+	#[test]
+	fn keycloak_authorize_rejects_attacker_controlled_client_redirect_uri() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&redirect_uri=https%3A%2F%2Fevil.example%2Fcb&state=client-csrf")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert!(
+			keycloak_authorize(&req, &keycloak_auth()).is_err(),
+			"attacker-controlled redirect_uri must be rejected before it's encoded into relay state"
+		);
+	}
+
+	#[test]
+	fn keycloak_authorize_accepts_loopback_and_same_origin_client_redirect_uris() {
+		for redirect_uri in [
+			"http://127.0.0.1:33418/callback",
+			"http://localhost:4000/cb",
+			"https://gateway.example.com/somewhere",
+		] {
+			let req = ::http::Request::builder()
+				.uri(format!(
+					"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&redirect_uri={}&state=client-csrf",
+					percent_encode(redirect_uri)
+				))
+				.body(Body::empty())
+				.expect("request should build");
+
+			assert!(
+				keycloak_authorize(&req, &keycloak_auth()).is_ok(),
+				"redirect_uri {redirect_uri:?} should be allowed"
+			);
+		}
+	}
+
+	#[test]
+	fn keycloak_callback_rewrites_iss_and_restores_client_state() {
+		let auth = keycloak_auth();
+		let relay_token = relay_state::encode(
+			auth.relay_signing_key.as_ref().unwrap(),
+			&relay_state::RelayState {
+				client_redirect_uri: "http://127.0.0.1:33418/callback".to_string(),
+				client_state: Some("client-csrf".to_string()),
+				expires_at_unix: now_unix() + 300,
+			},
+		)
+		.expect("relay state should encode");
+
+		let req = ::http::Request::builder()
+			.uri(format!(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?code=abc123&state={}&iss=https%3A%2F%2Flogin.example.com%2Fauth%2Frealms%2Fexample",
+				percent_encode(&relay_token)
+			))
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = keycloak_callback(&req, &auth).expect("callback should redirect");
+
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+
+		assert!(
+			location.starts_with("http://127.0.0.1:33418/callback?"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("code=abc123"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("state=client-csrf"),
+			"unexpected location: {location}"
+		);
+		// The client must receive the gateway's issuer, not Keycloak's issuer.
+		assert!(
+			location.contains("iss=https%3A%2F%2Fgateway.example.com%2Fmcp")
+				|| location.contains("iss=https://gateway.example.com/mcp"),
+			"expected gateway iss, got: {location}"
+		);
+		assert!(
+			!location.contains("login.example.com"),
+			"keycloak's real issuer must not leak to the client: {location}"
+		);
+	}
+
+	#[test]
+	fn keycloak_callback_rejects_tampered_state() {
+		let auth = keycloak_auth();
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?code=abc123&state=not-a-real-relay-token&iss=https%3A%2F%2Flogin.example.com%2Fauth%2Frealms%2Fexample")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert!(keycloak_callback(&req, &auth).is_err());
+	}
+
+	#[test]
+	fn keycloak_callback_relays_access_denied_error_to_client() {
+		// OAuth authorization errors are returned to the client's redirect_uri rather than
+		// treated as an internal callback failure.
+		let auth = keycloak_auth();
+		let relay_token = relay_state::encode(
+			auth.relay_signing_key.as_ref().unwrap(),
+			&relay_state::RelayState {
+				client_redirect_uri: "http://127.0.0.1:33418/callback".to_string(),
+				client_state: Some("client-csrf".to_string()),
+				expires_at_unix: now_unix() + 300,
+			},
+		)
+		.expect("relay state should encode");
+
+		let req = ::http::Request::builder()
+			.uri(format!(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?error=access_denied&error_description=user+cancelled&state={}",
+				percent_encode(&relay_token)
+			))
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = keycloak_callback(&req, &auth).expect("callback should redirect, not 500");
+
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+
+		assert!(
+			location.starts_with("http://127.0.0.1:33418/callback?"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("error=access_denied"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("state=client-csrf"),
+			"expected client's original state restored: {location}"
+		);
+		assert!(
+			!location.contains("code="),
+			"no code should be present when relaying an error: {location}"
+		);
+	}
+
+	#[test]
+	fn keycloak_callback_requires_code_and_state() {
+		let auth = keycloak_auth();
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?iss=https%3A%2F%2Flogin.example.com%2Fauth%2Frealms%2Fexample")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert!(keycloak_callback(&req, &auth).is_err());
+	}
+
+	#[test]
+	fn keycloak_callback_requires_relay_signing_key() {
+		// The gateway-managed callback requires the relay signing key.
+		let mut auth = keycloak_auth();
+		auth.relay_signing_key = None;
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback?code=abc123&state=irrelevant-because-no-key&iss=https%3A%2F%2Flogin.example.com%2Fauth%2Frealms%2Fexample")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let err = keycloak_callback(&req, &auth)
+			.expect_err("missing relaySigningKey must be rejected, not silently succeed");
+		// Assert on the specific guard so this doesn't pass because of an unrelated decode error.
+		assert!(
+			err.to_string().contains("relaySigningKey"),
+			"expected the missing-relaySigningKey error, got: {err}"
+		);
+	}
+
+	#[test]
+	fn rewrite_keycloak_token_form_replaces_redirect_uri() {
+		let body =
+			b"grant_type=authorization_code&client_id=mcp-gateway&code=abc123&redirect_uri=http%3A%2F%2F127.0.0.1%3A33418%2Fcallback&code_verifier=v";
+
+		let rewritten = rewrite_keycloak_token_form(
+			body,
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback",
+		);
+
+		assert!(rewritten.contains("grant_type=authorization_code"));
+		assert!(rewritten.contains("client_id=mcp-gateway"));
+		assert!(rewritten.contains("code=abc123"));
+		assert!(rewritten.contains("code_verifier=v"));
+		assert!(
+			rewritten.contains(
+				"redirect_uri=https%3A%2F%2Fgateway.example.com%2F.well-known%2Foauth-authorization-server%2Fmcp%2Fcallback"
+			),
+			"expected redirect_uri rewritten to gateway callback, got: {rewritten}"
+		);
+		assert!(
+			!rewritten.contains("127.0.0.1"),
+			"client's original redirect_uri must not survive: {rewritten}"
+		);
+	}
+
+	#[test]
+	fn rewrite_keycloak_token_form_handles_missing_redirect_uri() {
+		let body = b"grant_type=refresh_token&refresh_token=r1";
+
+		let rewritten = rewrite_keycloak_token_form(
+			body,
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback",
+		);
+
+		// Refresh-token requests have no redirect_uri to rewrite.
+		assert!(rewritten.contains("grant_type=refresh_token"));
+		assert!(!rewritten.contains("redirect_uri"));
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_rejects_non_post_methods() {
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.method(Method::GET)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = keycloak_token(&mut req, &keycloak_auth(), client)
+			.await
+			.expect("non-POST should get a response");
+
+		assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+		assert_eq!(
+			resp.headers().get(::http::header::ALLOW).expect("allow"),
+			"POST"
+		);
+	}
+
+	#[tokio::test]
+	async fn handle_mcp_request_routes_keycloak_authorize_and_token() {
+		let client = crate::test_helpers::policy_client();
+		let auth = keycloak_auth();
+
+		let mut authorize_req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?redirect_uri=http%3A%2F%2F127.0.0.1%2Fcb&state=s")
+			.body(Body::empty())
+			.expect("request should build");
+		let resp = handle_mcp_request(&mut authorize_req, &auth, &client)
+			.await
+			.expect("should not error")
+			.expect("should be handled");
+		assert_eq!(resp.status(), StatusCode::FOUND);
+
+		let mut token_req = ::http::Request::builder()
+			.method(Method::GET)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+		let resp = handle_mcp_request(&mut token_req, &auth, &client)
+			.await
+			.expect("should not error")
+			.expect("should be handled");
+		assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+	}
+
+	#[test]
+	fn keycloak_authorize_and_keycloak_token_use_same_callback_uri() {
+		// The redirect_uri used by /authorize must match the one sent to Keycloak's
+		// token endpoint, otherwise Keycloak rejects the token exchange.
+		let authorize_req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&redirect_uri=http%3A%2F%2F127.0.0.1%3A33418%2Fcallback&state=client-csrf")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp =
+			keycloak_authorize(&authorize_req, &keycloak_auth()).expect("authorize should redirect");
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+		let query: std::collections::HashMap<String, String> =
+			url::form_urlencoded::parse(location.split('?').nth(1).unwrap().as_bytes())
+				.into_owned()
+				.collect();
+		let authorize_callback = query
+			.get("redirect_uri")
+			.expect("authorize response should carry redirect_uri")
+			.clone();
+
+		let token_req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+		let token_callback = keycloak_callback_uri(&token_req).expect("callback uri should resolve");
+
+		assert_eq!(authorize_callback, token_callback);
+		assert_eq!(
+			authorize_callback,
+			"https://gateway.example.com/.well-known/oauth-authorization-server/mcp/callback"
+		);
+	}
+
+	async fn keycloak_token_echo(
+		mock: &MockServer,
+		auth: &McpAuthentication,
+		req: &mut Request,
+	) -> String {
+		Mock::given(method("POST"))
+			.and(path("/auth/realms/example/protocol/openid-connect/token"))
+			.respond_with(|request: &wiremock::Request| {
+				ResponseTemplate::new(200).set_body_bytes(request.body.clone())
+			})
+			.mount(mock)
+			.await;
+
+		let client = crate::test_helpers::policy_client();
+		let resp = keycloak_token(req, auth, client)
+			.await
+			.expect("token exchange should succeed");
+		let bytes = crate::http::read_resp_body(resp)
+			.await
+			.expect("response body should read");
+		String::from_utf8(bytes.to_vec()).expect("echoed body should be utf8")
+	}
+
+	fn keycloak_auth_for_mock(mock: &MockServer) -> McpAuthentication {
+		let issuer = format!("{}/auth/realms/example", mock.uri());
+		let mut auth = keycloak_auth_with_issuer(issuer);
+		auth.client_secret = Some(secrecy::SecretString::new(
+			"keycloak-client-secret".to_string().into_boxed_str(),
+		));
+		auth
+	}
+
+	fn keycloak_token_request(body: &'static str) -> Request {
+		::http::Request::builder()
+			.method(Method::POST)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.header(
+				::http::header::CONTENT_TYPE,
+				"application/x-www-form-urlencoded",
+			)
+			.body(Body::from(body))
+			.expect("request should build")
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_injects_client_secret_for_matching_authorization_code_grant() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request(
+			"grant_type=authorization_code&client_id=mcp-gateway&code=abc123&redirect_uri=http%3A%2F%2F127.0.0.1%3A33418%2Fcallback&code_verifier=v",
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			body.contains("client_secret=keycloak-client-secret"),
+			"expected configured secret injected, got: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_inject_client_secret_for_mismatched_client_id() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request(
+			"grant_type=authorization_code&client_id=some-other-client&code=abc123",
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			!body.contains("client_secret="),
+			"must not attach the gateway's secret to a request for a different client_id: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_inject_client_secret_for_client_credentials_grant() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request("grant_type=client_credentials&client_id=mcp-gateway");
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			!body.contains("client_secret="),
+			"pre-auth client_credentials must never get the gateway's secret attached: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_overwrite_existing_client_secret() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request(
+			"grant_type=authorization_code&client_id=mcp-gateway&code=abc123&client_secret=caller-supplied-secret",
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			body.contains("client_secret=caller-supplied-secret"),
+			"caller-supplied client_secret must survive: {body}"
+		);
+		assert!(
+			!body.contains("keycloak-client-secret"),
+			"must not attach a second, configured secret on top of the caller's own: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_inject_client_secret_when_grant_type_duplicated() {
+		// Duplicate security-sensitive fields make the value used by the injection gate
+		// potentially differ from the value Keycloak uses. Fail closed by skipping injection.
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request(
+			"grant_type=client_credentials&grant_type=authorization_code&client_id=mcp-gateway&code=abc123",
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			!body.contains("client_secret="),
+			"duplicate grant_type must disable secret injection even though one of the values looks like authorization_code: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_inject_client_secret_when_client_id_duplicated() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req = keycloak_token_request(
+			"grant_type=authorization_code&client_id=mcp-gateway&client_id=some-other-client&code=abc123",
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			!body.contains("client_secret="),
+			"duplicate client_id must disable secret injection: {body}"
+		);
+	}
+
+	#[tokio::test]
+	async fn keycloak_token_does_not_inject_client_secret_when_authorization_header_present() {
+		let mock = MockServer::start().await;
+		let auth = keycloak_auth_for_mock(&mock);
+		let mut req =
+			keycloak_token_request("grant_type=authorization_code&client_id=mcp-gateway&code=abc123");
+		req.headers_mut().insert(
+			::http::header::AUTHORIZATION,
+			"Basic bWNwLWdhdGV3YXk6c2VjcmV0".parse().unwrap(),
+		);
+
+		let body = keycloak_token_echo(&mock, &auth, &mut req).await;
+
+		assert!(
+			!body.contains("client_secret="),
+			"must not attach a client_secret on top of an existing Authorization header: {body}"
+		);
 	}
 }

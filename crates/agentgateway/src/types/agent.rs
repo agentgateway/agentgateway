@@ -1870,7 +1870,7 @@ impl McpBackend {
 /// instructions preamble, applied only when multiplexing multiple targets.
 #[apply(schema!)]
 pub struct McpServerOverrides {
-	/// Overrides `serverInfo.name`. Must be set together with `version` — setting only one
+	/// Overrides `serverInfo.name`. Must be set together with `version`, setting only one
 	/// would otherwise mix an overridden name with agentgateway's own version, or vice versa.
 	/// Defaults to `agentgateway` when unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3018,6 +3018,11 @@ pub struct McpAuthentication {
 		serialize_with = "crate::serdes::ser_redact"
 	)]
 	pub client_secret: Option<SecretString>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::serdes::ser_redact"
+	)]
+	pub relay_signing_key: Option<SecretString>,
 }
 
 #[apply(schema_enum!)]
@@ -3074,11 +3079,12 @@ pub struct LocalMcpAuthentication {
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 	/// OAuth client ID advertised to MCP clients when needed.
 	pub client_id: Option<String>,
-	/// OAuth client secret injected into proxied token requests for confidential clients.
-	/// Currently used by the `entra` provider, whose Web-platform app registrations require a
-	/// client secret at the token endpoint.
+	/// OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub client_secret: Option<SecretString>,
+	/// Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub relay_signing_key: Option<SecretString>,
 }
 
 impl LocalMcpAuthentication {
@@ -3169,6 +3175,7 @@ impl LocalMcpAuthentication {
 			mode: self.mode,
 			client_id: self.client_id.clone(),
 			client_secret: self.client_secret.clone(),
+			relay_signing_key: self.relay_signing_key.clone(),
 		})
 	}
 }
@@ -3779,6 +3786,27 @@ resourceMetadata:
 		assert!(matches!(auth.provider, Some(McpIDP::Entra {})));
 		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
 		assert!(auth.client_secret.is_some());
+		assert!(auth.as_jwt().is_ok());
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_keycloak_relay_signing_key() {
+		let yaml = r#"
+issuer: "https://login.example.com/auth/realms/example"
+audiences: ["mcp_proxy"]
+jwks: '{"keys":[]}'
+provider:
+  keycloak: {}
+clientId: "claude-code-mcp-gateway"
+relaySigningKey: "0000000000000000000000000000000000000000000000000000000000000000"
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		let auth: LocalMcpAuthentication = serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(matches!(auth.provider, Some(McpIDP::Keycloak {})));
+		assert_eq!(auth.client_id.as_deref(), Some("claude-code-mcp-gateway"));
+		assert!(auth.relay_signing_key.is_some());
+		assert!(auth.client_secret.is_none());
 		assert!(auth.as_jwt().is_ok());
 	}
 

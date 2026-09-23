@@ -534,7 +534,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -6884,7 +6885,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`binds[].listeners[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`binds[].listeners[].routes[].backends[].mcp.server`|object|Overrides for the MCP `serverInfo` and gateway instructions reported to clients on<br>`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall<br>back to the normal defaults.|
-|`binds[].listeners[].routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version`, setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
 |`binds[].listeners[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`binds[].listeners[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`binds[].listeners[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
@@ -22289,7 +22290,8 @@
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`policies[].policy.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -28639,7 +28641,7 @@
 |`backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`backends[].mcp.server`|object|Overrides for the MCP `serverInfo` and gateway instructions reported to clients on<br>`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall<br>back to the normal defaults.|
-|`backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version`, setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
 |`backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
@@ -40902,7 +40904,8 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`routeGroups[].routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -47252,7 +47255,7 @@
 |`routeGroups[].routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routeGroups[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routeGroups[].routes[].backends[].mcp.server`|object|Overrides for the MCP `serverInfo` and gateway instructions reported to clients on<br>`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall<br>back to the normal defaults.|
-|`routeGroups[].routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`routeGroups[].routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version`, setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
 |`routeGroups[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routeGroups[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routeGroups[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
@@ -62186,7 +62189,8 @@
 |`routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`routes[].policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -68536,7 +68540,7 @@
 |`routes[].backends[].mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routes[].backends[].mcp.server`|object|Overrides for the MCP `serverInfo` and gateway instructions reported to clients on<br>`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall<br>back to the normal defaults.|
-|`routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`routes[].backends[].mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version`, setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
 |`routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
@@ -89292,7 +89296,7 @@
 |`mcp.sseKeepAlive`|string|Interval at which SSE keep-alive comments are sent on long-lived MCP streams.<br>Disabled when unset. Set this when a load balancer or API gateway sits in front<br>of agentgateway and reaps connections that carry no traffic.|
 |`mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`mcp.server`|object|Overrides for the MCP `serverInfo` and gateway instructions reported to clients on<br>`initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall<br>back to the normal defaults.|
-|`mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version` — setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
+|`mcp.server.name`|string|Overrides `serverInfo.name`. Must be set together with `version`, setting only one<br>would otherwise mix an overridden name with agentgateway's own version, or vice versa.<br>Defaults to `agentgateway` when unset.|
 |`mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
@@ -89675,7 +89679,8 @@
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
-|`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).|
+|`mcp.policies.mcpAuthentication.relaySigningKey`|string|Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
