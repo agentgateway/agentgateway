@@ -132,6 +132,26 @@ func TestAwsAuthPropagatesDynamicSessionName(t *testing.T) {
 	assert.Equal(t, assumeRole.GetSessionNameExpression(), "jwt.sub")
 }
 
+func TestAwsAuthPropagatesExternalID(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthPropagatesExternalID"))
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		AssumeRole: &agentgateway.AwsAssumeRole{
+			RoleArn:    "arn:aws:iam::111122223333:role/backend",
+			ExternalID: new("tenant-a:prod/12345"),
+		},
+	}, "default")
+	assert.NoError(t, err)
+
+	assumeRole := policy.GetAws().GetAssumeRole()
+	assert.Equal(t, assumeRole != nil, true)
+	assert.Equal(t, assumeRole.GetExternalId(), "tenant-a:prod/12345")
+}
+
 func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags"))
 	ctx := simpleAuthPolicyCtx(
@@ -149,6 +169,7 @@ func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {
 	assumeRole := policy.GetAws().GetAssumeRole()
 	assert.Equal(t, assumeRole != nil, true)
 	assert.Equal(t, assumeRole.GetSessionName(), "")
+	assert.Equal(t, assumeRole.GetExternalId(), "")
 	assert.Equal(t, len(assumeRole.GetTags()), 0)
 }
 
@@ -181,17 +202,22 @@ func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
 	t.Run("workloadIdentity", func(t *testing.T) {
 		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
 			WorkloadIdentity: &agentgateway.AzureWorkloadIdentity{},
+			Scopes:           []string{"https://graph.microsoft.com/.default"},
 		}, "default")
 		assert.NoError(t, err)
 		explicit := policy.GetAzure().GetExplicitConfig()
 		assert.Equal(t, explicit != nil, true)
 		assert.Equal(t, explicit.GetWorkloadIdentityCredential() != nil, true)
+		assert.Equal(t, policy.GetAzure().GetScopes(), []string{"https://graph.microsoft.com/.default"})
 	})
 
 	t.Run("implicit when no credential source is set", func(t *testing.T) {
-		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{}, "default")
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
+			Scopes: []string{"https://graph.microsoft.com/.default"},
+		}, "default")
 		assert.NoError(t, err)
 		assert.Equal(t, policy.GetAzure().GetImplicit() != nil, true)
+		assert.Equal(t, policy.GetAzure().GetScopes(), []string{"https://graph.microsoft.com/.default"})
 	})
 }
 

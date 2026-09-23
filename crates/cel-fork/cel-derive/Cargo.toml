@@ -9,7 +9,7 @@ description = "Derive macros for cel-rust"
 [dependencies]
 proc-macro2 = "1"
 quote = "1"
-syn = { version = "2", features = ["full", "parsing"] }
+syn = { version = "3", features = ["full", "parsing"] }
 
 [lib]
 proc-macro = true

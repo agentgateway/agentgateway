@@ -11,6 +11,7 @@ pub struct RedirectUri {
 	pub port: u16,
 	pub https: bool,
 	pub callback_path: PathAndQuery,
+	pub origin: String,
 }
 
 impl RedirectUri {
@@ -60,6 +61,7 @@ impl RedirectUri {
 			port,
 			https,
 			callback_path,
+			origin: url.origin().ascii_serialization(),
 		})
 	}
 

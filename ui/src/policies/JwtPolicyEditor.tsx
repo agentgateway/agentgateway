@@ -139,16 +139,18 @@ export function JwtPolicyEditor(props: {
 	const preview = safeBuildJwtPolicy();
 
 	function buildJwtPolicy() {
-		return cleanEmpty({
-			mode,
-			location: authorizationLocationToValue(location),
-			issuer,
-			audiences,
-			jwks: buildJwks(),
+		return {
+			...(cleanEmpty({
+				mode,
+				location: authorizationLocationToValue(location),
+				issuer,
+				audiences,
+				jwks: buildJwks()
+			}) as JwtPolicy),
 			jwtValidationOptions: {
 				requiredClaims: Array.from(requiredClaims)
 			}
-		}) as JwtPolicy;
+		} as JwtPolicy;
 	}
 
 	function buildJwks() {
@@ -164,7 +166,7 @@ export function JwtPolicyEditor(props: {
 			return buildJwtPolicy();
 		} catch {
 			return {
-				error: 'Inline JWKS must be valid JSON before it can be saved.'
+				error: tr('copy.inlineJwksMustBeValidJsonBeforeItCanBeSaved')
 			};
 		}
 	}
@@ -180,23 +182,29 @@ export function JwtPolicyEditor(props: {
 			}
 			props.onSave(buildJwtPolicy());
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Invalid JWT policy');
+			setError(
+				err instanceof SyntaxError
+					? tr('copy.inlineJwksMustBeValidJson')
+					: err instanceof Error
+						? err.message
+						: tr('copy.invalidJwtPolicy')
+			);
 		}
 	}
 
 	function validateJwtPolicy() {
 		const errors: JwtFieldErrors = {};
-		if (!issuer.trim()) errors.issuer = 'Issuer is required.';
-		if (jwksMode === 'url' && !jwksUrl.trim()) errors.jwksUrl = 'JWKS URL is required.';
-		if (jwksMode === 'file' && !jwksFile.trim()) errors.jwksFile = 'JWKS file is required.';
+		if (!issuer.trim()) errors.issuer = tr('copy.issuerIsRequired');
+		if (jwksMode === 'url' && !jwksUrl.trim()) errors.jwksUrl = tr('copy.jwksUrlIsRequired');
+		if (jwksMode === 'file' && !jwksFile.trim()) errors.jwksFile = tr('copy.jwksFileIsRequired');
 		if (jwksMode === 'inline') {
 			if (!jwksInline.trim()) {
-				errors.jwksInline = 'Inline JWKS is required.';
+				errors.jwksInline = tr('copy.inlineJwksIsRequired');
 			} else {
 				try {
 					JSON.parse(jwksInline);
 				} catch {
-					errors.jwksInline = 'Inline JWKS must be valid JSON.';
+					errors.jwksInline = tr('copy.inlineJwksMustBeValidJson');
 				}
 			}
 		}

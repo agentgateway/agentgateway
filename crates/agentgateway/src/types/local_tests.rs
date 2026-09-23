@@ -111,6 +111,8 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			client_secret: SecretString::new("client-secret".into()),
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
+			login: None,
+			logout: None,
 		}),
 		..Default::default()
 	}
@@ -168,7 +170,8 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
 	let resources = crate::resource_manager::ResourceFetcher::direct(client);
-	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	let mut config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	config.oidc_cookie_encoder = test_config().oidc_cookie_encoder;
 
 	NormalizedLocalConfig::from(
 		&config,
@@ -492,6 +495,11 @@ async fn test_basic_config() {
 }
 
 #[tokio::test]
+async fn test_ui_oidc_config() {
+	test_config_parsing("ui_oidc").await;
+}
+
+#[tokio::test]
 async fn test_spiffe_tls_config_normalizes() {
 	// A SPIFFE-sourced HTTPS listener needs no cert/key files and should normalize without
 	// contacting the Workload API (the connection is established lazily at runtime). SPIFFE must be enabled
@@ -665,6 +673,11 @@ async fn test_llm_provider_reference_config() {
 }
 
 #[tokio::test]
+async fn test_keyed_rate_limit_config() {
+	test_config_parsing("keyed_rate_limit").await;
+}
+
+#[tokio::test]
 async fn test_llm_virtual_model_config() {
 	test_config_parsing("llm_virtual_model").await;
 }
@@ -677,40 +690,6 @@ async fn test_llm_virtual_model_failover_config() {
 #[tokio::test]
 async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
-}
-
-#[test]
-fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
-	let default_routes = super::llm_route_types(None);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"default route table should include explicit message endpoint"
-	);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "*"
-				&& *route_type == crate::llm::RouteType::Passthrough),
-		"default route table should include passthrough wildcard"
-	);
-
-	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
-	assert!(
-		detect_passthrough
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"passthrough override should preserve explicit route defaults"
-	);
-	assert!(
-		detect_passthrough.iter().any(
-			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
-		),
-		"passthrough override should replace wildcard fallback"
-	);
 }
 
 #[tokio::test]
@@ -1037,7 +1016,11 @@ llm:
 	let AIProvider::Custom(custom_provider) = &provider.provider else {
 		panic!("expected custom provider");
 	};
-	assert_eq!(custom_provider.model.as_deref(), Some("upstream-custom"));
+	assert_eq!(
+		custom_provider.model_override.as_deref(),
+		Some("upstream-custom")
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/"));
 	assert!(custom_provider.formats.iter().any(|format| format.format
 		== crate::llm::custom::ProviderFormat::Messages
 		&& format.path.as_deref() == Some("/api/messages")));
@@ -1216,6 +1199,51 @@ mcp:
 			.contains("top-level llm and mcp cannot use the same port 3000"),
 		"{err:?}"
 	);
+}
+
+#[tokio::test]
+async fn test_gateway_bind_address_is_per_gateway() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  private:
+    port: 3000
+    bindAddress: 127.0.0.1
+  shared:
+    port: 4000
+    bindAddress: 0.0.0.0
+    listeners:
+    - name: first
+      hostname: first.example.com
+    - name: second
+      hostname: second.example.com
+"#,
+	)
+	.await
+	.expect("gateways with different bind addresses should normalize");
+	assert_eq!(normalized.binds.len(), 2);
+	let private = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 3000)
+		.unwrap();
+	let shared = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 4000)
+		.unwrap();
+	assert_eq!(private.address, "127.0.0.1:3000".parse().unwrap());
+	assert_eq!(shared.address, "0.0.0.0:4000".parse().unwrap());
+	assert_eq!(shared.listeners.iter().count(), 2);
+}
+
+#[tokio::test]
+async fn test_gateway_bind_address_rejects_invalid_ip() {
+	let err =
+		normalize_test_yaml("gateways:\n  private:\n    port: 3000\n    bindAddress: localhost\n")
+			.await
+			.expect_err("bindAddress must be an IP address");
+	assert!(err.to_string().contains("IP address"), "{err:?}");
 }
 
 #[tokio::test]

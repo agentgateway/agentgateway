@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use websocket_sans_io::{FrameInfo, Opcode, WebsocketFrameEncoder, WebsocketFrameEvent};
 
 use crate::llm::policy::PromptGuard;
-use crate::llm::{LLMInfo, LLMResponse};
+use crate::llm::{LLMInfo, LLMResponse, TokenGapSummary};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
 
@@ -75,7 +75,10 @@ impl<IO> Parser<IO> {
 						completion: None,
 						output_messages: None,
 						first_token: None,
+						last_token_at: None,
+						inter_chunk_latencies: TokenGapSummary::default(),
 						count_tokens: None,
+						pages: None,
 						reasoning_tokens: None,
 						cache_creation_input_tokens: None,
 						cached_input_tokens: usage
@@ -276,9 +279,11 @@ impl WsFrameAccumulator {
 
 	fn drain_frames(&mut self) -> Vec<WsCompletedFrame> {
 		let mut result = Vec::new();
+		// The decoder unmasks payloads in place; preserve pending for raw forwarding.
+		let mut copy = self.pending.to_vec();
+		let mut remaining = copy.as_mut_slice();
 		loop {
-			let mut copy = self.pending.to_vec();
-			let ret = match self.decoder.add_data(&mut copy) {
+			let ret = match self.decoder.add_data(remaining) {
 				Ok(r) => r,
 				Err(_) => {
 					// Protocol error: forward all pending raw bytes as an opaque frame and
@@ -306,7 +311,7 @@ impl WsFrameAccumulator {
 				}) => {
 					self
 						.frame_payload
-						.extend_from_slice(&copy[..ret.consumed_bytes]);
+						.extend_from_slice(&remaining[..ret.consumed_bytes]);
 				},
 				Some(WebsocketFrameEvent::End {
 					original_opcode: Opcode::Text,
@@ -314,7 +319,7 @@ impl WsFrameAccumulator {
 				}) => {
 					self
 						.frame_payload
-						.extend_from_slice(&copy[..ret.consumed_bytes]);
+						.extend_from_slice(&remaining[..ret.consumed_bytes]);
 					let raw = self.frame_raw.split().freeze();
 					let payload = self.frame_payload.split().freeze();
 					result.push(WsCompletedFrame::Text { raw, payload });
@@ -328,6 +333,7 @@ impl WsFrameAccumulator {
 				| Some(WebsocketFrameEvent::Start { .. })
 				| None => {},
 			}
+			remaining = &mut remaining[ret.consumed_bytes..];
 		}
 		result
 	}
@@ -554,7 +560,10 @@ pub async fn guarded_realtime_proxy<C, S>(
 												completion: None,
 												output_messages: None,
 												first_token: None,
+												last_token_at: None,
+												inter_chunk_latencies: TokenGapSummary::default(),
 												count_tokens: None,
+												pages: None,
 												reasoning_tokens: None,
 												cache_creation_input_tokens: None,
 												cached_input_tokens: usage_clone

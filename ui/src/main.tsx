@@ -17,6 +17,7 @@ import { LlmGetStartedPage, McpGetStartedPage, TrafficGetStartedPage } from '@/p
 import { GuardrailsPage } from '@/pages/Guardrails';
 import { HomePage } from '@/pages/Home';
 import { KeysPage } from '@/pages/Keys';
+import { LoginPage } from '@/pages/Login';
 import { AnalyticsPage, LogsPage } from '@/pages/Logs';
 import { McpPlaygroundPage } from '@/pages/McpPlayground';
 import { McpServersPage } from '@/pages/McpServers';
@@ -41,7 +42,18 @@ const LazyRawConfigPage = React.lazy(() =>
 	}))
 );
 
-const rootRoute = createRootRoute({
+const rootRoute = createRootRoute();
+
+// Keep login outside Shell so it does not fetch protected application data.
+const loginRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	path: '/login',
+	component: localizedRoute(LoginPage)
+});
+
+const appRoute = createRoute({
+	getParentRoute: () => rootRoute,
+	id: 'app',
 	component: Shell
 });
 
@@ -53,145 +65,145 @@ function localizedRoute(Component: React.ComponentType) {
 }
 
 const indexRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/',
 	component: localizedRoute(HomePage)
 });
 
 const dumpPoliciesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/policies',
 	component: localizedRoute(DumpPoliciesPage)
 });
 
 const modelsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/models',
 	component: localizedRoute(ModelsPage)
 });
 
 const llmGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/get-started',
 	component: localizedRoute(LlmGetStartedPage)
 });
 
 const providersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/providers',
 	component: localizedRoute(ProvidersPage)
 });
 
 const logsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/logs',
 	component: localizedRoute(LogsPage)
 });
 
 const analyticsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/analytics',
 	component: localizedRoute(AnalyticsPage)
 });
 
 const policiesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/policies',
 	component: localizedRoute(PoliciesPage)
 });
 
 const guardrailsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/guardrails',
 	component: localizedRoute(GuardrailsPage)
 });
 
 const costsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/costs',
 	component: localizedRoute(CostsPage)
 });
 
 const keysRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/keys',
 	component: localizedRoute(KeysPage)
 });
 
 const playgroundRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/playground',
 	component: localizedRoute(PlaygroundPage)
 });
 
 const clientSetupRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/llm/client-setup',
 	component: localizedRoute(ClientSetupPage)
 });
 
 const mcpServersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/servers',
 	component: localizedRoute(McpServersPage)
 });
 
 const mcpPoliciesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/policies',
 	component: localizedRoute(McpPoliciesPage)
 });
 
 const mcpGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/get-started',
 	component: localizedRoute(McpGetStartedPage)
 });
 
 const mcpPlaygroundRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/mcp/playground',
 	component: localizedRoute(McpPlaygroundPage)
 });
 
 const trafficListenersRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/listeners',
 	component: localizedRoute(TrafficListenersPage)
 });
 
 const trafficGatewaysRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/gateways',
 	component: localizedRoute(TrafficGatewaysPage)
 });
 
 const trafficGetStartedRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/get-started',
 	component: localizedRoute(TrafficGetStartedPage)
 });
 
 const trafficRoutesRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/traffic/routes',
 	component: localizedRoute(TrafficRoutesPage)
 });
 
 const celRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/cel',
 	component: localizedRoute(CelPage)
 });
 
 const rawConfigRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/raw-config',
 	component: localizedRoute(RawConfigRoute)
 });
 
 const rawSettingsRoute = createRoute({
-	getParentRoute: () => rootRoute,
+	getParentRoute: () => appRoute,
 	path: '/settings',
 	component: localizedRoute(RawSettingsPage)
 });
@@ -213,30 +225,33 @@ function RawConfigRoute() {
 const router = createRouter({
 	basepath: routerBasePath(),
 	routeTree: rootRoute.addChildren([
-		indexRoute,
-		dumpPoliciesRoute,
-		llmGetStartedRoute,
-		modelsRoute,
-		providersRoute,
-		policiesRoute,
-		guardrailsRoute,
-		costsRoute,
-		logsRoute,
-		analyticsRoute,
-		keysRoute,
-		playgroundRoute,
-		clientSetupRoute,
-		mcpGetStartedRoute,
-		mcpServersRoute,
-		mcpPoliciesRoute,
-		mcpPlaygroundRoute,
-		trafficGetStartedRoute,
-		trafficGatewaysRoute,
-		trafficListenersRoute,
-		trafficRoutesRoute,
-		celRoute,
-		rawSettingsRoute,
-		rawConfigRoute
+		loginRoute,
+		appRoute.addChildren([
+			indexRoute,
+			dumpPoliciesRoute,
+			llmGetStartedRoute,
+			modelsRoute,
+			providersRoute,
+			policiesRoute,
+			guardrailsRoute,
+			costsRoute,
+			logsRoute,
+			analyticsRoute,
+			keysRoute,
+			playgroundRoute,
+			clientSetupRoute,
+			mcpGetStartedRoute,
+			mcpServersRoute,
+			mcpPoliciesRoute,
+			mcpPlaygroundRoute,
+			trafficGetStartedRoute,
+			trafficGatewaysRoute,
+			trafficListenersRoute,
+			trafficRoutesRoute,
+			celRoute,
+			rawSettingsRoute,
+			rawConfigRoute
+		])
 	])
 });
 
@@ -255,14 +270,12 @@ const queryClient = new QueryClient({
 	}
 });
 
-function LocalizedRouter() {
-	return <RouterProvider router={router} />;
-}
-
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Missing root element');
+createRoot(rootElement).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<LocalizedRouter />
+			<RouterProvider router={router} />
 		</QueryClientProvider>
 	</React.StrictMode>
 );

@@ -14,7 +14,7 @@ use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{GuardrailLog, RequestLog};
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
-use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
+use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReferenceWithPolicies};
 use crate::*;
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
@@ -39,7 +39,7 @@ fn record_guardrail(
 	detail: Option<GuardDetail>,
 ) {
 	let action = match action {
-		GuardrailAction::Allow => return,
+		GuardrailAction::Allow => strng::literal!("allow"),
 		GuardrailAction::FailOpen => strng::literal!("failOpen"),
 		GuardrailAction::Audit => strng::literal!("audit"),
 		GuardrailAction::Mask => strng::literal!("mask"),
@@ -436,9 +436,9 @@ pub trait StreamingEvaluator: Send {
 	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>>;
 
 	/// Returns the failure mode to apply when `evaluate` returns an error.
-	/// Guard types without an explicit `failure_mode` field default to `FailOpen`.
+	/// Guard types without an explicit `failure_mode` field default to `FailClosed`.
 	fn failure_mode(&self) -> FailureMode {
-		FailureMode::FailOpen
+		FailureMode::FailClosed
 	}
 }
 
@@ -614,8 +614,7 @@ impl PromptGuard {
 
 	/// Build one `StreamingEvaluator` per configured response guard.
 	///
-	/// Each evaluator is a stateless wrapper around the existing non-streaming
-	/// response-guard logic; the caller drives windowed batching.
+	/// Each evaluator tracks logged outcomes for one guard; the caller drives windowed batching.
 	pub fn begin_streaming_response_guard(
 		&self,
 		client: &crate::proxy::httpproxy::PolicyClient,
@@ -638,6 +637,7 @@ impl PromptGuard {
 			.collect()
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn evaluate_streaming_response_window(
 		guard: &ResponseGuard,
 		window: &str,
@@ -645,6 +645,7 @@ impl PromptGuard {
 		http_headers: &HeaderMap,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
+		allow_recorded: &mut bool,
 	) -> anyhow::Result<(Option<StreamingGuardrailOutcome>, GuardrailAction)> {
 		if window.is_empty() {
 			return Ok((None, GuardrailAction::Allow));
@@ -659,7 +660,7 @@ impl PromptGuard {
 			client,
 			original,
 			guardrail_log,
-			true,
+			Some(allow_recorded),
 		)
 		.await?;
 		let streaming = match rejection {
@@ -977,8 +978,15 @@ impl Policy {
 		guardrail_log: Option<&GuardrailLog>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let (outcome, detail) =
-			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
-				.await?;
+			match Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
+				.await
+			{
+				Err(e) if guard.failure_mode() == FailureMode::FailOpen => {
+					tracing::warn!("request guard error, failing open: {e}");
+					(GuardrailOutcome::FailOpen, None)
+				},
+				result => result?,
+			};
 		let (action, rejection) = Self::apply_request_guard_outcome(outcome, req)?;
 		record_guardrail(
 			guardrail_log,
@@ -1167,13 +1175,34 @@ impl Policy {
 				"Bedrock guardrail masked output count mismatch; rejecting content"
 			);
 		}
+		let blocked = resp.is_blocked();
 		let detail = resp.build_detail(guardrails);
 		let outcome = if masked {
 			GuardrailOutcome::Masked(TextReplacements::replace_all(resp.into_output_texts()))
 		} else {
-			GuardrailOutcome::Rejected(rejection.as_response())
+			GuardrailOutcome::Rejected(Self::bedrock_reject_response(rejection, blocked, &resp))
 		};
 		(outcome, Some(detail))
+	}
+	fn bedrock_reject_response(
+		rejection: &RequestRejection,
+		blocked: bool,
+		resp: &bedrock_guardrails::ApplyGuardrailResponse,
+	) -> Response {
+		if rejection.body != default_body() || !blocked {
+			return rejection.as_response();
+		}
+		let Some(body) = resp
+			.outputs
+			.iter()
+			.map(|o| o.text.as_str())
+			.find(|t| !t.trim().is_empty())
+		else {
+			return rejection.as_response();
+		};
+		let mut response = rejection.as_response();
+		*response.body_mut() = http::Body::from(Bytes::from(body.to_owned()));
+		response
 	}
 
 	async fn evaluate_google_model_armor_request(
@@ -1507,18 +1536,7 @@ impl Policy {
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(client, webhook, context, &headers, messages).await {
-			Ok(whr) => whr,
-			Err(e) => {
-				return match webhook.failure_mode {
-					FailureMode::FailOpen => {
-						warn!("webhook guardrail unavailable, failing open: {}", e);
-						Ok((GuardrailOutcome::FailOpen, None))
-					},
-					FailureMode::FailClosed => Err(e),
-				};
-			},
-		};
+		let whr = webhook::send_request(client, webhook, context, &headers, messages).await?;
 		if webhook.action == RejectAuditAction::Audit {
 			let (would_action, reason) = match whr.action {
 				RequestAction::Mask(m) => ("mask", m.reason),
@@ -1595,26 +1613,14 @@ impl Policy {
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		let messages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_response(
+		let whr = webhook::send_response(
 			client,
 			webhook,
 			webhook::EvaluationContext::new(original, None),
 			&headers,
 			messages,
 		)
-		.await
-		{
-			Ok(whr) => whr,
-			Err(e) => {
-				return match webhook.failure_mode {
-					FailureMode::FailOpen => {
-						warn!("webhook guardrail unavailable, failing open: {}", e);
-						Ok((GuardrailOutcome::FailOpen, None))
-					},
-					FailureMode::FailClosed => Err(e),
-				};
-			},
-		};
+		.await?;
 		if webhook.action == RejectAuditAction::Audit {
 			let (would_action, reason) = match whr.action {
 				ResponseAction::Mask(m) => ("mask", m.reason),
@@ -1850,7 +1856,7 @@ impl Policy {
 				client,
 				original,
 				guardrail_log,
-				false,
+				None,
 			)
 			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
@@ -1869,26 +1875,40 @@ impl Policy {
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
-		streaming: bool,
+		streaming_allow_recorded: Option<&mut bool>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let (outcome, detail) =
-			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await?;
+			match Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await
+			{
+				Err(e)
+					if streaming_allow_recorded.is_none()
+						&& guard.failure_mode() == FailureMode::FailOpen =>
+				{
+					tracing::warn!("response guard error, failing open: {e}");
+					(GuardrailOutcome::FailOpen, None)
+				},
+				result => result?,
+			};
 
-		let outcome = if streaming && matches!(outcome, GuardrailOutcome::Masked(_)) {
-			// mask is not supported for streaming; we should not record for logging
-			GuardrailOutcome::None
-		} else {
-			outcome
-		};
+		if streaming_allow_recorded.is_some() && matches!(outcome, GuardrailOutcome::Masked(_)) {
+			// Streaming cannot apply masking; do not report this as a passed check.
+			return Ok((GuardrailAction::Allow, None));
+		}
 
 		let (action, rejection) = Self::apply_response_guard_outcome(outcome, resp)?;
-		record_guardrail(
-			guardrail_log,
-			GuardrailPhase::Response,
-			guard.kind.name(),
-			action,
-			detail,
-		);
+		let record = match streaming_allow_recorded {
+			Some(recorded) if action == GuardrailAction::Allow => !std::mem::replace(recorded, true),
+			_ => true,
+		};
+		if record {
+			record_guardrail(
+				guardrail_log,
+				GuardrailPhase::Response,
+				guard.kind.name(),
+				action,
+				detail,
+			);
+		}
 		Ok((action, rejection))
 	}
 
@@ -1983,12 +2003,15 @@ impl RequestGuard {
 		))
 	}
 
-	/// Returns the configured failure mode for this guard, defaulting to `FailOpen` for
-	/// guard types that do not have an explicit `failure_mode` field.
+	/// Returns the configured failure mode, defaulting to `FailClosed`.
 	fn failure_mode(&self) -> FailureMode {
 		match &self.kind {
 			RequestGuardKind::Webhook(wh) => wh.failure_mode,
-			_ => FailureMode::FailOpen,
+			RequestGuardKind::OpenAIModeration(m) => m.failure_mode,
+			RequestGuardKind::BedrockGuardrails(bg) => bg.failure_mode,
+			RequestGuardKind::GoogleModelArmor(gma) => gma.failure_mode,
+			RequestGuardKind::AzureContentSafety(acs) => acs.failure_mode,
+			_ => FailureMode::FailClosed,
 		}
 	}
 }
@@ -2095,29 +2118,31 @@ pub struct NamedRegex {
 	name: String,
 }
 
-/// Defines how the proxy behaves when a webhook guardrail is unreachable or
+/// Defines how the proxy behaves when a guardrail provider is unreachable or
 /// returns an error.
 ///
 /// Defaults to `failClosed`. When failing closed, the error is propagated and
 /// the LLM request is rejected. When failing open, the request is allowed
-/// through despite the webhook failure.
+/// through despite the provider failure.
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "WebhookFailureMode"))]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
-	/// Reject the request when the webhook guardrail is unavailable (default).
+	/// Reject the request when the guardrail provider is unavailable (default).
 	#[default]
 	#[serde(rename = "failClosed")]
 	FailClosed,
-	/// Allow the request through when the webhook guardrail is unavailable.
+	/// Allow the request through when the guardrail provider is unavailable.
 	#[serde(rename = "failOpen")]
 	FailOpen,
 }
 
 #[apply(schema!)]
 pub struct Webhook {
-	/// Backend that receives guardrail webhook requests.
-	pub target: SimpleBackendReference,
+	/// Backend that receives guardrail webhook requests, and the backend policies
+	/// (such as `backendTLS`) used when connecting to it. A `host` with an
+	/// `https://` scheme enables TLS with system roots automatically.
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Headers to set on the webhook request, computed from CEL expressions.
 	/// Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;
 	/// setting `:path` replaces the default `/request` / `/response` path.
@@ -2141,6 +2166,10 @@ pub struct Webhook {
 
 #[apply(schema!)]
 pub struct Moderation {
+	/// Behavior when the provider is unreachable or returns an error.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub failure_mode: FailureMode,
 	/// Moderation model to use. Defaults to `omni-moderation-latest`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
@@ -2164,6 +2193,10 @@ pub struct Moderation {
 /// Configuration for AWS Bedrock Guardrails integration.
 #[apply(schema!)]
 pub struct BedrockGuardrails {
+	/// Behavior when the provider is unreachable or returns an error.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub failure_mode: FailureMode,
 	/// The unique identifier of the guardrail
 	pub guardrail_identifier: Strng,
 	/// The version of the guardrail
@@ -2197,6 +2230,10 @@ pub struct BedrockGuardrails {
 /// Configuration for Google Cloud Model Armor integration.
 #[apply(schema!)]
 pub struct GoogleModelArmor {
+	/// Behavior when the provider is unreachable or returns an error.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub failure_mode: FailureMode,
 	/// The template ID for the Model Armor configuration
 	pub template_id: Strng,
 	/// The GCP project ID
@@ -2228,6 +2265,10 @@ pub struct GoogleModelArmor {
 /// across all enabled features.
 #[apply(schema!)]
 pub struct AzureContentSafety {
+	/// Behavior when the provider is unreachable or returns an error.
+	/// Defaults to `failClosed`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub failure_mode: FailureMode,
 	/// The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")
 	pub endpoint: Strng,
 	/// Whether to reject flagged content or only observe it.
@@ -2346,6 +2387,18 @@ pub struct ResponseGuard {
 	/// Guardrail provider or rule set to apply.
 	#[serde(flatten)]
 	pub kind: ResponseGuardKind,
+}
+
+impl ResponseGuard {
+	fn failure_mode(&self) -> FailureMode {
+		match &self.kind {
+			ResponseGuardKind::Webhook(wh) => wh.failure_mode,
+			ResponseGuardKind::BedrockGuardrails(bg) => bg.failure_mode,
+			ResponseGuardKind::GoogleModelArmor(gma) => gma.failure_mode,
+			ResponseGuardKind::AzureContentSafety(acs) => acs.failure_mode,
+			_ => FailureMode::FailClosed,
+		}
+	}
 }
 
 #[apply(schema!)]

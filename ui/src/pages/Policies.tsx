@@ -92,7 +92,9 @@ export function PoliciesPage() {
 			schemaRoot="LocalLLMPolicy"
 			resourceKind="llm.policy"
 			sections={llmPolicySections}
-			yamlDescription="Read-only view of effective LLM policies, including database-backed resources in hybrid mode."
+			yamlDescription={tr(
+				'copy.readOnlyViewOfEffectiveLlmPoliciesIncludingDatabaseBackedResourcesInHybridMode'
+			)}
 			policies={config => config.data?.llm?.policies as Record<string, unknown> | null | undefined}
 			managedLinks={{
 				apiKey: {
@@ -128,7 +130,7 @@ export function McpPoliciesPage() {
 			resourceKind="mcp.policy"
 			sections={mcpPolicySections}
 			policyKeys={mcpPolicyKeys}
-			yamlDescription="Read-only view of mcp.policies."
+			yamlDescription={tr('copy.readOnlyViewOfMcpPolicies')}
 			policies={config => config.data?.mcp?.policies as Record<string, unknown> | null | undefined}
 			onSavePolicy={(next, key, value) => {
 				const mcp = ensureMcp(next);
@@ -200,7 +202,7 @@ export function PolicyCatalogPage(props: {
 	}, [help, language, props.policyKeys, props.schemaRoot]);
 	const selectedMeta = policyCatalog.find(policy => policy.key === selected);
 	const selectedFileOwned = Boolean(
-		selected && filePolicies && Object.prototype.hasOwnProperty.call(filePolicies, selected)
+		selected && filePolicies && Object.hasOwn(filePolicies, selected)
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
@@ -250,6 +252,7 @@ export function PolicyCatalogPage(props: {
 		};
 	}, [deleteResource, upsertPolicy]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useLayoutEffect(() => {
 		const scroll = pendingScrollRestore.current;
 		if (!scroll) return;
@@ -290,7 +293,10 @@ export function PolicyCatalogPage(props: {
 			) : null}
 			{props.beforePolicies}
 			{policiesDisabled ? (
-				<StatusBanner state="warn" title={props.policiesDisabledReason ?? 'Policies disabled'} />
+				<StatusBanner
+					state="warn"
+					title={props.policiesDisabledReason ?? tr('copy.policiesDisabled')}
+				/>
 			) : null}
 
 			<div className="policy-section-list">

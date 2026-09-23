@@ -19,7 +19,7 @@ use futures_util::future::{Either, FutureExt, TryFutureExt, select};
 use futures_util::pin_mut;
 use http::uri::Scheme;
 use hyper::body::{Body, Bytes, Frame, SizeHint};
-use hyper::header::{HOST, HeaderValue};
+use hyper::header::{CONTENT_LENGTH, HOST, HeaderValue, TRAILER, TRANSFER_ENCODING};
 use hyper::rt::Timer;
 use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
@@ -221,6 +221,14 @@ where
 				// This means we negotiated down in ALPN
 				*req.version_mut() = Version::HTTP_11;
 				trace!("Connection is HTTP/1, but request was HTTP/2");
+			}
+			if req.version() == Version::HTTP_11 && req.headers().contains_key(TRAILER) {
+				// HTTP/2 permits Content-Length alongside trailers, but HTTP/1 requires
+				// chunked framing. Force it even when the body has an exact size hint.
+				req.headers_mut().remove(CONTENT_LENGTH);
+				req
+					.headers_mut()
+					.insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
 			}
 
 			let uri = req.uri().clone();

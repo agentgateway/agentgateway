@@ -8,6 +8,7 @@ import curlIcon from '@/assets/curl.svg';
 import cursorIcon from '@/assets/cursor.svg';
 import gooseIcon from '@/assets/goose.svg';
 import opencodeIcon from '@/assets/opencode.svg';
+import piIcon from '@/assets/pi.svg';
 import githubCopilotIcon from '@/assets/providers/copilot.svg';
 import windsurfIcon from '@/assets/windsurf.svg';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
@@ -39,7 +40,16 @@ type ClientRecipe = {
 	id: string;
 	title: string;
 	description: string;
-	icon: 'claude' | 'codex' | 'curl' | 'cursor' | 'copilot' | 'goose' | 'opencode' | 'windsurf';
+	icon:
+		| 'claude'
+		| 'codex'
+		| 'curl'
+		| 'cursor'
+		| 'copilot'
+		| 'goose'
+		| 'opencode'
+		| 'pi'
+		| 'windsurf';
 	provider?: ProviderName;
 	steps?: ReactNode[];
 	language: string;
@@ -327,6 +337,7 @@ function ClientRecipeCard(props: {
 			{props.recipe.steps?.length ? (
 				<ol className="client-recipe-steps">
 					{props.recipe.steps.map((step, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<li key={index}>{step}</li>
 					))}
 				</ol>
@@ -376,7 +387,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 		{
 			id: 'curl',
 			title: 'curl',
-			description: tr('copy.minimalRawHttpRequestForDebuggingClientConnectivity'),
+			description: tr('copy.clientSetupCurlDescription'),
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
@@ -391,7 +402,7 @@ ${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
 		{
 			id: 'claude-code',
 			title: tr('copy.claudeCode'),
-			description: tr('copy.useTheGatewayUrlAndKeyWithClaudeCompatibleModelRoutesWhenConfigured'),
+			description: tr('copy.clientSetupClaudeCodeDescription'),
 			icon: 'claude',
 			language: 'bash',
 			code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
@@ -402,7 +413,7 @@ claude --model ${JSON.stringify(args.model)}`
 		{
 			id: 'claude-desktop',
 			title: tr('copy.claudeDesktop'),
-			description: tr('copy.routeClaudeDesktopThirdPartyInferenceThroughTheGateway'),
+			description: tr('copy.clientSetupClaudeDesktopDescription'),
 			icon: 'claude',
 			steps: [
 				<>
@@ -421,9 +432,7 @@ API Key: ${requiredApiKey}`
 		{
 			id: 'codex',
 			title: tr('copy.codexCli'),
-			description: tr(
-				'copy.useOpenAiCompatibleEnvironmentVariablesWhenRunningCodexAgainstTheGateway'
-			),
+			description: tr('copy.clientSetupCodexCliDescription'),
 			icon: 'codex',
 			language: 'bash',
 			code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
@@ -440,7 +449,7 @@ codex --model "${args.model}" \\
 		{
 			id: 'opencode',
 			title: 'OpenCode',
-			description: tr('copy.configureOpenCodeWithAnOpenAiCompatibleGatewayProvider'),
+			description: tr('copy.clientSetupOpenCodeDescription'),
 			icon: 'opencode',
 			steps: [
 				<>{tr('copy.openCodeCreateConfigInstruction', ['opencode.json'])}</>,
@@ -472,9 +481,34 @@ ${openCodeApiKeyExport}
 opencode`
 		},
 		{
+			id: 'pi',
+			title: 'Pi',
+			description: tr('copy.clientSetupPiDescription'),
+			icon: 'pi',
+			steps: [
+				tr('copy.clientSetupPiConfigInstruction'),
+				tr('copy.clientSetupPiSelectModel', [args.model])
+			],
+			language: 'json',
+			code: JSON.stringify(
+				{
+					providers: {
+						agentgateway: {
+							baseUrl: v1,
+							api: 'openai-responses',
+							apiKey: requiredApiKey,
+							models: [{ id: args.model }]
+						}
+					}
+				},
+				null,
+				2
+			)
+		},
+		{
 			id: 'goose',
 			title: 'Goose',
-			description: tr('copy.pointGooseSOpenAiProviderAtTheGatewayHostAndChatCompletionsPath'),
+			description: tr('copy.clientSetupGooseDescription'),
 			icon: 'goose',
 			steps: [
 				<>
@@ -500,7 +534,7 @@ goose session`
 		{
 			id: 'cursor',
 			title: 'Cursor',
-			description: tr('copy.useCursorSOpenAiBaseUrlOverrideWithAGatewayModel'),
+			description: tr('copy.clientSetupCursorDescription'),
 			icon: 'cursor',
 			steps: [
 				<>{tr('copy.cursorOpenModelsInstruction')}</>,
@@ -515,7 +549,7 @@ Custom model: ${args.model}`
 		{
 			id: 'github-copilot',
 			title: tr('copy.gitHubCopilot'),
-			description: tr('copy.configureVsCodeCopilotBusinessOrEnterpriseToUseTheGatewayProxy'),
+			description: tr('copy.clientSetupGithubCopilotDescription'),
 			icon: 'copilot',
 			steps: [
 				<>{tr('copy.copilotOpenSettingsInstruction', ['github.copilot'])}</>,
@@ -532,7 +566,7 @@ Custom model: ${args.model}`
 		{
 			id: 'windsurf',
 			title: 'Windsurf',
-			description: tr('copy.routeWindsurfTrafficThroughTheGatewayHttpProxySetting'),
+			description: tr('copy.clientSetupWindsurfDescription'),
 			icon: 'windsurf',
 			steps: [
 				<>{tr('copy.windsurfOpenSettingsInstruction')}</>,
@@ -548,7 +582,7 @@ Custom model: ${args.model}`
 		{
 			id: 'openai-js',
 			title: tr('copy.openAiJavaScriptSdk'),
-			description: tr('copy.useTheGatewayAsAnOpenAiCompatibleChatCompletionsEndpoint'),
+			description: tr('copy.clientSetupOpenAiJsSdkDescription'),
 			icon: 'codex',
 			provider: 'openai',
 			language: 'ts',
@@ -569,7 +603,7 @@ console.log(response.choices[0]?.message?.content);`
 		{
 			id: 'openai-python',
 			title: tr('copy.openAiPythonSdk'),
-			description: tr('copy.pointThePythonSdkAtTheGatewayListener'),
+			description: tr('copy.clientSetupOpenAiPythonSdkDescription'),
 			icon: 'codex',
 			provider: 'openai',
 			language: 'python',
@@ -648,6 +682,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
 			</span>
 		);
 	}
+	if (props.recipe.icon === 'pi') {
+		return (
+			<span className={className}>
+				<img src={piIcon} alt="" aria-hidden="true" />
+			</span>
+		);
+	}
 	if (props.recipe.icon === 'windsurf') {
 		return (
 			<span className={className}>
@@ -672,7 +713,13 @@ function HighlightedCode(props: { code: string; language: string }) {
 
 function highlightCode(code: string, language: string) {
 	return code.split('\n').flatMap((line, lineIndex, lines) => [
-		<span className="code-line" key={`line-${lineIndex}`}>
+		<span
+			className="code-line"
+			key={`line-${
+				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+				lineIndex
+			}`}
+		>
 			{highlightLine(line, language, lineIndex)}
 		</span>,
 		lineIndex < lines.length - 1 ? '\n' : null

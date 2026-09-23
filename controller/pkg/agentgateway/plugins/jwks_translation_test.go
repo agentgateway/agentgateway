@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -27,7 +28,7 @@ func longStringPtr(s string) *agentgateway.LongString {
 	return &v
 }
 
-func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProviderAndReturnsError(t *testing.T) {
+func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorPreservesRemoteProviderAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	jwtAuth := &agentgateway.JWTAuthentication{
 		Mode: agentgateway.JWTAuthenticationModeStrict,
@@ -66,8 +67,15 @@ func TestProcessJWTAuthenticationPolicyWhenLookupReturnsErrorOmitsRemoteProvider
 	if jwtSpec == nil {
 		t.Fatal("expected jwt spec")
 	}
-	if got := len(jwtSpec.Providers); got != 0 {
-		t.Fatalf("expected remote provider to be omitted, got %d providers", got)
+	if got := len(jwtSpec.Providers); got != 1 {
+		t.Fatalf("expected remote provider to be preserved, got %d providers", got)
+	}
+	provider := jwtSpec.Providers[0]
+	if provider.GetInline() != `{"keys":[]}` {
+		t.Fatalf("expected empty key set, got %q", provider.GetInline())
+	}
+	if provider.Issuer != jwtAuth.Providers[0].Issuer || len(provider.Audiences) != 1 || provider.Audiences[0] != "aud-a" {
+		t.Fatalf("expected issuer and audiences to be preserved, got %v", provider)
 	}
 	if jwtSpec.Mode != api.TrafficPolicySpec_JWT_STRICT {
 		t.Fatalf("expected strict mode, got %v", jwtSpec.Mode)
@@ -101,7 +109,147 @@ func TestProcessJWKSInvalidInline(t *testing.T) {
 	}
 }
 
-func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAndReturnsError(t *testing.T) {
+func TestProcessJWTAuthenticationPolicyTranslatesEmptyRequiredClaims(t *testing.T) {
+	inline := agentgateway.LongString(`{"keys":[]}`)
+	jwtAuth := &agentgateway.JWTAuthentication{
+		Mode: agentgateway.JWTAuthenticationModeStrict,
+		Providers: []agentgateway.JWTProvider{{
+			Issuer: "issuer.example",
+			JWKS:   agentgateway.JWKS{Inline: &inline},
+			Validation: &agentgateway.JWTValidationOptions{
+				RequiredClaims: new([]agentgateway.JWTClaim{}),
+			},
+		}},
+	}
+
+	// Exercise the typed client's JSON boundary before translating the policy.
+	wire, err := json.Marshal(jwtAuth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwtAuth = &agentgateway.JWTAuthentication{}
+	if err := json.Unmarshal(wire, jwtAuth); err != nil {
+		t.Fatal(err)
+	}
+
+	policy, err := processJWTAuthenticationPolicy(
+		PolicyCtx{Krt: krt.TestingDummyContext{}},
+		jwtAuth,
+		nil,
+		"default/test:jwt",
+		types.NamespacedName{Namespace: "default", Name: "test"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := policy.GetTraffic().GetJwt().GetProviders()[0].GetJwtValidationOptions()
+	if got == nil {
+		t.Fatal("expected jwt validation options to be set")
+	}
+	if len(got.GetRequiredClaims()) != 0 {
+		t.Fatalf("expected empty required claims, got %v", got.GetRequiredClaims())
+	}
+}
+
+func TestProcessJWTAuthenticationPolicyDefaultsRequiredClaimsWhenOptionsEmpty(t *testing.T) {
+	inline := agentgateway.LongString(`{"keys":[]}`)
+	jwtAuth := &agentgateway.JWTAuthentication{
+		Mode: agentgateway.JWTAuthenticationModeStrict,
+		Providers: []agentgateway.JWTProvider{{
+			Issuer:     "issuer.example",
+			JWKS:       agentgateway.JWKS{Inline: &inline},
+			Validation: &agentgateway.JWTValidationOptions{},
+		}},
+	}
+
+	policy, err := processJWTAuthenticationPolicy(
+		PolicyCtx{Krt: krt.TestingDummyContext{}},
+		jwtAuth,
+		nil,
+		"default/test:jwt",
+		types.NamespacedName{Namespace: "default", Name: "test"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := policy.GetTraffic().GetJwt().GetProviders()[0].GetJwtValidationOptions().GetRequiredClaims()
+	if len(got) != 1 || got[0] != "exp" {
+		t.Fatalf("expected default required claims [exp], got %v", got)
+	}
+}
+
+func TestProcessJWTAuthenticationPolicyOmitsValidationOptionsWhenUnset(t *testing.T) {
+	inline := agentgateway.LongString(`{"keys":[]}`)
+	jwtAuth := &agentgateway.JWTAuthentication{
+		Mode: agentgateway.JWTAuthenticationModeStrict,
+		Providers: []agentgateway.JWTProvider{{
+			Issuer: "issuer.example",
+			JWKS:   agentgateway.JWKS{Inline: &inline},
+		}},
+	}
+
+	policy, err := processJWTAuthenticationPolicy(
+		PolicyCtx{Krt: krt.TestingDummyContext{}},
+		jwtAuth,
+		nil,
+		"default/test:jwt",
+		types.NamespacedName{Namespace: "default", Name: "test"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := policy.GetTraffic().GetJwt().GetProviders()[0].GetJwtValidationOptions(); got != nil {
+		t.Fatalf("expected unset jwt validation options, got %#v", got)
+	}
+}
+
+func TestTranslateMCPAuthenticationSpecTranslatesEmptyRequiredClaims(t *testing.T) {
+	authn := &agentgateway.MCPAuthentication{
+		Issuer: "issuer.example",
+		JWKS: agentgateway.RemoteJWKS{
+			JwksPath: longStringPtr("/keys"),
+			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+				BackendRef: &gwv1.BackendObjectReference{
+					Name: "jwks-backend",
+				},
+			},
+		},
+		Validation: &agentgateway.JWTValidationOptions{
+			RequiredClaims: new([]agentgateway.JWTClaim{}),
+		},
+	}
+
+	// Exercise the typed client's JSON boundary before translating the policy.
+	wire, err := json.Marshal(authn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authn = &agentgateway.MCPAuthentication{}
+	if err := json.Unmarshal(wire, authn); err != nil {
+		t.Fatal(err)
+	}
+
+	spec, err := translateMCPAuthenticationSpec(
+		PolicyCtx{
+			Krt:        krt.TestingDummyContext{},
+			JWKSLookup: stubJWKSLookup{inline: `{"keys":[]}`},
+		},
+		types.NamespacedName{Namespace: "default", Name: "test"},
+		authn,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := spec.GetJwtValidationOptions()
+	if got == nil {
+		t.Fatal("expected jwt validation options to be set")
+	}
+	if len(got.GetRequiredClaims()) != 0 {
+		t.Fatalf("expected empty required claims, got %v", got.GetRequiredClaims())
+	}
+}
+
+func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorEmitsEmptyKeySetAndReturnsError(t *testing.T) {
 	sentinel := errors.New("lookup failed")
 	authn := &agentgateway.MCPAuthentication{
 		Issuer:    "issuer.example",
@@ -132,8 +280,8 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAn
 	if spec == nil {
 		t.Fatal("expected spec to still be emitted")
 	}
-	if spec.JwksInline != "" {
-		t.Fatalf("expected jwks inline to be empty, got %q", spec.JwksInline)
+	if spec.JwksInline != `{"keys":[]}` {
+		t.Fatalf("expected empty key set, got %q", spec.JwksInline)
 	}
 	if spec.Issuer != authn.Issuer {
 		t.Fatalf("expected issuer %q, got %q", authn.Issuer, spec.Issuer)

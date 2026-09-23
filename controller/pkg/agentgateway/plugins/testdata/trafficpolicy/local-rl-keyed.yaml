@@ -1,0 +1,86 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: keyed-local-rate-limit
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+  traffic:
+    rateLimit:
+      local:
+        - requests: 60
+          unit: Minutes
+          key: jwt.sub
+        - tokens: 100000
+          unit: Hours
+          key: jwt.team
+        - tokens: 20000
+          unit: Hours
+          key: jwt.sub + "/" + llm.requestModel
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/keyed-local-rate-limit:rl-local:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: keyed-local-rate-limit
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        localRateLimit:
+          fillInterval: 60s
+          maxTokens: "60"
+          rules:
+          - fillInterval: 60s
+            key: jwt.sub
+            maxTokens: "60"
+            tokensPerFill: "60"
+          - fillInterval: 3600s
+            key: jwt.team
+            maxTokens: "100000"
+            tokensPerFill: "100000"
+            type: TOKEN
+          - fillInterval: 3600s
+            key: jwt.sub + "/" + llm.requestModel
+            maxTokens: "20000"
+            tokensPerFill: "20000"
+            type: TOKEN
+          tokensPerFill: "60"
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: keyed-local-rate-limit
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

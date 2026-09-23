@@ -1,0 +1,35 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "call_1",
+            "name": "mcp__node_repl__js",
+            "input": {
+              "code": "1 + 1"
+            }
+          }
+        },
+        {
+          "toolUse": {
+            "toolUseId": "call_2",
+            "name": "other_kernel__js",
+            "input": {
+              "code": "1 + 1"
+            }
+          }
+        },
+        {
+          "toolUse": {
+            "toolUseId": "call_3",
+            "name": "finish",
+            "input": {}
+          }
+        }
+      ]
+    }
+  },
+  "stopReason": "tool_use"
+}

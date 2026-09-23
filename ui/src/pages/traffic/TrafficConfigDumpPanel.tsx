@@ -680,7 +680,7 @@ function backendListSummary(backends: unknown[]) {
 	return labels.slice(0, 2).join(', ') + (labels.length > 2 ? ` +${labels.length - 2}` : '');
 }
 
-function routeBackendLabel(value: unknown) {
+export function routeBackendLabel(value: unknown) {
 	if (!value || typeof value !== 'object') return tr('copy.unknown');
 	const backend = value as Record<string, unknown>;
 	if ('backend' in backend) return backendKind(backend.backend);

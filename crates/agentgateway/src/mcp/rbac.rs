@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use ::cel::Value;
 use ::cel::objects::{KeyRef, MapValue};
+use agent_core::strng::Strng;
 use serde::Serialize;
 use vector_map::VecMap;
 
@@ -27,13 +28,14 @@ impl McpAuthorization {
 
 /// Cheap clone via Arc; this API treats the request as read-only after construction.
 #[derive(Clone)]
-pub struct CelExecWrapper(Arc<::http::Request<()>>);
+pub struct CelExecWrapper(Arc<crate::mcp::upstream::IncomingRequestContext>);
 
-impl CelExecWrapper {
-	pub fn new(req: ::http::Request<()>) -> CelExecWrapper {
-		CelExecWrapper(Arc::new(req))
+impl From<crate::mcp::upstream::IncomingRequestContext> for CelExecWrapper {
+	fn from(ctx: crate::mcp::upstream::IncomingRequestContext) -> Self {
+		Self(Arc::new(ctx))
 	}
 }
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpAuthorizationSet(RuleSets);
@@ -48,13 +50,15 @@ impl McpAuthorizationSet {
 		Self(self.0.merge(other.0))
 	}
 
-	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
+	pub fn validate(&self, res: &ResourceType, method_name: &Strng, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
 		}
 		tracing::debug!("Checking RBAC for resource: {:?}", res);
-		let mcp = crate::mcp::MCPInfo::from(res);
-		let exec = crate::cel::Executor::new_mcp_request(cel.0.as_ref(), &mcp);
+		let mut mcp = crate::mcp::MCPInfo::from(res);
+		mcp.method_name = Some(method_name.clone());
+		let mut exec = cel.0.executor();
+		exec.mcp = Some(&mcp);
 		self.0.validate(&exec)
 	}
 
@@ -134,16 +138,24 @@ mod tests {
 
 	use super::*;
 	use crate::http::authorization::PolicySet;
+	use crate::mcp::guardrails::methods::{TOOLS_CALL, TOOLS_LIST};
+
+	fn cel_context(req: ::http::Request<bytes::Bytes>) -> CelExecWrapper {
+		let (parts, body) = req.into_parts();
+		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		*ctx.request.body_mut() = Some(body);
+		ctx.into()
+	}
 
 	fn tool_resource(target: &str, name: &str) -> ResourceType {
 		ResourceType::Tool(ResourceId::new(target.to_string(), name.to_string()))
 	}
 
-	fn req_with_claims(claims: serde_json::Value) -> ::http::Request<()> {
+	fn req_with_claims(claims: serde_json::Value) -> ::http::Request<bytes::Bytes> {
 		let mut req = ::http::Request::builder()
 			.method(::http::Method::POST)
 			.uri("http://example.com/mcp")
-			.body(())
+			.body(bytes::Bytes::new())
 			.unwrap();
 		let serde_json::Value::Object(claims) = claims else {
 			panic!("claims must be a JSON object");
@@ -155,11 +167,11 @@ mod tests {
 		req
 	}
 
-	fn req_without_claims() -> ::http::Request<()> {
+	fn req_without_claims() -> ::http::Request<bytes::Bytes> {
 		::http::Request::builder()
 			.method(::http::Method::POST)
 			.uri("http://example.com/mcp")
-			.body(())
+			.body(bytes::Bytes::new())
 			.unwrap()
 	}
 
@@ -177,12 +189,12 @@ mod tests {
 		let res = tool_resource("server", "increment");
 
 		let no_rule_sets = McpAuthorizationSet::new(RuleSets::from(vec![]));
-		assert!(no_rule_sets.validate(&res, &CelExecWrapper::new(req_without_claims())));
+		assert!(no_rule_sets.validate(&res, &TOOLS_CALL, &cel_context(req_without_claims())));
 
 		let empty_rule_set = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(
 			PolicySet::new(vec![], vec![], vec![]),
 		)]));
-		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
+		assert!(empty_rule_set.validate(&res, &TOOLS_CALL, &cel_context(req_without_claims())));
 	}
 
 	#[test]
@@ -199,21 +211,26 @@ mod tests {
 			))]))
 		};
 		let res = tool_resource("server", "increment");
-		let cel = CelExecWrapper::new(req_without_claims());
+		let cel = cel_context(req_without_claims());
 
 		// Higher-precedence allow does not erase a base deny
 		let merged = with_authz(deny_all())
 			.merge(with_authz(authorization_set("true")))
 			.mcp_authorization
 			.unwrap();
-		assert!(!merged.validate(&res, &cel));
+		assert!(!merged.validate(&res, &TOOLS_CALL, &cel));
 
 		// A policy on only one side passes through
 		for merged in [
 			with_authz(deny_all()).merge(Default::default()),
 			crate::store::BackendPolicies::default().merge(with_authz(deny_all())),
 		] {
-			assert!(!merged.mcp_authorization.unwrap().validate(&res, &cel));
+			assert!(
+				!merged
+					.mcp_authorization
+					.unwrap()
+					.validate(&res, &TOOLS_CALL, &cel)
+			);
 		}
 	}
 
@@ -223,7 +240,7 @@ mod tests {
 		let req = req_with_claims(json!({ "sub": "1234567890" }));
 		let res = tool_resource("server", "increment");
 
-		assert!(authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(authz.validate(&res, &TOOLS_CALL, &cel_context(req)));
 	}
 
 	#[test]
@@ -232,7 +249,7 @@ mod tests {
 		let req = req_with_claims(json!({ "user": { "role": "viewer" } }));
 		let res = tool_resource("server", "increment");
 
-		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(!authz.validate(&res, &TOOLS_CALL, &cel_context(req)));
 	}
 
 	#[test]
@@ -241,6 +258,17 @@ mod tests {
 		let req = req_without_claims();
 		let res = tool_resource("server", "increment");
 
-		assert!(!authz.validate(&res, &CelExecWrapper::new(req)));
+		assert!(!authz.validate(&res, &TOOLS_CALL, &cel_context(req)));
+	}
+
+	#[test]
+	fn test_mcp_authorization_method_name_distinguishes_list_from_call() {
+		let authz = authorization_set(r#"mcp.methodName == "tools/list""#);
+		let req = req_without_claims();
+		let res = tool_resource("server", "increment");
+		let cel = cel_context(req);
+
+		assert!(authz.validate(&res, &TOOLS_LIST, &cel));
+		assert!(!authz.validate(&res, &TOOLS_CALL, &cel));
 	}
 }

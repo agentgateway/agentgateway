@@ -91,6 +91,10 @@ func TestComputeInternalPorts(t *testing.T) {
 		{
 			name: "no annotation",
 			gw:   gw("", 80, 8080),
+			lsets: []*gwv1.ListenerSet{
+				ls("newer", "", now.Add(time.Minute), 9090),
+				ls("older", "", now, 9090),
+			},
 			want: nil,
 		},
 	}

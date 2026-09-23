@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -22,7 +23,7 @@ func init() {
 		if err != nil {
 			return nil, nil, err
 		}
-		return modelsDevTransform(api, modelsDevSelectProviders(api, opts.providers), opts.legacy)
+		return modelsDevTransform(api, modelsDevSelectProviders(api, opts.providers, opts.excludeProviders), opts.legacy)
 	}
 }
 
@@ -57,10 +58,16 @@ type modelsDevProvider struct {
 }
 
 type modelsDevModel struct {
-	ID     string         `json:"id"`
-	Name   string         `json:"name"`
-	Status string         `json:"status"`
-	Cost   *modelsDevCost `json:"cost"`
+	ID               string                     `json:"id"`
+	Name             string                     `json:"name"`
+	Family           string                     `json:"family"`
+	Status           string                     `json:"status"`
+	Cost             *modelsDevCost             `json:"cost"`
+	ReasoningOptions []modelsDevReasoningOption `json:"reasoning_options"`
+}
+
+type modelsDevReasoningOption struct {
+	Type string `json:"type"`
 }
 
 type modelsDevRates struct {
@@ -105,13 +112,23 @@ func modelsDevFetchAPI(ctx context.Context) (map[string]modelsDevProvider, error
 	return modelsDevDecodeAPI(io.LimitReader(resp.Body, 64<<20))
 }
 
-func modelsDevSelectProviders(api map[string]modelsDevProvider, requested []string) []string {
-	if len(requested) > 0 {
-		return requested
+func modelsDevSelectProviders(api map[string]modelsDevProvider, requested, excluded []string) []string {
+	selected := requested
+	if len(selected) == 0 {
+		selected = make([]string, 0, len(modelsDevProviderIDs))
+		for id := range modelsDevProviderIDs {
+			if _, ok := api[id]; ok {
+				selected = append(selected, id)
+			}
+		}
 	}
-	ids := make([]string, 0, len(modelsDevProviderIDs))
-	for id := range modelsDevProviderIDs {
-		if _, ok := api[id]; ok {
+	omit := make(map[string]struct{}, len(excluded))
+	for _, id := range excluded {
+		omit[id] = struct{}{}
+	}
+	ids := make([]string, 0, len(selected))
+	for _, id := range selected {
+		if _, ok := omit[id]; !ok {
 			ids = append(ids, id)
 		}
 	}
@@ -187,6 +204,22 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(format string, args ...any)) (Model, error) {
 	label := provider + "/" + model
 	var entry Model
+	if strings.HasPrefix(m.Family, "claude-") {
+		var effort, budgetTokens bool
+		for _, option := range m.ReasoningOptions {
+			switch option.Type {
+			case "effort":
+				effort = true
+			case "budget_tokens":
+				budgetTokens = true
+			}
+		}
+		if budgetTokens {
+			entry.Tags = append(entry.Tags, "legacy_thinking")
+		} else if effort {
+			entry.Tags = append(entry.Tags, "adaptive_thinking")
+		}
+	}
 
 	if m.Cost != nil {
 		rates, err := modelsDevBuildRates(&m.Cost.modelsDevRates, label)

@@ -15,9 +15,9 @@ use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
 use crate::apply;
-// Provider construction lives in the central `crypto` module; re-export here so
-// existing `transport::tls::provider*` call sites keep working unchanged.
-pub use crate::crypto::tls::{provider, provider_with_cipher_suites, provider_with_options};
+// Provider construction lives in the central `crypto` module; re-export its
+// public factories through the existing `transport::tls` path.
+pub use crate::crypto::tls::{provider, provider_with_options_validated};
 use crate::serdes::schema;
 use crate::transport::stream::Socket;
 use crate::types::discovery::Identity;
@@ -78,9 +78,18 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls_symcrypt::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
-#[cfg(feature = "crypto-aws-lc")]
+#[cfg(all(feature = "crypto-aws-lc", not(feature = "fips")))]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::X25519.to_supported_kx_group(),
+	KeyExchangeGroup::P256.to_supported_kx_group(),
+	KeyExchangeGroup::P384.to_supported_kx_group(),
+	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
+];
+
+// Bare X25519 is not an approved group; the AWS-LC FIPS module does report
+// X25519MLKEM768 as approved, so the hybrid PQC group stays.
+#[cfg(feature = "fips")]
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::P256.to_supported_kx_group(),
 	KeyExchangeGroup::P384.to_supported_kx_group(),
 	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
@@ -376,8 +385,6 @@ pub mod insecure {
 	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 	use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
 
-	use crate::transport::tls::provider;
-
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {
 		inner: Arc<WebPkiServerVerifier>,
@@ -527,7 +534,7 @@ pub mod insecure {
 		) -> Result<ServerCertVerified, rustls::Error> {
 			let cert = rustls::server::ParsedCertificate::try_from(end_entity)?;
 
-			let algs = provider().signature_verification_algorithms;
+			let algs = crate::crypto::tls::signature_verification_algorithms();
 			rustls::client::verify_server_cert_signed_by_trust_anchor(
 				&cert,
 				&self.roots,
@@ -566,7 +573,7 @@ pub mod insecure {
 				message,
 				cert,
 				dss,
-				&provider().signature_verification_algorithms,
+				&crate::crypto::tls::signature_verification_algorithms(),
 			)
 		}
 
@@ -580,14 +587,12 @@ pub mod insecure {
 				message,
 				cert,
 				dss,
-				&provider().signature_verification_algorithms,
+				&crate::crypto::tls::signature_verification_algorithms(),
 			)
 		}
 
 		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-			provider()
-				.signature_verification_algorithms
-				.supported_schemes()
+			crate::crypto::tls::signature_verification_algorithms().supported_schemes()
 		}
 	}
 
@@ -880,6 +885,18 @@ pub mod trustdomain {
 			assert!(info.identity.is_none());
 		}
 
+		#[test]
+		fn istio_mode_substrate_actor_id_no_identity() {
+			let cert = make_cert_with_uri("spiffe://substrate-actor.local/atespace/demo/actor/example");
+			let info = super::super::tls_info_from_der(&cert, super::super::PeerIdentityMode::Istio)
+				.expect("parse cert");
+			assert_eq!(
+				info.spiffe_id.as_deref(),
+				Some("spiffe://substrate-actor.local/atespace/demo/actor/example")
+			);
+			assert!(info.identity.is_none());
+		}
+
 		/// Minimal no-op ClientCertVerifier — only used to satisfy TrustDomainVerifier's
 		/// constructor; none of its methods are called by verify_trust_domain.
 		#[derive(Debug)]
@@ -981,7 +998,6 @@ pub mod identity {
 	use rustls::{DigitallySignedStruct, SignatureScheme};
 	use tracing::debug;
 
-	use crate::transport::tls::provider;
 	use crate::types::discovery::Identity;
 	use crate::*;
 
@@ -1037,7 +1053,7 @@ pub mod identity {
 		) -> Result<ServerCertVerified, rustls::Error> {
 			let cert = ParsedCertificate::try_from(end_entity)?;
 
-			let algs = provider().signature_verification_algorithms;
+			let algs = crate::crypto::tls::signature_verification_algorithms();
 			rustls::client::verify_server_cert_signed_by_trust_anchor(
 				&cert,
 				&self.roots,
@@ -1067,7 +1083,7 @@ pub mod identity {
 				message,
 				cert,
 				dss,
-				&provider().signature_verification_algorithms,
+				&crate::crypto::tls::signature_verification_algorithms(),
 			)
 		}
 
@@ -1081,14 +1097,12 @@ pub mod identity {
 				message,
 				cert,
 				dss,
-				&provider().signature_verification_algorithms,
+				&crate::crypto::tls::signature_verification_algorithms(),
 			)
 		}
 
 		fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-			provider()
-				.signature_verification_algorithms
-				.supported_schemes()
+			crate::crypto::tls::signature_verification_algorithms().supported_schemes()
 		}
 	}
 }
@@ -1231,7 +1245,7 @@ fn sans(
 
 	if let Some(names) = names {
 		// In SPIFFE mode we do not attempt to interpret the peer as an Istio identity, so skip the
-		// ns/sa parse entirely (avoiding a spurious warning for valid non-ns/sa SPIFFE IDs).
+		// ns/sa parse entirely.
 		let istio = if mode == PeerIdentityMode::Istio {
 			names
 				.iter()
@@ -1241,13 +1255,7 @@ fn sans(
 						_ => return None,
 					};
 
-					match id {
-						Ok(id) => Some(id),
-						Err(err) => {
-							warn!("SAN {n} could not be parsed: {err}");
-							None
-						},
-					}
+					id.ok()
 				})
 				.collect()
 		} else {

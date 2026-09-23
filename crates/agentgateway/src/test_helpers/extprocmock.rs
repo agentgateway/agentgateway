@@ -167,6 +167,26 @@ pub trait Handler {
 	}
 }
 
+pub struct ReplaceRequestBody(pub bytes::Bytes);
+
+#[async_trait]
+impl Handler for ReplaceRequestBody {
+	async fn handle_request_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let response = CommonResponse {
+			body_mutation: Some(BodyMutation {
+				mutation: Some(body_mutation::Mutation::Body(self.0.clone())),
+			}),
+			..Default::default()
+		};
+		let _ = sender.send(request_body_response(Some(response))).await;
+		Ok(())
+	}
+}
+
 /// Mock ext_proc server for testing
 pub struct ExtProcMock<T> {
 	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,

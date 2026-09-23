@@ -1,4 +1,6 @@
+use std::borrow::Cow;
 use std::fmt::Write as _;
+use std::io::{Cursor, Write as _};
 use std::time::Duration;
 
 use base64::Engine;
@@ -15,6 +17,11 @@ pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // silently dropped session cookies.
 const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
 const ORIGINAL_URI_LIMIT: usize = 2048;
+/// Marks a compressed payload. Sessions written before compression are bare JSON, which never
+/// starts with this byte, so untagged payloads still decode.
+const COMPRESSED_TAG: u8 = 0x01;
+const COMPRESSION_LEVEL: i32 = 9;
+const MAX_DECOMPRESSED_PAYLOAD_SIZE: usize = 64 * 1024;
 
 pub(super) fn default_session_ttl() -> Duration {
 	Duration::from_secs(60 * 60)
@@ -152,6 +159,7 @@ impl SessionConfig {
 			.encoder
 			.decrypt(cookie)
 			.map_err(|_| Error::InvalidSession)?;
+		let decoded = decode_session_payload(decoded)?;
 		let session: BrowserSession =
 			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
 		if session.is_expired() {
@@ -161,10 +169,10 @@ impl SessionConfig {
 	}
 
 	pub fn encode_browser_session(&self, session: &BrowserSession) -> Result<String, Error> {
-		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
+		let json = serde_json::to_vec(session).map_err(anyhow::Error::from)?;
 		let encoded = self
 			.encoder
-			.encrypt(&json)
+			.encrypt_bytes(&encode_session_payload(&json))
 			.map_err(|_| Error::InvalidSession)?;
 		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
 			return Err(Error::SessionCookieTooLarge);
@@ -199,6 +207,28 @@ impl SessionConfig {
 	pub fn transaction_cookie_name(&self, transaction_id: &str) -> String {
 		format!("{}.{}", self.transaction_cookie_prefix, transaction_id)
 	}
+}
+
+fn encode_session_payload(json: &[u8]) -> Cow<'_, [u8]> {
+	let mut payload = Cursor::new(Vec::with_capacity(json.len()));
+	let compressed = zstd::bulk::Compressor::new(COMPRESSION_LEVEL).and_then(|mut c| {
+		payload.write_all(&[COMPRESSED_TAG])?;
+		c.include_checksum(false)?;
+		c.include_contentsize(false)?;
+		c.compress_to_buffer(json, &mut payload)
+	});
+	if compressed.is_ok() && payload.get_ref().len() < json.len() {
+		return Cow::Owned(payload.into_inner());
+	}
+	Cow::Borrowed(json)
+}
+
+fn decode_session_payload(payload: Vec<u8>) -> Result<Vec<u8>, Error> {
+	let Some((&COMPRESSED_TAG, compressed)) = payload.split_first() else {
+		return Ok(payload);
+	};
+	zstd::bulk::decompress(compressed, MAX_DECOMPRESSED_PAYLOAD_SIZE)
+		.map_err(|_| Error::InvalidSession)
 }
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]

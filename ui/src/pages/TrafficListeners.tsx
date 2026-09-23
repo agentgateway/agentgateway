@@ -184,7 +184,13 @@ function TrafficListenersEditorPage() {
 								0
 							);
 							return (
-								<section className="traffic-bind" key={`${bind.port}-${bindIndex}`}>
+								<section
+									className="traffic-bind"
+									key={`${bind.port}-${
+										// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+										bindIndex
+									}`}
+								>
 									<div className="traffic-bind-header">
 										<div>
 											<h3>
@@ -255,7 +261,12 @@ function TrafficListenersEditorPage() {
 												</thead>
 												<tbody>
 													{bind.listeners.map((listener, listenerIndex) => (
-														<tr key={`${listener.name}-${listenerIndex}`}>
+														<tr
+															key={`${listener.name}-${
+																// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+																listenerIndex
+															}`}
+														>
 															<td className="strong">
 																{listenerDisplayName(listener, listenerIndex)}
 															</td>

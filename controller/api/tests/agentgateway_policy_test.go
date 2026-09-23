@@ -141,3 +141,54 @@ spec:
 		}
 	}
 }
+
+func TestAzureManagedIdentityScopeValidation(t *testing.T) {
+	const policy = `apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: azure-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+  backend:
+    auth:
+      azure:
+        %s
+        scopes:
+        - scope-one
+        %s
+`
+
+	tests := []struct {
+		name       string
+		credential string
+		second     string
+		wantError  bool
+	}{
+		{name: "managed identity with one scope", credential: "managedIdentity: {}"},
+		{name: "managed identity with two scopes", credential: "managedIdentity: {}", second: "- scope-two", wantError: true},
+		{name: "workload identity with two scopes", credential: "workloadIdentity: {}", second: "- scope-two"},
+		{name: "implicit auth with two scopes", second: "- scope-two"},
+	}
+
+	validator := NewAgentgatewayValidator(t)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validator.ValidateCustomResourceYAML(
+				fmt.Sprintf(policy, test.credential, test.second),
+				nil,
+			)
+			if test.wantError {
+				if err == nil || !strings.Contains(err.Error(), "managedIdentity supports exactly one scope") {
+					t.Fatalf("expected managed identity scope validation error, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected policy to be valid, got %v", err)
+			}
+		})
+	}
+}

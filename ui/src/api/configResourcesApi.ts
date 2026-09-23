@@ -1,6 +1,7 @@
 import { requestJson } from '@/api/base';
 import type { LocalAttachedRoute, LocalAttachedTCPRoute } from '@/gateway-config';
 import type {
+	LlmConfig,
 	LlmModel,
 	LlmProvider,
 	LlmVirtualModel,
@@ -19,6 +20,7 @@ export type ConfigResourceKind =
 	| 'llm.policy'
 	| 'mcp.target'
 	| 'mcp.policy'
+	| 'llm.settings'
 	| 'mcp.settings'
 	| 'traffic.gateway'
 	| 'traffic.route'
@@ -27,6 +29,7 @@ export type ConfigResourceKind =
 
 export type PolicyResourceKind = Extract<ConfigResourceKind, `${string}.policy`>;
 
+export type LlmSettingsResource = Pick<LlmConfig, 'gateways' | 'port' | 'tls'>;
 export type McpSettingsResource = Partial<Omit<McpConfig, 'targets' | 'policies'>>;
 export type TrafficGatewayResource = TrafficGateway & { name: string };
 export type TrafficRouteResource = LocalAttachedRoute & { name: string };
@@ -34,27 +37,29 @@ export type TrafficTcpRouteResource = LocalAttachedTCPRoute & { name: string };
 
 export type ConfigResourceValue<K extends ConfigResourceKind> = K extends 'modelCatalog'
 	? { base?: unknown; custom?: unknown }
-	: K extends 'llm.provider'
-		? LlmProvider
-		: K extends 'llm.model'
-			? LlmModel
-			: K extends 'llm.virtualModel'
-				? LlmVirtualModel
-				: K extends 'llm.apiKey'
-					? VirtualApiKey
-					: K extends 'mcp.target'
-						? McpTarget
-						: K extends 'mcp.settings'
-							? McpSettingsResource
-							: K extends 'traffic.gateway'
-								? TrafficGatewayResource
-								: K extends 'traffic.route'
-									? TrafficRouteResource
-									: K extends 'traffic.tcpRoute'
-										? TrafficTcpRouteResource
-										: K extends 'llm.policy' | 'mcp.policy' | 'ui.policy'
-											? unknown
-											: never;
+	: K extends 'llm.settings'
+		? LlmSettingsResource
+		: K extends 'llm.provider'
+			? LlmProvider
+			: K extends 'llm.model'
+				? LlmModel
+				: K extends 'llm.virtualModel'
+					? LlmVirtualModel
+					: K extends 'llm.apiKey'
+						? VirtualApiKey
+						: K extends 'mcp.target'
+							? McpTarget
+							: K extends 'mcp.settings'
+								? McpSettingsResource
+								: K extends 'traffic.gateway'
+									? TrafficGatewayResource
+									: K extends 'traffic.route'
+										? TrafficRouteResource
+										: K extends 'traffic.tcpRoute'
+											? TrafficTcpRouteResource
+											: K extends 'llm.policy' | 'mcp.policy' | 'ui.policy'
+												? unknown
+												: never;
 
 export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKind> {
 	kind: K;

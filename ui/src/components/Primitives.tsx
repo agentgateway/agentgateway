@@ -243,6 +243,7 @@ export function Dropdown(props: {
 	}
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<div
 			className={['custom-select', props.className].filter(Boolean).join(' ')}
 			onBlur={event => {
@@ -299,6 +300,7 @@ export function Dropdown(props: {
 						/>
 					) : null}
 					{filteredOptions.map((option, index) => (
+						// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<div
 							className={[
 								'custom-select-option',
@@ -380,6 +382,7 @@ export function SegmentedControl<T extends string>(props: {
 			aria-label={props.ariaLabel}
 		>
 			{props.options.map(option => (
+				// biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<button
 					className={option.value === props.value ? 'active' : ''}
 					type="button"
@@ -481,6 +484,7 @@ export function Tooltip(props: {
 	}, [open, props.side]);
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<span
 			className="tooltip-wrap"
 			onMouseEnter={() => setOpen(true)}
@@ -507,8 +511,10 @@ function formatTooltipContent(content: ReactNode) {
 	const parts = content.split(/(`[^`]+`)/g);
 	return parts.map((part, index) => {
 		if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
+			// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			return <code key={index}>{part.slice(1, -1)}</code>;
 		}
+		// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		return <span key={index}>{part}</span>;
 	});
 }
@@ -628,6 +634,7 @@ export function Drawer(props: {
 
 	return (
 		<>
+			{/** biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<div
 				className={props.variant === 'nested' ? 'drawer-backdrop nested' : 'drawer-backdrop'}
 				role="presentation"
@@ -741,6 +748,7 @@ export function ConfirmDialog(props: {
 	}
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<div className="confirm-backdrop" role="presentation" onMouseDown={props.onCancel}>
 			<div
 				className="confirm-dialog"
@@ -820,12 +828,14 @@ export function Field(props: {
 	tooltip?: string;
 }) {
 	return (
+		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<label className={props.className ? `field ${props.className}` : 'field'}>
 			<span className="field-label">
 				{props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						<span className="help-icon" tabIndex={0} aria-label={props.tooltip}>
+						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
+						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
 						</span>
 					</Tooltip>
@@ -850,7 +860,8 @@ export function FieldGroup(props: {
 				{props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						<span className="help-icon" tabIndex={0} aria-label={props.tooltip}>
+						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
+						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
 						</span>
 					</Tooltip>
@@ -881,7 +892,13 @@ export function YamlTextBlock(props: { value: string; className?: string }) {
 			}
 		>
 			{lines.map((line, index) => (
-				<span className="yaml-line" key={`${index}-${line}`}>
+				<span
+					className="yaml-line"
+					key={`${
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+						index
+					}-${line}`}
+				>
 					{highlightYamlLine(line)}
 					{index < lines.length - 1 ? '\n' : null}
 				</span>

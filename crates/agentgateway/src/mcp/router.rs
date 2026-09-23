@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::prelude::{AssertSize, Strng};
-use axum::response::Response;
 
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
@@ -18,8 +17,8 @@ use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTargetRef, McpBackend, McpPrefixMode, McpTargetSpec, ResourceName, SimpleBackend,
-	SimpleBackendReference,
+	BackendTargetRef, McpBackend, McpPrefixMode, McpServerOverrides, McpTargetSpec, ResourceName,
+	SimpleBackend, SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
 
@@ -112,6 +111,8 @@ impl App {
 				prefix_mode: backend.prefix_mode,
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
+				sse_keep_alive: backend.sse_keep_alive,
+				server: backend.server.clone(),
 			}
 		};
 		let sessions = self.session.clone();
@@ -238,6 +239,8 @@ pub struct McpBackendGroup {
 	pub prefix_mode: McpPrefixMode,
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
+	pub sse_keep_alive: Option<Duration>,
+	pub server: Option<McpServerOverrides>,
 }
 
 impl Default for McpBackendGroup {
@@ -248,6 +251,8 @@ impl Default for McpBackendGroup {
 			prefix_mode: McpPrefixMode::default(),
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
+			sse_keep_alive: None,
+			server: None,
 		}
 	}
 }

@@ -44,7 +44,8 @@
 | `agentgateway_cost_catalog_lookups_total` | Counter | — | Total number of model cost catalog lookups by resolution status. |
 | `agentgateway_gen_ai_client_cost_usd_total` | Counter | usd | Cumulative USD cost of generative AI requests. |
 | `agentgateway_gen_ai_client_token_usage` | Histogram | — | Number of tokens used per request. |
-| `agentgateway_gen_ai_server_request_duration` | Histogram | — | Duration of generative AI request. |
+| `agentgateway_gen_ai_server_inter_chunk_latency` | Histogram | — | Time between consecutive output chunks for a given request. |
+| `agentgateway_gen_ai_server_request_duration` | Histogram | — | Duration of a generative AI request in seconds; failed operations have error_type="_OTHER" and successful operations omit the label. |
 | `agentgateway_gen_ai_server_time_per_output_token` | Histogram | — | Time to generate each output token for a given request. |
 | `agentgateway_gen_ai_server_time_to_first_token` | Histogram | — | Time to generate the first token for a given request. |
 | `agentgateway_guardrail_checks_total` | Counter | — | Total number of guardrail checks. |
@@ -53,6 +54,8 @@
 
 | Metric | Type | Unit | Description |
 | --- | --- | --- | --- |
+| `agentgateway_atenet_router_route_duration_seconds` | Histogram | seconds | Time from receiving a Substrate request to resolving its worker endpoint. |
 | `agentgateway_build_info` | Info | — | Agentgateway build information. |
 | `agentgateway_config_synchronized` | Gauge | — | Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration. |
+| `agentgateway_substrate_request_parking_active` | Gauge | — | Number of requests waiting for a Substrate actor to become routable. |
 | `agentgateway_upstream_call_duration_seconds` | Histogram | seconds | Duration of outbound calls made by agentgateway (seconds). |

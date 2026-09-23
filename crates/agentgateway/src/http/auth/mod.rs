@@ -23,7 +23,6 @@ pub use oauth::{
 	OAuthTokenExchangeAuth, PrivateKeyJwt,
 };
 use secrecy::{ExposeSecret, SecretString};
-use url::form_urlencoded;
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
@@ -119,6 +118,24 @@ pub struct BackendAuth {
 	pub credentials: Vec<BackendAuthCredential>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum BackendAuthError {
+	#[error(transparent)]
+	Local(anyhow::Error),
+	#[error(transparent)]
+	CredentialProvider(anyhow::Error),
+}
+
+impl BackendAuthError {
+	fn local(error: impl Into<anyhow::Error>) -> Self {
+		Self::Local(error.into())
+	}
+
+	fn credential_provider(error: impl Into<anyhow::Error>) -> Self {
+		Self::CredentialProvider(error.into())
+	}
+}
+
 impl BackendAuth {
 	pub fn new(kind: BackendAuthKind) -> Self {
 		Self {
@@ -202,9 +219,7 @@ pub async fn apply_backend_auth(
 		apply_backend_auth_kind(backend_info, kind, req).await?;
 	}
 	for credential in &auth.credentials {
-		credential
-			.location
-			.insert(req, credential.key.expose_secret())?;
+		insert_local_auth(&credential.location, req, credential.key.expose_secret())?;
 		// Credential locations are always explicitly configured. Mark Authorization writes
 		// so providers (e.g. Anthropic) do not rewrite or relocate the header. Other
 		// locations must not touch the marker set by the primary auth kind.
@@ -216,6 +231,14 @@ pub async fn apply_backend_auth(
 		}
 	}
 	Ok(())
+}
+
+fn insert_local_auth(
+	location: &AuthorizationLocation,
+	req: &mut Request,
+	value: &str,
+) -> Result<(), BackendAuthError> {
+	location.insert(req, value).map_err(BackendAuthError::local)
 }
 
 async fn apply_backend_auth_kind(
@@ -234,7 +257,7 @@ async fn apply_backend_auth_kind(
 				.get::<Claims>()
 				.map(|claim| claim.jwt.expose_secret().to_string())
 			{
-				resolved.insert(req, &token)?;
+				insert_local_auth(resolved, req, &token)?;
 			}
 			req
 				.extensions_mut()
@@ -246,15 +269,13 @@ async fn apply_backend_auth_kind(
 		} => {
 			let explicit = location.is_some();
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			resolved.insert(req, key.expose_secret())?;
+			insert_local_auth(resolved, req, key.expose_secret())?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuthKind::Gcp(g) => {
-			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
-				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			gcp::insert_token(g, &backend_info.call_target, req.headers_mut()).await?;
 		},
 		BackendAuthKind::Aws(_) => {
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
@@ -265,22 +286,19 @@ async fn apply_backend_auth_kind(
 				azure_auth,
 				&backend_info.call_target,
 			)
-			.await
-			.map_err(ProxyError::BackendAuthenticationFailed)?;
+			.await?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuthKind::Copilot => {
 			copilot::insert_headers(req)
 				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+				.map_err(BackendAuthError::local)?;
 		},
 		BackendAuthKind::JwtSign(cfg) => {
-			let token = cfg
-				.sign()
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			let token = cfg.sign().map_err(BackendAuthError::local)?;
 			let explicit = cfg.location().is_some();
 			let resolved = cfg.location().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			resolved.insert(req, &token)?;
+			insert_local_auth(resolved, req, &token)?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
@@ -387,7 +405,9 @@ impl AuthorizationLocation {
 					None => Some(Cow::Borrowed(value)),
 				}
 			},
-			AuthorizationLocation::QueryParameter { name } => query_parameter(req, name),
+			AuthorizationLocation::QueryParameter { name } => {
+				crate::http::query_parameter(req.uri(), name)
+			},
 			AuthorizationLocation::Cookie { name } => crate::http::read_request_cookie(req, name),
 			AuthorizationLocation::Expression(expression) => crate::cel::Executor::new_request(req)
 				.eval(expression)
@@ -468,15 +488,6 @@ fn strip_prefix_ascii_case_insensitive<'a>(value: &'a str, prefix: &str) -> Opti
 	} else {
 		None
 	}
-}
-
-fn query_parameter<'a>(req: &'a Request, name: &str) -> Option<Cow<'a, str>> {
-	for (key, value) in form_urlencoded::parse(req.uri().query().unwrap_or_default().as_bytes()) {
-		if key == name {
-			return Some(value);
-		}
-	}
-	None
 }
 
 fn set_request_cookie(

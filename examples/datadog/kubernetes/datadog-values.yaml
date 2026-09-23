@@ -1,0 +1,35 @@
+datadog:
+  apiKeyExistingSecret: datadog-api-key
+  site: us3.datadoghq.com
+  clusterName: agentgateway-datadog
+  # Kind uses a kubelet certificate that the Agent cannot validate.
+  kubelet:
+    tlsVerify: false
+  logs:
+    enabled: false
+  apm:
+    portEnabled: true
+  processAgent:
+    enabled: false
+  orchestratorExplorer:
+    enabled: false
+  kubeStateMetricsCore:
+    enabled: false
+  operator:
+    enabled: false
+  otlp:
+    receiver:
+      protocols:
+        grpc:
+          enabled: false
+        http:
+          enabled: true
+          endpoint: 0.0.0.0:4318
+          useHostPort: false
+clusterAgent:
+  enabled: false
+  admissionController:
+    enabled: false
+agents:
+  image:
+    tag: 7.82.3

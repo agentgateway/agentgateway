@@ -13,6 +13,7 @@ spec:
   traffic:
     timeouts:
       request: 30s
+      responseIdle: 5s
 ---
 # Output
 output:
@@ -34,6 +35,7 @@ output:
       traffic:
         timeout:
           request: 30s
+          responseIdle: 5s
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

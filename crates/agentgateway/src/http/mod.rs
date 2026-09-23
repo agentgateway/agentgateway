@@ -5,7 +5,6 @@ pub mod timeout;
 pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
-mod buflist;
 pub mod cors;
 pub mod delay;
 pub mod jwt;
@@ -26,8 +25,6 @@ pub mod ext_proc;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
-mod peekbody;
-mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
@@ -36,10 +33,10 @@ pub mod tests_common;
 pub mod transformation_cel;
 
 pub use agent_http::{
-	Body, BufferLimit, Error, Request, Response, buffer_limit, read_body_with_limit,
+	Body, BodyContent, BodyInspection, BufferLimit, Error, RawBody, RecordedBody, RecordedBodyHandle,
+	Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit, read_body_with_limit,
 	response_buffer_limit, x_headers,
 };
-pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
 	for (name, value) in req.headers_mut() {
@@ -147,6 +144,13 @@ impl<'a> From<&'a mut Response> for RequestOrResponse<'a> {
 }
 
 impl RequestOrResponse<'_> {
+	pub fn replace_body_bytes(&mut self, bytes: Bytes) {
+		match self {
+			Self::Request(req) => req.replace_body_bytes(bytes),
+			Self::Response(resp) => resp.replace_body_bytes(bytes),
+		}
+	}
+
 	pub fn headers(&mut self) -> &mut http::HeaderMap {
 		match self {
 			RequestOrResponse::Request(r) => r.headers_mut(),
@@ -159,6 +163,7 @@ impl RequestOrResponse<'_> {
 			RequestOrResponse::Response(r) => r.body_mut(),
 		}
 	}
+
 	pub fn apply_header(
 		&mut self,
 		k: &HeaderOrPseudo,
@@ -252,19 +257,15 @@ impl RequestOrResponse<'_> {
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
-use std::pin::Pin;
 use std::str::FromStr;
-use std::task::{Context, Poll};
 
 pub use ::http::uri::{Authority, Scheme};
 pub use ::http::{
 	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
 };
-use axum_core::BoxError;
 use bytes::Bytes;
 use cel::Value;
 use http::uri::PathAndQuery;
-use http_body::{Frame, SizeHint};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::{Url, form_urlencoded};
@@ -488,7 +489,10 @@ pub(crate) fn request_header_matches(
 }
 
 /// Extract the value for a pseudo header from the request
-pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option<String> {
+pub fn get_pseudo_header_value<B>(
+	pseudo: &HeaderOrPseudo,
+	req: &::http::Request<B>,
+) -> Option<String> {
 	match pseudo {
 		HeaderOrPseudo::Method => Some(req.method().to_string()),
 		HeaderOrPseudo::Scheme => req.uri().scheme().map(|s| s.to_string()),
@@ -509,7 +513,7 @@ pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option
 }
 
 /// Return all present request pseudo headers without introducing defaults
-pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)> {
+pub fn get_request_pseudo_headers<B>(req: &::http::Request<B>) -> Vec<(HeaderOrPseudo, String)> {
 	let mut out = Vec::with_capacity(4);
 	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Method, req) {
 		out.push((HeaderOrPseudo::Method, v));
@@ -597,6 +601,15 @@ pub fn modify_url(
 	f(&mut url)?;
 	*uri = url_to_uri(&url)?;
 	Ok(())
+}
+
+pub(crate) fn query_parameter<'a>(uri: &'a Uri, name: &str) -> Option<Cow<'a, str>> {
+	for (key, value) in form_urlencoded::parse(uri.query().unwrap_or_default().as_bytes()) {
+		if key == name {
+			return Some(value);
+		}
+	}
+	None
 }
 
 pub fn modify_query_parameters<S, R, KSet, VSet, KRemove>(
@@ -764,37 +777,14 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
-/// Result of inspecting a body without consuming it from the caller's perspective.
-#[derive(Debug)]
-#[must_use]
-pub enum BodyInspection {
-	/// The complete body fit within the configured limit.
-	Complete(Bytes),
-	/// The body exceeded the limit. Contains the first `limit` bytes.
-	Partial(Bytes),
-}
-
 pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
-	inspect_body_with_limit(req.body_mut(), lim).await
+	req.body_mut().inspect(lim).await
 }
 
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
-	inspect_body_with_limit(resp.body_mut(), lim).await
-}
-
-pub async fn inspect_body_with_limit(
-	body: &mut Body,
-	limit: usize,
-) -> anyhow::Result<BodyInspection> {
-	let mut bytes = peekbody::inspect_body(body, limit.saturating_add(1)).await?;
-	if bytes.len() > limit {
-		bytes.truncate(limit);
-		Ok(BodyInspection::Partial(bytes))
-	} else {
-		Ok(BodyInspection::Complete(bytes))
-	}
+	resp.body_mut().inspect(lim).await
 }
 
 #[derive(Debug, Default)]
@@ -845,54 +835,23 @@ impl PolicyResponse {
 
 pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
 	if let Some(rh) = additional_headers {
+		// HeaderMap::into_iter reports the name only for the first value in a repeated field.
+		let mut previous_name = None;
 		for (k, v) in rh.into_iter() {
-			let Some(k) = k else { continue };
-			dest.insert(k, v);
+			if let Some(k) = k {
+				previous_name = Some(k.clone());
+				// Most response mutations replace an existing header. Set-Cookie is not list-valued,
+				// so each policy and upstream cookie must remain a separate appended field.
+				if k == header::SET_COOKIE {
+					dest.append(k, v);
+				} else {
+					dest.insert(k, v);
+				}
+			// Preserve subsequent Set-Cookie values whose repeated field name was omitted above.
+			} else if previous_name.as_ref() == Some(&header::SET_COOKIE) {
+				dest.append(header::SET_COOKIE, v);
+			}
 		}
-	}
-}
-
-pin_project_lite::pin_project! {
-	/// DropBody is simply a Body wrapper that holds onto another item such that it is dropped when the body
-	/// is complete.
-	#[derive(Debug)]
-	pub struct DropBody<B, D> {
-		#[pin]
-		body: B,
-		dropper: D,
-	}
-}
-
-impl<B, D> DropBody<B, D>
-where
-	D: Send + 'static,
-	B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<BoxError>,
-{
-	#[allow(clippy::new_ret_no_self)]
-	pub fn new(body: B, dropper: D) -> Body {
-		Body::new(Self { body, dropper })
-	}
-}
-
-impl<B: http_body::Body + Unpin, D> http_body::Body for DropBody<B, D> {
-	type Data = B::Data;
-	type Error = B::Error;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let this = self.project();
-		this.body.poll_frame(cx)
-	}
-
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
 	}
 }
 
@@ -979,6 +938,26 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn merge_headers_preserves_set_cookies() {
+		let mut dest = HeaderMap::new();
+		dest.append(header::SET_COOKIE, "upstream=1".parse().unwrap());
+		let mut additional = HeaderMap::new();
+		additional.append(header::SET_COOKIE, "oidc=1".parse().unwrap());
+		additional.append(header::SET_COOKIE, "transaction=1".parse().unwrap());
+		additional.insert(header::LOCATION, "/after-login".parse().unwrap());
+
+		merge_in_headers(Some(additional), &mut dest);
+
+		let cookies: Vec<_> = dest
+			.get_all(header::SET_COOKIE)
+			.iter()
+			.map(|value| value.to_str().unwrap())
+			.collect();
+		assert_eq!(cookies, ["upstream=1", "oidc=1", "transaction=1"]);
+		assert_eq!(dest.get(header::LOCATION).unwrap(), "/after-login");
+	}
+
+	#[test]
 	fn test_modify_query_parameters_for_relative_uri() {
 		let mut uri = "/resource?keep=1&set=old&set=older&remove=gone"
 			.parse()
@@ -1026,6 +1005,19 @@ mod tests {
 		assert_eq!(req.headers().get("x-test").unwrap(), "value");
 		let body = read_body_with_limit(req.into_body(), 100).await.unwrap();
 		assert_eq!(body, "body");
+	}
+
+	#[tokio::test]
+	async fn replace_body_bytes_preserves_buffer_limit() {
+		let mut req = ::http::Request::new(Body::empty());
+		req.extensions_mut().insert(BufferLimit::new(4));
+		req
+			.body_mut()
+			.replace_bytes(Bytes::from_static(b"too large"));
+		assert!(matches!(
+			inspect_body(&mut req).await.unwrap(),
+			BodyInspection::Partial(_)
+		));
 	}
 
 	#[test]

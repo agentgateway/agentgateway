@@ -16,10 +16,11 @@ export function addBaseCostSource(config: GatewayConfig, file: string) {
 			...existing.filter(source => source.file !== file)
 		] as never;
 	}
+	return config;
 }
 
 export async function refreshBaseCostsAndConfigure(updateConfig: {
-	mutateAsync: (updater: (config: GatewayConfig) => GatewayConfig | void) => Promise<unknown>;
+	mutateAsync: (updater: (config: GatewayConfig) => GatewayConfig | undefined) => Promise<unknown>;
 }) {
 	const refreshed = await refreshBaseCosts();
 	if (refreshed.file) {

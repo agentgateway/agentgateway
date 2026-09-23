@@ -13,7 +13,6 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
-	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -43,7 +42,7 @@ type Publisher struct {
 func NewPublisher(client kube.Client) *Publisher {
 	eventBroadcaster := record.NewBroadcaster()
 	eventRecorder := eventBroadcaster.NewRecorder(
-		schemes.DefaultScheme(),
+		kube.IstioScheme,
 		corev1.EventSource{Component: wellknown.DefaultAgwControllerName},
 	)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{

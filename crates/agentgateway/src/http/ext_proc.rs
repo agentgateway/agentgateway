@@ -42,6 +42,24 @@ const TRACE_POLICY_KIND: &str = "ext_proc";
 const INFERENCE_DESTINATION_HEADER: HeaderName =
 	HeaderName::from_static("x-gateway-destination-endpoint");
 
+struct ResponseLoopContext<'a> {
+	response: Option<&'a mut http::Response>,
+	body_tx: &'a mut Sender<Result<Frame<Bytes>, Infallible>>,
+	fsm: &'a mut ResponseFlowFsm,
+	send_headers: bool,
+	ignore_mode_override: bool,
+	trailers: &'a Mutex<Option<http::HeaderMap>>,
+}
+
+struct RequestLoopContext<'a> {
+	request: Option<&'a mut http::Request>,
+	body_tx: &'a mut Sender<Result<Frame<Bytes>, Infallible>>,
+	fsm: &'a mut RequestFlowFsm,
+	send_headers: bool,
+	ignore_mode_override: bool,
+	trailers: &'a Mutex<Option<http::HeaderMap>>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	#[error("failed to send request")]
@@ -385,6 +403,8 @@ struct ExtProcInstance {
 	span_target: Arc<SimpleBackendReference>,
 	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
 	tx_req: Option<Sender<ProcessingRequest>>,
+	// Completes on the transport's first poll, or errors if setup drops the stream first.
+	request_stream_polled: Option<tokio::sync::oneshot::Receiver<()>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
@@ -420,6 +440,7 @@ impl ExtProcInstance {
 					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
 			),
 			tx_req: None,
+			request_stream_polled: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
 			metadata_context,
@@ -442,9 +463,19 @@ impl ExtProcInstance {
 		let failure_mode = self.failure_mode;
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
-		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
+		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
-		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
+		// Enqueueing a ProcessingRequest does not mean we connected to the processor.
+		// Signal when the outbound path actually starts reading the gRPC request stream,
+		// so mutate_request can keep the original HTTP body untouched during setup.
+		let (tx_polled, rx_polled) = tokio::sync::oneshot::channel();
+		let mut tx_polled = Some(tx_polled);
+		let req_stream = futures::stream::poll_fn(move |cx| {
+			if let Some(tx) = tx_polled.take() {
+				let _ = tx.send(());
+			}
+			rx_req.poll_recv(cx)
+		});
 		dtrace::spawn(async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
@@ -517,6 +548,7 @@ impl ExtProcInstance {
 		});
 
 		self.tx_req = Some(tx_req);
+		self.request_stream_polled = Some(rx_polled);
 		self.rx_resp_for_request = Some(rx_resp_for_request);
 		self.rx_resp_for_response = Some(rx_resp_for_response);
 		Ok(())
@@ -560,6 +592,7 @@ impl ExtProcInstance {
 		first_message: &mut FirstExtProcMessage,
 		body_direction: BodyStreamDirection,
 		send_trailers: bool,
+		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 	) -> Result<bool, Error> {
 		let Some(pending) = BufferedBodyPhase::take_pending_send(buffered_body).await? else {
 			return Ok(false);
@@ -578,6 +611,7 @@ impl ExtProcInstance {
 					self.request_sender()?,
 					body_direction,
 					send_trailers,
+					trailer_slot.clone(),
 					first_message,
 					error_message,
 				)
@@ -600,6 +634,7 @@ impl ExtProcInstance {
 					end_stream,
 					trailers,
 					send_trailers,
+					trailer_slot,
 					first_message,
 				)
 				.await?;
@@ -618,13 +653,14 @@ impl ExtProcInstance {
 		end_stream: bool,
 		trailers: Option<::http::HeaderMap>,
 		send_trailers: bool,
+		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 		first_message: FirstExtProcMessage,
 	) -> Result<(), Error> {
 		let mut first_message = first_message;
 		tx.send(ProcessingRequest {
 			request: Some(body_direction.body_message(HttpBody {
 				body,
-				end_of_stream: end_stream,
+				end_of_stream: end_stream && !(send_trailers && trailers.is_some()),
 			})),
 			metadata_context: metadata_context.as_deref().cloned(),
 			attributes: first_message.take_attributes_or_default(),
@@ -638,6 +674,9 @@ impl ExtProcInstance {
 			return Ok(());
 		};
 		if send_trailers {
+			if let Some(trailer_slot) = trailer_slot {
+				*trailer_slot.lock().expect("trailers mutex poisoned") = Some(trailers.clone());
+			}
 			tx.send(ProcessingRequest {
 				request: Some(body_direction.trailers_message(HttpTrailers {
 					trailers: to_header_map(&trailers),
@@ -674,6 +713,7 @@ impl ExtProcInstance {
 		tx: Sender<ProcessingRequest>,
 		body_direction: BodyStreamDirection,
 		send_trailers: bool,
+		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 		first_message: FirstExtProcMessage,
 		missing_body_message: &'static str,
 	) {
@@ -683,6 +723,7 @@ impl ExtProcInstance {
 			tx,
 			body_direction,
 			send_trailers,
+			trailer_slot,
 			first_message,
 		));
 	}
@@ -704,70 +745,70 @@ impl ExtProcInstance {
 	async fn process_response_loop_message(
 		&mut self,
 		presp: ProcessingResponse,
-		resp: Option<&mut http::Response>,
-		tx_chunk: &mut Sender<Result<Frame<Bytes>, Infallible>>,
-		response_fsm: &mut ResponseFlowFsm,
-		send_response_headers: bool,
-		ignore_mode_override: bool,
+		context: ResponseLoopContext<'_>,
 	) -> Result<(bool, bool), Error> {
 		if matches!(presp.response, Some(Response::ResponseHeaders(_))) {
 			self
 				.mode_state
 				.mark_headers_processed(HeaderPhase::Response);
-			if ignore_mode_override && presp.mode_override.is_some() {
+			if context.ignore_mode_override && presp.mode_override.is_some() {
 				warn!("received mode_override after full-duplex response body streaming started; ignoring");
 			} else {
 				self.maybe_apply_mode_override(HeaderPhase::Response, &presp);
 			}
-			response_fsm.reconcile_potential_mode_override(self.mode_state.response_body_mode);
+			context
+				.fsm
+				.reconcile_potential_mode_override(self.mode_state.response_body_mode);
 		}
 		let (headers_done, eos) = handle_response_for_response_mutation(
-			response_fsm.send_body,
-			send_response_headers,
-			response_fsm
+			context.fsm.send_body,
+			context.send_headers,
+			context
+				.fsm
 				.body_path
-				.validates_content_length(send_response_headers),
-			resp,
-			tx_chunk,
+				.validates_content_length(context.send_headers),
+			context.response,
+			context.body_tx,
+			context.trailers,
 			presp,
 		)
 		.await?;
-		Ok((response_fsm.advance_after_response(headers_done), eos))
+		Ok((context.fsm.advance_after_response(headers_done), eos))
 	}
 
 	async fn process_request_loop_message(
 		&mut self,
 		presp: ProcessingResponse,
-		req: Option<&mut http::Request>,
-		tx_chunk: &mut Sender<Result<Frame<Bytes>, Infallible>>,
-		request_fsm: &mut RequestFlowFsm,
-		send_request_headers: bool,
-		ignore_mode_override: bool,
+		context: RequestLoopContext<'_>,
 	) -> Result<RequestLoopStep, Error> {
 		let body_no_mutation = request_body_response_has_no_mutation(&presp);
 		let streamed_body_mutation = request_response_has_streamed_body_mutation(&presp);
 		if matches!(presp.response, Some(Response::RequestHeaders(_))) {
 			self.mode_state.mark_headers_processed(HeaderPhase::Request);
-			if ignore_mode_override && presp.mode_override.is_some() {
+			if context.ignore_mode_override && presp.mode_override.is_some() {
 				warn!("received mode_override after full-duplex request body streaming started; ignoring");
 			} else {
 				self.maybe_apply_mode_override(HeaderPhase::Request, &presp);
 			}
-			request_fsm.reconcile_potential_mode_override(self.mode_state.request_body_mode);
+			context
+				.fsm
+				.reconcile_potential_mode_override(self.mode_state.request_body_mode);
 		}
 		let (headers_done, eos) = handle_response_for_request_mutation(
-			request_fsm.expect_body_response,
-			send_request_headers,
-			request_fsm
+			context.fsm.expect_body_response,
+			context.send_headers,
+			context
+				.fsm
 				.body_path
-				.validates_content_length(send_request_headers),
-			req,
-			tx_chunk,
+				.validates_content_length(context.send_headers),
+			context.request,
+			context.body_tx,
+			context.trailers,
 			presp,
 		)
 		.await?;
 		Ok(RequestLoopStep {
-			transitioned: request_fsm.advance_after_response(headers_done),
+			transitioned: context.fsm.advance_after_response(headers_done),
 			eos,
 			body_no_mutation,
 			streamed_body_mutation,
@@ -777,6 +818,7 @@ impl ExtProcInstance {
 	async fn forward_response_stream_continuation(
 		mut rx: Receiver<ProcessingResponse>,
 		mut tx_chunk: Sender<Result<Frame<Bytes>, Infallible>>,
+		response_trailers: Arc<Mutex<Option<http::HeaderMap>>>,
 		send_response_body: bool,
 		send_response_headers: bool,
 	) {
@@ -791,6 +833,7 @@ impl ExtProcInstance {
 				false,
 				None,
 				&mut tx_chunk,
+				&response_trailers,
 				presp,
 			)
 			.await;
@@ -849,6 +892,20 @@ impl ExtProcInstance {
 
 	pub async fn mutate_request(
 		&mut self,
+		req: http::Request,
+	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
+		let rebuffer = req.body().needs_inspection();
+		let (mut req, response) = self.mutate_request_inner(req).await?;
+		if rebuffer && self.mode_state.request_body_mode != BodySendMode::None {
+			let _ = http::inspect_body(&mut req)
+				.await
+				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+		}
+		Ok((req, response))
+	}
+
+	async fn mutate_request_inner(
+		&mut self,
 		mut req: http::Request,
 	) -> Result<(http::Request, Option<PolicyResponse>), Error> {
 		let headers = req_to_header_map(&req);
@@ -863,6 +920,7 @@ impl ExtProcInstance {
 		let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
 
 		let failure_mode = self.failure_mode;
+		let request_trailers = Arc::new(Mutex::new(None));
 		let end_of_stream = req.body().is_end_stream();
 		let had_body = !end_of_stream;
 		let send_request_headers = self.mode_state.request_header_mode == HeaderSendMode::Send;
@@ -925,6 +983,20 @@ impl ExtProcInstance {
 			return Ok((req, None));
 		}
 
+		// Wait before handing the original body to a producer that can consume it.
+		// A setup failure drops the unpolled stream (and its one-shot sender), letting
+		// FailOpen return the intact request. Do not wait for client.process() or an EPP
+		// response here: a full-duplex processor may need the body before responding.
+		if let Some(polled) = self.request_stream_polled.take()
+			&& polled.await.is_err()
+		{
+			if failure_mode == FailureMode::FailOpen {
+				self.skipped = true;
+				return Ok((req, None));
+			}
+			return Err(Error::RequestSend);
+		}
+
 		let tx = self.tx_req.clone();
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 		let mut rx_chunk = Some(rx_chunk);
@@ -949,6 +1021,7 @@ impl ExtProcInstance {
 				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Request,
 				send_request_trailers,
+				Some(request_trailers.clone()),
 				first_message,
 				"request body should be available before streaming starts",
 			);
@@ -989,6 +1062,7 @@ impl ExtProcInstance {
 					&mut first_message_when_headers_skipped,
 					BodyStreamDirection::Request,
 					send_request_trailers,
+					Some(request_trailers.clone()),
 				)
 				.await
 			{
@@ -1037,11 +1111,14 @@ impl ExtProcInstance {
 			let step = self
 				.process_request_loop_message(
 					presp,
-					Some(&mut req),
-					&mut tx_chunk,
-					&mut request_fsm,
-					send_request_headers,
-					request_body_streamed_before_header_response,
+					RequestLoopContext {
+						request: Some(&mut req),
+						body_tx: &mut tx_chunk,
+						fsm: &mut request_fsm,
+						send_headers: send_request_headers,
+						ignore_mode_override: request_body_streamed_before_header_response,
+						trailers: &request_trailers,
+					},
 				)
 				.await?;
 			BufferedBodyPhase::update_deferred_mode(
@@ -1080,6 +1157,7 @@ impl ExtProcInstance {
 								&mut first_message_when_headers_skipped,
 								BodyStreamDirection::Request,
 								send_request_trailers,
+								Some(request_trailers.clone()),
 							)
 							.await
 						{
@@ -1117,8 +1195,7 @@ impl ExtProcInstance {
 						if let Some(original_body) =
 							BufferedBodyPhase::take_deferred_body(&mut pending_buffered_body)
 						{
-							let (parts, _) = req.into_parts();
-							let req = http::Request::from_parts(parts, original_body);
+							req.body_mut().restore_content(original_body);
 							debug_assert_preserved_request_body(
 								&req,
 								had_body,
@@ -1155,6 +1232,7 @@ impl ExtProcInstance {
 						tx.clone().ok_or(Error::RequestSend)?,
 						BodyStreamDirection::Request,
 						send_request_trailers,
+						Some(request_trailers.clone()),
 						first_message,
 						"request body should be available before streaming continuation starts",
 					);
@@ -1165,6 +1243,7 @@ impl ExtProcInstance {
 					request_fsm.enter_streaming_continuation();
 					trace!("spawn body!");
 					let immediate_response = self.request_body_immediate_response.clone();
+					let request_trailers = request_trailers.clone();
 					// Move remaining body response handling to an async task so we can return
 					// the request to the caller while body chunks continue to flow.
 					tokio::task::spawn(async move {
@@ -1184,6 +1263,7 @@ impl ExtProcInstance {
 								false,
 								None,
 								&mut tx_chunk,
+								&request_trailers,
 								presp,
 							)
 							.await;
@@ -1221,6 +1301,7 @@ impl ExtProcInstance {
 		tx: Sender<ProcessingRequest>,
 		body_direction: BodyStreamDirection,
 		send_trailers: bool,
+		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 		first_message: FirstExtProcMessage,
 	) {
 		if let Err(error) = Self::send_body_stream(
@@ -1229,6 +1310,7 @@ impl ExtProcInstance {
 			tx,
 			body_direction,
 			send_trailers,
+			trailer_slot,
 			first_message,
 			"failed to read body stream",
 		)
@@ -1241,12 +1323,14 @@ impl ExtProcInstance {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn send_body_stream(
 		metadata_context: Option<Arc<Metadata>>,
 		mut body: http::Body,
 		tx: Sender<ProcessingRequest>,
 		body_direction: BodyStreamDirection,
 		send_trailers: bool,
+		trailer_slot: Option<Arc<Mutex<Option<http::HeaderMap>>>>,
 		first_message: FirstExtProcMessage,
 		body_error_message: &'static str,
 	) -> Result<(), Error> {
@@ -1274,6 +1358,9 @@ impl ExtProcInstance {
 					continue;
 				}
 				let frame = frame.into_trailers().expect("already checked");
+				if let Some(trailer_slot) = &trailer_slot {
+					*trailer_slot.lock().expect("trailers mutex poisoned") = Some(frame.clone());
+				}
 				sent_end_stream = true;
 				body_direction.trailers_message(HttpTrailers {
 					trailers: to_header_map(&frame),
@@ -1356,9 +1443,28 @@ impl ExtProcInstance {
 		request: Option<&RequestSnapshot>,
 		resolved_destination_metadata: Option<SocketAddr>,
 	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
+		let rebuffer = response.body().needs_inspection();
+		let (mut response, policy_response) = self
+			.mutate_response_inner(response, request, resolved_destination_metadata)
+			.await?;
+		if rebuffer && self.mode_state.response_body_mode != BodySendMode::None {
+			let _ = http::inspect_response_body(&mut response)
+				.await
+				.map_err(|error| Error::BodyBuffer(error.to_string()))?;
+		}
+		Ok((response, policy_response))
+	}
+
+	async fn mutate_response_inner(
+		&mut self,
+		response: http::Response,
+		request: Option<&RequestSnapshot>,
+		resolved_destination_metadata: Option<SocketAddr>,
+	) -> Result<(http::Response, Option<PolicyResponse>), Error> {
 		if self.skipped {
 			return Ok((response, None));
 		}
+		let response_trailers = Arc::new(Mutex::new(None));
 		let headers = resp_to_header_map(&response);
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
 
@@ -1434,12 +1540,14 @@ impl ExtProcInstance {
 		}
 
 		let tx = self.tx_req.clone();
-		let mut pending_response_body = Some(body);
+		let mut managed_body = body;
+		let mut pending_response_body = Some(managed_body.take_content());
 		let mut pending_response_buffer = None;
 		// Now we need to build the new body. This is going to be streamed in from the ext_proc server.
 		let (mut tx_chunk, rx_chunk) = tokio::sync::mpsc::channel(1);
 		let body = http_body_util::StreamBody::new(ReceiverStream::new(rx_chunk));
-		let mut resp = http::Response::from_parts(parts, http::Body::new(body));
+		managed_body.replace_content(agent_http::RawBody::new(body).into());
+		let mut resp = http::Response::from_parts(parts, managed_body);
 
 		// FULL_DUPLEX_STREAMED sends response body chunks as they arrive. The ext_proc server may
 		// buffer the response headers and complete body before sending any response, so do not wait
@@ -1456,6 +1564,7 @@ impl ExtProcInstance {
 				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Response,
 				send_response_trailers,
+				Some(response_trailers.clone()),
 				first_message,
 				"response body should be available before streaming starts",
 			);
@@ -1475,6 +1584,7 @@ impl ExtProcInstance {
 					&mut first_message,
 					BodyStreamDirection::Response,
 					send_response_trailers,
+					Some(response_trailers.clone()),
 				)
 				.await?;
 			if !sent_buffered {
@@ -1487,6 +1597,7 @@ impl ExtProcInstance {
 					tx.clone().ok_or(Error::RequestSend)?,
 					BodyStreamDirection::Response,
 					send_response_trailers,
+					Some(response_trailers.clone()),
 					first_message,
 					"response body should be available before streaming starts",
 				);
@@ -1508,11 +1619,14 @@ impl ExtProcInstance {
 					let result = self
 						.process_response_loop_message(
 							presp,
-							Some(&mut resp),
-							&mut tx_chunk,
-							&mut response_fsm,
-							send_response_headers,
-							response_body_streamed_before_header_response,
+							ResponseLoopContext {
+								response: Some(&mut resp),
+								body_tx: &mut tx_chunk,
+								fsm: &mut response_fsm,
+								send_headers: send_response_headers,
+								ignore_mode_override: response_body_streamed_before_header_response,
+								trailers: &response_trailers,
+							},
 						)
 						.await?;
 					BufferedBodyPhase::update_deferred_mode(
@@ -1550,6 +1664,7 @@ impl ExtProcInstance {
 								&mut first_message,
 								BodyStreamDirection::Response,
 								send_response_trailers,
+								Some(response_trailers.clone()),
 							)
 							.await?
 						{
@@ -1566,12 +1681,12 @@ impl ExtProcInstance {
 						if let Some(original_body) =
 							BufferedBodyPhase::take_deferred_body(&mut pending_response_buffer)
 						{
-							let (parts, _) = resp.into_parts();
-							return Ok((http::Response::from_parts(parts, original_body), None));
+							resp.body_mut().restore_content(original_body);
+							return Ok((resp, None));
 						}
 						if let Some(original_body) = pending_response_body.take() {
-							let (parts, _) = resp.into_parts();
-							return Ok((http::Response::from_parts(parts, original_body), None));
+							resp.body_mut().restore_content(original_body);
+							return Ok((resp, None));
 						}
 					},
 					_ => {},
@@ -1598,6 +1713,7 @@ impl ExtProcInstance {
 							tx.clone().ok_or(Error::RequestSend)?,
 							BodyStreamDirection::Response,
 							send_response_trailers,
+							Some(response_trailers.clone()),
 							first_message,
 							"response body should be available before streaming continuation starts",
 						);
@@ -1607,6 +1723,23 @@ impl ExtProcInstance {
 					tokio::task::spawn(Self::forward_response_stream_continuation(
 						rx,
 						tx_chunk,
+						response_trailers.clone(),
+						true,
+						send_response_headers,
+					));
+				} else if !eos
+					&& response_fsm.send_body
+					&& response_fsm.body_path == BodyPath::Buffered
+					&& response_trailers
+						.lock()
+						.expect("response trailers mutex poisoned")
+						.is_some()
+				{
+					response_fsm.enter_streaming_continuation();
+					tokio::task::spawn(Self::forward_response_stream_continuation(
+						rx,
+						tx_chunk,
+						response_trailers.clone(),
 						true,
 						send_response_headers,
 					));

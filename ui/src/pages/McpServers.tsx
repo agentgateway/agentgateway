@@ -41,7 +41,7 @@ import type {
 	McpTargetKind
 } from '@/types';
 
-const targetKinds: McpTargetKind[] = ['mcp', 'sse', 'stdio'];
+const targetKinds: McpTargetKind[] = ['mcp', 'sse', 'stdio', 'openapi'];
 
 type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port'>> & {
 	gateways?: McpConfig['gateways'] | null;
@@ -178,8 +178,7 @@ export function McpServersPage() {
 											<td>
 												{warnings.length ? (
 													<span className="badge warn">
-														{warnings.length}
-														{tr('copy.warnings')}
+														{tr('copy.valueWarningValue', { count: warnings.length })}
 													</span>
 												) : (
 													<span className="badge ok">{tr('copy.ready')}</span>
@@ -549,17 +548,21 @@ function McpServerEditor(props: {
 	onSave: (target: McpTarget, previousName?: string) => void;
 }) {
 	const [name, setName] = useState(props.initial.name);
-	const [kind, setKind] = useState<McpTargetKind>(() => {
-		const kind = targetKind(props.initial);
-		return kind === 'openapi' ? 'mcp' : kind;
-	});
+	const [kind, setKind] = useState<McpTargetKind>(() => targetKind(props.initial));
 	const network = networkTarget(props.initial);
 	const stdio = 'stdio' in props.initial ? props.initial.stdio : undefined;
+	const initialSchema = 'openapi' in props.initial ? props.initial.openapi.schema : undefined;
 	const [url, setUrl] = useState(() => networkUrl(network, kind));
 	const [cmd, setCmd] = useState(stdio?.cmd ?? '');
 	const [args, setArgs] = useState((stdio?.args ?? []).join(' '));
 	const [envText, setEnvText] = useState(toYamlMappingText(stdio?.env));
 	const [clearEnv, setClearEnv] = useState(Boolean(stdio?.clear_env));
+	const [schemaMode, setSchemaMode] = useState<SchemaSourceMode>(() =>
+		schemaSourceMode(initialSchema)
+	);
+	const [schemaValue, setSchemaValue] = useState(() =>
+		schemaSourceValue(initialSchema, schemaMode)
+	);
 	const [error, setError] = useState<string | null>(null);
 	const draft = JSON.stringify({
 		name,
@@ -568,7 +571,9 @@ function McpServerEditor(props: {
 		cmd,
 		args,
 		envText,
-		clearEnv
+		clearEnv,
+		schemaMode,
+		schemaValue
 	});
 	const [initialDraft] = useState(() => draft);
 
@@ -597,7 +602,10 @@ function McpServerEditor(props: {
 		const target = {
 			host: url.trim() || null
 		};
-		return kind === 'sse' ? { ...base, sse: target } : { ...base, mcp: target };
+		if (kind === 'sse') return { ...base, sse: target };
+		if (kind === 'openapi')
+			return { ...base, openapi: { ...target, schema: schemaFromSource(schemaValue, schemaMode) } };
+		return { ...base, mcp: target };
 	}
 
 	function validTargetPreview() {
@@ -628,7 +636,11 @@ function McpServerEditor(props: {
 					diffTitle={tr('copy.mcpServerConfigDiff')}
 					saveLabel={tr('copy.saveServer')}
 					saving={props.saving}
-					saveDisabled={!name.trim() || (kind === 'stdio' && !cmd.trim())}
+					saveDisabled={
+						!name.trim() ||
+						(kind === 'stdio' && !cmd.trim()) ||
+						(kind === 'openapi' && !schemaValue.trim())
+					}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={() => Boolean(validTargetPreview())}
@@ -729,28 +741,94 @@ function McpServerEditor(props: {
 					</label>
 				</>
 			) : (
-				<Field
-					label={tr('copy.url')}
-					tooltip={
-						kind === 'sse'
-							? props.help.field<McpTarget>(
+				<>
+					<Field
+						label={tr('copy.url')}
+						tooltip={
+							kind === 'sse'
+								? props.help.field<McpTarget>(
+										'LocalMcpTarget1',
+										'sse.host',
+										'URL of the MCP server endpoint.'
+									)
+								: kind === 'openapi'
+									? props.help.field<McpTarget>(
+											'LocalMcpTarget1',
+											'openapi.host',
+											'URL of the MCP server endpoint.'
+										)
+									: props.help.field<McpTarget>(
+											'LocalMcpTarget1',
+											'mcp.host',
+											'URL of the MCP server endpoint.'
+										)
+						}
+					>
+						<input
+							value={url}
+							onChange={event => setUrl(event.target.value)}
+							placeholder={
+								kind === 'sse' ? 'http://localhost:3001/sse' : 'http://localhost:3001/mcp'
+							}
+						/>
+					</Field>
+					{kind === 'openapi' ? (
+						<>
+							<FieldGroup
+								label={tr('copy.openApiSchemaSource')}
+								tooltip={props.help.field<McpTarget>(
 									'LocalMcpTarget1',
-									'sse.host',
-									'URL of the MCP server endpoint.'
-								)
-							: props.help.field<McpTarget>(
-									'LocalMcpTarget1',
-									'mcp.host',
-									'URL of the MCP server endpoint.'
-								)
-					}
-				>
-					<input
-						value={url}
-						onChange={event => setUrl(event.target.value)}
-						placeholder={kind === 'sse' ? 'http://localhost:3001/sse' : 'http://localhost:3001/mcp'}
-					/>
-				</Field>
+									'openapi.schema',
+									'Where to load the OpenAPI schema document from.'
+								)}
+							>
+								<SegmentedControl
+									ariaLabel={tr('copy.openApiSchemaSource')}
+									value={schemaMode}
+									options={[
+										{ value: 'url', label: tr('copy.url') },
+										{ value: 'file', label: tr('copy.file') },
+										{ value: 'inline', label: tr('copy.inline') }
+									]}
+									onChange={setSchemaMode}
+								/>
+							</FieldGroup>
+							{schemaMode === 'inline' ? (
+								<FieldGroup
+									label={tr('copy.openApiSchema')}
+									tooltip={props.help.field<McpTarget>(
+										'LocalMcpTarget1',
+										'openapi.schema',
+										'Inline OpenAPI schema document.'
+									)}
+								>
+									<MiniMonacoEditor language="yaml" value={schemaValue} onChange={setSchemaValue} />
+								</FieldGroup>
+							) : (
+								<Field
+									label={tr('copy.openApiSchema')}
+									tooltip={props.help.field<McpTarget>(
+										'LocalMcpTarget1',
+										'openapi.schema',
+										schemaMode === 'file'
+											? 'Path to the OpenAPI schema document on disk.'
+											: 'URL to fetch the OpenAPI schema document from.'
+									)}
+								>
+									<input
+										value={schemaValue}
+										onChange={event => setSchemaValue(event.target.value)}
+										placeholder={
+											schemaMode === 'file'
+												? '/etc/agentgateway/openapi.yaml'
+												: 'https://example.com/openapi.json'
+										}
+									/>
+								</Field>
+							)}
+						</>
+					) : null}
+				</>
 			)}
 			{error ? (
 				<StatusBanner state="bad" title={tr('copy.invalidServer')}>
@@ -801,12 +879,17 @@ function shellDisplayArg(value: string) {
 
 function targetWarnings(target: McpTarget) {
 	const warnings: string[] = [];
-	if (!target.name.trim()) warnings.push('Server name is required.');
-	if ('stdio' in target && !target.stdio.cmd.trim()) warnings.push('Command is required.');
+	if (!target.name.trim()) warnings.push(tr('copy.serverNameRequired'));
+	if ('stdio' in target && !target.stdio.cmd.trim()) warnings.push(tr('copy.commandRequired'));
 	if (!('stdio' in target)) {
 		const network = networkTarget(target);
-		if (!network?.host) warnings.push('URL should be set.');
+		if (!network?.host) warnings.push(tr('copy.urlRequired'));
 	}
+	if (
+		'openapi' in target &&
+		!schemaSourceValue(target.openapi.schema, schemaSourceMode(target.openapi.schema)).trim()
+	)
+		warnings.push(tr('copy.openApiSchemaRequired'));
 	return warnings;
 }
 
@@ -823,9 +906,9 @@ function parseEnvYaml(value: string) {
 }
 
 function transportLabel(kind: McpTargetKind) {
-	if (kind === 'mcp') return 'Streamable HTTP';
-	if (kind === 'sse') return 'Legacy SSE';
-	if (kind === 'stdio') return 'Command Line';
+	if (kind === 'mcp') return tr('copy.streamableHttp');
+	if (kind === 'sse') return tr('copy.legacySse');
+	if (kind === 'stdio') return tr('copy.commandLine');
 	return 'OpenAPI';
 }
 
@@ -835,6 +918,31 @@ function networkUrl(network: ReturnType<typeof networkTarget>, kind: McpTargetKi
 		return network.host;
 	const host = network.host ?? 'localhost';
 	const port = network.port ? `:${network.port}` : '';
-	const path = network.path ?? (kind === 'sse' ? '/sse' : '/mcp');
+	const path = network.path ?? (kind === 'openapi' ? '' : kind === 'sse' ? '/sse' : '/mcp');
 	return `http://${host}${port}${path}`;
+}
+
+type SchemaSourceMode = 'file' | 'url' | 'inline';
+
+function schemaSourceMode(value: unknown): SchemaSourceMode {
+	if (value && typeof value === 'object' && 'file' in value) return 'file';
+	if (value && typeof value === 'object' && 'url' in value) return 'url';
+	if (typeof value === 'string') return 'inline';
+	return 'url';
+}
+
+function schemaSourceValue(value: unknown, mode: SchemaSourceMode) {
+	if (mode === 'file' && value && typeof value === 'object' && 'file' in value)
+		return typeof value.file === 'string' ? value.file : '';
+	if (mode === 'url' && value && typeof value === 'object' && 'url' in value)
+		return typeof value.url === 'string' ? value.url : '';
+	if (mode === 'inline' && typeof value === 'string') return value;
+	return '';
+}
+
+function schemaFromSource(value: string, mode: SchemaSourceMode): unknown {
+	const trimmed = value.trim();
+	if (mode === 'file') return { file: trimmed };
+	if (mode === 'url') return { url: trimmed };
+	return value;
 }

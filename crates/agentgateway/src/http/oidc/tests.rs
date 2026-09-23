@@ -105,6 +105,8 @@ fn test_policy() -> OidcPolicy {
 	};
 
 	OidcPolicy {
+		login: None,
+		logout: None,
 		policy_id: PolicyId::policy("policy"),
 		provider: Arc::new(Provider {
 			issuer: TEST_ISSUER.into(),
@@ -231,6 +233,8 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
+		login: None,
+		logout: None,
 	}
 }
 
@@ -311,6 +315,72 @@ fn explicit_provider_config_rejects_relative_endpoints_during_deserialization() 
 	assert!(err.to_string().contains("must be an absolute http(s) URL"));
 }
 
+fn browser_session(raw_id_token: String) -> BrowserSession {
+	BrowserSession {
+		policy_id: PolicyId::policy("policy"),
+		raw_id_token: SecretString::new(raw_id_token.into()),
+		expires_at_unix: Some(now_unix() + 300),
+	}
+}
+
+fn group_claim_id_token(groups: usize) -> String {
+	let groups = (0..groups)
+		.map(|i| format!("\"/acme/engineering/platform-team-{i:03}\""))
+		.collect::<Vec<_>>()
+		.join(",");
+	format!("aGVhZGVy.{{\"sub\":\"user-1\",\"groups\":[{groups}]}}.c2lnbmF0dXJl")
+}
+
+fn incompressible_id_token(bytes: usize) -> String {
+	let mut random = vec![0u8; bytes];
+	crate::crypto::rand::fill(&mut random).expect("rng");
+	base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random)
+}
+
+#[test]
+fn browser_session_compresses_group_heavy_id_token() {
+	let session = test_policy().session;
+	let id_token = group_claim_id_token(120);
+	assert!(id_token.len() > 3800);
+
+	let encoded = session
+		.encode_browser_session(&browser_session(id_token.clone()))
+		.expect("encode group-heavy session");
+	assert!(encoded.len() <= 3800, "encoded {} bytes", encoded.len());
+
+	let decoded = session
+		.decode_browser_session(&encoded)
+		.expect("decode group-heavy session");
+	assert_eq!(decoded.raw_id_token.expose_secret(), id_token);
+}
+
+#[test]
+fn browser_session_decodes_payload_written_before_compression() {
+	let session = test_policy().session;
+	let expected = browser_session(signed_id_token(TEST_NONCE));
+	let legacy = session
+		.encoder
+		.encrypt(&serde_json::to_string(&expected).expect("session json"))
+		.expect("encrypt legacy payload");
+
+	let decoded = session
+		.decode_browser_session(&legacy)
+		.expect("decode legacy payload");
+	assert_eq!(
+		decoded.raw_id_token.expose_secret(),
+		expected.raw_id_token.expose_secret()
+	);
+}
+
+#[test]
+fn browser_session_rejects_oversized_incompressible_id_token() {
+	let session = test_policy().session;
+	let err = session
+		.encode_browser_session(&browser_session(incompressible_id_token(4096)))
+		.expect_err("incompressible token should not fit");
+	assert!(matches!(err, Error::SessionCookieTooLarge));
+}
+
 #[tokio::test]
 async fn apply_derives_claims_from_stored_id_token() {
 	let policy = test_policy();
@@ -337,6 +407,13 @@ async fn apply_derives_claims_from_stored_id_token() {
 		.await
 		.expect("browser policy apply");
 	assert!(response.direct_response.is_none());
+	assert!(
+		!req
+			.extensions()
+			.get::<super::AuthenticatedSession>()
+			.unwrap()
+			.can_logout
+	);
 	let claims = req
 		.extensions()
 		.get::<jwt::Claims>()
@@ -415,6 +492,28 @@ async fn apply_redirects_unauthenticated_requests_to_login() {
 			.expect("set-cookie utf8");
 		assert_eq!(cookie.contains("Secure"), expect_secure_cookie, "{name}");
 	}
+}
+
+#[tokio::test]
+async fn apply_returns_unauthorized_for_fetch_requests() {
+	let policy = test_policy();
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+
+	let err = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect_err("fetch request should not redirect")
+		.downcast();
+	assert!(matches!(
+		&err,
+		ProxyError::OidcFailure(Error::AuthenticationRequired)
+	));
+	assert_eq!(
+		err.into_response_with_grpc(false).status(),
+		::http::StatusCode::UNAUTHORIZED
+	);
 }
 
 #[tokio::test]
@@ -919,6 +1018,8 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				login: None,
+				logout: None,
 			},
 			provider_endpoint(format!("{}/authorize", mock.uri())),
 			provider_endpoint(format!("{}/token", mock.uri())),
@@ -996,6 +1097,8 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		login: None,
+		logout: None,
 	};
 	let err = compile_local_policy(policy, translated_policy_id("discovery-relative-endpoints"))
 		.await
@@ -1005,8 +1108,49 @@ async fn discovery_rejects_relative_provider_endpoints() {
 }
 
 #[tokio::test]
-async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
+async fn local_oidc_config_rejects_invalid_configuration() {
 	let cases = [
+		(
+			"login redirect overlaps logout",
+			LocalOidcConfig {
+				login: Some(super::OidcLogin {
+					path: "/auth/start".into(),
+					redirect: Some("/auth/end?next=home".into()),
+				}),
+				logout: Some(super::OidcLogout {
+					path: "/auth/end".into(),
+					redirect: None,
+				}),
+				..explicit_local_oidc_config()
+			},
+			"login.redirect must differ",
+		),
+		(
+			"external login redirect",
+			LocalOidcConfig {
+				login: Some(super::OidcLogin {
+					path: "/auth/start".into(),
+					redirect: Some("//evil.example".into()),
+				}),
+				..explicit_local_oidc_config()
+			},
+			"login.redirect must be a safe local path",
+		),
+		(
+			"overlapping endpoints",
+			LocalOidcConfig {
+				login: Some(super::OidcLogin {
+					path: "/auth".into(),
+					redirect: None,
+				}),
+				logout: Some(super::OidcLogout {
+					path: "/auth".into(),
+					redirect: None,
+				}),
+				..explicit_local_oidc_config()
+			},
+			"logout.path must be a distinct local path",
+		),
 		(
 			"partial explicit",
 			LocalOidcConfig {
@@ -1020,6 +1164,8 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				login: None,
+				logout: None,
 			},
 			"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted",
 		),
@@ -1048,6 +1194,8 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				login: None,
+				logout: None,
 			},
 			"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly",
 		),
@@ -1058,5 +1206,163 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 			.await
 			.expect_err(name);
 		assert!(err.to_string().contains(expected_error_fragment), "{name}");
+	}
+}
+
+#[tokio::test]
+async fn browser_login_and_logout_flow() {
+	let mut policy = test_policy();
+	policy.login = Some(super::OidcLogin {
+		path: "/auth/start".into(),
+		redirect: Some("/sign-in".into()),
+	});
+	policy.logout = Some(super::OidcLogout {
+		path: "/auth/end".into(),
+		redirect: Some("/signed-out".into()),
+	});
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/ui/llm/models?tab=all",
+		None,
+	);
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.unwrap()
+		.direct_response
+		.unwrap();
+	assert_eq!(
+		response.headers()[header::LOCATION],
+		"/sign-in?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall"
+	);
+	assert!(!response.headers().contains_key(header::SET_COOKIE));
+
+	let mut req = request(Method::GET, "https://app.example.com/api/config", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.unwrap()
+		.direct_response
+		.unwrap();
+	assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(response.headers()[header::LOCATION], "/sign-in");
+
+	// A login page left behind the policy starts OAuth rather than redirecting to itself.
+	for path in ["/sign-in", "/sign-in?returnTo=%2Fapp"] {
+		let mut req = request(Method::GET, &format!("https://app.example.com{path}"), None);
+		let response = test_helpers::test_policy(&policy, &mut req)
+			.await
+			.unwrap()
+			.direct_response
+			.unwrap();
+		assert!(
+			response.headers()[header::LOCATION]
+				.to_str()
+				.unwrap()
+				.starts_with("https://issuer.example.com/authorize?")
+		);
+	}
+
+	for (target, expected) in [
+		("%2Fui%2Fllm%2Fmodels%3Ftab%3Dall", "/ui/llm/models?tab=all"),
+		("https%3A%2F%2Fevil.example", "/"),
+		("%2F%2Fevil.example", "/"),
+		("%2Fauth%2Fend", "/"),
+	] {
+		let mut req = request(
+			Method::GET,
+			&format!("https://app.example.com/auth/start?returnTo={target}"),
+			None,
+		);
+		let response = test_helpers::test_policy(&policy, &mut req)
+			.await
+			.unwrap()
+			.direct_response
+			.unwrap();
+		assert!(
+			response.headers()[header::LOCATION]
+				.to_str()
+				.unwrap()
+				.starts_with("https://issuer.example.com/authorize?")
+		);
+		let cookie = response.headers()[header::SET_COOKIE]
+			.to_str()
+			.unwrap()
+			.split(';')
+			.next()
+			.unwrap();
+		let (_, value) = cookie.split_once('=').unwrap();
+		let transaction = policy.session.decode_transaction(value).unwrap();
+		assert_eq!(transaction.original_uri, expected);
+	}
+
+	for (method, origin, expected) in [
+		(
+			Method::GET,
+			Some("https://app.example.com"),
+			StatusCode::METHOD_NOT_ALLOWED,
+		),
+		(Method::POST, None, StatusCode::FORBIDDEN),
+		(
+			Method::POST,
+			Some("https://evil.example"),
+			StatusCode::FORBIDDEN,
+		),
+		(
+			Method::POST,
+			Some("https://app.example.com"),
+			StatusCode::SEE_OTHER,
+		),
+	] {
+		let mut req = request(method, "https://app.example.com/auth/end", None);
+		if let Some(origin) = origin {
+			req
+				.headers_mut()
+				.insert(header::ORIGIN, origin.parse().unwrap());
+		}
+		let result = test_helpers::test_policy(&policy, &mut req).await;
+		let response = if expected == StatusCode::SEE_OTHER {
+			result.unwrap().direct_response.unwrap()
+		} else {
+			let error = result
+				.expect_err("logout rejection must be a proxy error")
+				.downcast();
+			if expected == StatusCode::FORBIDDEN {
+				assert!(matches!(&error, ProxyError::CsrfValidationFailed));
+			} else {
+				assert!(matches!(&error, ProxyError::MethodNotAllowed));
+			}
+			error.into_response_with_grpc(false)
+		};
+		assert_eq!(response.status(), expected);
+		if expected == StatusCode::SEE_OTHER {
+			assert_eq!(response.headers()[header::LOCATION], "/signed-out");
+			let cookie = response.headers()[header::SET_COOKIE].to_str().unwrap();
+			assert!(cookie.starts_with(&format!("{}=;", policy.session.cookie_name)));
+			assert!(cookie.contains("Max-Age=0"));
+			assert!(cookie.contains("HttpOnly"));
+		} else {
+			assert!(!response.headers().contains_key(header::SET_COOKIE));
+		}
+	}
+	// Logout works without a custom login flow, and its redirect has useful defaults.
+	policy.logout.as_mut().unwrap().redirect = None;
+	for (login_redirect, expected) in [(Some("/sign-in"), "/sign-in"), (None, "/")] {
+		policy.login = login_redirect.map(|redirect| super::OidcLogin {
+			path: "/auth/start".into(),
+			redirect: Some(redirect.into()),
+		});
+		let mut req = request(Method::POST, "https://app.example.com/auth/end", None);
+		req
+			.headers_mut()
+			.insert(header::ORIGIN, "https://app.example.com".parse().unwrap());
+		let response = test_helpers::test_policy(&policy, &mut req)
+			.await
+			.unwrap()
+			.direct_response
+			.unwrap();
+		assert_eq!(response.status(), StatusCode::SEE_OTHER);
+		assert_eq!(response.headers()[header::LOCATION], expected);
 	}
 }

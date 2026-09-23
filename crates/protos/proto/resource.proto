@@ -167,6 +167,9 @@ message Policy {
   // Controls whether more-specific child policy levels can be included when
   // computing the effective policy.
   Inheritance inheritance = 8;
+  // Kubernetes creationTimestamp as Unix seconds. Older policies take
+  // precedence when multiple policies of the same kind target the same level.
+  int64 creation_timestamp = 9;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
@@ -329,6 +332,7 @@ enum Protocol {
 message Timeout {
   google.protobuf.Duration request = 1;
   google.protobuf.Duration backend_request = 2;
+  google.protobuf.Duration response_idle = 3;
 }
 
 message Retry {
@@ -483,6 +487,9 @@ message Azure {
     AzureDeveloperImplicit developer_implicit = 2;
     AzureImplicit implicit = 3;
   }
+  // Scopes requested for the Azure access token. If unset, the scope is
+  // inferred from the backend hostname.
+  repeated string scopes = 4;
 }
 
 // Explicit AWS credentials configuration
@@ -518,6 +525,9 @@ message AwsAssumeRole {
   // request is rejected. At most one of session_name and session_name_expression
   // may be set.
   string session_name_expression = 4;
+  // Set when the role's trust policy requires sts:ExternalId. Must match
+  // [\w+=,.@:/-]{2,1224}.
+  string external_id = 5;
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
@@ -790,6 +800,11 @@ message FrontendPolicySpec {
   }
   // Logging configuration policy
   message Logging {
+    enum Preset {
+      PRESET_UNSPECIFIED = 0;
+      OTEL = 1;
+    }
+
     // CEL expression to filter out logs. If unset, all logs are considered.
     optional string filter = 1;
 
@@ -833,6 +848,9 @@ message FrontendPolicySpec {
 
     // Optional OTLP access log export configuration.
     OtlpAccessLog otlp_access_log = 3;
+
+    // Default stdout access log fields. Unspecified keeps the human-oriented legacy fields.
+    Preset preset = 4;
   }
 
   message Tracing {
@@ -855,9 +873,21 @@ message FrontendPolicySpec {
 
     // client_sampling is a CEL expression to determine the amount of client sampling.
     // Client sampling determines whether to initiate a new trace span if the incoming
-    // request already has a trace. This should evaluate to a float between 0.0-1.0,
-    // or a boolean (true/false). If unspecified, client sampling is 100% enabled.
+    // request already has a trace. This only applies when that trace is sampled (-01);
+    // use parent_not_sampled for requests whose trace is not. This should evaluate to a
+    // float between 0.0-1.0, or a boolean (true/false). If unspecified, client sampling
+    // is 100% enabled.
     optional string client_sampling = 5;
+
+    // parent_not_sampled is a CEL expression deciding whether to trace a request that arrives
+    // with a traceparent whose sampled flag is unset (-00), meaning the client asked for it not
+    // to be traced. When true the request is traced anyway, and -01 is sent upstream so
+    // downstream services trace it too. This should evaluate to a float between 0.0-1.0, or a
+    // boolean (true/false). If unspecified, the client's choice is honored.
+    //
+    // Only one of random_sampling, client_sampling and parent_not_sampled applies to any given
+    // request; the incoming traceparent decides which.
+    optional string parent_not_sampled = 11;
 
     // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
     optional string path = 6;
@@ -980,6 +1010,9 @@ message TrafficPolicySpec {
       uint64 tokens_per_fill = 2;
       google.protobuf.Duration fill_interval = 3;
       Type type = 4;
+      // CEL expression selecting the bucket, for example `jwt.sub`. Each distinct value gets its
+      // own bucket with the limits above; when unset, all requests share one bucket.
+      optional string key = 5;
     }
     // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
@@ -1335,6 +1368,9 @@ message BackendPolicySpec {
       // REJECT (default) rejects flagged content; AUDIT records the would-be
       // rejection without blocking.
       RejectAuditAction action = 4;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 5;
     }
 
     message BedrockGuardrails {
@@ -1352,6 +1388,9 @@ message BackendPolicySpec {
       // as decided by AWS at runtime); AUDIT invokes the guardrail and records
       // its assessment without blocking or masking.
       RejectAuditAction action = 6;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 7;
     }
 
     message GoogleModelArmor {
@@ -1369,6 +1408,9 @@ message BackendPolicySpec {
       // REJECT (default) rejects flagged content; AUDIT records the would-be
       // rejection without blocking.
       RejectAuditAction action = 6;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 7;
     }
 
     message AzureContentSafety {
@@ -1535,6 +1577,13 @@ message BackendPolicySpec {
     }
     BackendReference endpoint_picker = 1;
     FailureMode failure_mode = 2;
+  }
+  // Configures best-effort session affinity using an existing request attribute.
+  // Requests with the same value are consistently load balanced to the same healthy backend,
+  // but may be remapped when the available backends change.
+  message SessionAffinity {
+    // CEL expression evaluated against request state. It must return a string or bytes value.
+    string source = 1;
   }
   message Eviction {
     // Base time to evict (e.g. 3s, 10s). The actual ejection time equals
@@ -1772,6 +1821,7 @@ message BackendPolicySpec {
     // AI failover providers use this to preserve the authorization policy of
     // the concrete model from which the provider was lowered.
     TrafficPolicySpec.RBAC authorization = 19;
+    SessionAffinity session_affinity = 20;
   }
 }
 
@@ -1837,6 +1887,13 @@ message AIBackend {
     string region = 2;
     optional string guardrail_identifier = 3;
     optional string guardrail_version = 4;
+    BedrockEndpointPreference endpoint_preference = 5;
+  }
+  enum BedrockEndpointPreference {
+    BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED = 0;
+    BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY = 1;
+    BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY = 2;
+    BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED = 3;
   }
   message AzureOpenAI {
     optional string model = 1;
@@ -1967,6 +2024,14 @@ message MCPBackend {
     FAIL_OPEN = 1;
   }
   FailureMode failure_mode = 5;
+
+  // Interval at which SSE keep-alive comments are sent on long-lived MCP
+  // streams. Disabled when unset. Without it, a stream that legitimately
+  // carries no traffic (for example a FAIL_OPEN GET stream held open with
+  // no reachable upstream, or an idle session) is indistinguishable from a
+  // dead connection and is dropped by intermediaries such as load balancers
+  // and API gateways.
+  optional google.protobuf.Duration sse_keep_alive = 6;
 }
 
 message MCPTarget {
@@ -2212,6 +2277,9 @@ message ModelRoute {
         // referenced resource name when match.model is omitted.
         string model = 1;
         uint32 weight = 2;
+        // The control plane could not resolve this target. If selected, the
+        // request fails instead of resolving model against wildcard routes.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }
@@ -2225,6 +2293,9 @@ message ModelRoute {
         // not a ModelRoute resource key.
         string model = 1;
         optional string when = 2;
+        // The control plane could not resolve this target. If its condition
+        // matches, the request fails instead of falling through.
+        bool invalid = 3;
       }
       repeated Target targets = 1;
     }

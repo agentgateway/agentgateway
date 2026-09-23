@@ -1,0 +1,40 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/invalid-upstream-headers.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0].litellm_params.organization"
+    status: manual
+    message: LiteLLM organization must be a string and was not emitted
+  - sourcePath: "model_list[0].litellm_params.extra_headers.Bad Header"
+    status: manual
+    message: LiteLLM extra header name is not a valid HTTP header name and was not emitted
+  - sourcePath: "model_list[0].litellm_params.extra_headers.X-Count"
+    status: manual
+    message: LiteLLM extra header value must be a string and was not emitted
+  - sourcePath: "model_list[0].litellm_params.extra_headers.X-Trace"
+    status: manual
+    message: "Conflicting case-insensitive values for LiteLLM header \"x-trace\" were not emitted"
+  - sourcePath: "model_list[0].litellm_params.extra_headers.x-trace"
+    status: manual
+    message: "Conflicting case-insensitive values for LiteLLM header \"x-trace\" were not emitted"
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat

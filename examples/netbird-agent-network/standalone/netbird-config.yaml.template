@@ -1,0 +1,28 @@
+server:
+  listenAddress: ":80"
+  exposedAddress: "https://${NETBIRD_MANAGEMENT_DOMAIN}:443"
+  stunPorts:
+    - 3478
+  metricsPort: 9090
+  healthcheckAddress: ":9000"
+  logLevel: "info"
+  logFile: "console"
+  authSecret: "${NETBIRD_AUTH_SECRET}"
+  dataDir: "/var/lib/netbird"
+  disableAnonymousMetrics: true
+  disableGeoliteUpdate: true
+  auth:
+    issuer: "https://${NETBIRD_MANAGEMENT_DOMAIN}/oauth2"
+    signKeyRefreshEnabled: true
+    sessionCookieEncryptionKey: "${NETBIRD_SESSION_KEY}"
+    dashboardRedirectURIs:
+      - "https://${NETBIRD_MANAGEMENT_DOMAIN}/nb-auth"
+      - "https://${NETBIRD_MANAGEMENT_DOMAIN}/nb-silent-auth"
+    cliRedirectURIs:
+      - "http://localhost:53000/"
+  reverseProxy:
+    trustedHTTPProxies:
+      - "172.31.0.10/32"
+  store:
+    engine: "sqlite"
+    encryptionKey: "${NETBIRD_STORE_KEY}"

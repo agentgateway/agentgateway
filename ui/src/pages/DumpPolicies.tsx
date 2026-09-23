@@ -72,7 +72,7 @@ export function DumpPoliciesPage() {
 										<td>
 											<div className="resource-name-cell">
 												<strong>{policyName(policy)}</strong>
-												<small>{policy.name?.kind ?? 'Policy'}</small>
+												<small>{policy.name?.kind ?? tr('copy.policy')}</small>
 											</div>
 										</td>
 										<td>{policyTargetLabel(policy.target)}</td>
@@ -129,6 +129,7 @@ export function DumpPoliciesPage() {
 }
 
 function FieldLabel(props: { children: string }) {
+	// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	return <label className="field-label">{props.children}</label>;
 }
 
@@ -137,11 +138,12 @@ function policyName(policy: TargetedPolicy) {
 }
 
 function policyInheritanceLabel(value: unknown) {
-	return typeof value === 'string' && value ? value : 'default';
+	if (value === 'default') return tr('copy.default');
+	return typeof value === 'string' && value ? value : tr('copy.default');
 }
 
 function policyTypeLabel(policy: unknown) {
-	if (!policy || typeof policy !== 'object') return 'policy';
+	if (!policy || typeof policy !== 'object') return tr('copy.policy');
 	const record = policy as Record<string, unknown>;
 	const outer = firstPolicyKey(record);
 	const inner = outer ? record[outer] : null;
@@ -149,7 +151,7 @@ function policyTypeLabel(policy: unknown) {
 		const child = firstPolicyKey(inner as Record<string, unknown>);
 		return child ?? outer;
 	}
-	return outer ?? 'policy';
+	return outer ?? tr('copy.policy');
 }
 
 function firstPolicyKey(record: Record<string, unknown>) {
@@ -165,13 +167,13 @@ function isTargetedPolicy(value: unknown): value is TargetedPolicy {
 }
 
 function policyTargetLabel(target: unknown) {
-	if (!target || typeof target !== 'object') return 'unknown target';
+	if (!target || typeof target !== 'object') return tr('copy.unknownTarget');
 	const record = target as Record<string, unknown>;
 	if ('gateway' in record) return gatewayTargetLabel(record.gateway);
 	if ('route' in record) return routeTargetLabel(record.route);
 	if ('backend' in record) return backendTargetLabel(record.backend);
 	if ('listenerSet' in record) return listenerSetTargetLabel(record.listenerSet);
-	return 'target';
+	return tr('copy.target');
 }
 
 function gatewayTargetLabel(value: unknown) {
@@ -180,9 +182,12 @@ function gatewayTargetLabel(value: unknown) {
 		gatewayNamespace?: string;
 		listenerName?: string | null;
 	} | null;
-	if (!gateway) return 'Gateway';
+	if (!gateway) return tr('copy.gateway');
 	const listener = gateway.listenerName ? ` · ${gateway.listenerName}` : '';
-	return `Gateway ${gateway.gatewayNamespace ?? 'default'}/${gateway.gatewayName ?? 'gateway'}${listener}`;
+	return `${tr('copy.gatewayValueValue', [
+		gateway.gatewayNamespace ?? 'default',
+		gateway.gatewayName ?? 'gateway'
+	])}${listener}`;
 }
 
 function routeTargetLabel(value: unknown) {
@@ -192,15 +197,15 @@ function routeTargetLabel(value: unknown) {
 		ruleName?: string | null;
 		kind?: string | null;
 	} | null;
-	if (!route) return 'Route';
-	const kind = route.kind ? `${route.kind} ` : 'Route ';
+	if (!route) return tr('copy.route');
+	const kind = route.kind ? `${route.kind} ` : `${tr('copy.route')} `;
 	const rule = route.ruleName ? ` · ${route.ruleName}` : '';
 	return `${kind}${route.namespace ?? 'default'}/${route.name ?? 'route'}${rule}`;
 }
 
 function backendTargetLabel(value: unknown) {
-	if (typeof value === 'string') return `Backend ${value}`;
-	if (!value || typeof value !== 'object') return 'Backend';
+	if (typeof value === 'string') return `${tr('copy.backend')} ${value}`;
+	if (!value || typeof value !== 'object') return tr('copy.backend');
 	const backend = value as Record<string, unknown>;
 	if ('backend' in backend) {
 		const named = backend.backend as {
@@ -209,7 +214,7 @@ function backendTargetLabel(value: unknown) {
 			section?: string | null;
 		} | null;
 		const section = named?.section ? ` · ${named.section}` : '';
-		return `Backend ${named?.namespace ?? 'default'}/${named?.name ?? 'backend'}${section}`;
+		return `${tr('copy.backend')} ${named?.namespace ?? 'default'}/${named?.name ?? 'backend'}${section}`;
 	}
 	if ('service' in backend) {
 		const service = backend.service as {
@@ -217,9 +222,9 @@ function backendTargetLabel(value: unknown) {
 			hostname?: string;
 			port?: number | null;
 		} | null;
-		return `Service ${service?.namespace ?? 'default'}/${service?.hostname ?? 'service'}${service?.port ? `:${service.port}` : ''}`;
+		return `${tr('copy.service')} ${service?.namespace ?? 'default'}/${service?.hostname ?? 'service'}${service?.port ? `:${service.port}` : ''}`;
 	}
-	return 'Backend';
+	return tr('copy.backend');
 }
 
 function listenerSetTargetLabel(value: unknown) {
@@ -230,5 +235,5 @@ function listenerSetTargetLabel(value: unknown) {
 	} | null;
 	if (!listenerSet) return 'ListenerSet';
 	const section = listenerSet.section ? ` · ${listenerSet.section}` : '';
-	return `ListenerSet ${listenerSet.namespace ?? 'default'}/${listenerSet.name ?? 'listener-set'}${section}`;
+	return `${tr('copy.listenerSetValueValue', [listenerSet.namespace ?? 'default', listenerSet.name ?? 'listener-set'])}${section}`;
 }

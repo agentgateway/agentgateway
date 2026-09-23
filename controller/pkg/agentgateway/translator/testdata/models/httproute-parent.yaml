@@ -125,7 +125,7 @@ output:
       concreteModel:
         backend:
           backend: default/gpt-5-mini/backend.default.tenant1
-      key: default/gpt-5-mini.default.tenant1
+      key: default/gpt-5-mini.default.tenant1.http
       listenerKey: default/model-gateway.http
       match:
         model: gpt-5-mini

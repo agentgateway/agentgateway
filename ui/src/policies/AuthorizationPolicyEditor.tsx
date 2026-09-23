@@ -116,7 +116,7 @@ export function AuthorizationPolicyEditor(props: {
 		setErrors(validationErrors);
 		if (Object.keys(validationErrors).length) {
 			setEditingIndex(Number(Object.keys(validationErrors)[0]));
-			setSummaryError('Fix the highlighted authorization rules before saving.');
+			setSummaryError(tr('copy.fixHighlightedAuthorizationRulesBeforeSaving'));
 			return;
 		}
 		setSummaryError(null);
@@ -134,9 +134,7 @@ export function AuthorizationPolicyEditor(props: {
 		>
 			<div className="authz-rule-toolbar">
 				<div>
-					<strong>
-						{rules.length} {rules.length === 1 ? 'rule' : 'rules'}
-					</strong>
+					<strong>{tr('copy.authorizationRuleCount', { count: rules.length })}</strong>
 					<small>{tr('copy.eachCelExpressionIsSavedUnderAllowDenyOrRequire')}</small>
 				</div>
 				<button className="button" type="button" onClick={addRule}>
@@ -163,20 +161,28 @@ export function AuthorizationPolicyEditor(props: {
 						return (
 							<section
 								className={errors[index] ? 'authz-rule-card invalid' : 'authz-rule-card'}
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								key={index}
 							>
 								<div className="authz-rule-header">
 									<div>
 										<div className="authz-rule-title">
 											<strong>{tr('copy.ruleNumber', [index + 1])}</strong>
-											<span className={`badge authz-effect ${rule.effect}`}>{rule.effect}</span>
+											<span className={`badge authz-effect ${rule.effect}`}>
+												{tr(`copy.${rule.effect}`)}
+											</span>
 										</div>
-										{!editing ? <code>{rule.expression.trim() || 'Empty rule'}</code> : null}
+										{!editing ? (
+											<code>{rule.expression.trim() || tr('copy.emptyRule')}</code>
+										) : null}
 									</div>
 									<div className="row-actions">
 										<div className="authz-effect-select">
 											<EnumSelector
-												ariaLabel={`Rule ${index + 1} effect`}
+												ariaLabel={tr('copy.authorizationRuleEffectLabel', [
+													index + 1,
+													tr(`copy.${rule.effect}`)
+												])}
 												value={rule.effect}
 												options={effectOptions}
 												onChange={value => updateEffect(index, value)}
@@ -188,7 +194,7 @@ export function AuthorizationPolicyEditor(props: {
 											onClick={() => setEditingIndex(editing ? null : index)}
 										>
 											<Pencil size={14} />
-											{editing ? 'Done' : 'Edit'}
+											{editing ? tr('copy.done') : tr('copy.edit')}
 										</button>
 										<Link
 											className="table-action"
@@ -309,18 +315,18 @@ function buildAuthorization(rules: AuthzRule[]): AuthorizationDraft {
 function validateRules(rules: AuthzRule[]) {
 	const errors: Record<number, string> = {};
 	if (rules.length === 0) {
-		errors[0] = 'At least one authorization rule is required.';
+		errors[0] = tr('copy.atLeastOneAuthorizationRuleIsRequired');
 		return errors;
 	}
 	const seen = new Set<string>();
 	rules.forEach((rule, index) => {
 		const trimmed = rule.expression.trim();
 		if (!trimmed) {
-			errors[index] = 'Rule expression is required.';
+			errors[index] = tr('copy.ruleExpressionIsRequired');
 			return;
 		}
 		if (seen.has(trimmed)) {
-			errors[index] = 'Duplicate rule expression.';
+			errors[index] = tr('copy.duplicateRuleExpression');
 			return;
 		}
 		seen.add(trimmed);

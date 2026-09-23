@@ -4,18 +4,13 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
+import { refreshBaseCosts } from '@/api/costsApi';
 import { PageHeader, StatusBanner } from '@/components/Primitives';
-import {
-	enableTrafficConfig,
-	ensureLlm,
-	ensureLlmFrontendDefaults,
-	fileOwnedMcpSettingFields,
-	startupLlmConfig,
-	startupMcpConfig
-} from '@/config';
+import { ensureLlm, fileOwnedMcpSettingFields } from '@/config';
 import { refreshBaseCostsAndConfigure } from '@/costs';
 import {
 	useConfigDumpMode,
+	useEnableSurface,
 	useLlmConfigData,
 	useMcpConfigData,
 	useTrafficConfigData,
@@ -56,6 +51,7 @@ export function HomePage() {
 		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
 	});
 	const update = useUpdateConfig();
+	const enable = useEnableSurface();
 	const upsertResource = useUpsertConfigResource();
 	const help = useSchemaHelp();
 	const [locallyEnabled, setLocallyEnabled] = useState<Set<StartupSurface>>(() => new Set());
@@ -99,20 +95,14 @@ export function HomePage() {
 	async function enableSurface(surface: StartupSurface) {
 		setCostRefreshError(null);
 		try {
-			await update.mutateAsync(next => {
-				if (surface === 'llm') {
-					next.llm = startupLlmConfig(next, 4000);
-					ensureLlmFrontendDefaults(next);
-				} else if (surface === 'mcp') {
-					next.mcp = startupMcpConfig(next, 3000);
-				} else {
-					enableTrafficConfig(next);
-				}
+			const { hybrid } = await enable.mutateAsync({
+				surface: surface === 'apis' ? 'traffic' : surface
 			});
 			setLocallyEnabled(current => new Set(current).add(surface));
 			if (surface === 'llm') {
 				try {
-					await refreshBaseCostsAndConfigure(update);
+					if (hybrid) await refreshBaseCosts();
+					else await refreshBaseCostsAndConfigure(update);
 				} catch (err) {
 					setCostRefreshError(
 						err instanceof Error ? err.message : 'Failed to refresh base cost catalog'
@@ -120,7 +110,7 @@ export function HomePage() {
 				}
 			}
 		} catch {
-			// useUpdateConfig exposes the save error through update.isError.
+			// The enable mutation exposes the save error.
 		}
 	}
 
@@ -144,7 +134,10 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
+			// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
+				{/** biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 				<section
 					className="startup-panel"
 					role="dialog"
@@ -166,9 +159,9 @@ export function HomePage() {
 							{pageDataError.message}
 						</StatusBanner>
 					) : null}
-					{update.isError ? (
+					{enable.isError || update.isError ? (
 						<StatusBanner state="bad" title={tr('copy.saveFailed')}>
-							{update.error.message}
+							{enable.error?.message ?? update.error?.message}
 						</StatusBanner>
 					) : null}
 					{costRefreshError ? (
@@ -182,7 +175,7 @@ export function HomePage() {
 							label="LLM"
 							description={tr('copy.modelsKeysPoliciesAndChatTesting')}
 							enabled={hasLlm || locallyEnabled.has('llm')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Bot size={24} />}
 							onClick={() => void enableSurface('llm')}
 						/>
@@ -190,7 +183,7 @@ export function HomePage() {
 							label="MCP"
 							description={tr('copy.serversToolsAndMcpPlaygroundFlows')}
 							enabled={hasMcp || locallyEnabled.has('mcp')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Server size={24} />}
 							onClick={() => void enableSurface('mcp')}
 						/>
@@ -198,7 +191,7 @@ export function HomePage() {
 							label={tr('copy.apis')}
 							description={tr('copy.httpAndTcpListenersRoutesAndPolicyControls')}
 							enabled={hasTraffic || locallyEnabled.has('apis')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Network size={24} />}
 							onClick={() => void enableSurface('apis')}
 						/>
@@ -230,6 +223,12 @@ export function HomePage() {
 	return (
 		<div className="page-stack">
 			<PageHeader title={tr('copy.gatewayOverview')} />
+
+			{enable.isError || update.isError ? (
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
+					{enable.error?.message ?? update.error?.message}
+				</StatusBanner>
+			) : null}
 
 			{pageDataLoading ? (
 				<StatusBanner state="loading" title={tr('copy.loadingGatewayConfiguration')} />
@@ -275,7 +274,7 @@ export function HomePage() {
 					title="LLM"
 					icon={<Bot size={18} />}
 					enabled={hasLlm}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('llm')}
 					setupNeeded={callableModels === 0}
 					setupText="Add a model before LLM traffic can be served."
@@ -292,7 +291,7 @@ export function HomePage() {
 						<button
 							className="button"
 							type="button"
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							onClick={() => setLlmSettingsOpen(true)}
 						>
 							<Settings size={16} />
@@ -304,7 +303,7 @@ export function HomePage() {
 					title="MCP"
 					icon={<Server size={18} />}
 					enabled={hasMcp}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('mcp')}
 					setupNeeded={mcpServers.length === 0}
 					setupText="Add an MCP target before tools are available."
@@ -318,7 +317,7 @@ export function HomePage() {
 						<button
 							className="button"
 							type="button"
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							onClick={() => setMcpSettingsOpen(true)}
 						>
 							<Settings size={16} />
@@ -330,7 +329,7 @@ export function HomePage() {
 					title={tr('copy.traffic')}
 					icon={<Network size={18} />}
 					enabled={hasTraffic}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('apis')}
 					setupNeeded={hasBinds ? traffic.listeners === 0 : traffic.gateways === 0}
 					setupText={

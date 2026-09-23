@@ -36,6 +36,7 @@ export function ModelMatchesEditor(props: {
 				<div className="policy-editor-stack compact">
 					{matches.map((match, index) => (
 						<MatchCard
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							index={index}
 							match={match}
@@ -115,6 +116,7 @@ function MatchCard(props: {
 					<div className="match-header-list">
 						{headers.map((header, index) => (
 							<HeaderMatchRow
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								key={index}
 								header={header}
 								onChange={next => updateHeader(index, next)}
@@ -181,7 +183,7 @@ function HeaderMatchRow(props: {
 				aria-label={tr('copy.headerValue')}
 				value={text}
 				onChange={event => setText(event.target.value)}
-				placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+				placeholder={mode === 'regex' ? tr('copy.regexValue') : tr('copy.exactValue')}
 			/>
 			<label className={mode === 'regex' ? 'regex-toggle selected' : 'regex-toggle'}>
 				<input

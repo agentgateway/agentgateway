@@ -12,6 +12,9 @@ import {
 	MessageSquare,
 	RefreshCw,
 	Settings,
+	Shield,
+	ShieldBan,
+	ShieldEllipsis,
 	User,
 	Wrench
 } from 'lucide-react';
@@ -128,6 +131,7 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const filters = useMemo(
 		() => ({
 			...analyticsLogFilters(logFilters),
@@ -162,10 +166,12 @@ export function LogsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
 	}, [filters]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
 		filterOptionsSeqRef.current = loadSeq;
@@ -243,6 +249,7 @@ export function LogsPage() {
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (!linkedLogId) {
 			setExpandedId(null);
@@ -450,6 +457,7 @@ export function LogsPage() {
 									entry={entry}
 									detail={expandedId === entry.id ? (expanded ?? entry) : entry}
 									expanded={expandedId === entry.id}
+									promptLoggingEnabled={promptLoggingEnabled}
 									loading={expandedId === entry.id && expandedLoading}
 									onToggle={() => void expand(entry)}
 									onOpenSettings={() => setSettings('logs')}
@@ -725,6 +733,7 @@ export function AnalyticsPage() {
 	const selectedGroupBy: AnalyticsDimension[] = groupBy;
 	const groupByKey = selectedGroupBy.join(',');
 	const filtersKey = analyticsFiltersKey(filters);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const analyticsState = useMemo(
 		() => ({
 			timeRange,
@@ -785,10 +794,12 @@ export function AnalyticsPage() {
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
 	}, [timeRange, groupByKey, filtersKey]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		setFilterOptionMap(emptyAnalyticsFilterOptions());
 	}, [timeRange, groupByKey]);
@@ -806,6 +817,7 @@ export function AnalyticsPage() {
 
 	const requestedRange = useMemo(() => logTimeRangeToApi(timeRange), [timeRange]);
 	const effectiveBucketSeconds = bucketSeconds ?? bucketSecondsForRange(timeRange);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const timeline = useMemo(
 		() =>
 			analyticsTimelineData(
@@ -1159,8 +1171,10 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 	return (
 		<Tooltip content={label}>
 			<span
-				className={'log-turn-badge ' + (common ? variant : 'other')}
+				className={`log-turn-badge ${common ? variant : 'other'}`}
+				role="img"
 				aria-label={label}
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				tabIndex={0}
 			>
 				{common ? (
@@ -1235,10 +1249,141 @@ function providerIconName(name: string | null | undefined) {
 	return match === 'xai' ? 'xAI' : match;
 }
 
+function logGuardrails(entry: LogEntry): Record<string, unknown>[] {
+	const value = parseMaybeJson(attributeValue(entry.attributes, 'agw.ai.guardrails'));
+	if (!Array.isArray(value)) return [];
+	return value.filter(
+		(item): item is Record<string, unknown> =>
+			item != null && typeof item === 'object' && !Array.isArray(item)
+	);
+}
+
+function LogGuardrailBadge(props: { entry: LogEntry }) {
+	const guards = logGuardrails(props.entry);
+	if (!guards.length) return null;
+	const rejected = guards.some(guard => guard.action === 'reject');
+	const masked = guards.some(guard => guard.action === 'mask');
+	const failedOpen = guards.some(guard => guard.action === 'failOpen');
+	const state = rejected ? 'rejected' : failedOpen ? 'failed-open' : masked ? 'masked' : 'inactive';
+	const label = rejected
+		? tr('copy.guardrailRejected')
+		: failedOpen
+			? tr('copy.guardrailFailedOpen')
+			: masked
+				? tr('copy.guardrailMaskedContent')
+				: tr('copy.guardrailPresentNoAction');
+	const Icon = rejected ? ShieldBan : masked ? ShieldEllipsis : Shield;
+	return (
+		<Tooltip
+			content={
+				<>
+					<strong>{label}</strong>
+					{guards.map((guard, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
+						<div key={index}>
+							{guardPhaseLabel(guard.phase)}: {String(guard.guard ?? tr('copy.guardrail'))} (
+							{guardrailOutcomeLabel(String(guard.action ?? 'unknown'))})
+						</div>
+					))}
+				</>
+			}
+		>
+			<span className={`log-guardrail-badge ${state}`} role="img" aria-label={label}>
+				<Icon size={15} aria-hidden="true" />
+			</span>
+		</Tooltip>
+	);
+}
+
+function LogGuardrailDetails(props: { entry: LogEntry }) {
+	const guards = logGuardrails(props.entry);
+	if (!guards.length) return null;
+	const outcomes: Record<string, { label: string; description: string }> = {
+		allow: {
+			label: tr('copy.guardrailOutcomeAllowed'),
+			description: tr('copy.contentPassedWithoutModification')
+		},
+		reject: {
+			label: tr('copy.guardrailOutcomeRejected'),
+			description: tr('copy.guardrailBlockedCall')
+		},
+		mask: {
+			label: tr('copy.guardrailOutcomeMasked'),
+			description: tr('copy.guardrailModifiedContentBeforeContinuing')
+		},
+		audit: {
+			label: tr('copy.auditOnly'),
+			description: tr('copy.guardrailFlaggedContentWithoutBlockingOrMasking')
+		},
+		failOpen: {
+			label: tr('copy.failOpen'),
+			description: tr('copy.guardrailCouldNotCompleteItsCheckCallContinued')
+		}
+	};
+	return (
+		<section className="log-detail-section">
+			<h4>{tr('copy.guardrails')}</h4>
+			<div className="log-guardrail-list">
+				{guards.map((guard, index) => {
+					const action = String(guard.action ?? 'unknown');
+					const outcome = outcomes[action];
+					const state =
+						action === 'reject'
+							? 'rejected'
+							: action === 'failOpen'
+								? 'failed-open'
+								: action === 'mask'
+									? 'masked'
+									: 'inactive';
+					const Icon =
+						action === 'reject' ? ShieldBan : action === 'mask' ? ShieldEllipsis : Shield;
+					return (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
+						<div className="log-guardrail-result" key={index}>
+							<span className={`log-guardrail-badge ${state}`}>
+								<Icon size={18} aria-hidden="true" />
+							</span>
+							<div className="log-guardrail-context">
+								<div className="log-guardrail-heading">
+									<strong>{String(guard.guard ?? tr('copy.guardrail'))}</strong>
+									<span className="log-op-chip">{guardPhaseLabel(guard.phase)}</span>
+									<span className={`log-guardrail-badge ${state}`}>{outcome?.label ?? action}</span>
+								</div>
+								{outcome ? <p>{outcome.description}</p> : null}
+								{typeof guard.guardrailId === 'string' ? (
+									<p>
+										{tr('copy.guardrailIdentifier')}: <code>{guard.guardrailId}</code>
+									</p>
+								) : null}
+							</div>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+	);
+}
+
+function guardPhaseLabel(phase: unknown) {
+	if (phase === 'request') return tr('copy.request_1058hua');
+	if (phase === 'response') return tr('copy.response_nrnldq');
+	return String(phase ?? tr('copy.unknown'));
+}
+
+function guardrailOutcomeLabel(action: string) {
+	if (action === 'allow') return tr('copy.guardrailOutcomeAllowed');
+	if (action === 'reject') return tr('copy.guardrailOutcomeRejected');
+	if (action === 'mask') return tr('copy.guardrailOutcomeMasked');
+	if (action === 'audit') return tr('copy.auditOnly');
+	if (action === 'failOpen') return tr('copy.failOpen');
+	return action;
+}
+
 function LogCallRow(props: {
 	entry: LogEntry;
 	detail: LogEntry;
 	expanded: boolean;
+	promptLoggingEnabled: boolean;
 	loading: boolean;
 	onToggle: () => void;
 	onOpenSettings?: () => void;
@@ -1248,7 +1393,7 @@ function LogCallRow(props: {
 	const preview = logMessagePreview(props.entry);
 	const requestModel = props.entry.genAi.requestModel ?? null;
 	const responseModel = props.entry.genAi.responseModel ?? null;
-	const primaryModel = originalModel ?? requestModel ?? 'unknown model';
+	const primaryModel = originalModel ?? requestModel ?? tr('copy.unknownModel');
 	const resolvedModel = responseModel ?? requestModel;
 	const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
 	const operation = props.entry.genAi.operationName ?? 'chat';
@@ -1261,6 +1406,7 @@ function LogCallRow(props: {
 					: `log-row ${statusBad ? 'bad' : 'ok'}`
 			}
 		>
+			{/** biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<tr
 				className="log-row-summary"
 				tabIndex={0}
@@ -1281,8 +1427,11 @@ function LogCallRow(props: {
 					</span>
 				</td>
 				<td className="log-td-status">
-					<span className={statusBad ? 'log-status-pill bad' : 'log-status-pill ok'}>
-						{props.entry.httpStatus ?? 'err'}
+					<span className="log-status-indicators">
+						<span className={statusBad ? 'log-status-pill bad' : 'log-status-pill ok'}>
+							{props.entry.httpStatus ?? 'err'}
+						</span>
+						<LogGuardrailBadge entry={props.entry} />
 					</span>
 				</td>
 				<td className="log-td-model">
@@ -1329,7 +1478,11 @@ function LogCallRow(props: {
 							{props.loading ? (
 								<StatusBanner state="loading" title={tr('copy.loadingLogPayload')} />
 							) : null}
-							<LogDetailView entry={props.detail} onOpenSettings={props.onOpenSettings} />
+							<LogDetailView
+								entry={props.detail}
+								promptLoggingEnabled={props.promptLoggingEnabled}
+								onOpenSettings={props.onOpenSettings}
+							/>
 						</div>
 					</td>
 				</tr>
@@ -1406,7 +1559,11 @@ function logUsageDetail(entry: LogEntry): LogUsageDetail {
 	};
 }
 
-function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) {
+function LogDetailView(props: {
+	entry: LogEntry;
+	promptLoggingEnabled: boolean;
+	onOpenSettings?: () => void;
+}) {
 	const messages = logConversation(props.entry);
 	const trajectory = trajectoryEvents(messages);
 	const conversationRef = useRef<HTMLDetailsElement>(null);
@@ -1416,7 +1573,7 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 	const original = originalModelForLog(props.entry);
 	const request = props.entry.genAi.requestModel ?? null;
 	const response = props.entry.genAi.responseModel ?? null;
-	const primaryModel = original ?? request ?? 'unknown model';
+	const primaryModel = original ?? request ?? tr('copy.unknownModel');
 	const hasRouting =
 		(original != null && request != null && original !== request) ||
 		(response != null && request != null && response !== request);
@@ -1437,6 +1594,7 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 		});
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		const anchorId = decodeURIComponent(window.location.hash.slice(1));
 		if (!trajectory.some(event => event.anchorId === anchorId)) return;
@@ -1550,6 +1708,8 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 				</section>
 			</div>
 
+			<LogGuardrailDetails entry={props.entry} />
+
 			{messages.length ? (
 				<details className="log-conversation" ref={conversationRef}>
 					<summary>
@@ -1564,11 +1724,18 @@ function LogDetailView(props: { entry: LogEntry; onOpenSettings?: () => void }) 
 							<LogMessageView
 								events={trajectory.filter(event => event.messageIndex === index)}
 								message={message}
-								key={`${message.role}-${index}`}
+								key={`${message.role}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))}
 					</div>
 				</details>
+			) : props.promptLoggingEnabled ? (
+				<StatusBanner state="info" title={tr('copy.noPromptOrCompletionContentRecorded')}>
+					{tr('copy.promptLoggingEnabledButNoContentCapturedForRequestPassthroughMode')}
+				</StatusBanner>
 			) : (
 				<StatusBanner state="info" title={tr('copy.promptLoggingIsOff')}>
 					{tr('copy.enableIncludePromptsAndCompletionsInLogsIn')}{' '}
@@ -1603,12 +1770,7 @@ type TrajectoryEvent = {
 	system?: boolean;
 };
 
-const TRAJECTORY_LANES: Array<{ lane: TrajectoryLane; label: string }> = [
-	{ lane: 'input', label: 'Input' },
-	{ lane: 'model', label: 'Model' },
-	{ lane: 'tool-call', label: 'Tool call' },
-	{ lane: 'tool-result', label: 'Tool result' }
-];
+const TRAJECTORY_LANES: TrajectoryLane[] = ['input', 'model', 'tool-call', 'tool-result'];
 
 function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: string) => void }) {
 	const [selected, setSelected] = useState<number | null>(null);
@@ -1630,7 +1792,7 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			</div>
 			<div className="log-trajectory-scroll">
 				<div className="log-trajectory-chart" style={chartStyle}>
-					{TRAJECTORY_LANES.map(({ lane }) => (
+					{TRAJECTORY_LANES.map(lane => (
 						<div className="log-trajectory-row" key={lane}>
 							<span className="log-trajectory-label">{tr(trajectoryLaneKey(lane))}</span>
 							<div className="log-trajectory-track" style={trackStyle}>
@@ -1639,13 +1801,11 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 										<button
 											aria-label={tr('copy.trajectoryStep', [index + 1, event.label])}
 											aria-pressed={selected === index}
-											className={
-												'log-trajectory-bar ' +
-												lane +
-												(event.system ? ' system' : '') +
-												(selected === index ? ' selected' : '')
-											}
-											key={lane + '-' + index}
+											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+												index
+											}`}
 											title={tr('copy.trajectoryStep', [index + 1, event.label])}
 											type="button"
 											onClick={() => setSelected(current => (current === index ? null : index))}
@@ -1658,7 +1818,10 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 										<span
 											aria-hidden="true"
 											className="log-trajectory-gap"
-											key={lane + '-' + index}
+											key={`${lane}-${
+												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+												index
+											}`}
 										/>
 									)
 								)}
@@ -1844,6 +2007,7 @@ function ModelRouteStep(props: { label: string; value: string; last?: boolean })
 
 function LogUsagePanel(props: { usage: LogUsageDetail }) {
 	const usage = props.usage;
+	const { inputTokens, outputTokens } = usage;
 	const inputBreakdown =
 		usage.inputTokens != null
 			? splitInputTokens(
@@ -1860,10 +2024,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 		usage.outputTokens != null && !outputBreakdownUnavailable
 			? splitOutputTokens(usage.outputTokens, usage.reasoningTokens, usage.outputAudioTokens)
 			: null;
-	const showBar =
-		usage.inputTokens != null &&
-		usage.outputTokens != null &&
-		usage.inputTokens + usage.outputTokens > 0;
+	const showBar = inputTokens != null && outputTokens != null && inputTokens + outputTokens > 0;
 	const showCostBar = [
 		usage.inputCost,
 		usage.cacheReadCost,
@@ -1960,8 +2121,8 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 						<div className="log-usage-bar-row">
 							<span className="log-usage-bar-label">{tr('copy.tokens')}</span>
 							<TokenBar
-								input={usage.inputTokens!}
-								output={usage.outputTokens!}
+								input={inputTokens}
+								output={outputTokens}
 								cacheRead={usage.cacheReadTokens ?? undefined}
 								cacheWrite={usage.cacheWriteTokens ?? undefined}
 								inputAudio={usage.inputAudioTokens ?? undefined}
@@ -2072,7 +2233,10 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								anchorId={props.events.find(event => event.partIndex === index)?.anchorId}
 								part={part}
 								collapsed={part.type === 'text' && collapsed}
-								key={part.type + '-' + index}
+								key={`${part.type}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))}
 						{collapsible ? (
@@ -2108,18 +2272,21 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 					</>
 				) : null}
 				{!message.parts && hasToolCalls
-					? message.toolCalls!.map((call, index) => (
+					? message.toolCalls?.map((call, index) => (
 							<LogToolBlock
 								anchorId={toolCallEvents[index]?.anchorId}
 								kind="call"
 								name={call.name}
 								value={call.arguments}
-								key={`${call.name}-${index}`}
+								key={`${call.name}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasToolResults
-					? message.toolResults!.map((result, index) => (
+					? message.toolResults?.map((result, index) => (
 							<LogToolBlock
 								anchorId={
 									props.events.find(
@@ -2130,13 +2297,22 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								name={result.name ?? tr('copy.unknown')}
 								value={result.content}
 								isError={result.isError}
-								key={(result.id ?? result.name ?? 'result') + '-' + index}
+								key={`${result.id ?? result.name ?? 'result'}-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
 							/>
 						))
 					: null}
 				{!message.parts && hasReasoning
-					? message.reasoning!.map((reasoning, index) => (
-							<LogReasoningBlock content={reasoning} key={'reasoning-' + index} />
+					? message.reasoning?.map((reasoning, index) => (
+							<LogReasoningBlock
+								content={reasoning}
+								key={`reasoning-${
+									// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+									index
+								}`}
+							/>
 						))
 					: null}
 				{!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (
@@ -2314,7 +2490,8 @@ function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: st
 	);
 	return (
 		<div
-			className={'log-msg-content log-markdown' + (props.collapsed ? ' collapsed' : '')}
+			className={`log-msg-content log-markdown${props.collapsed ? ' collapsed' : ''}`}
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			dangerouslySetInnerHTML={{ __html: html }}
 			id={props.anchorId}
 		/>
@@ -2635,19 +2812,19 @@ function TokenCells(props: { entry: LogEntry }) {
 		<>
 			<td
 				className="log-td-num"
-				title={input != null ? `${formatNumber(input)} input tokens` : undefined}
+				title={input != null ? tokenCountTitle(input, tr('copy.input')) : undefined}
 			>
 				{input == null ? '—' : formatCompactNumber(input)}
 			</td>
 			<td
 				className="log-td-num"
-				title={output != null ? `${formatNumber(output)} output tokens` : undefined}
+				title={output != null ? tokenCountTitle(output, tr('copy.output')) : undefined}
 			>
 				{output == null ? '—' : formatCompactNumber(output)}
 			</td>
 			<td
 				className="log-td-num"
-				title={cacheRead != null ? `${formatNumber(cacheRead)} cached input tokens` : undefined}
+				title={cacheRead != null ? tokenCountTitle(cacheRead, tr('copy.cacheRead')) : undefined}
 			>
 				{cachePercent == null ? '—' : `${cachePercent}%`}
 			</td>
@@ -2725,15 +2902,15 @@ function TokenBar(props: {
 	const reasoningPct = (reasoning / total) * 100;
 	const outputAudioPct = (outputAudio / total) * 100;
 	const title = [
-		`input: ${formatNumber(input)}`,
-		`uncached: ${formatNumber(uncached)}`,
-		cacheRead ? `cache read: ${formatNumber(cacheRead)}` : null,
-		cacheWrite ? `cache write: ${formatNumber(cacheWrite)}` : null,
-		inputAudio ? `input audio: ${formatNumber(inputAudio)}` : null,
-		props.splitOutput ? `generated: ${formatNumber(generated)}` : null,
-		props.splitOutput && reasoning ? `reasoning: ${formatNumber(reasoning)}` : null,
-		props.splitOutput && outputAudio ? `output audio: ${formatNumber(outputAudio)}` : null,
-		!props.splitOutput ? `output: ${formatNumber(output)}` : null
+		usageValueLabel(tr('copy.input'), input),
+		usageValueLabel(tr('copy.uncached'), uncached),
+		cacheRead ? usageValueLabel(tr('copy.cacheRead'), cacheRead) : null,
+		cacheWrite ? usageValueLabel(tr('copy.cacheWrite'), cacheWrite) : null,
+		inputAudio ? usageValueLabel(tr('copy.inputAudio'), inputAudio) : null,
+		props.splitOutput ? usageValueLabel(tr('copy.generated'), generated) : null,
+		props.splitOutput && reasoning ? usageValueLabel(tr('copy.reasoning'), reasoning) : null,
+		props.splitOutput && outputAudio ? usageValueLabel(tr('copy.outputAudio'), outputAudio) : null,
+		!props.splitOutput ? usageValueLabel(tr('copy.output'), output) : null
 	]
 		.filter(Boolean)
 		.join(' / ');
@@ -2785,19 +2962,20 @@ function TokenBar(props: {
 function CostBar(props: { usage: LogUsageDetail }) {
 	const usage = props.usage;
 	const components = [
-		['input', usage.inputCost, 'token-bar-input'],
-		['cache read', usage.cacheReadCost, 'token-bar-cache-read'],
-		['cache write', usage.cacheWriteCost, 'token-bar-cache-write'],
-		['input audio', usage.inputAudioCost, 'token-bar-audio'],
-		['generated', usage.outputCost, 'token-bar-output'],
-		['reasoning', usage.reasoningCost, 'token-bar-reasoning'],
-		['output audio', usage.outputAudioCost, 'token-bar-audio']
+		['input', usage.inputCost, 'token-bar-input', tr('copy.input')],
+		['cache-read', usage.cacheReadCost, 'token-bar-cache-read', tr('copy.cacheRead')],
+		['cache-write', usage.cacheWriteCost, 'token-bar-cache-write', tr('copy.cacheWrite')],
+		['input-audio', usage.inputAudioCost, 'token-bar-audio', tr('copy.inputAudio')],
+		['generated', usage.outputCost, 'token-bar-output', tr('copy.generated')],
+		['reasoning', usage.reasoningCost, 'token-bar-reasoning', tr('copy.reasoning')],
+		['output-audio', usage.outputAudioCost, 'token-bar-audio', tr('copy.outputAudio')]
 	] as const;
 	const total = components.reduce((sum, [, cost]) => sum + Math.max(cost ?? 0, 0), 0);
 	if (!total) return null;
 	const title = components
-		.filter(([, cost]) => cost != null && cost > 0)
-		.map(([label, cost]) => `${label}: ${formatCost(cost!)}`)
+		.flatMap(([, cost, , label]) =>
+			cost != null && cost > 0 ? [usageValueLabel(label, formatCost(cost))] : []
+		)
 		.join(' / ');
 	return (
 		<UsageBar
@@ -2809,6 +2987,17 @@ function CostBar(props: { usage: LogUsageDetail }) {
 			}))}
 		/>
 	);
+}
+
+function tokenCountTitle(count: number, kind: string) {
+	return tr('copy.tokenCountWithType', [formatNumber(count), kind.toLowerCase()]);
+}
+
+function usageValueLabel(key: string, value: number | string) {
+	return tr('copy.trajectoryMessageValue', [
+		key,
+		typeof value === 'number' ? formatNumber(value) : value
+	]);
 }
 
 function UsageBar(props: {

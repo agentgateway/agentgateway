@@ -4,8 +4,10 @@ import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
 	mockGateway,
+	mockXdsGateway,
 	populatedConfig,
-	sameOriginGatewayConfig
+	sameOriginGatewayConfig,
+	xdsDump
 } from './fixtures';
 
 const pages = [
@@ -195,19 +197,15 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
-	expect(gateway.postedConfigs[1].llm).toMatchObject({
-		port: 4000,
-		models: [],
-		providers: [],
-		virtualModels: []
+	expect(gateway.postedConfigs[1].llm).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(3);
-	expect(gateway.postedConfigs[2].mcp).toMatchObject({
-		port: 3000,
-		targets: []
+	expect(gateway.postedConfigs[2].mcp).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 	await expect(page.getByText('3 of 3 enabled')).toBeVisible();
@@ -364,18 +362,14 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].llm).toMatchObject({
-		gateways: 'default',
-		models: [],
-		providers: [],
-		virtualModels: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[0].llm).not.toHaveProperty('port');
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
 	expect(gateway.postedConfigs[1].mcp).toMatchObject({
-		gateways: 'default',
-		targets: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[1].mcp).not.toHaveProperty('port');
 
@@ -553,6 +547,55 @@ test('localizes virtual model condition help in Chinese', async ({ page }) => {
 	await expect(help).toHaveAttribute('aria-label', /最后一个回退目标/);
 	await help.hover();
 	await expect(page.getByRole('tooltip')).toContainText('条件表达式');
+});
+
+test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/models');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Models' })).toBeVisible();
+	await expect(nav.getByRole('link', { name: 'Providers' })).toHaveCount(0);
+	await expect(
+		page.getByText('Read-only model inventory from the active gateway dump.')
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add model' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add virtual model' })).toHaveCount(0);
+
+	const rows = page.locator('.dump-models-table tbody tr');
+	await expect(rows).toHaveCount(5);
+	const row = (key: string) => rows.filter({ has: page.getByText(key, { exact: true }) });
+
+	await expect(row('default/gpt-4o.llm')).toContainText('Concrete');
+	await expect(row('default/gpt-4o.llm')).toContainText('public');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/gpt-4o/backend.llm');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/model-gateway.llm');
+	await expect(row('default/llama.llm')).toContainText('internal');
+	await expect(row('default/llama.llm')).toContainText('default/llama/backend.llm');
+	await expect(row('default/smart.llm')).toContainText('Virtual');
+	await expect(row('default/smart.llm')).toContainText('2 weighted targets');
+	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) invalid');
+	await expect(row('default/tiered.llm')).toContainText('1 rule, fallback');
+	await expect(row('default/tiered.llm')).toContainText('gpt-4o, llama');
+	await expect(row('default/resilient.llm')).toContainText('Failover');
+	await expect(row('default/resilient.llm')).toContainText('default/resilient/backend.llm');
+
+	await page.getByRole('button', { name: 'View smart' }).click();
+	const drawer = page.getByRole('dialog', { name: 'smart' });
+	await expect(drawer).toBeVisible();
+	await expect(drawer).toContainText('does-not-exist');
+	await drawer.getByRole('button', { name: 'Close' }).click();
+	await expect(drawer).toHaveCount(0);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode shows an empty model inventory', async ({ page }) => {
+	await mockXdsGateway(page, xdsDump([]));
+	await page.goto('/llm/models');
+
+	await expect(page.getByText('No models are present in the active gateway dump.')).toBeVisible();
+	await expect(page.locator('.dump-models-table')).toHaveCount(0);
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {
@@ -779,6 +822,66 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
 
+test('creates an OpenAPI MCP target', async ({ page }) => {
+	const gateway = await mockGateway(page, emptyConfig());
+	await page.goto('/mcp/servers');
+
+	await page.getByRole('button', { name: 'Add server' }).first().click();
+	await page.getByLabel('Server name').fill('weather');
+	await page.getByRole('radio', { name: 'OpenAPI' }).click();
+	await page
+		.locator('label.field', { hasText: 'URL' })
+		.getByRole('textbox')
+		.fill('http://localhost:8101/mcp');
+	await page
+		.locator('label.field', { hasText: 'Schema' })
+		.getByRole('textbox')
+		.fill('https://example.com/weather-openapi.json');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'weather',
+		openapi: {
+			host: 'http://localhost:8101/mcp',
+			schema: { url: 'https://example.com/weather-openapi.json' }
+		}
+	});
+});
+
+test('editing an OpenAPI MCP target preserves its schema', async ({ page }) => {
+	const config = emptyConfig();
+	(config.mcp as { targets?: unknown[] }).targets = [
+		{
+			name: 'invoices',
+			openapi: {
+				host: 'http://localhost:8102/openapi',
+				schema: { url: 'https://example.com/invoices-openapi.json' }
+			}
+		}
+	];
+	const gateway = await mockGateway(page, config);
+	await page.goto('/mcp/servers');
+
+	await page
+		.getByRole('row', { name: /invoices/ })
+		.getByRole('button', { name: 'Edit server' })
+		.click();
+	await page.getByLabel('Server name').fill('invoices-v2');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'invoices-v2',
+		openapi: {
+			host: 'http://localhost:8102/openapi',
+			schema: { url: 'https://example.com/invoices-openapi.json' }
+		}
+	});
+});
+
 test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	const config = emptyConfig();
 	config.mcp = {
@@ -988,8 +1091,10 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			const kind = String(resource.kind);
 			if (!kind.endsWith('.policy')) continue;
 			const sectionName = kind.split('.')[0];
-			const section = (effective[sectionName] ??= {}) as Record<string, unknown>;
-			const policies = (section.policies ??= {}) as Record<string, unknown>;
+			effective[sectionName] ??= {};
+			const section = effective[sectionName] as Record<string, unknown>;
+			section.policies ??= {};
+			const policies = section.policies as Record<string, unknown>;
 			policies[String(resource.id)] = resource.value;
 		}
 		return route.fulfill({
@@ -1104,6 +1209,16 @@ test('reveals a virtual API key explicitly', async ({ page }) => {
 	await expect(page.getByText('agw_sk_testkey123456789')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Show full key' }).click();
 	await expect(page.getByText('agw_sk_testkey123456789')).toBeVisible();
+});
+
+test('warns that API key budgets require the primary database', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	const warning = page.locator('.status-banner.warn').filter({ hasText: 'Database required' });
+	await expect(warning).toContainText('API key budgets require config.database to be configured.');
 });
 
 test('LLM playground sends selected virtual model name', async ({ page }) => {
@@ -1346,3 +1461,71 @@ function trafficBaseConfig() {
 	];
 	return config;
 }
+
+for (const canLogout of [true, false]) {
+	test(`account menu shows the signed-in user (canLogout=${canLogout})`, async ({ page }) => {
+		await mockGateway(page);
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				json: {
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+					user: { subject: 'user-1', name: 'Alex Rivera', email: 'alex@example.com', canLogout }
+				}
+			})
+		);
+		await page.route('**/api/auth/logout', route =>
+			route.fulfill({
+				contentType: 'text/html',
+				body: '<h1>Signed out</h1>'
+			})
+		);
+		await page.goto('/');
+		const account = page.getByRole('button', { name: 'Account: Alex Rivera' });
+		await expect(account).toBeVisible();
+		await expect(account.locator('.user-avatar')).toHaveText('AR');
+		await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+		await account.click();
+		await expect(page.getByRole('region', { name: 'Your account' })).toContainText(
+			'alex@example.com'
+		);
+		if (!canLogout) {
+			await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+			return;
+		}
+		await page.getByRole('button', { name: 'Sign out', exact: true }).focus();
+		await page.keyboard.press('Escape');
+		await expect(account).toBeFocused();
+		await expect(account).toHaveAttribute('aria-expanded', 'false');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await account.click();
+		const logout = page.waitForRequest('**/api/auth/logout');
+		await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+		expect((await logout).method()).toBe('POST');
+		await expect(page.getByRole('heading', { name: 'Signed out' })).toBeVisible();
+	});
+}
+
+test('login loads without protected API requests and preserves the return destination', async ({
+	page
+}) => {
+	const apiRequests: string[] = [];
+	page.on('request', request => {
+		if (/^\/(api\/|config_dump)/.test(new URL(request.url()).pathname)) {
+			apiRequests.push(request.url());
+		}
+	});
+	await page.goto('/login?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall');
+	await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('img', { name: 'agentgateway' }).filter({ visible: true })
+	).toBeVisible();
+	await expect(page.getByRole('navigation')).toHaveCount(0);
+	await page.evaluate(() => document.fonts.ready);
+	expect(apiRequests).toEqual([]);
+
+	await page.route('**/api/auth/login?*', route => route.fulfill({ body: 'OAuth started' }));
+	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
+	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
+	await expect(page.getByText('OAuth started')).toBeVisible();
+});

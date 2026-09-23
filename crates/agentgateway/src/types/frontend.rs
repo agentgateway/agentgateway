@@ -48,8 +48,9 @@ pub enum HTTPHeaderCase {
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendHTTP"))]
 pub struct HTTP {
 	/// Maximum request or response body size buffered by the frontend.
-	#[serde(default = "defaults::max_buffer_size")]
-	pub max_buffer_size: usize,
+	/// Defaults to 2 MiB, or 32 MiB once the request enters LLM processing.
+	#[serde(default)]
+	pub max_buffer_size: Option<usize>,
 
 	/// Maximum number of headers allowed in an HTTP/1 request. Changing this value causes a
 	/// performance degradation, even when set lower than the default of 100.
@@ -104,7 +105,7 @@ pub struct HTTP {
 impl Default for HTTP {
 	fn default() -> Self {
 		Self {
-			max_buffer_size: defaults::max_buffer_size(),
+			max_buffer_size: None,
 
 			http1_max_headers: None,
 			http1_idle_timeout: defaults::http1_idle_timeout(),
@@ -275,8 +276,18 @@ pub struct AccessLogFields {
 	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
 }
 
+#[apply(schema_enum!)]
+pub enum AccessLogPreset {
+	/// Use the OTel-aligned built-in HTTP field set for stdout access logs.
+	Otel,
+}
+
 #[apply(schema!)]
 pub struct LoggingPolicy {
+	/// Selects the built-in fields for stdout access logs.
+	/// If unset, human-oriented legacy fields are used.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub preset: Option<AccessLogPreset>,
 	/// CEL expression that decides whether a request is logged.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,

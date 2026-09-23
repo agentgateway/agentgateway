@@ -5,7 +5,7 @@
       "Operator": "IsEquals",
       "DataType": "Boolean",
       "Operand": true,
-      "MoreInfoUrl": "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm-clients/microsoft-intune/#manage-claude-desktop",
+      "MoreInfoUrl": "https://agentgateway.dev/docs/kubernetes/latest/integrations/llm/clients/microsoft-intune/#manage-claude-desktop",
       "RemediationStrings": [
         {
           "Language": "en_US",

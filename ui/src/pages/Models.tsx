@@ -50,7 +50,12 @@ import type {
 	LocalLLMParams,
 	LocalLLMWeightedRouting
 } from '@/gateway-config';
-import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	useConfigDumpMode,
+	useDeleteConfigResource,
+	useLlmConfigData,
+	useUpsertConfigResource
+} from '@/hooks';
 import { tr } from '@/i18n';
 import {
 	concreteModelName,
@@ -60,6 +65,7 @@ import {
 	wildcardModelPrefix,
 	wildcardResolvedSuffix
 } from '@/modelResolution';
+import { DumpModelsView } from '@/pages/models/DumpModelsView';
 import { ModelMatchesEditor, normalizeMatches } from '@/pages/models/ModelMatchesEditor';
 import {
 	HeaderModifierEditor,
@@ -87,6 +93,7 @@ import {
 	virtualModelStrategy,
 	virtualModelSummary
 } from '@/pages/models/virtualModelUtils';
+import { ReadonlyModeBanner } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
@@ -103,6 +110,36 @@ type ConditionalVirtualTarget = NonNullable<
 >['targets'][number];
 
 export function ModelsPage() {
+	const mode = useConfigDumpMode();
+	if (mode.isLoading) {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title={tr('copy.llmModels')}
+					description={tr('copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior')}
+				/>
+				<Panel>
+					<StatusBanner state="loading" title={tr('copy.detectingConfigurationMode')} />
+				</Panel>
+			</div>
+		);
+	}
+	if (mode.data?.mode === 'dump') {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title={tr('copy.llmModels')}
+					description={tr('copy.modelInventoryDescription')}
+				/>
+				<ReadonlyModeBanner />
+				<DumpModelsView models={mode.data.dump.models ?? []} />
+			</div>
+		);
+	}
+	return <ModelsEditorPage />;
+}
+
+function ModelsEditorPage() {
 	const { config, hybrid, resources, models, virtualModels, providers, isLoading, error } =
 		useLlmConfigData();
 	const upsertResource = useUpsertConfigResource();
@@ -616,7 +653,7 @@ function ModelEditor(props: {
 	const warnings = modelWarnings(model);
 	const invalidApiKey = invalidProviderApiKey(model.params?.apiKey);
 	const providerApiKeyError =
-		saveAttempted && invalidApiKey ? 'Enter a value, or choose Unset.' : null;
+		saveAttempted && invalidApiKey ? tr('copy.enterAValueOrChooseUnset') : null;
 	const policyPatch = buildModelPolicyPatch({
 		transformation,
 		finalTransformation,
@@ -989,7 +1026,7 @@ function ModelPoliciesInline(props: {
 						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'transformation')}
 						values={props.transformation}
 						keyPlaceholder="field name"
-						valuePlaceholder="CEL expression"
+						valuePlaceholder={tr('copy.celExpression')}
 						valueKind="cel"
 						onChange={props.setTransformation}
 					/>
@@ -1009,7 +1046,7 @@ function ModelPoliciesInline(props: {
 						tooltip={props.help.field<LlmModel>('LocalLLMModels', 'finalTransformation')}
 						values={props.finalTransformation}
 						keyPlaceholder="field name"
-						valuePlaceholder="CEL expression"
+						valuePlaceholder={tr('copy.celExpression')}
 						valueKind="cel"
 						onChange={props.setFinalTransformation}
 					/>
@@ -1193,7 +1230,9 @@ function modelPolicySummary(model: Partial<LlmModel>) {
 		model.authorization ? 'authorization' : null,
 		model.promptCaching ? 'prompt caching' : null
 	].filter(Boolean);
-	return policies.length ? `${policies.length} configured` : tr('copy.noModelPoliciesConfigured');
+	return policies.length
+		? tr('copy.valuePolicies', { count: policies.length })
+		: tr('copy.noModelPoliciesConfigured');
 }
 
 function VirtualModelEditor(props: {
@@ -1404,6 +1443,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="target-list">
 						{weightedTargets.map((target, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							<div className="target-row weighted" key={index}>
 								<VirtualTargetSelector
 									label={tr('copy.model')}
@@ -1477,6 +1517,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="failover-group-list">
 						{failoverGroups.map((group, groupIndex) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							<section className="match-card" key={groupIndex}>
 								<div className="match-card-header">
 									<strong>
@@ -1502,6 +1543,7 @@ function VirtualModelEditor(props: {
 								<div className="match-card-body">
 									<div className="target-list">
 										{group.map((target, targetIndex) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 											<div className="target-row failover" key={targetIndex}>
 												<VirtualTargetSelector
 													label={tr('copy.model')}
@@ -1592,6 +1634,7 @@ function VirtualModelEditor(props: {
 						{conditionalTargets.map((target, index) => {
 							const isFallback = !target.when?.trim();
 							return (
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								<div className="conditional-target-card" key={index}>
 									<div className="match-card-header">
 										<strong>
@@ -1822,10 +1865,7 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
 	].filter(Boolean);
 	if (props.warnings > 0)
 		return (
-			<span className="badge warn">
-				{props.warnings}
-				{tr('copy.warnings')}
-			</span>
+			<span className="badge warn">{tr('copy.valueWarningValue', { count: props.warnings })}</span>
 		);
 	if (props.model.auth) return <span className="badge">{tr('copy.customAuthDetected')}</span>;
 	if (policies.length > 0)

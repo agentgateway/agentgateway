@@ -2,10 +2,20 @@ pub mod bedrock;
 pub mod completions;
 pub mod gemini;
 pub mod messages;
+pub mod namespace_tools;
 pub mod openai_compat;
 pub mod responses;
 pub mod vertex;
 pub mod vertex_gemini;
+
+pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {
+	model
+		.strip_prefix("gpt-")
+		.and_then(|model| model.split('-').next())
+		.and_then(|version| version.split_once('.'))
+		.and_then(|(major, minor)| Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?)))
+		.is_some_and(|version| version >= (5, 6))
+}
 
 /// Translate an OpenAI `tool_calls[].function.arguments` string into an Anthropic
 /// `tool_use.input` value.
@@ -31,6 +41,30 @@ mod tests {
 	use serde_json::json;
 
 	use super::tool_arguments_to_input;
+
+	#[test]
+	fn thinking_budget_buckets() {
+		use crate::types::messages::typed::ThinkingEffort::{High, Low, Max, Medium, Xhigh};
+		for (budget, expected) in [
+			(0, Low),
+			(1024, Low),
+			(2047, Low),
+			(2048, Medium),
+			(4095, Medium),
+			(4096, High),
+			(8191, High),
+			(8192, Xhigh),
+			(16383, Xhigh),
+			(16384, Max),
+			(u64::MAX, Max),
+		] {
+			assert_eq!(
+				crate::types::anthropic_effort_for_thinking_budget(budget),
+				expected,
+				"budget {budget}"
+			);
+		}
+	}
 
 	#[test]
 	fn empty_arguments_become_an_empty_object() {

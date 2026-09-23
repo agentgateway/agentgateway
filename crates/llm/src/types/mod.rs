@@ -39,6 +39,50 @@ pub(crate) fn thinking_budget_for_reasoning_effort(
 	}
 }
 
+pub(crate) fn anthropic_effort_for_reasoning_effort(
+	effort: &completions::typed::ReasoningEffort,
+) -> Option<messages::typed::ThinkingEffort> {
+	use completions::typed::ReasoningEffort;
+	use messages::typed::ThinkingEffort;
+
+	match effort {
+		ReasoningEffort::None => None,
+		ReasoningEffort::Minimal | ReasoningEffort::Low => Some(ThinkingEffort::Low),
+		ReasoningEffort::Medium => Some(ThinkingEffort::Medium),
+		ReasoningEffort::High => Some(ThinkingEffort::High),
+		ReasoningEffort::Xhigh => Some(ThinkingEffort::Xhigh),
+		ReasoningEffort::Max => Some(ThinkingEffort::Max),
+	}
+}
+
+pub(crate) fn thinking_budget_for_anthropic_effort(effort: messages::typed::ThinkingEffort) -> u64 {
+	use messages::typed::ThinkingEffort;
+
+	match effort {
+		ThinkingEffort::Low => 1024,
+		ThinkingEffort::Medium => 2048,
+		ThinkingEffort::High => 4096,
+		ThinkingEffort::Xhigh => 8192,
+		ThinkingEffort::Max => 16384,
+	}
+}
+
+/// Approximate a token budget using the same thresholds as effort-to-budget translation.
+pub(crate) fn anthropic_effort_for_thinking_budget(budget: u64) -> messages::typed::ThinkingEffort {
+	use messages::typed::ThinkingEffort;
+	for effort in [
+		ThinkingEffort::Max,
+		ThinkingEffort::Xhigh,
+		ThinkingEffort::High,
+		ThinkingEffort::Medium,
+	] {
+		if budget >= thinking_budget_for_anthropic_effort(effort) {
+			return effort;
+		}
+	}
+	ThinkingEffort::Low
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {

@@ -245,8 +245,8 @@ function TrafficRoutesEditorPage() {
 						title={tr('copy.noTrafficRoutesConfigured')}
 						description={
 							hasLegacyBinds
-								? 'Add a route under an HTTP or TCP listener.'
-								: 'Use traffic gateways for new HTTP routing configuration.'
+								? tr('copy.addARouteUnderAnHttpOrTcpListener')
+								: tr('copy.useTrafficGatewaysForNewHttpRoutingConfiguration')
 						}
 						action={
 							hasLegacyBinds ? (
@@ -547,15 +547,17 @@ function GatewayRoutesEditorPage() {
 										<td>
 											<span className="badge">{kind.toUpperCase()}</span>
 										</td>
-										<td>{effectiveGatewayRouteRef(route, config.data, kind) || 'Unassigned'}</td>
+										<td>
+											{effectiveGatewayRouteRef(route, config.data, kind) || tr('copy.unassigned')}
+										</td>
 										<td>{kind === 'http' ? httpPathSummary(route) : 'TCP'}</td>
 										<td>{backendListSummary(route.backends)}</td>
 										<td className="row-actions">
 											<Tooltip
 												content={
 													resourceId
-														? 'Edit route'
-														: 'Unnamed routes must be edited in raw configuration'
+														? tr('copy.editRoute')
+														: tr('copy.unnamedRoutesMustBeEditedInRawConfiguration')
 												}
 											>
 												<button
@@ -578,10 +580,10 @@ function GatewayRoutesEditorPage() {
 											<Tooltip
 												content={
 													!resourceId
-														? 'Unnamed routes must be deleted in raw configuration'
+														? tr('copy.unnamedRoutesMustBeDeletedInRawConfiguration')
 														: traffic.hybrid && !databaseRoute(kind, resourceId)
-															? 'File-owned routes cannot be deleted here'
-															: 'Delete route'
+															? tr('copy.fileOwnedRoutesCannotBeDeletedHere')
+															: tr('copy.deleteRoute')
 												}
 											>
 												<button
@@ -697,7 +699,7 @@ function GatewayRouteEditor(props: {
 
 	function save() {
 		if (!route.name?.trim()) {
-			setError('Enter a route name.');
+			setError(tr('copy.enterARouteName'));
 			return;
 		}
 		if (!gateway) {
@@ -716,8 +718,8 @@ function GatewayRouteEditor(props: {
 		<Drawer
 			title={
 				props.editing.resourceId || typeof props.editing.routeIndex === 'number'
-					? 'Edit route'
-					: 'Add route'
+					? tr('copy.editRoute')
+					: tr('copy.addRoute')
 			}
 			onClose={props.onCancel}
 			footer={
@@ -731,15 +733,15 @@ function GatewayRouteEditor(props: {
 								}
 							: undefined
 					}
-					diffTitle="Route config diff"
-					saveLabel="Save route"
+					diffTitle={tr('copy.routeConfigDiff')}
+					saveLabel={tr('copy.saveRoute')}
 					saving={props.saving}
 					saveDisabled={!route.name?.trim()}
 					onCancel={props.onCancel}
 					onSave={save}
 					beforeDiff={() => {
 						if (!route.name?.trim()) {
-							setError('Enter a route name.');
+							setError(tr('copy.enterARouteName'));
 							return false;
 						}
 						if (!gateway) {
@@ -773,7 +775,7 @@ function GatewayRouteEditor(props: {
 				{!props.editing.resourceId && typeof props.editing.routeIndex !== 'number' ? (
 					<FieldGroup label={tr('copy.kind')} tooltip={tr('copy.routeProtocolFamily')}>
 						<EnumSelector
-							ariaLabel="Route kind"
+							ariaLabel={tr('copy.kind')}
 							value={kind}
 							options={[
 								{ value: 'http', label: 'HTTP' },
@@ -795,7 +797,7 @@ function GatewayRouteEditor(props: {
 					tooltip={tr('copy.gatewayOrGatewayListenerThatOwnsThisRoute')}
 				>
 					<Dropdown
-						ariaLabel="Gateway"
+						ariaLabel={tr('copy.gateway')}
 						value={gateway}
 						options={gatewayOptions}
 						onChange={value => {
@@ -932,15 +934,17 @@ function RouteEditor(props: {
 
 	return (
 		<Drawer
-			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
+			title={
+				typeof props.editing.routeIndex === 'number' ? tr('copy.editRoute') : tr('copy.addRoute')
+			}
 			onClose={props.onCancel}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
 					config={props.config}
-					diffTitle="Route config diff"
-					saveLabel="Save route"
+					diffTitle={tr('copy.routeConfigDiff')}
+					saveLabel={tr('copy.saveRoute')}
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
@@ -970,7 +974,7 @@ function RouteEditor(props: {
 				{typeof props.editing.routeIndex !== 'number' ? (
 					<FieldGroup label={tr('copy.listener')} tooltip={tr('copy.listenerThatOwnsThisRoute')}>
 						<Dropdown
-							ariaLabel="Listener"
+							ariaLabel={tr('copy.listener')}
 							value={listenerKey}
 							options={props.listeners.map(item => ({
 								value: `${item.bindIndex}:${item.listenerIndex}`,
@@ -1074,7 +1078,7 @@ function HttpMatchEditor(props: {
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
 				>
 					<EnumSelector
-						ariaLabel="Path match"
+						ariaLabel={tr('copy.pathMatch')}
 						value={pathType}
 						options={pathTypes.map(value => ({
 							value,
@@ -1153,6 +1157,7 @@ function HeaderConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.headers.map((header, index) => (
 						<HeaderConditionRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							header={header}
 							onChange={next =>
@@ -1203,7 +1208,7 @@ function HeaderConditionRow(props: {
 					aria-label={tr('copy.headerValue')}
 					value={text}
 					onChange={event => setText(event.target.value)}
-					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+					placeholder={mode === 'regex' ? tr('copy.regexValue') : tr('copy.exactValue')}
 				/>
 			</div>
 			<div className="condition-actions">
@@ -1254,6 +1259,7 @@ function QueryConditionsEditor(props: {
 				<div className="match-header-list">
 					{props.query.map((query, index) => (
 						<QueryConditionRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							query={query}
 							onChange={next =>
@@ -1304,7 +1310,7 @@ function QueryConditionRow(props: {
 					aria-label={tr('copy.queryValue')}
 					value={text}
 					onChange={event => setText(event.target.value)}
-					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+					placeholder={mode === 'regex' ? tr('copy.regexValue') : tr('copy.exactValue')}
 				/>
 			</div>
 			<div className="condition-actions">
@@ -1366,6 +1372,7 @@ function RouteBackendsEditor(props: {
 				<div className="route-backend-list">
 					{props.backends.map((backend, index) => (
 						<RouteBackendRow
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							kind={props.kind}
 							help={props.help}
@@ -1431,7 +1438,7 @@ function RouteBackendRow(props: {
 						)}
 					>
 						<EnumSelector
-							ariaLabel="Backend target type"
+							ariaLabel={tr('copy.targetType')}
 							value={type}
 							options={backendKindOptions(props.kind)}
 							onChange={value => props.onChange(makeBackend(props.kind, value, backend))}
@@ -2038,9 +2045,9 @@ function writeTrafficRouteSearch(
 }
 
 function pathLabel(value: string) {
-	if (value === 'pathPrefix') return 'Prefix';
-	if (value === 'exact') return 'Exact';
-	return 'Regex';
+	if (value === 'pathPrefix') return tr('copy.prefixMatch');
+	if (value === 'exact') return tr('copy.exactMatch');
+	return tr('copy.regex');
 }
 
 function splitList(value: string) {

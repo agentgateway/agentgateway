@@ -32,7 +32,7 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	services := krt.NewStaticCollection(nil, []*corev1.Service{
 		testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
 	}, krt.WithStop(stop))
-	secrets := krt.NewStaticCollection(nil, []*corev1.Secret{secret}, krt.WithStop(stop))
+	secrets := krt.NewMutableCollection(nil, []*corev1.Secret{secret}, krt.WithStop(stop))
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, nil, krt.WithStop(stop))
 	policies := krt.NewStaticCollection(nil, []*agentgateway.AgentgatewayPolicy{{
 		Name: "backend-policy", Namespace: namespace,
@@ -47,7 +47,7 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	backendTLSPolicies := krt.NewStaticCollection[*gwv1.BackendTLSPolicy](nil, nil, krt.WithStop(stop))
 	resolver := remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps:     configMaps,
-		Secrets:        secrets,
+		Secrets:        secrets.AsCollection(),
 		Services:       services,
 		PolicySelector: policyselection.NewSelector(policies, backendTLSPolicies),
 	})
@@ -153,13 +153,13 @@ func TestResolveCAReferenceKindsAndErrors(t *testing.T) {
 			name:    "Secret missing ca.crt",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
 			source:  &corev1.Secret{Name: "ca", Namespace: namespace},
-			wantErr: "missing ca.crt",
+			wantErr: `missing key "ca.crt"`,
 		},
 		{
 			name:    "Secret with invalid PEM",
 			ref:     agentgateway.LocalCACertificateRef{Name: "ca", Kind: "Secret"},
 			source:  &corev1.Secret{Name: "ca", Namespace: namespace, Data: map[string][]byte{"ca.crt": []byte("invalid")}},
-			wantErr: "invalid ca.crt in Secret default/ca",
+			wantErr: `invalid CA certificate in Secret default/ca key "ca.crt"`,
 		},
 		{
 			name:    "Secret does not fall back to ConfigMap",

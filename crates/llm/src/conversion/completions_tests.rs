@@ -37,3 +37,352 @@ fn non_data_urls_are_rejected() {
 	assert_eq!(parse_data_url("https://example.com/cat.png"), None);
 	assert_eq!(parse_data_url("data:no-comma"), None);
 }
+
+#[test]
+fn messages_stop_sequences_are_forwarded_as_chat_completions_stop() {
+	let request: crate::types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "test-model",
+		"max_tokens": 64,
+		"stop_sequences": ["STOPPROBE", "DONE"],
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.unwrap();
+	let translated = super::from_messages::translate(&request).unwrap();
+	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+	assert_eq!(translated["stop"], serde_json::json!(["STOPPROBE", "DONE"]));
+}
+
+mod stop_sequence_reporting {
+	use super::super::from_messages::{choice_stop_sequence, translate_response_internal};
+	use crate::types::completions::typed as completions;
+	use crate::types::messages::typed as messages;
+
+	fn raw(choice_extra: &str) -> String {
+		format!(
+			r#"{{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"m",
+			"choices":[{{"index":0,"finish_reason":"stop",
+			"message":{{"role":"assistant","content":"A\nB\nC\nD\nE\n"}}{choice_extra}}}],
+			"usage":{{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}}}"#
+		)
+	}
+
+	fn translate(body: &str) -> messages::MessagesResponse {
+		let typed: completions::Response = serde_json::from_str(body).expect("valid chat completion");
+		translate_response_internal(typed).unwrap()
+	}
+
+	#[test]
+	fn extensions_accept_only_string_values_from_the_known_engine_fields() {
+		let seq = |choice_extra: &str| {
+			let typed: completions::Response =
+				serde_json::from_str(&raw(choice_extra)).expect("valid chat completion");
+			choice_stop_sequence(&typed.choices[0].rest)
+		};
+		// vLLM: a matched stop *string* is a string; a stop *token* is an integer.
+		assert_eq!(seq(r#","stop_reason":"F""#), Some("F".into()));
+		assert_eq!(seq(r#","stop_reason":128001"#), None);
+		// SGLang
+		assert_eq!(seq(r#","matched_stop":"END""#), Some("END".into()));
+		assert_eq!(seq(r#","matched_stop":154827"#), None);
+		// nothing reported or empty
+		assert_eq!(seq(""), None);
+		assert_eq!(seq(r#","stop_reason":"""#), None);
+		assert_eq!(
+			seq(r#","stop_reason":"","matched_stop":"END""#),
+			Some("END".into())
+		);
+	}
+
+	#[test]
+	fn matched_stop_string_becomes_stop_sequence_with_the_sequence_named() {
+		for (choice_extra, want) in [
+			(r#","stop_reason":"F""#, "F"),
+			(r#","matched_stop":"END""#, "END"),
+		] {
+			let out = translate(&raw(choice_extra));
+			assert_eq!(
+				out.stop_reason,
+				Some(messages::StopReason::StopSequence),
+				"{choice_extra}"
+			);
+			assert_eq!(out.stop_sequence.as_deref(), Some(want), "{choice_extra}");
+		}
+	}
+
+	#[test]
+	fn natural_end_of_turn_is_unchanged() {
+		// No extension field, or a stop *token id* (integer): both stay end_turn.
+		for choice_extra in ["", r#","stop_reason":128001"#, r#","matched_stop":154827"#] {
+			let out = translate(&raw(choice_extra));
+			assert_eq!(
+				out.stop_reason,
+				Some(messages::StopReason::EndTurn),
+				"{choice_extra}"
+			);
+			assert_eq!(out.stop_sequence, None, "{choice_extra}");
+		}
+	}
+
+	#[test]
+	fn other_finish_reasons_never_report_a_stop_sequence() {
+		let body = r#"{"id":"x","object":"chat.completion","created":0,"model":"m",
+			"choices":[{"index":0,"finish_reason":"length","stop_reason":"F",
+			"message":{"role":"assistant","content":"..."}}],
+			"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+		let out = translate(body);
+		assert_eq!(out.stop_reason, Some(messages::StopReason::MaxTokens));
+		assert_eq!(out.stop_sequence, None);
+
+		let body = r#"{"id":"x","object":"chat.completion","created":0,"model":"m",
+			"choices":[{"index":0,"finish_reason":"content_filter","stop_reason":"F",
+			"message":{"role":"assistant","content":"..."}}],
+			"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+		let out = translate(body);
+		assert_eq!(out.stop_reason, Some(messages::StopReason::Refusal));
+		assert_eq!(out.stop_sequence, None);
+	}
+}
+
+mod stop_sequence_reporting_streaming {
+	use super::super::from_messages::stop_sequence_from_fields;
+	use crate::types::completions::typed as completions;
+
+	#[test]
+	fn stream_chunk_types_keep_engine_extension_fields() {
+		// Without `rest` these were dropped at parse time, so the streaming path
+		// could never see them.
+		let chunk: completions::StreamResponse = serde_json::from_str(
+			r#"{"id":"c","object":"chat.completion.chunk","created":0,"model":"m",
+			"choices":[{"index":0,"delta":{},"finish_reason":"stop","stop_reason":"F","matched_stop":"F"}]}"#,
+		)
+		.unwrap();
+		assert_eq!(chunk.choices[0].rest["stop_reason"], "F");
+		assert_eq!(chunk.choices[0].rest["matched_stop"], "F");
+		// ...and a plain chunk serialises exactly as before: no phantom fields.
+		let plain: completions::StreamResponse = serde_json::from_str(
+			r#"{"id":"c","object":"chat.completion.chunk","created":0,"model":"m",
+			"choices":[{"index":0,"delta":{"content":"hi"}}]}"#,
+		)
+		.unwrap();
+		let out = serde_json::to_value(&plain).unwrap();
+		assert!(out["choices"][0].get("rest").is_none());
+	}
+
+	#[test]
+	fn precedence_and_type_rules_are_shared_with_the_buffered_path() {
+		let v = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
+		let (a, b, c) = (v(r#""F""#), v("128001"), v(r#""GREEN""#));
+		assert_eq!(
+			stop_sequence_from_fields([Some(&a), None, None]),
+			Some("F".into())
+		);
+		assert_eq!(
+			stop_sequence_from_fields([Some(&b), None, Some(&c)]),
+			Some("GREEN".into())
+		);
+		assert_eq!(stop_sequence_from_fields([Some(&b), None, None]), None);
+		assert_eq!(stop_sequence_from_fields([None, None, None]), None);
+	}
+}
+
+mod thinking_round_trip {
+	use agent_http::Body;
+	use bytes::Bytes;
+	use http_body_util::BodyExt;
+	use serde_json::{Value, json};
+
+	use super::super::from_messages;
+	use crate::conversion::messages::from_completions;
+	use crate::{LogContentFields, StreamingUsageGuard};
+
+	async fn events(body: Body) -> Vec<Value> {
+		let bytes = body.collect().await.unwrap().to_bytes();
+		String::from_utf8(bytes.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter(|data| *data != "[DONE]")
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect()
+	}
+
+	/// The event type, then the block index and the block or delta type when the event has them.
+	fn shape(event: &Value) -> String {
+		let mut out = event["type"].as_str().unwrap_or_default().to_string();
+		if let Some(index) = event["index"].as_u64() {
+			out.push_str(&format!(" {index}"));
+		}
+		for key in ["content_block", "delta"] {
+			if let Some(kind) = event[key]["type"].as_str() {
+				out.push(' ');
+				out.push_str(kind);
+			}
+		}
+		out
+	}
+
+	/// The single signed block is covered by the `reasoning_replay` request goldens; what is left to
+	/// pin down is a turn with several blocks, or with nothing an engine can replay.
+	#[test]
+	fn several_thinking_blocks_are_joined_when_a_turn_is_replayed() {
+		let request: crate::types::messages::Request = serde_json::from_value(json!({
+			"model": "m",
+			"max_tokens": 64,
+			"messages": [
+				{"role": "user", "content": "hi"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "plan", "signature": "sig"},
+					{"type": "redacted_thinking", "data": "opaque"},
+					{"type": "text", "text": "answer"}
+				]},
+				{"role": "user", "content": "more"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "one", "signature": "s1"},
+					{"type": "thinking", "thinking": "two", "signature": "s2"}
+				]}
+			]
+		}))
+		.unwrap();
+		let translated: Value =
+			serde_json::from_slice(&from_messages::translate(&request).unwrap()).unwrap();
+		let msgs = translated["messages"].as_array().unwrap();
+		assert_eq!(msgs.len(), 4);
+		// A redacted block holds nothing an engine can replay, so the turn keeps its signed block.
+		assert_eq!(msgs[1]["reasoning_content"], "plan");
+		assert_eq!(msgs[1]["reasoning_signature"], "sig");
+		assert_eq!(msgs[1]["content"][0]["text"], "answer");
+		// A turn made of thinking alone is still sent, joined into one reasoning text. Two blocks
+		// have two signatures, neither of which attests to the joined text.
+		assert_eq!(msgs[3]["role"], "assistant");
+		assert_eq!(msgs[3]["reasoning_content"], "one\n\ntwo");
+		assert!(msgs[3].get("reasoning_signature").is_none());
+		assert!(msgs[3].get("content").is_none());
+	}
+
+	/// The same rule on the response path, where the single-block case is the `thinking` golden.
+	#[test]
+	fn several_thinking_blocks_are_joined_in_a_response() {
+		let body = json!({
+			"id": "m1", "type": "message", "role": "assistant", "model": "m",
+			"stop_reason": "end_turn", "stop_sequence": null,
+			"usage": {"input_tokens": 1, "output_tokens": 1},
+			"content": [
+				{"type": "thinking", "thinking": "one", "signature": "s1"},
+				{"type": "thinking", "thinking": "two", "signature": "s2"},
+				{"type": "text", "text": "answer"}
+			]
+		});
+		let translated =
+			from_completions::translate_response(&Bytes::from(serde_json::to_vec(&body).unwrap()))
+				.unwrap();
+		let translated: Value = serde_json::from_slice(&translated.serialize().unwrap()).unwrap();
+		let message = &translated["choices"][0]["message"];
+		assert_eq!(message["reasoning_content"], "one\n\ntwo");
+		assert!(message.get("reasoning_signature").is_none());
+		assert_eq!(message["content"], "answer");
+	}
+
+	#[tokio::test]
+	async fn streamed_reasoning_opens_a_thinking_block_before_the_text() {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"pl"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_content":"an"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_signature":"sig"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"answer"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = events(from_messages::translate_stream(
+			Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		))
+		.await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		assert_eq!(
+			shapes,
+			[
+				"message_start",
+				"content_block_start 0 thinking",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 signature_delta",
+				"content_block_stop 0",
+				"content_block_start 1 text",
+				"content_block_delta 1 text_delta",
+				"content_block_stop 1",
+				"message_delta",
+				"message_stop",
+			]
+		);
+		assert_eq!(events[2]["delta"]["thinking"], "pl");
+		assert_eq!(events[4]["delta"]["signature"], "sig");
+	}
+
+	/// Reasoning that is withheld arrives as a signature with no text, and the block still has to
+	/// reach the client: it is what the next turn replays.
+	#[tokio::test]
+	async fn a_streamed_signature_alone_still_opens_a_thinking_block() {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_signature":"sig"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"answer"}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = events(from_messages::translate_stream(
+			Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		))
+		.await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		assert_eq!(
+			shapes,
+			[
+				"message_start",
+				"content_block_start 0 thinking",
+				"content_block_delta 0 signature_delta",
+				"content_block_stop 0",
+				"content_block_start 1 text",
+				"content_block_delta 1 text_delta",
+				"content_block_stop 1",
+				"message_delta",
+				"message_stop",
+			]
+		);
+		assert_eq!(events[2]["delta"]["signature"], "sig");
+	}
+}
+
+mod usage_reporting_streaming {
+	use crate::types::completions::typed as completions;
+
+	#[test]
+	fn final_chunk_without_delta_still_reports_usage() {
+		// GLM and friends end the stream with a choice that carries only `finish_reason` and
+		// `index`. `delta` used to be a required field, so the whole chunk failed to parse and the
+		// usage riding along with it was dropped on the floor.
+		let chunk: completions::StreamResponse = serde_json::from_str(
+			r#"{"id":"c","object":"chat.completion.chunk","created":0,"model":"m",
+			"choices":[{"index":0,"finish_reason":"tool_calls"}],
+			"usage":{"prompt_tokens":37031,"completion_tokens":44,"total_tokens":37075}}"#,
+		)
+		.expect("a chunk without `delta` should parse");
+
+		assert_eq!(chunk.choices[0].delta, Default::default());
+		let usage = chunk.usage.expect("usage should survive");
+		assert_eq!(usage.prompt_tokens, 37031);
+		assert_eq!(usage.completion_tokens, 44);
+		assert_eq!(usage.total_tokens, 37075);
+	}
+}

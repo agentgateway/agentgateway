@@ -295,6 +295,192 @@ async fn tracing_exports_to_otel_trace_mock() {
 	assert_eq!(ext_authz.parent_span_id, request.span_id);
 }
 
+/// `parentNotSampled` exports spans for a request whose incoming `traceparent` is `-00`, and
+/// reflects that recording decision by forwarding `-01` upstream.
+#[tokio::test]
+async fn tracing_parent_not_sampled_exports_and_propagates_sampled_flag() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.spans.lock().unwrap().extend(
+				request
+					.resource_spans
+					.iter()
+					.flat_map(|resource| &resource.scope_spans)
+					.flat_map(|scope| &scope.spans)
+					.cloned(),
+			);
+			oteltracemock::ok_response()
+		}
+	}
+
+	const TRACE_ID: &str = "0af7651916cd43dd8448eb211c80319c";
+	const PARENT_SPAN_ID: &str = "b7ad6b7169203331";
+	let unsampled = format!("00-{TRACE_ID}-{PARENT_SPAN_ID}-00");
+
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || CountingTraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"parentNotSampled": true
+			}
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[("traceparent", unsampled.as_str())],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	let upstream = read_body(res.into_body()).await;
+	let forwarded = upstream
+		.headers
+		.get("traceparent")
+		.expect("traceparent should be forwarded upstream")
+		.to_str()
+		.unwrap()
+		.to_string();
+	assert!(
+		forwarded.ends_with("-01"),
+		"upstream traceparent must reflect the gateway's recording decision, got {forwarded}"
+	);
+	assert!(
+		forwarded.starts_with(&format!("00-{TRACE_ID}-")),
+		"upstream traceparent must stay in the client's trace, got {forwarded}"
+	);
+	assert!(
+		!forwarded.contains(PARENT_SPAN_ID),
+		"upstream traceparent must carry the gateway's own span id, got {forwarded}"
+	);
+
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while spans.lock().unwrap().is_empty() {
+			tokio::time::sleep(Duration::from_millis(5)).await;
+		}
+	})
+	.await
+	.expect("a span should be exported for an unsampled parent");
+
+	let spans = spans.lock().unwrap();
+	let request = spans
+		.iter()
+		.find(|span| hex::encode(&span.trace_id) == TRACE_ID)
+		.expect("exported span should stay in the client's trace");
+	assert_eq!(hex::encode(&request.parent_span_id), PARENT_SPAN_ID);
+	assert_eq!(request.flags & 0x01, 0x01);
+}
+
+/// Without `parentNotSampled`, an incoming `-00` is honored and nothing is exported.
+#[tokio::test]
+async fn tracing_honors_unsampled_parent_by_default() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	struct CountingTraceHandler {
+		spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+	}
+
+	#[async_trait::async_trait]
+	impl oteltracemock::Handler for CountingTraceHandler {
+		async fn export(
+			&mut self,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+		) -> Result<
+			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+			tonic::Status,
+		> {
+			self.spans.lock().unwrap().extend(
+				request
+					.resource_spans
+					.iter()
+					.flat_map(|resource| &resource.scope_spans)
+					.flat_map(|scope| &scope.spans)
+					.cloned(),
+			);
+			oteltracemock::ok_response()
+		}
+	}
+
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || CountingTraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"clientSampling": true
+			}
+		}))
+		.await;
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo",
+		&[(
+			"traceparent",
+			"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00",
+		)],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	let upstream = read_body(res.into_body()).await;
+	let forwarded = upstream
+		.headers
+		.get("traceparent")
+		.expect("traceparent should be forwarded upstream")
+		.to_str()
+		.unwrap()
+		.to_string();
+	assert_eq!(
+		forwarded, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00",
+		"an unsampled request must pass the client's traceparent through untouched, so downstream \
+		 does not parent onto a span the gateway never recorded"
+	);
+
+	tokio::time::sleep(Duration::from_millis(200)).await;
+	assert!(spans.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn multiple_requests() {
 	let (_mock, _bind, io) = basic_setup().await;
@@ -396,6 +582,119 @@ async fn basic_http2() {
 		.unwrap();
 	assert_eq!(res.status(), 200);
 	assert_eq!(read_body(res.into_body()).await.version, Version::HTTP_2);
+}
+
+#[rstest::rstest]
+#[case::http1(Version::HTTP_11, Version::HTTP_11, false)]
+#[case::http2(Version::HTTP_2, Version::HTTP_2, false)]
+#[case::http2_to_http1(Version::HTTP_2, Version::HTTP_11, false)]
+#[case::http1_to_http2(Version::HTTP_11, Version::HTTP_2, false)]
+#[case::http2_content_length(Version::HTTP_2, Version::HTTP_2, true)]
+#[case::http2_to_http1_content_length(Version::HTTP_2, Version::HTTP_11, true)]
+#[tokio::test]
+async fn request_trailers(
+	#[case] version: Version,
+	#[case] backend_version: Version,
+	#[case] content_length: bool,
+) {
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = listener.local_addr().unwrap();
+	let (tx, rx) = oneshot::channel();
+	let tx = Arc::new(StdMutex::new(Some(tx)));
+	let server = tokio::spawn(async move {
+		let (stream, _) = listener.accept().await.unwrap();
+		let svc = service_fn(move |req: hyper::Request<hyper::body::Incoming>| {
+			let tx = tx.clone();
+			async move {
+				let (parts, body) = req.into_parts();
+				let body = body.collect().await.unwrap();
+				let trailers = body.trailers().cloned();
+				tx.lock()
+					.unwrap()
+					.take()
+					.unwrap()
+					.send((parts, body.to_bytes(), trailers))
+					.unwrap();
+				Ok::<_, Infallible>(hyper::Response::new(Body::empty()))
+			}
+		});
+		hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+			.serve_connection(TokioIo::new(stream), svc)
+			.await
+			.unwrap();
+	});
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::format!("{}", addr), "".into()),
+				Target::Address(addr),
+			),
+			inline_policies: vec![BackendTrafficPolicy::HTTP(backend::HTTP {
+				version: Some(backend_version),
+				..Default::default()
+			})],
+		})
+		.with_bind(simple_bind())
+		.with_route(basic_route(addr));
+	let io = if version == Version::HTTP_2 {
+		t.serve_http2(BIND_KEY)
+	} else {
+		t.serve_http(BIND_KEY)
+	};
+	let mut trailers = HeaderMap::new();
+	trailers.insert("x-input-trailer", "input-done".parse().unwrap());
+	let body = Body::new(StreamBody::new(tokio_stream::iter([
+		Ok::<_, Infallible>(Frame::data(bytes::Bytes::from_static(b"grpc-payload"))),
+		Ok(Frame::trailers(trailers.clone())),
+	])));
+	let mut request = RequestBuilder::new(Method::POST, "http://lo")
+		.version(version)
+		.header(header::TRAILER, "x-input-trailer")
+		.body(body);
+	if content_length {
+		request = request.header(header::CONTENT_LENGTH, "12");
+	}
+	let res = request.send(io).await.unwrap();
+	assert_eq!(res.status(), 200);
+	let (parts, bytes, received_trailers) = rx.await.unwrap();
+	server.abort();
+	assert_eq!(parts.version, backend_version);
+	assert_eq!(parts.headers.get_all(header::TRAILER).iter().count(), 1);
+	if backend_version == Version::HTTP_11 {
+		assert!(!parts.headers.contains_key(header::CONTENT_LENGTH));
+		assert_eq!(parts.headers[header::TRANSFER_ENCODING], "chunked");
+	} else if content_length {
+		assert_eq!(parts.headers[header::CONTENT_LENGTH], "12");
+	}
+	assert_eq!(bytes, "grpc-payload");
+	assert_eq!(received_trailers, Some(trailers));
+}
+
+#[tokio::test]
+async fn http2_host_header_without_authority() {
+	let mock = simple_mock().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(basic_route(*mock.address()));
+	let (mut client, connection) = h2::client::handshake(t.serve(BIND_KEY)).await.unwrap();
+	let connection = tokio::spawn(connection);
+
+	// h2 encodes an HTTP/1.x-version request on an HTTP/2 connection without
+	// :authority, preserving the regular Host header instead.
+	let request = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("/")
+		.version(Version::HTTP_11)
+		.header(header::HOST, "lo")
+		.body(())
+		.unwrap();
+	let (response, _) = client.send_request(request, true).unwrap();
+	assert_eq!(response.await.unwrap().status(), 200);
+
+	connection.abort();
 }
 
 async fn grpc_trailer_backend(status: &'static str) -> std::net::SocketAddr {

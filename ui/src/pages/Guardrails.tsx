@@ -1,3 +1,4 @@
+import { useBlocker } from '@tanstack/react-router';
 import { Braces, ListChecks, Pencil, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -240,8 +241,7 @@ export function GuardrailsPage() {
 	const help = useSchemaHelp();
 	const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
 	const fileOwned = Boolean(
-		rawConfig.data?.llm?.policies &&
-			Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, 'guardrails')
+		rawConfig.data?.llm?.policies && Object.hasOwn(rawConfig.data.llm.policies, 'guardrails')
 	);
 	const saving = upsertPolicy.isPending || deleteResource.isPending;
 	const saveError = upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
@@ -314,7 +314,7 @@ export function GuardrailsPage() {
 				<ConfirmDialog
 					title={tr('copy.removeAllLlmGuardrails')}
 					destructive
-					confirmLabel="Remove guardrails"
+					confirmLabel={tr('copy.removeGuardrails')}
 					confirmDisabled={saving}
 					onCancel={() => setRemoveAllOpen(false)}
 					onConfirm={remove}
@@ -343,6 +343,11 @@ function GuardrailsEditor(props: {
 	const [draft, setDraft] = useState<GuardrailDraft>(() => initialDraft);
 	const [error, setError] = useState<string | null>(null);
 	const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
+	const blocker = useBlocker({
+		shouldBlockFn: ({ current, next }) => dirty && current.pathname !== next.pathname,
+		enableBeforeUnload: dirty,
+		withResolver: true
+	});
 
 	function validateAndBuild(nextDraft: GuardrailDraft) {
 		setDraft(nextDraft);
@@ -369,6 +374,17 @@ function GuardrailsEditor(props: {
 
 	return (
 		<div className="guardrails-editor">
+			{blocker.status === 'blocked' ? (
+				<ConfirmDialog
+					title={tr('drawer.discardUnsavedChanges')}
+					destructive
+					confirmLabel={tr('common.discardChanges')}
+					onCancel={blocker.reset}
+					onConfirm={blocker.proceed}
+				>
+					<p>{tr('drawer.unsavedChangesMessage')}</p>
+				</ConfirmDialog>
+			) : null}
 			{error ? (
 				<StatusBanner state="bad" title={tr('copy.invalidGuardrails')}>
 					{error}
@@ -402,8 +418,8 @@ function GuardrailsEditor(props: {
 								})
 							: undefined
 					}
-					diffTitle="Guardrails config diff"
-					saveLabel="Save guardrails"
+					diffTitle={tr('copy.guardrailsConfigDiff')}
+					saveLabel={tr('copy.saveGuardrails')}
 					saving={props.saving}
 					onSave={save}
 					beforeDiff={() => Boolean(validateAndBuild(draft))}
@@ -465,6 +481,7 @@ function GuardrailSection(props: {
 				) : null}
 				{props.guards.map((guard, index) => (
 					<GuardCard
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						key={index}
 						phase={props.phase}
 						guard={guard}
@@ -569,7 +586,7 @@ function AddGuardModal(props: {
 		>
 			<FieldGroup label={tr('copy.guardType')} tooltip={guardTypeHelp(props.phase, props.help)}>
 				<EnumSelector
-					ariaLabel="Guard type"
+					ariaLabel={tr('copy.guardType')}
 					value={kind}
 					options={options}
 					placeholder={tr('copy.selectGuardType')}
@@ -656,7 +673,7 @@ function EditGuardDrawer(props: {
 			{draft.kind === 'unsupported' ? (
 				<>
 					<Field label={tr('copy.guardType')}>
-						<input value="Unsupported raw YAML" disabled />
+						<input value={tr('copy.unsupportedRawYaml')} disabled />
 					</Field>
 					<UnsupportedGuardFields guard={draft} />
 				</>
@@ -664,7 +681,7 @@ function EditGuardDrawer(props: {
 				<>
 					<FieldGroup label={tr('copy.guardType')} tooltip={guardTypeHelp(props.phase, props.help)}>
 						<EnumSelector
-							ariaLabel="Guard type"
+							ariaLabel={tr('copy.guardType')}
 							value={draft.kind}
 							options={props.phase === 'request' ? requestGuardKinds : responseGuardKinds}
 							onChange={value => setDraft(emptyGuardDraft(value))}
@@ -772,7 +789,7 @@ function BuiltinGuardFields(props: {
 				tooltip={props.help.field<RegexRules>('RegexRules', 'action')}
 			>
 				<EnumSelector
-					ariaLabel="Action"
+					ariaLabel={tr('copy.action')}
 					value={props.guard.action}
 					options={[
 						{
@@ -845,7 +862,7 @@ function RegexGuardFields(props: {
 				tooltip={props.help.field<RegexRules>('RegexRules', 'action')}
 			>
 				<EnumSelector
-					ariaLabel="Action"
+					ariaLabel={tr('copy.action')}
 					value={props.guard.action}
 					options={[
 						{
@@ -907,7 +924,7 @@ function WebhookGuardFields(props: {
 				tooltip={props.help.field<Webhook>('Webhook', 'failureMode')}
 			>
 				<EnumSelector
-					ariaLabel="Failure mode"
+					ariaLabel={tr('copy.failureMode')}
 					value={props.guard.failureMode}
 					options={[
 						{
@@ -996,7 +1013,7 @@ function BedrockGuardFields(props: {
 			>
 				<CloudRegionCombobox
 					cloud="aws"
-					ariaLabel="AWS region"
+					ariaLabel={tr('copy.awsRegion')}
 					value={props.guard.region}
 					onChange={value =>
 						props.onChange({
@@ -1050,7 +1067,7 @@ function GoogleModelArmorFields(props: {
 			>
 				<CloudRegionCombobox
 					cloud="google"
-					ariaLabel="Location"
+					ariaLabel={tr('copy.location')}
 					value={props.guard.location}
 					onChange={value =>
 						props.onChange({
@@ -1232,7 +1249,7 @@ function RejectionFields(props: {
 							rejectionBody: event.target.value
 						} as Partial<SupportedGuardDraft>)
 					}
-					placeholder="The request was rejected due to inappropriate content"
+					placeholder={tr('copy.exampleRejectionBody')}
 				/>
 			</Field>
 		</div>
@@ -1251,6 +1268,7 @@ function PatternList(props: {
 			tooltip={props.help.field<RegexRules>('RegexRules', 'rules')}
 		>
 			{props.patterns.map((pattern, index) => (
+				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<div className="guardrail-pattern-row" key={index}>
 					<input
 						className="mono-input"
@@ -1569,21 +1587,22 @@ function validateDraft(draft: GuardrailDraft) {
 	for (const guard of guards) {
 		if (guard.kind === 'unsupported') continue;
 		if (guard.kind === 'builtin' && guard.builtins.length === 0) {
-			return 'Each built-in detector guard needs at least one detector.';
+			return tr('copy.eachBuiltInDetectorGuardNeedsAtLeastOneDetector');
 		}
 		if (guard.kind === 'regex' && guard.patterns.every(pattern => !pattern.trim())) {
-			return 'Each custom regex guard needs at least one pattern.';
+			return tr('copy.eachCustomRegexGuardNeedsAtLeastOnePattern');
 		}
-		if (guard.kind === 'webhook' && !guard.target.trim()) return 'Webhook guards require a target.';
+		if (guard.kind === 'webhook' && !guard.target.trim())
+			return tr('copy.webhookGuardsRequireATarget');
 		if (
 			guard.kind === 'bedrockGuardrails' &&
 			(!guard.guardrailIdentifier.trim() || !guard.guardrailVersion.trim() || !guard.region.trim())
 		)
-			return 'Bedrock guardrails require identifier, version, and region.';
+			return tr('copy.bedrockGuardrailsRequireIdentifierVersionAndRegion');
 		if (guard.kind === 'googleModelArmor' && (!guard.templateId.trim() || !guard.projectId.trim()))
-			return 'Google Model Armor requires template ID and project ID.';
+			return tr('copy.googleModelArmorRequiresTemplateIdAndProjectId');
 		if (guard.kind === 'azureContentSafety' && !guard.endpoint.trim())
-			return 'Azure Content Safety requires an endpoint.';
+			return tr('copy.azureContentSafetyRequiresAnEndpoint');
 		if (
 			guard.kind === 'azureContentSafety' &&
 			guard.severityThreshold.trim() &&
@@ -1591,7 +1610,7 @@ function validateDraft(draft: GuardrailDraft) {
 				Number(guard.severityThreshold) < 0 ||
 				Number(guard.severityThreshold) > 6)
 		) {
-			return 'Azure severity threshold must be an integer from 0 to 6.';
+			return tr('copy.azureSeverityThresholdMustBeAnIntegerFrom0To6');
 		}
 		if (
 			guard.rejectionStatus.trim() &&
@@ -1599,7 +1618,7 @@ function validateDraft(draft: GuardrailDraft) {
 				Number(guard.rejectionStatus) < 100 ||
 				Number(guard.rejectionStatus) > 599)
 		) {
-			return 'Rejection status must be a valid HTTP status code.';
+			return tr('copy.rejectionStatusMustBeAValidHttpStatusCode');
 		}
 	}
 	return null;

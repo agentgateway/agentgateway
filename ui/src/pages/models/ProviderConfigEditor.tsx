@@ -80,11 +80,18 @@ export function ProviderConfigEditor(props: {
 			{
 				...(props.params ?? {}),
 				apiKey: null,
-				...(nextProvider === 'azure' ? { azureResourceType: 'openAI' } : {})
+				...(nextProvider === 'azure' ? { azureResourceType: 'openAI' } : {}),
+				...(nextProvider === 'bedrock' && provider !== 'bedrock'
+					? {
+							bedrockEndpointPreference:
+								props.params?.bedrockEndpointPreference ?? 'mantlePreferred'
+						}
+					: {})
 			}
 		);
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (provider === 'azure' && !props.params?.azureResourceType) {
 			patchParams({ azureResourceType: 'openAI' });
@@ -111,7 +118,7 @@ export function ProviderConfigEditor(props: {
 				tooltip={props.help.field<LlmModel>('LocalLLMModels', 'provider')}
 			>
 				<Dropdown
-					ariaLabel="Provider"
+					ariaLabel={tr('copy.provider')}
 					value={selectedProviderValue}
 					searchable
 					options={options}
@@ -174,7 +181,7 @@ export function ProviderConfigEditor(props: {
 							>
 								<CloudRegionCombobox
 									cloud="google"
-									ariaLabel="Vertex region"
+									ariaLabel={tr('copy.vertexRegion')}
 									value={props.params?.vertexRegion ?? ''}
 									onChange={value => patchParams({ vertexRegion: value || null })}
 									placeholder="us-central1"
@@ -193,12 +200,30 @@ export function ProviderConfigEditor(props: {
 						>
 							<CloudRegionCombobox
 								cloud="aws"
-								ariaLabel="AWS region"
+								ariaLabel={tr('copy.awsRegion')}
 								value={props.params?.awsRegion ?? ''}
 								onChange={value => patchParams({ awsRegion: value || null })}
 								placeholder="us-west-2"
 							/>
 						</Field>
+					) : null}
+					{provider === 'bedrock' ? (
+						<FieldGroup
+							label={tr('copy.bedrockEndpoint')}
+							tooltip={tr('copy.bedrockEndpointDescription')}
+						>
+							<EnumSelector<NonNullable<LlmParams['bedrockEndpointPreference']>>
+								ariaLabel={tr('copy.bedrockEndpoint')}
+								value={props.params?.bedrockEndpointPreference ?? 'runtimePreferred'}
+								onChange={bedrockEndpointPreference => patchParams({ bedrockEndpointPreference })}
+								options={[
+									{ value: 'mantlePreferred', label: tr('copy.preferMantle') },
+									{ value: 'runtimePreferred', label: tr('copy.preferRuntime') },
+									{ value: 'mantleOnly', label: tr('copy.mantleOnlyAdvanced') },
+									{ value: 'runtimeOnly', label: tr('copy.runtimeOnlyAdvanced') }
+								]}
+							/>
+						</FieldGroup>
 					) : null}
 					{provider === 'ollama' ? (
 						<Field
@@ -247,7 +272,7 @@ export function ProviderConfigEditor(props: {
 								tooltip={props.help.field<LlmParams>('LocalLLMParams', 'azureResourceType')}
 							>
 								<EnumSelector
-									ariaLabel="Azure resource type"
+									ariaLabel={tr('copy.azureResourceType')}
 									value={azureResourceType}
 									options={[
 										{ value: 'openAI', label: 'OpenAI' },
@@ -556,7 +581,11 @@ function AzureCredentials(props: {
 }) {
 	const azure = canonicalAuth(props.auth, 'azure')?.azure ?? null;
 	const managed =
-		azure && 'explicitConfig' in azure && 'managedIdentity' in azure.explicitConfig
+		azure &&
+		'explicitConfig' in azure &&
+		typeof azure.explicitConfig === 'object' &&
+		azure.explicitConfig !== null &&
+		'managedIdentity' in azure.explicitConfig
 			? azure.explicitConfig.managedIdentity
 			: null;
 	const [mode, setMode] = useState<AzureCredentialMode>(
@@ -732,7 +761,7 @@ function VisibilityButton(props: { visible: boolean; onClick: () => void }) {
 		<button
 			className="icon-button api-key-visibility"
 			type="button"
-			aria-label={props.visible ? 'Hide secret' : 'Show secret'}
+			aria-label={props.visible ? tr('copy.hideSecret') : tr('copy.showSecret')}
 			onClick={props.onClick}
 		>
 			{props.visible ? <EyeOff size={16} /> : <Eye size={16} />}

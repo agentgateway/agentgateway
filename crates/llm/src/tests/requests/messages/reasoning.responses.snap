@@ -1,0 +1,61 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/reasoning.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 1024
+  thinking:
+    type: adaptive
+  output_config:
+    effort: high
+  output_format: markdown
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: Give one concise insight about distributed consensus.
+          cache_control:
+            type: ephemeral
+            scope: turn
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Give one concise insight about distributed consensus.",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-terra",
+    "max_output_tokens": 1024,
+    "stream": false,
+    "reasoning": {
+      "effort": "high"
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.6-terra",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Give one concise insight about distributed consensus."
+      }
+    ]
+  }
+}

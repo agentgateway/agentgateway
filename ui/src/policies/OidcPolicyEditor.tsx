@@ -184,17 +184,17 @@ export function OidcPolicyEditor(props: {
 
 	function validateOidcPolicy() {
 		const errors: OidcFieldErrors = {};
-		if (!issuer.trim()) errors.issuer = 'Issuer is required.';
-		if (!clientId.trim()) errors.clientId = 'Client ID is required.';
-		if (!clientSecret.trim()) errors.clientSecret = 'Client secret is required.';
-		if (!redirectURI.trim()) errors.redirectURI = 'Redirect URI is required.';
+		if (!issuer.trim()) errors.issuer = tr('copy.issuerIsRequired');
+		if (!clientId.trim()) errors.clientId = tr('copy.clientIdIsRequired');
+		if (!clientSecret.trim()) errors.clientSecret = tr('copy.clientSecretIsRequired');
+		if (!redirectURI.trim()) errors.redirectURI = tr('copy.redirectUriIsRequired');
 		if (providerMode === 'discovery') {
 			const discoveryError = validateSource(discovery, false);
 			if (discoveryError) errors.discovery = discoveryError;
 		} else {
 			if (!authorizationEndpoint.trim())
-				errors.authorizationEndpoint = 'Authorization endpoint is required.';
-			if (!tokenEndpoint.trim()) errors.tokenEndpoint = 'Token endpoint is required.';
+				errors.authorizationEndpoint = tr('copy.authorizationEndpointIsRequired');
+			if (!tokenEndpoint.trim()) errors.tokenEndpoint = tr('copy.tokenEndpointIsRequired');
 			const jwksError = validateSource(jwks, true);
 			if (jwksError) errors.jwks = jwksError;
 		}
@@ -279,7 +279,7 @@ export function OidcPolicyEditor(props: {
 						tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'discovery')}
 						value={discovery}
 						fieldError={fieldErrors.discovery}
-						optionalText="Default: issuer + /.well-known/openid-configuration"
+						optionalText={tr('copy.defaultIssuerDiscoveryEndpoint')}
 						onChange={value => {
 							setDiscovery(value);
 							clearFieldError('discovery');
@@ -328,7 +328,7 @@ export function OidcPolicyEditor(props: {
 						>
 							<EnumSelector
 								value={tokenEndpointAuth}
-								ariaLabel="Token endpoint auth"
+								ariaLabel={tr('copy.tokenEndpointAuth')}
 								options={tokenEndpointAuthOptions}
 								onChange={setTokenEndpointAuth}
 							/>
@@ -533,7 +533,7 @@ function sourceToConfig(source: SourceDraft) {
 }
 
 function validateSource(source: SourceDraft, required: boolean) {
-	if (source.mode === 'none') return required ? 'Source is required.' : undefined;
-	if (!source.value.trim()) return 'Value is required.';
+	if (source.mode === 'none') return required ? tr('copy.sourceIsRequired') : undefined;
+	if (!source.value.trim()) return tr('copy.valueIsRequired');
 	return undefined;
 }

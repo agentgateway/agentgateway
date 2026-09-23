@@ -1,0 +1,22 @@
+disallowed-methods = [
+  { path = "rustls::ClientConfig::builder", reason = "TLS configs must use builder_with_provider with a provider from agentgateway::crypto::tls" },
+  { path = "rustls::ClientConfig::builder_with_protocol_versions", reason = "TLS configs must use builder_with_provider with a provider from agentgateway::crypto::tls" },
+  { path = "rustls::ServerConfig::builder", reason = "TLS configs must use builder_with_provider with a provider from agentgateway::crypto::tls" },
+  { path = "rustls::ServerConfig::builder_with_protocol_versions", reason = "TLS configs must use builder_with_provider with a provider from agentgateway::crypto::tls" },
+  { path = "rustls::crypto::CryptoProvider::get_default", reason = "TLS providers must come from agentgateway::crypto::tls" },
+  { path = "rustls::crypto::aws_lc_rs::default_provider", reason = "TLS providers must come from agentgateway::crypto::tls" },
+  { path = "rustls::crypto::ring::default_provider", reason = "TLS providers must come from agentgateway::crypto::tls", allow-invalid = true },
+  { path = "rustls::crypto::default_fips_provider", reason = "TLS providers must come from agentgateway::crypto::tls", allow-invalid = true },
+  { path = "rustls_symcrypt::default_symcrypt_provider", reason = "TLS providers must come from agentgateway::crypto::tls", allow-invalid = true },
+  { path = "rustls::ConfigBuilder::with_ech", reason = "ECH changes whether a rustls client config is FIPS-compatible", allow-invalid = true },
+]
+
+disallowed-fields = [
+  { path = "rustls::ClientConfig::require_ems", reason = "rustls derives this FIPS precondition from the selected provider" },
+  { path = "rustls::ServerConfig::require_ems", reason = "rustls derives this FIPS precondition from the selected provider" },
+  { path = "rustls::crypto::CryptoProvider::cipher_suites", reason = "TLS providers may only be assembled in agentgateway::crypto::tls" },
+  { path = "rustls::crypto::CryptoProvider::kx_groups", reason = "TLS providers may only be assembled in agentgateway::crypto::tls" },
+  { path = "rustls::crypto::CryptoProvider::signature_verification_algorithms", reason = "TLS providers may only be assembled in agentgateway::crypto::tls" },
+  { path = "rustls::crypto::CryptoProvider::secure_random", reason = "TLS providers may only be assembled in agentgateway::crypto::tls" },
+  { path = "rustls::crypto::CryptoProvider::key_provider", reason = "TLS providers may only be assembled in agentgateway::crypto::tls" },
+]

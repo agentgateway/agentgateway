@@ -55,6 +55,41 @@ fn test_aws_auth_deserializes_assume_role() {
 }
 
 #[test]
+fn test_aws_auth_deserializes_assume_role_with_external_id() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"externalId": "tenant-a:prod/12345"
+		}
+	}))
+	.expect("should deserialize assume role with external id");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => assert_eq!(ar.external_id.as_deref(), Some("tenant-a:prod/12345")),
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[rstest::rstest]
+#[case::too_short("a")]
+#[case::too_long(&"a".repeat(1225))]
+#[case::bad_charset("tenant a")]
+fn test_aws_auth_rejects_invalid_external_id(#[case] external_id: &str) {
+	let result: Result<AwsAuth, _> = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"externalId": external_id
+		}
+	}));
+	assert!(
+		result.is_err(),
+		"external id {external_id:?} should be rejected"
+	);
+}
+
+#[test]
 fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
 	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
 		"assumeRole": {
@@ -1030,7 +1065,7 @@ async fn test_backend_auth_combined_key_and_credentials() {
 }
 
 #[tokio::test]
-async fn test_backend_auth_credentials_invalid_value_errors() {
+async fn test_backend_auth_credentials_invalid_value_is_local() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -1049,8 +1084,17 @@ async fn test_backend_auth_credentials_invalid_value_errors() {
 		kind: None,
 		credentials: vec![credential("x-bad", "value\nwith\nnewlines", None)],
 	};
-	let err = apply_backend_auth(&backend_info, &auth, &mut req).await;
-	assert!(err.is_err(), "invalid header value must error");
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid header value must error");
+	assert!(matches!(
+		&err,
+		ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(_))
+	));
+	assert_eq!(
+		err.into_response_with_grpc(false).status(),
+		http::StatusCode::INTERNAL_SERVER_ERROR
+	);
 }
 
 #[test]

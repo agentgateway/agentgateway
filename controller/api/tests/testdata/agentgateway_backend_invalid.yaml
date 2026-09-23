@@ -293,3 +293,18 @@ spec:
           name: other-backend
         formats:
         - type: Completions
+
+---
+_err: Must have port for Service reference
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: custom-provider-default-service-missing-port
+spec:
+  ai:
+    provider:
+      custom:
+        backendRef:
+          name: llm-service
+        formats:
+        - type: Completions

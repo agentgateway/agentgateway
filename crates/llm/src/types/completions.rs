@@ -188,6 +188,7 @@ impl ResponseType for Response {
 			}),
 
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
+			pages: None,
 			count_tokens: None,
 
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
@@ -223,6 +224,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_chunk_latencies: Default::default(),
 		}
 	}
 
@@ -768,9 +771,17 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
+		/// The delta for this chunk. Providers are inconsistent about the final chunk: some send an
+		/// empty object alongside `finish_reason`, others omit the field entirely, so treat a missing
+		/// delta as an empty one rather than failing the whole chunk.
+		#[serde(default)]
 		pub delta: StreamResponseDelta,
 		/// The reason the model stopped generating tokens. This will be
 		/// `stop` if the model hit a natural stop point or a provided
@@ -830,6 +841,10 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoice {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,

@@ -160,15 +160,15 @@ pub fn form_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Resolv
 	let v = v.load(ftx)?.always_materialize_owned();
 	let bytes = v.as_bytes_pre_materialized()?;
 	let pairs = form_urlencoded::parse(bytes);
-	let mut map = hashbrown::HashMap::<Key, Value<'static>>::new();
+	let mut map = cel::types::map::IndexMap::<Key, Value<'static>>::default();
 	for (key, value) in pairs {
 		let key = Key::from(key.into_owned());
 		let value = Value::from(value.into_owned());
 		match map.entry(key) {
-			hashbrown::hash_map::Entry::Vacant(entry) => {
+			indexmap::map::Entry::Vacant(entry) => {
 				entry.insert(value);
 			},
-			hashbrown::hash_map::Entry::Occupied(mut entry) => match entry.get_mut() {
+			indexmap::map::Entry::Occupied(mut entry) => match entry.get_mut() {
 				Value::List(values) => {
 					let mut values = values.as_ref().to_vec();
 					values.push(value);

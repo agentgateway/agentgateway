@@ -19,8 +19,8 @@ func WithGatewayTransformationFunc(f GatewayTransformationFunction) GatewayColle
 }
 
 func processGatewayCollectionOptions(cfg *GatewayCollectionConfig, opts ...GatewayCollectionConfigOption) {
-	cfg.listenerIndex = krt.NewIndex(cfg.ListenerSets, "gatewayParent", func(o ListenerSet) []types.NamespacedName {
-		return []types.NamespacedName{o.GatewayParent}
+	cfg.listenerIndex = krt.NewIndex(cfg.ListenerSets, "gatewayParent", func(o *ListenerSet) []types.NamespacedName {
+		return []types.NamespacedName{o.ParentGateway}
 	})
 	cfg.transformationFunc = GatewayTransformationFunc
 	for _, fn := range opts {

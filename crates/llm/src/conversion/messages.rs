@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use agent_core::strng::{self, Strng};
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
@@ -83,7 +83,7 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use agent_core::strng;
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use bytes::Bytes;
 
 	use crate::conversion::completions::parse_data_url;
@@ -158,6 +158,15 @@ pub mod from_completions {
 		msg: &completions::RequestAssistantMessage,
 	) -> Vec<messages::ContentBlock> {
 		let mut out = Vec::new();
+		// An earlier thinking block is replayed ahead of the turn's text and tool calls, as the
+		// provider requires, and only with the signature it was issued with: an unsigned block is
+		// rejected.
+		if let Some(signature) = msg.reasoning_signature.as_deref().filter(|s| !s.is_empty()) {
+			out.push(messages::ContentBlock::Thinking {
+				thinking: msg.reasoning_content.clone().unwrap_or_default(),
+				signature: signature.to_string(),
+			});
+		}
 		if let Some(content) = &msg.content {
 			match content {
 				completions::RequestAssistantMessageContent::Text(text) => {
@@ -257,14 +266,21 @@ pub mod from_completions {
 	}
 
 	/// translate an OpenAI completions request to an anthropic messages request
-	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
+	pub fn translate(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id);
+		let xlated = translate_internal(typed, model_id, catalog);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
-	fn translate_internal(req: completions::Request, model_id: String) -> messages::Request {
+	fn translate_internal(
+		req: completions::Request,
+		model_id: String,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> messages::Request {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		let mut system_blocks = Vec::new();
@@ -388,6 +404,7 @@ pub mod from_completions {
 					completions::Tool::Function(function_tool) => {
 						Some(messages::Tool::Custom(messages::CustomTool {
 							name: function_tool.function.name.clone(),
+							strict: None,
 							description: function_tool.function.description.clone(),
 							input_schema: function_tool
 								.function
@@ -437,17 +454,37 @@ pub mod from_completions {
 			},
 			_ => None,
 		};
-		let thinking = req
-			.vendor_extensions
-			.thinking_budget_tokens
-			.or_else(|| {
-				req
-					.reasoning_effort
-					.as_ref()
-					.and_then(crate::types::thinking_budget_for_reasoning_effort)
-			})
-			.and_then(|budget_tokens| super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens))
-			.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens });
+		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&model_id, catalog);
+		let explicit_budget = req.vendor_extensions.thinking_budget_tokens;
+		let effort = req
+			.reasoning_effort
+			.as_ref()
+			.and_then(crate::types::anthropic_effort_for_reasoning_effort);
+		let (thinking, effort) = if let Some(budget_tokens) = explicit_budget
+			&& capabilities.legacy
+		{
+			(
+				super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
+					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+				None,
+			)
+		} else if (explicit_budget.is_some() || effort.is_some()) && capabilities.adaptive {
+			(
+				Some(messages::ThinkingInput::Adaptive {}),
+				Some(effort.unwrap_or(messages::ThinkingEffort::High)),
+			)
+		} else {
+			let budget_tokens =
+				explicit_budget.or_else(|| effort.map(crate::types::thinking_budget_for_anthropic_effort));
+			(
+				budget_tokens
+					.and_then(|budget_tokens| {
+						super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
+					})
+					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+				None,
+			)
+		};
 
 		let response_format = match req.response_format {
 			Some(completions::ResponseFormat::JsonSchema { json_schema }) => {
@@ -463,9 +500,9 @@ pub mod from_completions {
 			}),
 			Some(completions::ResponseFormat::Text) | None => None,
 		};
-		let output_config = if response_format.is_some() {
+		let output_config = if response_format.is_some() || effort.is_some() {
 			Some(messages::OutputConfig {
-				effort: None,
+				effort,
 				format: response_format,
 			})
 		} else {
@@ -502,7 +539,8 @@ pub mod from_completions {
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
-		let mut reasoning_content = None;
+		let mut reasoning_content: Option<String> = None;
+		let mut reasoning_signatures = Vec::new();
 		for block in resp.content {
 			match block {
 				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
@@ -533,9 +571,20 @@ pub mod from_completions {
 					// Should be on the request path, not the response path
 					continue;
 				},
-				// For now we ignore Redacted and signature think through a better approach as this may be needed
-				messages::ContentBlock::Thinking { thinking, .. } => {
-					reasoning_content = Some(thinking);
+				// Chat Completions carries one reasoning text, so several blocks are joined. The signature
+				// attests to one block and only survives a response with exactly one.
+				messages::ContentBlock::Thinking {
+					thinking,
+					signature,
+				} => {
+					match reasoning_content.as_mut() {
+						Some(text) => {
+							text.push_str("\n\n");
+							text.push_str(&thinking);
+						},
+						None => reasoning_content = Some(thinking),
+					}
+					reasoning_signatures.push(signature);
 				},
 				messages::ContentBlock::RedactedThinking { .. } => {},
 
@@ -560,12 +609,16 @@ pub mod from_completions {
 			refusal: None,
 			audio: None,
 			reasoning_content,
-			reasoning_signature: None,
+			reasoning_signature: match reasoning_signatures.as_slice() {
+				[signature] if !signature.is_empty() => Some(signature.clone()),
+				_ => None,
+			},
 			extra: None,
 		};
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
 		// Only one choice for anthropic
 		let choice = completions::ChatChoice {
+			rest: Default::default(),
 			index: 0,
 			message,
 			finish_reason,
@@ -651,6 +704,7 @@ pub mod from_completions {
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut next_tool_index = 0u32;
 		let mut ongoing_tool_calls: HashMap<usize, OngoingToolCall> = HashMap::new();
 		let mut completion = log_content.completion.then(String::new);
@@ -728,6 +782,7 @@ pub mod from_completions {
 						);
 
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: completions::StreamResponseDelta {
@@ -749,11 +804,16 @@ pub mod from_completions {
 					_ => None,
 				},
 				messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
+					let now = Instant::now();
 					if !saw_token {
 						saw_token = true;
+						last_token_at = Some(now);
 						log.update(|r| {
-							r.response.first_token = Some(Instant::now());
+							r.response.first_token = Some(now);
 						});
+					} else if let Some(prev) = last_token_at.replace(now) {
+						let gap = now.duration_since(prev);
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 					let mut dr = completions::StreamResponseDelta::default();
 					let mut emit_chunk = true;
@@ -786,13 +846,16 @@ pub mod from_completions {
 								None => emit_chunk = false,
 							}
 						},
-						messages::ContentBlockDelta::SignatureDelta { .. }
-						| messages::ContentBlockDelta::CitationsDelta { .. } => {
+						messages::ContentBlockDelta::SignatureDelta { signature } => {
+							dr.reasoning_signature = Some(signature)
+						},
+						messages::ContentBlockDelta::CitationsDelta { .. } => {
 							emit_chunk = false;
 						},
 					};
 					if emit_chunk {
 						let choice = completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: dr,
@@ -834,6 +897,7 @@ pub mod from_completions {
 					});
 					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
 						vec![completions::ChatChoiceStream {
+							rest: Default::default(),
 							index: 0,
 							logprobs: None,
 							delta: completions::StreamResponseDelta::default(),
@@ -874,6 +938,7 @@ pub mod from_completions {
 							// If no arguments were emitted for a tool call, send a synthetic `{}`
 							// for compatibility.
 							let choice = completions::ChatChoiceStream {
+								rest: Default::default(),
 								index: 0,
 								logprobs: None,
 								delta: completions::StreamResponseDelta {
@@ -1019,6 +1084,7 @@ pub fn passthrough_stream(
 	log_content: crate::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
+	let mut last_token_at: Option<Instant> = None;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
@@ -1065,11 +1131,16 @@ pub fn passthrough_stream(
 				_ => {},
 			},
 			messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
+				let now = Instant::now();
 				if !saw_token {
 					saw_token = true;
+					last_token_at = Some(now);
 					log.update(|r| {
-						r.response.first_token = Some(Instant::now());
+						r.response.first_token = Some(now);
 					});
+				} else if let Some(prev) = last_token_at.replace(now) {
+					let gap = now.duration_since(prev);
+					log.update(|r| r.response.inter_chunk_latencies.record(gap));
 				}
 				if let Some(c) = completion.as_mut()
 					&& let messages::ContentBlockDelta::TextDelta { text } = &delta

@@ -1,0 +1,21 @@
+{
+  "model": "gpt-4o",
+  "input": [
+    {
+      "role": "user",
+      "content": "Continue using the kernel."
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_1",
+      "namespace": "mcp.long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_long_namespace_",
+      "name": "js",
+      "arguments": "{}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_1",
+      "output": "2"
+    }
+  ]
+}

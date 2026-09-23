@@ -43,7 +43,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.baseURL)",message="baseURL requires provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.policies)",message="policies cannot be used with virtualModel"
-// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
+// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.visibility) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || has(self.baseURL)",message="ollama requires baseURL"
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || (isURL(self.baseURL) && (url(self.baseURL).getScheme() == 'http' || url(self.baseURL).getScheme() == 'https') && url(self.baseURL).getHostname() != \"\")",message="baseURL must be an absolute http or https URL with a host"
@@ -76,7 +76,6 @@ type AgentgatewayModelSpec struct {
 
 	// Controls whether clients can request this model directly. Internal models
 	// can only be selected by virtual models. Defaults to Public.
-	// +kubebuilder:default=Public
 	// +optional
 	Visibility ModelVisibility `json:"visibility,omitempty"`
 
@@ -104,6 +103,10 @@ type AgentgatewayModelSpec struct {
 	// BaseURL overrides the provider address and base path prefix. It must use the
 	// http or https scheme. Backend policies may override the default TLS
 	// configuration. Query parameters, fragments, and user info are not supported.
+	// The URL path is the upstream base path and defaults to / when omitted.
+	// Provider-specific endpoint paths are appended to this base path.
+	// For example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,
+	// while `https://api.openai.com` sends them to `/chat/completions`.
 	// +kubebuilder:validation:Format=uri
 	// +optional
 	BaseURL *LongString `json:"baseURL,omitempty"`
@@ -318,7 +321,6 @@ type WeightedModelTarget struct {
 	ModelTargetReference `json:",inline"`
 
 	// Relative traffic weight. Defaults to 1.
-	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=1000000
 	// +optional

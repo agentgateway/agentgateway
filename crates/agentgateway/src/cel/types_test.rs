@@ -5,6 +5,50 @@ use serde_json::json;
 use super::*;
 use crate::http::Body;
 
+#[tokio::test]
+async fn policy_snapshots_ignore_recording_but_logs_use_completed_output() {
+	use http_body_util::BodyExt;
+	let mut req = ::http::Request::new(Body::from_stream(futures_util::stream::iter([Ok::<
+		_,
+		std::io::Error,
+	>(
+		Bytes::from_static(b"hello"),
+	)])));
+	let _ = req.body_mut().inspect(2).await.unwrap();
+	req.body_mut().record(100);
+	let snapshot = snapshot_request(&mut req, false);
+	while req.body_mut().frame().await.is_some() {}
+	let policy = Executor::new_request_snapshot(Some(&snapshot));
+	assert!(policy.request.as_ref().unwrap().body.bytes().is_none());
+	assert_eq!(
+		policy
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"he"
+	);
+	let logger = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
+	assert_eq!(
+		logger.request.as_ref().unwrap().body.bytes().unwrap(),
+		"hello"
+	);
+	assert_eq!(
+		logger
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"hello"
+	);
+}
+
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
 	let mut req = ::http::Request::builder()
@@ -46,6 +90,7 @@ fn build_test_request() -> crate::http::Request {
 	};
 	req.extensions_mut().insert(backend);
 	req.extensions_mut().insert(ProxyContext {
+		error: None,
 		bind: Some("bind".into()),
 		gateway: Some(ProxyGatewayContext {
 			namespace: "default".into(),
@@ -87,6 +132,7 @@ fn build_test_request() -> crate::http::Request {
 		provider_total_tokens: Some(150),
 		service_tier: None,
 		first_token: None,
+		inter_chunk_latencies: crate::llm::TokenGapSummary::default(),
 		time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
 		time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 		count_tokens: None,
@@ -298,12 +344,26 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
+		pages: dec("0.02"),
+	});
+	// Cost per page
+	req
+		.extensions_mut()
+		.get_mut::<LLMContext>()
+		.unwrap()
+		.cost_rates = Some(llm::catalog::CostRates {
+		input: Some(3.0),
+		per_page: Some(0.005),
+		..Default::default()
 	});
 	let executor = Executor::new_request(&req);
 
-	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.525").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.input == 3.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.perPage == 0.005").unwrap()));
 }
 
 #[test]
@@ -328,6 +388,7 @@ fn test_route_metadata_context() {
 #[test]
 fn test_proxy_timing_is_native_duration() {
 	let proxy = ProxyContext {
+		error: None,
 		bind: None,
 		gateway: None,
 		listener: None,

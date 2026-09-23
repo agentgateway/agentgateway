@@ -1,0 +1,10 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+    organization: [not, a, string]
+    extra_headers:
+      Bad Header: value
+      X-Count: 1
+      X-Trace: first
+      x-trace: second

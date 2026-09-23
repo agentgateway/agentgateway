@@ -5,6 +5,7 @@ pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
 }
 
+#[allow(clippy::result_large_err)]
 pub async fn test_policy<P>(
 	policy: &P,
 	req: &mut crate::http::Request,
@@ -33,7 +34,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let log_cfg = log::Config {
 		filter: None,
 		fields: LoggingFields::default(),
-		database_fields: LoggingFields::default(),
+		database_fields: Default::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
 		database: None,

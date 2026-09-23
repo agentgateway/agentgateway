@@ -120,7 +120,7 @@ pub mod from_embeddings {
 			.map_err(AIError::RequestMarshal)?;
 		let params = Params::extract(req, &typed);
 
-		if provider.uses_embed_content(req.model.as_deref()) {
+		if provider.uses_embed_content(&typed.model) {
 			translate_embed_content_request(&typed, params)
 		} else {
 			translate_predict_request(&typed, params)
@@ -224,7 +224,7 @@ pub mod from_embeddings {
 		provider: &crate::vertex::Provider,
 		model: &str,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		let (data, prompt_tokens) = if provider.uses_embed_content(Some(model)) {
+		let (data, prompt_tokens) = if provider.uses_embed_content(model) {
 			translate_embed_content_response(bytes)?
 		} else {
 			translate_predict_response(bytes)?

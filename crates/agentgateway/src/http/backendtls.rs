@@ -299,13 +299,13 @@ impl ResolvedBackendTLS {
 			}
 
 			let roots = Arc::new(roots);
-			let provider = transport::tls::provider_with_options(
+			let provider = transport::tls::provider_with_options_validated(
 				&[],
 				self.key_exchange_groups.as_deref().unwrap_or_default(),
-			);
+			)?;
 			let ccb = ClientConfig::builder_with_provider(provider.clone())
 				.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-				.expect("server config must be valid")
+				.expect("client config must be valid")
 				.with_root_certificates(roots.clone());
 
 			let mut cc = match (self.cert, self.key) {
@@ -398,5 +398,28 @@ impl LocalBackendTLS {
 			spiffe: self.spiffe.is_some(),
 		}
 		.try_into()
+	}
+}
+
+#[cfg(all(test, feature = "fips"))]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn fips_config_backend_tls_rejects_non_approved_key_exchange_group() {
+		let result = ResolvedBackendTLS {
+			insecure: true,
+			key_exchange_groups: Some(vec![tls::KeyExchangeGroup::X25519]),
+			..Default::default()
+		}
+		.try_into();
+		let err = match result {
+			Ok(_) => panic!("non-approved backend key exchange group was accepted"),
+			Err(err) => err,
+		};
+		assert!(
+			err.to_string().contains("X25519"),
+			"error should name the configured key exchange group, got: {err}"
+		);
 	}
 }

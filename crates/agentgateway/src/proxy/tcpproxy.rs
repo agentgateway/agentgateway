@@ -51,8 +51,11 @@ impl TCPProxy {
 			tcp.clone(),
 		)
 		.into();
-		// Set source context for TCP logging
-		log.with(|l| l.source_context = Some(src));
+		// Set TCP-specific logging context before any operation that can fail.
+		log.with(|l| {
+			l.source_context = Some(src);
+			l.backend_protocol = Some(cel::BackendProtocol::tcp);
+		});
 		let ret = self.proxy_internal(connection, log.as_mut().unwrap()).await;
 		if let Err(e) = ret {
 			log.with(|l| l.error = Some(e.to_string()));
@@ -95,13 +98,22 @@ impl TCPProxy {
 		} else {
 			connection
 		};
+		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
+		let sni = log
+			.tls_info
+			.as_ref()
+			.and_then(|tls| tls.server_name.as_deref())
+			.map(|s| s.to_string());
+		let destination = crate::cel::DestinationContext {
+			address: self.target_address.ip(),
+			port: self.target_address.port(),
+			hostname: sni.as_deref().map(strng::new),
+		};
 		if let Some(authz) = frontend_policies.network_authorization.as_ref() {
-			authz.apply(
-				log
-					.source_context
-					.as_ref()
-					.expect("expected source context"),
-			)?;
+			authz.apply(&cel::Executor::new_tcp(
+				log.source_context.as_ref(),
+				&destination,
+			))?;
 		}
 		if let Some(authz) = frontend_policies.network_ext_authz.as_ref() {
 			authz
@@ -120,8 +132,6 @@ impl TCPProxy {
 				)
 				.await?;
 		}
-		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
-		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		let tcp_labels = TCPLabels {
 			bind: Some(&self.bind_name).into(),
 			gateway: Some(&self.selected_listener.name.as_gateway_name()).into(),
@@ -138,11 +148,6 @@ impl TCPProxy {
 			.downstream_connection
 			.get_or_create(&tcp_labels)
 			.inc();
-		let sni = log
-			.tls_info
-			.as_ref()
-			.and_then(|tls| tls.server_name.as_deref())
-			.map(|s| s.to_string());
 
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();
@@ -185,11 +190,6 @@ impl TCPProxy {
 			.ext::<WaypointService>()
 			.map(|_| crate::client::HboneSourceRole::Waypoint)
 			.or(Some(crate::client::HboneSourceRole::Gateway));
-		let destination = crate::cel::DestinationContext {
-			address: self.target_address.ip(),
-			port: self.target_address.port(),
-			hostname: sni.as_deref().map(strng::new),
-		};
 		let mut backend_call = Self::build_backend_call(
 			&mut Some(log),
 			Some(&destination),

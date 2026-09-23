@@ -282,11 +282,10 @@ type LLMProvider struct {
 }
 
 // References a namespace-local backend resource.
-// +kubebuilder:validation:XValidation:rule="(size(self.group) == 0 && self.kind == 'Service') ? has(self.port) : true",message="Must have port for Service reference"
+// +kubebuilder:validation:XValidation:rule="((!has(self.group) || size(self.group) == 0) && (!has(self.kind) || self.kind == 'Service')) ? has(self.port) : true",message="Must have port for Service reference"
 type LocalBackendObjectReference struct {
 	// API group of the referenced resource. For example, `gateway.networking.k8s.io`.
-	// When unspecified or empty string, core API group is inferred.
-	// +kubebuilder:default=""
+	// Defaults to the empty string, which identifies the core API group.
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern=`^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	// +optional
@@ -294,7 +293,6 @@ type LocalBackendObjectReference struct {
 
 	// Kind of the referenced resource. For example, `Service`.
 	// Defaults to "Service" when not specified.
-	// +kubebuilder:default=Service
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$`
@@ -409,7 +407,6 @@ type OpenAIInlineModeration struct {
 	// The moderation model to use, such as `omni-moderation-latest`.
 	// Defaults to `omni-moderation-latest` if not specified.
 	// +optional
-	// +kubebuilder:default=omni-moderation-latest
 	Model ShortString `json:"model,omitempty"`
 
 	// Policies to apply to request input and generated output.
@@ -532,7 +529,6 @@ type VertexAISettings struct {
 	// multi-region endpoints. Other values are treated as regional locations.
 	// Defaults to `global` if not specified.
 	// +optional
-	// +kubebuilder:default=global
 	Region TinyString `json:"region,omitempty"`
 }
 
@@ -557,7 +553,6 @@ type BedrockSettings struct {
 	// AWS region to use for the backend.
 	// Defaults to `us-east-1` if not specified.
 	// +optional
-	// +kubebuilder:default=us-east-1
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern="^[a-z0-9-]+$"
@@ -568,7 +563,31 @@ type BedrockSettings struct {
 	// If not specified, the AWS Guardrail policy will not be used.
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
+
+	// EndpointPreference selects which Bedrock API surface to prefer.
+	// Defaults to `RuntimePreferred`, preferring runtime over mantle.
+	// Decides which endpoint to pick mainly based on the catalog tags
+	// `mantle` and `runtime`.
+	// +optional
+	EndpointPreference BedrockEndpointPreference `json:"endpointPreference,omitempty"`
 }
+
+// BedrockEndpointPreference selects the Bedrock API endpoint preference.
+// +k8s:enum
+type BedrockEndpointPreference string
+
+const (
+	// BedrockEndpointPreferenceRuntimePreferred uses Runtime by default and routes to
+	// Mantle only for models the catalog tags `mantle` but not `runtime`. This is the default.
+	BedrockEndpointPreferenceRuntimePreferred BedrockEndpointPreference = "RuntimePreferred"
+	// BedrockEndpointPreferenceMantlePreferred uses Mantle by default and routes to
+	// Runtime only for models the catalog tags `runtime` but not `mantle`.
+	BedrockEndpointPreferenceMantlePreferred BedrockEndpointPreference = "MantlePreferred"
+	// BedrockEndpointPreferenceMantleOnly always uses the Mantle endpoint, regardless of catalog tags.
+	BedrockEndpointPreferenceMantleOnly BedrockEndpointPreference = "MantleOnly"
+	// BedrockEndpointPreferenceRuntimeOnly always uses the Runtime endpoint, regardless of catalog tags.
+	BedrockEndpointPreferenceRuntimeOnly BedrockEndpointPreference = "RuntimeOnly"
+)
 
 type BedrockConfig struct {
 	BedrockSettings `json:",inline"`

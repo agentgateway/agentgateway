@@ -20,11 +20,14 @@ default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "agentgateway/jemalloc"]
 mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
 # Crypto provider passthroughs. A provider must be selected; `crypto-aws-lc` is the default.
-# Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add one
-# of these, otherwise the agentgateway crypto code will fail to compile.
+# Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add
+# a `crypto-*` backend, otherwise the agentgateway crypto code will fail to compile. `fips`
+# modifies the selected backend and currently supports AWS-LC.
 crypto-aws-lc = ["agentgateway/crypto-aws-lc"]
+fips = ["agentgateway/fips"]
 crypto-symcrypt = ["agentgateway/crypto-symcrypt"]
 schema = ["agentgateway/schema"]
+ui = ["agentgateway/ui", "dep:include_dir"]
 
 [dependencies]
 pprof-alloc.workspace = true
@@ -34,6 +37,7 @@ anyhow.workspace = true
 clap.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 libc.workspace = true
+include_dir = { workspace = true, optional = true }
 mimalloc = { workspace = true, optional = true }
 tokio.workspace = true
 tracing.workspace = true

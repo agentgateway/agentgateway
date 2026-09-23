@@ -227,19 +227,35 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "readinessProbe:\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 10")
 	require.Contains(t, out, "startupProbe:\n          failureThreshold: 60\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 1\n          successThreshold: 1\n          timeoutSeconds: 2")
 	require.NotContains(t, out, "name: AGENTGATEWAY_ENV")
-	require.Contains(t, out, "name: OIDC_COOKIE_SECRET")
-	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: true")
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "secretKeyRef:")
 	require.NotContains(t, out, `"helm.sh/hook": test`)
 	require.NotContains(t, out, "curlimages/curl")
 }
 
-func TestStandaloneChartConfiguredOIDCCookieSecretIsRequired(t *testing.T) {
+func TestStandaloneChartOIDCCookieSecret(t *testing.T) {
 	out, stderr, err := renderStandaloneChart(t, `oidc:
+  enabled: true
   cookieSecretName: platform-oidc
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
-	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: false")
+	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
 	require.NotContains(t, out, "name: test-release-oidc")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: false
+  cookieSecretName: platform-oidc
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
 }
 
 func TestStandaloneChartInlineConfig(t *testing.T) {
@@ -251,6 +267,86 @@ func TestStandaloneChartInlineConfig(t *testing.T) {
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.Contains(t, out, "gateways:")
 	require.Contains(t, out, "port: 3000")
+}
+
+func TestStandaloneChartConfigChecksum(t *testing.T) {
+	render := func(t *testing.T, values string) (string, string) {
+		t.Helper()
+		out, stderr, err := renderStandaloneChart(t, values)
+		require.NoError(t, err, "helm template failed: %s", stderr)
+
+		const prefix = "checksum/config: "
+		_, checksumAndRest, found := strings.Cut(out, prefix)
+		require.True(t, found, "rendered Deployment does not contain %q", prefix)
+		checksum, _, _ := strings.Cut(checksumAndRest, "\n")
+		return out, checksum
+	}
+
+	baseValues := `config:
+  gateways:
+    default:
+      port: 3000
+`
+	baseOutput, baseChecksum := render(t, baseValues)
+
+	t.Run("dynamic config does not restart pods", func(t *testing.T) {
+		output, checksum := render(t, `config:
+  gateways:
+    default:
+      port: 4000
+`)
+		require.NotEqual(t, baseOutput, output, "test must change the rendered ConfigMap")
+		require.Equal(t, baseChecksum, checksum)
+	})
+
+	t.Run("model catalog does not restart pods", func(t *testing.T) {
+		output, checksum := render(t, `config:
+  config:
+    modelCatalog:
+    - inline:
+        providers: {}
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseOutput, output, "test must change the rendered ConfigMap")
+		require.Equal(t, baseChecksum, checksum)
+	})
+
+	t.Run("startup config restarts pods", func(t *testing.T) {
+		_, checksum := render(t, `config:
+  config:
+    adminAddr: 127.0.0.1:15000
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseChecksum, checksum)
+	})
+
+	t.Run("storage and database config restart pods", func(t *testing.T) {
+		_, databaseChecksum := render(t, `mode: database
+database:
+  postgres:
+    url: postgres://agentgateway@example.com/agentgateway
+config:
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, baseChecksum, databaseChecksum)
+
+		_, changedDatabaseChecksum := render(t, `mode: database
+database:
+  postgres:
+    url: postgres://agentgateway@other.example.com/agentgateway
+config:
+  gateways:
+    default:
+      port: 3000
+`)
+		require.NotEqual(t, databaseChecksum, changedDatabaseChecksum)
+	})
 }
 
 func TestStandaloneChartDatabaseModeAllowsReplicas(t *testing.T) {

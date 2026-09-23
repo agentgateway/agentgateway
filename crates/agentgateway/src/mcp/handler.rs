@@ -1,20 +1,21 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use http::StatusCode;
-use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, DiscoverResult,
-	ExtensionCapabilities, Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
+	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
+	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
 	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
@@ -31,7 +32,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::AsyncLog;
-use crate::types::agent::{McpPrefixMode, ResourceName};
+use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
 
@@ -240,15 +241,27 @@ impl ResolveKind {
 		}
 	}
 
-	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
+	fn list_request(
+		&self,
+		cursor: Option<String>,
+		meta: Option<&RequestMetaObject>,
+	) -> ClientRequest {
 		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
+		// Propagate the original client request's `_meta` onto the resolve request so
+		// modern (2026-07-28) upstreams that require the per-request envelope accept it.
+		let mut extensions = Extensions::new();
+		if let Some(m) = meta {
+			extensions.insert(m.clone());
+		}
 		match self {
 			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
 				params,
+				extensions,
 				..Default::default()
 			}),
 			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(rmcp::model::ListPromptsRequest {
 				params,
+				extensions,
 				..Default::default()
 			}),
 		}
@@ -349,6 +362,10 @@ impl Relay {
 				// these UI resources
 				policies.validate(
 					&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+					// rewrite_tool_list_ui_meta only ever invokes this closure when the message it's
+					// rewriting is itself a ListToolsResult, so this check only ever fires for a
+					// tools/list response's embedded UI resource URIs.
+					&crate::mcp::guardrails::methods::TOOLS_LIST,
 					&cel,
 				)
 			};
@@ -393,9 +410,10 @@ impl Relay {
 		kind: ResolveKind,
 		res: &'b str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		if self.needs_resolution() {
-			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			let target = self.resolve_unprefixed(kind, res, ctx, meta).await?;
 			return Ok((Cow::Owned(target.to_string()), res));
 		}
 		let (target, name) = self.parse_resource_name(res)?;
@@ -411,12 +429,13 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<Strng, UpstreamError> {
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
 			.map(|(target, con)| async move {
-				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx).await;
+				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx, meta).await;
 				(target, res)
 			})
 			.collect();
@@ -458,6 +477,7 @@ impl Relay {
 		kind: ResolveKind,
 		name: &str,
 		ctx: &IncomingRequestContext,
+		meta: Option<&RequestMetaObject>,
 	) -> Result<bool, UpstreamError> {
 		// Gateway-generated ids: reusing the client's id here would make the upstream
 		// see it twice (list probe, then the forwarded call) in one session.
@@ -469,7 +489,7 @@ impl Relay {
 			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 			let req = JsonRpcRequest::new(
 				RequestId::String(format!("agw-resolve-{seq}").into()),
-				kind.list_request(cursor),
+				kind.list_request(cursor, meta),
 			);
 			let Some(result) =
 				Self::first_response(con.generic_stream(target_name, req, ctx).await?).await?
@@ -665,7 +685,11 @@ impl Relay {
 					message = %rej.message,
 					"mcpGuardrails: request rejected",
 				);
-				Err(UpstreamError::McpGuardrails(rej))
+				Err(UpstreamError::McpGuardrails {
+					rej,
+					was_tool_call: method == CallToolRequestMethod::VALUE,
+					downstream_modern: ctx_downstream_modern(ctx),
+				})
 			},
 		}
 	}
@@ -733,6 +757,7 @@ impl Relay {
 									server_name.to_string(),
 									t.name.to_string(),
 								)),
+								&crate::mcp::guardrails::methods::TOOLS_LIST,
 								cel,
 							)
 						})
@@ -798,6 +823,7 @@ impl Relay {
 					resource_subscribe,
 					upstream_instructions,
 					upstreams.merged_extensions(&HashMap::new()),
+					upstreams.server_overrides(),
 				)
 				.into(),
 			)
@@ -851,6 +877,7 @@ impl Relay {
 				resource_subscribe,
 				upstream_instructions,
 				upstreams.merged_extensions(&upstream_extensions),
+				upstreams.server_overrides(),
 			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
@@ -882,6 +909,7 @@ impl Relay {
 									server_name.to_string(),
 									p.name.to_string(),
 								)),
+								&crate::mcp::guardrails::methods::PROMPTS_LIST,
 								cel,
 							)
 						})
@@ -923,6 +951,7 @@ impl Relay {
 										server_name.to_string(),
 										r.uri.to_string(),
 									)),
+									&crate::mcp::guardrails::methods::RESOURCES_LIST,
 									cel,
 								)
 							})
@@ -969,6 +998,7 @@ impl Relay {
 										server_name.to_string(),
 										rt.uri_template.to_string(),
 									)),
+									&crate::mcp::guardrails::methods::RESOURCES_TEMPLATES_LIST,
 									cel,
 								)
 							})
@@ -1064,7 +1094,11 @@ impl Relay {
 			)
 			.await;
 			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::McpGuardrails(rej));
+				return Err(UpstreamError::McpGuardrails {
+					rej,
+					was_tool_call: r.request.method() == CallToolRequestMethod::VALUE,
+					downstream_modern: ctx_downstream_modern(ctx),
+				});
 			}
 		}
 
@@ -1190,6 +1224,7 @@ impl Relay {
 						service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
 						ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 						&ctx,
+						self.upstreams.sse_keep_alive,
 					);
 				},
 			};
@@ -1231,6 +1266,7 @@ impl Relay {
 			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
 			ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 			&ctx,
+			self.upstreams.sse_keep_alive,
 		)
 	}
 	pub async fn send_single(
@@ -1248,7 +1284,7 @@ impl Relay {
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let mcp_log = mcp_log.or_else(|| ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned());
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(
@@ -1264,7 +1300,14 @@ impl Relay {
 			ctx_downstream_modern(&ctx),
 		);
 
-		respond_with_guardrails(id, stream, guardrails, mcp_log, &ctx)
+		respond_with_guardrails(
+			id,
+			stream,
+			guardrails,
+			mcp_log,
+			&ctx,
+			self.upstreams.sse_keep_alive,
+		)
 	}
 	pub async fn send_fanout_deletion(
 		&self,
@@ -1316,7 +1359,7 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
@@ -1367,11 +1410,18 @@ impl Relay {
 				Messages::pending(),
 				None,
 				ctx_downstream_modern(&ctx),
+				self.upstreams.sse_keep_alive,
 			);
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
-		messages_to_response(RequestId::Number(0), ms, None, ctx_downstream_modern(&ctx))
+		messages_to_response(
+			RequestId::Number(0),
+			ms,
+			None,
+			ctx_downstream_modern(&ctx),
+			self.upstreams.sse_keep_alive,
+		)
 	}
 
 	pub async fn send_fanout(
@@ -1397,7 +1447,7 @@ impl Relay {
 			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
 			.await?;
 
-		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		let cel = CelExecWrapper::from(ctx.clone());
 		let streams = streams
 			.into_iter()
 			.map(|(name, s)| {
@@ -1427,6 +1477,7 @@ impl Relay {
 			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
 			ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 			&ctx,
+			self.upstreams.sse_keep_alive,
 		)
 	}
 
@@ -1527,12 +1578,15 @@ impl Relay {
 		Ok(accepted_response())
 	}
 
+	pub(crate) const DEFAULT_GATEWAY_PREAMBLE: &str = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+
 	fn get_info(
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
-	) -> ServerInfo {
+		server_overrides: Option<McpServerOverrides>,
+	) -> ServerConfig {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
 			// Resources are supported with multiplexing using service+<uri> prefixing.
@@ -1550,7 +1604,10 @@ impl Relay {
 			capabilities.extensions = extensions;
 			capabilities
 		};
-		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
+		let gateway_preamble = server_overrides
+			.as_ref()
+			.and_then(|o| o.instructions.as_deref())
+			.unwrap_or(Self::DEFAULT_GATEWAY_PREAMBLE);
 		let instructions = if upstream_instructions.is_empty() {
 			Some(gateway_preamble.to_string())
 		} else {
@@ -1560,12 +1617,24 @@ impl Relay {
 			}
 			Some(merged)
 		};
-		ServerInfo::new(capabilities)
+		let mut server_info = Implementation::new(
+			server_overrides
+				.as_ref()
+				.and_then(|o| o.name.clone())
+				.map(|s| s.to_string())
+				.unwrap_or_else(|| "agentgateway".to_string()),
+			server_overrides
+				.as_ref()
+				.and_then(|o| o.version.clone())
+				.map(|s| s.to_string())
+				.unwrap_or_else(|| BuildInfo::new().version.to_string()),
+		);
+		if let Some(title) = server_overrides.as_ref().and_then(|o| o.title.clone()) {
+			server_info = server_info.with_title(title.to_string());
+		}
+		ServerConfig::new(capabilities)
 			.with_protocol_version(pv)
-			.with_server_info(Implementation::new(
-				"agentgateway",
-				BuildInfo::new().version.to_string(),
-			))
+			.with_server_info(server_info)
 			.with_instructions(instructions.unwrap_or_default())
 	}
 
@@ -1573,12 +1642,14 @@ impl Relay {
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
+		server_overrides: Option<McpServerOverrides>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
 			extensions,
+			server_overrides,
 		);
 		let mut result =
 			DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
@@ -1592,14 +1663,14 @@ impl Relay {
 	}
 }
 
-pub fn setup_request_log(http: Parts) -> (AsyncLog<MCPInfo>, CelExecWrapper) {
-	let log = http
-		.extensions
+pub fn setup_request_log(ctx: &IncomingRequestContext) -> (AsyncLog<MCPInfo>, CelExecWrapper) {
+	let log = ctx
+		.extensions()
 		.get::<AsyncLog<MCPInfo>>()
 		.cloned()
 		.unwrap_or_default();
 
-	let cel = CelExecWrapper::new(::http::Request::from_parts(http, ()));
+	let cel = CelExecWrapper::from(ctx.clone());
 	(log, cel)
 }
 
@@ -1616,10 +1687,11 @@ pub(super) fn messages_to_response(
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
 	downstream_modern: bool,
+	keep_alive: Option<Duration>,
 ) -> Result<Response, UpstreamError> {
 	Ok(mcp::session::sse_stream_response(
 		into_sse_stream(id, stream, mcp_log, downstream_modern),
-		None,
+		keep_alive,
 	))
 }
 
@@ -1629,6 +1701,7 @@ fn respond_with_guardrails(
 	guardrails: Option<GuardrailsCtx>,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
 	ctx: &IncomingRequestContext,
+	keep_alive: Option<Duration>,
 ) -> Result<Response, UpstreamError> {
 	match guardrails {
 		Some(guardrails) => messages_to_response(
@@ -1636,8 +1709,9 @@ fn respond_with_guardrails(
 			wrap_with_guardrails(stream, guardrails),
 			mcp_log,
 			ctx_downstream_modern(ctx),
+			keep_alive,
 		),
-		None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(ctx)),
+		None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(ctx), keep_alive),
 	}
 }
 
@@ -2162,8 +2236,14 @@ mod tests {
 			)),
 		]);
 
-		let response =
-			messages_to_response(RequestId::Number(42), stream, Some(log.clone()), false).unwrap();
+		let response = messages_to_response(
+			RequestId::Number(42),
+			stream,
+			Some(log.clone()),
+			false,
+			None,
+		)
+		.unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
@@ -2172,6 +2252,38 @@ mod tests {
 			"ok"
 		);
 		assert!(info.tool.as_ref().unwrap().error.is_none());
+	}
+
+	#[tokio::test]
+	async fn messages_to_response_emits_keep_alive_on_idle_stream() {
+		// A stream that never yields: the FailOpen GET path deliberately holds such a
+		// connection open. Without a keep-alive it is indistinguishable from a dead socket
+		// and gets reaped by intermediaries.
+		let response = messages_to_response(
+			RequestId::Number(1),
+			futures::stream::pending(),
+			None,
+			false,
+			Some(Duration::from_millis(20)),
+		)
+		.unwrap();
+
+		let mut body = response.into_body();
+		let frame = tokio::time::timeout(
+			Duration::from_secs(2),
+			http_body_util::BodyExt::frame(&mut body),
+		)
+		.await
+		.expect("keep-alive frame should arrive on an idle stream")
+		.expect("body should not end")
+		.expect("frame should not error");
+		let bytes = frame.into_data().expect("data frame");
+		// SSE keep-alives are comment lines, which clients ignore but proxies count as traffic.
+		assert!(
+			bytes.starts_with(b":"),
+			"expected an SSE comment frame, got {:?}",
+			String::from_utf8_lossy(&bytes)
+		);
 	}
 
 	#[tokio::test]
@@ -2223,7 +2335,7 @@ mod tests {
 			Some(RequestId::Number(7)),
 		))]);
 		let response =
-			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
+			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false, None).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();

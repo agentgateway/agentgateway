@@ -18,8 +18,8 @@ use secrecy::SecretString;
 use crate::http::auth::jwt_sign::LocalJwtSignAuth;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
-use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
-use crate::http::{filters, health, retry, timeout, transformation_cel};
+use crate::http::transformation_cel::{Transformation, TransformerConfig};
+use crate::http::{filters, health, retry, timeout};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
@@ -28,13 +28,14 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindMode, BindProtocol, BindSnapshot, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
-	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode, McpTarget,
-	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
-	ResourceName, Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch,
-	RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
-	SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies, SseTargetSpec,
-	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
-	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode,
+	McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
+	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
+	RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig, SimpleBackend,
+	SimpleBackendReference, SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
+	TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName,
+	validate_mcp_target_name,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -45,7 +46,7 @@ type LocalDirectResponsePolicy = LocalExplicitOrConditional<filters::DirectRespo
 type LocalExtProcPolicy = LocalExplicitOrConditional<crate::http::ext_proc::ExtProc>;
 type LocalRemoteRateLimitPolicy =
 	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
-type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
+type LocalTransformationPolicy = LocalExplicitOrConditional<Transformation>;
 type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 const DEFAULT_LLM_PORT: u16 = 4000;
 const DEFAULT_MCP_PORT: u16 = 3000;
@@ -208,12 +209,18 @@ fn merge_deprecated_frontend_policies(
 	let log = &deprecated.logging;
 	let has_deprecated_log = has_deprecated_frontend_log_fields(log);
 	if has_deprecated_log {
+		for _ in 0..5 {
+			tracing::warn!(
+				"config.logging.filter and config.logging.fields are deprecated; migrate to frontendPolicies.accessLog"
+			);
+		}
 		if frontend_policies.access_log.is_some() {
 			anyhow::bail!(
 				"cannot use deprecated config.logging together with frontendPolicies.accessLog"
 			);
 		}
 		frontend_policies.access_log = Some(frontend::LoggingPolicy {
+			preset: None,
 			filter: log.filter.clone(),
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
@@ -223,6 +230,9 @@ fn merge_deprecated_frontend_policies(
 		});
 	}
 	if let Some(tracing) = deprecated.tracing.clone() {
+		for _ in 0..5 {
+			tracing::warn!("config.tracing is deprecated; migrate to frontendPolicies.tracing");
+		}
 		if frontend_policies.tracing.is_some() {
 			anyhow::bail!("cannot use deprecated config.tracing together with frontendPolicies.tracing");
 		}
@@ -237,17 +247,21 @@ fn merge_deprecated_frontend_policies(
 		} = tracing;
 
 		let mut policies = if !headers.is_empty() {
-			let backend_xfm = transformation_cel::LocalTransformationConfig {
-				request: Some(transformation_cel::LocalTransform {
+			let backend_xfm = Transformation {
+				request: Some(Arc::new(TransformerConfig {
 					set: headers
 						.into_iter()
-						.map(|(k, v)| (strng::new(k), strng::new(v)))
-						.collect(),
+						.map(|(k, v)| {
+							Ok((
+								http::HeaderOrPseudo::try_from(k.as_str())?,
+								cel::Expression::new_strict(&v)?,
+							))
+						})
+						.collect::<anyhow::Result<_>>()?,
 					..Default::default()
-				}),
-				response: None,
+				})),
+				..Default::default()
 			};
-			let backend_xfm = Transformation::try_from_local_config(backend_xfm, true)?;
 			vec![BackendTrafficPolicy::Transformation(Arc::new(backend_xfm))]
 		} else {
 			Vec::new()
@@ -271,6 +285,7 @@ fn merge_deprecated_frontend_policies(
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
+				parent_not_sampled: None,
 				path,
 				protocol: match protocol {
 					Protocol::Grpc => crate::types::agent::TracingProtocol::Grpc,
@@ -312,6 +327,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
 	#[serde(skip)]
+	pub(crate) standard_attributes: Arc<crate::telemetry::log::LoggingFields>,
+	#[serde(skip)]
 	pub(crate) budget_registration: crate::http::budget::BudgetRegistration,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
@@ -330,8 +347,8 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	/// config defines top-level settings for DNS, admin, networking, observability, and session
-	/// management. Unlike other sections, these are applied only at startup, except modelCatalog,
-	/// which is dynamically reloaded.
+	/// management. Unlike other sections, these are applied only at startup, except modelCatalog and
+	/// standardAttributes, which are dynamically reloaded.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
@@ -409,6 +426,11 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	/// pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.
+	/// Defaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.
+	/// The prefix is removed before model routing.
+	#[serde(default)]
+	path_prefix: String,
 	/// gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
 	/// When omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
@@ -426,6 +448,7 @@ pub struct LocalLLMConfig {
 	/// models defines the set of models that can be served by this gateway. The model name refers to the
 	/// model in the users request that is matched; the model sent to the actual LLM can be overridden
 	/// on a per-model basis.
+	#[serde(default)]
 	models: Vec<LocalLLMModels>,
 	/// virtualModels defines a set of models that can be served from the gateway. The model name refers to the
 	/// model in the users request that is matched. However, unlike the `models` field, virtual models will
@@ -709,23 +732,18 @@ fn validate_local_conditional_policies<T>(
 	Ok(())
 }
 
-impl LocalExplicitOrConditional<LocalTransformationConfig> {
+impl LocalExplicitOrConditional<Transformation> {
 	fn into_transformation_policy(self) -> anyhow::Result<RequestPolicy<Transformation>> {
 		match self {
-			LocalExplicitOrConditional::Explicit(policy) => Ok(RequestPolicy::single(
-				Transformation::try_from_local_config(policy, true)?,
-			)),
+			LocalExplicitOrConditional::Explicit(policy) => Ok(RequestPolicy::single(policy)),
 			LocalExplicitOrConditional::Conditional(policies) => {
 				validate_local_conditional_policies(&policies)?;
 				Ok(RequestPolicy::from_policies(
 					policies
 						.conditional
 						.into_iter()
-						.map(|entry| {
-							Transformation::try_from_local_config(entry.policy, true)
-								.map(|policy| (policy, entry.condition))
-						})
-						.collect::<anyhow::Result<Vec<_>>>()?,
+						.map(|entry| (entry.policy, entry.condition))
+						.collect::<Vec<_>>(),
 				))
 			},
 		}
@@ -914,6 +932,9 @@ pub struct LocalLLMParams {
 	api_key: Option<SecretFromFile>,
 	/// AWS region to use for the Bedrock provider.
 	aws_region: Option<Strng>,
+	/// Which Bedrock endpoint to prefer (Runtime vs Mantle).
+	#[serde(default)]
+	bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference,
 	/// Google Cloud region to use for the Vertex AI provider.
 	vertex_region: Option<Strng>,
 	/// Google Cloud project ID to use for the Vertex AI provider.
@@ -927,6 +948,10 @@ pub struct LocalLLMParams {
 	/// For Azure: the Foundry project name (required for foundry resource type)
 	azure_project_name: Option<Strng>,
 	/// Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.
+	/// The URL path is the upstream base path and defaults to / when omitted.
+	/// Provider-specific endpoint paths are appended to this base path.
+	/// For example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,
+	/// while `https://api.openai.com` sends them to `/chat/completions`.
 	#[serde(default)]
 	base_url: Option<Strng>,
 	/// Override the upstream host for this provider.
@@ -953,6 +978,7 @@ impl LocalLLMModels {
 			model: model_override,
 			api_key: None,
 			aws_region: None,
+			bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 			vertex_region: None,
 			vertex_project: None,
 			azure_resource_name: None,
@@ -1053,11 +1079,11 @@ impl LocalLLMModels {
 			.host_override
 			.get_or_insert_with(|| (host, port).into());
 		let path = url.path().trim_end_matches('/');
-		if !path.is_empty() && self.params.path_override.is_none() {
+		if self.params.path_override.is_none() {
 			self
 				.params
 				.path_prefix
-				.get_or_insert_with(|| strng::new(path));
+				.get_or_insert_with(|| strng::new(if path.is_empty() { "/" } else { path }));
 		}
 		if url.scheme() == "https" && self.backend_tls.is_none() {
 			self.backend_tls = Some(http::backendtls::LocalBackendTLS::default());
@@ -1105,11 +1131,15 @@ struct LocalGateway {
 	/// port is the port to listen on for this gateway.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	/// bindAddress is the IPv4 or IPv6 address to listen on. Use `127.0.0.1` or `::1` for loopback.
+	/// When omitted, listens on all interfaces (`::` on Unix with IPv6 enabled, otherwise `0.0.0.0`).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	bind_address: Option<IpAddr>,
 	/// protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways
 	/// default to HTTP, or HTTPS when tls is set.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	protocol: Option<LocalGatewayProtocol>,
-	/// listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.
+	/// listeners defines multiple named listeners under this gateway. When set, only `port` and `bindAddress` may be configured on the top level gateway.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
 
@@ -1603,7 +1633,7 @@ impl LocalAIBackend {
 			ep_groups.push(group);
 		}
 		let es = types::loadbalancer::EndpointSet::new(ep_groups);
-		Ok(AIBackend { providers: es })
+		Ok(AIBackend::new(es))
 	}
 }
 
@@ -1771,13 +1801,18 @@ impl LocalBackend {
 					McpStatefulMode::Stateless => false,
 					McpStatefulMode::Stateful => true,
 				};
+				if let Some(server) = &tgt.server {
+					server.validate().map_err(Error::msg)?;
+				}
 				let m = McpBackend {
 					targets,
 					stateful,
 					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					sse_keep_alive: tgt.sse_keep_alive,
 					dns_rebinding_protection: tgt.dns_rebinding_protection,
+					server: tgt.server.clone(),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1834,6 +1869,7 @@ pub enum McpStatefulMode {
 #[apply(schema_de!)]
 pub struct LocalMcpBackend {
 	/// MCP server targets to multiplex together.
+	#[serde(default)]
 	pub targets: Vec<Arc<LocalMcpTarget>>,
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
@@ -1844,10 +1880,25 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// Interval at which SSE keep-alive comments are sent on long-lived MCP streams.
+	/// Disabled when unset. Set this when a load balancer or API gateway sits in front
+	/// of agentgateway and reaps connections that carry no traffic.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub sse_keep_alive: Option<Duration>,
 	/// Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).
 	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
+	/// Overrides for the MCP `serverInfo` and gateway instructions reported to clients on
+	/// `initialize`/`server/discover` when multiplexing multiple targets. Unset fields fall
+	/// back to the normal defaults.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub server: Option<McpServerOverrides>,
 }
 
 #[apply(schema_de!)]
@@ -2060,6 +2111,7 @@ fn mcp_matches() -> Vec<RouteMatch> {
 fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
 	let mut paths = vec![
 		PathMatch::Exact("/".into()),
+		PathMatch::PathPrefix("/api/auth".into()),
 		PathMatch::PathPrefix("/ui".into()),
 		PathMatch::PathPrefix("/api/runtime".into()),
 		PathMatch::PathPrefix("/api/config".into()),
@@ -2254,18 +2306,6 @@ struct LocalPolicy {
 	pub phase: PolicyPhase,
 	/// Policy settings to apply to the selected target.
 	pub policy: FilterOrPolicy,
-}
-
-pub fn de_transform<'de, D>(
-	deserializer: D,
-) -> Result<Option<crate::http::transformation_cel::Transformation>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	<Option<LocalTransformationConfig>>::deserialize(deserializer)?
-		.map(|c| http::transformation_cel::Transformation::try_from_local_config(c, true))
-		.transpose()
-		.map_err(serde::de::Error::custom)
 }
 
 pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
@@ -2464,6 +2504,9 @@ struct LocalLLMPolicy {
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
+	/// Set request timeout limits.
+	#[serde(default)]
+	timeout: Option<timeout::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -2609,11 +2652,6 @@ pub struct SimpleLocalBackendPolicies {
 
 	/// Modify request and response data for this backend.
 	#[serde(default)]
-	#[serde(deserialize_with = "de_transform")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
-	)]
 	pub transformations: Option<crate::http::transformation_cel::Transformation>,
 
 	/// TLS settings used when connecting to this backend.
@@ -2881,6 +2919,9 @@ struct LocalFrontendPolicies {
 	/// HTTP external authorization performed once for each downstream network connection.
 	#[serde(default)]
 	pub network_ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Validate the originating actor before accepting a CONNECT tunnel.
+	#[serde(default)]
+	pub substrate_egress_actor_resolution: Option<crate::http::substrate::EgressActorResolution>,
 	/// Enable downstream PROXY protocol handling on this gateway or port, including
 	/// version matching and whether PROXY headers are required or optional.
 	#[serde(default, rename = "proxyProtocol", alias = "proxy")]
@@ -2984,7 +3025,7 @@ pub struct FilterOrPolicy {
 	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
 	#[serde(default)]
 	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
-	/// Authorize CONNECT egress using the originating actor's dynamic policy.
+	/// Enforce the CONNECT-pinned effective Substrate egress policy.
 	#[serde(default)]
 	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
@@ -3053,6 +3094,18 @@ async fn convert(
 		.cloned()
 		.map(serde_json::from_value)
 		.transpose()?;
+	let raw_attributes = local_runtime_config
+		.as_ref()
+		.as_ref()
+		.and_then(|config| config.get("standardAttributes"))
+		.filter(|value| !value.is_null())
+		.cloned()
+		.map(serde_json::from_value::<crate::RawStandardAttributes>)
+		.transpose()?;
+	let standard_attributes = Arc::new(
+		crate::config::standard_attributes(raw_attributes.as_ref())
+			.context("invalid config.standardAttributes")?,
+	);
 	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -3152,6 +3205,7 @@ async fn convert(
 			}),
 			key: p.name.to_string().into(),
 			target: p.target,
+			creation_timestamp: 0,
 			inheritance: Default::default(),
 			policy: tp,
 		};
@@ -3333,6 +3387,7 @@ async fn convert(
 	// Add frontend policies targeted to this listener
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 	let normalized = NormalizedLocalConfig {
+		standard_attributes,
 		budget_registration: Default::default(),
 		model_catalog,
 		binds: all_binds,
@@ -3637,15 +3692,16 @@ async fn convert_gateways(
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+		let default_address = if cfg!(target_family = "unix") && config.ipv6_enabled {
+			IpAddr::V6(Ipv6Addr::UNSPECIFIED)
 		} else {
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+			IpAddr::V4(Ipv4Addr::UNSPECIFIED)
 		};
+		let address = gateway_config.bind_address.unwrap_or(default_address);
 		all_binds.push(BindSnapshot {
 			bind: Arc::new(Bind {
 				key: strng::format!("bind/{port}"),
-				address: sockaddr,
+				address: SocketAddr::new(address, port),
 				protocol: detect_bind_protocol(&listeners),
 				tunnel_protocol: TunnelProtocol::Direct,
 				mode: BindMode::Standard,
@@ -3716,6 +3772,7 @@ async fn convert_gateway_listener(
 				key: strng::format!("gateway/{reference}/{idx}"),
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -3966,13 +4023,43 @@ async fn convert_attached_ui(
 ) -> anyhow::Result<()> {
 	let listeners =
 		resolve_gateway_references(gateway_refs, &ui_config.gateways, GatewayRouteKind::Http)?;
+	if let Some(oidc) = ui_config
+		.policies
+		.as_ref()
+		.and_then(|policies| policies.oidc.as_ref())
+		&& (oidc.login.is_some() || oidc.logout.is_some())
+	{
+		bail!("ui.policies.oidc.login and logout are managed by the built-in UI and must be omitted");
+	}
 	let route_key = strng::new("ui");
 	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
-	let resolved_policies = if let Some(pol) = ui_config.policies {
+	let mut resolved_policies = if let Some(pol) = ui_config.policies {
 		split_policies(resources, pol.into(), config.as_policy_context(&route_key)).await?
 	} else {
 		ResolvedPolicies::default()
 	};
+	// The built-in UI has a public login page; regular OIDC routes retain automatic login.
+	for policy in &mut resolved_policies.route_policies {
+		if let TrafficPolicy::Oidc(oidc) = policy {
+			*oidc = RequestPolicy::from_policy_inners(
+				std::mem::take(oidc)
+					.into_policy_inners()
+					.into_iter()
+					.map(|mut entry| {
+						let policy = Arc::make_mut(&mut entry.pol);
+						policy.login = Some(crate::http::oidc::OidcLogin {
+							path: "/api/auth/login".into(),
+							redirect: Some("/ui/login".into()),
+						});
+						policy.logout = Some(crate::http::oidc::OidcLogout {
+							path: "/api/auth/logout".into(),
+							redirect: Some("/ui/login".into()),
+						});
+						entry
+					}),
+			);
+		}
+	}
 	if !resolved_policies.backend_policies.is_empty() {
 		bail!("ui.policies cannot contain backend policies");
 	}
@@ -3984,7 +4071,7 @@ async fn convert_attached_ui(
 			config.mcp.session_ttl,
 		)
 		.await?;
-	let routes = vec![Route {
+	let mut routes = vec![Route {
 		key: route_key,
 		service_key: None,
 		service_port: 0,
@@ -4004,6 +4091,26 @@ async fn convert_attached_ui(
 		llm_router: None,
 		inline_policies: resolved_policies.route_policies,
 	}];
+	// Login and bundled static assets contain no application data. They must be
+	// public so the login page can load without UI authentication or authorization.
+	let mut login_route = routes[0].clone();
+	login_route.key = strng::new("ui:login");
+	login_route.name.name = strng::new("ui-login");
+	login_route.matches = [
+		PathMatch::Exact("/ui/login".into()),
+		PathMatch::PathPrefix("/ui/assets".into()),
+		PathMatch::Exact("/ui/favicon.svg".into()),
+	]
+	.into_iter()
+	.map(|path| RouteMatch {
+		path,
+		headers: vec![],
+		method: None,
+		query: vec![],
+	})
+	.collect();
+	login_route.inline_policies.clear();
+	routes.push(login_route);
 	for listener_key in listeners {
 		push_listener_routes(
 			all_listener_routes,
@@ -4214,35 +4321,17 @@ impl ResolvedLLMModelRegistry {
 	}
 }
 
-fn llm_route_types(
-	passthrough: Option<&LocalLLMPassthrough>,
-) -> Vec<(Strng, crate::llm::RouteType)> {
-	let mut routes = crate::llm::model_router::default_route_types()
-		.routes
-		.iter()
-		.map(|(path, route_type)| (path.clone(), *route_type))
-		.collect::<Vec<_>>();
-	if let Some(passthrough) = passthrough {
-		if let Some((_, route_type)) = routes.iter_mut().find(|(path, _)| path.as_str() == "*") {
-			*route_type = passthrough.route_type();
-		} else {
-			routes.push((strng::new("*"), passthrough.route_type()));
-		}
-	}
-	routes
-}
-
 fn ensure_ai_provider_model(provider: &mut AIProvider, model: &str) {
 	let model = || Some(strng::new(model));
 	match provider {
-		AIProvider::Anthropic(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::OpenAI(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Copilot(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Gemini(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Custom(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Vertex(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Bedrock(p) => p.model = p.model.clone().or_else(model),
-		AIProvider::Azure(p) => p.model = p.model.clone().or_else(model),
+		AIProvider::Anthropic(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::OpenAI(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Copilot(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Gemini(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Custom(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Vertex(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Bedrock(p) => p.model_override = p.model_override.clone().or_else(model),
+		AIProvider::Azure(p) => p.model_override = p.model_override.clone().or_else(model),
 	}
 }
 
@@ -4260,6 +4349,7 @@ async fn convert_llm_config(
 	Vec<BackendWithPolicies>,
 )> {
 	let LocalLLMConfig {
+		path_prefix,
 		gateways: _,
 		port,
 		tls,
@@ -4268,6 +4358,14 @@ async fn convert_llm_config(
 		virtual_models,
 		policies,
 	} = llm_config;
+	let path_prefix = path_prefix.trim_end_matches('/');
+	if !path_prefix.is_empty()
+		&& (!path_prefix.starts_with('/')
+			|| path_prefix.contains(['?', '#'])
+			|| path_prefix.parse::<::http::uri::PathAndQuery>().is_err())
+	{
+		bail!("llm.pathPrefix must be an absolute URL path without a query or fragment");
+	}
 	let port = port.unwrap_or(DEFAULT_LLM_PORT);
 	let tls = match tls {
 		Some(tls) => Some(
@@ -4290,6 +4388,7 @@ async fn convert_llm_config(
 			guardrails,
 			local_rate_limit,
 			remote_rate_limit,
+			timeout,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
@@ -4299,6 +4398,7 @@ async fn convert_llm_config(
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
+				timeout,
 				..Default::default()
 			},
 			None,
@@ -4375,7 +4475,6 @@ async fn convert_llm_config(
 		};
 		let p = model_config.params.clone();
 		let model = p.model;
-		let llm_routes = llm_route_types(model_config.passthrough.as_ref());
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
@@ -4387,22 +4486,28 @@ async fn convert_llm_config(
 				)
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Anthropic) => {
-				AIProvider::Anthropic(anthropic::Provider { model })
+				AIProvider::Anthropic(anthropic::Provider {
+					model_override: model,
+				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::OpenAI) => {
 				AIProvider::OpenAI(openai::Provider {
-					model,
+					model_override: model,
 					moderation: None,
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Copilot) => {
-				AIProvider::Copilot(copilot::Provider { model })
+				AIProvider::Copilot(copilot::Provider {
+					model_override: model,
+				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Gemini) => {
-				AIProvider::Gemini(crate::llm::gemini::Provider { model })
+				AIProvider::Gemini(crate::llm::gemini::Provider {
+					model_override: model,
+				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Custom(custom_provider)) => {
-				if custom_provider.formats.is_empty() {
+				if custom_provider.formats.is_empty() && model_config.passthrough.is_none() {
 					bail!(
 						"custom provider for model {} must specify at least one format",
 						model_config.name
@@ -4415,29 +4520,30 @@ async fn convert_llm_config(
 					);
 				}
 				AIProvider::Custom(crate::llm::custom::Provider {
-					model: model.or_else(|| custom_provider.model.clone()),
+					model_override: model.or_else(|| custom_provider.model_override.clone()),
 					..custom_provider.clone()
 				})
 			},
 			LocalModelAIProvider::Preset(preset) => AIProvider::Custom(preset.provider(model.clone())),
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Vertex) => {
 				AIProvider::Vertex(crate::llm::vertex::Provider {
-					model,
+					model_override: model,
 					region: p.vertex_region,
 					project_id: p.vertex_project.context("vertex requires vertex_project")?,
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Bedrock) => {
 				AIProvider::bedrock(crate::llm::bedrock::Provider {
-					model,
+					model_override: model,
 					region: p.aws_region.context("bedrock requires aws_region")?,
 					guardrail_identifier: None,
 					guardrail_version: None,
+					endpoint_preference: p.bedrock_endpoint_preference,
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Azure) => {
 				AIProvider::azure(crate::llm::azure::Provider {
-					model,
+					model_override: model,
 					resource_name: p
 						.azure_resource_name
 						.context("azure requires azureResourceName")?,
@@ -4473,12 +4579,10 @@ async fn convert_llm_config(
 		};
 		let resolved_provider = named_provider.clone();
 
-		let ai_backend = AIBackend {
-			providers: crate::types::loadbalancer::EndpointSet::new(vec![vec![(
-				model_name.clone(),
-				named_provider,
-			)]]),
-		};
+		let ai_backend = AIBackend::new(crate::types::loadbalancer::EndpointSet::new(vec![vec![(
+			model_name.clone(),
+			named_provider,
+		)]]));
 
 		let mut pols = vec![];
 		if let Some(p) = model_config.backend_tls.clone() {
@@ -4550,10 +4654,11 @@ async fn convert_llm_config(
 				inline_policies: vec![],
 			},
 			policies: llm::model_router::ModelRoutePolicies {
-				llm: Arc::new(crate::llm::Policy {
-					routes: llm_routes.into_iter().collect(),
-					..Default::default()
-				}),
+				llm: Arc::default(),
+				passthrough: model_config
+					.passthrough
+					.as_ref()
+					.map(LocalLLMPassthrough::route_type),
 				authorization: model_config.authorization.clone(),
 			},
 			backend_policies: vec![],
@@ -4563,10 +4668,7 @@ async fn convert_llm_config(
 	let virtual_models = llm_registry.into_virtual_models();
 	let mut router_virtual_models = Vec::new();
 	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
-		let llm_policy = Arc::new(crate::llm::Policy {
-			routes: llm_route_types(None).into_iter().collect(),
-			..Default::default()
-		});
+		let llm_policy = Arc::default();
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
 				for target in &conditional.targets {
@@ -4579,6 +4681,7 @@ async fn convert_llm_config(
 						.map(|target| llm::model_router::ConditionalTarget {
 							model: target.model.clone(),
 							when: target.when.clone(),
+							invalid: false,
 						})
 						.collect(),
 				)
@@ -4594,6 +4697,7 @@ async fn convert_llm_config(
 						.map(|target| llm::model_router::WeightedTarget {
 							model: target.model.clone(),
 							weight: target.weight,
+							invalid: false,
 						})
 						.collect(),
 				)
@@ -4624,9 +4728,9 @@ async fn convert_llm_config(
 				all_backends.push(BackendWithPolicies {
 					backend: Backend::AI(
 						local_name(backend_key.clone()),
-						AIBackend {
-							providers: crate::types::loadbalancer::EndpointSet::new(provider_groups),
-						},
+						AIBackend::new(crate::types::loadbalancer::EndpointSet::new(
+							provider_groups,
+						)),
 					),
 					inline_policies: vec![],
 				});
@@ -4647,15 +4751,11 @@ async fn convert_llm_config(
 		});
 	}
 
+	let router = llm::model_router::ModelRouter::new(router_models, router_virtual_models)
+		.with_path_prefix(path_prefix.to_string());
 	let router_backend_key = strng::new("llm:router");
 	all_backends.push(BackendWithPolicies {
-		backend: Backend::LLMRouter(
-			local_name(router_backend_key.clone()),
-			Arc::new(llm::model_router::ModelRouter::new(
-				router_models,
-				router_virtual_models,
-			)),
-		),
+		backend: Backend::LLMRouter(local_name(router_backend_key.clone()), Arc::new(router)),
 		inline_policies: vec![],
 	});
 
@@ -4671,7 +4771,11 @@ async fn convert_llm_config(
 		},
 		hostnames: vec![],
 		matches: vec![RouteMatch {
-			path: PathMatch::PathPrefix(strng::new("/")),
+			path: PathMatch::PathPrefix(strng::new(if path_prefix.is_empty() {
+				"/"
+			} else {
+				path_prefix
+			})),
 			method: None,
 			headers: vec![],
 			query: vec![],
@@ -4713,6 +4817,7 @@ async fn convert_llm_config(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -4723,6 +4828,7 @@ async fn convert_llm_config(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Route).into(),
 			});
@@ -4999,6 +5105,7 @@ async fn convert_listener(
 				key,
 				name: None,
 				target: target.clone(),
+				creation_timestamp: 0,
 				inheritance: Default::default(),
 				policy: (pol, PolicyPhase::Gateway).into(),
 			});
@@ -5138,6 +5245,7 @@ async fn split_frontend_policies(
 			key: key.clone(),
 			name: None,
 			target: PolicyTarget::Gateway(gateway.clone()),
+			creation_timestamp: 0,
 			inheritance: Default::default(),
 			policy: p.into(),
 		});
@@ -5148,6 +5256,7 @@ async fn split_frontend_policies(
 		tcp,
 		network_authorization,
 		network_ext_authz,
+		substrate_egress_actor_resolution,
 		proxy_protocol,
 		connect,
 		access_log,
@@ -5175,6 +5284,12 @@ async fn split_frontend_policies(
 		add(
 			FrontendPolicy::NetworkExtAuthz(Arc::new(p.with_configured_cache_store())),
 			"networkExtAuthz",
+		);
+	}
+	if let Some(p) = substrate_egress_actor_resolution {
+		add(
+			FrontendPolicy::SubstrateEgressActorResolution(p),
+			"substrateEgressActorResolution",
 		);
 	}
 	if let Some(p) = proxy_protocol {
@@ -5406,9 +5521,7 @@ pub(crate) async fn split_policies_for_target(
 			let LocalExplicitOrConditional::Explicit(cfg) = p else {
 				bail!("conditional transformations are not supported on backend-targeted policies");
 			};
-			backend_policies.push(BackendTrafficPolicy::Transformation(Arc::new(
-				Transformation::try_from_local_config(cfg, true)?,
-			)));
+			backend_policies.push(BackendTrafficPolicy::Transformation(Arc::new(cfg)));
 		} else {
 			route_policies.push(TrafficPolicy::Transformation(
 				p.into_transformation_policy()?,

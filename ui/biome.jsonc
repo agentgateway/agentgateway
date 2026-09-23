@@ -47,8 +47,19 @@
 		}
 	},
 	"linter": {
+		"domains": {
+			"playwright": "all",
+			"project": "recommended",
+			"react": "recommended",
+			"test": "recommended",
+			"types": "recommended"
+		},
 		"rules": {
-			"preset": "none"
+			"preset": "recommended",
+			"style": {
+				"noDescendingSpecificity": "error",
+				"noNonNullAssertion": "error"
+			}
 		}
 	},
 	"overrides": [

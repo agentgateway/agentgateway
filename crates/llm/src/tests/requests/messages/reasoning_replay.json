@@ -4,7 +4,12 @@
   "messages": [
     {
       "role": "user",
-      "content": [{ "type": "text", "text": "What is 2+2?" }]
+      "content": [
+        {
+          "type": "text",
+          "text": "What is 2+2?"
+        }
+      ]
     },
     {
       "role": "assistant",
@@ -14,12 +19,42 @@
           "thinking": "Two plus two.",
           "signature": "SIG-replay=="
         },
-        { "type": "text", "text": "4" }
+        {
+          "type": "redacted_thinking",
+          "data": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+        },
+        {
+          "type": "text",
+          "text": "4"
+        }
       ]
     },
     {
       "role": "user",
-      "content": [{ "type": "text", "text": "And 3+3?" }]
+      "content": [
+        {
+          "type": "text",
+          "text": "And 3+3?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Three plus three is six.",
+          "signature": ""
+        },
+        {
+          "type": "text",
+          "text": "6"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Continue."
     }
   ]
 }

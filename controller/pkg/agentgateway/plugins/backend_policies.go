@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/maps"
@@ -37,6 +39,7 @@ const (
 	mcpAuthenticationPolicySuffix = ":mcp-authentication"
 	mcpGuardrailsPolicySuffix     = ":mcp-guardrails"
 	healthPolicySuffix            = ":health"
+	sessionAffinityPolicySuffix   = ":session-affinity"
 )
 
 func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessionTag {
@@ -177,6 +180,10 @@ func translateBackendPolicyToAgw(
 		appendPolicy("backendHealth")(translateBackendHealthPolicy(policy))
 	}
 
+	if s := backend.SessionAffinity; s != nil {
+		appendPolicy("backendSessionAffinity")(translateBackendSessionAffinityPolicy(policy))
+	}
+
 	if s := backend.Transformation; s != nil {
 		appendPolicy("backendTransformation")(translateBackendTransformation(policy))
 	}
@@ -304,6 +311,9 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 	var evictionProto *api.BackendPolicySpec_Eviction
 	if healthPolicy.Eviction != nil {
 		duration := durationToProto(healthPolicy.Eviction.Duration)
+		if duration == nil {
+			duration = durationpb.New(3 * time.Second)
+		}
 
 		// Convert 0–100 integer scores into 0.0–1.0 doubles for proto
 		var healthThreshold *float64
@@ -349,6 +359,28 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 	}
 
 	return evictPolicy, errors.Join(errs...)
+}
+
+func translateBackendSessionAffinityPolicy(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+	sessionAffinity := policy.Spec.Backend.SessionAffinity
+	var err error
+	if !isCEL(sessionAffinity.Source) {
+		err = fmt.Errorf("backend sessionAffinity source is not a valid CEL expression: %s", sessionAffinity.Source)
+	}
+
+	return &api.Policy{
+		Key:  policy.Namespace + "/" + policy.Name + sessionAffinityPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_SessionAffinity_{
+					SessionAffinity: &api.BackendPolicySpec_SessionAffinity{
+						Source: string(sessionAffinity.Source),
+					},
+				},
+			},
+		},
+	}, err
 }
 
 func translateBackendTCP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
@@ -685,9 +717,10 @@ func translateMCPAuthenticationSpec(
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},
-		JwksInline: translatedInlineJwks,
-		Mode:       mode,
-		ClientId:   authnPolicy.ClientID,
+		JwksInline:           translatedInlineJwks,
+		Mode:                 mode,
+		ClientId:             authnPolicy.ClientID,
+		JwtValidationOptions: translateJWTValidationOptions(authnPolicy.Validation),
 	}
 
 	if authnPolicy.ClientSecretRef != nil {
@@ -838,9 +871,8 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 			if err != nil {
 				logger.Error("error parsing request prompt guard", "error", err)
 				errs = append(errs, err)
-			} else {
-				translatedAIPolicy.PromptGuard.Request = r
 			}
+			translatedAIPolicy.PromptGuard.Request = r
 		}
 
 		if aiSpec.PromptGuard.Response != nil {
@@ -848,9 +880,8 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 			if err != nil {
 				logger.Error("error parsing response prompt guard", "error", err)
 				errs = append(errs, err)
-			} else {
-				translatedAIPolicy.PromptGuard.Response = r
 			}
+			translatedAIPolicy.PromptGuard.Response = r
 		}
 	}
 
@@ -860,11 +891,11 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 
 	if aiSpec.PromptCaching != nil {
 		translatedAIPolicy.PromptCaching = &api.BackendPolicySpec_Ai_PromptCaching{
-			CacheSystem:   aiSpec.PromptCaching.CacheSystem,
-			CacheMessages: aiSpec.PromptCaching.CacheMessages,
+			CacheSystem:   ptr.OrDefault(aiSpec.PromptCaching.CacheSystem, true),
+			CacheMessages: ptr.OrDefault(aiSpec.PromptCaching.CacheMessages, true),
 			CacheTools:    aiSpec.PromptCaching.CacheTools,
 		}
-		translatedAIPolicy.PromptCaching.MinTokens = new(uint32(aiSpec.PromptCaching.MinTokens)) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
+		translatedAIPolicy.PromptCaching.MinTokens = new(uint32(ptr.OrDefault(aiSpec.PromptCaching.MinTokens, 1024))) //nolint:gosec // G115: MinTokens is validated by kubebuilder to be >= 0
 		if aiSpec.PromptCaching.CacheMessageOffset > 0 {
 			translatedAIPolicy.PromptCaching.CacheMessageOffset = new(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
 		}
@@ -1591,6 +1622,9 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		if auth.AssumeRole.SessionNameExpression != nil {
 			assumeRole.SessionNameExpression = string(*auth.AssumeRole.SessionNameExpression)
 		}
+		if auth.AssumeRole.ExternalID != nil {
+			assumeRole.ExternalId = *auth.AssumeRole.ExternalID
+		}
 	}
 
 	awsAuth := &api.Aws{
@@ -1673,6 +1707,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 		return &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Azure{
 				Azure: &api.Azure{
+					Scopes: auth.Scopes,
 					Kind: &api.Azure_ExplicitConfig{
 						ExplicitConfig: &api.AzureExplicitConfig{
 							CredentialSource: &api.AzureExplicitConfig_ManagedIdentityCredential{
@@ -1689,6 +1724,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 		return &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Azure{
 				Azure: &api.Azure{
+					Scopes: auth.Scopes,
 					Kind: &api.Azure_ExplicitConfig{
 						ExplicitConfig: &api.AzureExplicitConfig{
 							CredentialSource: &api.AzureExplicitConfig_WorkloadIdentityCredential{
@@ -1705,6 +1741,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Azure{
 			Azure: &api.Azure{
+				Scopes: auth.Scopes,
 				Kind: &api.Azure_Implicit{
 					Implicit: &api.AzureImplicit{},
 				},
@@ -1745,6 +1782,7 @@ func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespa
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_Azure{
 			Azure: &api.Azure{
+				Scopes: auth.Scopes,
 				Kind: &api.Azure_ExplicitConfig{
 					ExplicitConfig: &api.AzureExplicitConfig{
 						CredentialSource: &api.AzureExplicitConfig_ClientSecret{

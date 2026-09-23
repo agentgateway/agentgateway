@@ -7,8 +7,8 @@ mod tls;
 use std::str::FromStr;
 use std::task;
 
-use ::http::HeaderValue;
 use ::http::uri::{Authority, Scheme};
+use ::http::{HeaderName, HeaderValue};
 use agent_pool::pool::ExpectedCapacity;
 use agent_pool::rt::TokioIo;
 use tracing::event;
@@ -76,6 +76,7 @@ pub struct TunnelConfig {
 	pub target: Target,
 	pub connection: Box<ConnectionConfig>,
 	pub token: Option<HeaderValue>,
+	pub connect_headers: Vec<(HeaderName, HeaderValue)>,
 	pub connect: bool,
 }
 
@@ -357,9 +358,15 @@ impl Connector {
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.connection, false)).await?;
 
-				let con = connect_tunnel::handshake(con, &dest, tcfg.token, self.h2_config.clone())
-					.await
-					.map_err(crate::http::Error::new)?;
+				let con = connect_tunnel::handshake(
+					con,
+					&dest,
+					tcfg.token,
+					&tcfg.connect_headers,
+					self.h2_config.clone(),
+				)
+				.await
+				.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
 				con
 			},
@@ -552,6 +559,11 @@ impl Client {
 		if let Some(pool_max) = backend_config.pool_max_size {
 			b.pool_max_idle_per_host(pool_max);
 		};
+		if !backend_config.h2_keepalive_interval.is_zero() {
+			b.http2_keep_alive_interval(Some(backend_config.h2_keepalive_interval));
+			b.http2_keep_alive_timeout(backend_config.h2_keepalive_timeout);
+			b.http2_keep_alive_while_idle(true);
+		}
 
 		let connector = Connector {
 			resolver: Arc::new(resolver),
@@ -730,10 +742,15 @@ impl Client {
 			);
 			let buffer_limit = http::buffer_limit(&req);
 			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
-			let call = client.request(req);
+
+			// We are leaving agentgateway code so no longer need our specialized body; Boxing is fine here.
+			let call = client.request(req.map(http::Body::into_boxed));
+
 			let map_error = |err: agent_pool::Error| {
 				if err.is_connect_timeout() {
 					ProxyError::UpstreamCallTimeout
+				} else if connect_tunnel::is_stale_assignment(&err) {
+					ProxyError::StaleAssignment
 				} else {
 					ProxyError::UpstreamCallFailed(err)
 				}
@@ -781,7 +798,7 @@ impl Client {
 				.extensions_mut()
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
-			Ok(resp)
+			Ok(resp.map(http::Body::new))
 		}
 	}
 }

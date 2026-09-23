@@ -176,8 +176,8 @@ pub fn test_basic_jwks() {
 				"kid": "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -324,8 +324,8 @@ fn setup_test_jwt_with_required_claims(
 				"kid": "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -335,23 +335,13 @@ fn setup_test_jwt_with_required_claims(
 	let allowed_aud = "allowed-aud";
 	let kid = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
 
-	let mut provider = Provider::from_jwks(
+	let provider = Provider::from_jwks(
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
 		JWTValidationOptions { required_claims },
 	)
 	.unwrap();
-	// Test-only: allow synthetic tokens without a real signature
-	#[allow(deprecated)]
-	{
-		provider
-			.keys
-			.get_mut(kid)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	(
 		Jwt {
@@ -366,18 +356,26 @@ fn setup_test_jwt_with_required_claims(
 	)
 }
 
-fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
-	build_unsigned_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
+fn build_signed_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
+	build_signed_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
 }
 
-fn build_unsigned_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
-	use base64::Engine as _;
-	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-	let header = json!({ "alg": "ES256", "kid": kid });
-	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
-	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
-	let s = URL_SAFE_NO_PAD.encode(b"sig");
-	format!("{h}.{p}.{s}")
+fn build_signed_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
+	// Test key matching the P-256 public coordinates in the JWKS fixtures.
+	const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
+7OtwJIZ/dpm8ygE2MBTjPCY3hgahRANCAARYzu50EeBrT0rELmTGroaGtn0zdjxL
+1lOGr9fGw5wOGcXO0+Gn5F5sIxGyTM0FwnUHFNz2SoixZR5dtxhNc+Lo
+-----END PRIVATE KEY-----
+";
+	crate::crypto::jwt::init();
+	let header = jsonwebtoken::Header {
+		alg: jsonwebtoken::Algorithm::ES256,
+		kid: Some(kid.to_string()),
+		..Default::default()
+	};
+	let key = jsonwebtoken::EncodingKey::from_ec_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).unwrap();
+	jsonwebtoken::encode(&header, &payload, &key).unwrap()
 }
 
 #[test]
@@ -399,7 +397,7 @@ pub fn test_configured_issuer_and_audiences_require_claims() {
 		("iss", json!({ "aud": allowed_aud, "exp": exp })),
 	];
 	for (missing_claim, payload) in cases {
-		let token = build_unsigned_token_with_payload(kid, payload);
+		let token = build_signed_token_with_payload(kid, payload);
 		match jwt.validate_claims(&token) {
 			Err(TokenError::Invalid(error)) => assert!(
 				matches!(error.kind(), ErrorKind::MissingRequiredClaim(claim) if claim == missing_claim),
@@ -419,6 +417,35 @@ fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {
 	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
 	let s = URL_SAFE_NO_PAD.encode(b"sig");
 	format!("{h}.{p}.{s}")
+}
+
+#[test]
+fn test_nbf_validation() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let now = jsonwebtoken::get_current_timestamp();
+	for required_claims in [
+		JWTValidationOptions::default().required_claims,
+		HashSet::new(),
+		HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+	] {
+		let (jwt, kid, issuer, aud) = setup_test_jwt_with_required_claims(required_claims);
+		for (nbf, accepted) in [(now - 600, true), (now + 30, true), (now + 864_000, false)] {
+			let token = build_signed_token_with_payload(
+				kid,
+				json!({ "iss": issuer, "aud": aud, "exp": now + 900_000, "nbf": nbf }),
+			);
+			let result = jwt.validate_claims(&token);
+			if accepted {
+				assert!(result.is_ok(), "nbf={nbf}: {result:?}");
+			} else {
+				assert!(matches!(
+					result,
+					Err(TokenError::Invalid(error)) if *error.kind() == ErrorKind::ImmatureSignature
+				));
+			}
+		}
+	}
 }
 
 // Validate specific rejection reasons for tokens: audience, issuer, expiry, missing kid, unknown kid
@@ -459,7 +486,7 @@ pub fn test_jwt_rejections_table() {
 	];
 
 	for (name, iss, aud, exp, expected) in cases {
-		let token = build_unsigned_token(kid, iss, aud, exp);
+		let token = build_signed_token(kid, iss, aud, exp);
 		let res = jwt.validate_claims(&token);
 		match res {
 			Err(TokenError::Invalid(e)) => match expected {
@@ -477,7 +504,7 @@ pub fn test_jwt_rejections_table() {
 	assert!(matches!(res, Err(TokenError::MissingKeyId)));
 
 	// UnknownKeyId: kid not found among providers
-	let token_unknown_kid = build_unsigned_token("non-existent-kid", issuer, allowed_aud, now + 600);
+	let token_unknown_kid = build_signed_token("non-existent-kid", issuer, allowed_aud, now + 600);
 	let res = jwt.validate_claims(&token_unknown_kid);
 	assert!(matches!(res, Err(TokenError::UnknownKeyId(_))));
 }
@@ -564,7 +591,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		.duration_since(UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
-	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let token = build_signed_token(kid, issuer, allowed_aud, now + 600);
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
 		crate::http::header::AUTHORIZATION,
@@ -627,7 +654,7 @@ pub async fn test_apply_optional_valid_token_respects_preserve_token() {
 		.duration_since(UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
-	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let token = build_signed_token(kid, issuer, allowed_aud, now + 600);
 	for preserve_token in [false, true] {
 		let jwt = Jwt {
 			mode: Mode::Optional,
@@ -671,7 +698,7 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 		.duration_since(UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
-	let token = build_unsigned_token(kid, issuer, allowed_aud, now + 600);
+	let token = build_signed_token(kid, issuer, allowed_aud, now + 600);
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	*req.uri_mut() = format!("http://example.com/?token={token}&keep=yes")
 		.parse()
@@ -698,7 +725,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let log_cfg = log::Config {
 		filter: None,
 		fields: LoggingFields::default(),
-		database_fields: LoggingFields::default(),
+		database_fields: Default::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
 		database: None,
@@ -727,16 +754,23 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 }
 
 fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
+	setup_test_multi_jwt_with_kids("kid-1", "kid-2")
+}
+
+fn setup_test_multi_jwt_with_kids(
+	kid1: &'static str,
+	kid2: &'static str,
+) -> (Jwt, ProviderInfo, ProviderInfo) {
 	let jwks1 = json!({
 		"keys": [
 			{
 				"use": "sig",
 				"kty": "EC",
-				"kid": "kid-1",
+				"kid": kid1,
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -745,11 +779,11 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			{
 				"use": "sig",
 				"kty": "EC",
-				"kid": "kid-2",
+				"kid": kid2,
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -760,42 +794,22 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 	let issuer2 = "https://issuer-2.example.com";
 	let aud1 = "aud-1";
 	let aud2 = "aud-2";
-	let kid1 = "kid-1";
-	let kid2 = "kid-2";
 
-	let mut provider1 = Provider::from_jwks(
+	let provider1 = Provider::from_jwks(
 		jwks1,
 		issuer1.to_string(),
 		Some(vec![aud1.to_string()]),
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
-	#[allow(deprecated)]
-	{
-		provider1
-			.keys
-			.get_mut(kid1)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
-	let mut provider2 = Provider::from_jwks(
+	let provider2 = Provider::from_jwks(
 		jwks2,
 		issuer2.to_string(),
 		Some(vec![aud2.to_string()]),
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
-	#[allow(deprecated)]
-	{
-		provider2
-			.keys
-			.get_mut(kid2)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	(
 		Jwt {
@@ -819,36 +833,186 @@ pub fn test_validate_claims_multi_providers_accepts_both() {
 		.unwrap()
 		.as_secs();
 
-	let token1 = build_unsigned_token(kid1, iss1, aud1, now + 600);
-	let token2 = build_unsigned_token(kid2, iss2, aud2, now + 600);
+	let token1 = build_signed_token(kid1, iss1, aud1, now + 600);
+	let token2 = build_signed_token(kid2, iss2, aud2, now + 600);
 
 	assert!(jwt.validate_claims(&token1).is_ok());
 	assert!(jwt.validate_claims(&token2).is_ok());
 }
 
-// Helper to build a token without the exp claim
-fn build_unsigned_token_without_exp(kid: &str, iss: &str, aud: &str) -> String {
-	use base64::Engine as _;
-	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-	let header = json!({ "alg": "ES256", "kid": kid });
-	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user" });
-	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
-	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
-	let s = URL_SAFE_NO_PAD.encode(b"sig");
-	format!("{h}.{p}.{s}")
+// Multiple providers that publish the same key with the same kid.
+// Multiple tokens are validated, one per issuer, and both are accepted.
+#[test]
+pub fn test_validate_claims_multi_providers_shared_kid_accepts_both() {
+	let (jwt, (kid1, iss1, aud1), (kid2, iss2, aud2)) =
+		setup_test_multi_jwt_with_kids("shared-kid", "shared-kid");
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for (kid, iss, aud) in [(kid1, iss1, aud1), (kid2, iss2, aud2)] {
+		let token = build_signed_token(kid, iss, aud, now + 600);
+		let claims = jwt
+			.validate_claims(&token)
+			.unwrap_or_else(|e| panic!("token from {iss} should validate: {e:?}"));
+		assert_eq!(claims.inner.get("iss"), Some(&json!(iss)));
+	}
 }
 
-// Helper to build a token with an expired exp claim
-fn build_unsigned_token_with_expired_exp(kid: &str, iss: &str, aud: &str) -> String {
-	use base64::Engine as _;
-	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-	let header = json!({ "alg": "ES256", "kid": kid });
-	// exp = 0 means expired (Unix epoch)
-	let payload = json!({ "iss": iss, "aud": aud, "sub": "test-user", "exp": 0 });
-	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
-	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
-	let s = URL_SAFE_NO_PAD.encode(b"sig");
-	format!("{h}.{p}.{s}")
+// Multiple providers that publish the same key under the same kid.
+// The token's aud does not match either provider, so the token is rejected with InvalidAudience by the correct issuer.
+#[test]
+pub fn test_validate_claims_multi_providers_shared_kid_reports_matching_provider_error() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let (jwt, (kid1, iss1, aud1), (kid2, iss2, _)) =
+		setup_test_multi_jwt_with_kids("shared-kid", "shared-kid");
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for (kid, iss) in [(kid1, iss1), (kid2, iss2)] {
+		let token = build_signed_token(kid, iss, "wrong-aud", now + 600);
+		let result = jwt.validate_claims(&token);
+		assert!(
+			matches!(
+				result,
+				Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidAudience
+			),
+			"{iss}: expected InvalidAudience, got {result:?}"
+		);
+	}
+
+	// No provider for the issuer, but the kid matches both providers.
+	let token = build_signed_token(kid1, "https://unknown.example.com", aud1, now + 600);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		matches!(
+			result,
+			Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidIssuer
+		),
+		"expected InvalidIssuer, got {result:?}"
+	);
+
+	// No provider for the kid, but the issuer matches one provider.
+	let token = build_signed_token("non-existent-kid", iss1, aud1, now + 600);
+	assert!(matches!(
+		jwt.validate_claims(&token),
+		Err(TokenError::UnknownKeyId(_))
+	));
+}
+
+// Multiple provider with the same kid but have different issuers.
+// The provider with the matching issuer is used to validate the token, not just the kid.
+#[test]
+pub fn test_validate_claims_multi_providers_colliding_kid_different_keys() {
+	let ed25519_jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "OKP",
+				"kid": "shared-kid",
+				"crv": "Ed25519",
+				"x": "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8"
+			}
+		]
+	});
+	let ec_jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "shared-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}
+		]
+	});
+	let ed25519_provider = Provider::from_jwks(
+		serde_json::from_value(ed25519_jwks).unwrap(),
+		"https://issuer-1.example.com".to_string(),
+		Some(vec!["aud-1".to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let ec_provider = Provider::from_jwks(
+		serde_json::from_value(ec_jwks).unwrap(),
+		"https://issuer-2.example.com".to_string(),
+		Some(vec!["aud-2".to_string()]),
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![ed25519_provider, ec_provider],
+		location: bearer_location(),
+		preserve_token: false,
+	};
+
+	// Sign with the second provider's key and validate with the second provider's iss and aud.
+	let token = build_signed_token(
+		"shared-kid",
+		"https://issuer-2.example.com",
+		"aud-2",
+		jsonwebtoken::get_current_timestamp() + 600,
+	);
+	let result = jwt.validate_claims(&token);
+	assert!(result.is_ok(), "expected token to validate, got {result:?}");
+}
+
+// Multiple providers share the same issuer and kid, but the audiences are different.
+// The provider with the matching audience, issuer, and kid is used to validate the token, not just the iss/kid.
+#[test]
+pub fn test_validate_claims_multi_providers_same_issuer() {
+	use jsonwebtoken::errors::ErrorKind;
+
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "shared-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}
+		]
+	});
+	let issuer = "https://issuer.example.com";
+	let providers = ["aud-1", "aud-2"].map(|aud| {
+		Provider::from_jwks(
+			serde_json::from_value(jwks.clone()).unwrap(),
+			issuer.to_string(),
+			Some(vec![aud.to_string()]),
+			JWTValidationOptions::default(),
+		)
+		.unwrap()
+	});
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: providers.into(),
+		location: bearer_location(),
+		preserve_token: false,
+	};
+	let now = jsonwebtoken::get_current_timestamp();
+
+	for aud in ["aud-1", "aud-2"] {
+		let token = build_signed_token("shared-kid", issuer, aud, now + 600);
+		let result = jwt.validate_claims(&token);
+		assert!(
+			result.is_ok(),
+			"{aud}: expected token to validate, got {result:?}"
+		);
+	}
+
+	let token = build_signed_token("shared-kid", issuer, "aud-3", now + 600);
+	let result = jwt.validate_claims(&token);
+	assert!(
+		matches!(
+			result,
+			Err(TokenError::Invalid(ref error)) if *error.kind() == ErrorKind::InvalidAudience
+		),
+		"expected InvalidAudience, got {result:?}"
+	);
 }
 
 // Empty required_claims accepts tokens without exp claim
@@ -862,8 +1026,8 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 				"kid": "no-exp-kid",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -876,23 +1040,13 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		required_claims: HashSet::new(),
 	};
 
-	let mut provider = Provider::from_jwks(
+	let provider = Provider::from_jwks(
 		jwks,
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
 	)
 	.unwrap();
-
-	#[allow(deprecated)]
-	{
-		provider
-			.keys
-			.get_mut(kid)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	let jwt = Jwt {
 		mode: Mode::Strict,
@@ -901,7 +1055,10 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		preserve_token: false,
 	};
 
-	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let token = build_signed_token_with_payload(
+		kid,
+		json!({ "iss": issuer, "aud": aud, "sub": "test-user" }),
+	);
 	let result = jwt.validate_claims(&token);
 	assert!(
 		result.is_ok(),
@@ -926,8 +1083,8 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 				"kid": "default-kid",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -936,23 +1093,13 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 	let aud = "default-aud";
 	let kid = "default-kid";
 
-	let mut provider = Provider::from_jwks(
+	let provider = Provider::from_jwks(
 		jwks,
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		JWTValidationOptions::default(),
 	)
 	.unwrap();
-
-	#[allow(deprecated)]
-	{
-		provider
-			.keys
-			.get_mut(kid)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	let jwt = Jwt {
 		mode: Mode::Strict,
@@ -961,7 +1108,10 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 		preserve_token: false,
 	};
 
-	let token = build_unsigned_token_without_exp(kid, issuer, aud);
+	let token = build_signed_token_with_payload(
+		kid,
+		json!({ "iss": issuer, "aud": aud, "sub": "test-user" }),
+	);
 	let result = jwt.validate_claims(&token);
 	assert!(
 		result.is_err(),
@@ -980,8 +1130,8 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 				"kid": "expired-kid",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -994,23 +1144,13 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		required_claims: HashSet::new(),
 	};
 
-	let mut provider = Provider::from_jwks(
+	let provider = Provider::from_jwks(
 		jwks,
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
 	)
 	.unwrap();
-
-	#[allow(deprecated)]
-	{
-		provider
-			.keys
-			.get_mut(kid)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	let jwt = Jwt {
 		mode: Mode::Strict,
@@ -1019,7 +1159,10 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		preserve_token: false,
 	};
 
-	let token = build_unsigned_token_with_expired_exp(kid, issuer, aud);
+	let token = build_signed_token_with_payload(
+		kid,
+		json!({ "iss": issuer, "aud": aud, "sub": "test-user", "exp": 0 }),
+	);
 	let result = jwt.validate_claims(&token);
 	assert!(
 		result.is_err(),
@@ -1038,8 +1181,8 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 				"kid": "nbf-kid",
 				"crv": "P-256",
 				"alg": "ES256",
-				"x": "XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo",
-				"y": "g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE"
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
 			}
 		]
 	});
@@ -1052,23 +1195,13 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		required_claims: HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
 	};
 
-	let mut provider = Provider::from_jwks(
+	let provider = Provider::from_jwks(
 		jwks,
 		issuer.to_string(),
 		Some(vec![aud.to_string()]),
 		jwt_validation_options,
 	)
 	.unwrap();
-
-	#[allow(deprecated)]
-	{
-		provider
-			.keys
-			.get_mut(kid)
-			.unwrap()
-			.validation
-			.insecure_disable_signature_validation();
-	}
 
 	let jwt = Jwt {
 		mode: Mode::Strict,
@@ -1083,7 +1216,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		.duration_since(UNIX_EPOCH)
 		.unwrap()
 		.as_secs();
-	let token = build_unsigned_token(kid, issuer, aud, now + 600);
+	let token = build_signed_token(kid, issuer, aud, now + 600);
 	let result = jwt.validate_claims(&token);
 	assert!(
 		result.is_err(),

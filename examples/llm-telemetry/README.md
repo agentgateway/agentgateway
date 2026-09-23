@@ -4,6 +4,9 @@ This example shows how to export traces for LLM backend calls.
 
 The `tracing/` directory contains provider-specific examples for OpenTelemetry-compatible backends such as Jaeger, Langfuse, OpenLLMetry, and Phoenix.
 
+For Datadog metrics and OTLP tracing with a synthetic provider, see the
+[Datadog observability example](../datadog/README.md).
+
 ### Running the example
 
 Start agentgateway with the OpenTelemetry tracing config:

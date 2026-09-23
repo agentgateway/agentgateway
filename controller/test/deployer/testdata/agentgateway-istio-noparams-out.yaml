@@ -137,7 +137,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: CA_ADDRESS
-          value: https://istiod.istio-system.svc:15012
+          value: https://istiod-1-30.istio-system.svc:15012
         - name: TRUST_DOMAIN
           value: custom.example.com
         - name: CLUSTER_ID

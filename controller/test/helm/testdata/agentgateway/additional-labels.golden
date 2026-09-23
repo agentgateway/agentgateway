@@ -14,6 +14,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
     another-label: "true"
     extra-label-key: extra-label-value
+
 ---
 # Source: agentgateway/templates/service.yaml
 apiVersion: v1
@@ -144,6 +145,8 @@ spec:
               value: "9978"
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: "[]"
+            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
+              value: "true"
             - name: AGW_XDS_MODE
               value: "tls"
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS

@@ -61,7 +61,7 @@ export function McpAuthenticationPolicyEditor(props: {
 			return build();
 		} catch {
 			return {
-				error: 'Resource metadata must be YAML and inline JWKS must be valid JSON.'
+				error: tr('copy.resourceMetadataMustBeYamlAndInlineJwksMustBeValidJson')
 			};
 		}
 	}
@@ -69,13 +69,13 @@ export function McpAuthenticationPolicyEditor(props: {
 	function save() {
 		try {
 			const nextErrors: FieldErrors = {};
-			if (!issuer.trim()) nextErrors.issuer = 'Issuer is required.';
-			if (!jwksValue.trim()) nextErrors.jwks = 'JWKS source is required.';
+			if (!issuer.trim()) nextErrors.issuer = tr('copy.issuerIsRequired');
+			if (!jwksValue.trim()) nextErrors.jwks = tr('copy.jwksSourceIsRequired');
 			if (jwksMode === 'inline') JSON.parse(jwksValue);
 			if (resourceMetadata.trim()) {
 				const parsed = parseYamlText(resourceMetadata);
 				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-					nextErrors.metadata = 'Resource metadata must be a YAML mapping.';
+					nextErrors.metadata = tr('copy.resourceMetadataMustBeAYamlMapping');
 			}
 			setErrors(nextErrors);
 			if (Object.keys(nextErrors).length) {
@@ -85,7 +85,13 @@ export function McpAuthenticationPolicyEditor(props: {
 			setError(null);
 			props.onSave(build());
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Invalid MCP authentication policy');
+			setError(
+				err instanceof SyntaxError
+					? tr('copy.resourceMetadataMustBeYamlAndInlineJwksMustBeValidJson')
+					: err instanceof Error
+						? err.message
+						: tr('copy.invalidMcpAuthenticationPolicy')
+			);
 		}
 	}
 
@@ -108,13 +114,13 @@ export function McpAuthenticationPolicyEditor(props: {
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'mode')}
 				>
 					<EnumSelector
-						ariaLabel="Validation mode"
+						ariaLabel={tr('copy.validationMode')}
 						value={mode}
 						schema={props.help.node(['$defs', 'McpAuthenticationMode'])}
 						labels={{
-							strict: 'Strict',
-							optional: 'Optional',
-							permissive: 'Permissive'
+							strict: tr('copy.strict'),
+							optional: tr('copy.optional_1yfbac9'),
+							permissive: tr('copy.permissive')
 						}}
 						onChange={value => setMode(value as AuthMode)}
 					/>
@@ -178,7 +184,7 @@ export function McpAuthenticationPolicyEditor(props: {
 					</FieldGroup>
 				) : (
 					<Field
-						label={jwksMode === 'url' ? 'JWKS URL' : 'JWKS file'}
+						label={jwksMode === 'url' ? tr('copy.jwksUrl') : tr('copy.jwksFile')}
 						className={errors.jwks ? 'invalid' : undefined}
 						hint={errors.jwks}
 					>

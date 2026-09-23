@@ -149,11 +149,13 @@ output:
           promptGuard:
             request:
             - regex:
+                action: MASK
                 rules:
                 - regex: bad.*
                 - builtin: CREDIT_CARD
               rejection:
                 body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+                status: 403
               scope:
               - CONTENT_SCOPE_SYSTEM_PROMPT
               - CONTENT_SCOPE_MESSAGES
@@ -182,6 +184,35 @@ output:
                     hostname: webhook.default.svc.cluster.local
                     namespace: default
                 failureMode: FAIL_OPEN
+            response:
+            - regex:
+                action: MASK
+                rules:
+                - regex: bad.*
+                - builtin: EMAIL
+                - builtin: CA_SIN
+                - builtin: PHONE_NUMBER
+                - builtin: SSN
+              rejection:
+                body: cmVnZXggcmVqZWN0ZWQgb24gcmVzcG9uc2U=
+                status: 403
+            - webhook:
+                action: REJECT_AUDIT_ACTION_REJECT
+            - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_REJECT
+                identifier: bedrock-guardrail-identifier
+                region: us-west-2
+                version: DRAFT
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_REJECT
+                inlinePolicies:
+                - auth:
+                    gcp:
+                      idToken:
+                        audience: https://ai-guardrails.example.com
+                location: us-central1
+                projectId: model-armor-project-id
+                templateId: model-armor-template-id
           prompts:
             append:
             - content: hello!

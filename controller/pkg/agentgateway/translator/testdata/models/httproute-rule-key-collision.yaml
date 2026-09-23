@@ -148,7 +148,7 @@ output:
       concreteModel:
         backend:
           backend: default/private-model/backend.default.tenants.0
-      key: default/private-model.default.tenants.0
+      key: default/private-model.default.tenants.0.http
       listenerKey: default/model-gateway.http
       match:
         model: private-model

@@ -91,6 +91,19 @@ func GatewaysForDeployerTransformationFunc(
 // A lower-precedence listener with a different mode is rejected by translation and
 // cannot change Service/container exposure here.
 func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
+	if gw.GetAnnotations()[annotations.InternalPorts] == "" {
+		// Fastpath: no internal ports. Avoids expensive sort of the LS collection
+		hasInternalPorts := false
+		for _, ls := range lsets {
+			if ls.GetAnnotations()[annotations.InternalPorts] != "" {
+				hasInternalPorts = true
+				break
+			}
+		}
+		if !hasInternalPorts {
+			return smallset.New[int32]()
+		}
+	}
 	portModes := map[int32]bool{}
 
 	gwInternal, _ := annotations.ParseInternalPorts(

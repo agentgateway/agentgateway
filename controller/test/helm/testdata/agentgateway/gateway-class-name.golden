@@ -90,6 +90,8 @@ spec:
               value: "9978"
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: "[]"
+            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
+              value: "true"
             - name: AGW_XDS_MODE
               value: "tls"
             - name: AGW_AGENTGATEWAY_CLASS_NAME

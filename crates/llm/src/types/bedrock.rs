@@ -58,6 +58,11 @@ pub enum ReasoningContentBlock {
 		#[serde(rename = "reasoningText")]
 		reasoning_text: ReasoningText,
 	},
+	// Encrypted reasoning: { "redactedContent": "<base64>" }.
+	Redacted {
+		#[serde(rename = "redactedContent")]
+		redacted_content: String,
+	},
 	// Legacy/simple format: { "text": "..." }
 	Simple {
 		text: String,
@@ -668,9 +673,16 @@ pub struct CohereEmbeddingRequest {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CohereEmbeddingResponse {
-	pub embeddings: Vec<Vec<f32>>,
+	pub embeddings: CohereEmbeddings,
 	pub id: String,
 	pub texts: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum CohereEmbeddings {
+	ByIndex(Vec<Vec<f32>>),
+	ByType(HashMap<String, Vec<Vec<f32>>>),
 }
 
 // ---- Amazon Nova Multimodal Embeddings (amazon.nova-*-multimodal-embeddings-*) ----

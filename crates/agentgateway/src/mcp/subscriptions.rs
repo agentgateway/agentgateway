@@ -412,7 +412,7 @@ mod tests {
 		id: RequestId,
 		body: impl futures_core::Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	) -> Vec<serde_json::Value> {
-		let response = messages_to_response(id, body, None, true).unwrap();
+		let response = messages_to_response(id, body, None, true, None).unwrap();
 		let bytes = crate::http::read_resp_body(response).await.unwrap();
 		let text = std::str::from_utf8(&bytes).unwrap();
 		text

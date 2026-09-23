@@ -1,0 +1,29 @@
+podAnnotations:
+  ad.datadoghq.com/controller.checks: |-
+    {
+      "openmetrics": {
+        "init_config": {},
+        "instances": [
+          {
+            "use_latest_spec": false,
+            "openmetrics_endpoint": "http://%%host%%:9092/metrics",
+            "namespace": "agentgateway",
+            "metrics": [
+              {
+                "agentgateway_controller_reconciliations": "controller.reconciliations",
+                "agentgateway_controller_reconcile_duration_seconds": "controller.reconcile.duration",
+                "agentgateway_controller_reconciliations_running": "controller.reconciliations_running"
+              },
+              ".*"
+            ],
+            "histogram_buckets_as_distributions": true,
+            "collect_counters_with_distributions": true,
+            "tags": [
+              "service:agentgateway",
+              "env:datadog-dev",
+              "component:controller"
+            ]
+          }
+        ]
+      }
+    }

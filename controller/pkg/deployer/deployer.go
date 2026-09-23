@@ -300,6 +300,10 @@ func (d *Deployer) DeployObjs(ctx context.Context, objs []client.Object) error {
 
 func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Object, sourceObj client.Object) error {
 	controllerName := d.agwControllerName
+	var sourceGVK schema.GroupVersionKind
+	if sourceObj != nil {
+		sourceGVK = d.objectGVK(sourceObj)
+	}
 
 	for _, obj := range objs {
 		u, err := kubeutils.ToUnstructured(obj)
@@ -320,6 +324,20 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 		// If the object doesn't exist or there's an error other than "not found", proceed with patching
 		switch {
 		case err == nil:
+			if sourceObj != nil {
+				owner := metav1.GetControllerOf(existing)
+				ownedBySource := false
+				if owner != nil {
+					ownerGV, ownerErr := schema.ParseGroupVersion(owner.APIVersion)
+					ownedBySource = ownerErr == nil && ownerGV.Group == sourceGVK.Group &&
+						owner.Kind == sourceGVK.Kind && owner.Name == sourceObj.GetName()
+				}
+				if !ownedBySource {
+					return fmt.Errorf("cannot deploy object %s %s/%s: resource already exists and is not controlled by %s %s/%s",
+						obj.GetObjectKind().GroupVersionKind().String(), obj.GetNamespace(), obj.GetName(),
+						sourceGVK.Kind, sourceObj.GetNamespace(), sourceObj.GetName())
+				}
+			}
 			// zero out fields that api server changes
 			existing.SetResourceVersion("")
 			existing.SetGeneration(0)

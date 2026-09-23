@@ -48,7 +48,7 @@ func TestSharedJwksRequestsRetargetOwnerAcrossRequestKeys(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -77,7 +77,7 @@ func TestSharedJwksRequestsRemoveLastOwnerDeletesRequest(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -107,7 +107,7 @@ func TestStoreTracksSharedRequestCollectionLifecycle(t *testing.T) {
 		"agentgateway-system",
 		krtOpts.ToOptions("jwks/PersistedEntries")...,
 	)
-	store := NewStore(requests, persisted, DefaultJwksStorePrefix)
+	store := NewStore(requests.AsCollection(), persisted, DefaultJwksStorePrefix)
 	store.jwksFetcher.defaultJwksClient = offlineStubJwksClient{}
 	go func() {
 		_ = store.Start(ctx)
@@ -138,7 +138,7 @@ func TestStoreDropsOldFetchStateWhenPolicyRetargets(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -229,7 +229,7 @@ func TestStoreClearsCacheWhenLastPolicyDeleted(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -286,7 +286,7 @@ func TestStoreClearsCacheWhenAllSharedPoliciesDeleted(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -349,7 +349,7 @@ func TestStoreClearsCacheWhenPolicyDeletedAfterWarmStart(t *testing.T) {
 	}, krtOpts)
 
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -409,7 +409,7 @@ func TestStoreClearsOrphanCacheAtStartup(t *testing.T) {
 	// No AgentPolicies exist.
 	policies := dynamicRemotePolicies(t, nil, krtOpts)
 	collections := NewCollections(CollectionInputs{
-		AgentgatewayPolicies: policies,
+		AgentgatewayPolicies: policies.AsCollection(),
 		Backends:             staticBackends(t, krtOpts),
 		Resolver: jwksResolverFunc(func(owner RemoteJwksOwner) (*ResolvedJwksRequest, error) {
 			return resolvedJwksRequest(owner, jwksPath(owner.Remote.JwksPath)), nil
@@ -535,10 +535,10 @@ func dynamicRemotePolicies(
 ) krt.StaticCollection[*agentgateway.AgentgatewayPolicy] {
 	t.Helper()
 
-	return krt.NewStaticCollection(alwaysSynced{}, initial, krtOpts.ToOptions("jwks/Policies")...)
+	return krt.NewMutableCollection(alwaysSynced{}, initial, krtOpts.ToOptions("jwks/Policies")...)
 }
 
-func staticBackends(t *testing.T, krtOpts krtutil.KrtOptions) krt.StaticCollection[*agentgateway.AgentgatewayBackend] {
+func staticBackends(t *testing.T, krtOpts krtutil.KrtOptions) krt.Collection[*agentgateway.AgentgatewayBackend] {
 	t.Helper()
 
 	return krt.NewStaticCollection[*agentgateway.AgentgatewayBackend](alwaysSynced{}, nil, krtOpts.ToOptions("jwks/Backends")...)
@@ -548,7 +548,7 @@ func staticJwksConfigMaps(
 	t *testing.T,
 	krtOpts krtutil.KrtOptions,
 	initial []*corev1.ConfigMap,
-) krt.StaticCollection[*corev1.ConfigMap] {
+) krt.Collection[*corev1.ConfigMap] {
 	t.Helper()
 
 	return krt.NewStaticCollection(alwaysSynced{}, initial, krtOpts.ToOptions("jwks/PersistedConfigMaps")...)
@@ -561,7 +561,7 @@ func dynamicSharedJwksRequests(
 ) krt.StaticCollection[SharedJwksRequest] {
 	t.Helper()
 
-	return krt.NewStaticCollection(alwaysSynced{}, initial, krtOpts.ToOptions("jwks/SharedRequestsInput")...)
+	return krt.NewMutableCollection(alwaysSynced{}, initial, krtOpts.ToOptions("jwks/SharedRequestsInput")...)
 }
 
 func resolvedJwksRequest(owner RemoteJwksOwner, requestURL string) *ResolvedJwksRequest {

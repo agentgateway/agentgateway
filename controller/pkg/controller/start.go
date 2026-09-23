@@ -147,6 +147,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		cfg.ExtraAgwResourceStatusHandlers,
 		cfg.AgwCollections.Settings.EnableInferExt,
 		cfg.AgwCollections.Settings.EnableAgentgatewayModels,
+		cfg.AgwCollections.Settings.EnableXBackend,
 	)
 	if err := cfg.Manager.Add(agwStatusSyncer); err != nil {
 		setupLog.Error(err, "unable to add agentgateway StatusSyncer runnable")

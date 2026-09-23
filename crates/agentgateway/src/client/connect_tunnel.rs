@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use http::HeaderValue;
+use http::{HeaderName, HeaderValue};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::http::substrate::STALE_ASSIGNMENT_HEADER;
@@ -10,8 +10,34 @@ use crate::transport::{hbone, stream};
 const PROXY_AUTHORIZATION_HEADER: &str = "Proxy-Authorization";
 
 #[derive(Debug, thiserror::Error)]
-#[error("atunnel rejected a stale worker assignment")]
-struct StaleAssignment;
+pub(crate) enum Error {
+	#[error("atunnel rejected a stale worker assignment")]
+	StaleAssignment,
+	#[error(transparent)]
+	Other(anyhow::Error),
+}
+
+impl Error {
+	fn from_handshake(error: anyhow::Error) -> Self {
+		if matches!(error.downcast_ref::<Self>(), Some(Self::StaleAssignment)) {
+			Self::StaleAssignment
+		} else {
+			Self::Other(error)
+		}
+	}
+}
+
+pub(crate) fn is_stale_assignment(mut error: &(dyn std::error::Error + 'static)) -> bool {
+	loop {
+		if matches!(error.downcast_ref::<Error>(), Some(Error::StaleAssignment)) {
+			return true;
+		}
+		let Some(source) = error.source() else {
+			return false;
+		};
+		error = source;
+	}
+}
 
 /// Establish an HTTP/1.1 CONNECT tunnel.
 ///
@@ -21,6 +47,7 @@ pub async fn handshake_h1(
 	conn: Socket,
 	dest: &str,
 	auth: Option<HeaderValue>,
+	headers: &[(HeaderName, HeaderValue)],
 ) -> Result<Socket, anyhow::Error> {
 	let (mut ext, metrics, inner) = conn.into_parts();
 	let mut conn = Socket::new_rewind(inner);
@@ -39,6 +66,12 @@ pub async fn handshake_h1(
 		buf.extend_from_slice(PROXY_AUTHORIZATION_HEADER.as_bytes());
 		buf.extend_from_slice(b": ");
 		buf.extend_from_slice(auth.as_bytes());
+		buf.extend_from_slice(b"\r\n");
+	}
+	for (name, value) in headers {
+		buf.extend_from_slice(name.as_str().as_bytes());
+		buf.extend_from_slice(b": ");
+		buf.extend_from_slice(value.as_bytes());
 		buf.extend_from_slice(b"\r\n");
 	}
 	// headers end
@@ -67,7 +100,7 @@ pub async fn handshake_h1(
 			} else if recvd.starts_with(b"HTTP/1.1 407") || recvd.starts_with(b"HTTP/1.0 407") {
 				return Err(anyhow::anyhow!("tunnel required auth"));
 			} else if h1_stale_assignment(recvd) {
-				return Err(StaleAssignment.into());
+				return Err(Error::StaleAssignment.into());
 			} else {
 				return Err(anyhow::anyhow!("tunnel failed"));
 			}
@@ -98,28 +131,31 @@ pub(crate) async fn handshake(
 	conn: Socket,
 	dest: &str,
 	auth: Option<HeaderValue>,
+	headers: &[(HeaderName, HeaderValue)],
 	h2_config: Arc<agent_hbone::H2Config>,
-) -> Result<Socket, anyhow::Error> {
+) -> Result<Socket, Error> {
 	// `TunnelConfig::token` has always authenticated configured HTTP proxies
 	// through Proxy-Authorization. Preserve that contract for either protocol
 	// selected by ALPN.
-	match conn
+	let result = match conn
 		.ext::<TLSConnectionInfo>()
 		.and_then(|info| info.negotiated_alpn)
 	{
-		Some(stream::Alpn::H2) => handshake_h2(conn, dest, auth, h2_config).await,
-		Some(stream::Alpn::Http11) => handshake_h1(conn, dest, auth).await,
-		None => handshake_h1(conn, dest, auth).await,
+		Some(stream::Alpn::H2) => handshake_h2(conn, dest, auth, headers, h2_config).await,
+		Some(stream::Alpn::Http11) => handshake_h1(conn, dest, auth, headers).await,
+		None => handshake_h1(conn, dest, auth, headers).await,
 		Some(alpn) => Err(anyhow::anyhow!(
 			"CONNECT negotiated unsupported ALPN: {alpn:?}"
 		)),
-	}
+	};
+	result.map_err(Error::from_handshake)
 }
 
 async fn handshake_h2(
 	conn: Socket,
 	dest: &str,
 	auth: Option<HeaderValue>,
+	headers: &[(HeaderName, HeaderValue)],
 	h2_config: Arc<agent_hbone::H2Config>,
 ) -> Result<Socket, anyhow::Error> {
 	let target = conn.target_address();
@@ -144,6 +180,9 @@ async fn handshake_h2(
 		request
 			.headers_mut()
 			.insert(PROXY_AUTHORIZATION_HEADER, auth);
+	}
+	for (name, value) in headers {
+		request.headers_mut().insert(name, value.clone());
 	}
 	let stream = sender.send_request(request).await?;
 	Ok(Socket::from_hbone(
@@ -203,7 +242,7 @@ mod tests {
 				.expect("write response");
 		});
 
-		let mut tunneled = handshake_h1(memory_socket(client), "dest:443", None)
+		let mut tunneled = handshake_h1(memory_socket(client), "dest:443", None, &[])
 			.await
 			.expect("handshake should succeed");
 		let mut first_bytes = [0; 5];
@@ -229,11 +268,12 @@ mod tests {
 				.expect("write response");
 		});
 
-		let error = match handshake_h1(memory_socket(client), "dest:443", None).await {
+		let error = match handshake_h1(memory_socket(client), "dest:443", None, &[]).await {
 			Ok(_) => panic!("stale assignment must fail the tunnel handshake"),
 			Err(error) => error,
 		};
-		assert!(error.downcast_ref::<StaleAssignment>().is_some());
+		let error = crate::http::Error::new(Error::from_handshake(error));
+		assert!(is_stale_assignment(&error));
 		server_task.await.expect("server task");
 	}
 }

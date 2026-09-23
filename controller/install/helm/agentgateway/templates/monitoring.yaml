@@ -28,6 +28,10 @@ spec:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
+  {{- with .Values.monitoring.proxy.podMonitor.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end }}
 {{- if .Values.monitoring.serviceMonitor.enabled }}
 ---
@@ -65,6 +69,10 @@ metadata:
     {{- with .Values.monitoring.grafanaDashboard.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+  {{- with .Values.monitoring.grafanaDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 data:
   agentgateway.json: |
 {{ .Files.Get "files/agentgateway-dashboard.json" | indent 4 }}

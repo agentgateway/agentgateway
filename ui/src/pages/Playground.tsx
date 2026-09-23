@@ -208,10 +208,10 @@ export function PlaygroundPage() {
 		'';
 	const selectedKeyValue = apiKeyMode === 'saved' && rawVirtualKeys.length > 0 ? savedKey : apiKey;
 	const llmCors = policies.cors as CorsPolicy | null | undefined;
-	const fileCorsOwned = Object.prototype.hasOwnProperty.call(filePolicies, 'cors');
+	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
 	const fileMcpCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.prototype.hasOwnProperty.call(mcpData.rawConfig.data.mcp.policies, 'cors')
+			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 	const needsCors =
 		!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
@@ -710,7 +710,13 @@ export function PlaygroundPage() {
 							<div className="chat-empty">{tr('copy.noMessagesYet')}</div>
 						) : (
 							messages.map((message, index) => (
-								<ChatMessageView message={message} key={`${message.role}-${index}`} />
+								<ChatMessageView
+									message={message}
+									key={`${message.role}-${
+										// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+										index
+									}`}
+								/>
 							))
 						)}
 						{loading ? (
@@ -901,7 +907,13 @@ function RunTimeline(props: { steps: RunStep[] }) {
 	return (
 		<div className="playground-run-timeline" aria-label={tr('copy.requestProgress')}>
 			{props.steps.map((step, index) => (
-				<div className={`run-step ${step.state}`} key={`${index}-${step.label}`}>
+				<div
+					className={`run-step ${step.state}`}
+					key={`${
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+						index
+					}-${step.label}`}
+				>
 					<span className="run-step-dot">
 						{step.state === 'active' ? <Loader2 className="spin" size={12} /> : null}
 					</span>

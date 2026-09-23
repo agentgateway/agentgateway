@@ -580,6 +580,7 @@ impl ResponseType for Response {
 			output_text_tokens: None,
 			output_audio_tokens: self.output_audio_tokens,
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
+			pages: None,
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
@@ -599,6 +600,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_chunk_latencies: Default::default(),
 		}
 	}
 
@@ -795,6 +798,14 @@ pub mod typed {
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
+		ToolReference {
+			tool_name: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		// Same tolerance as ContentBlock: an unrecognized part must not reject the whole request
+		#[serde(other)]
+		Unknown,
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -1221,6 +1232,9 @@ pub mod typed {
 		pub description: Option<String>,
 		/// JSON schema for tool input
 		pub input_schema: serde_json::Value,
+		/// Enforce the tool input schema strictly.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub strict: Option<bool>,
 		/// Create a cache control breakpoint at this content block
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
@@ -1343,6 +1357,7 @@ pub mod typed {
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				pages: None,
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
@@ -1365,6 +1380,8 @@ pub mod typed {
 				},
 				output_messages,
 				first_token: Default::default(),
+				last_token_at: Default::default(),
+				inter_chunk_latencies: Default::default(),
 			}
 		}
 
@@ -1420,6 +1437,23 @@ pub mod typed {
 mod tests {
 	use super::*;
 	use crate::types::ResponseType;
+
+	#[test]
+	fn tool_result_parts_accept_tool_reference_and_unknown_types() {
+		let parsed: typed::ToolResultContent = serde_json::from_value(serde_json::json!([
+			{"type": "tool_reference", "tool_name": "mcp__example__list_widgets"},
+			{"type": "future_block", "foo": 1}
+		]))
+		.expect("unrecognized tool_result parts must not fail parsing");
+		let typed::ToolResultContent::Array(parts) = parsed else {
+			panic!("expected array content");
+		};
+		assert!(matches!(
+			&parts[0],
+			typed::ToolResultContentPart::ToolReference { tool_name, .. } if tool_name == "mcp__example__list_widgets"
+		));
+		assert!(matches!(parts[1], typed::ToolResultContentPart::Unknown));
+	}
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {

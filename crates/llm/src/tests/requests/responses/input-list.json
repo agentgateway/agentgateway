@@ -1,5 +1,48 @@
 {
-  "input": [{"role": "user", "content": "Hello"}],
+  "input": [
+    {
+      "role": "user",
+      "content": "Hello"
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_replay",
+      "summary": [],
+      "encrypted_content": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+    },
+    {
+      "role": "assistant",
+      "content": "Hello!"
+    },
+    {
+      "role": "user",
+      "content": "How are you?"
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_unsigned",
+      "summary": [],
+      "content": [
+        {
+          "type": "reasoning_text",
+          "text": "Let me think through this."
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Continue."
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_empty",
+      "summary": []
+    },
+    {
+      "role": "user",
+      "content": "Please continue."
+    }
+  ],
   "model": "gpt-4o",
   "stream": true
 }

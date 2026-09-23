@@ -85,7 +85,7 @@ FROM docker.io/library/rust:1.98.0-bookworm AS builder
 ARG PROFILE=release
 ARG VERSION
 ARG GIT_REVISION
-ARG CARGO_FEATURES=agentgateway/ui
+ARG CARGO_FEATURES=agentgateway-app/ui
 ARG CARGO_NO_DEFAULT_FEATURES=false
 
 WORKDIR /app

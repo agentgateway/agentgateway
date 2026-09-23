@@ -77,9 +77,8 @@ impl NetworkAuthorizationSet {
 		Self(rs)
 	}
 
-	pub fn apply(&self, source: &crate::cel::SourceContext) -> Result<(), ProxyError> {
-		let exec = Executor::new_source(source);
-		let allowed = self.0.validate(&exec);
+	pub fn apply(&self, exec: &Executor<'_>) -> Result<(), ProxyError> {
+		let allowed = self.0.validate(exec);
 		if !allowed {
 			Err(ProxyError::AuthorizationFailed)
 		} else {

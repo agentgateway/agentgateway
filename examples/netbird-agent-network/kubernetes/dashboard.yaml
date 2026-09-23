@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbird-dashboard
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-dashboard
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-dashboard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netbird-dashboard
+        app.kubernetes.io/part-of: netbird-agent-network
+    spec:
+      containers:
+        - name: dashboard
+          image: ${NETBIRD_DASHBOARD_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NETBIRD_MGMT_API_ENDPOINT
+              value: https://${NETBIRD_MANAGEMENT_DOMAIN}
+            - name: NETBIRD_MGMT_GRPC_API_ENDPOINT
+              value: https://${NETBIRD_MANAGEMENT_DOMAIN}
+            - name: AUTH_AUDIENCE
+              value: netbird-dashboard
+            - name: AUTH_CLIENT_ID
+              value: netbird-dashboard
+            - name: AUTH_AUTHORITY
+              value: https://${NETBIRD_MANAGEMENT_DOMAIN}/oauth2
+            - name: AUTH_SUPPORTED_SCOPES
+              value: openid profile email groups
+            - name: AUTH_REDIRECT_URI
+              value: /nb-auth
+            - name: AUTH_SILENT_REDIRECT_URI
+              value: /nb-silent-auth
+            - name: USE_AUTH0
+              value: "false"
+            - name: NETBIRD_AGENT_NETWORK_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-dashboard
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-dashboard
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: netbird-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: netbird-dashboard
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-dashboard
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  parentRefs:
+    - name: netbird-management
+      sectionName: https
+  hostnames:
+    - ${NETBIRD_MANAGEMENT_DOMAIN}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: netbird-dashboard
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-dashboard-ingress
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-dashboard
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: netbird-management
+              app.kubernetes.io/name: netbird-management
+      ports:
+        - protocol: TCP
+          port: 80

@@ -7,8 +7,8 @@ use crate::{InputFormat, RouteType, apply};
 #[cfg_attr(feature = "schema", schemars(rename = "CustomProvider"))]
 pub struct Provider {
 	/// Model ID to send to the provider, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 	/// Provider identity for cost-catalog lookup and telemetry. Built-in named providers
 	/// (cohere, mistral, ...) set this so their cost resolves under the right catalog key;
 	/// a bare custom provider may set it to match a catalog entry. Falls back to "custom".
@@ -179,7 +179,7 @@ impl ProviderPreset {
 			),
 		};
 		Provider {
-			model,
+			model_override: model,
 			provider_override: Some(strng::new(provider_override)),
 			formats,
 		}
@@ -267,7 +267,7 @@ mod tests {
 	#[test]
 	fn path_for_returns_format_path() {
 		let provider = Provider {
-			model: None,
+			model_override: None,
 			provider_override: None,
 			formats: vec![
 				ProviderFormatConfig {

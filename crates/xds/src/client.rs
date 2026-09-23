@@ -651,20 +651,10 @@ impl AdsClient {
 					};
 					// A response proves the connection recovered from prior failures.
 					*backoff = INITIAL_BACKOFF;
-					let mut received_type = None;
-					if !self.types_to_expect.is_empty() {
-						received_type = Some(msg.type_url.clone())
-					}
+					let received_type = (!self.types_to_expect.is_empty()).then(|| msg.type_url.clone());
 
 					let (req, has_errors) = self.handle_stream_event(msg)?;
-					if !has_errors {
-						if let Some(received_type) = received_type {
-							self.types_to_expect.remove(&received_type);
-							if self.types_to_expect.is_empty() {
-								mem::drop(mem::take(&mut self.block_ready));
-							}
-						}
-					};
+					self.record_response(received_type.as_deref(), has_errors);
 
 					let tx = discovery_req_tx.clone();
 					pending_ack_sends.push(async move { tx.send(req).await });
@@ -672,6 +662,15 @@ impl AdsClient {
 				Some(result) = pending_ack_sends.next() => {
 					result.map_err(|e| Error::RequestFailure(Box::new(e)))?;
 				}
+			}
+		}
+	}
+
+	fn record_response(&mut self, received_type: Option<&str>, has_errors: bool) {
+		if !has_errors && let Some(received_type) = received_type {
+			self.types_to_expect.remove(received_type);
+			if self.types_to_expect.is_empty() {
+				mem::drop(mem::take(&mut self.block_ready));
 			}
 		}
 	}
@@ -783,4 +782,73 @@ pub enum AdsError {
 	MissingResource(),
 	#[error("encode: {0}")]
 	Encode(#[from] EncodeError),
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[derive(Clone, Debug)]
+	struct TestClient;
+
+	impl ClientTrait for TestClient {
+		fn make_call(
+			&mut self,
+			_: Request<Body>,
+		) -> Pin<
+			Box<dyn Future<Output = Result<http::Response<axum_core::body::Body>, anyhow::Error>> + Send>,
+		> {
+			Box::pin(async { Err(anyhow::anyhow!("not used by this unit test")) })
+		}
+
+		fn box_clone(&self) -> Box<dyn ClientTrait> {
+			Box::new(self.clone())
+		}
+	}
+
+	#[derive(Debug)]
+	struct WarningHandler;
+
+	impl Handler<prost_wkt_types::Any> for WarningHandler {
+		fn handle(
+			&self,
+			_: Box<&mut dyn Iterator<Item = XdsUpdate<prost_wkt_types::Any>>>,
+		) -> Result<(), Vec<RejectedConfig>> {
+			Err(vec![RejectedConfig::warning(
+				"test-resource".into(),
+				"test warning",
+			)])
+		}
+	}
+
+	#[test]
+	fn warning_only_response_is_nonfatal_and_releases_readiness() {
+		let type_url: Strng = "type.googleapis.com/test".into();
+		let config = Config::new(
+			GrpcClient::new(TestClient),
+			"gateway".into(),
+			"default".into(),
+		)
+		.with_watched_handler(type_url.clone(), WarningHandler);
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(Metrics::new(&mut registry));
+		let (ready, _) = tokio::sync::watch::channel(());
+		let mut client = AdsClient::new(config, metrics, ready);
+
+		let (request, has_errors) = client
+			.handle_stream_event(DeltaDiscoveryResponse {
+				type_url: type_url.to_string(),
+				nonce: "nonce".to_string(),
+				..Default::default()
+			})
+			.expect("warning-only responses should be handled");
+		assert!(!has_errors);
+		assert!(
+			request.error_detail.is_some(),
+			"warnings are reported as a NACK detail"
+		);
+
+		client.record_response(Some(type_url.as_str()), has_errors);
+		assert!(client.block_ready.is_none());
+	}
 }

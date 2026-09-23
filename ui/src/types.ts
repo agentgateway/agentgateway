@@ -109,7 +109,7 @@ export type McpTarget =
 			openapi: McpNetworkTarget & { schema: unknown };
 	  });
 export type McpConfig = Omit<LocalSimpleMcpConfig, 'targets'> & {
-	targets: McpTarget[];
+	targets?: McpTarget[];
 };
 export type GatewayConfig = Omit<LocalConfig, 'llm' | 'mcp'> & {
 	llm?: LlmConfig | null;

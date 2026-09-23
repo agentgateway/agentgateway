@@ -266,6 +266,7 @@ impl PartialOrd for Value<'_> {
 			(Value::UInt(a), Value::UInt(b)) => Some(a.cmp(b)),
 			(Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
 			(Value::String(a), Value::String(b)) => Some(a.as_ref().cmp(b.as_ref())),
+			(Value::Bytes(a), Value::Bytes(b)) => Some(a.as_ref().cmp(b.as_ref())),
 			(Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
 			(Value::Null, Value::Null) => Some(Ordering::Equal),
 
@@ -1009,7 +1010,10 @@ impl<'a> Value<'a> {
 		ctx: &'vars Context,
 		resolver: &'rf dyn VariableResolver<'vars>,
 	) -> ResolveResult<'a> {
-		let mut map = hashbrown::HashMap::with_capacity(map_expr.entries.len());
+		let mut map = crate::types::map::IndexMap::with_capacity_and_hasher(
+			map_expr.entries.len(),
+			Default::default(),
+		);
 		for entry in map_expr.entries.iter() {
 			let (k, v, is_optional) = match &entry.expr {
 				EntryExpr::StructField(_) => panic!("WAT?"),
@@ -1186,6 +1190,12 @@ impl<'a> ops::Add<Value<'a>> for Value<'a> {
 				res.push_str(l.as_ref());
 				res.push_str(r.as_ref());
 				Ok(Value::String(res.into()))
+			},
+			(Value::Bytes(l), Value::Bytes(r)) => {
+				let mut res = Vec::with_capacity(l.as_ref().len() + r.as_ref().len());
+				res.extend_from_slice(l.as_ref());
+				res.extend_from_slice(r.as_ref());
+				Ok(Value::Bytes(BytesValue::Owned(res.into())))
 			},
 
 			(Value::Duration(l), Value::Duration(r)) => l
@@ -1431,6 +1441,14 @@ mod tests {
 	}
 
 	#[test]
+	fn test_bytes_compare() {
+		let program =
+			Program::compile(r#"b"a" < b"b" && b"a" <= b"a" && b"b" > b"a" && b"b" >= b"b""#).unwrap();
+		let context = Context::default();
+		assert_eq!(program.execute(&context).unwrap(), true.into());
+	}
+
+	#[test]
 	fn test_invalid_compare() {
 		let context = Context::default();
 
@@ -1477,6 +1495,14 @@ mod tests {
 			"'foo' + 10",
 			ExecutionError::UnsupportedBinaryOperator("add", "foo".into(), Value::Int(10)),
 		);
+	}
+
+	#[test]
+	fn test_add_bytes() {
+		let program = Program::compile(r#"b"a" + b"b""#).unwrap();
+		let context = Context::default();
+		let value = program.execute(&context).unwrap();
+		assert_eq!(value, Value::from(b"ab".to_vec()));
 	}
 
 	#[test]
@@ -2264,7 +2290,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, "b": 2, ?"c": optional.of(3)}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("b".into(), Value::Int(2));
 			expected_map.insert("c".into(), Value::Int(3));
@@ -2277,7 +2303,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, "b": 2, ?"c": optional.none()}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("b".into(), Value::Int(2));
 			assert_eq!(
@@ -2289,7 +2315,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, ?"b": optional.none(), ?"c": optional.of(3)}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			expected_map.insert("c".into(), Value::Int(3));
 			assert_eq!(
@@ -2301,7 +2327,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"a": 1, ?"b": mymap[?"missing"]}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("a".into(), Value::Int(1));
 			assert_eq!(
 				Value::resolve(&expr, &ctx, &map_vars),
@@ -2312,7 +2338,7 @@ mod tests {
 				.enable_optional_syntax(true)
 				.parse(r#"{"x": 10, ?"y": mymap[?"a"]}"#)
 				.expect("Must parse");
-			let mut expected_map = hashbrown::HashMap::new();
+			let mut expected_map = crate::types::map::IndexMap::default();
 			expected_map.insert("x".into(), Value::Int(10));
 			expected_map.insert("y".into(), Value::Int(1));
 			assert_eq!(
@@ -2327,7 +2353,7 @@ mod tests {
 			assert_eq!(
 				Value::resolve(&expr, &ctx, &empty_vars),
 				Ok(Value::Map(MapValue::Owned(Arc::from(
-					hashbrown::HashMap::new()
+					crate::types::map::IndexMap::default()
 				)))),
 			);
 		}

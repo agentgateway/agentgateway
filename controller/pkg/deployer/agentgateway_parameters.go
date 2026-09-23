@@ -87,7 +87,20 @@ func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwC
 	}
 	setIfNonZero(&gtw.Istio.ClusterId, cols.IstioClusterId)
 	setIfNonZero(&gtw.Istio.Network, cols.IstioNetwork)
-	setIfNonZero(&gtw.Istio.CaAddress, cols.IstioCaAddress)
+	if gtw.Istio.CaAddress == "" {
+		gtw.Istio.CaAddress = cols.IstioCaAddress
+		if gtw.Istio.CaAddress == "" {
+			service := "istiod"
+			if cols.IstioRevision != "" && cols.IstioRevision != "default" {
+				service += "-" + cols.IstioRevision
+			}
+			namespace := cols.IstioNamespace
+			if namespace == "" {
+				namespace = "istio-system"
+			}
+			gtw.Istio.CaAddress = fmt.Sprintf("https://%s.%s.svc:15012", service, namespace)
+		}
+	}
 
 	// Inherit the mesh trust domain only when the params didn't set one.
 	if gtw.Istio.TrustDomain == "" && cols.MeshConfig != nil {

@@ -12,6 +12,9 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
+// DefaultKey is the data key a CA bundle is read from when a reference does not name one.
+const DefaultKey = corev1.ServiceAccountRootCAKey
+
 // Kind returns the selected Kubernetes source kind for a CA reference.
 func Kind(kind string) string {
 	if kind == "" {
@@ -20,7 +23,16 @@ func Kind(kind string) string {
 	return kind
 }
 
-// Resolve validates and normalizes the CA certificate selected by ref.
+// Key returns the data key ref reads its CA bundle from, defaulting to ca.crt.
+func Key(ref agentgateway.LocalCACertificateRef) string {
+	if ref.Key == "" {
+		return DefaultKey
+	}
+	return ref.Key
+}
+
+// Resolve validates and normalizes the CA certificate selected by ref. The bundle is read from the
+// key named by ref.Key, or ca.crt when it is unset.
 func Resolve(
 	krtctx krt.HandlerContext,
 	configMaps krt.Collection[*corev1.ConfigMap],
@@ -30,6 +42,7 @@ func Resolve(
 ) (string, error) {
 	nn := types.NamespacedName{Namespace: namespace, Name: string(ref.Name)}
 	kind := Kind(ref.Kind)
+	key := Key(ref)
 	var caCRT []byte
 
 	switch kind {
@@ -38,9 +51,9 @@ func Resolve(
 		if configMap == nil {
 			return "", fmt.Errorf("ConfigMap %s not found", nn)
 		}
-		value, ok := configMap.Data[corev1.ServiceAccountRootCAKey]
+		value, ok := configMap.Data[key]
 		if !ok || value == "" {
-			return "", fmt.Errorf("error extracting CA cert from ConfigMap %s: missing ca.crt", nn)
+			return "", fmt.Errorf("error extracting CA cert from ConfigMap %s: missing key %q", nn, key)
 		}
 		caCRT = []byte(value)
 	case "Secret":
@@ -49,9 +62,9 @@ func Resolve(
 			return "", fmt.Errorf("Secret %s not found", nn)
 		}
 		var ok bool
-		caCRT, ok = secret.Data[corev1.ServiceAccountRootCAKey]
+		caCRT, ok = secret.Data[key]
 		if !ok || len(caCRT) == 0 {
-			return "", fmt.Errorf("error extracting CA cert from Secret %s: missing ca.crt", nn)
+			return "", fmt.Errorf("error extracting CA cert from Secret %s: missing key %q", nn, key)
 		}
 	default:
 		return "", fmt.Errorf("unsupported CA certificate reference kind %q", ref.Kind)
@@ -59,11 +72,11 @@ func Resolve(
 
 	certificates, err := cert.ParseCertsPEM(caCRT)
 	if err != nil {
-		return "", fmt.Errorf("invalid ca.crt in %s %s: %w", kind, nn, err)
+		return "", fmt.Errorf("invalid CA certificate in %s %s key %q: %w", kind, nn, key, err)
 	}
 	normalized, err := cert.EncodeCertificates(certificates...)
 	if err != nil {
-		return "", fmt.Errorf("invalid ca.crt in %s %s: %w", kind, nn, err)
+		return "", fmt.Errorf("invalid CA certificate in %s %s key %q: %w", kind, nn, key, err)
 	}
 	return string(normalized), nil
 }

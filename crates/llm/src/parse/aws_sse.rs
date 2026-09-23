@@ -1,6 +1,6 @@
+use agent_http::{Body, RawBody};
 use aws_smithy_eventstream::frame::{DecodedFrame, MessageFrameDecoder};
 pub use aws_smithy_types::event_stream::Message;
-use axum_core::body::Body;
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -177,33 +177,39 @@ pub fn transform_multi<O: Serialize>(
 }
 
 pub fn inspect(b: Body, buffer_limit: usize, mut f: impl FnMut(Message) + Send + 'static) -> Body {
-	let mut decoder = EventStreamCodec::with_max_size(buffer_limit);
-	let mut decode_buffer = BytesMut::new();
-	let mut inspect_failed = false;
-	let stream = b.into_data_stream().map(move |chunk| {
-		let bytes = chunk?;
-		if !inspect_failed {
-			if decode_buffer.len().saturating_add(bytes.len()) > buffer_limit {
-				inspect_failed = true;
-				decode_buffer.clear();
-				return Ok::<Bytes, axum_core::Error>(bytes);
-			}
-			decode_buffer.extend_from_slice(&bytes);
-			loop {
-				match decoder.decode(&mut decode_buffer) {
-					Ok(Some(message)) => f(message),
-					Ok(None) => break,
-					Err(_) => {
-						inspect_failed = true;
-						decode_buffer.clear();
-						break;
-					},
+	// Safety: each original data chunk is returned unchanged and  in order.
+	b.dangerous_wrap_stream_preserving_content(|b| {
+		let mut decoder = EventStreamCodec::with_max_size(buffer_limit);
+		let mut decode_buffer = BytesMut::new();
+		let mut inspect_failed = false;
+		// AWS event-stream responses carry their metadata in event messages, not
+		// HTTP trailers. Discarding trailers via into_data_stream is intentional
+		// here: they are never present on this protocol path.
+		let stream = b.into_data_stream().map(move |chunk| {
+			let bytes = chunk?;
+			if !inspect_failed {
+				if decode_buffer.len().saturating_add(bytes.len()) > buffer_limit {
+					inspect_failed = true;
+					decode_buffer.clear();
+					return Ok::<Bytes, axum_core::Error>(bytes);
+				}
+				decode_buffer.extend_from_slice(&bytes);
+				loop {
+					match decoder.decode(&mut decode_buffer) {
+						Ok(Some(message)) => f(message),
+						Ok(None) => break,
+						Err(_) => {
+							inspect_failed = true;
+							decode_buffer.clear();
+							break;
+						},
+					}
 				}
 			}
-		}
-		Ok::<Bytes, axum_core::Error>(bytes)
-	});
-	Body::from_stream(stream)
+			Ok::<Bytes, axum_core::Error>(bytes)
+		});
+		RawBody::from_stream(stream)
+	})
 }
 
 #[cfg(test)]

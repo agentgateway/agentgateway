@@ -6,7 +6,7 @@ use crate::types;
 
 fn provider() -> crate::vertex::Provider {
 	crate::vertex::Provider {
-		model: None,
+		model_override: None,
 		region: Some(strng::new("global")),
 		project_id: strng::new("test-project"),
 	}

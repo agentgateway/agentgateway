@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-content_filter.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"chatcmpl_filtered","type":"message","role":"assistant","content":[],"model":"gpt-5.6-luna","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null},"usage":{"input_tokens":10,"output_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 10,
+  "output_tokens": 0,
+  "total_tokens": 10,
+  "provider_model": "gpt-5.6-luna"
+}

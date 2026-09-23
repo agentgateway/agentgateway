@@ -43,6 +43,11 @@ output:
       traffic:
         jwt:
           mode: STRICT
+          providers:
+          - audiences:
+            - api://test
+            inline: '{"keys":[]}'
+            issuer: https://sts.windows.net/test-path/
         phase: GATEWAY
 status:
 - apiVersion: agentgateway.dev/v1alpha1

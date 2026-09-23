@@ -22,8 +22,96 @@ use crate::test_helpers::proxymock::{
 	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
-use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
+use crate::types::agent::{
+	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+};
 use crate::*;
+
+#[tokio::test]
+async fn token_exchange_rejections_preserve_http_status() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, ResponseTemplate};
+	for target_policy in [false, true] {
+		for (message_kind, status, expected_status) in [
+			("request", 400u16, 400u16),
+			("notification", 401, 500),
+			("legacy_initialize", 503, 502),
+		] {
+			let token = wiremock::MockServer::start().await;
+			let upstream = wiremock::MockServer::start().await;
+			Mock::given(method("POST"))
+				.and(path("/token"))
+				.respond_with(
+					ResponseTemplate::new(status).set_body_json(serde_json::json!({
+						"error": "invalid_grant"
+					})),
+				)
+				.mount(&token)
+				.await;
+			let auth = serde_json::from_value(serde_json::json!({
+				"host": token.address().to_string(), "path": "/token",
+				"cache": {"maxEntries": 0}
+			}))
+			.unwrap();
+			let policies = vec![BackendTrafficPolicy::backend_auth(
+				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+			)];
+			let (mcp_policies, target_policies) = if target_policy {
+				(vec![], policies)
+			} else {
+				(policies, vec![])
+			};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_mcp_backend_and_target_policies(
+					*upstream.address(),
+					false,
+					false,
+					mcp_policies,
+					target_policies,
+					false,
+				)
+				.with_bind(simple_bind())
+				.with_route(basic_route(*upstream.address()));
+			let io = t.serve_real_listener(BIND_KEY).await;
+			let body = match message_kind {
+				"request" => serde_json::json!({"jsonrpc": "2.0", "id": 1,
+					"method": "tools/call", "params": {"name": "echo", "arguments": {}, "_meta": task_meta()}}),
+				"notification" => {
+					serde_json::json!({"jsonrpc": "2.0", "method": "notifications/roots/list_changed"})
+				},
+				_ => mcp_initialize_body(),
+			};
+			let client = reqwest::Client::new();
+			let url = format!("http://{io}/mcp");
+			let mut request = mcp_json_post(&client, &url, &body).bearer_auth("subject-token");
+			if message_kind != "legacy_initialize" {
+				request = request.header("mcp-protocol-version", "2026-07-28");
+				if message_kind == "request" {
+					request = request
+						.header("mcp-method", "tools/call")
+						.header("mcp-name", "echo");
+				} else {
+					request = request.header("mcp-method", "notifications/roots/list_changed");
+				}
+			}
+			let response = request.send().await.unwrap();
+			let actual_status = response.status();
+			let text = response.text().await.unwrap();
+			let requests = token.received_requests().await.unwrap();
+			assert!(
+				!requests.is_empty(),
+				"token endpoint not reached: {target_policy} {message_kind} {status}: {actual_status} {text}"
+			);
+			assert!(upstream.received_requests().await.unwrap().is_empty());
+			assert_eq!(
+				actual_status.as_u16(),
+				expected_status,
+				"target_policy={target_policy} message={message_kind} token_status={status}: {text}"
+			);
+		}
+	}
+}
 
 #[tokio::test]
 async fn stream_to_stream_single() {
@@ -782,7 +870,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 
 	session
 		.stateless_send_and_initialize(
-			parts.clone(),
+			super::upstream::IncomingRequestContext::new(&parts),
 			ClientJsonRpcMessage::request(
 				rmcp::model::CallToolRequest::new(
 					rmcp::model::CallToolRequestParams::new("a_echo").with_arguments(
@@ -1465,6 +1553,54 @@ async fn task_methods_respect_mcp_authorization_deny_policy() {
 	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: tasks/get is allowed, tasks/cancel for the exact same task is
+/// denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_tasks_get_denies_tasks_cancel() {
+	let mock = mock_task_streamable_http_server().await;
+	let get_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "tasks/get""#).unwrap(),
+		)],
+	)));
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		false,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(get_only_policy)],
+	)
+	.await;
+
+	let get = modern_request(
+		io,
+		1,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(
+		get["result"]["status"], "completed",
+		"expected tasks/get to be allowed, got: {get}"
+	);
+
+	let cancel = modern_request(
+		io,
+		2,
+		"tasks/cancel",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(
+		cancel["error"]["code"], -32602,
+		"expected tasks/cancel to be denied for a tasks/get-only policy, got: {cancel}"
+	);
+}
+
 #[tokio::test]
 async fn legacy_multiplex_invalid_target_keeps_internal_error() {
 	let first = mock_streamable_http_server(true).await;
@@ -1988,7 +2124,7 @@ async fn elicitation_roundtrip_completes_tool_call() {
 	// route back so the tool call completes instead of hanging.
 	use rmcp::ServiceExt;
 	use rmcp::model::{
-		ClientCapabilities, ClientInfo, ElicitRequestParams, ElicitResult, ElicitationAction,
+		ClientCapabilities, ClientConfig, ElicitRequestParams, ElicitResult, ElicitationAction,
 		Implementation, ProtocolVersion,
 	};
 	use rmcp::service::RequestContext;
@@ -2006,8 +2142,8 @@ async fn elicitation_roundtrip_completes_tool_call() {
 					.with_content(serde_json::json!({"confirm": "yes"})),
 			)
 		}
-		fn get_info(&self) -> ClientInfo {
-			let mut info = ClientInfo::new(
+		fn get_info(&self) -> ClientConfig {
+			let mut info = ClientConfig::new(
 				ClientCapabilities::default(),
 				Implementation::new("test client".to_string(), "0.0.1".to_string()),
 			);
@@ -2289,6 +2425,118 @@ async fn modern_malformed_known_method_params_are_not_method_not_found() {
 		),
 		"unexpected body for malformed tools/call: {json}"
 	);
+}
+
+#[tokio::test]
+async fn streamable_http_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn streamable_http_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn streamable_http_body_at_configured_limit_succeeds() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_body_at_configured_limit_reaches_session_lookup() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -2649,6 +2897,59 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: tools/list is allowed, tools/call for the exact same tool is
+/// denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_list_denies_call() {
+	let mock = mock_streamable_http_server(true).await;
+
+	// Mirrors the shape of a real `action: Require` AgentgatewayPolicy: no allow/deny rules,
+	// so with no allow rules present a passing require defaults to allow (denylist semantics).
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "tools/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("tools/list should be allowed");
+	assert!(
+		tools.tools.iter().any(|t| t.name == "echo"),
+		"expected the echo tool to be listed, got: {:?}",
+		tools.tools
+	);
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	assert!(
+		result.is_err(),
+		"expected tools/call to be denied for a tools/list-only policy"
+	);
+}
+
 #[tokio::test]
 async fn stateful_session_cannot_cross_mcp_backends() {
 	let sensitive = mock_streamable_http_server(true).await;
@@ -2784,6 +3085,49 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 	}
 }
 
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: prompts/list is allowed, prompts/get is denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_prompts_list_denies_prompts_get() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "prompts/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let prompts = client
+		.list_prompts(None)
+		.await
+		.expect("prompts/list should be allowed");
+	assert!(
+		prompts.prompts.iter().any(|p| p.name == "example_prompt"),
+		"expected example_prompt to be listed, got: {:?}",
+		prompts.prompts
+	);
+
+	let result = client
+		.get_prompt(rmcp::model::GetPromptRequestParams::new("example_prompt"))
+		.await;
+	assert!(
+		result.is_err(),
+		"expected prompts/get to be denied for a prompts/list-only policy"
+	);
+}
+
 /// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
 #[tokio::test]
@@ -2839,6 +3183,54 @@ async fn authorization_denied_returns_unknown_resource_error() {
 		},
 		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
 	}
+}
+
+/// Test that a policy keyed on mcp.methodName sees the right method for each
+/// call site: resources/list is allowed, resources/read is denied.
+#[tokio::test]
+async fn authorization_by_method_name_allows_resources_list_denies_resources_read() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let list_only_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.methodName == "resources/list""#).unwrap(),
+		)],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(list_only_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let resources = client
+		.list_resources(None)
+		.await
+		.expect("resources/list should be allowed");
+	assert!(
+		resources
+			.resources
+			.iter()
+			.any(|r| r.uri == "memo://insights"),
+		"expected memo://insights to be listed, got: {:?}",
+		resources.resources
+	);
+
+	let result = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"memo://insights",
+		))
+		.await;
+	assert!(
+		result.is_err(),
+		"expected resources/read to be denied for a resources/list-only policy"
+	);
 }
 
 #[tokio::test]
@@ -3219,7 +3611,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 
 	use ::http::{HeaderName, HeaderValue};
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 
@@ -3255,7 +3647,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
 			.custom_headers(headers);
 		let transport = StreamableHttpClientTransport::from_config(config);
-		let client_info = ClientInfo::new(
+		let client_info = ClientConfig::new(
 			ClientCapabilities::default(),
 			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
 		);
@@ -3469,6 +3861,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 		key: "frontend/accessLog".into(),
 		name: None,
 		target: PolicyTarget::Gateway(listener_name.clone().into()),
+		creation_timestamp: 0,
 		inheritance: Default::default(),
 		policy: FrontendPolicy::AccessLog(access_log_payload_policy()).into(),
 	});
@@ -3479,6 +3872,40 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 			.listener_frontend_policies(&listener_name, None, None)
 			.access_log
 			.is_some()
+	);
+	(t, io)
+}
+
+async fn setup_proxy_with_max_buffer_size(
+	mock: &MockServer,
+	max_buffer_size: usize,
+) -> (TestBind, SocketAddr) {
+	let (mut t, io) = setup_proxy(mock, true, false).await;
+	t.with_policy(TargetedPolicy {
+		key: "frontend/http".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::HTTP(crate::types::frontend::HTTP {
+			max_buffer_size: Some(max_buffer_size),
+			..Default::default()
+		})
+		.into(),
+	});
+	assert_eq!(
+		t.pi
+			.stores
+			.read_binds()
+			.frontend_policies(t.pi.cfg.gateway_ref())
+			.http
+			.and_then(|h| h.max_buffer_size),
+		Some(max_buffer_size)
 	);
 	(t, io)
 }
@@ -3798,11 +4225,11 @@ pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
@@ -4441,7 +4868,7 @@ pub async fn mcp_streamable_client_with_ui(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, ExtensionCapabilities, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
@@ -4453,7 +4880,7 @@ pub async fn mcp_streamable_client_with_ui(
 			.cloned()
 			.unwrap(),
 	);
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::builder()
 			.enable_extensions_with(extensions)
 			.build(),
@@ -4512,7 +4939,7 @@ mod appsmockserver {
 			Ok(self.get_info())
 		}
 
-		fn get_info(&self) -> ServerInfo {
+		fn get_info(&self) -> ServerConfig {
 			let mut extensions = ExtensionCapabilities::new();
 			extensions.insert(
 				"io.modelcontextprotocol/ui".to_string(),
@@ -4521,7 +4948,7 @@ mod appsmockserver {
 					.cloned()
 					.unwrap(),
 			);
-			ServerInfo::new(
+			ServerConfig::new(
 				ServerCapabilities::builder()
 					.enable_tools()
 					.enable_resources()
@@ -4840,8 +5267,8 @@ mod mockserver {
 	#[tool_handler]
 	#[prompt_handler]
 	impl ServerHandler for Counter {
-		fn get_info(&self) -> ServerInfo {
-			ServerInfo::new(
+		fn get_info(&self) -> ServerConfig {
+			ServerConfig::new(
 				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
@@ -4952,8 +5379,8 @@ mod mockserver {
 	pub struct PagingServer;
 
 	impl ServerHandler for PagingServer {
-		fn get_info(&self) -> ServerInfo {
-			ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+		fn get_info(&self) -> ServerConfig {
+			ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
 		}
 
 		async fn list_tools(
@@ -5417,7 +5844,7 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 }
 
 fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
-	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
+	crate::mcp::upstream::IncomingRequestContext::empty().into()
 }
 
 fn persisted_session(
@@ -5786,6 +6213,231 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 }
 
 #[test]
+fn test_mcp_server_overrides_validate_requires_name_and_version_together() {
+	let name_only = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: None,
+		title: None,
+		instructions: None,
+	};
+	assert!(name_only.validate().is_err());
+
+	let version_only = McpServerOverrides {
+		name: None,
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(version_only.validate().is_err());
+
+	let both_set = McpServerOverrides {
+		name: Some("custom-gateway".into()),
+		version: Some("9.9.9".into()),
+		title: None,
+		instructions: None,
+	};
+	assert!(both_set.validate().is_ok());
+
+	let both_unset = McpServerOverrides {
+		name: None,
+		version: None,
+		title: Some("Custom Title".into()),
+		instructions: Some("Custom gateway preamble.".into()),
+	};
+	assert!(both_unset.validate().is_ok());
+}
+
+#[test]
+fn test_merge_initialize_uses_title_override_when_multiplexing() {
+	use agent_core::version::BuildInfo;
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30117)),
+			)],
+			server: Some(McpServerOverrides {
+				name: None,
+				version: None,
+				title: Some("Custom Title".into()),
+				instructions: None,
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0")),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	// Title is overridden; name, version and instructions preamble keep their defaults.
+	assert_eq!(info.server_info.name, "agentgateway");
+	assert_eq!(
+		info.server_info.version,
+		BuildInfo::new().version.to_string()
+	);
+	assert_eq!(
+		info.server_info.title.as_deref(),
+		Some("Custom Title"),
+		"title override should be applied"
+	);
+	let instructions = info.instructions.expect("instructions should be present");
+	assert_eq!(
+		instructions,
+		Relay::DEFAULT_GATEWAY_PREAMBLE,
+		"unset instructions override should keep the default preamble, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_initialize_uses_full_override_when_multiplexing() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![fake_streamable_target(
+				"alpha",
+				SocketAddr::from(([127, 0, 0, 1], 30118)),
+			)],
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: Some("Custom Title".into()),
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+
+	let results: Vec<(Strng, ServerResult)> = vec![(
+		"alpha".into(),
+		ServerResult::InitializeResult(
+			InitializeResult::new(ServerCapabilities::default())
+				.with_protocol_version(ProtocolVersion::V_2025_06_18)
+				.with_server_info(Implementation::new("alpha-server", "1.0"))
+				.with_instructions("Alpha server instructions."),
+		),
+	)];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	assert_eq!(info.server_info.name, "custom-gateway");
+	assert_eq!(info.server_info.version, "9.9.9");
+	assert_eq!(info.server_info.title.as_deref(), Some("Custom Title"));
+	let instructions = info.instructions.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("Alpha server instructions."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
+fn test_merge_discover_uses_full_override_when_multiplexing() {
+	use rmcp::model::{
+		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30119))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30120))),
+			],
+			server: Some(McpServerOverrides {
+				name: Some("custom-gateway".into()),
+				version: Some("9.9.9".into()),
+				title: None,
+				instructions: Some("Custom gateway preamble.".into()),
+			}),
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let discover_merge = relay.merge_discover(true);
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::DiscoverResult({
+				let mut dr = DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("alpha-server", "1.0"));
+				dr.instructions = Some("Alpha guidance.".to_string());
+				dr
+			}),
+		),
+		(
+			"beta".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("beta-server", "1.0")),
+			),
+		),
+	];
+
+	let result = discover_merge(results, &empty_cel()).unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+
+	let server_info = discover
+		.server_info()
+		.expect("server_info should be present");
+	assert_eq!(server_info.name, "custom-gateway");
+	assert_eq!(server_info.version, "9.9.9");
+	let instructions = discover
+		.instructions
+		.expect("instructions should be present");
+	assert!(instructions.starts_with("Custom gateway preamble."));
+	assert!(instructions.contains("[alpha]\nAlpha guidance."));
+	assert!(
+		!instructions.contains(Relay::DEFAULT_GATEWAY_PREAMBLE),
+		"default preamble text must not leak through when overridden, got: {instructions}"
+	);
+}
+
+#[test]
 fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 	use rmcp::model::{
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
@@ -6088,16 +6740,20 @@ async fn mcp_local_ratelimit() {
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
 
-	// Attach local rate limit policy
-	// MCP protocol overhead: initialize + notification + SSE GET = 3 requests
-	// Allow 5 total: overhead (3) + tool calls (2), then rate limit the 6th
+	// Only tool calls consume this limit; MCP initialization traffic does not match.
 	t.attach_route_policy(serde_json::json!({
-		"localRateLimit": [{
-			"maxTokens": 5,
-			"tokensPerFill": 1,
-			"fillInterval": "10s",
-			"type": "requests"
-		}]
+		"localRateLimit": {
+			"conditional": [{
+				"condition": format!(
+					"backend.name == '/{}' && backend.type == 'mcp' && mcp.tool.name == 'echo' && mcp.tool.arguments.n > 0",
+					mock.addr,
+				),
+				"maxTokens": 2,
+				"tokensPerFill": 1,
+				"fillInterval": "10s",
+				"type": "requests"
+			}]
+		}
 	}))
 	.await;
 
@@ -6121,24 +6777,79 @@ async fn mcp_local_ratelimit() {
 		.await;
 	assert!(result2.is_ok(), "Second request should succeed");
 
-	// Third call should be rate limited
 	let result3 = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo")
 				.with_arguments(serde_json::json!({"n": 3}).as_object().cloned().unwrap()),
 		)
-		.await;
-	let err = result3.expect_err("Third request should be rate limited");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
+		.await
+		.expect("a rate-limited tool call returns an errored result, not a protocol error");
 	assert_eq!(
-		e.code.0, -32003,
-		"rate limit should map to RESOURCE_EXHAUSTED"
+		result3.is_error,
+		Some(true),
+		"rate-limited tool call should be a tool-execution error"
 	);
-	let data = e.data.as_ref().expect("error should carry retry data");
-	assert_eq!(data["limit"], 5);
-	assert!(data.get("retryAfterSeconds").is_some());
+	let text = &result3.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert!(
+		text.contains("rate limit"),
+		"denial text should name the rate limit: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_cached_request_reparsed_after_body_transformation() {
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+
+	t.attach_route_policy(serde_json::json!({
+		"transformations": {
+			"conditional": [{
+				"condition": "mcp.tool.name == 'echo'",
+				"request": {
+					"body": r#"{
+						"jsonrpc": "2.0",
+						"id": json(request.body).id,
+						"method": "tools/call",
+						"params": {
+							"name": mcp.tool.name,
+							"arguments": {"after": true}
+						}
+					}"#
+				}
+			}]
+		}
+	}))
+	.await;
+
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client(io).await;
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"before": true})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.expect("transformed tool call should succeed");
+
+	assert_eq!(
+		&result.content[0].as_text().unwrap().text,
+		r#"{"after":true}"#
+	);
 }
 
 #[tokio::test]
@@ -6196,11 +6907,11 @@ async fn try_mcp_streamable_client(
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
 {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
@@ -6313,6 +7024,94 @@ async fn mcp_ratelimit_jsonrpc_error() {
 	assert_eq!(body["error"]["data"]["limit"], 1);
 	assert_eq!(body["error"]["data"]["remaining"], 0);
 	assert!(body["error"]["data"].get("retryAfterSeconds").is_some());
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_tool_call_is_error() {
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// initialize consumes the only token
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	assert_eq!(
+		resp.headers().get("content-type").unwrap(),
+		"application/json"
+	);
+	assert_eq!(resp.headers().get("x-ratelimit-limit").unwrap(), "1");
+	assert!(resp.headers().get("x-ratelimit-reset").is_some());
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 7);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	assert!(
+		body["result"].get("resultType").is_none(),
+		"resultType must be omitted for pre-2026 client compatibility: {body}"
+	);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("rate limit"),
+		"unexpected denial text: {text}"
+	);
+	assert!(
+		text.contains("retry after"),
+		"denial text should tell the model when to retry: {text}"
+	);
+}
+
+#[tokio::test]
+async fn mcp_ratelimit_tool_call_modern_emits_result_type() {
+	// modern client → resultType "complete"; the legacy test above omits it
+	let (_mock, _t, io) = one_shot_ratelimited_proxy().await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// initialize consumes the only token
+	mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 8,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.header("mcp-protocol-version", "2026-07-28")
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["result"]["isError"], true);
+	assert_eq!(
+		body["result"]["resultType"], "complete",
+		"a modern client should get resultType: complete: {body}"
+	);
 }
 
 #[tokio::test]
@@ -6565,6 +7364,76 @@ async fn mcp_remote_ratelimit_retry_data() {
 	assert_eq!(body["error"]["data"]["retryAfterSeconds"], 7);
 }
 
+#[tokio::test]
+async fn mcp_remote_ratelimit_tool_call_is_error() {
+	struct DenyAllRateLimit;
+
+	#[async_trait::async_trait]
+	impl crate::test_helpers::ratelimitmock::Handler for DenyAllRateLimit {
+		async fn should_rate_limit(
+			&mut self,
+			_request: &crate::http::remoteratelimit::proto::RateLimitRequest,
+		) -> Result<crate::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+			over_limit_response(b"denied by mock rls".to_vec())
+		}
+	}
+
+	let ratelimit = RateLimitMock::new(|| DenyAllRateLimit).spawn().await;
+	let mock = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"remoteRateLimit": {
+			"host": ratelimit.address.to_string(),
+			"domain": "test",
+			"descriptors": [{
+				"entries": [
+					{"key": "generic_key", "value": "\"test\""}
+				],
+				"type": "requests"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(
+		&client,
+		&url,
+		&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 9,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	)
+	.send()
+	.await
+	.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let body: serde_json::Value = resp.json().await.unwrap();
+	assert_eq!(body["id"], 9);
+	assert!(
+		body.get("error").is_none(),
+		"a denied tool call must not be a JSON-RPC error: {body}"
+	);
+	assert_eq!(body["result"]["isError"], true);
+	assert!(
+		body["result"].get("resultType").is_none(),
+		"resultType must be omitted for pre-2026 client compatibility: {body}"
+	);
+	let text = body["result"]["content"][0]["text"].as_str().unwrap();
+	assert!(
+		text.contains("denied by mock rls"),
+		"the RLS body should reach the model: {text}"
+	);
+}
+
 // =========================== mcpGuardrails test helpers ============================
 
 mod guardrails_test_support {
@@ -6680,7 +7549,7 @@ async fn mcp_guardrails_pass_through() {
 }
 
 #[tokio::test]
-async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
+async fn mcp_guardrails_tool_call_reject_is_error() {
 	use protos::ext_mcp::authorization_error::Code;
 
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
@@ -6701,7 +7570,7 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 	)
 	.await;
 	let client = mcp_streamable_client(io).await;
-	let err = client
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
 				serde_json::json!({"hi": "world"})
@@ -6711,13 +7580,14 @@ async fn mcp_guardrails_reject_surfaces_jsonrpc_error() {
 			),
 		)
 		.await
-		.expect_err("tool call should fail when mcpGuardrails rejects");
+		.expect("guardrail rejection returns a result, not a protocol error");
 
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
-	assert_eq!(e.message.as_ref(), "denied by mock mcpGuardrails");
+	assert_eq!(result.is_error, Some(true));
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
+	assert_eq!(text, "denied by mock mcpGuardrails");
 }
 
 #[tokio::test]
@@ -6758,21 +7628,25 @@ async fn mcp_guardrails_denies_tool_by_name() {
 	let client = mcp_streamable_client(io).await;
 
 	// Forbidden tool is rejected at the request phase, before reaching upstream.
-	let err = client
+	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("forbidden-tool")
 				.with_arguments(serde_json::Map::new()),
 		)
 		.await
-		.expect_err("forbidden tool call should be denied by mcpGuardrails");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
+		.expect("guardrail rejection returns a result, not a protocol error");
+	assert_eq!(
+		result.is_error,
+		Some(true),
+		"forbidden tool call should be a tool-execution error"
+	);
+	let text = &result.content[0]
+		.as_text()
+		.expect("denial carries text content")
+		.text;
 	assert!(
-		e.message.contains("forbidden-tool"),
-		"deny message should name the tool: {}",
-		e.message
+		text.contains("forbidden-tool"),
+		"deny message should name the tool: {text}"
 	);
 
 	// An allowed tool passes the request phase through to the upstream.
@@ -7555,9 +8429,7 @@ async fn mcp_guardrails_request_headers_visible_to_policy_server() {
 // mcpGuardrails processor metadata is readable as `guardrails.*` in an upstream-leg transformation.
 #[tokio::test]
 async fn mcp_guardrails_request_metadata_usable_in_backend_transformation() {
-	use crate::http::transformation_cel::{
-		LocalTransform, LocalTransformationConfig, Transformation,
-	};
+	use crate::http::transformation_cel::Transformation;
 	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
 
 	let extmcp_mock = closure_mock(
@@ -7570,19 +8442,11 @@ async fn mcp_guardrails_request_metadata_usable_in_backend_transformation() {
 	.spawn()
 	.await;
 
-	let xfm = Transformation::try_from_local_config(
-		LocalTransformationConfig {
-			request: Some(LocalTransform {
-				set: vec![(
-					strng::new("x-from-guardrails"),
-					strng::new("mcpGuardrails.tenant"),
-				)],
-				..Default::default()
-			}),
-			response: None,
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": {
+			"set": { "x-from-guardrails": "mcpGuardrails.tenant" },
 		},
-		true,
-	)
+	}))
 	.unwrap();
 	let target_policy = BackendTrafficPolicy::Transformation(Arc::new(xfm));
 
@@ -7717,4 +8581,47 @@ async fn mcp_guardrails_mutated_resource_read_reaches_upstream() {
 		})
 		.expect("resource should return text");
 	assert!(text.contains("Business Intelligence Memo"));
+}
+
+// Regression for https://github.com/agentgateway/agentgateway/issues/3357.
+#[tokio::test]
+async fn modern_multi_target_resolve_propagates_meta() {
+	let (mock, capture) = mock_mrtr_streamable_http_server().await;
+	let other = mock_modern_streamable_http_server().await;
+	let t = never_prefix_proxy(
+		vec![("a", mock.addr, false), ("b", other.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let meta = modern_meta();
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {
+			"name": "guarded_echo",
+			"arguments": {},
+			"_meta": meta
+		}
+	});
+	let resp = mcp_json_post(&reqwest::Client::new(), &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/call")
+		.header("mcp-name", "guarded_echo")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let result = terminal_result(&resp.text().await.unwrap(), 1);
+	assert_eq!(result["content"][0]["text"], "no-elicitation-capability");
+
+	// Check the gateway-generated list probe, not just the forwarded tool call.
+	let requests = capture.lock().unwrap();
+	let probe = requests
+		.iter()
+		.find(|r| r["method"] == "tools/list")
+		.unwrap();
+	for (key, value) in meta.as_object().unwrap() {
+		assert_eq!(&probe["params"]["_meta"][key], value, "{key}");
+	}
 }

@@ -138,7 +138,10 @@ async fn log_only_request_body_records_without_buffering() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -146,17 +149,14 @@ async fn log_only_request_body_records_without_buffering() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	assert!(req.extensions().get::<BufferedBody>().is_none());
-	assert!(
-		req
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_some()
-	);
+	assert!(req.body().inspection().is_none());
+	assert!(req.body().recorded().is_some());
 
 	let snapshot = cb.maybe_snapshot_request(&mut req, false).unwrap();
-	let body = std::mem::replace(req.body_mut(), Body::empty());
-	let sent = body.collect().await.unwrap().to_bytes();
+	let mut body = std::mem::replace(req.body_mut(), Body::empty());
+	// Content-Length consumers can stop after the data frame without polling EOF.
+	let sent = body.frame().await.unwrap().unwrap().into_data().unwrap();
+	assert!(!body.recorded().unwrap().is_complete());
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 
 	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
@@ -174,7 +174,10 @@ async fn request_body_expression_buffers_before_log() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -182,13 +185,8 @@ async fn request_body_expression_buffers_before_log() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	assert!(req.extensions().get::<BufferedBody>().is_some());
-	assert!(
-		req
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_none()
-	);
+	assert!(req.body().known_bytes().is_some());
+	assert!(req.body().recorded().is_none());
 	let exec = Executor::new_request(&req);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
@@ -204,7 +202,10 @@ async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -212,8 +213,10 @@ async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	let buffered = req.extensions().get::<BufferedBody>().unwrap();
-	assert!(buffered.bytes().is_none());
+	assert!(matches!(
+		req.body().inspection(),
+		Some(crate::http::BodyInspection::Partial(_))
+	));
 	assert!(Executor::new_request(&req).eval(&exp).is_err());
 	let sent = req.into_body().collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
@@ -227,7 +230,10 @@ async fn request_body_prefix_is_available_when_body_exceeds_buffer_limit() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -250,18 +256,16 @@ async fn log_only_response_body_records_without_buffering() {
 	cb.register_log_expression(&exp);
 	let mut resp = ::http::Response::builder()
 		.status(200)
-		.body(Body::from("world"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("world")])))
 		.unwrap();
 
 	cb.maybe_buffer_response_body(&mut resp).await;
 
-	assert!(resp.extensions().get::<BufferedBody>().is_none());
-	assert!(
-		resp
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_some()
-	);
+	assert!(resp.body().inspection().is_none());
+	assert!(resp.body().recorded().is_some());
 
 	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
 	let body = std::mem::replace(resp.body_mut(), Body::empty());
@@ -282,7 +286,10 @@ async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
 	cb.register_log_expression(&exp);
 	let mut resp = ::http::Response::builder()
 		.status(200)
-		.body(Body::from("world"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("world")])))
 		.unwrap();
 	resp
 		.extensions_mut()
@@ -290,7 +297,7 @@ async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
 
 	cb.maybe_buffer_response_body(&mut resp).await;
 
-	assert!(resp.extensions().get::<BufferedBody>().is_none());
+	assert!(resp.body().inspection().is_none());
 	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
 	let body = std::mem::replace(resp.body_mut(), Body::empty());
 	let sent = body.collect().await.unwrap().to_bytes();

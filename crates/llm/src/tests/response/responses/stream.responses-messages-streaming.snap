@@ -1,7 +1,6 @@
 ---
 source: crates/llm/src/golden_tests.rs
 description: src/tests/response/responses/stream.json
-info: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"created_at\":123,\"id\":\"\",\"model\":\"gpt-4.1-mini\",\"object\":\"response\",\"output\":[],\"status\":\"in_progress\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"content\":[],\"id\":\"\",\"role\":\"assistant\",\"status\":\"in_progress\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"item_id\":\"\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":4,\"item_id\":\"\",\"output_index\":0,\"content_index\":0,\"text\":\"Hello\"}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":5,\"output_index\":0,\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\"}],\"id\":\"\",\"role\":\"assistant\",\"status\":\"completed\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":6,\"output_index\":1,\"item\":{\"type\":\"function_call\",\"arguments\":\"\",\"call_id\":\"call_xxx\",\"name\":\"get_weather\",\"id\":\"\",\"status\":\"in_progress\"}}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":7,\"item_id\":\"\",\"output_index\":1,\"delta\":\"{\\\"loc\"}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"sequence_number\":8,\"item_id\":\"\",\"output_index\":1,\"delta\":\"ation\\\":\\\"San Francisco\\\"}\"}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"name\":\"get_weather\",\"sequence_number\":9,\"item_id\":\"\",\"output_index\":1,\"arguments\":\"{\\\"location\\\":\\\"San Francisco\\\"}\"}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":10,\"output_index\":1,\"item\":{\"type\":\"function_call\",\"arguments\":\"{\\\"location\\\":\\\"San Francisco\\\"}\",\"call_id\":\"call_xxx\",\"name\":\"get_weather\",\"id\":\"\",\"status\":\"completed\"}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":11,\"response\":{\"created_at\":123,\"id\":\"\",\"model\":\"gpt-4.1-mini\",\"object\":\"response\",\"output\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":12,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens\":8,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":20}}}\n\ndata: [DONE]\n\n"
 ---
 event: message_start
 data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"gpt-4.1-mini","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
@@ -32,3 +31,33 @@ data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":
 
 event: message_stop
 data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 12,
+  "output_tokens": 8,
+  "total_tokens": 20,
+  "reasoning_tokens": 0,
+  "cached_input_tokens": 0,
+  "provider_model": "gpt-4.1-mini",
+  "completion": [
+    "Hello"
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_xxx",
+          "name": "get_weather",
+          "arguments": {
+            "location": "San Francisco"
+          }
+        }
+      ],
+      "finish_reason": "tool_use"
+    }
+  ]
+}

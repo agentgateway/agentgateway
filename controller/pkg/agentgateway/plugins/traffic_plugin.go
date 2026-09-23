@@ -14,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
@@ -70,8 +72,14 @@ var logger = logging.New("agentgateway/plugins")
 // Shared CEL environment for expression validation
 var celEnv *cel.Env
 
+var celValidationCache *lru.Cache[uint64, bool]
+
 func init() {
 	var err error
+	celValidationCache, err = lru.New[uint64, bool](1024)
+	if err != nil {
+		panic(err)
+	}
 	celEnv, err = cel.NewEnv()
 	if err != nil {
 		logger.Error("failed to create CEL environment", "error", err)
@@ -422,6 +430,11 @@ func TranslatePolicyToAgw(
 	if err != nil {
 		errs = append(errs, err)
 	}
+	for _, p := range agwPolicies {
+		if p != nil {
+			p.CreationTimestamp = max(policy.CreationTimestamp.Unix(), 0)
+		}
+	}
 
 	return agwPolicies, errors.Join(errs...)
 }
@@ -753,7 +766,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_JWT_OPTIONAL
-	case agentgateway.JWTAuthenticationModeStrict:
+	case agentgateway.JWTAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_JWT_STRICT
 	case agentgateway.JWTAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_JWT_PERMISSIVE
@@ -765,8 +778,9 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	}
 	for idx, pp := range jwt.Providers {
 		jp := &api.TrafficPolicySpec_JWTProvider{
-			Issuer:    pp.Issuer,
-			Audiences: pp.Audiences,
+			Issuer:               pp.Issuer,
+			Audiences:            pp.Audiences,
+			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
 		if i := pp.JWKS.Inline; i != nil {
 			var ks jose.JSONWebKeySet
@@ -785,7 +799,6 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			inline, err := resolveJWKSInlineForOwner(ctx, owner)
 			if err != nil {
 				errs = append(errs, err)
-				continue
 			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: inline}
 			p.Providers = append(p.Providers, jp)
@@ -823,6 +836,17 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	return jwtPolicy, errors.Join(errs...)
 }
 
+func translateJWTValidationOptions(opts *agentgateway.JWTValidationOptions) *api.JWTValidationOptions {
+	if opts == nil {
+		return nil
+	}
+	claims := []string{"exp"}
+	if opts.RequiredClaims != nil {
+		claims = cast(*opts.RequiredClaims)
+	}
+	return &api.JWTValidationOptions{RequiredClaims: claims}
+}
+
 func processBasicAuthenticationPolicy(
 	ctx PolicyCtx,
 	ba *agentgateway.BasicAuthentication,
@@ -837,7 +861,7 @@ func processBasicAuthenticationPolicy(
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_OPTIONAL
-	case agentgateway.BasicAuthenticationModeStrict:
+	case agentgateway.BasicAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_STRICT
 	}
 
@@ -913,7 +937,7 @@ func processAPIKeyAuthenticationPolicy(
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_APIKey_OPTIONAL
-	case agentgateway.APIKeyAuthenticationModeStrict:
+	case agentgateway.APIKeyAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_APIKey_STRICT
 	case agentgateway.APIKeyAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
@@ -1028,16 +1052,20 @@ func processAPIKeyAuthenticationPolicy(
 }
 
 func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
-	if timeout.Request == nil {
+	if timeout.Request == nil && timeout.ResponseIdle == nil {
 		return nil
 	}
 	request := durationToProto(timeout.Request)
+	responseIdle := durationToProto(timeout.ResponseIdle)
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{Request: request}},
+				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
+					Request:      request,
+					ResponseIdle: responseIdle,
+				}},
 			},
 		},
 	}
@@ -1403,9 +1431,13 @@ func processExtProcTraffic(
 	}
 	if extProc.ProcessingOptions != nil {
 		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
-			RequestBodyMode:   api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			ResponseBodyMode:  api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			AllowModeOverride: extProc.ProcessingOptions.AllowModeOverride,
+			RequestBodyMode:     api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			ResponseBodyMode:    api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			RequestHeaderMode:   api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseHeaderMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			RequestTrailerMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseTrailerMode: api.TrafficPolicySpec_ExtProc_SEND,
+			AllowModeOverride:   extProc.ProcessingOptions.AllowModeOverride,
 		}
 		if extProc.ProcessingOptions.RequestBodyMode != nil {
 			spec.ProcessingOptions.RequestBodyMode = toBodySendMode(*extProc.ProcessingOptions.RequestBodyMode)
@@ -1680,7 +1712,10 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 	// Process local rate limiting if present
 	if rl.Local != nil {
-		localPolicy := processLocalRateLimitPolicy(rl.Local, policyPhase, basePolicyName, policy)
+		localPolicy, err := processLocalRateLimitPolicy(rl.Local, policyPhase, basePolicyName, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
 		if localPolicy != nil {
 			agwPolicies = append(agwPolicies, localPolicy)
 		}
@@ -1702,10 +1737,14 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
 func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateLimit, _ types.NamespacedName) (*api.Policy_Traffic, error) {
+	var errs []error
 	rules := make([]*api.TrafficPolicySpec_LocalRateLimit_Rule, 0, len(*limits))
 	for _, limit := range *limits {
 		rule := &api.TrafficPolicySpec_LocalRateLimit_Rule{
 			Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+			Key: castCELPtr(limit.Key, func(expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("local rate limit key is not a valid CEL expression: %s", expr))
+			}),
 		}
 		var capacity uint64
 		if limit.Requests != nil {
@@ -1739,17 +1778,17 @@ func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateL
 		Kind: &api.TrafficPolicySpec_LocalRateLimit_{
 			LocalRateLimit: localRateLimit,
 		},
-	}}, nil
+	}}, errors.Join(errs...)
 }
 
-func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) *api.Policy {
-	tp, _ := processLocalRateLimitTraffic(PolicyCtx{}, &limits, policy)
+func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	tp, err := processLocalRateLimitTraffic(PolicyCtx{}, &limits, policy)
 	tp.Traffic.Phase = phase(policyPhase)
 	return &api.Policy{
 		Key:  basePolicyName + localRateLimitPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: tp,
-	}
+	}, err
 }
 
 func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLimit, policy types.NamespacedName) (*api.Policy_Traffic, error) {
@@ -2087,8 +2126,14 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 
 // Checks if the expression is a valid CEL expression
 func isCEL(expr agentgateway.CELExpression) bool {
+	key := xxhash.Sum64String(string(expr))
+	if valid, found := celValidationCache.Get(key); found {
+		return valid
+	}
 	_, iss := celEnv.Parse(string(expr))
-	return iss.Err() == nil
+	valid := iss.Err() == nil
+	celValidationCache.Add(key, valid)
+	return valid
 }
 
 func attachmentName(target *api.PolicyTarget) string {
