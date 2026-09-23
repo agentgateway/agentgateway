@@ -1089,6 +1089,13 @@
           "type": "string",
           "default": ""
         },
+        "endpoint": {
+          "description": "The selected backend call target, including the port for network endpoints. This is available\nonce the target has been resolved.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "type": {
           "description": "The type of backend.",
           "type": "string",

@@ -435,6 +435,10 @@ pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
 	#[serde(default)]
 	pub name: Strng,
+	/// The selected backend call target, including the port for network endpoints. This is available
+	/// once the target has been resolved.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub endpoint: Option<Strng>,
 	/// The type of backend.
 	#[serde(rename = "type")]
 	#[serde(default)]
@@ -2499,6 +2503,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		backend: Some(BackendContext {
 			name: "my-backend".into(),
+			endpoint: Some("example.com:443".into()),
 			backend_type: BackendType::Service,
 			protocol: BackendProtocol::http,
 		}),

@@ -156,6 +156,7 @@
 |`mcp.task.name`|string|The task ID.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
+|`backend.endpoint`|string|The selected backend call target, including the port for network endpoints. This is available<br>once the target has been resolved.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|

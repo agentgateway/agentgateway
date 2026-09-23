@@ -85,6 +85,7 @@ fn build_test_request() -> crate::http::Request {
 	// Add backend context
 	let backend = BackendContext {
 		name: "test-backend".into(),
+		endpoint: Some("example.com:443".into()),
 		backend_type: BackendType::Service,
 		protocol: BackendProtocol::http,
 	};
@@ -528,6 +529,7 @@ fn test_executor_snapshot_json_to_cel() {
 		},
 		"backend": {
 			"name": "my-backend",
+			"endpoint": "example.com:443",
 			"type": "service",
 			"protocol": "http"
 		},
@@ -573,6 +575,7 @@ fn test_executor_snapshot_json_to_cel() {
 	assert_eq!(cel_json["request"]["path"], "/test");
 	assert_eq!(cel_json["source"]["address"], "10.0.0.1");
 	assert_eq!(cel_json["backend"]["name"], "my-backend");
+	assert_eq!(cel_json["backend"]["endpoint"], "example.com:443");
 	assert_eq!(cel_json["proxy"]["listener"]["name"], "http");
 	assert_eq!(cel_json["proxy"]["route"]["rule"], "rule");
 	assert_eq!(cel_json["jwt"]["sub"], "test-user");
