@@ -540,8 +540,8 @@ pub(super) async fn authorization_server_metadata(
 			if auth.client_id.is_some() {
 				apply_keycloak_endpoint_rewrites(&current_uri, &mut resp)?;
 			} else {
-			// No configured client_id: per-client DCR is handled directly by Keycloak.
-			// Keep Keycloak's authorize/token endpoints unchanged; only proxy registration.
+				// No configured client_id: per-client DCR is handled directly by Keycloak.
+				// Keep Keycloak's authorize/token endpoints unchanged; only proxy registration.
 				apply_keycloak_registration_rewrite(&current_uri, &mut resp)?;
 			}
 		},
@@ -1385,7 +1385,9 @@ mod tests {
 		let mock = MockServer::start().await;
 		let issuer = format!("{}/auth/realms/example", mock.uri());
 		Mock::given(method("GET"))
-			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.and(path(
+				"/auth/realms/example/.well-known/openid-configuration",
+			))
 			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
 				"issuer": issuer,
 				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
@@ -1436,7 +1438,9 @@ mod tests {
 		let mock = MockServer::start().await;
 		let issuer = format!("{}/auth/realms/example", mock.uri());
 		Mock::given(method("GET"))
-			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.and(path(
+				"/auth/realms/example/.well-known/openid-configuration",
+			))
 			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
 				"issuer": issuer,
 				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
@@ -1487,7 +1491,9 @@ mod tests {
 		let mock = MockServer::start().await;
 		let issuer = format!("{}/auth/realms/example", mock.uri());
 		Mock::given(method("GET"))
-			.and(path("/auth/realms/example/.well-known/openid-configuration"))
+			.and(path(
+				"/auth/realms/example/.well-known/openid-configuration",
+			))
 			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
 				"issuer": issuer,
 				"authorization_endpoint": format!("{issuer}/protocol/openid-connect/auth"),
