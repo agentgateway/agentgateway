@@ -50,6 +50,9 @@ info:
     ]
   },
   "parsed": {
+    "finish_reasons": [
+      "tool_use"
+    ],
     "input_tokens": 0,
     "output_tokens": 0,
     "total_tokens": 0,

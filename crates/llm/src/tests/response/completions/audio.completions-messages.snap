@@ -57,6 +57,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "end_turn"
+    ],
     "input_tokens": 308,
     "input_audio_tokens": 240,
     "output_tokens": 180,

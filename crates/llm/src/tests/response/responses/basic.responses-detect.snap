@@ -177,6 +177,9 @@ info:
     "metadata": {}
   },
   "parsed": {
+    "finish_reasons": [
+      "completed"
+    ],
     "input_tokens": 10,
     "output_tokens": 10,
     "total_tokens": 20,

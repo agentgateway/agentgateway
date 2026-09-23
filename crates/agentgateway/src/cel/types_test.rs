@@ -115,6 +115,7 @@ fn build_test_request() -> crate::http::Request {
 
 	// Add LLM context
 	let llm = LLMContext {
+		finish_reasons: None,
 		streaming: false,
 		request_model: "gpt-4".into(),
 		response_model: Some("gpt-4-turbo".into()),

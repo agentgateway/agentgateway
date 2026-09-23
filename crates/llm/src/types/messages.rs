@@ -571,6 +571,13 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			finish_reasons: Some(vec![
+				self
+					.stop_reason
+					.as_deref()
+					.map(Into::into)
+					.unwrap_or_else(crate::finish_reasons::error),
+			]),
 			input_tokens: Some(self.usage.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -1348,6 +1355,13 @@ pub mod typed {
 			};
 
 			crate::LLMResponse {
+				finish_reasons: Some(vec![
+					self
+						.stop_reason
+						.as_ref()
+						.and_then(crate::types::serialize_str)
+						.unwrap_or_else(crate::finish_reasons::error),
+				]),
 				input_tokens: Some(self.usage.input_tokens as u64),
 				input_image_tokens: None,
 				input_text_tokens: None,

@@ -91,6 +91,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "end_turn"
+    ],
     "input_tokens": 18,
     "output_tokens": 5,
     "total_tokens": 23,

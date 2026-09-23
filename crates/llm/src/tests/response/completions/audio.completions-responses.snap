@@ -71,6 +71,9 @@ info:
     "object": "response"
   },
   "parsed": {
+    "finish_reasons": [
+      "completed"
+    ],
     "input_tokens": 320,
     "output_tokens": 180,
     "total_tokens": 500,

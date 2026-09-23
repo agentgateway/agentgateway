@@ -17,6 +17,9 @@ data: {"type":"error","error":{"type":"server_error","message":"provider failed"
 
 
 {
+  "finish_reasons": [
+    "error"
+  ],
   "provider_model": "gpt-5.6-luna",
   "completion": [
     ""

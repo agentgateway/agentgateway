@@ -61,6 +61,7 @@ impl<IO> Parser<IO> {
 				// also, the model can change... so what do we report??
 				self.log.non_atomic_mutate(|r| {
 					r.response = LLMResponse {
+						finish_reasons: None,
 						input_tokens: Some(usage.input_tokens as u64),
 						input_image_tokens: None,
 						input_text_tokens: None,
@@ -546,6 +547,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 										let usage_clone = usage.clone();
 										log_clone.non_atomic_mutate(|r| {
 											r.response = LLMResponse {
+												finish_reasons: None,
 												input_tokens: Some(usage_clone.input_tokens as u64),
 												input_image_tokens: None,
 												input_text_tokens: None,

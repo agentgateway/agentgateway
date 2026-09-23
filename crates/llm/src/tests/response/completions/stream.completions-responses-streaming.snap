@@ -287,6 +287,9 @@ data: {"type":"response.completed","sequence_number":94,"response":{"created_at"
 
 
 {
+  "finish_reasons": [
+    "completed"
+  ],
   "input_tokens": 18,
   "output_tokens": 286,
   "total_tokens": 304,

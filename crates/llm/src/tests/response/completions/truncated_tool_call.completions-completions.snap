@@ -55,6 +55,9 @@ info:
     "created": "[date]"
   },
   "parsed": {
+    "finish_reasons": [
+      "length"
+    ],
     "input_tokens": 20,
     "output_tokens": 15,
     "total_tokens": 35,

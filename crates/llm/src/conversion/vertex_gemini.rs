@@ -49,6 +49,12 @@ pub fn passthrough_stream(
 		let Some(Ok(chunk)) = f else {
 			return;
 		};
+		for (position, candidate) in chunk.candidates.iter().enumerate() {
+			log.record_finish_reason(
+				candidate.index.map(u64::from).unwrap_or(position as u64),
+				candidate.finish_reason.as_deref().map(strng::new),
+			);
+		}
 		if !saw_token {
 			saw_token = true;
 			log.update(|r| r.response.first_token = Some(Instant::now()));
@@ -1119,10 +1125,18 @@ pub mod to_completions {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+		let missing = resp
+			.candidates
+			.iter()
+			.map(|c| c.finish_reason.is_none())
+			.collect();
 		let typed = build_response(&resp);
 		let inner =
 			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(inner))
+		Ok(crate::finish_reasons::with_missing_reasons(
+			Box::new(inner),
+			missing,
+		))
 	}
 
 	#[derive(Default)]
@@ -1535,6 +1549,13 @@ pub mod to_completions {
 						sr.model = model.to_string();
 					}
 					if let Some(choice) = sr.choices.first() {
+						log.record_finish_reason(
+							0,
+							choice
+								.finish_reason
+								.as_ref()
+								.and_then(crate::types::serialize_str),
+						);
 						if let Some(content) = &choice.delta.content
 							&& let Some(completion) = completion.as_mut()
 						{

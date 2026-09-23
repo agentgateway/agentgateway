@@ -86,6 +86,9 @@ info:
     "system_fingerprint": null
   },
   "parsed": {
+    "finish_reasons": [
+      "tool_calls"
+    ],
     "input_tokens": 25,
     "input_audio_tokens": 0,
     "output_tokens": 18,

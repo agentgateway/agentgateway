@@ -1,0 +1,462 @@
+use std::sync::{Arc, Mutex};
+
+use agent_http::Body;
+use bytes::Bytes;
+use http_body_util::BodyExt;
+use serde_json::json;
+
+use super::*;
+use crate::{
+	InputFormat, LLMInfo, LLMRequest, LLMResponse, LogContentFields, ResponseType,
+	StreamingUsageReporter, conversion,
+};
+
+struct Reporter(Arc<Mutex<LLMInfo>>);
+impl StreamingUsageReporter for Reporter {
+	fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+		f(&mut self.0.lock().unwrap());
+	}
+	fn report_usage(&mut self) {}
+}
+fn reporter() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>) {
+	let info = Arc::new(Mutex::new(LLMInfo::new(
+		LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Detect,
+			cache_convention: crate::CacheTokenConvention::pending(),
+			request_model: "test".into(),
+			provider: "test".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		LLMResponse::default(),
+	)));
+	(
+		StreamingUsageGuard::new(Box::new(Reporter(info.clone()))),
+		info,
+	)
+}
+fn reasons(info: &Arc<Mutex<LLMInfo>>) -> Option<Vec<Strng>> {
+	info.lock().unwrap().response.finish_reasons.clone()
+}
+fn expected(values: &[&str]) -> Option<Vec<Strng>> {
+	Some(values.iter().map(strng::new).collect())
+}
+fn sse(values: &[Value]) -> String {
+	values
+		.iter()
+		.map(|v| {
+			let mut v = v.clone();
+			if v.get("choices").is_some() {
+				v["id"] = "test".into();
+				v["model"] = "test".into();
+				for choice in v["choices"].as_array_mut().unwrap() {
+					if choice.get("delta").is_none() {
+						choice["delta"] = json!({});
+					}
+				}
+			}
+			format!("data: {v}\n\n")
+		})
+		.collect()
+}
+fn completions(body: Body, log: StreamingUsageGuard) -> Body {
+	conversion::completions::passthrough_stream(
+		log,
+		LogContentFields::default(),
+		http::Response::new(body),
+	)
+	.into_body()
+}
+
+#[test]
+fn finalization_keeps_slots_and_first_terminal_reason() {
+	let (log, info) = reporter();
+	log.record_finish_reason(8, None);
+	log.record_finish_reason(3, Some("stop".into()));
+	log.record_finish_reason(1, Some("stop".into()));
+	log.record_finish_reason(3, None);
+	log.record_finish_reason(3, Some("length".into()));
+	assert_eq!(reasons(&info), None);
+	drop(log);
+	assert_eq!(reasons(&info), expected(&["stop", "stop", "error"]));
+	let (log, info) = reporter();
+	drop(log);
+	assert_eq!(reasons(&info), None);
+}
+
+#[tokio::test]
+async fn completions_interleaved_reasons_survive_usage_and_repeated_terminals() {
+	let input = sse(&[
+		json!({"choices":[{"index":1,"delta":{"content":"B"}},{"index":0,"delta":{"content":"A"}}]}),
+		json!({"choices":[{"index":1,"finish_reason":"length"}]}),
+		json!({"choices":[{"index":0,"finish_reason":"stop"}]}),
+		json!({"choices":[{"index":1,"finish_reason":"length"}]}),
+		json!({"choices":[],"model":"test","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}),
+	]);
+	let (log, info) = reporter();
+	let output = completions(Body::from(input.clone()), log)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(output, input);
+	assert_eq!(reasons(&info), expected(&["stop", "length"]));
+	assert_eq!(info.lock().unwrap().response.total_tokens, Some(3));
+	assert!(info.lock().unwrap().response.completion.is_none());
+	assert!(info.lock().unwrap().response.output_messages.is_none());
+}
+
+#[tokio::test]
+async fn completions_without_indexes_use_position_and_keep_duplicates() {
+	for (choices, want) in [
+		(
+			json!([{"finish_reason":"tool_calls"},{"finish_reason":"tool_calls"},{}]),
+			["tool_calls", "tool_calls", "error"],
+		),
+		(
+			json!([{"index":4,"finish_reason":"length"},{"finish_reason":"stop"},{"index":0,"finish_reason":"tool_calls"}]),
+			["tool_calls", "stop", "length"],
+		),
+	] {
+		let (log, info) = reporter();
+		completions(Body::from(sse(&[json!({"choices":choices})])), log)
+			.collect()
+			.await
+			.unwrap();
+		assert_eq!(reasons(&info), expected(&want));
+	}
+}
+
+#[tokio::test]
+async fn completions_raw_fallback_preserves_reasons_and_wire_bytes() {
+	let mut input = sse(&[
+		json!({"choices":[{"index":0,"delta":{"content":"hello"}}]}),
+		json!({"choices":[{"index":1,"finish_reason":"provider_extension"}]}),
+		json!({"choices":[{"index":2,"delta":{"content":7},"finish_reason":"length"}]}),
+	]);
+	input.push_str("data: {invalid json\n\n");
+	input.push_str(&sse(&[
+		json!({"choices":[{"index":0,"finish_reason":"stop"}]}),
+		json!({"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}),
+	]));
+	input.push_str("data: [DONE]\n\n");
+	let (log, info) = reporter();
+	let output = completions(Body::from(input.clone()), log)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(output, input);
+	assert_eq!(
+		reasons(&info),
+		expected(&["stop", "provider_extension", "length"])
+	);
+	assert_eq!(info.lock().unwrap().response.total_tokens, Some(5));
+}
+
+#[tokio::test]
+async fn disconnect_and_body_error_finalize_pending_choices() {
+	for fail in [false, true] {
+		let (log, info) = reporter();
+		let input = sse(&[
+			json!({"choices":[{"index":0,"finish_reason":"stop"},{"index":1,"delta":{"content":"partial"}}]}),
+		]);
+		let body = Body::from_stream(futures_util::stream::iter([
+			Ok(Bytes::from(input)),
+			Err(std::io::Error::other("upstream disconnected")),
+		]));
+		let mut body = completions(body, log);
+		body.frame().await.unwrap().unwrap();
+		if fail {
+			assert!(body.frame().await.unwrap().is_err());
+		}
+		drop(body);
+		assert_eq!(reasons(&info), expected(&["stop", "error"]));
+	}
+}
+
+#[tokio::test]
+async fn gemini_indexes_and_missing_reasons() {
+	let input = sse(&[
+		json!({"candidates":[{"index":4,"content":{"parts":[{"text":"partial"}]}},{"index":2,"finishReason":"MAX_TOKENS"}]}),
+		json!({"candidates":[{"index":0,"finishReason":"STOP"},{"index":2,"finishReason":"MAX_TOKENS"}]}),
+		json!({"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":2}}),
+	]);
+	for detect in [false, true] {
+		let (log, info) = reporter();
+		let body = Body::from(input.clone());
+		let body = if detect {
+			types::detect::passthrough_stream(log, http::Response::new(body)).into_body()
+		} else {
+			conversion::vertex_gemini::passthrough_stream(
+				body,
+				1024 * 1024,
+				log,
+				LogContentFields::default(),
+			)
+		};
+		body.collect().await.unwrap();
+		assert_eq!(reasons(&info), expected(&["STOP", "MAX_TOKENS", "error"]));
+	}
+}
+
+#[tokio::test]
+async fn messages_reasons_are_independent_of_usage_and_content() {
+	for (reason, want) in [
+		(Some("max_tokens"), "max_tokens"),
+		(Some("tool_use"), "tool_use"),
+		(None, "error"),
+	] {
+		let mut values = vec![
+			json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}),
+		];
+		if let Some(reason) = reason {
+			values.push(json!({"type":"message_delta","delta":{"stop_reason":reason}}));
+		}
+		values.push(json!({"type":"error","error":{"type":"api_error","message":"failed"}}));
+		let (log, info) = reporter();
+		conversion::messages::passthrough_stream(
+			Body::from(sse(&values)),
+			1024 * 1024,
+			log,
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap();
+		assert_eq!(reasons(&info), expected(&[want]));
+	}
+}
+
+#[tokio::test]
+async fn responses_statuses_and_cancellation() {
+	for (status, want) in [
+		("completed", "completed"),
+		("incomplete", "incomplete"),
+		("failed", "error"),
+		("cancelled", "error"),
+		("in_progress", "error"),
+		("queued", "error"),
+	] {
+		let input = sse(&[
+			json!({"type":"response.created","response":{"status":"in_progress","object":"response","output":[]}}),
+			json!({"type":format!("response.{status}"),"response":{"status":status,"object":"response","output":[]}}),
+			json!({"type":format!("response.{status}"),"response":{"status":status,"object":"response","output":[]}}),
+		]);
+		for detect in [false, true] {
+			let (log, info) = reporter();
+			let body = Body::from(input.clone());
+			let body = if detect {
+				types::detect::passthrough_stream(log, http::Response::new(body)).into_body()
+			} else {
+				conversion::responses::passthrough_stream(
+					body,
+					1024 * 1024,
+					log,
+					LogContentFields::default(),
+				)
+			};
+			body.collect().await.unwrap();
+			assert_eq!(reasons(&info), expected(&[want]), "{status}");
+		}
+	}
+}
+
+#[test]
+fn buffered_order_missing_reasons_and_non_generation_endpoints() {
+	let value = json!({"model":"test","choices":[{"index":2,"finish_reason":"length"},{"index":0,"finish_reason":"stop"},{"index":1}]});
+	let response: types::completions::Response = serde_json::from_value(value.clone()).unwrap();
+	assert_eq!(
+		response
+			.to_llm_response(LogContentFields::default())
+			.finish_reasons,
+		expected(&["length", "stop", "error"])
+	);
+	assert_eq!(
+		detect_buffered(&value),
+		expected(&["length", "stop", "error"])
+	);
+	for value in [
+		json!({"data":[{"embedding":[0.1]}]}),
+		json!({"totalTokens":23}),
+		json!({"results":[]}),
+		json!({"usage":{"total_tokens":3}}),
+	] {
+		assert_eq!(detect_buffered(&value), None);
+	}
+}
+
+#[test]
+fn buffered_responses_terminal_statuses() {
+	for (status, want) in [
+		("completed", "completed"),
+		("incomplete", "incomplete"),
+		("failed", "error"),
+		("cancelled", "error"),
+	] {
+		let mut value: Value =
+			serde_json::from_str(include_str!("tests/response/responses/basic.json")).unwrap();
+		value["status"] = status.into();
+		let response: types::responses::Response = serde_json::from_value(value.clone()).unwrap();
+		assert_eq!(
+			response
+				.to_llm_response(LogContentFields::default())
+				.finish_reasons,
+			expected(&[want])
+		);
+		assert_eq!(detect_buffered(&value), expected(&[want]));
+	}
+}
+
+#[test]
+fn buffered_background_responses_have_no_finish_reasons() {
+	for status in ["queued", "in_progress"] {
+		let value = json!({
+			"id": "resp_background",
+			"object": "response",
+			"model": "test",
+			"background": true,
+			"status": status,
+			"output": [],
+			"usage": null,
+		});
+		let response: types::responses::Response = serde_json::from_value(value.clone()).unwrap();
+		for response in [
+			response.to_llm_response(LogContentFields::default()),
+			types::detect::Response::Json(value).to_llm_response(LogContentFields::default()),
+		] {
+			assert_eq!(response.finish_reasons, None, "{status}");
+			assert!(
+				serde_json::to_value(response)
+					.unwrap()
+					.get("finish_reasons")
+					.is_none()
+			);
+		}
+	}
+}
+
+#[tokio::test]
+async fn translations_record_client_reasons_before_usage() {
+	for (reason, messages, responses) in [
+		("stop", "end_turn", "completed"),
+		("length", "max_tokens", "incomplete"),
+		("tool_calls", "tool_use", "completed"),
+		("content_filter", "refusal", "error"),
+	] {
+		let input = sse(&[
+			json!({"id":"test","model":"test","choices":[{"index":0,"delta":{},"finish_reason":reason}]}),
+		]);
+		for (target, want) in [(0, messages), (1, responses)] {
+			let (log, info) = reporter();
+			let body = Body::from(input.clone());
+			let body = if target == 0 {
+				conversion::completions::from_messages::translate_stream(
+					body,
+					1024 * 1024,
+					log,
+					LogContentFields::default(),
+				)
+			} else {
+				conversion::openai_compat::to_responses::translate_stream(
+					body,
+					1024 * 1024,
+					log,
+					LogContentFields::default(),
+					None,
+				)
+			};
+			body.collect().await.unwrap();
+			assert_eq!(reasons(&info), expected(&[want]));
+		}
+	}
+}
+
+#[test]
+fn buffered_translations_do_not_hide_missing_reasons() {
+	let mut value: Value =
+		serde_json::from_str(include_str!("tests/response/completions/basic.json")).unwrap();
+	value["choices"][0]["finish_reason"] = Value::Null;
+	let bytes = Bytes::from(serde_json::to_vec(&value).unwrap());
+	for response in [
+		conversion::completions::from_messages::translate_response(&bytes).unwrap(),
+		conversion::openai_compat::to_responses::translate_response(&bytes, "test", None).unwrap(),
+	] {
+		assert_eq!(
+			response
+				.to_llm_response(LogContentFields::default())
+				.finish_reasons,
+			expected(&["error"])
+		);
+		// Existing compatibility terminals are still serialized on the wire.
+		assert!(
+			!String::from_utf8(response.serialize().unwrap())
+				.unwrap()
+				.contains("\"error\"")
+		);
+	}
+}
+
+#[tokio::test]
+async fn bedrock_reasons_survive_missing_metadata() {
+	let input = include_bytes!("tests/response/bedrock/basic.bin");
+	// Keep complete AWS frames up to messageStop, dropping the trailing metadata frame.
+	let mut end = 0;
+	while end < input.len() {
+		let len = u32::from_be_bytes(input[end..end + 4].try_into().unwrap()) as usize;
+		let frame = &input[end..end + len];
+		end += len;
+		if frame
+			.windows(b"messageStop".len())
+			.any(|w| w == b"messageStop")
+		{
+			break;
+		}
+	}
+	assert!(end < input.len());
+	for (target, want) in [
+		(0, "stop"),
+		(1, "end_turn"),
+		(2, "completed"),
+		(3, "end_turn"),
+	] {
+		let (log, info) = reporter();
+		let body = Body::from(Bytes::copy_from_slice(&input[..end]));
+		let body = match target {
+			0 => conversion::bedrock::from_completions::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+			),
+			1 => conversion::bedrock::from_messages::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+			),
+			2 => conversion::bedrock::from_responses::translate_stream(
+				body,
+				1024 * 1024,
+				log,
+				"test",
+				"test",
+				LogContentFields::default(),
+				None,
+				None,
+			),
+			_ => types::detect::passthrough_aws_stream(log, http::Response::new(body)).into_body(),
+		};
+		body.collect().await.unwrap();
+		assert_eq!(reasons(&info), expected(&[want]));
+	}
+}

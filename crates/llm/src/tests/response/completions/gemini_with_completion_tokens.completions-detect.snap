@@ -40,6 +40,9 @@ info:
     "object": "chat.completion"
   },
   "parsed": {
+    "finish_reasons": [
+      "length"
+    ],
     "input_tokens": 7,
     "output_tokens": 12,
     "total_tokens": 402,

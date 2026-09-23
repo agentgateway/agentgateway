@@ -107,6 +107,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "end_turn"
+    ],
     "input_tokens": 10,
     "output_tokens": 10,
     "total_tokens": 20,

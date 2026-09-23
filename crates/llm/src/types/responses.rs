@@ -807,6 +807,14 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			finish_reasons: match self.status.as_str() {
+				// Background submissions and polling can succeed before generation finishes.
+				"queued" | "in_progress" => None,
+				status => Some(vec![
+					crate::finish_reasons::response_status(Some(status))
+						.unwrap_or_else(crate::finish_reasons::error),
+				]),
+			},
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,

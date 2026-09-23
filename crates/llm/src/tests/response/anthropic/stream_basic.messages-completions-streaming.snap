@@ -19,6 +19,9 @@ data: [DONE]
 
 
 {
+  "finish_reasons": [
+    "stop"
+  ],
   "input_tokens": 15,
   "output_tokens": 21,
   "total_tokens": 36,

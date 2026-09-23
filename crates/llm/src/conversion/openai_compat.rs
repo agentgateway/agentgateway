@@ -497,13 +497,22 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let missing = vec![
+			resp
+				.choices
+				.first()
+				.is_some_and(|c| c.finish_reason.is_none()),
+		];
 		let mut typed = translate_response_internal(resp, model);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(crate::finish_reasons::with_missing_reasons(
+			Box::new(passthrough),
+			missing,
+		))
 	}
 
 	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
@@ -691,6 +700,9 @@ pub mod to_responses {
 						return events;
 					},
 					SseJsonEvent::Data(Ok(chunk)) => {
+						if !chunk.choices.is_empty() {
+							log.record_finish_reason(0, None);
+						}
 						if !sent_created {
 							sent_created = true;
 							let response_builder = response_builder.insert(
@@ -886,6 +898,14 @@ pub mod to_responses {
 							}
 
 							if let Some(reason) = &choice.finish_reason {
+								log.record_finish_reason(
+									0,
+									Some(match reason {
+										completions::FinishReason::Length => strng::literal!("incomplete"),
+										completions::FinishReason::ContentFilter => crate::finish_reasons::error(),
+										_ => strng::literal!("completed"),
+									}),
+								);
 								pending_stop_reason = Some(*reason);
 							}
 						}

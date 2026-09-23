@@ -538,6 +538,13 @@ impl ResponseType for Response {
 		let um = self.0.usage_metadata.as_ref();
 		let counts = um.map(vg::UsageMetadata::counts);
 		LLMResponse {
+			finish_reasons: crate::finish_reasons::buffered(
+				self
+					.0
+					.candidates
+					.iter()
+					.map(|c| c.finish_reason.as_deref().map(Into::into)),
+			),
 			input_tokens: counts.map(|c| c.0),
 			output_tokens: counts.map(|c| c.1),
 			total_tokens: counts.map(|c| c.2),

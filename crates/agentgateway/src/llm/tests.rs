@@ -610,6 +610,57 @@ fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
 	assert!(rate_limit.charge_tokens(Some(6), &exec).is_ok());
 }
 
+#[tokio::test]
+async fn messages_raw_fallback_preserves_final_rate_limit_amendment() {
+	let rate_limit =
+		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 10,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+			key: None,
+		})
+		.unwrap();
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo::new(
+		llm_request_with_tokens(None),
+		LLMResponse::default(),
+	)));
+	let amend = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.shared_bucket()],
+			..Default::default()
+		},
+		None,
+		None,
+	);
+	// The first event cannot be typed because it omits delta. Its partial usage
+	// must not consume the one-shot amendment before the valid final event arrives.
+	let input = [
+		json!({"type":"message_delta","usage":{"input_tokens":2}}),
+		json!({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":2,"output_tokens":4}}),
+	]
+	.into_iter()
+	.map(|event| format!("data: {event}\n\n"))
+	.collect::<String>();
+	conversion::messages::passthrough_stream(
+		Body::from(input),
+		1024 * 1024,
+		amend.into_llm(),
+		LogContentFields::default(),
+	)
+	.collect()
+	.await
+	.unwrap();
+
+	let plain = ::http::Request::builder().body(Body::empty()).unwrap();
+	let exec = cel::Executor::new_request(&plain);
+	// Final usage costs six tokens, leaving exactly four in the bucket.
+	assert!(rate_limit.charge_tokens(Some(5), &exec).is_err());
+	assert!(rate_limit.charge_tokens(Some(4), &exec).is_ok());
+}
+
 fn test_root() -> &'static Path {
 	Path::new("../llm/src/tests")
 }

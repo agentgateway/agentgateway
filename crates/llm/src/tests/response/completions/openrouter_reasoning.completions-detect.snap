@@ -65,6 +65,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "stop"
+    ],
     "input_tokens": 23,
     "output_tokens": 796,
     "total_tokens": 819,

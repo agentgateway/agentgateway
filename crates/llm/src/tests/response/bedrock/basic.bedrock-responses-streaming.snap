@@ -26,6 +26,9 @@ data: {"type":"response.completed","sequence_number":7,"response":{"created_at":
 
 
 {
+  "finish_reasons": [
+    "completed"
+  ],
   "input_tokens": 15,
   "output_tokens": 142,
   "total_tokens": 157,

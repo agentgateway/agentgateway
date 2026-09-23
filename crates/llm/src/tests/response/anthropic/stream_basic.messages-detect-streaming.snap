@@ -38,6 +38,9 @@ data: {"type":"message_stop"            }
 
 
 {
+  "finish_reasons": [
+    "end_turn"
+  ],
   "input_tokens": 15,
   "output_tokens": 21,
   "total_tokens": 36,

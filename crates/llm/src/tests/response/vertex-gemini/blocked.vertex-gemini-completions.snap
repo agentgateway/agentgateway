@@ -33,6 +33,9 @@ info:
     "object": "chat.completion"
   },
   "parsed": {
+    "finish_reasons": [
+      "content_filter"
+    ],
     "input_tokens": 12,
     "output_tokens": 0,
     "total_tokens": 12,

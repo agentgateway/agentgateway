@@ -56,6 +56,9 @@ info:
     }
   },
   "parsed": {
+    "finish_reasons": [
+      "end_turn"
+    ],
     "input_tokens": 47,
     "output_tokens": 251,
     "total_tokens": 298,

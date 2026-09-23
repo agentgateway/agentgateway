@@ -25,6 +25,9 @@ data: [DONE]
 
 
 {
+  "finish_reasons": [
+    "tool_calls"
+  ],
   "input_tokens": 150,
   "output_tokens": 45,
   "total_tokens": 195,

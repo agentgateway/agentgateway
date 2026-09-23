@@ -282,7 +282,7 @@ impl Tracer {
 			.filter(|(k, _)| !self.fields.has(k))
 			.filter(|(k, _)| *k != "error")
 			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
-			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
+			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(k, v)))
 			.collect_vec();
 		let Some(out_span) = request.outgoing_span.as_ref() else {
 			return;
@@ -308,7 +308,7 @@ impl Tracer {
 			{
 				span_name = Some(s);
 			} else if let Some(eval) = v.as_ref().map(ValueBag::capture_serde1) {
-				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&eval)));
+				attributes.push(KeyValue::new(Key::new(k.to_string()), to_otel(&k, &eval)));
 			}
 		}
 
@@ -450,13 +450,28 @@ impl opentelemetry_sdk::trace::SpanExporter for PolicyGrpcSpanExporter {
 	}
 }
 
-pub(crate) fn to_otel(v: &ValueBag) -> opentelemetry::Value {
+pub(crate) fn otel_string_array(key: &str, v: &ValueBag) -> Option<Vec<String>> {
+	// Only finish reasons opt into arrays; other structured attributes retain their string form.
+	if key != "gen_ai.response.finish_reasons" {
+		return None;
+	}
+	v.to_str_seq::<Vec<_>>()?
+		.into_iter()
+		.map(|v| v.map(|s| s.into_owned()))
+		.collect()
+}
+
+pub(crate) fn to_otel(key: &str, v: &ValueBag) -> opentelemetry::Value {
 	if let Some(b) = v.to_str() {
 		opentelemetry::Value::String(b.to_string().into())
 	} else if let Some(b) = v.to_i64() {
 		opentelemetry::Value::I64(b)
 	} else if let Some(b) = v.to_f64() {
 		opentelemetry::Value::F64(b)
+	} else if let Some(strings) = otel_string_array(key, v) {
+		opentelemetry::Value::Array(opentelemetry::Array::String(
+			strings.into_iter().map(Into::into).collect(),
+		))
 	} else {
 		opentelemetry::Value::String(v.to_string().into())
 	}

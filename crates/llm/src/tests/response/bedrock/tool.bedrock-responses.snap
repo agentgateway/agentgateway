@@ -45,6 +45,9 @@ info:
     "object": "response"
   },
   "parsed": {
+    "finish_reasons": [
+      "completed"
+    ],
     "provider_model": "input-model",
     "output_messages": [
       {

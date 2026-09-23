@@ -169,6 +169,12 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			finish_reasons: crate::finish_reasons::buffered(self.choices.iter().map(|c| {
+				c.rest
+					.get("finish_reason")
+					.and_then(serde_json::Value::as_str)
+					.map(Into::into)
+			})),
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
