@@ -13,6 +13,7 @@ import githubCopilotIcon from '@/assets/providers/copilot.svg';
 import windsurfIcon from '@/assets/windsurf.svg';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
+import { FreeformCombobox } from '@/components/FreeformCombobox';
 import {
 	Dropdown,
 	Field,
@@ -25,7 +26,7 @@ import { ProviderIcon } from '@/components/ProviderIcon';
 import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
-import { useLlmConfigData } from '@/hooks';
+import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
@@ -33,6 +34,7 @@ import {
 	wildcardModelPrefix,
 	wildcardResolvedSuffix
 } from '@/modelResolution';
+import { requestableDumpModelNames } from '@/pages/models/dumpModels';
 import type { LlmModel, LlmProvider, ProviderName } from '@/types';
 
 type ClientRecipe = {
@@ -66,6 +68,9 @@ type RequestModelOption =
 	| { kind: 'virtual'; name: string; icon: ReactNode; searchText: string };
 
 export function ClientSetupPage() {
+	const mode = useConfigDumpMode();
+	// XDS mode has no local LLM config: models come from the config dump instead.
+	const dumpMode = mode.data?.mode === 'dump';
 	const {
 		config,
 		models,
@@ -74,7 +79,11 @@ export function ClientSetupPage() {
 		apiKeys,
 		isLoading: modelsLoading,
 		error: configDataError
-	} = useLlmConfigData();
+	} = useLlmConfigData({ enabled: !dumpMode });
+	const dumpModelNames = useMemo(
+		() => (dumpMode ? requestableDumpModelNames(mode.data?.dump?.models ?? []) : []),
+		[dumpMode, mode.data]
+	);
 	const modelOptions = useMemo(
 		() => [
 			...models.map(item => ({
@@ -94,7 +103,8 @@ export function ClientSetupPage() {
 		[models, providers, virtualModels]
 	);
 	const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
-	const derivedBaseUrl = llmGatewayOrigin(config.data);
+	// The proxy does not know its externally reachable URL in XDS mode, so there is nothing to derive.
+	const derivedBaseUrl = dumpMode ? '' : llmGatewayOrigin(config.data);
 	const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
 	const [baseUrlTouched, setBaseUrlTouched] = useState(false);
 	const [model, setModel] = useState('');
@@ -104,9 +114,11 @@ export function ClientSetupPage() {
 	const [rawKey, setRawKey] = useState('');
 	const [selectedIntegration, setSelectedIntegration] = useState('curl');
 
-	const selectedModel = modelOptions.some(item => item.name === model)
-		? model
-		: (modelOptions[0]?.name ?? '');
+	const selectedModel = dumpMode
+		? model || (dumpModelNames[0] ?? '')
+		: modelOptions.some(item => item.name === model)
+			? model
+			: (modelOptions[0]?.name ?? '');
 	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
@@ -126,12 +138,10 @@ export function ClientSetupPage() {
 			: undefined;
 	const apiKey = selectedVirtualKey?.key ?? rawKey;
 	const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
-	const requestModel = clientSetupRequestModel(
-		selectedModelOption,
-		selectedModel,
-		specificModel,
-		providers
-	);
+	// In XDS mode the name is typed or picked directly, so there is no model config to resolve.
+	const requestModel = dumpMode
+		? selectedModel.trim()
+		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
 		model: requestModel || 'model',
@@ -150,7 +160,19 @@ export function ClientSetupPage() {
 					{configDataError.message}
 				</StatusBanner>
 			) : null}
-			{modelOptions.length === 0 && !modelsLoading ? (
+			{dumpMode ? (
+				<StatusBanner state="info" title="This page configures the client only">
+					Nothing here is written to the gateway. It does not create or change Gateway, HTTPRoute,
+					AgentgatewayBackend, AgentgatewayPolicy or Secret resources.
+				</StatusBanner>
+			) : null}
+			{dumpMode && !dumpModelNames.length && !mode.isLoading ? (
+				<StatusBanner state="warn" title="No models in the gateway dump">
+					No public model is present in the active dump. Type the model name the client should
+					request.
+				</StatusBanner>
+			) : null}
+			{!dumpMode && modelOptions.length === 0 && !modelsLoading ? (
 				<StatusBanner state="warn" title="No models configured">
 					Create an LLM model before wiring clients to the gateway.
 				</StatusBanner>
@@ -166,31 +188,49 @@ export function ClientSetupPage() {
 					<div className="section-heading">
 						<h3>Connection</h3>
 					</div>
-					<Field label="Gateway base URL" hint="SDK snippets use this URL with /v1 appended.">
+					<Field
+						label="Gateway base URL"
+						hint={
+							dumpMode
+								? 'The gateway cannot know its external URL. Enter the one clients use, including any route prefix.'
+								: 'SDK snippets use this URL with /v1 appended.'
+						}
+					>
 						<input
 							value={effectiveBaseUrl}
 							onChange={event => {
 								setBaseUrlTouched(true);
 								setBaseUrl(event.target.value);
 							}}
-							placeholder={derivedBaseUrl}
+							placeholder={dumpMode ? 'https://gateway.example.com' : derivedBaseUrl}
 						/>
 					</Field>
 					<FieldGroup label="Model">
-						<Dropdown
-							ariaLabel="Model"
-							value={selectedModel}
-							placeholder="No models"
-							searchable
-							options={modelOptions.map(item => ({
-								value: item.name,
-								label: item.name,
-								description: item.kind === 'virtual' ? 'Virtual model' : undefined,
-								icon: item.icon,
-								searchText: item.searchText
-							}))}
-							onChange={setModel}
-						/>
+						{dumpMode ? (
+							<FreeformCombobox
+								ariaLabel="Model"
+								value={selectedModel}
+								options={dumpModelNames}
+								onChange={setModel}
+								placeholder="Select or type a model"
+								emptyText="No models in the dump"
+							/>
+						) : (
+							<Dropdown
+								ariaLabel="Model"
+								value={selectedModel}
+								placeholder="No models"
+								searchable
+								options={modelOptions.map(item => ({
+									value: item.name,
+									label: item.name,
+									description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+									icon: item.icon,
+									searchText: item.searchText
+								}))}
+								onChange={setModel}
+							/>
+						)}
 					</FieldGroup>
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
@@ -246,7 +286,9 @@ export function ClientSetupPage() {
 					<div className="client-setup-summary">
 						<div>
 							<span>Base URL</span>
-							<code>{effectiveBaseUrl.replace(/\/$/, '')}/v1</code>
+							<code>
+								{effectiveBaseUrl.trim() ? `${effectiveBaseUrl.replace(/\/$/, '')}/v1` : 'Not set'}
+							</code>
 						</div>
 						<div>
 							<span>Model</span>
@@ -259,12 +301,20 @@ export function ClientSetupPage() {
 					</div>
 				</Panel>
 
-				<ClientRecipeCard
-					recipe={activeRecipe}
-					recipes={recipes}
-					selectedIntegration={activeRecipe.id}
-					onSelectIntegration={setSelectedIntegration}
-				/>
+				{effectiveBaseUrl.trim() ? (
+					<ClientRecipeCard
+						recipe={activeRecipe}
+						recipes={recipes}
+						selectedIntegration={activeRecipe.id}
+						onSelectIntegration={setSelectedIntegration}
+					/>
+				) : (
+					<Panel>
+						<StatusBanner state="info" title="Enter the gateway base URL">
+							Client snippets appear once the URL is set, so they never carry a placeholder host.
+						</StatusBanner>
+					</Panel>
+				)}
 			</section>
 		</div>
 	);
