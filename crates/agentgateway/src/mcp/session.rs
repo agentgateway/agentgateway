@@ -344,9 +344,23 @@ impl Session {
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
 				trace!("forward SSE got single JSON response");
+				let limit = crate::http::response_buffer_limit(&resp);
+				let content_length = resp
+					.headers()
+					.typed_get::<headers::ContentLength>()
+					.map(|c| c.0);
 				let message = json::from_response_body::<ServerJsonRpcMessage>(resp)
 					.await
-					.map_err(ClientError::new)?;
+					.map_err(|e| {
+						if agent_http::is_length_limit_error(&e) {
+							ClientError::ResponseTooLarge {
+								limit,
+								size: content_length,
+							}
+						} else {
+							ClientError::new(e)
+						}
+					})?;
 				StreamableHttpPostResponse::Json(message, None)
 			},
 			_ => {

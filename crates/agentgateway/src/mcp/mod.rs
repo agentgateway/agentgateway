@@ -417,6 +417,9 @@ pub enum ClientError {
 	General(Arc<crate::http::Error>),
 	#[error("http request failed: {0}")]
 	Proxy(#[from] ProxyError),
+	/// `size` is the upstream's Content-Length, absent for a compressed body.
+	#[error("upstream response body{} exceeds the maximum buffer size of {limit} bytes", .size.map(|s| format!(" of {s} bytes")).unwrap_or_default())]
+	ResponseTooLarge { limit: usize, size: Option<u64> },
 }
 
 impl ClientError {

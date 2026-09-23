@@ -2609,6 +2609,66 @@ async fn streamable_http_body_at_configured_limit_succeeds() {
 }
 
 #[tokio::test]
+async fn streamable_http_oversized_upstream_response_names_size_and_limit() {
+	let mock = mock_streamable_http_server_json_response().await;
+	let limit = 4096usize;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let init = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize should create a session")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let call = |id: i64, bytes: usize| {
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": id,
+			"method": "tools/call",
+			"params": {"name": "long_answer", "arguments": {"bytes": bytes}}
+		})
+	};
+	let resp = mcp_json_post(&client, &url, &call(2, 4 * limit))
+		.header("mcp-session-id", session_id.clone())
+		.send()
+		.await
+		.unwrap();
+	let text = resp.text().await.unwrap();
+	let msg = terminal_message(&text, 2);
+	let err = msg["error"]["message"].as_str().unwrap_or_default();
+	assert!(
+		err.contains(&format!("exceeds the maximum buffer size of {limit} bytes")),
+		"expected the limit in the error, got: {text}"
+	);
+	assert!(
+		err.contains("upstream response body of ") && err.contains(" bytes exceeds"),
+		"expected the answer's declared size in the error, got: {text}"
+	);
+
+	let resp = mcp_json_post(&client, &url, &call(3, 16))
+		.header("mcp-session-id", session_id)
+		.send()
+		.await
+		.unwrap();
+	let text = resp.text().await.unwrap();
+	let msg = terminal_message(&text, 3);
+	assert_eq!(
+		msg["result"]["content"][0]["text"],
+		"x".repeat(16),
+		"{text}"
+	);
+}
+
+#[tokio::test]
 async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
 	let mock = mock_streamable_http_server(true).await;
 	let limit = 64usize;
@@ -4449,7 +4509,12 @@ impl MockServer {
 }
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
-	mock_streamable_http_server_inner(stateful, None).await
+	mock_streamable_http_server_inner(stateful, None, false).await
+}
+
+// rmcp honours `json_response` only in its stateless session mode.
+async fn mock_streamable_http_server_json_response() -> MockServer {
+	mock_streamable_http_server_inner(false, None, true).await
 }
 
 async fn mock_modern_streamable_http_server() -> MockServer {
@@ -4852,13 +4917,14 @@ type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;
 
 async fn mock_streamable_http_server_with_capture(stateful: bool) -> (MockServer, HeaderCapture) {
 	let capture: HeaderCapture = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-	let server = mock_streamable_http_server_inner(stateful, Some(capture.clone())).await;
+	let server = mock_streamable_http_server_inner(stateful, Some(capture.clone()), false).await;
 	(server, capture)
 }
 
 async fn mock_streamable_http_server_inner(
 	stateful: bool,
 	capture: Option<HeaderCapture>,
+	json_response: bool,
 ) -> MockServer {
 	use mockserver::Counter;
 	use rmcp::transport::streamable_http_server::StreamableHttpService;
@@ -4876,7 +4942,7 @@ async fn mock_streamable_http_server_inner(
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
 			.with_legacy_session_mode(stateful)
-			.with_json_response(false),
+			.with_json_response(json_response),
 	);
 
 	let (tx, rx) = tokio::sync::oneshot::channel();
@@ -5226,6 +5292,11 @@ mod mockserver {
 		pub b: i32,
 	}
 
+	#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+	pub struct LongAnswerArgs {
+		pub bytes: usize,
+	}
+
 	#[derive(Clone)]
 	pub struct Counter {
 		counter: Arc<Mutex<i32>>,
@@ -5280,6 +5351,16 @@ mod mockserver {
 		fn echo(&self, Parameters(object): Parameters<JsonObject>) -> Result<CallToolResult, McpError> {
 			Ok(CallToolResult::success(vec![ContentBlock::text(
 				serde_json::Value::Object(object).to_string(),
+			)]))
+		}
+
+		#[tool(description = "Answer with a text of the requested length")]
+		fn long_answer(
+			&self,
+			Parameters(LongAnswerArgs { bytes }): Parameters<LongAnswerArgs>,
+		) -> Result<CallToolResult, McpError> {
+			Ok(CallToolResult::success(vec![ContentBlock::text(
+				"x".repeat(bytes),
 			)]))
 		}
 
