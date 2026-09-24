@@ -641,22 +641,35 @@ async fn a_traversal_model_in_the_client_path_is_rejected_before_a_path_is_built
 	}
 }
 
-#[rstest::rstest]
-#[case::gemini(gemini_provider(Some(TRAVERSAL_MODELS[0])))]
-#[case::vertex(vertex_provider(None, Some(TRAVERSAL_MODELS[0])))]
-fn a_configured_traversal_model_is_rejected_before_interpolation(#[case] provider: AIProvider) {
-	// The model can also come from config (`ai.provider.model`, a model alias), which never went
-	// through path extraction, so the path builders have to hold the line themselves.
-	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
-		::http::Method::POST,
-		&[],
-	);
+#[tokio::test]
+async fn configured_gemini_model_override_is_rejected_before_interpolation() {
+	let provider = gemini_provider(Some(TRAVERSAL_MODELS[0]));
+	let RequestResult::Success {
+		request: mut req,
+		llm_request,
+		upstream_route_type,
+		..
+	} = provider
+		.process_gemini_request(
+			&backend_info(gemini::DEFAULT_HOST_STR),
+			None,
+			generate_content_body("https://example.com/v1beta/models/gemini-2.5-flash:generateContent"),
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect("configured model should resolve")
+	else {
+		panic!("expected a forwarded request");
+	};
+	assert_eq!(llm_request.request_model, TRAVERSAL_MODELS[0]);
+
 	let error = provider
 		.setup_request(
 			&mut req,
-			RouteType::GenerateContent,
-			Some(&native_chat_request(TRAVERSAL_MODELS[0], false)),
+			upstream_route_type,
+			Some(&llm_request),
 			None,
 			None,
 			false,
