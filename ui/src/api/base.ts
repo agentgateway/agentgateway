@@ -34,10 +34,21 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 	return response;
 }
 
+export class ApiError extends Error {
+	readonly status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.name = 'ApiError';
+		this.status = status;
+	}
+}
+
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+	// `headers` last: spreading `init` after it drops Content-Type for callers that pass headers.
 	const response = await requestApi(path, {
-		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-		...init
+		...init,
+		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }
 	});
 	if (!response.ok) {
 		let message = `${response.status} ${response.statusText}`;
@@ -54,7 +65,7 @@ export async function requestJson<T>(path: string, init?: RequestInit): Promise<
 		} catch {
 			// Keep the status text fallback when the body cannot be read.
 		}
-		throw new Error(message || 'request failed');
+		throw new ApiError(response.status, message || 'request failed');
 	}
 	return response.json() as Promise<T>;
 }
