@@ -1240,6 +1240,21 @@ impl AIProvider {
 		Ok(())
 	}
 
+	fn ensure_provider_path_is_safe(path: &str) -> anyhow::Result<()> {
+		if agent_http::path::contains_dot_segment(path) {
+			return Err(AIError::InvalidModelPath.into());
+		}
+		Ok(())
+	}
+
+	fn ensure_safe_path_model(is_safe: bool) -> anyhow::Result<()> {
+		if is_safe {
+			Ok(())
+		} else {
+			Err(AIError::InvalidModelPath.into())
+		}
+	}
+
 	fn with_path_prefix(path: &str, path_prefix: Option<&str>) -> String {
 		match path_prefix {
 			Some(prefix) => format!("{}{}", prefix.trim_end_matches('/'), path),
@@ -1355,10 +1370,19 @@ impl AIProvider {
 						route_type == RouteType::GeminiCountTokens
 							|| matches!(l.provider_state, Some(ProviderState::VertexGemini))
 					})
-					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
+					.map(|l| {
+						Self::ensure_safe_path_model(gemini::model_is_safe_for_path(l.request_model.as_str()))?;
+						Ok::<_, anyhow::Error>(gemini::native_gemini_path(
+							route_type,
+							l.request_model.as_str(),
+							l.streaming,
+						))
+					})
+					.transpose()?;
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path = native.as_deref().unwrap_or(gemini::path(route_type));
+						Self::ensure_provider_path_is_safe(path)?;
 						let path = Self::with_path_prefix(path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 						Ok(())
@@ -1376,10 +1400,16 @@ impl AIProvider {
 					.provider_state
 					.as_ref()
 					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
+				Self::ensure_safe_path_model(provider.model_is_safe_for_path(
+					route_type,
+					request_model,
+					native_gemini,
+				))?;
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path =
 							provider.get_path_for_model(route_type, request_model, streaming, native_gemini);
+						Self::ensure_provider_path_is_safe(&path)?;
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 						Ok(())
@@ -1391,12 +1421,18 @@ impl AIProvider {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
 						let endpoint = bedrock_endpoint.expect("setup_request resolves the Bedrock endpoint");
+						Self::ensure_safe_path_model(bedrock::Provider::model_is_safe_for_path(
+							route_type,
+							l.request_model.as_str(),
+							endpoint,
+						))?;
 						let path = provider.get_path_for_route(
 							route_type,
 							l.streaming,
 							l.request_model.as_str(),
 							endpoint,
 						);
+						Self::ensure_provider_path_is_safe(&path)?;
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 					}
@@ -1407,7 +1443,11 @@ impl AIProvider {
 			AIProvider::Azure(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
+						Self::ensure_safe_path_model(
+							provider.model_is_safe_for_path(route_type, l.request_model.as_str()),
+						)?;
 						let path = provider.get_path_for_model(route_type, l.request_model.as_str());
+						Self::ensure_provider_path_is_safe(&path)?;
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 					}
@@ -1415,52 +1455,47 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Custom(provider) => {
-				// The native Gemini formats embed the model in the path and pick the method by
-				// streaming, which a static configured path cannot express, so their default is
-				// the canonical Gemini API shape. A configured path still wins verbatim below,
-				// which only suits single-model unary shims.
-				let native = llm_request
-					.filter(|_| {
+			AIProvider::Custom(provider) => http::modify_req(req, |req| {
+				http::modify_uri(req, |uri| {
+					if let Some(path) = provider.path_for_route(route_type) {
+						Self::set_path_and_query(uri, path)?;
+						return Ok(());
+					}
+					if let Some(l) = llm_request.filter(|_| {
 						matches!(
 							route_type,
 							RouteType::GenerateContent | RouteType::GeminiCountTokens
 						)
-					})
-					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
-				http::modify_req(req, |req| {
-					http::modify_uri(req, |uri| {
-						if let Some(path) = provider.path_for_route(route_type) {
-							Self::set_path_and_query(uri, path)?;
-							return Ok(());
-						}
-						if let Some(native) = native.as_deref() {
-							let path = Self::with_path_prefix(native, path_prefix);
-							Self::set_path_and_query(uri, &path)?;
-							return Ok(());
-						}
-						let path = match route_type {
-							RouteType::Messages | RouteType::AnthropicTokenCount => format!(
-								"{}{}",
-								path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
-									prefix.trim_end_matches('/')
-								}),
-								anthropic::path_suffix(route_type)
-							),
-							_ => format!(
-								"{}{}",
-								path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
-									prefix.trim_end_matches('/')
-								}),
-								openai::path_suffix(route_type)
-							),
-						};
+					}) {
+						Self::ensure_safe_path_model(gemini::model_is_safe_for_path(l.request_model.as_str()))?;
+						let native =
+							gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming);
+						Self::ensure_provider_path_is_safe(&native)?;
+						let path = Self::with_path_prefix(&native, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
-						Ok(())
-					})?;
+						return Ok(());
+					}
+					let path = match route_type {
+						RouteType::Messages | RouteType::AnthropicTokenCount => format!(
+							"{}{}",
+							path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
+								prefix.trim_end_matches('/')
+							}),
+							anthropic::path_suffix(route_type)
+						),
+						_ => format!(
+							"{}{}",
+							path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
+								prefix.trim_end_matches('/')
+							}),
+							openai::path_suffix(route_type)
+						),
+					};
+					Self::set_path_and_query(uri, &path)?;
 					Ok(())
-				})
-			},
+				})?;
+				Ok(())
+			}),
 		}
 	}
 

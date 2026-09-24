@@ -54,6 +54,8 @@ impl RequestBodyExt for Request {
 
 pub const DEFAULT_BUFFER_LIMIT: usize = 2_097_152;
 
+pub mod path;
+
 #[derive(Debug, Clone)]
 pub struct BufferLimit(pub usize);
 

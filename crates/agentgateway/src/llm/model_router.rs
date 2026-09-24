@@ -755,6 +755,13 @@ fn rewrite_body_model(req: &mut Request, mut body: Value, target: &str) -> Route
 }
 
 fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
+	if !agent_http::path::is_safe_resource_name(target) {
+		return Err(Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"Model cannot be used in request path",
+			"invalid_model",
+		)));
+	}
 	let Some(path_and_query) = req.uri().path_and_query() else {
 		return Ok(());
 	};
@@ -1491,6 +1498,21 @@ mod tests {
 			req.uri().to_string(),
 			"http://example.com/model/real%2Fmodel/converse?trace=true"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::dot(".")]
+	#[case::dot_dot("..")]
+	#[case::parent_escape("../../foo")]
+	#[case::query("model?x=1")]
+	#[case::fragment("model#fragment")]
+	fn rewrite_uri_model_rejects_unsafe_targets(#[case] target: &str) {
+		let mut req = ::http::Request::builder()
+			.uri("/model/virtual/converse")
+			.body(http::Body::empty())
+			.unwrap();
+		let response = rewrite_uri_model(&mut req, target).expect_err("unsafe target should fail");
+		assert_eq!(response.status(), ::http::StatusCode::BAD_REQUEST);
 	}
 
 	#[tokio::test]

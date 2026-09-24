@@ -641,33 +641,33 @@ async fn a_traversal_model_in_the_client_path_is_rejected_before_a_path_is_built
 	}
 }
 
-#[tokio::test]
-async fn a_configured_traversal_model_is_escaped_rather_than_interpolated() {
+#[rstest::rstest]
+#[case::gemini(gemini_provider(Some(TRAVERSAL_MODELS[0])))]
+#[case::vertex(vertex_provider(None, Some(TRAVERSAL_MODELS[0])))]
+fn a_configured_traversal_model_is_rejected_before_interpolation(#[case] provider: AIProvider) {
 	// The model can also come from config (`ai.provider.model`, a model alias), which never went
 	// through path extraction, so the path builders have to hold the line themselves.
-	let (_, req) = process_and_setup(
-		&gemini_provider(Some(TRAVERSAL_MODELS[0])),
-		None,
+	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
-		gemini::DEFAULT_HOST_STR,
-	)
-	.await;
-	assert_eq!(
-		req.uri().path(),
-		"/v1beta/models/gemini-2.5-flash%2F..%2F..%2F..%2F..%2Flocations%2Fglobal%2Fendpoints%2Fopenapi%2Fchat%2Fcompletions:generateContent"
+		::http::Method::POST,
+		&[],
 	);
-
-	// Vertex has a fixed fallback path to land on, so it uses that rather than escaping.
-	let req = setup(
-		&vertex_provider(None, None),
-		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
-		RouteType::GenerateContent,
-		&native_chat_request(TRAVERSAL_MODELS[0], false),
-	);
-	assert_eq!(
-		req.uri().path(),
-		"/v1/projects/test-project/locations/global/endpoints/openapi/chat/completions"
-	);
+	let error = provider
+		.setup_request(
+			&mut req,
+			RouteType::GenerateContent,
+			Some(&native_chat_request(TRAVERSAL_MODELS[0], false)),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect_err("configured traversal model must be rejected");
+	assert!(matches!(
+		error.downcast_ref::<AIError>(),
+		Some(AIError::InvalidModelPath)
+	));
 }
 
 #[tokio::test]

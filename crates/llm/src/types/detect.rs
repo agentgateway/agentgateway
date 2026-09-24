@@ -174,7 +174,7 @@ pub fn extract_model_from_path(path: &str) -> Option<Strng> {
 	// `[^/]+` route regex, so the traversal only appears after this decode.
 	model
 		.map(|model| strng::new(percent_decode_str(model).decode_utf8_lossy()))
-		.filter(|model| crate::model_path::is_safe_resource_name(model))
+		.filter(|model| agent_http::path::is_safe_resource_name(model))
 }
 
 fn strip_bedrock_model_suffix(rest: &str) -> Option<&str> {
