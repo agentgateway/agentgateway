@@ -509,6 +509,10 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				Moderation: moderation,
 			},
 		}
+	} else if llm.Copilot != nil {
+		provider.Provider = &api.AIBackend_Provider_Copilot{
+			Copilot: &api.AIBackend_Copilot{Model: llm.Copilot.Model},
+		}
 	} else if llm.AzureOpenAI != nil {
 		resourceName, resourceType := parseAzureEndpoint(llm.AzureOpenAI.Endpoint)
 		provider.Provider = &api.AIBackend_Provider_Azure{

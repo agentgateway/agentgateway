@@ -1871,6 +1871,9 @@ message AIBackend {
       MODERATION_MODE_BLOCK = 2;
     }
   }
+  message Copilot {
+    optional string model = 1;
+  }
   message Gemini {
     optional string model = 1;
   }
@@ -1986,6 +1989,7 @@ message AIBackend {
       Azure azure = 13;
       Custom custom = 15;
       ProviderPreset provider_preset = 16;
+      Copilot copilot = 19;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

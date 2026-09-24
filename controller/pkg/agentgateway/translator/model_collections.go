@@ -679,6 +679,8 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	switch {
 	case llm.OpenAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Openai{Openai: &api.AIBackend_OpenAI{Model: providerModel(selectedModel, llm.OpenAI.Model)}}
+	case llm.Copilot != nil:
+		provider.Provider = &api.AIBackend_Provider_Copilot{Copilot: &api.AIBackend_Copilot{Model: providerModel(selectedModel, llm.Copilot.Model)}}
 	case llm.Azure != nil:
 		resourceType := api.AIBackend_OPEN_AI
 		if llm.Azure.ResourceType == agentgateway.AzureResourceTypeFoundry {
@@ -809,6 +811,8 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 	switch *model.Provider {
 	case agentgateway.ModelProviderOpenAI:
 		provider.OpenAI = &agentgateway.OpenAIConfig{}
+	case agentgateway.ModelProviderCopilot:
+		provider.Copilot = &agentgateway.CopilotConfig{}
 	case agentgateway.ModelProviderAzure:
 		if model.Azure == nil {
 			return nil, fmt.Errorf("azure provider requires azure configuration")

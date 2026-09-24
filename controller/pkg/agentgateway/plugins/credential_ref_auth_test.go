@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -13,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 )
@@ -340,6 +342,111 @@ func TestBackendAuthCustomKeyRejectsEmptyValue(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "missing token value") {
 		t.Fatalf("translateBackendAuth() error = %v, want missing token error", err)
 	}
+}
+
+func TestCopilotSecretAuthPreservesExplicitKey(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		data    map[string][]byte
+		absent  bool
+		want    string
+		wantErr bool
+	}{
+		{name: "missing secret", absent: true, wantErr: true},
+		{name: "missing key", data: map[string][]byte{"other": []byte("unused")}, wantErr: true},
+		{name: "empty", data: map[string][]byte{"Authorization": nil}, wantErr: true},
+		{name: "whitespace", data: map[string][]byte{"Authorization": []byte(" \n\t ")}, wantErr: true},
+		{name: "invalid utf8", data: map[string][]byte{"Authorization": {0xff}}, wantErr: true},
+		{name: "bare", data: map[string][]byte{"Authorization": []byte(" copilot-token \n")}, want: "copilot-token"},
+		{name: "bearer", data: map[string][]byte{"Authorization": []byte(" Bearer copilot-token \n")}, want: "copilot-token"},
+		{name: "bearer only", data: map[string][]byte{"Authorization": []byte(" Bearer \n")}, want: "Bearer"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var inputs []*corev1.Secret
+			if !tt.absent {
+				inputs = append(inputs, &corev1.Secret{Name: "copilot", Namespace: "default", Data: tt.data})
+			}
+			secrets := krt.NewStaticCollection(nil, inputs, krt.WithStop(test.NewStop(t)))
+			ctx := simpleAuthPolicyCtx(&AgwCollections{Secrets: secrets}, kubeutils.NewSecretCredentialResolver(secrets))
+			policy := copilotSecretAuthPolicy()
+			translated, err := translateBackendAuth(ctx, policy, "default/copilot")
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, want error %t", err, tt.wantErr)
+			}
+			if translated == nil || translated.GetBackend().GetAuth() == nil {
+				t.Fatal("explicit auth policy was lost")
+			}
+			key, ok := translated.GetBackend().GetAuth().Kind.(*api.BackendAuthPolicy_Key)
+			if !ok || key.Key == nil {
+				t.Fatal("explicit key policy must be retained even on resolution failure")
+			}
+			assert.Equal(t, key.Key.Secret, tt.want)
+		})
+	}
+}
+
+func copilotSecretAuthPolicy() *agentgateway.AgentgatewayPolicy {
+	return &agentgateway.AgentgatewayPolicy{
+		Name: "copilot", Namespace: "default",
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{Auth: &agentgateway.BackendAuth{
+				SecretRef: &agentgateway.LocalSecretKeyRef{Name: "copilot"},
+			}},
+		},
+	}
+}
+
+type resolvedCopilotAuth struct {
+	Key        string
+	Credential string
+	Explicit   bool
+	Error      bool
+}
+
+func (r resolvedCopilotAuth) ResourceName() string { return r.Key }
+
+func TestCopilotSecretAuthReconcilesRotation(t *testing.T) {
+	stop := test.NewStop(t)
+	secrets := krt.NewMutableCollection[*corev1.Secret](nil, nil, krt.WithStop(stop))
+	policies := krt.NewStaticCollection(nil, []*agentgateway.AgentgatewayPolicy{copilotSecretAuthPolicy()}, krt.WithStop(stop))
+	resolved := krt.NewCollection(policies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) *resolvedCopilotAuth {
+		translated, err := translateBackendAuth(PolicyCtx{
+			Krt: ctx, Collections: &AgwCollections{Secrets: secrets.AsCollection()},
+			CredentialResolver: kubeutils.NewSecretCredentialResolver(secrets.AsCollection()),
+		}, policy, "default/copilot")
+		result := &resolvedCopilotAuth{Key: policy.Name, Error: err != nil}
+		if translated != nil {
+			if key, ok := translated.GetBackend().GetAuth().Kind.(*api.BackendAuthPolicy_Key); ok && key.Key != nil {
+				result.Explicit = true
+				result.Credential = key.Key.Secret
+			}
+		}
+		return result
+	}, krt.WithStop(stop))
+	updates := make(chan resolvedCopilotAuth, 16)
+	registration := resolved.Register(func(event krt.Event[resolvedCopilotAuth]) { updates <- event.Latest() })
+	t.Cleanup(registration.UnregisterHandler)
+	wantUpdate := func(credential string, wantErr bool) {
+		t.Helper()
+		select {
+		case got := <-updates:
+			assert.Equal(t, got, resolvedCopilotAuth{Key: "copilot", Credential: credential, Explicit: true, Error: wantErr})
+		case <-time.After(5 * time.Second):
+			t.Fatal("Secret change did not reconcile the backend auth policy")
+		}
+	}
+	wantUpdate("", true)
+	for _, credential := range []string{"copilot-first", "copilot-second", " "} {
+		secrets.UpdateObject(&corev1.Secret{Name: "copilot", Namespace: "default", Data: map[string][]byte{"Authorization": []byte(credential)}})
+		wantUpdate(strings.TrimSpace(credential), credential == " ")
+	}
+	// Restore before deletion so the published empty-key state is observable again.
+	secrets.UpdateObject(&corev1.Secret{Name: "copilot", Namespace: "default", Data: map[string][]byte{"Authorization": []byte("copilot-restored")}})
+	wantUpdate("copilot-restored", false)
+	secrets.DeleteObject("default/copilot")
+	wantUpdate("", true)
+	secrets.UpdateObject(&corev1.Secret{Name: "copilot", Namespace: "default", Data: map[string][]byte{"Authorization": []byte("copilot-final")}})
+	wantUpdate("copilot-final", false)
 }
 
 type configMapCredentialResolver struct {

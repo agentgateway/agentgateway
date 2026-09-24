@@ -1,6 +1,6 @@
 pub mod aws;
 pub mod azure;
-mod copilot;
+pub(crate) mod copilot;
 pub mod gcp;
 pub(crate) mod jws;
 pub mod jwt_sign;
@@ -290,9 +290,10 @@ async fn apply_backend_auth_kind(
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuthKind::Copilot => {
-			copilot::insert_headers(req)
+			copilot::insert_token(req)
 				.await
 				.map_err(BackendAuthError::local)?;
+			copilot::insert_protocol_headers(req);
 		},
 		BackendAuthKind::JwtSign(cfg) => {
 			let token = cfg.sign().map_err(BackendAuthError::local)?;

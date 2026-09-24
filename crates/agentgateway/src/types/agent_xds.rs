@@ -1921,6 +1921,11 @@ pub(crate) fn backend_with_policies_from_proto(
 								moderation,
 							})
 						},
+						Some(provider::Provider::Copilot(copilot)) => {
+							AIProvider::Copilot(llm::copilot::Provider {
+								model_override: copilot.model.as_deref().map(strng::new),
+							})
+						},
 						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
 							model_override: gemini.model.as_deref().map(strng::new),
 						}),
@@ -5777,6 +5782,65 @@ mod tests {
 			panic!("Expected Backend::MCP, got {:?}", bw.backend);
 		};
 		assert_eq!(mcp_backend.sse_keep_alive, None);
+		Ok(())
+	}
+
+	#[test]
+	fn copilot_provider_from_xds_preserves_models_and_override() -> Result<(), ProtoError> {
+		use prost::Message;
+
+		for (wire, generic, expected) in [
+			(vec![0x9a, 0x01, 0x00], None, None),
+			(
+				vec![0x9a, 0x01, 0x05, 0x0a, 0x03, b'g', b'p', b't'],
+				None,
+				Some("gpt"),
+			),
+			(
+				vec![0x9a, 0x01, 0x05, 0x0a, 0x03, b'g', b'p', b't'],
+				Some("selected-model"),
+				Some("selected-model"),
+			),
+		] {
+			// Field 19 carries the dedicated Copilot message, whose field 1 is model.
+			let mut provider = proto::agent::ai_backend::Provider::decode(wire.as_slice()).unwrap();
+			provider.name = "copilot".into();
+			provider.model_override = generic.map(String::from);
+			provider.host_override = Some(proto::agent::ai_backend::HostOverride {
+				host: "copilot.example.com".into(),
+				port: 8443,
+			});
+			provider.path_prefix = Some("/inference".into());
+			let backend = proto::agent::Backend {
+				key: "test-ns/copilot".into(),
+				name: Some(proto::agent::ResourceName {
+					name: "copilot".into(),
+					namespace: "test-ns".into(),
+				}),
+				kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+					provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+						providers: vec![provider],
+					}],
+				})),
+				inline_policies: vec![],
+			};
+			let decoded = backend_with_policies_from_proto(&backend, &mut Diagnostics::default())?;
+			let Backend::AI(_, ai) = decoded.backend else {
+				panic!("expected AI backend")
+			};
+			let providers = ai.providers.iter();
+			let (provider, _) = providers.iter().next().unwrap();
+			let AIProvider::Copilot(copilot) = &provider.provider else {
+				panic!("expected Copilot provider")
+			};
+			assert_eq!(copilot.model_override.as_deref(), expected);
+			assert_eq!(provider.name.as_str(), "copilot");
+			assert_eq!(
+				provider.host_override,
+				Some(Target::Hostname(strng::new("copilot.example.com"), 8443))
+			);
+			assert_eq!(provider.path_prefix.as_deref(), Some("/inference"));
+		}
 		Ok(())
 	}
 

@@ -1,0 +1,57 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: copilot
+  namespace: agentgateway-system
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: copilot
+  namespace: agentgateway-system
+spec:
+  ai:
+    provider:
+      copilot: {}
+  policies:
+    auth:
+      secretRef:
+        name: copilot-token
+    ai:
+      routes:
+        /v1/chat/completions: Completions
+        /v1/messages: Messages
+        /v1/responses: Responses
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: copilot
+  namespace: agentgateway-system
+spec:
+  parentRefs:
+  - name: copilot
+  rules:
+  - matches:
+    - path:
+        type: Exact
+        value: /v1/chat/completions
+    - path:
+        type: Exact
+        value: /v1/messages
+    - path:
+        type: Exact
+        value: /v1/responses
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: copilot
