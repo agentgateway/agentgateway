@@ -13,7 +13,9 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
-use super::{CacheTokenConvention, LLMInfo, LLMResponse};
+use super::{
+	CacheTokenConvention, LLMInfo, LLMResponse, Provider, anthropic, bedrock, gemini, openai, vertex,
+};
 use crate::{ModelCatalogSource, apply, schema};
 
 mod model;
@@ -21,6 +23,64 @@ pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 const BUILTIN_CATALOG_JSON: &str = include_str!("../../../../../catalog/model-catalog.json");
+
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PricingTier {
+	Standard,
+	Flex,
+	Priority,
+	Reserved,
+}
+
+impl PricingTier {
+	/// Normalizes a provider-reported service tier. Unknown tiers are None.
+	pub fn detect(provider: &str, service_tier: &str) -> Option<Self> {
+		let tier = match (provider, service_tier) {
+			// https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/GenerateContentResponse#TrafficType
+			(provider, tier) if provider == vertex::Provider::NAME.as_str() => match tier {
+				"ON_DEMAND" => Self::Standard,
+				"ON_DEMAND_FLEX" => Self::Flex,
+				"ON_DEMAND_PRIORITY" => Self::Priority,
+				"PROVISIONED_THROUGHPUT" => Self::Reserved,
+				_ => return None,
+			},
+			// https://ai.google.dev/api/generate-content#ServiceTier
+			(provider, tier) if provider == gemini::Provider::NAME.as_str() => match tier {
+				"standard" => Self::Standard,
+				"flex" => Self::Flex,
+				"priority" => Self::Priority,
+				_ => return None,
+			},
+			// https://developers.openai.com/api/docs/guides/fast-mode
+			// https://developers.openai.com/api/docs/guides/flex-processing
+			// https://openai.com/api-scale-tier/
+			(provider, tier) if provider == openai::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"fast" | "priority" => Self::Priority,
+				"scale" => Self::Reserved,
+				_ => return None,
+			},
+			// https://platform.claude.com/docs/en/api/service-tiers
+			(provider, tier) if provider == anthropic::Provider::NAME.as_str() => match tier {
+				"standard" => Self::Standard,
+				"priority" => Self::Priority,
+				_ => return None,
+			},
+			// https://docs.aws.amazon.com/bedrock/latest/userguide/service-tiers-inference.html
+			(provider, tier) if provider == bedrock::Provider::NAME.as_str() => match tier {
+				"default" => Self::Standard,
+				"flex" => Self::Flex,
+				"priority" => Self::Priority,
+				"reserved" => Self::Reserved,
+				_ => return None,
+			},
+			_ => return None,
+		};
+		Some(tier)
+	}
+}
 
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
@@ -348,10 +408,15 @@ impl CatalogSnapshot {
 		};
 
 		let provisional_usage = usage_for(convention, resp, true, true);
+		let pricing_tier = resp
+			.service_tier
+			.as_deref()
+			.and_then(|tier| PricingTier::detect(provider, tier))
+			.unwrap_or(PricingTier::Standard);
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens);
+		let rates = entry.effective_rates(context_tokens, pricing_tier);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -386,6 +451,7 @@ impl CatalogSnapshot {
 				"provider": provider,
 				"model": model,
 				"status": status_name(CostLookupStatus::Exact),
+				"pricingTier": format!("{pricing_tier:?}"),
 				"cacheTokenConvention": cache_convention_name(convention),
 				"contextTokens": context_tokens,
 				"pricesCacheRead": prices_cache_read,
@@ -768,6 +834,39 @@ mod tests {
 	use rust_decimal::prelude::ToPrimitive;
 
 	use super::*;
+
+	#[test]
+	fn ordered_tiers_select_served_tier_and_context() {
+		let catalog = CatalogSnapshot::parse(
+			r#"{"providers":{"gcp.vertex_ai":{"models":{"m":{
+				"rates":{"input":"1"},
+				"tiers":[
+					{"serviceTier":"flex","rates":{"input":"0.5"}},
+					{"serviceTier":"flex","contextOver":200000,"rates":{"input":"0.75"}},
+					{"contextOver":200000,"rates":{"input":"2"}}
+				]
+			}}}}}"#,
+		)
+		.unwrap();
+		let price = |tokens: u64, served_tier: Option<&str>| {
+			catalog
+				.price(
+					vertex::Provider::NAME.as_str(),
+					"m",
+					&LLMResponse {
+						input_tokens: Some(tokens),
+						service_tier: served_tier.map(Into::into),
+						..Default::default()
+					},
+					CacheTokenConvention::InputIncludesCache,
+				)
+				.0
+		};
+		assert_eq!(price(300_000, Some("ON_DEMAND_FLEX")), Some(0.225));
+		assert_eq!(price(100_000, Some("ON_DEMAND_FLEX")), Some(0.05));
+		assert_eq!(price(300_000, Some("ON_DEMAND")), Some(0.6));
+		assert_eq!(price(100_000, None), Some(0.1));
+	}
 
 	fn test_catalog(input_rate: &str) -> String {
 		format!(

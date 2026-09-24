@@ -505,6 +505,13 @@
           "type": [
             "string",
             "null"
+          ],
+          "enum": [
+            "standard",
+            "flex",
+            "priority",
+            "reserved",
+            null
           ]
         },
         "timeToFirstToken": {

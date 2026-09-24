@@ -1551,9 +1551,9 @@ pub struct LLMContext {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_total_tokens: Option<u64>,
 	/// The service tier the provider served the request under.
-	#[dynamic(rename = "serviceTier")]
+	#[dynamic(rename = "serviceTier", with_value = "service_tier_to_value")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub service_tier: Option<Strng>,
+	pub service_tier: Option<llm::catalog::PricingTier>,
 	// For now, not exposed to CEL; only used to piggy-back this field for metrics.
 	#[serde(skip)]
 	#[dynamic(skip)]
@@ -1629,7 +1629,10 @@ impl LLMContext {
 			input_audio_tokens: resp.input_audio_tokens,
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
-			service_tier: resp.service_tier,
+			service_tier: resp
+				.service_tier
+				.as_deref()
+				.and_then(|tier| llm::catalog::PricingTier::detect(&value.request.provider, tier)),
 			response_model: resp.provider_model,
 			// Not always set
 			completion: resp.completion,
@@ -1789,6 +1792,16 @@ impl DynamicType for SecretStringValue<'_> {
 pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
 	Value::Dynamic(DynamicValue::new_owned(SecretStringValue(secret)))
 }
+fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
+	match c {
+		None => Value::Null,
+		Some(llm::catalog::PricingTier::Standard) => Value::String("standard".into()),
+		Some(llm::catalog::PricingTier::Flex) => Value::String("flex".into()),
+		Some(llm::catalog::PricingTier::Priority) => Value::String("priority".into()),
+		Some(llm::catalog::PricingTier::Reserved) => Value::String("reserved".into()),
+	}
+}
+
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
 }
@@ -2452,7 +2465,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
 			provider_total_tokens: Some(150),
-			service_tier: Some("default".into()),
+			service_tier: Some(llm::catalog::PricingTier::Standard),
 			first_token: None,
 			inter_chunk_latencies: llm::TokenGapSummary::default(),
 			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),

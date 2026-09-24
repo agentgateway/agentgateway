@@ -543,6 +543,9 @@ impl ResponseType for Response {
 			total_tokens: counts.map(|c| c.2),
 			reasoning_tokens: um.and_then(|u| u.thoughts_token_count),
 			cached_input_tokens: um.and_then(|u| u.cached_content_token_count),
+			service_tier: um
+				.and_then(|u| u.service_tier.as_deref().or(u.traffic_type.as_deref()))
+				.map(strng::new),
 			provider_model: self.0.model_version.as_deref().map(strng::new),
 			completion: log_content.completion.then(|| {
 				self
@@ -1110,7 +1113,8 @@ mod tests {
 				"candidatesTokenCount": 5,
 				"totalTokenCount": 17,
 				"thoughtsTokenCount": 2,
-				"cachedContentTokenCount": 3
+				"cachedContentTokenCount": 3,
+				"serviceTier": "flex"
 			},
 			"modelVersion": "gemini-2.5-flash"
 		}));
@@ -1124,6 +1128,7 @@ mod tests {
 		assert_eq!(llm.total_tokens, Some(17));
 		assert_eq!(llm.reasoning_tokens, Some(2));
 		assert_eq!(llm.cached_input_tokens, Some(3));
+		assert_eq!(llm.service_tier.as_deref(), Some("flex"));
 		assert_eq!(llm.provider_model.as_deref(), Some("gemini-2.5-flash"));
 		assert_eq!(llm.completion, Some(vec!["hello".to_string()]));
 		assert!(llm.output_messages.is_none());

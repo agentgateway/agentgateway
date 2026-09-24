@@ -68,6 +68,11 @@ pub fn passthrough_stream(
 				r.response.total_tokens = Some(total);
 				r.response.cached_input_tokens = um.cached_content_token_count;
 				r.response.reasoning_tokens = um.thoughts_token_count;
+				r.response.service_tier = um
+					.service_tier
+					.as_deref()
+					.or(um.traffic_type.as_deref())
+					.map(strng::new);
 			});
 		}
 		if log_content.completion {
@@ -1256,7 +1261,10 @@ pub mod to_completions {
 			model,
 			choices,
 			usage: resp.usage_metadata.as_ref().map(build_usage),
-			service_tier: None,
+			service_tier: resp
+				.usage_metadata
+				.as_ref()
+				.and_then(|um| um.service_tier.clone().or_else(|| um.traffic_type.clone())),
 			system_fingerprint: None,
 		}
 	}
@@ -1482,7 +1490,10 @@ pub mod to_completions {
 				choices,
 				created: self.created,
 				model: self.model_version.clone(),
-				service_tier: None,
+				service_tier: chunk
+					.usage_metadata
+					.as_ref()
+					.and_then(|um| um.service_tier.clone().or_else(|| um.traffic_type.clone())),
 				system_fingerprint: None,
 				object: "chat.completion.chunk".to_string(),
 				usage,
@@ -1545,6 +1556,11 @@ pub mod to_completions {
 					r.response.total_tokens = Some(total);
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
+					r.response.service_tier = um
+						.service_tier
+						.as_deref()
+						.or(um.traffic_type.as_deref())
+						.map(strng::new);
 				});
 			}
 

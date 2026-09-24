@@ -339,6 +339,10 @@ pub struct PromptFeedback {
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetadata {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub traffic_type: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_token_count: Option<u64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub candidates_token_count: Option<u64>,
