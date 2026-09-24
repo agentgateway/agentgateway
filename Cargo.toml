@@ -147,7 +147,7 @@ pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.8"
+pingora-pool = "0.9"
 ppp = "2.3"
 pprof-alloc = "0.5"
 # NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's

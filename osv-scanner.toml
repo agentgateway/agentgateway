@@ -1,4 +1,45 @@
 [[IgnoredVulns]]
 id = "RUSTSEC-2026-0189"
-ignoreUntil = 2027-01-20
-reason = "rmcp 0.10.0 is used only by legacy SSE tests; the affected Streamable HTTP server transport is neither exercised nor shipped"
+reason = "rmcp 0.10.0 is a test-only dev-dependency"
+
+[[IgnoredVulns]]
+id = "GHSA-9pj6-vhgr-3mwh"
+reason = "rmcp 0.10.0 is a test-only dev-dependency"
+
+[[IgnoredVulns]]
+id = "GHSA-9g45-5xwm-f3wc"
+reason = "rmcp 0.10.0 is a test-only dev-dependency"
+
+[[IgnoredVulns]]
+id = "GHSA-33f5-2c5q-wgwj"
+reason = "rmcp 0.10.0 is a test-only dev-dependency"
+
+[[IgnoredVulns]]
+id = "GHSA-7774-7vr3-cc8j"
+reason = "istio master pseudo-version misread as pre-1.x"
+
+[[IgnoredVulns]]
+id = "GHSA-856q-xv3c-7f2f"
+reason = "istio master pseudo-version misread as pre-1.x"
+
+[[IgnoredVulns]]
+id = "GHSA-hqxw-mm44-gc4r"
+reason = "istio master pseudo-version misread as pre-1.x"
+
+[[IgnoredVulns]]
+id = "GHSA-qcvw-82hh-gq38"
+reason = "istio master pseudo-version misread as pre-1.x"
+
+[[IgnoredVulns]]
+id = "GHSA-xwx5-5c9g-x68x"
+reason = "istio master pseudo-version misread as pre-1.x"
+
+# https://github.com/grpc/grpc-go/issues/9440#issuecomment-5819503605
+[[IgnoredVulns]]
+id = "GO-2026-6443"
+reason = "already fixed in grpc v1.84.0; advisory lists the wrong version"
+
+# https://github.com/grpc/grpc-go/issues/9440#issuecomment-5819503605
+[[IgnoredVulns]]
+id = "GHSA-2v4p-qf9q-27wj"
+reason = "already fixed in grpc v1.84.0; advisory lists the wrong version"
