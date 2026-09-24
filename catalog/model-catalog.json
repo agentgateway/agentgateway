@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-23T08:35:28Z"
+    "generatedAt": "2026-09-24T08:36:40Z"
   },
   "providers": {
     "anthropic": {
@@ -1890,6 +1890,44 @@
             "openai_completions",
             "openai_responses",
             "runtime"
+          ]
+        },
+        "openai.gpt-6-luna": {
+          "rates": {
+            "input": "0.11",
+            "output": "0.55",
+            "cacheRead": "0.011",
+            "cacheWrite": "0.1375"
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "0.22",
+                "output": "0.825",
+                "cacheRead": "0.022",
+                "cacheWrite": "0.275"
+              }
+            }
+          ]
+        },
+        "openai.gpt-6-sol": {
+          "rates": {
+            "input": "2.2",
+            "output": "11",
+            "cacheRead": "0.22",
+            "cacheWrite": "2.75"
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "4.4",
+                "output": "16.5",
+                "cacheRead": "0.44",
+                "cacheWrite": "5.5"
+              }
+            }
           ]
         },
         "openai.gpt-daybreak-blue-5.6-sol": {
@@ -4207,6 +4245,20 @@
             "cacheRead": "0.2"
           }
         },
+        "XiaomiMiMo/MiMo-V2.6-Flash": {
+          "rates": {
+            "input": "0.14",
+            "output": "0.28",
+            "cacheRead": "0.0028"
+          }
+        },
+        "XiaomiMiMo/MiMo-V2.6-Pro": {
+          "rates": {
+            "input": "0.435",
+            "output": "0.87",
+            "cacheRead": "0.0036"
+          }
+        },
         "deepseek-ai/DeepSeek-R1-0528": {
           "rates": {
             "input": "0.5",
@@ -4435,7 +4487,7 @@
         },
         "zai-org/GLM-5.3": {
           "rates": {
-            "input": "1.2",
+            "input": "0.9",
             "output": "4",
             "cacheRead": "0.2"
           }
@@ -4476,6 +4528,13 @@
             "input": "0.22",
             "output": "0.66",
             "cacheRead": "0.007"
+          }
+        },
+        "accounts/fireworks/models/ember-1": {
+          "rates": {
+            "input": "3",
+            "output": "15",
+            "cacheRead": "0.3"
           }
         },
         "accounts/fireworks/models/glm-5p3": {
