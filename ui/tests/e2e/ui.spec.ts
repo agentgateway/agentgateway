@@ -7,7 +7,9 @@ import {
 	mockXdsGateway,
 	populatedConfig,
 	sameOriginGatewayConfig,
-	xdsDump
+	xdsDump,
+	xdsDumpModels,
+	xdsWildcardModel
 } from './fixtures';
 
 const pages = [
@@ -570,7 +572,7 @@ test('XDS mode offers Client Setup with models from the config dump', async ({ p
 	await expect(page.getByText('This page configures the client only')).toBeVisible();
 	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
 
-	const modelInput = page.getByRole('textbox', { name: 'Model' });
+	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
 	await expect(modelInput).toHaveValue('gpt-4o');
 	await page.getByRole('button', { name: 'Show Model options' }).click();
 	const modelOptions = page.getByRole('listbox', { name: 'Model' });
@@ -593,6 +595,31 @@ test('XDS mode offers Client Setup with models from the config dump', async ({ p
 	);
 
 	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode Client Setup keeps a cleared model and asks for a concrete name', async ({
+	page
+}) => {
+	await mockXdsGateway(page, xdsDump([...xdsDumpModels(), xdsWildcardModel()]));
+	await page.goto('/llm/client-setup');
+	await page.getByLabel('Gateway base URL').fill('https://gw.example.com');
+
+	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
+	const summary = page.locator('.client-setup-summary');
+
+	await modelInput.fill('');
+	await modelInput.press('Escape');
+	await expect(modelInput).toHaveValue('');
+	await expect(summary).toContainText('No model selected');
+
+	await modelInput.fill('gpt-5-*');
+	await modelInput.press('Escape');
+	const specificModel = page.getByRole('textbox', { name: 'Specific model' });
+	await expect(specificModel).toBeVisible();
+	await expect(summary).toContainText('gpt-5-<model>');
+
+	await specificModel.fill('nano');
+	await expect(summary).toContainText('gpt-5-nano');
 });
 
 test('Client Setup hides client snippets until the gateway URL is set', async ({ page }) => {
