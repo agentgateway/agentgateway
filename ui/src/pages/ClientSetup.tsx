@@ -108,6 +108,7 @@ export function ClientSetupPage() {
 	const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
 	const [baseUrlTouched, setBaseUrlTouched] = useState(false);
 	const [model, setModel] = useState('');
+	const [modelTouched, setModelTouched] = useState(false);
 	const [specificModel, setSpecificModel] = useState('');
 	const [apiKeyMode, setApiKeyMode] = useState<'saved' | 'raw'>('saved');
 	const [selectedKey, setSelectedKey] = useState('');
@@ -115,7 +116,10 @@ export function ClientSetupPage() {
 	const [selectedIntegration, setSelectedIntegration] = useState('curl');
 
 	const selectedModel = dumpMode
-		? model || (dumpModelNames[0] ?? '')
+		? // An edited field keeps what was typed, including an empty value.
+			modelTouched
+			? model
+			: (dumpModelNames[0] ?? '')
 		: modelOptions.some(item => item.name === model)
 			? model
 			: (modelOptions[0]?.name ?? '');
@@ -140,7 +144,7 @@ export function ClientSetupPage() {
 	const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
 	// In XDS mode the name is typed or picked directly, so there is no model config to resolve.
 	const requestModel = dumpMode
-		? selectedModel.trim()
+		? dumpRequestModel(selectedModel, specificModel)
 		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
@@ -211,7 +215,10 @@ export function ClientSetupPage() {
 								ariaLabel="Model"
 								value={selectedModel}
 								options={dumpModelNames}
-								onChange={setModel}
+								onChange={value => {
+									setModelTouched(true);
+									setModel(value);
+								}}
 								placeholder="Select or type a model"
 								emptyText="No models in the dump"
 							/>
@@ -232,6 +239,24 @@ export function ClientSetupPage() {
 							/>
 						)}
 					</FieldGroup>
+					{dumpMode && isWildcardModelName(selectedModel) ? (
+						<Field
+							label="Specific model"
+							hint="The dump lists a pattern; clients have to request a concrete model."
+						>
+							<div className="target-resolved-composite">
+								{wildcardModelPrefix(selectedModel) ? (
+									<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
+								) : null}
+								<input
+									aria-label="Specific model"
+									value={specificModel}
+									onChange={event => setSpecificModel(event.target.value)}
+									placeholder="Model name"
+								/>
+							</div>
+						</Field>
+					) : null}
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
 							<div className="target-resolved-composite">
@@ -318,6 +343,18 @@ export function ClientSetupPage() {
 			</section>
 		</div>
 	);
+}
+
+/**
+ * XDS mode has no model config to resolve against. A dump name can be a pattern
+ * (`gpt-*`, `*-latest` or `*`), and a client cannot request a pattern, so the
+ * concrete part is typed in and appended to the prefix, as in standalone mode.
+ */
+function dumpRequestModel(selectedModel: string, specificModel: string) {
+	if (!isWildcardModelName(selectedModel)) return selectedModel.trim();
+	const prefix = wildcardModelPrefix(selectedModel);
+	const suffix = specificModel.trim();
+	return suffix ? `${prefix}${suffix}` : `${prefix}<model>`;
 }
 
 function clientSetupRequestModel(
