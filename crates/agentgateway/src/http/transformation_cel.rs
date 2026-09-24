@@ -64,6 +64,8 @@ pub struct TransformerConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub replace: Option<cel::Expression>,
 	/// CEL expression that computes a replacement body.
+	/// A null result leaves the current body unchanged, matching a null header value.
+	/// An evaluation error also leaves the body unchanged.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub body: Option<cel::Expression>,
@@ -77,21 +79,28 @@ pub struct TransformerConfig {
 	pub metadata: Vec<(Strng, cel::Expression)>,
 }
 
+fn body_from_value(v: cel::Value<'_>) -> anyhow::Result<Option<Bytes>> {
+	// Null means "do not replace", the same contract header set uses for a null value.
+	// value_as_byte_or_json would otherwise serialize null as the four bytes `null`.
+	if matches!(v, cel::Value::Null) {
+		return Ok(None);
+	}
+	cel::value_as_byte_or_json(v).map(Some)
+}
+
 fn eval_body(
 	r: &RequestOrResponse,
 	expr: &Expression,
 	request: Option<&cel::RequestSnapshot>,
-) -> anyhow::Result<Bytes> {
+) -> anyhow::Result<Option<Bytes>> {
 	match r {
 		RequestOrResponse::Request(r) => {
 			let exec = cel::Executor::new_request(r);
-			let v = exec.eval(expr)?;
-			cel::value_as_byte_or_json(v)
+			body_from_value(exec.eval(expr)?)
 		},
 		RequestOrResponse::Response(r) => {
 			let exec = cel::Executor::new_response(request, r);
-			let v = exec.eval(expr)?;
-			cel::value_as_byte_or_json(v)
+			body_from_value(exec.eval(expr)?)
 		},
 	}
 }
@@ -252,9 +261,16 @@ impl Transformation {
 			r.headers().remove(k);
 		}
 		if let Some(b) = &cfg.body {
-			// If it fails, set an empty body
-			let b = eval_body(&r, b, request).unwrap_or_default();
-			r.replace_body_bytes(b);
+			match eval_body(&r, b, request) {
+				Ok(Some(bytes)) => r.replace_body_bytes(bytes),
+				// Null leaves the upstream body. An error must not wipe it either:
+				// unwrap_or_default() used to replace a failed eval with an empty body
+				// while status and upstream headers stayed, which dropped streamed completions.
+				Ok(None) => {},
+				Err(e) => {
+					debug!("transformation body expression failed, leaving body unchanged: {e}");
+				},
+			}
 		}
 	}
 
