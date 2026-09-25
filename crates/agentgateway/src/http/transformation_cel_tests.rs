@@ -50,6 +50,94 @@ async fn test_transformation_body() {
 }
 
 #[tokio::test]
+async fn test_transformation_response_body_null_leaves_upstream() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": r#"response.code == 429 ? "refused" : null"#,
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("content-type", "application/json")
+		.header("content-length", "14")
+		.header("x-amzn-requestid", "abc")
+		.body(crate::http::Body::from("upstream-body"))
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	xfm.apply_response(&mut resp, Some(&snap));
+	assert_eq!(resp.headers().get("content-length").unwrap(), "14");
+	assert_eq!(resp.headers().get("x-amzn-requestid").unwrap(), "abc");
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"upstream-body");
+}
+
+#[tokio::test]
+async fn test_transformation_response_body_match_replaces() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": r#"response.code == 429 ? "refused" : null"#,
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(429)
+		.header("content-type", "application/json")
+		.header("content-length", "0")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	xfm.apply_response(&mut resp, Some(&snap));
+	assert!(resp.headers().get("content-length").is_none());
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"refused");
+}
+
+#[tokio::test]
+async fn test_transformation_response_body_error_leaves_upstream() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": "1 / 0",
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("content-length", "14")
+		.body(crate::http::Body::from("upstream-body"))
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	xfm.apply_response(&mut resp, Some(&snap));
+	assert_eq!(resp.headers().get("content-length").unwrap(), "14");
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"upstream-body");
+}
+
+#[tokio::test]
 async fn test_transformation_form_urlencoded_body_merge() {
 	let mut req = ::http::Request::builder()
 		.method("POST")
