@@ -35,6 +35,14 @@ pub struct ConfigResource {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourcesResponse {
 	pub resources: Vec<ConfigResource>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub generation: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Snapshot {
+	pub resources: Vec<ConfigResource>,
+	pub generation: i64,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,6 +53,8 @@ pub enum ConfigResourceError {
 	Conflict(String),
 	#[error("{0}")]
 	NotFound(String),
+	#[error("config store changed during validation (expected generation {expected}, found {found})")]
+	GenerationConflict { expected: i64, found: i64 },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -220,6 +230,10 @@ impl ConfigResourceStore {
 		&self,
 		kind: Option<ConfigResourceKind>,
 	) -> anyhow::Result<Vec<ConfigResource>> {
+		Ok(self.snapshot(kind).await?.resources)
+	}
+
+	pub async fn snapshot(&self, kind: Option<ConfigResourceKind>) -> anyhow::Result<Snapshot> {
 		match &self.pool {
 			DatabasePool::Sqlite(pool) => list_sqlite(pool, kind).await,
 			DatabasePool::Postgres(pool) => list_postgres(pool, kind).await,
@@ -229,13 +243,33 @@ impl ConfigResourceStore {
 	pub(crate) async fn upsert_prepared(
 		&self,
 		prepared: Vec<PreparedResource>,
+		expected_generation: Option<i64>,
 	) -> anyhow::Result<ConfigResourcesResponse> {
-		let resources = match &self.pool {
-			DatabasePool::Sqlite(pool) => upsert_sqlite(pool, prepared).await?,
+		if prepared.is_empty() {
+			let generation = self.snapshot(None).await?.generation;
+			if let Some(expected) = expected_generation
+				&& expected != generation
+			{
+				return Err(
+					ConfigResourceError::GenerationConflict {
+						expected,
+						found: generation,
+					}
+					.into(),
+				);
+			}
+			return Ok(ConfigResourcesResponse {
+				resources: Vec::new(),
+				generation: Some(generation),
+			});
+		}
+		let (resources, generation) = match &self.pool {
+			DatabasePool::Sqlite(pool) => upsert_sqlite(pool, prepared, expected_generation).await?,
 			DatabasePool::Postgres(pool) => {
 				upsert_postgres(
 					pool,
 					prepared,
+					expected_generation,
 					self
 						.notification_id
 						.as_deref()
@@ -247,7 +281,10 @@ impl ConfigResourceStore {
 		if !resources.is_empty() {
 			self.notify_changed();
 		}
-		Ok(ConfigResourcesResponse { resources })
+		Ok(ConfigResourcesResponse {
+			resources,
+			generation: Some(generation),
+		})
 	}
 
 	pub(crate) async fn rename_prepared(
@@ -255,12 +292,20 @@ impl ConfigResourceStore {
 		previous_kind: ConfigResourceKind,
 		previous_id: &str,
 		prepared: PreparedResource,
+		expected_generation: Option<i64>,
 	) -> anyhow::Result<ConfigResourcesResponse> {
 		validate_id(previous_id)?;
 		validate_id(&prepared.id)?;
-		let resource = match &self.pool {
+		let (resource, generation) = match &self.pool {
 			DatabasePool::Sqlite(pool) => {
-				rename_sqlite(pool, previous_kind, previous_id, prepared).await?
+				rename_sqlite(
+					pool,
+					previous_kind,
+					previous_id,
+					prepared,
+					expected_generation,
+				)
+				.await?
 			},
 			DatabasePool::Postgres(pool) => {
 				rename_postgres(
@@ -268,6 +313,7 @@ impl ConfigResourceStore {
 					previous_kind,
 					previous_id,
 					prepared,
+					expected_generation,
 					self
 						.notification_id
 						.as_deref()
@@ -279,18 +325,25 @@ impl ConfigResourceStore {
 		self.notify_changed();
 		Ok(ConfigResourcesResponse {
 			resources: vec![resource],
+			generation: Some(generation),
 		})
 	}
 
-	pub async fn delete(&self, kind: ConfigResourceKind, id: &str) -> anyhow::Result<()> {
+	pub async fn delete(
+		&self,
+		kind: ConfigResourceKind,
+		id: &str,
+		expected_generation: Option<i64>,
+	) -> anyhow::Result<i64> {
 		validate_id(id)?;
 		let deleted = match &self.pool {
-			DatabasePool::Sqlite(pool) => delete_sqlite(pool, kind, id).await?,
+			DatabasePool::Sqlite(pool) => delete_sqlite(pool, kind, id, expected_generation).await?,
 			DatabasePool::Postgres(pool) => {
 				delete_postgres(
 					pool,
 					kind,
 					id,
+					expected_generation,
 					self
 						.notification_id
 						.as_deref()
@@ -299,13 +352,13 @@ impl ConfigResourceStore {
 				.await?
 			},
 		};
-		if !deleted {
+		let Some(generation) = deleted else {
 			return Err(
 				ConfigResourceError::NotFound(format!("config resource not found: {kind}/{id}")).into(),
 			);
-		}
+		};
 		self.notify_changed();
-		Ok(())
+		Ok(generation)
 	}
 
 	fn notify_changed(&self) {
@@ -1460,7 +1513,11 @@ fn string_field(
 async fn list_sqlite(
 	pool: &SqlitePool,
 	kind: Option<ConfigResourceKind>,
-) -> anyhow::Result<Vec<ConfigResource>> {
+) -> anyhow::Result<Snapshot> {
+	let mut tx = pool.begin().await?;
+	let generation: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
+		.fetch_one(&mut *tx)
+		.await?;
 	let rows = if let Some(kind) = kind {
 		sqlx::query(
 			"SELECT kind, id, value_json, revision, created_at, updated_at \
@@ -1469,7 +1526,7 @@ async fn list_sqlite(
 			 ORDER BY id",
 		)
 		.bind(kind.as_str())
-		.fetch_all(pool)
+		.fetch_all(&mut *tx)
 		.await?
 	} else {
 		sqlx::query(
@@ -1478,16 +1535,28 @@ async fn list_sqlite(
 			 WHERE deleted_at IS NULL \
 			 ORDER BY kind, id",
 		)
-		.fetch_all(pool)
+		.fetch_all(&mut *tx)
 		.await?
 	};
-	rows.into_iter().map(sqlite_row_to_resource).collect()
+	tx.commit().await?;
+	let resources = rows
+		.into_iter()
+		.map(sqlite_row_to_resource)
+		.collect::<anyhow::Result<Vec<_>>>()?;
+	Ok(Snapshot {
+		resources,
+		generation,
+	})
 }
 
 async fn list_postgres(
 	pool: &PgPool,
 	kind: Option<ConfigResourceKind>,
-) -> anyhow::Result<Vec<ConfigResource>> {
+) -> anyhow::Result<Snapshot> {
+	let mut tx = pool.begin().await?;
+	let generation: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
+		.fetch_one(&mut *tx)
+		.await?;
 	let rows = if let Some(kind) = kind {
 		sqlx::query(
 			"SELECT kind, id, value_json, revision, created_at, updated_at \
@@ -1496,7 +1565,7 @@ async fn list_postgres(
 			 ORDER BY id",
 		)
 		.bind(kind.as_str())
-		.fetch_all(pool)
+		.fetch_all(&mut *tx)
 		.await?
 	} else {
 		sqlx::query(
@@ -1505,17 +1574,98 @@ async fn list_postgres(
 			 WHERE deleted_at IS NULL \
 			 ORDER BY kind, id",
 		)
-		.fetch_all(pool)
+		.fetch_all(&mut *tx)
 		.await?
 	};
-	rows.into_iter().map(postgres_row_to_resource).collect()
+	tx.commit().await?;
+	let resources = rows
+		.into_iter()
+		.map(postgres_row_to_resource)
+		.collect::<anyhow::Result<Vec<_>>>()?;
+	Ok(Snapshot {
+		resources,
+		generation,
+	})
+}
+
+/// sqlx issues a deferred `BEGIN`, and SQLite fails a deferred transaction's lock upgrade with
+/// `SQLITE_BUSY` without consulting `busy_timeout`. Take the write lock up front instead.
+const SQLITE_BEGIN_IMMEDIATE: &str = "BEGIN IMMEDIATE";
+
+async fn bump_generation_sqlite(
+	tx: &mut Transaction<'_, Sqlite>,
+	expected: Option<i64>,
+) -> anyhow::Result<i64> {
+	let bumped: Option<i64> = sqlx::query_scalar(
+		"UPDATE agw_config_meta SET generation = generation + 1 \
+		 WHERE id = 1 AND (? IS NULL OR generation = ?) \
+		 RETURNING generation",
+	)
+	.bind(expected)
+	.bind(expected)
+	.fetch_optional(&mut **tx)
+	.await?;
+	match bumped {
+		Some(generation) => Ok(generation),
+		None => Err(generation_conflict_sqlite(tx, expected).await),
+	}
+}
+
+async fn generation_conflict_sqlite(
+	tx: &mut Transaction<'_, Sqlite>,
+	expected: Option<i64>,
+) -> anyhow::Error {
+	let found: anyhow::Result<i64> =
+		sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
+			.fetch_one(&mut **tx)
+			.await
+			.map_err(Into::into);
+	match found {
+		Ok(found) => ConfigResourceError::GenerationConflict {
+			expected: expected.unwrap_or(found),
+			found,
+		}
+		.into(),
+		Err(err) => err,
+	}
+}
+
+async fn bump_generation_postgres(
+	tx: &mut Transaction<'_, Postgres>,
+	expected: Option<i64>,
+) -> anyhow::Result<i64> {
+	let bumped: Option<i64> = sqlx::query_scalar(
+		"UPDATE agw_config_meta SET generation = generation + 1 \
+		 WHERE id = 1 AND ($1::BIGINT IS NULL OR generation = $1) \
+		 RETURNING generation",
+	)
+	.bind(expected)
+	.fetch_optional(&mut **tx)
+	.await?;
+	match bumped {
+		Some(generation) => Ok(generation),
+		None => {
+			let found: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
+				.fetch_one(&mut **tx)
+				.await?;
+			Err(
+				ConfigResourceError::GenerationConflict {
+					expected: expected.unwrap_or(found),
+					found,
+				}
+				.into(),
+			)
+		},
+	}
 }
 
 async fn upsert_sqlite(
 	pool: &SqlitePool,
 	prepared: Vec<PreparedResource>,
-) -> anyhow::Result<Vec<ConfigResource>> {
-	let mut tx = pool.begin().await?;
+	expected_generation: Option<i64>,
+) -> anyhow::Result<(Vec<ConfigResource>, i64)> {
+	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
+	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let mut changed = Vec::with_capacity(prepared.len());
 	for PreparedResource { kind, id, value } in prepared {
 		validate_id(&id)?;
@@ -1547,15 +1697,17 @@ async fn upsert_sqlite(
 		}
 	}
 	tx.commit().await?;
-	Ok(resources)
+	Ok((resources, generation))
 }
 
 async fn upsert_postgres(
 	pool: &PgPool,
 	prepared: Vec<PreparedResource>,
+	expected_generation: Option<i64>,
 	notification_id: &str,
-) -> anyhow::Result<Vec<ConfigResource>> {
+) -> anyhow::Result<(Vec<ConfigResource>, i64)> {
 	let mut tx = pool.begin().await?;
+	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let mut changed = Vec::with_capacity(prepared.len());
 	for PreparedResource { kind, id, value } in prepared {
 		validate_id(&id)?;
@@ -1589,7 +1741,7 @@ async fn upsert_postgres(
 		notify_postgres(&mut tx, notification_id).await?;
 	}
 	tx.commit().await?;
-	Ok(resources)
+	Ok((resources, generation))
 }
 
 async fn rename_sqlite(
@@ -1597,14 +1749,16 @@ async fn rename_sqlite(
 	previous_kind: ConfigResourceKind,
 	previous_id: &str,
 	prepared: PreparedResource,
-) -> anyhow::Result<ConfigResource> {
+	expected_generation: Option<i64>,
+) -> anyhow::Result<(ConfigResource, i64)> {
 	if previous_kind != prepared.kind || previous_id == prepared.id {
 		return Err(
 			ConfigResourceError::InvalidRequest("config resource rename requires a new ID".to_string())
 				.into(),
 		);
 	}
-	let mut tx = pool.begin().await?;
+	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
+	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let now = Utc::now().to_rfc3339();
 	if !soft_delete_sqlite(&mut tx, previous_kind, previous_id, &now).await? {
 		return Err(
@@ -1646,7 +1800,7 @@ async fn rename_sqlite(
 		.await?
 		.ok_or_else(|| anyhow::anyhow!("renamed config resource was not found"))?;
 	tx.commit().await?;
-	Ok(resource)
+	Ok((resource, generation))
 }
 
 async fn rename_postgres(
@@ -1654,8 +1808,9 @@ async fn rename_postgres(
 	previous_kind: ConfigResourceKind,
 	previous_id: &str,
 	prepared: PreparedResource,
+	expected_generation: Option<i64>,
 	notification_id: &str,
-) -> anyhow::Result<ConfigResource> {
+) -> anyhow::Result<(ConfigResource, i64)> {
 	if previous_kind != prepared.kind || previous_id == prepared.id {
 		return Err(
 			ConfigResourceError::InvalidRequest("config resource rename requires a new ID".to_string())
@@ -1663,6 +1818,7 @@ async fn rename_postgres(
 		);
 	}
 	let mut tx = pool.begin().await?;
+	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let now = Utc::now();
 	if !soft_delete_postgres(&mut tx, previous_kind, previous_id, now).await? {
 		return Err(
@@ -1704,19 +1860,23 @@ async fn rename_postgres(
 		.ok_or_else(|| anyhow::anyhow!("renamed config resource was not found"))?;
 	notify_postgres(&mut tx, notification_id).await?;
 	tx.commit().await?;
-	Ok(resource)
+	Ok((resource, generation))
 }
 
 async fn delete_sqlite(
 	pool: &SqlitePool,
 	kind: ConfigResourceKind,
 	id: &str,
-) -> anyhow::Result<bool> {
-	let mut tx = pool.begin().await?;
+	expected_generation: Option<i64>,
+) -> anyhow::Result<Option<i64>> {
+	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
+	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let now = Utc::now().to_rfc3339();
-	let deleted = soft_delete_sqlite(&mut tx, kind, id, &now).await?;
+	if !soft_delete_sqlite(&mut tx, kind, id, &now).await? {
+		return Ok(None);
+	}
 	tx.commit().await?;
-	Ok(deleted)
+	Ok(Some(generation))
 }
 
 async fn soft_delete_sqlite(
@@ -1743,16 +1903,18 @@ async fn delete_postgres(
 	pool: &PgPool,
 	kind: ConfigResourceKind,
 	id: &str,
+	expected_generation: Option<i64>,
 	notification_id: &str,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<Option<i64>> {
 	let mut tx = pool.begin().await?;
+	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let now = Utc::now();
-	let deleted = soft_delete_postgres(&mut tx, kind, id, now).await?;
-	if deleted {
-		notify_postgres(&mut tx, notification_id).await?;
+	if !soft_delete_postgres(&mut tx, kind, id, now).await? {
+		return Ok(None);
 	}
+	notify_postgres(&mut tx, notification_id).await?;
 	tx.commit().await?;
-	Ok(deleted)
+	Ok(Some(generation))
 }
 
 async fn soft_delete_postgres(
@@ -1864,6 +2026,13 @@ CREATE TABLE IF NOT EXISTS agw_config_resources (
 
 CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
 	ON agw_config_resources(kind, updated_at);
+
+CREATE TABLE IF NOT EXISTS agw_config_meta (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	generation INTEGER NOT NULL
+);
+
+INSERT OR IGNORE INTO agw_config_meta (id, generation) VALUES (1, 1);
 "#;
 
 const POSTGRES_SCHEMA: &str = r#"
@@ -1880,6 +2049,13 @@ CREATE TABLE IF NOT EXISTS agw_config_resources (
 
 CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
 	ON agw_config_resources(kind, updated_at);
+
+CREATE TABLE IF NOT EXISTS agw_config_meta (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	generation BIGINT NOT NULL
+);
+
+INSERT INTO agw_config_meta (id, generation) VALUES (1, 1) ON CONFLICT (id) DO NOTHING;
 "#;
 
 const POSTGRES_CHANGE_CHANNEL: &str = "agentgateway_config_changed";
@@ -1899,6 +2075,231 @@ mod tests {
 			created_at: Utc::now(),
 			updated_at: Utc::now(),
 		}
+	}
+
+	fn test_provider(id: &str) -> PreparedResource {
+		PreparedResource {
+			kind: ConfigResourceKind::LlmProvider,
+			id: id.to_string(),
+			value: json!({"name": id, "provider": "openAI"}),
+		}
+	}
+
+	/// `sqlite::memory:` gives each pooled connection its own database, so a second writer would not
+	/// see the first one's rows.
+	async fn file_backed_store(dir: &tempfile::TempDir) -> ConfigResourceStore {
+		let url = format!("sqlite://{}", dir.path().join("config.db").display());
+		ConfigResourceStore::connect(&url, None)
+			.await
+			.expect("connect config resource store")
+	}
+
+	fn is_generation_conflict(err: &anyhow::Error) -> bool {
+		matches!(
+			err.downcast_ref::<ConfigResourceError>(),
+			Some(ConfigResourceError::GenerationConflict { .. })
+		)
+	}
+
+	#[tokio::test]
+	async fn rejects_a_write_pinned_to_a_stale_generation() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let snapshot = store.snapshot(None).await.expect("snapshot");
+
+		store
+			.upsert_prepared(vec![test_provider("a")], Some(snapshot.generation))
+			.await
+			.expect("write against a current generation");
+
+		let err = store
+			.upsert_prepared(vec![test_provider("b")], Some(snapshot.generation))
+			.await
+			.expect_err("the same generation is now stale");
+		assert!(is_generation_conflict(&err), "unexpected error: {err}");
+
+		let after = store.snapshot(None).await.expect("snapshot");
+		assert_eq!(
+			after
+				.resources
+				.iter()
+				.map(|resource| resource.id.as_str())
+				.collect::<Vec<_>>(),
+			vec!["a"],
+			"a rejected write must leave nothing behind"
+		);
+		assert_eq!(after.generation, snapshot.generation + 1);
+	}
+
+	#[tokio::test]
+	async fn concurrent_writers_cannot_both_commit_one_generation() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let generation = store.snapshot(None).await.expect("snapshot").generation;
+
+		let (first, second) = {
+			let (one, two) = (store.clone(), store.clone());
+			tokio::join!(
+				tokio::spawn(async move {
+					one
+						.upsert_prepared(vec![test_provider("a")], Some(generation))
+						.await
+				}),
+				tokio::spawn(async move {
+					two
+						.upsert_prepared(vec![test_provider("b")], Some(generation))
+						.await
+				}),
+			)
+		};
+		let results = [first.expect("join"), second.expect("join")];
+
+		assert_eq!(
+			results.iter().filter(|result| result.is_ok()).count(),
+			1,
+			"exactly one writer may commit a given generation"
+		);
+		let err = results
+			.iter()
+			.find_map(|result| result.as_ref().err())
+			.expect("one writer must lose");
+		assert!(is_generation_conflict(err), "unexpected error: {err}");
+
+		let after = store.snapshot(None).await.expect("snapshot");
+		assert_eq!(after.resources.len(), 1, "only the winner's write landed");
+		assert_eq!(after.generation, generation + 1);
+	}
+
+	#[tokio::test]
+	async fn unpinned_writes_still_advance_the_generation() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let start = store.snapshot(None).await.expect("snapshot").generation;
+
+		store
+			.upsert_prepared(vec![test_provider("a")], None)
+			.await
+			.expect("unpinned upsert");
+		store
+			.rename_prepared(
+				ConfigResourceKind::LlmProvider,
+				"a",
+				test_provider("b"),
+				None,
+			)
+			.await
+			.expect("unpinned rename");
+		store
+			.delete(ConfigResourceKind::LlmProvider, "b", None)
+			.await
+			.expect("unpinned delete");
+
+		assert_eq!(
+			store.snapshot(None).await.expect("snapshot").generation,
+			start + 3,
+			"every mutation advances the generation"
+		);
+	}
+
+	#[tokio::test]
+	async fn delete_reports_the_generation_it_produced() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let created = store
+			.upsert_prepared(vec![test_provider("a")], None)
+			.await
+			.expect("create resource")
+			.generation
+			.expect("upsert reports a generation");
+
+		let deleted = store
+			.delete(ConfigResourceKind::LlmProvider, "a", Some(created))
+			.await
+			.expect("delete pinned to the current generation");
+		assert_eq!(deleted, created + 1);
+		assert_eq!(
+			store.snapshot(None).await.expect("snapshot").generation,
+			deleted,
+			"the reported generation must be the one a later write can pin to"
+		);
+	}
+
+	#[tokio::test]
+	async fn an_empty_upsert_still_answers_the_pin() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let generation = store.snapshot(None).await.expect("snapshot").generation;
+
+		let response = store
+			.upsert_prepared(Vec::new(), Some(generation))
+			.await
+			.expect("an empty write against a current pin is a no-op");
+		assert_eq!(response.generation, Some(generation));
+		assert!(response.resources.is_empty());
+
+		let err = store
+			.upsert_prepared(Vec::new(), Some(generation - 1))
+			.await
+			.expect_err("a stale pin must not be silently accepted");
+		assert!(is_generation_conflict(&err), "unexpected error: {err}");
+
+		assert_eq!(
+			store.snapshot(None).await.expect("snapshot").generation,
+			generation,
+			"an empty write must not consume a generation"
+		);
+	}
+
+	#[tokio::test]
+	async fn a_delete_that_matches_nothing_does_not_advance_the_generation() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let generation = store.snapshot(None).await.expect("snapshot").generation;
+
+		let err = store
+			.delete(ConfigResourceKind::LlmProvider, "missing", None)
+			.await
+			.expect_err("deleting a missing resource fails");
+		assert!(err.to_string().contains("not found"), "unexpected: {err}");
+		assert_eq!(
+			store.snapshot(None).await.expect("snapshot").generation,
+			generation,
+			"a rolled back delete must not consume a generation"
+		);
+	}
+
+	#[tokio::test]
+	async fn seeds_the_generation_for_databases_written_before_it_existed() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let url = format!("sqlite://{}", dir.path().join("config.db").display());
+		let store = ConfigResourceStore::connect(&url, None)
+			.await
+			.expect("connect config resource store");
+		store
+			.upsert_prepared(vec![test_provider("a")], None)
+			.await
+			.expect("write a resource");
+
+		let DatabasePool::Sqlite(pool) = store.pool() else {
+			panic!("expected a sqlite pool");
+		};
+		sqlx::query("DROP TABLE agw_config_meta")
+			.execute(&pool)
+			.await
+			.expect("drop the generation counter");
+		drop(store);
+		pool.close().await;
+
+		let reopened = ConfigResourceStore::connect(&url, None)
+			.await
+			.expect("reconnect config resource store");
+		let snapshot = reopened.snapshot(None).await.expect("snapshot");
+		assert_eq!(snapshot.generation, 1, "the counter seeds on startup");
+		assert_eq!(
+			snapshot.resources.len(),
+			1,
+			"seeding must not disturb existing resources"
+		);
 	}
 
 	#[test]
@@ -2038,11 +2439,14 @@ mod tests {
 			.await
 			.expect("connect config resource store");
 		store
-			.upsert_prepared(vec![PreparedResource {
-				kind: ConfigResourceKind::LlmProvider,
-				id: "old".to_string(),
-				value: json!({"name": "old", "provider": "openAI"}),
-			}])
+			.upsert_prepared(
+				vec![PreparedResource {
+					kind: ConfigResourceKind::LlmProvider,
+					id: "old".to_string(),
+					value: json!({"name": "old", "provider": "openAI"}),
+				}],
+				None,
+			)
 			.await
 			.expect("create resource");
 		let response = store
@@ -2054,6 +2458,7 @@ mod tests {
 					id: "new".to_string(),
 					value: json!({"name": "new", "provider": "openAI"}),
 				},
+				None,
 			)
 			.await
 			.expect("rename resource");
@@ -2070,11 +2475,14 @@ mod tests {
 		);
 
 		store
-			.upsert_prepared(vec![PreparedResource {
-				kind: ConfigResourceKind::LlmProvider,
-				id: "other".to_string(),
-				value: json!({"name": "other", "provider": "openAI"}),
-			}])
+			.upsert_prepared(
+				vec![PreparedResource {
+					kind: ConfigResourceKind::LlmProvider,
+					id: "other".to_string(),
+					value: json!({"name": "other", "provider": "openAI"}),
+				}],
+				None,
+			)
 			.await
 			.expect("create rename target");
 		let err = store
@@ -2086,6 +2494,7 @@ mod tests {
 					id: "other".to_string(),
 					value: json!({"name": "other", "provider": "anthropic"}),
 				},
+				None,
 			)
 			.await
 			.expect_err("rename collision should fail");

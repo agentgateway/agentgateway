@@ -1,4 +1,4 @@
-import { requestJson } from '@/api/base';
+import { ApiError, requestJson } from '@/api/base';
 import type { LocalAttachedRoute, LocalAttachedTCPRoute } from '@/gateway-config';
 import type {
 	LlmConfig,
@@ -72,17 +72,59 @@ export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKin
 
 export interface ConfigResourcesResponse<K extends ConfigResourceKind = ConfigResourceKind> {
 	resources: ConfigResource<K>[];
+	generation?: number | null;
 }
 
-export function listConfigResources() {
-	return requestJson<ConfigResourcesResponse>('/api/config/resources');
+export class ConfigConflictError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'ConfigConflictError';
+	}
+}
+
+let observedGeneration: number | null = null;
+
+function rememberGeneration(response: { generation?: number | null }) {
+	if (typeof response.generation === 'number') observedGeneration = response.generation;
+	return response;
+}
+
+export function forgetConfigGeneration() {
+	observedGeneration = null;
+}
+
+async function writeConfig<T>(path: string, init: RequestInit): Promise<T> {
+	const pin: Record<string, string> =
+		observedGeneration === null ? {} : { 'If-Match': String(observedGeneration) };
+	try {
+		const response = await requestJson<T>(path, {
+			...init,
+			headers: { ...((init.headers as Record<string, string>) ?? {}), ...pin }
+		});
+		rememberGeneration(response as { generation?: number | null });
+		return response;
+	} catch (error) {
+		if (error instanceof ApiError && error.status === 409) {
+			// Drop the pin so the next write revalidates server-side rather than wedging on a
+			// generation this client cannot refresh by itself.
+			observedGeneration = null;
+			throw new ConfigConflictError(error.message);
+		}
+		throw error;
+	}
+}
+
+export async function listConfigResources() {
+	const response = await requestJson<ConfigResourcesResponse>('/api/config/resources');
+	rememberGeneration(response);
+	return response;
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(
 	kind: K,
 	resources: ConfigResourceValue<K>[]
 ) {
-	return requestJson<ConfigResourcesResponse<K>>(
+	return writeConfig<ConfigResourcesResponse<K>>(
 		`/api/config/resources/${encodeURIComponent(kind)}`,
 		{
 			method: 'PUT',
@@ -98,7 +140,7 @@ export function updateConfigResource<K extends ConfigResourceKind>(
 	id: string,
 	value: ConfigResourceValue<K>
 ) {
-	return requestJson<ConfigResourcesResponse<K>>(
+	return writeConfig<ConfigResourcesResponse<K>>(
 		`/api/config/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
 		{
 			method: 'PUT',
@@ -108,7 +150,7 @@ export function updateConfigResource<K extends ConfigResourceKind>(
 }
 
 export function deleteConfigResource(kind: ConfigResourceKind, id: string) {
-	return requestJson<{ status: string; message: string }>(
+	return writeConfig<{ status: string; message: string; generation?: number | null }>(
 		`/api/config/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
 		{ method: 'DELETE' }
 	);
