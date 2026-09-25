@@ -138,7 +138,7 @@ export function CostsPage() {
 			) : null}
 			{message ? <StatusBanner state="ok" title={message} /> : null}
 			<Panel>
-				<div className="section-heading-row">
+				<div className="editor-title">
 					<div>
 						<h3>Catalog sources</h3>
 						<p>
@@ -181,7 +181,7 @@ export function CostsPage() {
 				)}
 			</Panel>
 			<Panel>
-				<div className="section-heading-row">
+				<div className="editor-title">
 					<div>
 						<h3>Custom costs</h3>
 						<p>
