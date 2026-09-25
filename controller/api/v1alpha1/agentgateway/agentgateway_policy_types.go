@@ -3201,7 +3201,7 @@ type RateLimitsOrConditional struct {
 	// in case no conditions are met.
 	// +optional
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:MaxItems=64
 	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
 	Conditional []RateLimitsConditional `json:"conditional,omitempty"`
 }
