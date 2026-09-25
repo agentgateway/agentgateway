@@ -301,9 +301,8 @@ impl SubstrateIngress {
 		let budget = self.request_parking.budget();
 		let deadline = tokio::time::Instant::now() + budget;
 		let result = async {
-			let channel = self.target.grpc_channel(
-				client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate),
-			);
+			let client = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+			let channel = self.target.grpc_channel(client.clone());
 			let mut control = protos::ateapi::control_client::ControlClient::new(channel);
 			let message = protos::ateapi::ResumeActorRequest {
 				actor: Some(protos::ateapi::ObjectRef {
@@ -321,11 +320,21 @@ impl SubstrateIngress {
 						format!("ResumeActor timed out after {budget:?}"),
 					));
 				}
+				let mut request = tonic::Request::new(message.clone());
+				let mut span = client.start_grpc_span(
+					&mut request,
+					self.target.target.as_ref(),
+					"/ateapi.Control/ResumeActor",
+				);
 				let response = dtrace::scope_future(
 					Some(TRACE_POLICY_KIND),
-					tokio::time::timeout(remaining, control.resume_actor(message.clone())),
+					tokio::time::timeout(remaining, control.resume_actor(request)),
 				)
 				.await;
+				if let (Some(span), Ok(result)) = (span.as_deref_mut(), &response) {
+					span.record_grpc_result(result);
+				}
+				drop(span);
 				match response {
 					Ok(Ok(response)) => {
 						let response = response.into_inner();
@@ -711,11 +720,13 @@ impl RequestPolicyTrait for SubstrateIngress {
 				::http::HeaderValue::from(actor_port),
 			);
 		}
+		// ResumeActor runs at connect time, so keep the request's span for it.
+		let client = client.with_parent(req);
 		req.extensions_mut().insert(SubstrateRequestState {
 			actor,
 			connect_authority,
 			ingress: self.clone(),
-			client: client.clone(),
+			client,
 			current: None,
 			resume: ResumeDisposition::None,
 			route_duration: Duration::ZERO,
