@@ -7,6 +7,7 @@ import {
 	Braces,
 	Cable,
 	ChevronDown,
+	ChevronRight,
 	Coins,
 	FileCode2,
 	GitFork,
@@ -112,10 +113,11 @@ export function Shell() {
 		dumpMode
 	});
 	const nav = navGroups.flatMap(group => group.items);
-	const currentNav =
-		nav
-			.filter(item => navItemActive(item, router.location.pathname))
-			.sort((left, right) => right.to.length - left.to.length)[0] ?? nav[0];
+	const matchedNav = nav
+		.filter(item => navItemActive(item, router.location.pathname))
+		.sort((left, right) => right.to.length - left.to.length)[0];
+	const currentNav = matchedNav ?? nav[0];
+	const currentGroup = navGroups.find(group => group.items.includes(currentNav));
 	const CurrentIcon = currentNav.icon;
 
 	useEffect(() => {
@@ -190,7 +192,13 @@ export function Shell() {
 								</nav>
 							) : null}
 						</div>
-						<span className="eyebrow">{eyebrowForPath(router.location.pathname)}</span>
+						{matchedNav && currentGroup && (
+							<nav className="breadcrumb" aria-label="Breadcrumb">
+								<span>{currentGroup.title}</span>
+								<ChevronRight size={14} />
+								<span aria-current="page">{matchedNav.label}</span>
+							</nav>
+						)}
 					</div>
 					<div className="topbar-controls">
 						{runtime.data?.user && <UserMenu user={runtime.data.user} />}
@@ -476,15 +484,6 @@ function MobileNavItem(props: {
 			<span>{props.label}</span>
 		</Link>
 	);
-}
-
-function eyebrowForPath(path: string) {
-	if (path === '/') return 'Gateway overview';
-	if (path.startsWith('/mcp')) return 'MCP configuration';
-	if (path.startsWith('/traffic')) return 'Traffic configuration';
-	if (path.startsWith('/cel') || path.startsWith('/raw-config') || path.startsWith('/settings'))
-		return 'Policy tools';
-	return 'LLM configuration';
 }
 
 function NavItem(props: {
