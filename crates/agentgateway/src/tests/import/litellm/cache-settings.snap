@@ -1,0 +1,67 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/cache-settings.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: router_settings.redis_url
+    status: manual
+    message: "LiteLLM router Redis coordination settings were not emitted; review shared routing, cooldown, and usage state separately from response caching. These settings can also configure the backend when router response caching is enabled"
+  - sourcePath: router_settings.cache_responses
+    status: manual
+    message: This LiteLLM response-cache flag is false and was not emitted; review other response-cache settings independently
+  - sourcePath: router_settings.caching_groups
+    status: manual
+    message: LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually
+  - sourcePath: "router_settings.caching_groups[0]"
+    status: manual
+    message: LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually
+  - sourcePath: "router_settings.caching_groups[0][0]"
+    status: manual
+    message: LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually
+  - sourcePath: "router_settings.caching_groups[0][1]"
+    status: manual
+    message: LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually
+  - sourcePath: litellm_settings.cache
+    status: manual
+    message: LiteLLM response caching was requested but was not preserved; configure a response-cache solution manually before relying on cached responses. Provider promptCaching is not equivalent to caching complete responses
+  - sourcePath: litellm_settings.cache_params.type
+    status: manual
+    message: LiteLLM response-cache backend selection was not emitted; choose a response-cache solution manually. Provider promptCaching does not cache complete responses
+  - sourcePath: litellm_settings.cache_params.host
+    status: manual
+    message: LiteLLM response-cache connection or authentication settings were not emitted; configure connectivity and secret references in the chosen cache solution manually
+  - sourcePath: litellm_settings.cache_params.password
+    status: manual
+    message: LiteLLM response-cache connection or authentication settings were not emitted; configure connectivity and secret references in the chosen cache solution manually
+  - sourcePath: litellm_settings.cache_params.ttl
+    status: manual
+    message: LiteLLM response-cache expiration was not preserved; review TTL units and backend defaults when configuring cache lifetime manually
+  - sourcePath: litellm_settings.cache_params.namespace
+    status: manual
+    message: LiteLLM response-cache namespace was not preserved; configure cache-key isolation manually before sharing a cache backend
+  - sourcePath: litellm_settings.cache_params.future_setting
+    status: unsupported
+    message: Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution
+  - sourcePath: litellm_settings.cache_params.future_setting.nested
+    status: unsupported
+    message: Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution
