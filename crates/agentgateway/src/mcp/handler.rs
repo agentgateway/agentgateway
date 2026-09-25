@@ -711,7 +711,7 @@ impl Relay {
 		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
 			.await
 		{
-			Outcome::Pass => Ok(None),
+			Outcome::Pass | Outcome::PassFiltered(_) => Ok(None),
 			Outcome::Mutated(p) => {
 				tracing::debug!(method, "mcpGuardrails: request mutated");
 				Ok(Some(p))
@@ -1092,7 +1092,7 @@ impl Relay {
 		// A discovery rejection means "legacy protocol", not "upstream unavailable".
 		// Surface it even in FailOpen so probe clients can fall back to initialize.
 		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
-		let selected_upstreams = self
+		let mut selected_upstreams = self
 			.upstreams
 			.iter_named()
 			.filter(|(name, _)| {
@@ -1131,12 +1131,23 @@ impl Relay {
 				.assert_size::<{ 4 * 1024 }>(),
 			)
 			.await;
-			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::McpGuardrails {
-					rej,
-					was_tool_call: r.request.method() == CallToolRequestMethod::VALUE,
-					downstream_modern: ctx_downstream_modern(ctx),
-				});
+			match outcome {
+				crate::mcp::guardrails::Outcome::Reject(rej) => {
+					return Err(UpstreamError::McpGuardrails {
+						rej,
+						was_tool_call: r.request.method() == CallToolRequestMethod::VALUE,
+						downstream_modern: ctx_downstream_modern(ctx),
+					});
+				},
+				crate::mcp::guardrails::Outcome::PassFiltered(allowed) => {
+					selected_upstreams.retain(|(name, _)| allowed.iter().any(|a| a == name.as_str()));
+					if selected_upstreams.is_empty() {
+						return Err(UpstreamError::Unavailable(
+							"all targets filtered by mcpGuardrails allowed_targets".to_string(),
+						));
+					}
+				},
+				_ => {},
 			}
 		}
 
@@ -2106,7 +2117,7 @@ async fn apply_guardrails_response_intercept(
 	)
 	.await
 	{
-		Outcome::Pass => None,
+		Outcome::Pass | Outcome::PassFiltered(_) => None,
 		Outcome::Mutated(new_result) => {
 			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
