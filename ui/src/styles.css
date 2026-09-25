@@ -6080,6 +6080,10 @@ textarea {
 	gap: 8px;
 }
 
+.confirm-dialog-body .virtual-key-value {
+	margin-top: 12px;
+}
+
 .virtual-key-value-actions,
 .key-editor-value-row {
 	display: flex;

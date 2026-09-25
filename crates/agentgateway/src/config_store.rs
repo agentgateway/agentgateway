@@ -340,6 +340,7 @@ pub(crate) const MCP_SETTINGS_FIELDS: [&str; 5] = [
 const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
 const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
 const API_KEY_CREATED_AT_METADATA: &str = "agentgateway.dev/createdAt";
+const API_KEY_HINT_METADATA: &str = "agentgateway.dev/keyHint";
 
 /// Older file keys have no stored ID, so expose their array position to the resource API.
 fn file_api_key_id(value: &Value, index: usize) -> String {
@@ -1401,7 +1402,8 @@ fn validate_api_key_metadata(value: &Value) -> anyhow::Result<()> {
 		.and_then(|metadata| {
 			metadata
 				.keys()
-				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX))
+				// Key hint is not really required to be trusted so we can allow that
+				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX) && *field != API_KEY_HINT_METADATA)
 		}) {
 		return Err(
 			ConfigResourceError::InvalidRequest(format!(
