@@ -33,6 +33,20 @@ pub fn insert_all(ctx: &mut Context) {
 	flatten::insert_all(ctx);
 }
 
+/// Declares the method names this crate's opaque value types can intercept,
+/// enabling static checking of method-style calls (see
+/// [`Context::declare_opaque_methods`]).
+///
+/// This is separate from [`insert_all`] on purpose: declaring the surface
+/// asserts it is *complete* for the assembled environment. A consumer whose
+/// own value types expose further methods must declare those names too, or
+/// `Program::check` will misreport calls to them as unknown.
+pub fn declare_opaque_methods(ctx: &mut Context) {
+	ctx.declare_opaque_methods(cidr::Cidr::METHOD_NAMES.iter().copied());
+	ctx.declare_opaque_methods(cidr::IP::METHOD_NAMES.iter().copied());
+	optimize::declare_opaque_methods(ctx);
+}
+
 mod helpers {
 	use cel::extractors::Function;
 	use cel::objects::{Opaque, OpaqueValue, StringValue};
@@ -57,6 +71,9 @@ mod helpers {
 	#[macro_export]
 	macro_rules! impl_functions {
     ({$($basic:tt => $name:literal),* $(,)?}, {$($full:tt => $fname:literal),* $(,)?}) => {
+        /// Every method name `call_function` dispatches, for declaring the
+        /// opaque method surface (`Context::declare_opaque_methods`).
+        pub const METHOD_NAMES: &'static [&'static str] = &[$($name,)* $($fname,)*];
 				#[allow(unused_variables)]
         fn call_function<'rr, 'rrf>(&self, name: &str, ftx: &mut FunctionContext<'rr, 'rrf>) -> Option<cel::ResolveResult<'rr>> {
             match name {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ::cel::extractors::{Argument, This};
 use ::cel::objects::{Key, MapValue, StringValue, ValueType};
-use ::cel::{Context, FunctionContext, ResolveResult, Value};
+use ::cel::{Context, FunctionContext, FunctionMeta, ResolveResult, Value};
 use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use cel::ExecutionError;
@@ -19,27 +19,31 @@ use uuid::Uuid;
 
 pub fn insert_all(ctx: &mut Context) {
 	// Custom to agentgateway
-	ctx.add_function("json", json_parse);
-	ctx.add_function("jsonField", json_parse_field);
-	ctx.add_function("unvalidatedJwtPayload", unvalidated_jwt_payload);
-	ctx.add_function("to_json", to_json);
+	ctx.add_function_with_meta("json", FunctionMeta::global(1), json_parse);
+	ctx.add_function_with_meta("jsonField", FunctionMeta::global(2), json_parse_field);
+	ctx.add_function_with_meta(
+		"unvalidatedJwtPayload",
+		FunctionMeta::global(1),
+		unvalidated_jwt_payload,
+	);
+	ctx.add_function_with_meta("to_json", FunctionMeta::global(1), to_json);
 	// Keep old and new name for compatibility
-	ctx.add_function("toJson", to_json);
-	ctx.add_function("with", with);
-	ctx.add_function("mapValues", map_values);
-	ctx.add_function("filterKeys", filter_keys);
-	ctx.add_function("merge", map_merge);
-	ctx.add_function("variables", variables);
-	ctx.add_function("random", random);
-	ctx.add_function("default", default);
-	ctx.add_function("coalesce", coalesce);
-	ctx.add_function("regexReplace", regex_replace);
-	ctx.add_function("fail", fail);
-	ctx.add_function("uuid", uuid_generate);
+	ctx.add_function_with_meta("toJson", FunctionMeta::global(1), to_json);
+	ctx.add_function_with_meta("with", FunctionMeta::method(3), with);
+	ctx.add_function_with_meta("mapValues", FunctionMeta::method(3), map_values);
+	ctx.add_function_with_meta("filterKeys", FunctionMeta::method(3), filter_keys);
+	ctx.add_function_with_meta("merge", FunctionMeta::method(2), map_merge);
+	ctx.add_function_with_meta("variables", FunctionMeta::global(0), variables);
+	ctx.add_function_with_meta("random", FunctionMeta::global(0), random);
+	ctx.add_function_with_meta("default", FunctionMeta::global(2), default);
+	ctx.add_function_with_meta("coalesce", FunctionMeta::global(1).variadic(), coalesce);
+	ctx.add_function_with_meta("regexReplace", FunctionMeta::method(3), regex_replace);
+	ctx.add_function_with_meta("fail", FunctionMeta::global(1), fail);
+	ctx.add_function_with_meta("uuid", FunctionMeta::global(0), uuid_generate);
 
 	// Support legacy and modern name
-	ctx.add_function("base64Encode", base64_encode);
-	ctx.add_function("base64Decode", base64_decode);
+	ctx.add_function_with_meta("base64Encode", FunctionMeta::global(1), base64_encode);
+	ctx.add_function_with_meta("base64Decode", FunctionMeta::global(1), base64_decode);
 	ctx.add_qualified_function("base64", "encode", base64_encode);
 	ctx.add_qualified_function("base64", "decode", base64_decode);
 	ctx.add_qualified_function("url", "encode", url_encode);

@@ -1,5 +1,6 @@
 use crate::common::ast::{CallExpr, ComprehensionExpr, Expr, IdedExpr, ListExpr, operators};
 use crate::common::value::CelVal::{Boolean, Int};
+use crate::context::{FunctionMeta, ReceiverStyle};
 use crate::parser::{MacroExprHelper, ParseError};
 
 pub type MacroExpander = fn(
@@ -8,24 +9,55 @@ pub type MacroExpander = fn(
 	args: Vec<IdedExpr>,
 ) -> Result<IdedExpr, ParseError>;
 
+/// The comprehension macros and the call shapes they expand at. A call
+/// matching a shape is expanded at parse time and never appears as a call
+/// node, so the checker treats a surviving call node with one of these names
+/// as a mismatched use. Arity counts include the receiver, per
+/// [`FunctionMeta`]'s convention.
+pub(crate) const MACROS: &[(&str, FunctionMeta, MacroExpander)] = &[
+	(operators::HAS, FunctionMeta::global(1), has_macro_expander),
+	(
+		operators::EXISTS,
+		FunctionMeta::method(3),
+		exists_macro_expander,
+	),
+	(operators::ALL, FunctionMeta::method(3), all_macro_expander),
+	(
+		operators::EXISTS_ONE,
+		FunctionMeta::method(3),
+		exists_one_macro_expander,
+	),
+	(
+		"existsOne",
+		FunctionMeta::method(3),
+		exists_one_macro_expander,
+	),
+	(
+		operators::MAP,
+		FunctionMeta::method(3).up_to(4),
+		map_macro_expander,
+	),
+	(
+		operators::FILTER,
+		FunctionMeta::method(3),
+		filter_macro_expander,
+	),
+];
+
 pub fn find_expander(
 	func_name: &str,
 	target: Option<&IdedExpr>,
 	args: &[IdedExpr],
 ) -> Option<MacroExpander> {
-	match func_name {
-		operators::HAS if args.len() == 1 && target.is_none() => Some(has_macro_expander),
-		operators::EXISTS if args.len() == 2 && target.is_some() => Some(exists_macro_expander),
-		operators::ALL if args.len() == 2 && target.is_some() => Some(all_macro_expander),
-		operators::EXISTS_ONE | "existsOne" if args.len() == 2 && target.is_some() => {
-			Some(exists_one_macro_expander)
-		},
-		operators::MAP if (args.len() == 2 || args.len() == 3) && target.is_some() => {
-			Some(map_macro_expander)
-		},
-		operators::FILTER if args.len() == 2 && target.is_some() => Some(filter_macro_expander),
-		_ => None,
-	}
+	let (_, shape, expander) = MACROS.iter().find(|(name, _, _)| *name == func_name)?;
+	let receiver_ok = match shape.receiver {
+		ReceiverStyle::Required => target.is_some(),
+		ReceiverStyle::Forbidden => target.is_none(),
+		ReceiverStyle::Either => true,
+	};
+	let arity = args.len() + usize::from(target.is_some());
+	(receiver_ok && arity >= shape.min_args && shape.max_args.is_none_or(|max| arity <= max))
+		.then_some(*expander)
 }
 
 fn has_macro_expander(
