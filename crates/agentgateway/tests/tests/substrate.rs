@@ -1,4 +1,4 @@
-use agentgateway::test_helpers::{ateapimock, credprovidermock};
+use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
@@ -300,6 +300,89 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 		actor_requests[0].headers.get("x-ate-target-port").unwrap(),
 		"80"
 	);
+}
+
+struct TraceparentHandler(IngressHandler, Arc<StdMutex<Vec<String>>>);
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for TraceparentHandler {
+	async fn resume_actor(
+		&mut self,
+		request: &protos::ateapi::ResumeActorRequest,
+	) -> Result<ResumeActorResponse, tonic::Status> {
+		self.0.resume_actor(request).await
+	}
+
+	fn resume_actor_metadata(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		let tp = metadata.get("traceparent").and_then(|v| v.to_str().ok());
+		self.1.lock().unwrap().extend(tp.map(str::to_owned));
+	}
+}
+
+struct NoopTraces;
+
+#[async_trait::async_trait]
+impl oteltracemock::Handler for NoopTraces {}
+
+#[tokio::test]
+async fn actor_ingress_propagates_trace_context_to_resume_actor() {
+	let otel = oteltracemock::OtelTraceMock::new(|| NoopTraces)
+		.spawn()
+		.await;
+	let actor = simple_mock().await;
+	let seen = Arc::new(StdMutex::new(Vec::new()));
+	let api = ateapimock::AteApiMock::new({
+		let (seen, pod_ip) = (seen.clone(), actor.address().ip().to_string());
+		move || {
+			let inner = IngressHandler {
+				pod_ip: pod_ip.clone(),
+				calls: Default::default(),
+				resumed: true,
+				uid: ACTOR_UID,
+			};
+			TraceparentHandler(inner, seen.clone())
+		}
+	})
+	.spawn()
+	.await;
+
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_frontend_policy(json!({"tracing": {"host": otel.address.to_string()}}))
+		.await;
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": api.address.to_string(),
+				"connectTargetPort": actor.address().port(),
+			}
+		}))
+		.await;
+
+	let client_tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+	let response = send_request_headers(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		"http://my-actor.demo.actors.resources.substrate.ate.dev/",
+		&[
+			("ate-target-actor", "demo/my-actor"),
+			("traceparent", client_tp),
+		],
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+
+	// Same trace and sampled flag, but the gateway's own span as parent.
+	let seen = seen.lock().unwrap().clone();
+	assert_eq!(seen.len(), 1, "{seen:?}");
+	assert_eq!(seen[0][..36], client_tp[..36]);
+	assert_ne!(seen[0][36..52], client_tp[36..52]);
+	assert!(seen[0].ends_with("-01"), "{}", seen[0]);
 }
 
 #[tokio::test]

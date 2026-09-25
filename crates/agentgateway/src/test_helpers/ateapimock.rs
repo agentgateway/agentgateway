@@ -21,6 +21,8 @@ pub trait Handler {
 		Err(Status::unimplemented("ResumeActor is not implemented"))
 	}
 
+	fn resume_actor_metadata(&mut self, _metadata: &tonic::metadata::MetadataMap) {}
+
 	async fn get_actor_egress_policy(
 		&mut self,
 		_request: &GetActorEgressPolicyRequest,
@@ -78,6 +80,7 @@ where
 		request: Request<ResumeActorRequest>,
 	) -> Result<Response<ResumeActorResponse>, Status> {
 		let mut handler = (self.handler)();
+		handler.resume_actor_metadata(request.metadata());
 		Ok(Response::new(
 			handler.resume_actor(request.get_ref()).await?,
 		))
