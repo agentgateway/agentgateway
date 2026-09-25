@@ -5248,6 +5248,30 @@ impl PolicyClient {
 			result
 		})
 	}
+
+	/// Like [`simple_call`], but routes the request through the given forward-proxy
+	/// hop using CONNECT. Features whose outbound egress has no backend of its own
+	/// to carry a `backendTunnel` (e.g. the OIDC browser-auth policy) use this to
+	/// reach an identity provider that is only reachable through a corp egress proxy.
+	pub fn simple_call_tunneled(
+		&self,
+		mut req: Request,
+		tunnel: crate::client::TunnelSpec,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		req
+			.extensions_mut()
+			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
+		let upstream = self.inputs.upstream.with_outbound_tunnel(tunnel);
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let mut span = self.start_outbound_span(&mut req);
+			let call = Box::pin(upstream.simple_call(req));
+			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
+	}
 }
 
 trait OptLogger {

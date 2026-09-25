@@ -1,4 +1,4 @@
-import { Fingerprint, Globe2, KeyRound } from 'lucide-react';
+import { Fingerprint, Globe2, KeyRound, Network } from 'lucide-react';
 import { useState } from 'react';
 
 import { EnumSelector } from '@/components/EnumSelector';
@@ -21,6 +21,15 @@ type SourceDraft = {
 	value: string;
 };
 
+// Draft for the optional egress-proxy hop. Only the inline `{host}` proxy form
+// is representable: the Rust resolver rejects named `service:`/`backend:` refs
+// on the OIDC fetch path.
+type TunnelDraft = {
+	enabled: boolean;
+	host: string;
+	proxySecret: string;
+};
+
 type OidcFieldErrors = Partial<
 	Record<
 		| 'issuer'
@@ -30,7 +39,8 @@ type OidcFieldErrors = Partial<
 		| 'discovery'
 		| 'authorizationEndpoint'
 		| 'tokenEndpoint'
-		| 'jwks',
+		| 'jwks'
+		| 'backendTunnel',
 		string
 	>
 >;
@@ -116,6 +126,7 @@ export function OidcPolicyEditor(props: {
 		props.oidc?.tokenEndpointAuth ?? 'clientSecretBasic'
 	);
 	const [jwks, setJwks] = useState<SourceDraft>(() => sourceFrom(props.oidc?.jwks, 'url'));
+	const [tunnel, setTunnel] = useState<TunnelDraft>(() => tunnelFrom(props.oidc?.backendTunnel));
 	const [fieldErrors, setFieldErrors] = useState<OidcFieldErrors>({});
 	const [error, setError] = useState<string | null>(null);
 
@@ -132,7 +143,8 @@ export function OidcPolicyEditor(props: {
 			clientId,
 			clientSecret,
 			redirectURI,
-			scopes
+			scopes,
+			backendTunnel: tunnelToConfig(tunnel)
 		}) as OidcDraft;
 	}
 
@@ -162,6 +174,9 @@ export function OidcPolicyEditor(props: {
 			if (!tokenEndpoint.trim()) errors.tokenEndpoint = 'Token endpoint is required.';
 			const jwksError = validateSource(jwks, true);
 			if (jwksError) errors.jwks = jwksError;
+		}
+		if (tunnel.enabled && !tunnel.host.trim()) {
+			errors.backendTunnel = 'Proxy host is required.';
 		}
 		return errors;
 	}
@@ -393,6 +408,84 @@ export function OidcPolicyEditor(props: {
 				/>
 			</PolicySection>
 
+			<PolicySection
+				icon={<Network size={17} />}
+				title="Egress proxy"
+				description="Send OIDC discovery, JWKS, and token exchange through a forward proxy instead of connecting directly."
+			>
+				<FieldGroup
+					label="Proxy tunnel"
+					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'backendTunnel')}
+				>
+					<label className="config-option-row">
+						<input
+							type="checkbox"
+							checked={tunnel.enabled}
+							onChange={event => {
+								setTunnel(current => ({ ...current, enabled: event.target.checked }));
+								clearFieldError('backendTunnel');
+							}}
+						/>
+						<span>
+							<strong>Route OIDC egress through a CONNECT proxy</strong>
+							<small>
+								Use when the identity provider is only reachable through a corporate proxy.
+							</small>
+						</span>
+					</label>
+				</FieldGroup>
+				{tunnel.enabled ? (
+					<>
+						<Field
+							label="Proxy host"
+							className={fieldErrors.backendTunnel ? 'invalid' : undefined}
+							hint={fieldErrors.backendTunnel}
+						>
+							<input
+								value={tunnel.host}
+								aria-invalid={Boolean(fieldErrors.backendTunnel)}
+								onChange={event => {
+									setTunnel(current => ({ ...current, host: event.target.value }));
+									clearFieldError('backendTunnel');
+								}}
+								placeholder="corp-egress-proxy.example.com:8080"
+							/>
+						</Field>
+						<Field
+							label="Proxy auth key"
+							tooltip={props.help.propertyDescription(
+								'LocalOidcConfig',
+								['backendTunnel', 'policies', 'backendAuth', 'key'],
+								'Optional. Sent as the CONNECT Proxy-Authorization header, with a Bearer prefix.'
+							)}
+						>
+							<input
+								type="text"
+								className="masked-secret-input"
+								autoComplete="off"
+								autoCorrect="off"
+								autoCapitalize="none"
+								data-1p-ignore="true"
+								data-lpignore="true"
+								data-form-type="other"
+								name="agw-oidc-proxy-auth-key"
+								spellCheck={false}
+								value={tunnel.proxySecret}
+								onChange={event => {
+									setTunnel(current => ({ ...current, proxySecret: event.target.value }));
+								}}
+								placeholder="Proxy egress secret"
+							/>
+						</Field>
+						<div className="empty-inline">
+							Only an inline host and the key auth method are supported here. The proxy is dialed
+							without TLS, and only CONNECT mode is honored. Anything else is rejected at config
+							load — use the raw configuration editor for it.
+						</div>
+					</>
+				) : null}
+			</PolicySection>
+
 			<ResultingYaml value={preview} />
 
 			{error ? (
@@ -480,6 +573,28 @@ function SourceEditor(props: {
 	);
 }
 
+function tunnelFrom(value: unknown): TunnelDraft {
+	if (!isRecord(value)) return { enabled: false, host: '', proxySecret: '' };
+	const proxy = isRecord(value.proxy) ? value.proxy : undefined;
+	const host = typeof proxy?.host === 'string' ? proxy.host : '';
+	const policies = isRecord(value.policies) ? value.policies : undefined;
+	return {
+		// A tunnel only round-trips when the proxy is the inline `{host}` form we
+		// can represent; anything else (service/backend refs) is left to raw YAML.
+		enabled: Boolean(host),
+		host,
+		proxySecret: backendAuthKey(policies?.backendAuth)
+	};
+}
+
+function backendAuthKey(value: unknown): string {
+	if (!isRecord(value)) return '';
+	const key = value.key;
+	if (typeof key === 'string') return key;
+	if (isRecord(key) && typeof key.value === 'string') return key.value;
+	return '';
+}
+
 function sourceFrom(value: unknown, emptyMode: SourceMode): SourceDraft {
 	if (isRecord(value) && typeof value.url === 'string') return { mode: 'url', value: value.url };
 	if (isRecord(value) && typeof value.file === 'string') return { mode: 'file', value: value.file };
@@ -493,6 +608,15 @@ function sourceToConfig(source: SourceDraft) {
 	if (source.mode === 'url') return { url: value };
 	if (source.mode === 'file') return { file: value };
 	return value;
+}
+
+function tunnelToConfig(tunnel: TunnelDraft) {
+	if (!tunnel.enabled) return undefined;
+	const host = tunnel.host.trim();
+	if (!host) return undefined;
+	const secret = tunnel.proxySecret.trim();
+	const policies = secret ? { backendAuth: { key: { value: secret } } } : undefined;
+	return { proxy: { host }, policies };
 }
 
 function validateSource(source: SourceDraft, required: boolean) {

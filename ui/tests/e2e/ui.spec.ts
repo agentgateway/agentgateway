@@ -1253,6 +1253,78 @@ test('edits top-level MCP policies', async ({ page }) => {
 	expect(saved.mcp?.policies?.cors?.allowOrigins).toContain('http://127.0.0.1:19100');
 });
 
+test('edits the OIDC policy egress proxy and preserves it on save', async ({ page }) => {
+	const config = emptyConfig();
+	config.gateways = { default: { port: 8080 } };
+	config.ui = { gateways: 'default' };
+	const gateway = await mockGateway(page, config);
+	await page.goto('/settings');
+
+	await page.getByRole('button', { name: /OIDC/ }).click();
+	const drawer = page.locator('.drawer');
+	await drawer.getByRole('textbox', { name: /^Issuer/ }).fill('https://idp.example.com');
+	await drawer.getByRole('textbox', { name: /^Client ID/ }).fill('agentgateway-browser');
+	await drawer.getByRole('textbox', { name: /^Client secret/ }).fill('shh');
+	await drawer
+		.getByRole('textbox', { name: /^Redirect URI/ })
+		.fill('http://localhost:4000/oauth/callback');
+
+	await drawer.getByLabel('Route OIDC egress through a CONNECT proxy').check();
+	await drawer
+		.getByRole('textbox', { name: /^Proxy host/ })
+		.fill('corp-egress-proxy.example.com:8080');
+	await drawer.getByRole('textbox', { name: /^Proxy auth key/ }).fill('proxy-secret');
+	await drawer.getByRole('button', { name: 'Save policy' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as {
+		ui?: { policies?: { oidc?: { backendTunnel?: unknown } } };
+	};
+	expect(saved.ui?.policies?.oidc?.backendTunnel).toEqual({
+		proxy: { host: 'corp-egress-proxy.example.com:8080' },
+		policies: { backendAuth: { key: { value: 'proxy-secret' } } }
+	});
+});
+
+test('keeps a preconfigured OIDC egress proxy when editing other fields', async ({ page }) => {
+	const config = emptyConfig();
+	config.gateways = { default: { port: 8080 } };
+	config.ui = {
+		gateways: 'default',
+		policies: {
+			oidc: {
+				issuer: 'https://idp.example.com',
+				clientId: 'agentgateway-browser',
+				clientSecret: 'shh',
+				redirectURI: 'http://localhost:4000/oauth/callback',
+				backendTunnel: {
+					proxy: { host: 'corp-egress-proxy.example.com:8080' },
+					policies: { backendAuth: { key: { value: 'proxy-secret' } } }
+				}
+			}
+		}
+	};
+	const gateway = await mockGateway(page, config);
+	await page.goto('/settings');
+
+	await page.getByRole('button', { name: /OIDC/ }).click();
+	const drawer = page.locator('.drawer');
+	// The tunnel was configured by hand in YAML; editing an unrelated field must
+	// not silently drop it.
+	await drawer.getByRole('textbox', { name: /^Client ID/ }).fill('renamed-client');
+	await drawer.getByRole('button', { name: 'Save policy' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as {
+		ui?: { policies?: { oidc?: { clientId?: string; backendTunnel?: unknown } } };
+	};
+	expect(saved.ui?.policies?.oidc?.clientId).toBe('renamed-client');
+	expect(saved.ui?.policies?.oidc?.backendTunnel).toEqual({
+		proxy: { host: 'corp-egress-proxy.example.com:8080' },
+		policies: { backendAuth: { key: { value: 'proxy-secret' } } }
+	});
+});
+
 test('refreshes a reopened policy diff', async ({ page }) => {
 	const config = emptyConfig();
 	const llm = config.llm as {

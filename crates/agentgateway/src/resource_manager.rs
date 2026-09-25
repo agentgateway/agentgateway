@@ -86,6 +86,24 @@ enum ResourceFetcherMode {
 }
 
 impl ResourceFetcher {
+	/// Return a copy of this fetcher whose outbound HTTP fetches are tunneled
+	/// through the given forward-proxy hop (CONNECT). Used by features whose
+	/// outbound egress has no backend to carry a `backendTunnel` (e.g. the OIDC
+	/// policy's compile-time discovery/JWKS). Produces a direct fetcher backed by a
+	/// dedicated tunneled client so the shared manager cache and app-wide client
+	/// are left untouched.
+	pub fn with_outbound_tunnel(&self, spec: crate::client::TunnelSpec) -> Self {
+		match &self.mode {
+			ResourceFetcherMode::Direct(client) => {
+				ResourceFetcher::direct(client.with_outbound_tunnel(spec))
+			},
+			ResourceFetcherMode::Managed(manager) | ResourceFetcherMode::CachedOrDirect(manager) => {
+				ResourceFetcher::direct(manager.client_with_outbound_tunnel(spec))
+			},
+			ResourceFetcherMode::FilesOnly => ResourceFetcher::files_only(),
+		}
+	}
+
 	/// Uses the manager cache and starts refresh/watch behavior for runtime config dependencies.
 	pub fn managed(manager: ResourceManager) -> Self {
 		Self {
@@ -350,6 +368,13 @@ impl ResourceManager {
 
 	pub fn subscribe_changes(&self) -> watch::Receiver<ResourceChange> {
 		self.inner.change_tx.subscribe()
+	}
+
+	/// A dedicated clone of this manager's outbound client configured to tunnel
+	/// through the given forward-proxy hop (CONNECT), for features whose resources
+	/// must be fetched through a proxy the shared client does not use.
+	pub fn client_with_outbound_tunnel(&self, spec: crate::client::TunnelSpec) -> Client {
+		self.inner.client.with_outbound_tunnel(spec)
 	}
 
 	pub async fn fetch_and_wait(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {

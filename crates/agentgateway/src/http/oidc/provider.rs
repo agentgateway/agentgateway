@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use ::http::{Method, StatusCode, header};
@@ -27,6 +28,7 @@ pub(crate) async fn exchange_code(
 	redirect_uri: &str,
 	code: &str,
 	pkce_verifier: &SecretString,
+	outbound_tunnel: Option<Arc<crate::client::TunnelSpec>>,
 ) -> Result<TokenResponse, Error> {
 	exchange_code_with_timeout(
 		client,
@@ -35,11 +37,13 @@ pub(crate) async fn exchange_code(
 		redirect_uri,
 		code,
 		pkce_verifier,
+		outbound_tunnel,
 		DEFAULT_TOKEN_EXCHANGE_TIMEOUT,
 	)
 	.await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn exchange_code_with_timeout(
 	client: PolicyClient,
 	provider: &Provider,
@@ -47,6 +51,7 @@ pub(crate) async fn exchange_code_with_timeout(
 	redirect_uri: &str,
 	code: &str,
 	pkce_verifier: &SecretString,
+	outbound_tunnel: Option<Arc<crate::client::TunnelSpec>>,
 	timeout: Duration,
 ) -> Result<TokenResponse, Error> {
 	let mut form = vec![
@@ -81,12 +86,20 @@ pub(crate) async fn exchange_code_with_timeout(
 		.body(Body::from(body))
 		.map_err(|e| Error::Config(format!("failed to build token exchange request: {e}")))?;
 	req.extensions_mut().insert(BackendRequestTimeout(timeout));
-	let resp = client
-		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
-		.simple_call(req)
-		.await
-		.map_err(anyhow::Error::from)
-		.map_err(Error::TokenExchangeFailed)?;
+	let outbound = client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc);
+	let resp = if let Some(tunnel) = outbound_tunnel {
+		outbound
+			.simple_call_tunneled(req, (*tunnel).clone())
+			.await
+			.map_err(anyhow::Error::from)
+			.map_err(Error::TokenExchangeFailed)?
+	} else {
+		outbound
+			.simple_call(req)
+			.await
+			.map_err(anyhow::Error::from)
+			.map_err(Error::TokenExchangeFailed)?
+	};
 	let status = resp.status();
 	let (_, body) = {
 		let (parts, body) = resp.into_parts();

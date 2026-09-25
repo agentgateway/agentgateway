@@ -4434,6 +4434,280 @@
 |`binds[].listeners[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`binds[].listeners[].routes[].policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -19082,6 +19356,280 @@
 |`binds[].listeners[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`binds[].listeners[].policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`binds[].listeners[].policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -26190,6 +26738,280 @@
 |`policies[].policy.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`policies[].policy.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`policies[].policy.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`policies[].policy.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`policies[].policy.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`policies[].policy.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`policies[].policy.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`policies[].policy.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`policies[].policy.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`policies[].policy.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`policies[].policy.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`policies[].policy.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`policies[].policy.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`policies[].policy.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`policies[].policy.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`policies[].policy.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`policies[].policy.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`policies[].policy.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`policies[].policy.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -44804,6 +45626,280 @@
 |`routeGroups[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routeGroups[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routeGroups[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`routeGroups[].routes[].policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -59159,6 +60255,280 @@
 |`gateways.*.listeners[].oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.listeners[].oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.listeners[].oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`gateways.*.listeners[].oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`gateways.*.listeners[].oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`gateways.*.listeners[].oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -60490,6 +61860,280 @@
 |`gateways.*.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`gateways.*.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`gateways.*.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`gateways.*.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`gateways.*.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`gateways.*.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`gateways.*.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`gateways.*.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`gateways.*.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`gateways.*.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`gateways.*.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`gateways.*.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`gateways.*.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`gateways.*.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`gateways.*.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`gateways.*.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`gateways.*.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`gateways.*.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`gateways.*.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`gateways.*.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -66089,6 +67733,280 @@
 |`routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`routes[].policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`routes[].policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`routes[].policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routes[].policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routes[].policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`routes[].policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`routes[].policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`routes[].policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`routes[].policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`routes[].policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`routes[].policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`routes[].policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`routes[].policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`routes[].policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`routes[].policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`routes[].policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -84811,6 +86729,280 @@
 |`llm.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`llm.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`llm.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`llm.policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`llm.policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`llm.policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`llm.policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`llm.policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`llm.policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`llm.policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`llm.policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`llm.policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`llm.policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`llm.policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`llm.policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`llm.policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`llm.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`llm.policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`llm.policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`llm.policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`llm.policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`llm.policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`llm.policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`llm.policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -93581,6 +95773,280 @@
 |`mcp.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`mcp.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`mcp.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`mcp.policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`mcp.policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`mcp.policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`mcp.policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`mcp.policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`mcp.policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`mcp.policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`mcp.policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`mcp.policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`mcp.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`mcp.policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`mcp.policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`mcp.policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`mcp.policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`mcp.policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -95741,6 +98207,280 @@
 |`ui.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`ui.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`ui.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`ui.policies.oidc.backendTunnel`|object|Optional outbound proxy backend to tunnel this policy's own egress through<br>(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM<br>providers. Use when the identity provider is only reachable through a forward<br>proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the<br>proxy inline via `{host, port}` so no separate named backend is required.|
+|`ui.policies.oidc.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
+|`ui.policies.oidc.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
+|`ui.policies.oidc.backendTunnel.proxy.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`ui.policies.oidc.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
+|`ui.policies.oidc.backendTunnel.proxy.host`|string|Hostname or IP address|
+|`ui.policies.oidc.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.oidc.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
+|`ui.policies.oidc.backendTunnel.policies`|object|Policies to connect to the proxy backend|
+|`ui.policies.oidc.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
+|`ui.policies.oidc.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
+|`ui.policies.oidc.backendTunnel.policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
+|`ui.policies.oidc.backendTunnel.policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
+|`ui.policies.oidc.backendTunnel.policies.transformations`|object|Modify request and response data for this backend.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request`|object|Transform the request before it is forwarded.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.remove`|[]string|Header names to remove.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response`|object|Transform the response before it is returned.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.remove`|[]string|Header names to remove.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
+|`ui.policies.oidc.backendTunnel.policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS`|object|TLS settings used when connecting to this backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.key`|string|Private key file for the client certificate.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
+|`ui.policies.oidc.backendTunnel.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth`|object|Authentication credentials sent to this backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp.credential.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.accessKeyId`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.secretAccessKey`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.sessionToken`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.region`|string|AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS<br>backends may provide this automatically; otherwise the ambient AWS region<br>is used.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName`|string|Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report<br>attribution. Either a static string or `{expression: ...}` with a CEL<br>expression evaluated against each request. Max 64 chars, matching<br>`[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.sessionName.expression`|string|CEL expression evaluated against each request to produce the session<br>name, for example `jwt.sub` or `request.headers["x-team"]`. If the<br>expression does not produce a valid session name at request time, the<br>request is rejected.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags`|[]object|Session tags passed to STS AssumeRole for cost attribution. Once activated as<br>cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under<br>`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL<br>expression evaluated against each request (`expression`).|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].key`|string|Tag key.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].value`|string|Static tag value.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.tags[].expression`|string|CEL expression evaluated against each request to produce the tag value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid tag value at request time, the request is rejected.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.aws.assumeRole.externalId`|string|Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,<br>matching `[\w+=,.@:/-]`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.azure.scopes`|[]string|Scopes requested for the Azure access token. When unset, the scope is<br>inferred from the backend hostname.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign`|object|Sign a short-lived JWT with a private key on each request.<br>Signs a short-lived JWT with a private key on each request and sends it to<br>the backend. For upstreams that require per-request keypair JWTs (e.g. the<br>Snowflake SQL API) rather than a static credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.alg`|enum|JWS signing algorithm. Defaults to RS256.<br>Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.kid`|string|Optional JWS key ID header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims`|object|Static claims added to every token (e.g. iss, sub, aud). Values may be<br>any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,<br>and `nbf` are reserved for the signer and cannot be configured here.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.claims.*`|any||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.ttl`|string|Token lifetime used for `exp`. Defaults to 300s.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location`|object|Where the signed token is written. Defaults to the Authorization<br>header with a `Bearer ` prefix.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.jwtSign.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange`|object|Use OAuth token exchange flows to obtain a backend access token.<br>Exactly one of service, host, or backend may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service`|object|Service reference. Service must be defined in the top level services list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.service.port`|integer|Port on the target Service to route to.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.host`|string|Hostname or IP address|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.subjectToken.tokenType`|string|RFC 8693 token type URN; when omitted defaults to access_token|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken`|object|RFC 8693 delegation actor token. Token-exchange grant only.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source`|object|Where the actor token is read from in the incoming request. The CEL<br>`expression` source is permitted (extraction only). Unlike subject tokens,<br>actor tokens have no default source.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.tokenType`|string|RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.actorToken.enforceMayAct`|boolean|Enforce that the subject's `may_act` claim authorizes the actor before exchanging.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.kid`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.assertionAudience`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.additionalParams`|object|Extra form parameters appended to the token request.<br>Values are CEL expressions evaluated against the incoming request.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation`|object|Where to place the exchanged token in the backend request. Defaults to the<br>Authorization header with a "Bearer " prefix. The CEL `expression` source is<br>not valid here (it cannot insert).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.service.port`|integer|Port on the target Service to route to.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.host`|string|Hostname or IP address|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.policies`|any|Backend policies used when connecting to the service.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.kid`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.assertionAudience`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.identityProvider.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer`|object|The resource authorization server, which exchanges the ID-JAG for an access token.<br>Exactly one of service, host, or backend may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service`|object|Service reference. Service must be defined in the top level services list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.service.port`|integer|Port on the target Service to route to.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.host`|string|Hostname or IP address|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies`|any|Backend policies used when connecting to the service.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretBasic`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `clientSecretPost`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey`|object|PEM-encoded private signing key (RSA or EC, matching `alg`).|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.signingKey.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate`|object|PEM-encoded X.509 certificate chain, leaf first. The leaf public key must<br>correspond to `signing_key` for token endpoints to validate assertions.<br>A mismatch or comparison failure is logged and does not prevent loading.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificate.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.certificateHeader`|enum|JWS certificate header emitted from `certificate`. Required when `certificate` is set.<br>Possible values: `x5c`, `x5t#S256`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.alg`|enum|Possible values: `RS256`, `RS384`, `RS512`, `PS256`, `ES256`, `ES384`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.kid`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.assertionAudience`|string||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.method`|enum|Possible values: `privateKeyJwt`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth.clientSecret`|object|OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.audience`|string|Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.resources`|[]string|`resource` parameters naming the protected resource APIs.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.scopes`|[]string|`scope` values requested when obtaining the ID-JAG from the identity provider, sent<br>space-delimited.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.accessTokenScopes`|[]string|`scope` values requested when exchanging the ID-JAG for an access token. When unset,<br>inherits `scopes`. When empty, omits `scope`.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken`|object|Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read<br>from the Authorization Bearer header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source`|object|Where to read the subject token. Defaults to the Authorization Bearer header.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.source.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.subjectToken.tokenType`|string|RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials`|[]object||
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.name`|string|Header name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter`|object|Read the credential from a URL query parameter.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.queryParameter.name`|string|Query parameter name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`ui.policies.oidc.backendTunnel.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`ui.policies.oidc.backendTunnel.policies.http`|object|HTTP protocol settings for this backend.|
+|`ui.policies.oidc.backendTunnel.policies.http.version`|string|HTTP version to use when connecting to the backend.|
+|`ui.policies.oidc.backendTunnel.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
+|`ui.policies.oidc.backendTunnel.policies.http.maxConnectionDuration`|string|Maximum time a connection to the backend may stay open. A connection past this duration is<br>not reused for new requests; a fresh connection is established instead, while in-flight<br>requests are not interrupted.|
+|`ui.policies.oidc.backendTunnel.policies.tcp`|object|TCP protocol settings for this backend.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.keepalives.enabled`|boolean|Enable TCP keepalive probes on backend connections. Defaults to true.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
+|`ui.policies.oidc.backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
+|`ui.policies.oidc.backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

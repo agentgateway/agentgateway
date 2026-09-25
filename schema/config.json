@@ -6601,6 +6601,18 @@
             }
           ],
           "default": null
+        },
+        "backendTunnel": {
+          "description": "Optional outbound proxy backend to tunnel this policy's own egress through\n(OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM\nproviders. Use when the identity provider is only reachable through a forward\nproxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the\nproxy inline via `{host, port}` so no separate named backend is required.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,

@@ -122,6 +122,7 @@ fn test_policy() -> OidcPolicy {
 		redirect_uri: test_redirect_uri(),
 		session,
 		scopes: vec!["openid".into(), "profile".into()],
+		outbound_tunnel: None,
 	}
 }
 
@@ -235,6 +236,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		scopes: vec!["profile".into(), "email".into()],
 		login: None,
 		logout: None,
+		backend_tunnel: None,
 	}
 }
 
@@ -592,6 +594,7 @@ async fn token_endpoint_auth_modes_shape_exchange_requests() {
 			"https://app.example.com/oauth/callback",
 			"code",
 			&SecretString::new("verifier".into()),
+			None,
 		)
 		.await
 		.expect(name);
@@ -685,6 +688,7 @@ async fn token_exchange_bounds_transport_failures() {
 					"https://app.example.com/oauth/callback",
 					"code",
 					&SecretString::new("verifier".into()),
+					None,
 					Duration::from_millis(50),
 				)
 				.await
@@ -697,6 +701,7 @@ async fn token_exchange_bounds_transport_failures() {
 					"https://app.example.com/oauth/callback",
 					"code",
 					&SecretString::new("verifier".into()),
+					None,
 				)
 				.await
 			},
@@ -1020,6 +1025,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				backend_tunnel: None,
 			},
 			provider_endpoint(format!("{}/authorize", mock.uri())),
 			provider_endpoint(format!("{}/token", mock.uri())),
@@ -1099,6 +1105,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		scopes: vec![],
 		login: None,
 		logout: None,
+		backend_tunnel: None,
 	};
 	let err = compile_local_policy(policy, translated_policy_id("discovery-relative-endpoints"))
 		.await
@@ -1166,6 +1173,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				backend_tunnel: None,
 			},
 			"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted",
 		),
@@ -1196,6 +1204,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				backend_tunnel: None,
 			},
 			"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly",
 		),
