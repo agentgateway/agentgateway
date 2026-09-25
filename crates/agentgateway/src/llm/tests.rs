@@ -3041,6 +3041,53 @@ fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
 	assert_eq!(req.uri().query(), None);
 }
 
+#[rstest::rstest]
+#[case::generate_content(
+	RouteType::GenerateContent,
+	custom::ProviderFormat::GenerateContent,
+	"/static/generate"
+)]
+#[case::count_tokens(
+	RouteType::GeminiCountTokens,
+	custom::ProviderFormat::GeminiCountTokens,
+	"/static/count-tokens"
+)]
+fn custom_static_native_path_does_not_validate_the_body_model(
+	#[case] route: RouteType,
+	#[case] format: custom::ProviderFormat,
+	#[case] configured_path: &str,
+) {
+	let provider = AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: vec![custom::ProviderFormatConfig {
+			format,
+			path: Some(strng::new(configured_path)),
+		}],
+	});
+	let llm_request = llm_request_for_path("../../foo");
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/model:generateContent",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			route,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect("static custom path must not validate a body-only model");
+
+	assert_eq!(req.uri().path(), configured_path);
+}
+
 fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
@@ -3053,6 +3100,118 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		prompt: None,
 		provider_state: None,
 	}
+}
+
+fn assert_invalid_model_path(result: anyhow::Result<()>) {
+	let error = result.expect_err("unsafe model path should be rejected");
+	assert!(
+		matches!(
+			error.downcast_ref::<AIError>(),
+			Some(AIError::InvalidModelPath)
+		),
+		"unexpected error: {error:?}"
+	);
+}
+
+#[rstest::rstest]
+#[case::dot("/model/../converse")]
+#[case::nested("/v1/projects/p/locations/global/models/./predict")]
+#[case::backslash("/model/foo\\..\\bar/converse")]
+fn provider_path_backstop_rejects_dot_segments(#[case] path: &str) {
+	assert_invalid_model_path(AIProvider::ensure_provider_path_is_safe(path));
+}
+
+#[rstest::rstest]
+#[case::body_only("/mnt/models/Llama-3.1-8B", None, None, "/v1/chat/completions")]
+#[case::path_override(
+	"../../foo",
+	Some("/operator/../override"),
+	None,
+	"/operator/../override"
+)]
+#[case::path_prefix(
+	"/mnt/models/Llama-3.1-8B",
+	None,
+	Some("/operator/../prefix"),
+	"/operator/../prefix/chat/completions"
+)]
+fn models_not_used_in_paths_do_not_fail_validation(
+	#[case] model: &str,
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] expected_path: &str,
+) {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	let llm_request = llm_request_for_path(model);
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/chat/completions",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			path_override,
+			path_prefix,
+			false,
+			None,
+			None,
+		)
+		.expect("model not used in path should remain valid");
+	assert_eq!(req.uri().path(), expected_path);
+}
+
+#[rstest::rstest]
+#[case::bedrock(AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+}), RouteType::Messages, false)]
+#[case::azure(AIProvider::azure(azure::Provider {
+		model_override: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::OpenAI,
+		api_version: Some(strng::new("2024-02-15-preview")),
+		project_name: None,
+}), RouteType::Messages, false)]
+#[case::vertex(AIProvider::Vertex(vertex::Provider {
+		model_override: None,
+		region: None,
+		project_id: strng::new("p"),
+	}), RouteType::Embeddings, false)]
+#[case::gemini(AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	}), RouteType::GenerateContent, true)]
+fn model_interpolating_providers_reject_unsafe_models(
+	#[case] provider: AIProvider,
+	#[case] route: RouteType,
+	#[case] native_gemini: bool,
+) {
+	let llm_request = if native_gemini {
+		native_gemini_llm_request("../../foo", false)
+	} else {
+		llm_request_for_path("../../foo")
+	};
+	let mut req =
+		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	assert_invalid_model_path(provider.setup_request(
+		&mut req,
+		route,
+		Some(&llm_request),
+		None,
+		None,
+		false,
+		None,
+		None,
+	));
 }
 
 fn assert_prefixed_host_override_path(

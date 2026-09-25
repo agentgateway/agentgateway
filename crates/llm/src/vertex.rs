@@ -71,6 +71,27 @@ fn prepare_anthropic_body(
 }
 
 impl Provider {
+	pub fn model_is_safe_for_path(
+		&self,
+		route: RouteType,
+		request_model: &str,
+		native_gemini: bool,
+	) -> bool {
+		if matches!(route, RouteType::AnthropicTokenCount | RouteType::Rerank) {
+			return true;
+		}
+		if route == RouteType::Embeddings {
+			return agent_http::path::is_safe_segment(strip_google_model_prefix(request_model));
+		}
+		if let Some(model) = self.anthropic_model(request_model) {
+			return agent_http::path::is_safe_segment(&model);
+		}
+		if route == RouteType::GeminiCountTokens || native_gemini {
+			return agent_http::path::is_safe_segment(strip_google_model_prefix(request_model));
+		}
+		true
+	}
+
 	pub fn get_path_for_model(
 		&self,
 		route: RouteType,
@@ -200,7 +221,7 @@ impl Provider {
 
 		// The publisher path supplies its own `.../models/` prefix, so what is left has to be a
 		// single segment; a `/` still in it would be choosing the upstream path, not a model.
-		if !crate::model_path::is_safe_segment(stripped) {
+		if !agent_http::path::is_safe_segment(stripped) {
 			return None;
 		}
 
@@ -611,6 +632,29 @@ mod tests {
 		};
 		let got = p.get_path_for_model(RouteType::Embeddings, req_model, false, false);
 		assert_eq!(got.as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::embedding(RouteType::Embeddings, "../../foo", false, false)]
+	#[case::anthropic(RouteType::Messages, "claude-../foo", false, false)]
+	#[case::native_gemini(RouteType::GenerateContent, "gemini-2.5-flash/../../foo", true, false)]
+	#[case::body_only(RouteType::Completions, "/mnt/models/model", false, true)]
+	fn rejects_unsafe_models_only_when_the_selected_route_interpolates_them(
+		#[case] route: RouteType,
+		#[case] model: &str,
+		#[case] native_gemini: bool,
+		#[case] expected: bool,
+	) {
+		let provider = Provider {
+			project_id: strng::new("p"),
+			model_override: None,
+			region: None,
+		};
+
+		assert_eq!(
+			provider.model_is_safe_for_path(route, model, native_gemini),
+			expected
+		);
 	}
 
 	#[rstest::rstest]

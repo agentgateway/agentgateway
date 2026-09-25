@@ -297,6 +297,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::MessageNotFound
 		| llm::AIError::StreamingUnsupported
 		| llm::AIError::UnsupportedModel
+		| llm::AIError::InvalidModelPath
 		| llm::AIError::UnsupportedContent
 		| llm::AIError::UnsupportedConversion(_)
 		| llm::AIError::RequestParsing(_) => AIErrorClassification {
@@ -353,6 +354,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::MessageNotFound
 		| llm::AIError::StreamingUnsupported
 		| llm::AIError::UnsupportedModel
+		| llm::AIError::InvalidModelPath
 		| llm::AIError::RequestTooLarge
 		| llm::AIError::RequestParsing(_)
 		| llm::AIError::RequestMarshal(_)
@@ -853,6 +855,11 @@ mod tests {
 		);
 		assert_ai_error_mapping(
 			|| ProxyError::AIRequest(llm::AIError::UnsupportedConversion("request".into())),
+			StatusCode::BAD_REQUEST,
+			ProxyResponseReason::InvalidRequest,
+		);
+		assert_ai_error_mapping(
+			|| ProxyError::AIRequest(llm::AIError::InvalidModelPath),
 			StatusCode::BAD_REQUEST,
 			ProxyResponseReason::InvalidRequest,
 		);

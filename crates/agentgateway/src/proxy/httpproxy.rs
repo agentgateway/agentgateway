@@ -2884,7 +2884,10 @@ async fn make_backend_call(
 							Some(&mut backend_call.target),
 							Some(inputs.model_catalog.as_handle()),
 						)
-						.map_err(ProxyError::Processing)?;
+						.map_err(|error| match error.downcast::<crate::llm::AIError>() {
+							Ok(error) => ProxyError::AIRequest(error),
+							Err(error) => ProxyError::Processing(error),
+						})?;
 
 					// Apply all policies (rate limits, prompt guards, enrichment)
 					// count_tokens skips policies (no tokens generated, no prompts to manipulate)
