@@ -535,6 +535,17 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -4401,11 +4412,22 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -19097,11 +19119,22 @@
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`binds[].listeners[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`binds[].listeners[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`binds[].listeners[].policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -22291,6 +22324,17 @@
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`policies[].policy.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`policies[].policy.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`policies[].policy.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`policies[].policy.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`policies[].policy.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`policies[].policy.mcpAuthentication.introspection.timeout.secs`|integer||
+|`policies[].policy.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`policies[].policy.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -26157,11 +26201,22 @@
 |`policies[].policy.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`policies[].policy.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`policies[].policy.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`policies[].policy.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`policies[].policy.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`policies[].policy.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`policies[].policy.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`policies[].policy.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`policies[].policy.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`policies[].policy.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`policies[].policy.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`policies[].policy.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`policies[].policy.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`policies[].policy.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`policies[].policy.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`policies[].policy.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`policies[].policy.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`policies[].policy.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -40905,6 +40960,17 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -44771,11 +44837,22 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routeGroups[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -59174,11 +59251,22 @@
 |`gateways.*.listeners[].jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`gateways.*.listeners[].jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.listeners[].jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`gateways.*.listeners[].jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`gateways.*.listeners[].jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`gateways.*.listeners[].jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.listeners[].jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.listeners[].jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -60505,11 +60593,22 @@
 |`gateways.*.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`gateways.*.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`gateways.*.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`gateways.*.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`gateways.*.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`gateways.*.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`gateways.*.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`gateways.*.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`gateways.*.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`gateways.*.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`gateways.*.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`gateways.*.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`gateways.*.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`gateways.*.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`gateways.*.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -62190,6 +62289,17 @@
 |`routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -66056,11 +66166,22 @@
 |`routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`routes[].policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`routes[].policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`routes[].policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`routes[].policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routes[].policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`routes[].policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`routes[].policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routes[].policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`routes[].policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`routes[].policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -84826,11 +84947,22 @@
 |`llm.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`llm.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`llm.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`llm.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`llm.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`llm.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`llm.policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`llm.policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`llm.policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`llm.policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`llm.policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`llm.policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`llm.policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`llm.policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`llm.policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`llm.policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`llm.policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`llm.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`llm.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -89682,6 +89814,17 @@
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`mcp.policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`mcp.policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`mcp.policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`mcp.policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`mcp.policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`mcp.policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`mcp.policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`mcp.policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -93548,11 +93691,22 @@
 |`mcp.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`mcp.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`mcp.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`mcp.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`mcp.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`mcp.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`mcp.policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`mcp.policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`mcp.policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`mcp.policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`mcp.policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`mcp.policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`mcp.policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`mcp.policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`mcp.policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`mcp.policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`mcp.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`mcp.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -95756,11 +95910,22 @@
 |`ui.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`ui.policies.jwtAuth.providers[].issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`ui.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
-|`ui.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
+|`ui.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>Mutually exclusive with `introspection` — a provider uses either local JWKS verification<br>or remote introspection, not both.|
 |`ui.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`ui.policies.jwtAuth.providers[].introspection`|object|RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —<br>a provider uses either local JWKS verification or remote introspection, not both.|
+|`ui.policies.jwtAuth.providers[].introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).|
+|`ui.policies.jwtAuth.providers[].introspection.clientId`|string|OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate<br>the introspection request (RFC 7662 §2.1). This is the gateway's credential, not the<br>client whose token is being validated.|
+|`ui.policies.jwtAuth.providers[].introspection.clientSecret`|string|OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.<br>Must belong to a confidential client registered with the introspecting IdP.<br>Only `client_secret_basic` is supported; `private_key_jwt` is not.|
+|`ui.policies.jwtAuth.providers[].introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`ui.policies.jwtAuth.providers[].introspection.cacheDuration.secs`|integer||
+|`ui.policies.jwtAuth.providers[].introspection.cacheDuration.nanos`|integer||
+|`ui.policies.jwtAuth.providers[].introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`ui.policies.jwtAuth.providers[].introspection.timeout.secs`|integer||
+|`ui.policies.jwtAuth.providers[].introspection.timeout.nanos`|integer||
+|`ui.policies.jwtAuth.providers[].introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`ui.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`ui.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|

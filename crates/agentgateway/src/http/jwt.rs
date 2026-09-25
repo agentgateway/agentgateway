@@ -12,6 +12,7 @@ use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
 use crate::telemetry::log::RequestLog;
+use crate::types::agent::LocalIntrospectionConfig;
 use crate::*;
 
 #[cfg(test)]
@@ -39,6 +40,9 @@ pub enum TokenError {
 
 	#[error("failed to strip validated credentials from the request: {0}")]
 	CredentialRemoval(String),
+
+	#[error("token introspection failed: {0}")]
+	IntrospectionFailed(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -80,6 +84,11 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// When set on a provider, opaque tokens (non-JWT) are validated via introspection
+	// against this provider's configured endpoint.
+	introspection: Option<std::sync::Arc<crate::http::introspection::IntrospectionConfig>>,
+	introspection_cache: Option<std::sync::Arc<crate::http::introspection::IntrospectionCache>>,
 }
 
 // TODO: can we give anything useful here?
@@ -241,10 +250,17 @@ pub struct ProviderConfig {
 	/// Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.
 	pub audiences: Option<Vec<String>>,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: serdes::FileInlineOrRemote,
+	/// Mutually exclusive with `introspection` — a provider uses either local JWKS verification
+	/// or remote introspection, not both.
+	#[serde(default)]
+	pub jwks: Option<serdes::FileInlineOrRemote>,
 	/// Claim requirements to enforce after the token signature is verified.
 	#[serde(default)]
 	pub jwt_validation_options: JWTValidationOptions,
+	/// RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —
+	/// a provider uses either local JWKS verification or remote introspection, not both.
+	#[serde(default)]
+	pub introspection: Option<LocalIntrospectionConfig>,
 }
 
 #[apply(schema_enum!)]
@@ -343,20 +359,58 @@ impl LocalJwtConfig {
 				vec![ProviderConfig {
 					issuer,
 					audiences,
-					jwks,
+					jwks: Some(jwks),
 					jwt_validation_options,
+					introspection: None,
 				}],
 			),
 		};
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
-			let jwks: JwkSet = pc
-				.jwks
-				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
-				.await
-				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			// Build base provider: JWKS if configured, otherwise introspection-only
+			let base_provider = if let Some(jwks_ref) = pc.jwks.as_ref() {
+				// Load JWKS provider
+				let jwks: JwkSet = jwks_ref
+					.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+					.await
+					.map_err(JwkError::JwkLoadError)?;
+				Provider::from_jwks(
+					jwks,
+					pc.issuer.clone(),
+					pc.audiences.clone(),
+					pc.jwt_validation_options.clone(),
+				)?
+			} else if pc.introspection.is_some() {
+				// Introspection-only provider (opaque tokens)
+				Provider::introspection_only(
+					pc.issuer.clone(),
+					pc.audiences.clone(),
+					pc.jwt_validation_options.clone(),
+				)
+			} else {
+				return Err(JwkError::JwkLoadError(anyhow::anyhow!(
+					"JWT provider '{}' requires either jwks or introspection",
+					pc.issuer
+				)));
+			};
+
+			// Add introspection on top if configured
+			let provider = if let Some(intro) = &pc.introspection {
+				let config = crate::http::introspection::IntrospectionConfig {
+					endpoint: intro.url.clone(),
+					client_id: intro.client_id.clone(),
+					client_secret: intro.client_secret.clone(),
+					cache_duration: intro.cache_duration,
+					timeout: intro.timeout,
+					failure_mode: intro.failure_mode,
+					expected_issuer: pc.issuer.clone(),
+					expected_audiences: pc.audiences.clone().unwrap_or_default(),
+				};
+				base_provider.with_introspection(config)
+			} else {
+				base_provider
+			};
 			providers.push(provider);
 		}
 		Ok(Jwt {
@@ -476,7 +530,46 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			introspection: None,
+			introspection_cache: None,
+		})
+	}
+
+	/// Create a provider that uses only RFC 7662 introspection (no JWKS keys).
+	pub fn introspection_only(
+		issuer: String,
+		_audiences: Option<Vec<String>>,
+		_jwt_validation_options: JWTValidationOptions,
+	) -> Self {
+		Provider {
+			issuer,
+			keys: HashMap::new(),
+			introspection: None,
+			introspection_cache: None,
+		}
+	}
+
+	/// Attach RFC 7662 Token Introspection configuration to this provider.
+	///
+	/// When set, opaque tokens (non-JWT) matching this provider's issuer are
+	/// introspected against the configured endpoint.
+	pub fn with_introspection(
+		mut self,
+		config: crate::http::introspection::IntrospectionConfig,
+	) -> Self {
+		let cache = if config.cache_duration.as_secs() > 0 {
+			Some(std::sync::Arc::new(
+				crate::http::introspection::IntrospectionCache::new(config.cache_duration),
+			))
+		} else {
+			None
+		};
+		self.introspection = Some(std::sync::Arc::new(config));
+		self.introspection_cache = cache;
+		self
 	}
 }
 
@@ -493,6 +586,26 @@ impl Jwt {
 			location: authorization_location,
 			preserve_token,
 		}
+	}
+
+	/// Add introspection configuration to all providers in this Jwt validator.
+	/// This allows JWT validation to fall back to introspection for opaque tokens.
+	pub fn with_introspection_for_all_providers(
+		mut self,
+		config: crate::http::introspection::IntrospectionConfig,
+	) -> Self {
+		let cache = if config.cache_duration.as_secs() > 0 {
+			Some(std::sync::Arc::new(
+				crate::http::introspection::IntrospectionCache::new(config.cache_duration),
+			))
+		} else {
+			None
+		};
+		for provider in &mut self.providers {
+			provider.introspection = Some(std::sync::Arc::new(config.clone()));
+			provider.introspection_cache = cache.clone();
+		}
+		self
 	}
 }
 
@@ -577,6 +690,7 @@ impl Jwt {
 		&self,
 		log: Option<&mut RequestLog>,
 		req: &mut Request,
+		client: Option<&crate::proxy::httpproxy::PolicyClient>,
 	) -> Result<(), TokenError> {
 		let Some(token) = self.location.extract(req) else {
 			// In strict mode, we require a token
@@ -598,6 +712,16 @@ impl Jwt {
 		};
 		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
+			Err(e)
+				if self.should_try_introspection(&e)
+					&& self.has_introspection_provider()
+					&& client.is_some() =>
+			{
+				// JWT validation failed with a format error and a provider with
+				// introspection is configured. Attempt RFC 7662 introspection.
+				let policy_client = client.unwrap();
+				self.try_introspection(&token, policy_client).await?
+			},
 			Err(e) if self.mode == Mode::Permissive => {
 				dtrace::pol_result!(
 					dtrace::Warn,
@@ -636,6 +760,95 @@ impl Jwt {
 		);
 		req.extensions_mut().insert(claims);
 		Ok(())
+	}
+
+	/// Returns true if any provider has introspection configured.
+	fn has_introspection_provider(&self) -> bool {
+		self.providers.iter().any(|p| p.introspection.is_some())
+	}
+
+	/// Try RFC 7662 introspection against the first provider that has it configured.
+	async fn try_introspection(
+		&self,
+		token: &str,
+		policy_client: &crate::proxy::httpproxy::PolicyClient,
+	) -> Result<Claims, TokenError> {
+		let provider = self
+			.providers
+			.iter()
+			.find(|p| p.introspection.is_some())
+			.expect("caller checked has_introspection_provider");
+		let config = provider.introspection.as_ref().unwrap();
+
+		// Determine endpoint (may need OIDC discovery)
+		let endpoint = match &config.endpoint {
+			Some(ep) => ep.clone(),
+			None => {
+				match crate::http::introspection::discover_introspection_endpoint(
+					policy_client,
+					&config.expected_issuer,
+				)
+				.await
+				{
+					Ok(Some(ep)) => ep,
+					Ok(None) => {
+						return Err(TokenError::IntrospectionFailed(
+							"introspection_endpoint not found in OIDC discovery".to_string(),
+						));
+					},
+					Err(e) => {
+						return Err(TokenError::IntrospectionFailed(e));
+					},
+				}
+			},
+		};
+
+		// Check cache first
+		if let Some(cache) = &provider.introspection_cache
+			&& let Some(cached) = cache.get(token).await
+		{
+			tracing::debug!("introspection cache hit");
+			return Ok(cached);
+		}
+
+		// Call introspection
+		let claims =
+			match crate::http::introspection::introspect(policy_client, config, token, &endpoint).await {
+				Ok(claims) => claims,
+				Err(e) => match config.failure_mode {
+					crate::http::introspection::FailureMode::FailOpen => {
+						tracing::warn!("introspection failed ({e}), failing open");
+						return Ok(Claims::default());
+					},
+					crate::http::introspection::FailureMode::FailClosed => {
+						return Err(TokenError::IntrospectionFailed(e.to_string()));
+					},
+				},
+			};
+
+		// Cache the result
+		if let Some(cache) = &provider.introspection_cache {
+			cache.insert(token, claims.clone()).await;
+		}
+		Ok(claims)
+	}
+
+	/// Determine whether to fall back to RFC 7662 introspection.
+	///
+	/// We only fallback when the token is structurally not a JWT:
+	/// - `InvalidHeader`: token cannot be decoded as JWT at all (opaque token)
+	/// - `MissingKeyId`: JWT header parsed but no kid (unusual, could be opaque)
+	///
+	/// We do NOT fallback when:
+	/// - `Invalid(e)`: JWT decoded but signature/claims failed validation
+	///   → this means it IS a JWT, just not valid for our providers
+	/// - `Missing`: no token at all → introspection cannot help
+	/// - `UnknownKeyId`: JWT has a kid but it's not in our key set
+	fn should_try_introspection(&self, error: &TokenError) -> bool {
+		matches!(
+			error,
+			TokenError::InvalidHeader(_) | TokenError::MissingKeyId
+		)
 	}
 
 	pub fn validate_claims(&self, token: &str) -> Result<Claims, TokenError> {

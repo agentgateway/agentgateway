@@ -18,7 +18,7 @@ func TestOwnersFromPolicyUseCanonicalSpecScopedPaths(t *testing.T) {
 			Providers: []agentgateway.JWTProvider{
 				{},
 				{
-					JWKS: agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
+					JWKS: &agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
 				},
 			},
 		},
@@ -26,7 +26,7 @@ func TestOwnersFromPolicyUseCanonicalSpecScopedPaths(t *testing.T) {
 	policy.Spec.Backend = &agentgateway.BackendFull{
 		MCP: &agentgateway.BackendMCP{
 			Authentication: &agentgateway.MCPAuthentication{
-				JWKS: agentgateway.RemoteJWKS{},
+				JWKS: &agentgateway.RemoteJWKS{},
 			},
 		},
 	}
@@ -38,7 +38,7 @@ func TestOwnersFromPolicyUseCanonicalSpecScopedPaths(t *testing.T) {
 	owner, ok := PolicyJWTProviderLookupOwner(policy.Namespace, policy.Name, 1, policy.Spec.Traffic.JWTAuthentication.Providers[1])
 	assert.True(t, ok)
 	assert.Equal(t, owner, owners[0])
-	assert.Equal(t, PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, policy.Spec.Backend.MCP.Authentication.JWKS), owners[1])
+	assert.Equal(t, PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, *policy.Spec.Backend.MCP.Authentication.JWKS), owners[1])
 }
 
 func TestOwnersFromPolicyRequireAtLeastOneTarget(t *testing.T) {
@@ -48,7 +48,7 @@ func TestOwnersFromPolicyRequireAtLeastOneTarget(t *testing.T) {
 	policy.Spec.Traffic = &agentgateway.Traffic{
 		JWTAuthentication: &agentgateway.JWTAuthentication{
 			Providers: []agentgateway.JWTProvider{{
-				JWKS: agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
+				JWKS: &agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
 			}},
 		},
 	}
@@ -64,7 +64,7 @@ func TestOwnersFromPolicyWithTargetSelectors(t *testing.T) {
 	policy.Spec.Traffic = &agentgateway.Traffic{
 		JWTAuthentication: &agentgateway.JWTAuthentication{
 			Providers: []agentgateway.JWTProvider{{
-				JWKS: agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
+				JWKS: &agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
 			}},
 		},
 	}
