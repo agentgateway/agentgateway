@@ -114,6 +114,7 @@ hashbrown = "0.17"
 h2 = "0.4"
 headers = "0.4"
 hex = "0.4"
+hmac = "0.13"
 hickory-resolver = { version = "0.26", features = ["serde"] }
 htpasswd-verify-fork = { path = "crates/htpasswd-verify-fork" }
 httpdate = "1.0"
