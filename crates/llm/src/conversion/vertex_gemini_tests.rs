@@ -66,6 +66,101 @@ fn consecutive_same_role_messages_merge() {
 	assert_eq!(g["contents"][1]["role"], "model");
 }
 
+/// Claude Code sends a `role: system` message after the first user turn and another one on every
+/// later turn. Vertex's implicit cache matches on the request prefix, so each turn's request must
+/// start with the previous turn's request: systemInstruction unchanged, earlier contents untouched.
+#[test]
+fn mid_conversation_system_messages_keep_the_prefix_stable() {
+	let turn = |n: usize| {
+		let mut messages = vec![
+			json!({ "role": "user", "content": "read the files" }),
+			json!({ "role": "system", "content": "# Environment" }),
+		];
+		for i in 0..n {
+			messages.push(json!({ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": format!("call_{i}"), "name": "Read", "input": { "i": i } }
+			]}));
+			messages.push(json!({ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": format!("call_{i}"), "content": format!("file {i}") }
+			]}));
+			messages
+				.push(json!({ "role": "system", "content": format!("<total_tokens>{i}</total_tokens>") }));
+		}
+		to_gemini_msg(json!({
+			"model": "gemini-3.8-flash",
+			"max_tokens": 1024,
+			"system": "You are Claude Code.",
+			"tools": [{ "name": "Read", "input_schema": { "type": "object" } }],
+			"messages": messages
+		}))
+	};
+	let (prev, next) = (turn(2), turn(3));
+	assert_eq!(prev["systemInstruction"], next["systemInstruction"]);
+	assert_eq!(
+		next["systemInstruction"]["parts"][0]["text"],
+		"You are Claude Code."
+	);
+	let (prev, next) = (
+		prev["contents"].as_array().unwrap(),
+		next["contents"].as_array().unwrap(),
+	);
+	assert!(next.len() > prev.len());
+	assert_eq!(prev[..], next[..prev.len()]);
+	// The mid-conversation system text stays where it was sent.
+	assert_eq!(
+		prev[0]["parts"][1]["text"],
+		"<system-reminder>\n# Environment\n</system-reminder>"
+	);
+	assert_eq!(
+		prev.last().unwrap()["parts"][0]["text"],
+		"<system-reminder>\n<total_tokens>1</total_tokens>\n</system-reminder>"
+	);
+}
+
+/// A system message sent between a tool_use and its tool_result stays where it was sent.
+#[test]
+fn mid_conversation_system_message_between_tool_call_and_result() {
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3.8-flash",
+		"max_tokens": 1024,
+		"tools": [{ "name": "Read", "input_schema": { "type": "object" } }],
+		"messages": [
+			{ "role": "user", "content": "read it" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "call_0", "name": "Read", "input": {} }
+			]},
+			{ "role": "system", "content": "reminder" },
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "call_0", "content": "file" }
+			]}
+		]
+	}));
+	let contents = g["contents"].as_array().unwrap();
+	assert_eq!(contents.len(), 4);
+	assert_eq!(contents[1]["role"], "model");
+	assert_eq!(
+		contents[2]["parts"][0]["text"],
+		"<system-reminder>\nreminder\n</system-reminder>"
+	);
+	assert!(contents[3]["parts"][0].get("functionResponse").is_some());
+}
+
+/// System messages ahead of the first turn are still instructions, not conversation.
+#[test]
+fn leading_system_messages_go_to_system_instruction() {
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3.8-flash",
+		"max_tokens": 1024,
+		"system": "a",
+		"messages": [
+			{ "role": "system", "content": "b" },
+			{ "role": "user", "content": "hi" }
+		]
+	}));
+	assert_eq!(g["systemInstruction"]["parts"][0]["text"], "a\nb");
+	assert_eq!(g["contents"].as_array().unwrap().len(), 1);
+}
+
 #[test]
 fn empty_messages_get_synthetic_user_entry() {
 	let g = to_gemini(json!({ "model": "gemini-2.5-flash", "messages": [] }));

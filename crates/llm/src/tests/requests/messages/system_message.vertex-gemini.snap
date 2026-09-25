@@ -27,17 +27,13 @@ info:
           },
           {
             "text": "hola"
+          },
+          {
+            "text": "<system-reminder>\nThe following skills are available for use.\n</system-reminder>"
           }
         ]
       }
     ],
-    "systemInstruction": {
-      "parts": [
-        {
-          "text": "The following skills are available for use."
-        }
-      ]
-    },
     "generationConfig": {
       "maxOutputTokens": 1024
     }

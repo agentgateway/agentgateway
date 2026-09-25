@@ -1245,11 +1245,16 @@ pub mod from_messages {
 				_ => {},
 			}
 		}
+		// Only the system messages that lead the conversation belong in systemInstruction. Later
+		// ones stay in place (see messages_to_contents): Vertex's implicit cache matches on the
+		// request prefix, and systemInstruction precedes contents, so appending a per-turn system
+		// message there would change the prefix on every call and void the cache for the whole
+		// conversation.
 		system_parts.extend(
 			req
 				.messages
 				.iter()
-				.filter(|m| m.role == Role::System)
+				.take_while(|m| m.role == Role::System)
 				.flat_map(|m| m.content.iter())
 				.filter_map(|b| {
 					if let ContentBlock::Text(t) = b {
@@ -1311,8 +1316,10 @@ pub mod from_messages {
 			.collect();
 
 		let mut contents: Vec<vg::Content> = Vec::new();
+		let mut leading_system = true;
 
 		for m in messages {
+			leading_system &= m.role == Role::System;
 			match m.role {
 				Role::User => {
 					// Gemini 3 rejects a functionResponse that has sibling parts, so tool results
@@ -1423,8 +1430,23 @@ pub mod from_messages {
 					}
 					push_content(&mut contents, "model", parts);
 				},
+				// Leading system messages are collected into systemInstruction in build_request.
+				Role::System if leading_system => {},
+				// A system message mid-conversation keeps its position as a user reminder, so the
+				// contents before it stay a stable, cacheable prefix across turns.
 				Role::System => {
-					// Collected into systemInstruction in build_request; skip here.
+					let reminder: Vec<vg::Part> = m
+						.content
+						.iter()
+						.filter_map(|b| match b {
+							ContentBlock::Text(t) if !t.text.is_empty() => Some(text_part(&format!(
+								"<system-reminder>\n{}\n</system-reminder>",
+								t.text
+							))),
+							_ => None,
+						})
+						.collect();
+					push_content(&mut contents, "user", reminder);
 				},
 			}
 		}
