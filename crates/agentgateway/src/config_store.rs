@@ -849,6 +849,7 @@ pub fn merge_model_catalog_sources(
 				// timestamped catalog rather than guessing from the resource timestamp,
 				// which may also reflect an unrelated custom-overlay edit.
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			});
 		}
 		sources.push(crate::ModelCatalogSource::InlineCatalog { inline });
@@ -1920,6 +1921,7 @@ mod tests {
 			Some(crate::llm::catalog::CatalogMetadata {
 				source: None,
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			})
 		);
 	}
