@@ -458,8 +458,33 @@ impl ConfigImporter for LiteLlmImporter {
 				message,
 			});
 		}
-		for setting in config.router_settings.keys() {
+		for (setting, value) in &config.router_settings {
 			if matches!(setting.as_str(), "fallbacks" | "routing_strategy") {
+				continue;
+			}
+			let source_path = format!("router_settings.{setting}");
+			if setting == "cache_responses" {
+				report_litellm_response_cache(&mut plan.findings, &source_path, value);
+				continue;
+			}
+			let cache_message = match setting.as_str() {
+				"redis_url" | "redis_host" | "redis_port" | "redis_password" | "redis_db"
+				| "cache_kwargs" => Some(
+					"LiteLLM router Redis coordination settings were not emitted; review shared routing, cooldown, and usage state separately from response caching. These settings can also configure the backend when router response caching is enabled",
+				),
+				"caching_groups" => Some(
+					"LiteLLM response-cache sharing across model groups was not preserved; review cache-key isolation when configuring response caching manually",
+				),
+				_ => None,
+			};
+			if let Some(message) = cache_message {
+				report_litellm_cache_value(
+					&mut plan.findings,
+					&source_path,
+					value,
+					ImportStatus::Manual,
+					message,
+				);
 				continue;
 			}
 			plan.findings.push(ImportFinding {
@@ -486,8 +511,16 @@ impl ConfigImporter for LiteLlmImporter {
 				});
 			}
 		}
-		for setting in config.litellm_settings.keys() {
+		for (setting, value) in &config.litellm_settings {
 			if setting == "fallbacks" {
+				continue;
+			}
+			if setting == "cache" {
+				report_litellm_response_cache(&mut plan.findings, "litellm_settings.cache", value);
+				continue;
+			}
+			if setting == "cache_params" {
+				report_litellm_cache_params(&mut plan.findings, value);
 				continue;
 			}
 			if setting == "database_url" {
@@ -508,6 +541,128 @@ impl ConfigImporter for LiteLlmImporter {
 			"Unrecognized LiteLLM top-level field was not emitted",
 		);
 		Ok(plan)
+	}
+}
+
+fn report_litellm_response_cache(
+	findings: &mut Vec<ImportFinding>,
+	source_path: &str,
+	value: &Value,
+) {
+	let message = match value.as_bool() {
+		Some(true) => {
+			"LiteLLM response caching was requested but was not preserved; configure a response-cache solution manually before relying on cached responses. Provider promptCaching is not equivalent to caching complete responses"
+		},
+		Some(false) => {
+			"This LiteLLM response-cache flag is false and was not emitted; review other response-cache settings independently"
+		},
+		None => {
+			"Expected a boolean response-cache flag; its value was not resolved or emitted. Review response caching manually"
+		},
+	};
+	report_litellm_cache_value(findings, source_path, value, ImportStatus::Manual, message);
+}
+
+const CACHE_BACKEND_GUIDANCE: &str = "LiteLLM response-cache backend selection was not emitted; choose a response-cache solution manually. Provider promptCaching does not cache complete responses";
+
+const CACHE_CONNECTION_GUIDANCE: &str = "LiteLLM response-cache connection or authentication settings were not emitted; configure connectivity and secret references in the chosen cache solution manually";
+
+const CACHE_EXPIRATION_GUIDANCE: &str = "LiteLLM response-cache expiration was not preserved; review TTL units and backend defaults when configuring cache lifetime manually";
+
+const CACHE_NAMESPACE_GUIDANCE: &str = "LiteLLM response-cache namespace was not preserved; configure cache-key isolation manually before sharing a cache backend";
+
+const CACHE_OPERATION_GUIDANCE: &str = "LiteLLM response-cache operation selection was not preserved; review which API operations may reuse cached responses";
+
+const CACHE_MODE_GUIDANCE: &str = "LiteLLM response-cache opt-in or opt-out behavior was not preserved; review which requests may read from or write to the cache";
+
+fn cache_parameter_guidance(key: &str) -> Option<&'static str> {
+	match key {
+		"type" => Some(CACHE_BACKEND_GUIDANCE),
+		"host" | "port" | "url" | "password" => Some(CACHE_CONNECTION_GUIDANCE),
+		"ttl" | "default_in_memory_ttl" | "default_in_redis_ttl" => Some(CACHE_EXPIRATION_GUIDANCE),
+		"namespace" => Some(CACHE_NAMESPACE_GUIDANCE),
+		"supported_call_types" => Some(CACHE_OPERATION_GUIDANCE),
+		"mode" => Some(CACHE_MODE_GUIDANCE),
+		_ => None,
+	}
+}
+
+fn report_litellm_cache_params(findings: &mut Vec<ImportFinding>, value: &Value) {
+	let source_path = "litellm_settings.cache_params";
+	let Some(params) = value.as_object() else {
+		report_litellm_cache_value(
+			findings,
+			source_path,
+			value,
+			ImportStatus::Manual,
+			"Expected a response-cache parameter mapping; it was not resolved or emitted. Review response caching manually",
+		);
+		return;
+	};
+	if params.is_empty() {
+		report_litellm_cache_value(
+			findings,
+			source_path,
+			value,
+			ImportStatus::Manual,
+			"Empty LiteLLM response-cache parameters were not emitted; review the source cache defaults before configuring response caching manually",
+		);
+	}
+	for (key, value) in params {
+		let message = cache_parameter_guidance(key);
+		let (status, message) = match message {
+			Some(message) => (ImportStatus::Manual, message),
+			None => (
+				ImportStatus::Unsupported,
+				"Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution",
+			),
+		};
+		report_litellm_cache_value(
+			findings,
+			&format!("{source_path}.{key}"),
+			value,
+			status,
+			message,
+		);
+	}
+}
+
+fn report_litellm_cache_value(
+	findings: &mut Vec<ImportFinding>,
+	source_path: &str,
+	value: &Value,
+	status: ImportStatus,
+	message: &str,
+) {
+	findings.push(ImportFinding {
+		source_path: source_path.to_string(),
+		status,
+		message: message.to_string(),
+	});
+	match value {
+		Value::Object(values) => {
+			for (key, value) in values {
+				report_litellm_cache_value(
+					findings,
+					&format!("{source_path}.{key}"),
+					value,
+					status,
+					message,
+				);
+			}
+		},
+		Value::Array(values) => {
+			for (index, value) in values.iter().enumerate() {
+				report_litellm_cache_value(
+					findings,
+					&format!("{source_path}[{index}]"),
+					value,
+					status,
+					message,
+				);
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -1491,6 +1646,10 @@ fn unique_imported_provider_name(
 }
 
 #[cfg(test)]
+#[path = "tests/import/cache.rs"]
+mod cache_tests;
+
+#[cfg(test)]
 mod tests {
 	use std::fs;
 	use std::path::{Path, PathBuf};
@@ -1551,6 +1710,11 @@ mod tests {
 	#[test]
 	fn reports_litellm_database_settings_without_reusing_them() {
 		assert_litellm_golden("database-settings");
+	}
+
+	#[test]
+	fn reports_litellm_cache_settings_without_reusing_them() {
+		assert_litellm_golden("cache-settings");
 	}
 
 	#[test]
