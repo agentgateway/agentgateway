@@ -71,6 +71,7 @@ mod bedrock_guardrails;
 mod google_model_armor;
 mod moderation;
 mod pii;
+mod prompt_injection;
 pub mod streaming_guardrails;
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -1035,6 +1036,10 @@ impl Policy {
 				Self::evaluate_azure_content_safety_request(req, claims, client, acs, &guard.rejection)
 					.await
 			},
+			RequestGuardKind::PromptInjection(pi) => Ok((
+				Self::evaluate_prompt_injection_request(req, pi, &guard.rejection, &guard.scope),
+				None,
+			)),
 		}
 	}
 
@@ -1517,6 +1522,33 @@ impl Policy {
 			GuardrailOutcome::None
 		} else {
 			GuardrailOutcome::Masked(ResponseGuardMutation::Texts(TextReplacements(replacements)))
+		}
+	}
+
+	fn evaluate_prompt_injection_request(
+		req: &mut dyn RequestType,
+		config: &PromptInjectionHeuristic,
+		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
+	) -> GuardrailOutcome<RequestGuardMutation> {
+		let audit = config.action == RejectAuditAction::Audit;
+		let mut detected = false;
+		req.visit_text_mut(&mut |content_scope, text| {
+			if detected {
+				return;
+			}
+			if !guard_scope.is_empty() && !guard_scope.contains(&content_scope) {
+				return;
+			}
+			let result = prompt_injection::detect(text);
+			if result.detected && result.score >= config.threshold {
+				detected = true;
+			}
+		});
+		if detected {
+			reject_or_audit(audit, rejection)
+		} else {
+			GuardrailOutcome::None
 		}
 	}
 
@@ -2030,6 +2062,8 @@ pub enum RequestGuardKind {
 	GoogleModelArmor(GoogleModelArmor),
 	/// Use Azure Content Safety to evaluate the prompt.
 	AzureContentSafety(AzureContentSafety),
+	/// Use heuristic pattern matching to detect prompt injection attempts.
+	PromptInjection(PromptInjectionHeuristic),
 }
 
 impl RequestGuardKind {
@@ -2041,6 +2075,7 @@ impl RequestGuardKind {
 			RequestGuardKind::BedrockGuardrails(_) => "bedrockGuardrails",
 			RequestGuardKind::GoogleModelArmor(_) => "googleModelArmor",
 			RequestGuardKind::AzureContentSafety(_) => "azureContentSafety",
+			RequestGuardKind::PromptInjection(_) => "promptInjection",
 		}
 	}
 }
@@ -2298,6 +2333,26 @@ pub struct AzureContentSafety {
 	/// Only applicable to request guards.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub detect_jailbreak: Option<DetectJailbreakConfig>,
+}
+
+/// Configuration for heuristic prompt injection detection.
+///
+/// Uses a set of regex patterns to detect common prompt injection techniques
+/// such as role manipulation, system prompt extraction, delimiter injection,
+/// and jailbreak attempts. Runs entirely locally with no external API calls.
+#[apply(schema!)]
+pub struct PromptInjectionHeuristic {
+	/// Score threshold above which content is flagged (0.0–1.0). Default: 0.33 (at least one pattern match).
+	#[serde(default = "default_injection_threshold")]
+	pub threshold: f32,
+	/// Whether to reject flagged content or only observe it.
+	/// Defaults to `reject` (enforce).
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub action: RejectAuditAction,
+}
+
+fn default_injection_threshold() -> f32 {
+	0.33
 }
 
 /// Configuration for the Analyze Text API.
