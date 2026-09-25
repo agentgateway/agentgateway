@@ -1,0 +1,148 @@
+# Response caching for public, deterministic HomeHub answers.
+version: v0.3
+providers:
+  defaults:
+    model: homehub-support
+  models:
+  - name: homehub-support
+    provider_model_id: homehub-support
+    api_format: openai
+    backend_refs:
+    - name: support-backend
+      endpoint: support-backend:8080
+      weight: 1
+routing:
+  modelCards:
+  - name: homehub-support
+    description: Deterministic HomeHub product-support backend.
+    capabilities:
+    - chat
+  signals:
+    domains: []
+    jailbreak: []
+    pii: []
+    role_bindings: []
+    keywords:
+    - name: homehub_support
+      operator: OR
+      keywords:
+      - HomeHub
+      case_sensitive: false
+    - name: reset_question
+      operator: OR
+      keywords:
+      - factory reset
+      - factory-reset
+      - reset procedure
+      - factory settings
+      - restore
+      case_sensitive: false
+  projections: {}
+  decisions:
+  - name: cached_homehub_support
+    description: Cache semantically equivalent HomeHub support questions.
+    priority: 100
+    rules:
+      operator: AND
+      conditions:
+      - type: keyword
+        name: homehub_support
+      - type: keyword
+        name: reset_question
+    modelRefs:
+    - model: homehub-support
+      use_reasoning: false
+    plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        mode: semantic
+        scope: global
+        semantic:
+          similarity_threshold: 0.7
+        ttl_seconds: 86400
+  - name: uncached_homehub_support
+    description: Forward other HomeHub support intents without response reuse.
+    priority: 50
+    rules:
+      operator: AND
+      conditions:
+      - type: keyword
+        name: homehub_support
+    modelRefs:
+    - model: homehub-support
+      use_reasoning: false
+global:
+  router:
+    config_source: file
+    auto_model_name: auto
+    strategy: priority
+    model_selection:
+      enabled: false
+    # Agentgateway sends complete request bodies for this example.
+    streamed_body:
+      enabled: false
+    skip_processing:
+      enabled: true
+  services:
+    response_api:
+      enabled: false
+      store_backend: memory
+    router_replay:
+      store_backend: memory
+    observability:
+      metrics:
+        enabled: true
+      tracing:
+        enabled: false
+    ratelimit:
+      providers: []
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        use_cpu: true
+        embedding_config:
+          backend: candle
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
+  integrations:
+    tools:
+      enabled: false
+  stores:
+    memory: null
+    response_cache:
+      enabled: true
+      backend_type: redis
+      similarity_threshold: 0.7
+      ttl_seconds: 86400
+      embedding_model: mmbert
+      redis:
+        connection:
+          host: redis
+          port: 6379
+          database: 0
+          password: ''
+          timeout: 30
+          tls:
+            enabled: false
+        index:
+          name: semantic_cache_idx
+          prefix: 'semantic-cache:'
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 64
+        search:
+          topk: 5
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+    vector_store: null
+listeners: []

@@ -1,0 +1,57 @@
+name: response-cache
+services:
+  agentgateway:
+    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.5.0}
+    command: ["-f", "/etc/agentgateway/config.yaml"]
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    volumes:
+      - ./agentgateway.yaml:/etc/agentgateway/config.yaml:ro
+    depends_on:
+      semantic-router:
+        condition: service_healthy
+      support-backend:
+        condition: service_healthy
+  semantic-router:
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG:-latest}
+    pull_policy: always
+    command: ["/app/config/config.yaml"]
+    volumes:
+      - ./semantic-router-config.yaml:/app/config/config.yaml:ro
+      - models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
+      start_period: 30s
+  redis:
+    image: redis:${REDIS_VERSION:-8.10.0-alpine}
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--save", "60", "1", "--dir", "/data"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  support-backend:
+    image: python:${PYTHON_VERSION:-3.12-alpine}
+    command: ["python", "-u", "/app/server.py"]
+    user: "65532:65532"
+    read_only: true
+    volumes:
+      - ../shared/support-backend.py:/app/server.py:ro
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  models:
+  redis-data:
