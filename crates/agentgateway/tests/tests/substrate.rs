@@ -106,7 +106,7 @@ impl credprovidermock::Handler for CredentialHandler {
 		);
 		assert_eq!(
 			request.actor_spiffe_id,
-			"spiffe://substrate-actor.local/atespace/demo/actor/my-actor"
+			"spiffe://substrate-actor.local/actor/demo/my-actor"
 		);
 		self.calls.fetch_add(1, Ordering::Relaxed);
 		Ok(protos::credprovider::FetchSecretResponse {
@@ -1293,20 +1293,11 @@ async fn actor_ingress_uses_backend_tunnel_for_connect() {
 	atunnel.abort();
 }
 
-fn actor_certificate(uid: &str) -> String {
+fn actor_certificate(uri: &str) -> String {
 	let mut params = rcgen::CertificateParams::default();
 	params
-		.custom_extensions
-		.push(rcgen::CustomExtension::from_oid_content(
-			&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
-			serde_json::to_vec(&json!({
-				"Atespace": "demo",
-				"ActorName": "my-actor",
-				"ActorUid": uid,
-				"Purpose": "atunnel",
-			}))
-			.unwrap(),
-		));
+		.subject_alt_names
+		.push(rcgen::SanType::URI(uri.try_into().unwrap()));
 	params
 		.self_signed(&rcgen::KeyPair::generate().unwrap())
 		.unwrap()
@@ -1315,7 +1306,7 @@ fn actor_certificate(uid: &str) -> String {
 
 async fn substrate_egress_connect_status(
 	handler: EgressHandler,
-	certificate_uid: &str,
+	certificate_uri: &str,
 	payload: &[u8],
 ) -> StatusCode {
 	let upstream = simple_mock().await;
@@ -1348,7 +1339,7 @@ async fn substrate_egress_connect_status(
 		strng::literal!("outer"),
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
-				certificate: Some(actor_certificate(certificate_uid).into()),
+				certificate: Some(actor_certificate(certificate_uri).into()),
 				..Default::default()
 			}),
 			..Default::default()
@@ -1450,7 +1441,9 @@ async fn substrate_egress_injects_provider_credentials_into_the_upstream_request
 		strng::literal!("outer"),
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
-				certificate: Some(actor_certificate("uid-1").into()),
+				certificate: Some(
+					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+				),
 				..Default::default()
 			}),
 			..Default::default()
@@ -1465,7 +1458,7 @@ async fn substrate_egress_injects_provider_credentials_into_the_upstream_request
 		String::from_utf8_lossy(&connect_response[..response_len]).starts_with("HTTP/1.1 200 OK\r\n")
 	);
 
-	io.write_all(b"GET / HTTP/1.1\r\nHost: allowed.example\r\nAuthorization: Bearer actor-supplied\r\nConnection: close\r\n\r\n")
+	io.write_all(b"GET /substrate-egress-credentials HTTP/1.1\r\nHost: allowed.example\r\nAuthorization: Bearer actor-supplied\r\nConnection: close\r\n\r\n")
 		.await
 		.unwrap();
 	let mut response = Vec::new();
@@ -1482,6 +1475,10 @@ async fn substrate_egress_injects_provider_credentials_into_the_upstream_request
 		upstream_requests[0].headers.get("authorization").unwrap(),
 		"Bearer injected-token"
 	);
+	let log = find_request_log("/substrate-egress-credentials").await;
+	assert_eq!(log["ate.actor.uid"].as_str(), Some("uid-1"), "{log:#?}");
+	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
+	assert_eq!(log["ate.atespace"].as_str(), Some("demo"), "{log:#?}");
 }
 
 #[tokio::test]
@@ -1494,7 +1491,7 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::NotFound)
 			},
-			"uid-1",
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -1503,11 +1500,11 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 	assert_eq!(
 		substrate_egress_connect_status(
 			EgressHandler {
-				uid: "uid-2",
+				uid: "uid-1",
 				state: running,
 				error: None
 			},
-			"uid-1",
+			"spiffe://substrate-actor.local/actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -1520,7 +1517,7 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: ActorState::Suspended,
 				error: None
 			},
-			"uid-1",
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -1533,7 +1530,7 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::Unavailable)
 			},
-			"uid-1",
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -1555,7 +1552,7 @@ async fn substrate_egress_authorizes_http_tls_and_opaque_tcp_connect_tunnels() {
 					state: ActorState::Running,
 					error: None
 				},
-				"uid-1",
+				"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 				payload,
 			)
 			.await,

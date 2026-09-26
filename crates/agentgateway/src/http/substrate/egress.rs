@@ -117,7 +117,7 @@ impl RequestPolicyTrait for SubstrateEgress {
 			name: identity.actor_name.clone(),
 		};
 		log.ate_actor_name = Some(actor.name.clone());
-		log.ate_actor_uid = Some(identity.actor_uid.clone());
+		log.ate_actor_uid = identity.actor_uid.clone();
 		log.ate_atespace = Some(actor.atespace.clone());
 		let channel = self
 			.target
@@ -243,9 +243,9 @@ fn provider_name(uri: &str) -> Option<&str> {
 }
 
 fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
-	// Matches Substrate's actorspiffe.Parse contract in
-	// internal/actorspiffe/actorspiffe.go.
-	format!("spiffe://substrate-actor.local/atespace/{atespace}/actor/{actor_name}")
+	// Translate the authenticated ateom identity to the actor identity providers authorize.
+	// Matches Substrate's resources.ActorSPIFFEID.
+	format!("spiffe://substrate-actor.local/actor/{atespace}/{actor_name}")
 }
 
 fn credential_header(
@@ -641,7 +641,7 @@ mod tests {
 	fn credential_cache_reuses_fresh_entries_and_expires_stale_ones() {
 		let cache = CredentialCache::new(16);
 		let key = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/example".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/actor/default/example".to_owned(),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
@@ -661,13 +661,13 @@ mod tests {
 		let cache = CredentialCache::new(16);
 		let now = Instant::now();
 		let key = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/one".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/actor/default/one".to_owned(),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		cache.insert(key.clone(), b"one".to_vec(), now);
 
 		let another_actor = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/two".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/actor/default/two".to_owned(),
 			uri: key.uri.clone(),
 		};
 		let another_uri = CredentialCacheKey {
