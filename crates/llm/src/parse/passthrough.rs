@@ -15,6 +15,7 @@ pin_project! {
 		decode_buffer: BytesMut,
 		handler: F,
 		finished: bool,
+		error: bool,
 	}
 }
 
@@ -33,6 +34,7 @@ where
 			handler,
 			decode_buffer: BytesMut::new(),
 			finished: false,
+			error: false,
 		})
 	})
 }
@@ -79,13 +81,16 @@ where
 		};
 
 		// Try to decode items from our buffer
-		if let Err(e) = (try_decode)(
-			*this.finished,
-			this.decode_buffer,
-			&mut *this.decoder,
-			this.handler,
-		) {
-			return Poll::Ready(Some(Err(e)));
+		// The body is forwarded unmodified, so a decoder failure (e.g. an unterminated
+		// final event) must not fail the response. Stop observing and keep forwarding.
+		if !*this.error
+			&& let Err(_e) = (try_decode)(
+				*this.finished,
+				this.decode_buffer,
+				&mut *this.decoder,
+				this.handler,
+			) {
+			*this.error = true;
 		}
 		// We need more input data - poll the underlying body
 		let res = ready!(this.body.as_mut().poll_frame(cx));
@@ -105,15 +110,16 @@ where
 			},
 		};
 
-		match (try_decode)(
-			*this.finished,
-			this.decode_buffer,
-			&mut *this.decoder,
-			this.handler,
-		) {
-			Ok(_) => Poll::Ready(frame_to_send),
-			Err(e) => Poll::Ready(Some(Err(e))),
+		if !*this.error
+			&& let Err(_e) = (try_decode)(
+				*this.finished,
+				this.decode_buffer,
+				&mut *this.decoder,
+				this.handler,
+			) {
+			*this.error = true;
 		}
+		Poll::Ready(frame_to_send)
 	}
 }
 
