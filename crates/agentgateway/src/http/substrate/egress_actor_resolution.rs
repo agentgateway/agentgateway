@@ -1,4 +1,3 @@
-use serde::Deserialize;
 use tonic::Code;
 
 use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
@@ -10,15 +9,10 @@ use crate::transport::stream::{Extension, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
-const ACTOR_IDENTITY_OID: &str = "1.3.6.1.4.1.11129.2.12.2";
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Clone, Debug)]
 pub(crate) struct ActorIdentity {
 	pub(crate) atespace: String,
 	pub(crate) actor_name: String,
-	pub(crate) actor_uid: String,
-	purpose: String,
 }
 
 /// Validates an actor's identity before accepting a CONNECT tunnel.
@@ -46,31 +40,35 @@ impl EgressActorResolution {
 			x509_parser::parse_x509_certificate(pem.contents()).map_err(|error| {
 				ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
 			})?;
-		let mut extensions = certificate
-			.extensions()
+		let san = certificate.subject_alternative_name().map_err(|error| {
+			ProxyError::SubstrateEgressDenied(format!("invalid actor certificate SAN: {error}"))
+		})?;
+		let mut uris = san
 			.iter()
-			.filter(|extension| extension.oid.to_id_string() == ACTOR_IDENTITY_OID);
-		let extension = extensions.next().ok_or_else(|| {
-			ProxyError::SubstrateEgressDenied("actor certificate has no ActorIdentity".to_owned())
+			.flat_map(|san| &san.value.general_names)
+			.filter_map(|name| match name {
+				x509_parser::extensions::GeneralName::URI(uri) => Some(*uri),
+				_ => None,
+			});
+		let uri = uris.next().ok_or_else(|| {
+			ProxyError::SubstrateEgressDenied("actor certificate has no URI SAN".to_owned())
 		})?;
-		if extensions.next().is_some() {
+		if uris.next().is_some() {
 			return Err(ProxyError::SubstrateEgressDenied(
-				"actor certificate has multiple ActorIdentity extensions".to_owned(),
+				"actor certificate has multiple URI SANs".to_owned(),
 			));
 		}
-		let identity: ActorIdentity = serde_json::from_slice(extension.value).map_err(|error| {
-			ProxyError::SubstrateEgressDenied(format!("invalid ActorIdentity: {error}"))
-		})?;
-		if !valid_resource_name(&identity.atespace)
-			|| !valid_resource_name(&identity.actor_name)
-			|| identity.actor_uid.is_empty()
-			|| identity.purpose != "atunnel"
-		{
-			return Err(ProxyError::SubstrateEgressDenied(
-				"invalid ActorIdentity".to_owned(),
-			));
-		}
-		Ok(identity)
+		let (atespace, actor_name) = uri
+			.strip_prefix("spiffe://substrate-actor.local/ateom-for-actor/")
+			.and_then(|path| path.split_once('/'))
+			.filter(|(atespace, actor)| valid_resource_name(atespace) && valid_resource_name(actor))
+			.ok_or_else(|| {
+				ProxyError::SubstrateEgressDenied("invalid ateom-for-actor SPIFFE ID".to_owned())
+			})?;
+		Ok(ActorIdentity {
+			atespace: atespace.to_owned(),
+			actor_name: actor_name.to_owned(),
+		})
 	}
 
 	pub(crate) async fn authorize_connect(
@@ -134,14 +132,6 @@ impl EgressActorResolution {
 				);
 			},
 		};
-		if current
-			.metadata
-			.as_ref()
-			.map(|metadata| metadata.uid.as_str())
-			!= Some(identity.actor_uid.as_str())
-		{
-			return Err(ProxyError::SubstrateEgressDenied("actor UID mismatch".to_owned()).into());
-		}
 		if current.status.as_ref().map(|status| status.state)
 			!= Some(protos::ateapi::ActorState::Running as i32)
 		{
@@ -153,20 +143,18 @@ impl EgressActorResolution {
 
 #[cfg(test)]
 mod tests {
-	use rcgen::{CertificateParams, CustomExtension, KeyPair};
+	use rcgen::{CertificateParams, KeyPair, SanType};
 
 	use super::*;
 	use crate::http::Body;
 	use crate::transport::tls::TlsInfo;
 
-	fn request_with_identity(identity: &str) -> Request {
+	fn request_with_identity(uris: &[&str]) -> Request {
 		let mut params = CertificateParams::default();
-		params
-			.custom_extensions
-			.push(CustomExtension::from_oid_content(
-				&[1, 3, 6, 1, 4, 1, 11129, 2, 12, 2],
-				identity.as_bytes().to_vec(),
-			));
+		params.subject_alt_names = uris
+			.iter()
+			.map(|uri| SanType::URI((*uri).try_into().unwrap()))
+			.collect();
 		let certificate = params
 			.self_signed(&KeyPair::generate().unwrap())
 			.unwrap()
@@ -184,24 +172,39 @@ mod tests {
 
 	#[test]
 	fn actor_identity_is_parsed_from_the_certificate() {
-		let identity = EgressActorResolution::identity(&request_with_identity(
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-		))
+		let identity = EgressActorResolution::identity(&request_with_identity(&[
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+		]))
 		.unwrap();
 		assert_eq!(identity.atespace, "demo");
 		assert_eq!(identity.actor_name, "my-actor");
-		assert_eq!(identity.actor_uid, "uid-1");
 	}
 
 	#[test]
-	fn actor_identity_requires_every_field_and_atunnel_purpose() {
-		for identity in [
-			r#"{"Atespace":"","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"","ActorUid":"uid-1","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"","Purpose":"atunnel"}"#,
-			r#"{"Atespace":"demo","ActorName":"my-actor","ActorUid":"uid-1","Purpose":"other"}"#,
+	fn actor_identity_requires_a_single_valid_ateom_uri() {
+		let valid = "spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor";
+		for uris in [
+			vec![],
+			vec![valid, valid],
+			vec![valid, "https://example.com"],
+			vec!["spiffe://substrate-actor.local/actor/demo/my-actor"],
+			vec!["spiffe://substrate-actor.local/atespace/demo/actor/my-actor"],
+			vec!["spiffe://other.local/ateom-for-actor/demo/my-actor"],
+			vec!["https://substrate-actor.local/ateom-for-actor/demo/my-actor"],
+			vec!["spiffe://user@substrate-actor.local/ateom-for-actor/demo/my-actor"],
+			vec!["spiffe://substrate-actor.local:443/ateom-for-actor/demo/my-actor"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor//my-actor"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/demo/"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor/extra"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor?query"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor#fragment"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/de%2Fmo/my-actor"],
+			vec!["spiffe://substrate-actor.local/ateom-for-actor/demo/UPPER"],
 		] {
-			assert!(EgressActorResolution::identity(&request_with_identity(identity)).is_err());
+			assert!(
+				EgressActorResolution::identity(&request_with_identity(&uris)).is_err(),
+				"{uris:?}"
+			);
 		}
 	}
 }

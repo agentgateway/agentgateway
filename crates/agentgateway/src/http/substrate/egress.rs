@@ -117,7 +117,6 @@ impl RequestPolicyTrait for SubstrateEgress {
 			name: identity.actor_name.clone(),
 		};
 		log.ate_actor_name = Some(actor.name.clone());
-		log.ate_actor_uid = Some(identity.actor_uid.clone());
 		log.ate_atespace = Some(actor.atespace.clone());
 		let channel = self
 			.target
@@ -190,7 +189,10 @@ impl SubstrateEgress {
 		provider: &CredentialProvider,
 		uri: &str,
 	) -> Result<Vec<u8>, ProxyResponse> {
-		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
+		let actor_identity = format!(
+			"spiffe://substrate-actor.local/ateom-for-actor/{}/{}",
+			identity.atespace, identity.actor_name
+		);
 		let key = CredentialCacheKey {
 			actor_identity: actor_identity.clone(),
 			uri: uri.to_owned(),
@@ -240,12 +242,6 @@ impl SubstrateEgress {
 fn provider_name(uri: &str) -> Option<&str> {
 	let authority = uri.strip_prefix("ate-secret://")?.split('/').next()?;
 	(!authority.is_empty() && !authority.contains(['?', '#', '@', ':'])).then_some(authority)
-}
-
-fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
-	// Matches Substrate's actorspiffe.Parse contract in
-	// internal/actorspiffe/actorspiffe.go.
-	format!("spiffe://substrate-actor.local/atespace/{atespace}/actor/{actor_name}")
 }
 
 fn credential_header(
@@ -641,7 +637,7 @@ mod tests {
 	fn credential_cache_reuses_fresh_entries_and_expires_stale_ones() {
 		let cache = CredentialCache::new(16);
 		let key = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/example".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/ateom-for-actor/default/example".to_owned(),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
@@ -661,13 +657,13 @@ mod tests {
 		let cache = CredentialCache::new(16);
 		let now = Instant::now();
 		let key = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/one".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/ateom-for-actor/default/one".to_owned(),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		cache.insert(key.clone(), b"one".to_vec(), now);
 
 		let another_actor = CredentialCacheKey {
-			actor_identity: "spiffe://substrate-actor.local/atespace/default/actor/two".to_owned(),
+			actor_identity: "spiffe://substrate-actor.local/ateom-for-actor/default/two".to_owned(),
 			uri: key.uri.clone(),
 		};
 		let another_uri = CredentialCacheKey {

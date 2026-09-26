@@ -806,7 +806,6 @@ impl Gateway {
 							bind = %bind.key,
 							target = %target_address,
 							actor_name = %identity.actor_name,
-							actor_uid = %identity.actor_uid,
 							atespace = %identity.atespace,
 							"CONNECT tunnel terminated"
 						);
