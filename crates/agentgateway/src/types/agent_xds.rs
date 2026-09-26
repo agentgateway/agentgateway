@@ -685,6 +685,9 @@ fn build_mcp_authentication(
 		mode,
 		client_id,
 		client_secret,
+		// Not yet exposed over xDS; only the local (file/env) config path
+		// (`LocalMcpAuthentication`) currently supports the Keycloak RFC 9207 relay.
+		relay_signing_key: None,
 	}
 }
 
