@@ -59,12 +59,40 @@ pub(crate) async fn enforce_authentication(
 	auth: &McpAuthentication,
 	client: &PolicyClient,
 ) -> Result<Option<Response>, ProxyError> {
-	// skip well-known OAuth endpoints for authn
-	if !is_well_known_endpoint(req.uri().path()) {
+	// skip well-known OAuth endpoints and OAuth flow endpoints for authn
+	// These are pre-authentication endpoints that must be publicly accessible:
+	// - /.well-known/oauth-* metadata endpoints
+	// - /authorize and /token (Entra proxied endpoints)
+	// - /client-registration (DCR endpoint)
+	if !is_well_known_endpoint(req.uri().path()) && !is_oauth_flow_endpoint(req.uri().path(), auth) {
 		apply_token_validation(req, auth).await?;
 	}
 
 	handle_mcp_request(req, auth, client).await
+}
+
+/// Check if the path is an OAuth flow endpoint that should bypass JWT validation.
+/// These are pre-authentication endpoints advertised in AS metadata:
+/// - Entra: /authorize and /token (proxied to strip RFC 8707 resource param)
+/// - All providers with adapter: /client-registration (DCR endpoint)
+fn is_oauth_flow_endpoint(path: &str, auth: &McpAuthentication) -> bool {
+	// Client registration is a pre-auth DCR endpoint for all providers
+	if path.ends_with("/client-registration") && !path.starts_with("/.well-known/") {
+		return true;
+	}
+
+	// Entra-specific: /authorize and /token endpoints under issuer path
+	if matches!(auth.provider, Some(McpIDP::Entra {})) {
+		// Entra endpoints are served under the issuer path, not under /.well-known/
+		// Match paths ending with /authorize or /token that are not under /.well-known/
+		if (path.ends_with("/authorize") || path.ends_with("/token"))
+			&& !path.starts_with("/.well-known/")
+		{
+			return true;
+		}
+	}
+
+	false
 }
 
 pub(crate) async fn handle_mcp_request(
@@ -96,12 +124,13 @@ pub(crate) async fn handle_mcp_request(
 			))
 		},
 		// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010), so the gateway
-		// advertises proxied authorization/token endpoints (under the served AS metadata path)
-		// that strip it before forwarding to Entra.
+		// advertises proxied authorization/token endpoints that strip it before forwarding to Entra.
+		// These endpoints can be under either the well-known AS metadata path or the issuer path.
 		path
 			if matches!(auth.provider, Some(McpIDP::Entra {}))
-				&& path.starts_with("/.well-known/oauth-authorization-server/")
-				&& path.ends_with("/authorize") =>
+				&& path.ends_with("/authorize")
+				&& (path.starts_with("/.well-known/oauth-authorization-server/")
+					|| !path.starts_with("/.well-known/")) =>
 		{
 			Ok(Some(
 				entra_authorize(req, auth)
@@ -115,8 +144,9 @@ pub(crate) async fn handle_mcp_request(
 		},
 		path
 			if matches!(auth.provider, Some(McpIDP::Entra {}))
-				&& path.starts_with("/.well-known/oauth-authorization-server/")
-				&& path.ends_with("/token") =>
+				&& path.ends_with("/token")
+				&& (path.starts_with("/.well-known/oauth-authorization-server/")
+					|| !path.starts_with("/.well-known/")) =>
 		{
 			Ok(Some(
 				entra_token(req, auth, client.clone())
@@ -436,7 +466,12 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		Some(McpIDP::Entra {}) => {
-			let current_uri = request_uri_for_oauth_metadata(req);
+			// Use the issuer (resource path) for constructing endpoints to ensure
+			// consistency between the issuer field and the endpoint URLs.
+			// This fixes RFC 8414 §3.3 issuer validation in strict MCP clients
+			// (e.g. GitHub Copilot CLI with typescript-sdk >= 2026-07-28).
+			let issuer = issuer_from_authorization_server_metadata_request(req)
+				.unwrap_or_else(|| request_uri_for_oauth_metadata(req).to_string());
 
 			// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010). Advertise
 			// gateway-proxied authorization/token endpoints that strip it before forwarding.
@@ -447,14 +482,14 @@ pub(super) async fn authorization_server_metadata(
 					"authorization_endpoint missing".to_string(),
 				));
 			};
-			*ae = format!("{current_uri}/authorize");
+			*ae = format!("{issuer}/authorize");
 			let Some(serde_json::Value::String(te)) = json::traverse_mut(&mut resp, &["token_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"token_endpoint missing".to_string(),
 				));
 			};
-			*te = format!("{current_uri}/token");
+			*te = format!("{issuer}/token");
 
 			if let Some(obj) = resp.as_object_mut() {
 				// Entra does not implement RFC 7591 (no registration_endpoint in its metadata);
@@ -462,7 +497,7 @@ pub(super) async fn authorization_server_metadata(
 				// configured clientId.
 				obj.insert(
 					"registration_endpoint".to_string(),
-					serde_json::Value::String(format!("{current_uri}/client-registration")),
+					serde_json::Value::String(format!("{issuer}/client-registration")),
 				);
 				// Entra supports PKCE (S256) but omits it from its discovery document; MCP
 				// clients require it to be advertised.
@@ -884,6 +919,87 @@ mod tests {
 	}
 
 	#[test]
+	fn entra_metadata_endpoints_match_issuer_path() {
+		// RFC 8414 §3.3 requires the issuer in AS metadata to match the issuer identifier
+		// from authorization_servers. Strict MCP clients (e.g. GitHub Copilot CLI with
+		// typescript-sdk >= 2026-07-28) validate this. The endpoint URLs advertised in
+		// AS metadata must be consistent with the issuer to avoid client-side validation
+		// failures and ensure the endpoints are reachable under the issuer's authority.
+		let auth = entra_auth();
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/entra/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		// Simulate Entra's OIDC discovery response
+		let mut metadata = serde_json::json!({
+			"issuer": "https://login.microsoftonline.com/tenant-id/v2.0",
+			"authorization_endpoint": "https://login.microsoftonline.com/tenant-id/oauth2/v2.0/authorize",
+			"token_endpoint": "https://login.microsoftonline.com/tenant-id/oauth2/v2.0/token",
+		});
+
+		// Apply the same transformations as authorization_server_metadata
+		let issuer =
+			issuer_from_authorization_server_metadata_request(&req).expect("issuer should be extracted");
+
+		// Rewrite endpoints
+		if let Some(ae) = metadata["authorization_endpoint"].as_str() {
+			let _ = ae;
+			metadata["authorization_endpoint"] = serde_json::Value::String(format!("{issuer}/authorize"));
+		}
+		if let Some(te) = metadata["token_endpoint"].as_str() {
+			let _ = te;
+			metadata["token_endpoint"] = serde_json::Value::String(format!("{issuer}/token"));
+		}
+		if let Some(obj) = metadata.as_object_mut() {
+			obj.insert(
+				"registration_endpoint".to_string(),
+				serde_json::Value::String(format!("{issuer}/client-registration")),
+			);
+		}
+
+		// Rewrite issuer
+		rewrite_authorization_server_issuer(&req, &auth, &mut metadata)
+			.expect("issuer should be rewritten");
+
+		// Verify: issuer and endpoints should all be under the same base path
+		let expected_base = "https://gateway.example.com/entra/mcp";
+		assert_eq!(metadata["issuer"], expected_base);
+		assert_eq!(
+			metadata["authorization_endpoint"],
+			"https://gateway.example.com/entra/mcp/authorize"
+		);
+		assert_eq!(
+			metadata["token_endpoint"],
+			"https://gateway.example.com/entra/mcp/token"
+		);
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/entra/mcp/client-registration"
+		);
+
+		// Verify: endpoints should be under the issuer path (consistent with RFC 8414)
+		assert!(
+			metadata["authorization_endpoint"]
+				.as_str()
+				.unwrap()
+				.starts_with(metadata["issuer"].as_str().unwrap())
+		);
+		assert!(
+			metadata["token_endpoint"]
+				.as_str()
+				.unwrap()
+				.starts_with(metadata["issuer"].as_str().unwrap())
+		);
+		assert!(
+			metadata["registration_endpoint"]
+				.as_str()
+				.unwrap()
+				.starts_with(metadata["issuer"].as_str().unwrap())
+		);
+	}
+
+	#[test]
 	fn authorization_server_metadata_preserves_issuer_without_provider() {
 		let req = ::http::Request::builder()
 			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/example/mcp")
@@ -926,6 +1042,44 @@ mod tests {
 		assert!(!is_well_known_endpoint(
 			"/.well-known/oauth-protected-resource-evil"
 		));
+	}
+
+	#[test]
+	fn oauth_flow_endpoint_detection() {
+		let entra = entra_auth();
+		let non_entra = default_auth();
+
+		// Client registration should be exempted for all providers
+		assert!(is_oauth_flow_endpoint("/mcp/client-registration", &entra));
+		assert!(is_oauth_flow_endpoint(
+			"/mcp/client-registration",
+			&non_entra
+		));
+		assert!(is_oauth_flow_endpoint("/client-registration", &entra));
+
+		// Entra endpoints under issuer path should be detected
+		assert!(is_oauth_flow_endpoint("/entra/mcp/authorize", &entra));
+		assert!(is_oauth_flow_endpoint("/entra/mcp/token", &entra));
+		assert!(is_oauth_flow_endpoint("/authorize", &entra));
+		assert!(is_oauth_flow_endpoint("/token", &entra));
+
+		// Non-Entra providers should not match /authorize or /token
+		assert!(!is_oauth_flow_endpoint("/mcp/authorize", &non_entra));
+		assert!(!is_oauth_flow_endpoint("/mcp/token", &non_entra));
+
+		// Well-known paths should not match (handled separately by is_well_known_endpoint)
+		assert!(!is_oauth_flow_endpoint(
+			"/.well-known/oauth-authorization-server/mcp/authorize",
+			&entra
+		));
+		assert!(!is_oauth_flow_endpoint(
+			"/.well-known/oauth-authorization-server/mcp/client-registration",
+			&entra
+		));
+
+		// Other paths should not match
+		assert!(!is_oauth_flow_endpoint("/mcp/sse", &entra));
+		assert!(!is_oauth_flow_endpoint("/mcp/messages", &entra));
 	}
 
 	#[test]
