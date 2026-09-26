@@ -365,7 +365,10 @@ function navigationGroups(options: {
 	} else {
 		groups.push({
 			title: 'LLM',
-			items: [{ to: '/llm/models', label: 'Models', icon: Bot }]
+			items: [
+				{ to: '/llm/models', label: 'Models', icon: Bot },
+				{ to: '/llm/client-setup', label: 'Client Setup', icon: Cable }
+			]
 		});
 	}
 	groups.push({
