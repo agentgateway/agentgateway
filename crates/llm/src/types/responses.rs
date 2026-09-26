@@ -487,6 +487,11 @@ impl RequestType for Request {
 		serde_json::to_value(self)
 	}
 
+	fn set_value(&mut self, value: serde_json::Value) -> anyhow::Result<()> {
+		*self = serde_json::from_value(value)?;
+		Ok(())
+	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
 		let prepend_items: Vec<RawInputItem> = prompts

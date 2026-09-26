@@ -167,6 +167,11 @@ pub trait RequestType: Send + Sync {
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
+
+	/// Replace the complete JSON body, preserving the original request on deserialization failure.
+	fn set_value(&mut self, _value: serde_json::Value) -> anyhow::Result<()> {
+		anyhow::bail!("replacing the request body is not supported for this request type")
+	}
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans

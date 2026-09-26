@@ -23,6 +23,7 @@ async fn webhook_fail_open_emits_single_metric() {
 				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
+				protocol: Default::default(),
 				action: RejectAuditAction::Reject,
 			}),
 		}],
@@ -3935,4 +3936,219 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		})
 	);
+}
+
+#[tokio::test]
+async fn raw_webhook_whole_request() {
+	use crate::llm::{InputFormat, types};
+	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
+	use wiremock::{
+		Mock, MockServer, ResponseTemplate,
+		matchers::{method, path},
+	};
+
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/compress"))
+		.respond_with(|request: &wiremock::Request| {
+			let mut body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+			body["webhook_extension"] = serde_json::json!({"processed": true});
+			ResponseTemplate::new(200).set_body_json(body)
+		})
+		.mount(&mock)
+		.await;
+	let policy = Policy {
+		prompt_guard: Some(PromptGuard {
+			streaming: Default::default(),
+			request: vec![RequestGuard {
+				rejection: Default::default(),
+				scope: default_content_scope(),
+				kind: RequestGuardKind::Webhook(Webhook {
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+							*mock.address(),
+						))),
+						policies: vec![],
+					},
+					headers: vec![(
+						HeaderOrPseudo::Path,
+						Arc::new(cel::Expression::new_strict("'/compress'").unwrap()),
+					)],
+					forward_header_matches: vec![],
+					failure_mode: FailureMode::FailClosed,
+					protocol: WebhookProtocol::Raw,
+					action: RejectAuditAction::Reject,
+				}),
+			}],
+			response: vec![],
+		}),
+		..Default::default()
+	};
+	macro_rules! fixture {
+		($ty:ty, $file:literal) => {
+			Box::new(
+				serde_json::from_str::<$ty>(include_str!(concat!(
+					"../../../../llm/src/tests/requests/",
+					$file
+				)))
+				.unwrap(),
+			) as Box<dyn RequestType>
+		};
+	}
+	let mut gemini: types::gemini::Request = serde_json::from_str(include_str!(
+		"../../../../llm/src/tests/requests/gemini/passthrough-fields.json"
+	))
+	.unwrap();
+	gemini.model = Some("gemini-2.5-pro".into());
+	gemini.streaming = true;
+	let mut requests: Vec<(InputFormat, Box<dyn RequestType>)> = vec![
+		(
+			InputFormat::Completions,
+			fixture!(types::completions::Request, "completions/full.json"),
+		),
+		(
+			InputFormat::Messages,
+			fixture!(types::messages::Request, "messages/cache_control.json"),
+		),
+		(
+			InputFormat::Responses,
+			fixture!(types::responses::Request, "responses/basic.json"),
+		),
+		(InputFormat::Gemini, Box::new(gemini)),
+	];
+	let client = crate::test_helpers::policy_client();
+	let mut report = serde_json::Map::new();
+	for (format, req) in &mut requests {
+		let original = req.to_value().unwrap();
+		let metadata = req.to_llm_request("test".into(), false).unwrap();
+		let log = GuardrailLog::default();
+		assert!(
+			policy
+				.apply_prompt_guard(
+					&client,
+					req.as_mut(),
+					&::http::HeaderMap::new(),
+					None,
+					None,
+					Some(&log)
+				)
+				.await
+				.unwrap()
+				.is_none()
+		);
+		let sent: serde_json::Value =
+			serde_json::from_slice(&mock.received_requests().await.unwrap().last().unwrap().body)
+				.unwrap();
+		assert_eq!(sent, original);
+		let after = req.to_llm_request("test".into(), false).unwrap();
+		assert_eq!(after.request_model, metadata.request_model);
+		assert_eq!(after.streaming, metadata.streaming);
+		assert_eq!(log.take().unwrap()[0].action, "rewrite");
+		report.insert(format!("{format:?}"), req.to_value().unwrap());
+	}
+	assert_eq!(
+		mock.received_requests().await.unwrap().len(),
+		requests.len()
+	);
+	insta::assert_json_snapshot!("raw_webhook_whole_request", report);
+}
+
+#[tokio::test]
+async fn raw_webhook_outcomes() {
+	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
+	use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+
+	let mock = MockServer::start().await;
+	let client = crate::test_helpers::policy_client();
+	let direct = ResponseTemplate::new(200)
+		.insert_header("x-agentgateway-direct-response", "true")
+		.set_body_string(r#"{"status":429,"body":{"error":"too many tokens"}}"#);
+	// (response, enforced action, whether the request is replaced).
+	// `Err(true)` is a webhook error, subject to failureMode; `Err(false)` always fails.
+	let cases = [
+		(
+			ResponseTemplate::new(204),
+			Ok(GuardrailAction::Allow),
+			false,
+		),
+		(
+			ResponseTemplate::new(200).set_body_string(r#"{"messages":[],"model":"replacement"}"#),
+			Ok(GuardrailAction::Rewrite),
+			true,
+		),
+		(direct, Ok(GuardrailAction::Reject), false),
+		(ResponseTemplate::new(500), Err(true), false),
+		(
+			ResponseTemplate::new(200).set_body_string("not json"),
+			Err(true),
+			false,
+		),
+		(
+			ResponseTemplate::new(200).set_body_string(r#"{"messages":false}"#),
+			Err(false),
+			false,
+		),
+	];
+	for (template, expected, replaced) in cases {
+		mock.reset().await;
+		Mock::given(method("POST"))
+			.respond_with(template)
+			.mount(&mock)
+			.await;
+		for failure_mode in [FailureMode::FailOpen, FailureMode::FailClosed] {
+			let guard = RequestGuard {
+				rejection: Default::default(),
+				scope: default_content_scope(),
+				kind: RequestGuardKind::Webhook(Webhook {
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+							*mock.address(),
+						))),
+						policies: vec![],
+					},
+					headers: vec![],
+					forward_header_matches: vec![],
+					failure_mode,
+					protocol: WebhookProtocol::Raw,
+					action: RejectAuditAction::Reject,
+				}),
+			};
+			let mut req: crate::llm::types::completions::Request = serde_json::from_value(
+				serde_json::json!({"model":"original", "messages":[{"role":"user","content":"hello"}]}),
+			)
+			.unwrap();
+			let original = req.to_value().unwrap();
+			let result = Policy::apply_single_request_guard(
+				&guard,
+				&mut req,
+				&::http::HeaderMap::new(),
+				&client,
+				None,
+				None,
+				None,
+			)
+			.await;
+			match (expected, failure_mode) {
+				(Err(true), FailureMode::FailOpen) => {
+					assert_eq!(result.unwrap().0, GuardrailAction::FailOpen)
+				},
+				(Err(_), _) => assert!(result.is_err()),
+				(Ok(action), _) => {
+					let (got, rejection) = result.unwrap();
+					assert_eq!(got, action);
+					if action == GuardrailAction::Reject {
+						let rejection = rejection.unwrap();
+						assert_eq!(rejection.status(), 429);
+						assert_eq!(rejection.headers()["content-type"], "application/json");
+					}
+				},
+			}
+			if replaced {
+				assert_eq!(req.model.as_deref(), Some("replacement"));
+				assert!(req.messages.is_empty());
+			} else {
+				assert_eq!(req.to_value().unwrap(), original);
+			}
+		}
+	}
 }

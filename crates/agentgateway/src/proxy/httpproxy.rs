@@ -4884,6 +4884,8 @@ pub struct TunnelClient {
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,
 	context: Option<Arc<PolicyClientContext>>,
+	/// Inherited from the parent request, so policy calls processing it use the same limit.
+	buffer_limit: Option<crate::transport::BufferLimit>,
 }
 
 #[derive(Debug)]
@@ -4898,6 +4900,7 @@ impl PolicyClient {
 		PolicyClient {
 			inputs,
 			context: None,
+			buffer_limit: None,
 		}
 	}
 
@@ -4906,8 +4909,15 @@ impl PolicyClient {
 	}
 
 	pub(crate) fn with_parent_extensions(&self, extensions: &::http::Extensions) -> PolicyClient {
+		let buffer_limit = extensions
+			.get::<crate::transport::BufferLimit>()
+			.copied()
+			.or(self.buffer_limit);
 		let Some(span_writer) = extensions.get::<SpanWriter>().cloned() else {
-			return self.clone();
+			return PolicyClient {
+				buffer_limit,
+				..self.clone()
+			};
 		};
 		PolicyClient {
 			inputs: self.inputs.clone(),
@@ -4919,6 +4929,7 @@ impl PolicyClient {
 					.as_ref()
 					.and_then(|context| context.dtrace_scope.clone()),
 			})),
+			buffer_limit,
 		}
 	}
 
@@ -4938,6 +4949,7 @@ impl PolicyClient {
 					.unwrap_or_default(),
 				dtrace_scope: None,
 			})),
+			buffer_limit: self.buffer_limit,
 		}
 	}
 
@@ -4953,6 +4965,7 @@ impl PolicyClient {
 					.unwrap_or_default(),
 				dtrace_scope: Some(scope.into()),
 			})),
+			buffer_limit: self.buffer_limit,
 		}
 	}
 
@@ -5206,6 +5219,9 @@ impl PolicyClient {
 		req
 			.extensions_mut()
 			.get_or_insert(BackendRequestTimeout(Duration::from_secs(10)));
+		if let Some(limit) = self.buffer_limit {
+			req.extensions_mut().get_or_insert(limit);
+		}
 		let mut req = Some(req);
 		Box::pin(async move {
 			let mut response_policies = Default::default();

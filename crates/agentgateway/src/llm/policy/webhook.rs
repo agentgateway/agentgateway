@@ -290,6 +290,82 @@ pub(super) async fn send_response(
 	Ok(parsed)
 }
 
+/// Marks a raw webhook `200` response as a direct response to return to the client.
+const DIRECT_RESPONSE_HEADER: &str = "x-agentgateway-direct-response";
+
+#[derive(Debug, Deserialize)]
+struct DirectResponse {
+	status: u16,
+	#[serde(default)]
+	headers: HashMap<String, String>,
+	/// A string is returned as-is; any other JSON value is serialized.
+	#[serde(default)]
+	body: serde_json::Value,
+}
+
+pub(super) enum RawResult {
+	Unchanged,
+	Rewrite(serde_json::Value),
+	DirectResponse(crate::http::Response),
+}
+
+pub(super) async fn send_raw_request(
+	client: &PolicyClient,
+	webhook: &Webhook,
+	context: EvaluationContext<'_>,
+	http_headers: &HeaderMap,
+	body: &serde_json::Value,
+) -> anyhow::Result<RawResult> {
+	let whr = with_default_timeout(build_request(
+		body,
+		REQUEST_PATH,
+		webhook,
+		context,
+		http_headers,
+	)?);
+	let res = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+		.call_reference_with_policies(
+			whr,
+			&webhook.target.target,
+			webhook.target.policies.as_slice(),
+		)
+		.await?;
+	match res.status() {
+		::http::StatusCode::NO_CONTENT => Ok(RawResult::Unchanged),
+		::http::StatusCode::OK if res.headers().contains_key(DIRECT_RESPONSE_HEADER) => {
+			let limit = res.extensions().get::<crate::transport::BufferLimit>().copied();
+			let dr: DirectResponse = json::from_response_body(res).await?;
+			let mut rb = ::http::Response::builder().status(dr.status);
+			// Keep the limit, as the direct response is buffered again before it is sent.
+			if let Some(limit) = limit {
+				rb = rb.extension(limit);
+			}
+			for (k, v) in dr.headers {
+				rb = rb.header(k, v);
+			}
+			let body = match dr.body {
+				serde_json::Value::String(s) => s.into_bytes(),
+				serde_json::Value::Null => vec![],
+				v => {
+					if !rb
+						.headers_ref()
+						.is_some_and(|h| h.contains_key(CONTENT_TYPE))
+					{
+						rb = rb.header(CONTENT_TYPE, "application/json");
+					}
+					serde_json::to_vec(&v)?
+				},
+			};
+			Ok(RawResult::DirectResponse(
+				rb.body(crate::http::Body::from(body))?,
+			))
+		},
+		::http::StatusCode::OK => Ok(RawResult::Rewrite(json::from_response_body(res).await?)),
+		status => anyhow::bail!("raw webhook returned unexpected status {status}"),
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
@@ -311,6 +387,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
+			protocol: Default::default(),
 			action: RejectAuditAction::Reject,
 		}
 	}

@@ -1356,6 +1356,13 @@ message BackendPolicySpec {
       // REJECT (default) enforces the webhook's verdict; AUDIT records it
       // without blocking or masking.
       RejectAuditAction action = 5;
+
+      // Protocol used to talk to the webhook. Defaults to GUARDRAIL.
+      enum Protocol {
+        GUARDRAIL = 0;
+        RAW = 1;
+      }
+      Protocol protocol = 6;
     }
 
     message Moderation {

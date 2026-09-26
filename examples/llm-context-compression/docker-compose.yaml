@@ -1,0 +1,19 @@
+services:
+  headroom:
+    image: ghcr.io/chopratejas/headroom:0.27.0-code
+    command: ["--host", "0.0.0.0", "--port", "8787", "--mode", "cache"]
+    ports:
+      # The webhook shares this container's network, so its port is published here.
+      - "8788:8788"
+
+  compression-webhook:
+    image: oven/bun:1
+    command: ["bun", "/app/webhook.ts"]
+    # Headroom only accepts /v1/compress calls from loopback.
+    network_mode: service:headroom
+    environment:
+      HOST: 0.0.0.0
+    volumes:
+      - ./webhook.ts:/app/webhook.ts:ro
+    depends_on:
+      - headroom

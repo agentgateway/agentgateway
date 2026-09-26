@@ -100,6 +100,9 @@ spec:
                 group: ""
                 port: 80
               failureMode: FailOpen
+              protocol: Raw
+              headers:
+                ":path": '"/v1/compress"'
       promptCaching:
         cacheSystem: true
         cacheMessages: true
@@ -184,6 +187,9 @@ output:
                     hostname: webhook.default.svc.cluster.local
                     namespace: default
                 failureMode: FAIL_OPEN
+                headers:
+                  :path: '"/v1/compress"'
+                protocol: RAW
             response:
             - regex:
                 action: MASK

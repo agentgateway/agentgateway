@@ -150,6 +150,7 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	w := &api.BackendPolicySpec_Ai_Webhook{
 		Backend:     be,
 		FailureMode: guardrailFailureMode(webhook.FailureMode),
+		Protocol:    webhookProtocol(webhook.Protocol),
 		Action:      mapRejectAuditAction(webhook.Action),
 	}
 
@@ -185,6 +186,13 @@ func guardrailFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_A
 		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
 	}
 	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
+}
+
+func webhookProtocol(protocol agentgateway.WebhookProtocol) api.BackendPolicySpec_Ai_Webhook_Protocol {
+	if protocol == agentgateway.WebhookProtocolRaw {
+		return api.BackendPolicySpec_Ai_Webhook_RAW
+	}
+	return api.BackendPolicySpec_Ai_Webhook_GUARDRAIL
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {

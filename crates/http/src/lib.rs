@@ -54,7 +54,7 @@ impl RequestBodyExt for Request {
 
 pub const DEFAULT_BUFFER_LIMIT: usize = 2_097_152;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct BufferLimit(pub usize);
 
 /// A bounded snapshot made available without consuming the body from the

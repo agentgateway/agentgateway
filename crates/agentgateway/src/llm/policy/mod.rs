@@ -43,6 +43,7 @@ fn record_guardrail(
 		GuardrailAction::FailOpen => strng::literal!("failOpen"),
 		GuardrailAction::Audit => strng::literal!("audit"),
 		GuardrailAction::Mask => strng::literal!("mask"),
+		GuardrailAction::Rewrite => strng::literal!("rewrite"),
 		GuardrailAction::Reject => strng::literal!("reject"),
 	};
 	let Some(log) = log else { return };
@@ -301,18 +302,30 @@ pub struct PromptGuard {
 	)]
 	pub request: Vec<RequestGuard>,
 	/// Guards applied to LLM responses before they reach the client.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(
+		default,
+		deserialize_with = "de_response_guards",
+		skip_serializing_if = "Vec::is_empty"
+	)]
 	pub response: Vec<ResponseGuard>,
 }
 
-/// TODO not all guard types properly scan all scopes
-/// avoids silently ignoring configured scopes
 fn de_request_guards<'de, D: serde::Deserializer<'de>>(
 	deserializer: D,
 ) -> Result<Vec<RequestGuard>, D::Error> {
 	let guards = <Vec<RequestGuard> as serde::Deserialize>::deserialize(deserializer)?;
 	for guard in &guards {
-		guard.validate_scope().map_err(serde::de::Error::custom)?;
+		guard.validate().map_err(serde::de::Error::custom)?;
+	}
+	Ok(guards)
+}
+
+fn de_response_guards<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<ResponseGuard>, D::Error> {
+	let guards = <Vec<ResponseGuard> as serde::Deserialize>::deserialize(deserializer)?;
+	for guard in &guards {
+		guard.validate().map_err(serde::de::Error::custom)?;
 	}
 	Ok(guards)
 }
@@ -342,6 +355,8 @@ impl PromptGuardStreamingMode {
 enum GuardrailOutcome<Mask> {
 	None,
 	Masked(Mask),
+	/// Content was replaced entirely, rather than having sensitive parts masked.
+	Rewritten(Mask),
 	Rejected(Response),
 	Audit,
 	/// Guard service was unreachable and `failure_mode = FailOpen`; request is allowed
@@ -354,6 +369,7 @@ impl<Mask> From<&GuardrailOutcome<Mask>> for GuardrailAction {
 		match outcome {
 			GuardrailOutcome::None => GuardrailAction::Allow,
 			GuardrailOutcome::Masked(_) => GuardrailAction::Mask,
+			GuardrailOutcome::Rewritten(_) => GuardrailAction::Rewrite,
 			GuardrailOutcome::Rejected(_) => GuardrailAction::Reject,
 			GuardrailOutcome::Audit => GuardrailAction::Audit,
 			GuardrailOutcome::FailOpen => GuardrailAction::FailOpen,
@@ -366,6 +382,7 @@ impl<Mask> GuardrailOutcome<Mask> {
 		match self {
 			GuardrailOutcome::None => GuardrailOutcome::None,
 			GuardrailOutcome::Masked(mask) => GuardrailOutcome::Masked(f(mask)),
+			GuardrailOutcome::Rewritten(mask) => GuardrailOutcome::Rewritten(f(mask)),
 			GuardrailOutcome::Rejected(resp) => GuardrailOutcome::Rejected(resp),
 			GuardrailOutcome::Audit => GuardrailOutcome::Audit,
 			GuardrailOutcome::FailOpen => GuardrailOutcome::FailOpen,
@@ -412,6 +429,7 @@ impl TextReplacements {
 enum RequestGuardMutation {
 	Texts(TextReplacements),
 	Messages(Vec<crate::llm::SimpleChatCompletionMessage>),
+	RawRequest(serde_json::Value),
 }
 
 enum ResponseGuardMutation {
@@ -562,7 +580,10 @@ impl PromptGuard {
 		let mut req = TextRequest {
 			content: text.to_string(),
 		};
-		for g in &self.request {
+		// Raw webhooks operate on the complete JSON request body, which realtime frames do not have.
+		for g in self.request.iter().filter(
+			|g| !matches!(&g.kind, RequestGuardKind::Webhook(w) if w.protocol == WebhookProtocol::Raw),
+		) {
 			match Policy::apply_single_request_guard(
 				g,
 				&mut req,
@@ -890,7 +911,7 @@ impl Policy {
 		let action = (&outcome).into();
 		let rejection = match outcome {
 			GuardrailOutcome::None | GuardrailOutcome::Audit | GuardrailOutcome::FailOpen => None,
-			GuardrailOutcome::Masked(mutation) => {
+			GuardrailOutcome::Masked(mutation) | GuardrailOutcome::Rewritten(mutation) => {
 				apply_mask(mutation)?;
 				None
 			},
@@ -909,6 +930,7 @@ impl Policy {
 					replacements.apply(|visitor| req.visit_text_mut(&mut |_, text| visitor(text)));
 				},
 				RequestGuardMutation::Messages(messages) => req.set_messages(messages),
+				RequestGuardMutation::RawRequest(body) => req.set_value(body)?,
 			}
 			Ok(())
 		})
@@ -1011,8 +1033,13 @@ impl Policy {
 				Self::evaluate_regex_request(req, rg, &guard.rejection, &guard.scope),
 				None,
 			)),
-			RequestGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
+			RequestGuardKind::Webhook(wh) => match wh.protocol {
+				WebhookProtocol::Guardrail => {
+					Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
+				},
+				WebhookProtocol::Raw => {
+					Self::evaluate_raw_webhook_request(req, http_headers, client, wh, original).await
+				},
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
 				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
@@ -1604,6 +1631,37 @@ impl Policy {
 		}
 	}
 
+	async fn evaluate_raw_webhook_request(
+		req: &dyn RequestType,
+		http_headers: &HeaderMap,
+		client: &PolicyClient,
+		webhook: &Webhook,
+		original: Option<&cel::RequestSnapshot>,
+	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
+		let body = req.to_value()?;
+		let context = webhook::EvaluationContext::new(original, Some(&body));
+		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+		let (outcome, would_action) =
+			match webhook::send_raw_request(client, webhook, context, &headers, &body).await? {
+				webhook::RawResult::Unchanged => return Ok((GuardrailOutcome::None, None)),
+				webhook::RawResult::Rewrite(body) => (
+					GuardrailOutcome::Rewritten(RequestGuardMutation::RawRequest(body)),
+					"rewrite",
+				),
+				webhook::RawResult::DirectResponse(resp) => (GuardrailOutcome::Rejected(resp), "reject"),
+			};
+		if webhook.action == RejectAuditAction::Audit {
+			return Ok((
+				GuardrailOutcome::Audit,
+				Some(GuardDetail {
+					assessments: vec![serde_json::json!({"wouldAction": would_action})],
+					..Default::default()
+				}),
+			));
+		}
+		Ok((outcome, None))
+	}
+
 	async fn evaluate_webhook_response(
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
@@ -1925,6 +1983,10 @@ impl Policy {
 				None,
 			)),
 			ResponseGuardKind::Webhook(wh) => {
+				anyhow::ensure!(
+					wh.protocol == WebhookProtocol::Guardrail,
+					"raw webhooks are not supported on response guards"
+				);
 				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
@@ -1982,9 +2044,21 @@ fn de_content_scope<'de, D: serde::Deserializer<'de>>(
 }
 
 impl RequestGuard {
-	/// TODO not all guard types properly scan all scopes
-	/// avoids silently ignoring configured scopes
-	pub(crate) fn validate_scope(&self) -> Result<(), String> {
+	/// Rejects settings the guard kind would silently ignore.
+	pub(crate) fn validate(&self) -> Result<(), String> {
+		if let RequestGuardKind::Webhook(wh) = &self.kind
+			&& wh.protocol == WebhookProtocol::Raw
+		{
+			let r = &self.rejection;
+			if r.body != default_body() || r.status != default_code() || r.headers.is_some() {
+				return Err(
+					"rejection: raw webhooks return their own direct response and do not support a rejection"
+						.to_string(),
+				);
+			}
+		}
+		// TODO not all guard types properly scan all scopes
+		// avoids silently ignoring configured scopes
 		if matches!(
 			self.kind,
 			RequestGuardKind::Regex(_) | RequestGuardKind::BedrockGuardrails(_)
@@ -2137,6 +2211,29 @@ pub enum FailureMode {
 	FailOpen,
 }
 
+/// Protocol used to talk to a webhook.
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+pub enum WebhookProtocol {
+	/// The webhook receives the request messages in a simplified role/content shape,
+	/// and returns a pass, mask, or reject action (default).
+	#[default]
+	#[serde(rename = "guardrail")]
+	Guardrail,
+	/// The webhook receives the complete JSON request body. It responds with:
+	/// * `200`: the body is replaced with the response body.
+	/// * `204`: the body is left unchanged.
+	/// * `200` with the `x-agentgateway-direct-response` header: the request is not forwarded; the
+	///   response body, `{"status": <code>, "headers": {...}, "body": <string or JSON>}`, is returned
+	///   to the client instead.
+	///
+	/// Any other response is treated as an error. The webhook should not change the `model`, as
+	/// routing decisions have already been made based on it.
+	/// Only supported on request guards; skipped for realtime requests.
+	#[serde(rename = "raw")]
+	Raw,
+}
+
 #[apply(schema!)]
 pub struct Webhook {
 	/// Backend that receives guardrail webhook requests, and the backend policies
@@ -2158,6 +2255,9 @@ pub struct Webhook {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub failure_mode: FailureMode,
+	/// Protocol used to talk to the webhook. Defaults to `guardrail`.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub protocol: WebhookProtocol,
 	/// Whether to enforce the webhook's verdict or only observe it.
 	/// Defaults to `reject` (enforce).
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
@@ -2394,6 +2494,15 @@ pub struct ResponseGuard {
 }
 
 impl ResponseGuard {
+	fn validate(&self) -> Result<(), String> {
+		if let ResponseGuardKind::Webhook(wh) = &self.kind
+			&& wh.protocol == WebhookProtocol::Raw
+		{
+			return Err("raw webhooks are not supported on response guards".to_string());
+		}
+		Ok(())
+	}
+
 	fn failure_mode(&self) -> FailureMode {
 		match &self.kind {
 			ResponseGuardKind::Webhook(wh) => wh.failure_mode,
