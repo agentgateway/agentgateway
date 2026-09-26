@@ -10248,7 +10248,7 @@ spec:
                           required:
                           - policy
                           type: object
-                        maxItems: 16
+                        maxItems: 64
                         minItems: 1
                         type: array
                         x-kubernetes-validations:
