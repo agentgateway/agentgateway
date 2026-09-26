@@ -818,6 +818,16 @@ pub mod typed {
 		},
 	}
 
+	impl CacheControlEphemeral {
+		/// The client-requested cache TTL ("5m" or "1h"), if any. `None` means the
+		/// client didn't specify one and the provider's default applies.
+		pub fn ttl(&self) -> Option<&str> {
+			match self {
+				CacheControlEphemeral::Ephemeral { ttl } => ttl.as_deref(),
+			}
+		}
+	}
+
 	#[derive(Clone, Deserialize, Serialize, Debug)]
 	#[serde(rename_all = "snake_case")]
 	pub struct Message {

@@ -279,6 +279,11 @@ pub enum Tool {
 pub struct CachePointBlock {
 	/// Specifies the type of cache point within the CachePointBlock.
 	pub r#type: CachePointType,
+	/// How long the cache entry is retained. Defaults to Bedrock's own 5-minute
+	/// TTL when omitted. Only some models accept `OneHour`; Bedrock itself
+	/// validates this, the gateway does not maintain a model allow-list.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub ttl: Option<CachePointTtl>,
 }
 
 #[derive(
@@ -295,6 +300,25 @@ pub struct CachePointBlock {
 #[serde(rename_all = "camelCase")]
 pub enum CachePointType {
 	Default,
+}
+
+#[derive(
+	Clone,
+	Copy,
+	Eq,
+	Ord,
+	PartialEq,
+	PartialOrd,
+	std::fmt::Debug,
+	std::hash::Hash,
+	::serde::Serialize,
+	::serde::Deserialize,
+)]
+pub enum CachePointTtl {
+	#[serde(rename = "5m")]
+	FiveMinutes,
+	#[serde(rename = "1h")]
+	OneHour,
 }
 
 #[derive(Clone, Serialize, Debug, PartialEq)]

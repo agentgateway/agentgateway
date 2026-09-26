@@ -2058,3 +2058,175 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+#[test]
+fn test_messages_system_cache_control_ttl_forwarded_to_bedrock() {
+	use types::messages::typed as messages;
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("eu-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		system: Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+					ttl: Some("1h".to_string()),
+				}),
+			},
+		])),
+		tools: None,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = system
+		.iter()
+		.find_map(|b| match b {
+			types::bedrock::SystemContentBlock::CachePoint { cache_point } => Some(cache_point),
+			_ => None,
+		})
+		.expect("a cachePoint was inserted for the cache_control-marked system block");
+
+	assert_eq!(cache_point.r#type, types::bedrock::CachePointType::Default);
+	assert_eq!(
+		cache_point.ttl,
+		Some(types::bedrock::CachePointTtl::OneHour)
+	);
+}
+
+#[test]
+fn test_messages_system_cache_control_without_ttl_omits_ttl_field() {
+	use types::messages::typed as messages;
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("eu-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		system: Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				// Client sent no ttl - matches the existing default-5m behaviour.
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral { ttl: None }),
+			},
+		])),
+		tools: None,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = system
+		.iter()
+		.find_map(|b| match b {
+			types::bedrock::SystemContentBlock::CachePoint { cache_point } => Some(cache_point),
+			_ => None,
+		})
+		.expect("a cachePoint was inserted for the cache_control-marked system block");
+
+	// No ttl on the wire -> Bedrock applies its own 5-minute default.
+	assert_eq!(cache_point.ttl, None);
+}
+
+#[test]
+fn test_messages_unrecognized_cache_control_ttl_omits_ttl_field() {
+	use types::messages::typed as messages;
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("eu-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = messages::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		system: Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				// A future or malformed ttl value must not be forwarded verbatim -
+				// unrecognized values fall back to Bedrock's default instead of
+				// erroring or guessing.
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+					ttl: Some("30m".to_string()),
+				}),
+			},
+		])),
+		tools: None,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = system
+		.iter()
+		.find_map(|b| match b {
+			types::bedrock::SystemContentBlock::CachePoint { cache_point } => Some(cache_point),
+			_ => None,
+		})
+		.expect("a cachePoint was inserted for the cache_control-marked system block");
+
+	assert_eq!(cache_point.ttl, None);
+}
