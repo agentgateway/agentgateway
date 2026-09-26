@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-24T08:36:40Z"
+    "generatedAt": "2026-09-26T08:33:12Z"
   },
   "providers": {
     "anthropic": {
@@ -4619,13 +4619,6 @@
             "input": "0.22",
             "output": "0.66",
             "cacheRead": "0.007"
-          }
-        },
-        "accounts/fireworks/routers/deepseek-pro-latest": {
-          "rates": {
-            "input": "1.32",
-            "output": "3.96",
-            "cacheRead": "0.044"
           }
         },
         "accounts/fireworks/routers/glm-5p2-fast": {
