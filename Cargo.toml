@@ -137,11 +137,11 @@ md-5 = "0.11"
 num_cpus = "1.17"
 once_cell = "1.21"
 openapiv3 = "2.2"
-opentelemetry = "0.32"
-opentelemetry-http = "0.32"
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
-opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
+opentelemetry = "0.33"
+opentelemetry-http = "0.33"
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
+opentelemetry-proto = { version = "0.33", features = ["gen-tonic", "logs"] }
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
 pem = "4.0.0"
 percent-encoding = "2.3"
@@ -206,7 +206,7 @@ shellexpand = "3.1"
 socket2 = "0.6"
 spiffe = { version = "0.16", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
 split-iter = "0.1"
-sse-stream = "0.2"
+sse-stream = "0.3"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
