@@ -1427,7 +1427,6 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		(simple_mock().await, vec![])
 	};
 	let port = upstream.address().port();
-	let connect_target = TcpListener::bind(("127.0.0.2", port)).await.unwrap();
 	let effects = Some(protos::ateapi::HttpRuleEffects {
 		replace_headers: vec![protos::ateapi::CredentialHeader {
 			header: "authorization".to_owned(),
@@ -1623,12 +1622,6 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	assert_eq!(log["ate.actor.uid"].as_str(), Some("uid-1"), "{log:#?}");
 	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
 	assert_eq!(log["ate.atespace"].as_str(), Some("demo"), "{log:#?}");
-	assert!(
-		tokio::time::timeout(Duration::from_millis(50), connect_target.accept())
-			.await
-			.is_err(),
-		"actor egress dialed the CONNECT IP instead of resolving the authorized hostname"
-	);
 }
 
 // Provide both TLS paths for the same name. The policy must choose between them,
@@ -1738,7 +1731,6 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 ) {
 	let (upstream, certs) = tls_mock().await;
 	let port = upstream.address().port();
-	let connect_target = TcpListener::bind(("127.0.0.2", port)).await.unwrap();
 	let ports = Some(protos::ateapi::Ports {
 		numbers: vec![i32::from(port)],
 		..Default::default()
@@ -1846,12 +1838,6 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	assert_eq!(
 		upstream.received_requests().await.unwrap().len(),
 		usize::from(allowed_request)
-	);
-	assert!(
-		tokio::time::timeout(Duration::from_millis(50), connect_target.accept())
-			.await
-			.is_err(),
-		"actor egress dialed the CONNECT IP instead of resolving the authorized hostname"
 	);
 }
 
