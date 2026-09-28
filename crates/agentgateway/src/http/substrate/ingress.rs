@@ -320,21 +320,31 @@ impl SubstrateIngress {
 						format!("ResumeActor timed out after {budget:?}"),
 					));
 				}
-				let mut request = tonic::Request::new(message.clone());
-				let mut span = client.start_grpc_span(
-					&mut request,
-					self.target.target.as_ref(),
-					"/ateapi.Control/ResumeActor",
-				);
-				let response = dtrace::scope_future(
-					Some(TRACE_POLICY_KIND),
-					tokio::time::timeout(remaining, control.resume_actor(request)),
-				)
-				.await;
-				if let (Some(span), Ok(result)) = (span.as_deref_mut(), &response) {
-					span.record_grpc_result(result);
-				}
-				drop(span);
+				let response = {
+					let mut request = tonic::Request::new(message.clone());
+					let mut span = client.start_grpc_span(
+						&mut request,
+						self.target.target.as_ref(),
+						"/ateapi.Control/ResumeActor",
+					);
+					if let Some(span) = span.as_deref_mut() {
+						span.rename_span("ateapi.Control/ResumeActor");
+					}
+					let response = dtrace::scope_future(
+						Some(TRACE_POLICY_KIND),
+						tokio::time::timeout(remaining, control.resume_actor(request)),
+					)
+					.await;
+					if let Some(span) = span.as_deref_mut() {
+						match &response {
+							Ok(result) => span.record_grpc_result(result),
+							Err(_) => {
+								span.record_grpc_error(&tonic::Status::deadline_exceeded("ResumeActor timed out"))
+							},
+						}
+					}
+					response
+				};
 				match response {
 					Ok(Ok(response)) => {
 						let response = response.into_inner();
@@ -720,13 +730,11 @@ impl RequestPolicyTrait for SubstrateIngress {
 				::http::HeaderValue::from(actor_port),
 			);
 		}
-		// ResumeActor runs at connect time, so keep the request's span for it.
-		let client = client.with_parent(req);
 		req.extensions_mut().insert(SubstrateRequestState {
 			actor,
 			connect_authority,
 			ingress: self.clone(),
-			client,
+			client: client.clone(),
 			current: None,
 			resume: ResumeDisposition::None,
 			route_duration: Duration::ZERO,
