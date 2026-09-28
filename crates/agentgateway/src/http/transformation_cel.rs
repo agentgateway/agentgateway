@@ -64,8 +64,6 @@ pub struct TransformerConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub replace: Option<cel::Expression>,
 	/// CEL expression that computes a replacement body.
-	/// A null result leaves the current body unchanged.
-	/// An evaluation error fails the transformation. `coalesce(expr, null)` keeps the body when the expression can fail.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub body: Option<cel::Expression>,

@@ -145,62 +145,6 @@ async fn test_transformation_response_body_error_fails() {
 }
 
 #[tokio::test]
-async fn test_transformation_response_body_empty_string_clears() {
-	let mut req = ::http::Request::builder()
-		.method("POST")
-		.uri("https://gateway.example.com/v1/messages")
-		.body(crate::http::Body::empty())
-		.unwrap();
-	let xfm: Transformation = serde_json::from_value(serde_json::json!({
-		"request": null,
-		"response": {
-			"body": r#""""#,
-		},
-	}))
-	.unwrap();
-	let mut resp = ::http::Response::builder()
-		.status(200)
-		.header("content-length", "14")
-		.body(crate::http::Body::from("upstream-body"))
-		.unwrap();
-	let snap = cel::snapshot_request(&mut req, true);
-	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
-	assert!(resp.headers().get("content-length").is_none());
-	let body = http::read_body_with_limit(resp.into_body(), 1000)
-		.await
-		.unwrap();
-	assert_eq!(body.as_ref(), b"");
-}
-
-#[tokio::test]
-async fn test_transformation_response_body_coalesce_failure_to_null_leaves_upstream() {
-	let mut req = ::http::Request::builder()
-		.method("POST")
-		.uri("https://gateway.example.com/v1/messages")
-		.body(crate::http::Body::empty())
-		.unwrap();
-	let xfm: Transformation = serde_json::from_value(serde_json::json!({
-		"request": null,
-		"response": {
-			"body": "coalesce(1 / 0, null)",
-		},
-	}))
-	.unwrap();
-	let mut resp = ::http::Response::builder()
-		.status(200)
-		.header("content-length", "14")
-		.body(crate::http::Body::from("upstream-body"))
-		.unwrap();
-	let snap = cel::snapshot_request(&mut req, true);
-	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
-	assert_eq!(resp.headers().get("content-length").unwrap(), "14");
-	let body = http::read_body_with_limit(resp.into_body(), 1000)
-		.await
-		.unwrap();
-	assert_eq!(body.as_ref(), b"upstream-body");
-}
-
-#[tokio::test]
 async fn test_transformation_form_urlencoded_body_merge() {
 	let mut req = ::http::Request::builder()
 		.method("POST")

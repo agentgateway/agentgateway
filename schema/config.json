@@ -2942,7 +2942,7 @@
           ]
         },
         "body": {
-          "description": "CEL expression that computes a replacement body.\nA null result leaves the current body unchanged.\nAn evaluation error fails the transformation. `coalesce(expr, null)` keeps the body when the expression can fail.",
+          "description": "CEL expression that computes a replacement body.",
           "type": [
             "string",
             "null"
