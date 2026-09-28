@@ -322,16 +322,46 @@ impl ateapimock::Handler for TraceparentHandler {
 	}
 }
 
-struct NoopTraces;
+struct TraceHandler {
+	spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+}
 
 #[async_trait::async_trait]
-impl oteltracemock::Handler for NoopTraces {}
+impl oteltracemock::Handler for TraceHandler {
+	async fn export(
+		&mut self,
+		request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+	) -> Result<
+		opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+		tonic::Status,
+	> {
+		self.spans.lock().unwrap().extend(
+			request
+				.resource_spans
+				.iter()
+				.flat_map(|resource| &resource.scope_spans)
+				.flat_map(|scope| &scope.spans)
+				.cloned(),
+		);
+		oteltracemock::ok_response()
+	}
+}
 
 #[tokio::test]
 async fn actor_ingress_propagates_trace_context_to_resume_actor() {
-	let otel = oteltracemock::OtelTraceMock::new(|| NoopTraces)
-		.spawn()
-		.await;
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || TraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
 	let actor = simple_mock().await;
 	let seen = Arc::new(StdMutex::new(Vec::new()));
 	let api = ateapimock::AteApiMock::new({
@@ -386,6 +416,28 @@ async fn actor_ingress_propagates_trace_context_to_resume_actor() {
 	assert_eq!(seen[0][..36], client_tp[..36]);
 	assert_ne!(seen[0][36..52], client_tp[36..52]);
 	assert!(seen[0].ends_with("-01"), "{}", seen[0]);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while spans.lock().unwrap().len() < 2 {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.unwrap();
+
+	let spans = spans.lock().unwrap();
+	let resume_actor = spans
+		.iter()
+		.find(|span| span.name == "ateapi.Control/ResumeActor")
+		.expect("ResumeActor client span should be exported");
+	let request = spans
+		.iter()
+		.find(|span| {
+			span.trace_id == resume_actor.trace_id && span.span_id == resume_actor.parent_span_id
+		})
+		.expect("parent request span should be exported");
+	assert_eq!(resume_actor.trace_id, request.trace_id);
+	assert_eq!(resume_actor.parent_span_id, request.span_id);
 }
 
 #[tokio::test]
