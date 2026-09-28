@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-09-26T08:33:12Z"
+    "generatedAt": "2026-09-28T08:46:22Z"
   },
   "providers": {
     "anthropic": {
@@ -4249,12 +4249,12 @@
           "rates": {
             "input": "0.14",
             "output": "0.28",
-            "cacheRead": "0.0028"
+            "cacheRead": "0.0027"
           }
         },
         "XiaomiMiMo/MiMo-V2.6-Pro": {
           "rates": {
-            "input": "0.435",
+            "input": "0.43",
             "output": "0.87",
             "cacheRead": "0.0036"
           }
@@ -4443,6 +4443,13 @@
             "cacheRead": "0.033"
           }
         },
+        "tencent/Hy4-preview": {
+          "rates": {
+            "input": "0.834",
+            "output": "2.501",
+            "cacheRead": "0.042"
+          }
+        },
         "thinkingmachines/Inkling": {
           "rates": {
             "input": "0.95",
@@ -4593,13 +4600,6 @@
             "cacheRead": "0.01"
           }
         },
-        "accounts/fireworks/models/qwen3p7-plus": {
-          "rates": {
-            "input": "0.4",
-            "output": "1.6",
-            "cacheRead": "0.08"
-          }
-        },
         "accounts/fireworks/models/qwen3p8-2p4t-a95b": {
           "rates": {
             "input": "2",
@@ -4619,13 +4619,6 @@
             "input": "0.22",
             "output": "0.66",
             "cacheRead": "0.007"
-          }
-        },
-        "accounts/fireworks/routers/glm-5p2-fast": {
-          "rates": {
-            "input": "2.1",
-            "output": "6.6",
-            "cacheRead": "0.21"
           }
         },
         "accounts/fireworks/routers/glm-5p3-fast": {
@@ -6449,6 +6442,33 @@
               }
             }
           ]
+        },
+        "gpt-daybreak-blue-latest": {
+          "rates": {
+            "input": "4",
+            "output": "20",
+            "cacheRead": "0.4",
+            "cacheWrite": "5"
+          },
+          "tiers": [
+            {
+              "contextOver": 272000,
+              "rates": {
+                "input": "8",
+                "output": "30",
+                "cacheRead": "0.8",
+                "cacheWrite": "10"
+              }
+            }
+          ]
+        },
+        "gpt-daybreak-red-latest": {
+          "rates": {
+            "input": "12.5",
+            "output": "75",
+            "cacheRead": "1.25",
+            "cacheWrite": "15.625"
+          }
         },
         "gpt-image-2": {
           "rates": {
