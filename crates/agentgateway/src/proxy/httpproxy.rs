@@ -28,6 +28,7 @@ use crate::http::backendtls::{
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
+use crate::http::substrate::{ActorIdentity, EgressRequestProtocol};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
@@ -254,10 +255,16 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
-	pol
+	let egress = pol
 		.substrate_egress
-		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.apply_selected("substrate egress", c, l, req, rp.headers())
 		.await?;
+	if req.extensions().get::<ActorIdentity>().is_some() && egress.is_none() {
+		return Err(
+			ProxyError::SubstrateEgressDenied("missing substrate egress request policy".to_owned())
+				.into(),
+		);
+	}
 	pol
 		.substrate_ingress
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
@@ -719,7 +726,24 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-		connection.copy::<http::substrate::ActorIdentity>(req.extensions_mut());
+		if connection
+			.copy::<ActorIdentity>(req.extensions_mut())
+			.is_some()
+		{
+			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
+			let protocol = if matches!(
+				self
+					.selected_listener
+					.as_ref()
+					.map(|listener| &listener.protocol),
+				Some(ListenerProtocol::HTTPS(_))
+			) {
+				EgressRequestProtocol::Https
+			} else {
+				EgressRequestProtocol::Http
+			};
+			req.extensions_mut().insert(protocol);
+		}
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
@@ -1482,6 +1506,11 @@ impl HTTPProxy {
 		) {
 			return Ok(());
 		}
+		// Substrate checks each HTTP authority independently of the ClientHello SNI.
+		if req.extensions().get::<ActorIdentity>().is_some() {
+			return Ok(());
+		}
+
 		// From the spec:
 		// * If another Listener has an exact match or more specific wildcard entry,
 		//   the Gateway SHOULD return a 421.
@@ -2632,6 +2661,15 @@ async fn make_backend_call(
 				expr,
 				|| target_from_request(&req),
 			)?;
+			let mut policies = policies;
+			if req.extensions().get::<ActorIdentity>().is_some()
+				&& req.extensions().get::<EgressRequestProtocol>() == Some(&EgressRequestProtocol::Https)
+				&& policies.backend_tls.is_none()
+			{
+				// Re-originate intercepted HTTPS with TLS. Explicit settings can supply
+				// private roots or client identity.
+				Arc::make_mut(&mut policies).backend_tls = Some(http::backendtls::SYSTEM_TRUST.clone());
+			}
 			let backend_call = BackendCall::from_shared(target, policies);
 			(backend_call, None)
 		},

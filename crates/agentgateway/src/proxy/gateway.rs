@@ -24,6 +24,7 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
@@ -407,6 +408,12 @@ impl Gateway {
 		drain: DrainWatcher,
 	) {
 		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
+		// Classify actor traffic from the inner bytes, independently of its port or outer TLS.
+		let bind_protocol = if raw_stream.ext::<ActorIdentity>().is_some() {
+			BindProtocol::auto
+		} else {
+			bind_protocol
+		};
 
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
@@ -785,7 +792,7 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
-					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution {
+					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution.as_ref() {
 						match policy
 							.authorize_connect(&inputs, connection.as_ref(), &mut req)
 							.await
@@ -825,6 +832,9 @@ impl Gateway {
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
 						if let Some(identity) = actor_identity {
 							downstream.ext_mut().insert(identity);
+						}
+						if let Some(policy) = substrate_egress_actor_resolution {
+							downstream.ext_mut().insert(policy);
 						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						if let Some(buffer) = buffer {
@@ -1071,6 +1081,12 @@ impl Gateway {
 		mut stream: Socket,
 		_drain: DrainWatcher,
 	) {
+		if stream.ext::<ActorIdentity>().is_some()
+			&& stream.ext::<EgressTlsMode>() != Some(&EgressTlsMode::Passthrough)
+		{
+			debug!(bind=%bind_name, "actor egress denied unsupported protocol");
+			return;
+		}
 		let selected_listener = match selected_listener {
 			Some(l) => l,
 			None => {
@@ -1207,9 +1223,22 @@ impl Gateway {
 			};
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
+			let egress_mode =
+				substrate::authorize_tls(&super::httpproxy::PolicyClient::new(inp.clone()), &ext, sni)
+					.await?;
 			let best = listeners
-				.best_match_tls(sni)
+				.best_match_filtered(sni, |protocol| match egress_mode {
+					Some(EgressTlsMode::Intercept) => matches!(protocol, ListenerProtocol::HTTPS(_)),
+					Some(EgressTlsMode::Passthrough) => matches!(protocol, ListenerProtocol::TLS(None)),
+					None => matches!(
+						protocol,
+						ListenerProtocol::HTTPS(_) | ListenerProtocol::TLS(_)
+					),
+				})
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
+			if let Some(mode) = egress_mode {
+				ext.insert(mode);
+			}
 			match best
 				.protocol
 				.tls(tls_pol, inp.ca.as_ref(), inp.spiffe.as_ref())

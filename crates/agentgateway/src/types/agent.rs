@@ -2031,7 +2031,7 @@ impl ListenerSet {
 		})
 	}
 
-	fn best_match_filtered(
+	pub(crate) fn best_match_filtered(
 		&self,
 		host: &str,
 		filter: impl Fn(&ListenerProtocol) -> bool,

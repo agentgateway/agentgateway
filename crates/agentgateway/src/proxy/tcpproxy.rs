@@ -99,6 +99,11 @@ impl TCPProxy {
 			connection
 		};
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
+		if let Some(actor) = connection.ext::<http::substrate::ActorIdentity>() {
+			log.ate_actor_name = Some(actor.actor_name.clone());
+			log.ate_actor_uid = actor.actor_uid.clone();
+			log.ate_atespace = Some(actor.atespace.clone());
+		}
 		let sni = log
 			.tls_info
 			.as_ref()
