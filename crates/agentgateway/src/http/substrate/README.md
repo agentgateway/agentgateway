@@ -29,8 +29,10 @@ against the HTTP or HTTPS rules for the inner transport, and applies only the
 winning rule's effects. For HTTPS, the ClientHello SNI selects the certificate;
 the request authority is authorized independently. Nested CONNECT is denied.
 
-Use dynamic backends to forward to the authorized authority and the original
-CONNECT destination port. An authority port does not change the dial target.
+Both HTTP and TLS passthrough routes require dynamic backends. The gateway
+resolves the authorized HTTP authority or TLS SNI through DNS and uses the
+original CONNECT destination port. The CONNECT IP, an authority port, and a
+configured dynamic target expression cannot override that destination.
 Intercepted HTTPS defaults to TLS on dynamic upstream connections; `backendTLS`
 can configure private roots or client certificates. Passthrough TCP routes use
 the SNI and original destination port, with no backend TLS termination or

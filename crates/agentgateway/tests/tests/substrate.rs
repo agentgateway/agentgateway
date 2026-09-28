@@ -1386,8 +1386,7 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 		}),
 	);
 	io.write_all(
-		format!("CONNECT allowed.example:{port} HTTP/1.1\r\nHost: allowed.example:{port}\r\n\r\n")
-			.as_bytes(),
+		format!("CONNECT 127.0.0.2:{port} HTTP/1.1\r\nHost: 127.0.0.2:{port}\r\n\r\n").as_bytes(),
 	)
 	.await
 	.unwrap();
@@ -1428,6 +1427,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		(simple_mock().await, vec![])
 	};
 	let port = upstream.address().port();
+	let connect_target = TcpListener::bind(("127.0.0.2", port)).await.unwrap();
 	let effects = Some(protos::ateapi::HttpRuleEffects {
 		replace_headers: vec![protos::ateapi::CredentialHeader {
 			header: "authorization".to_owned(),
@@ -1442,7 +1442,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	let rule = if https {
 		protos::ateapi::EgressRule {
 			https: Some(protos::ateapi::HttpsRule {
-				hostnames: vec!["*".to_owned()],
+				hostnames: vec!["localhost".to_owned()],
 				ports,
 				effects,
 			}),
@@ -1451,7 +1451,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	} else {
 		protos::ateapi::EgressRule {
 			http: Some(protos::ateapi::HttpRule {
-				hostnames: vec!["*".to_owned()],
+				hostnames: vec!["localhost".to_owned()],
 				ports,
 				effects,
 			}),
@@ -1526,7 +1526,15 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	);
 	let mut gateway = crate::tests::dfp::setup_dfp_bind()
 		.with_raw_backend(BackendWithPolicies {
-			backend: Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None),
+			backend: Backend::Dynamic(
+				ResourceName::new("dynamic".into(), "".into()),
+				Some(Arc::new(
+					agentgateway::cel::Expression::new_strict(
+						r#"destination.address + ":" + string(destination.port)"#,
+					)
+					.unwrap(),
+				)),
+			),
 			inline_policies: backend_tls,
 		})
 		.with_bind(outer)
@@ -1561,7 +1569,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	// Deliberately use the opposite URI scheme to exercise transport-based matching.
 	let scheme = if https { "http" } else { "https" };
 	let request = format!(
-		"GET {scheme}://127.0.0.1:1{path} HTTP/1.1\r\nHost: 127.0.0.1:1\r\n{authorization}Connection: close\r\n\r\n"
+		"GET {scheme}://localhost:1{path} HTTP/1.1\r\nHost: localhost:1\r\n{authorization}Connection: close\r\n\r\n"
 	);
 	async fn exchange(mut io: impl AsyncRead + AsyncWrite + Unpin, request: &str) {
 		io.write_all(request.as_bytes()).await.unwrap();
@@ -1588,7 +1596,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 			.unwrap();
 		let io = tokio_rustls::TlsConnector::from(tls.base_config().config)
 			.connect(
-				rustls_pki_types::ServerName::try_from("allowed.example").unwrap(),
+				rustls_pki_types::ServerName::try_from("localhost").unwrap(),
 				io,
 			)
 			.await
@@ -1615,6 +1623,12 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	assert_eq!(log["ate.actor.uid"].as_str(), Some("uid-1"), "{log:#?}");
 	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
 	assert_eq!(log["ate.atespace"].as_str(), Some("demo"), "{log:#?}");
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), connect_target.accept())
+			.await
+			.is_err(),
+		"actor egress dialed the CONNECT IP instead of resolving the authorized hostname"
+	);
 }
 
 // Provide both TLS paths for the same name. The policy must choose between them,
@@ -1647,7 +1661,7 @@ async fn substrate_tls_gateway(
 			Listener {
 				key: LISTENER_KEY,
 				name: Default::default(),
-				hostname: "allowed.example".into(),
+				hostname: "localhost".into(),
 				protocol: ListenerProtocol::HTTPS(crate::tests::tls::test_server_tls_config()),
 			},
 			Listener {
@@ -1677,7 +1691,7 @@ async fn substrate_tls_gateway(
 		})
 		.into_iter()
 		.collect();
-	let mut tls_route = basic_named_tcp_route(strng::format!("/{upstream}"));
+	let mut tls_route = basic_named_tcp_route("/passthrough".into());
 	tls_route.key = "tls-route".into();
 	let mut tcp_route = basic_named_tcp_route(strng::format!("/{upstream}"));
 	tcp_route.key = "tcp-route".into();
@@ -1686,6 +1700,10 @@ async fn substrate_tls_gateway(
 		.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None),
 			inline_policies: backend_tls,
+		})
+		.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Dynamic(ResourceName::new("passthrough".into(), "".into()), None),
+			inline_policies: vec![],
 		})
 		.with_backend(upstream)
 		.with_bind(outer)
@@ -1708,30 +1726,25 @@ async fn substrate_tls_gateway(
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
-#[case(true, true)]
-#[case(false, true)]
-#[case(true, false)]
+#[case(true, true, false)]
+#[case(false, true, false)]
+#[case(false, true, true)]
+#[case(true, false, false)]
 #[tokio::test]
 async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	#[case] intercept: bool,
 	#[case] allowed_request: bool,
+	#[case] use_connect_ip: bool,
 ) {
 	let (upstream, certs) = tls_mock().await;
 	let port = upstream.address().port();
+	let connect_target = TcpListener::bind(("127.0.0.2", port)).await.unwrap();
 	let ports = Some(protos::ateapi::Ports {
 		numbers: vec![i32::from(port)],
 		..Default::default()
 	});
-	let https_name = if intercept {
-		"allowed.example"
-	} else {
-		"*.example"
-	};
-	let tls_name = if intercept {
-		"*.example"
-	} else {
-		"allowed.example"
-	};
+	let https_name = if intercept { "localhost" } else { "*" };
+	let tls_name = if intercept { "*" } else { "localhost" };
 	let mut hostnames = vec![https_name.to_owned()];
 	if allowed_request {
 		hostnames.push("*".to_owned());
@@ -1762,6 +1775,22 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 		Some(certs.root_cert.pem().into_bytes()),
 	)
 	.await;
+	let gateway = if use_connect_ip {
+		gateway.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Dynamic(
+				ResourceName::new("passthrough".into(), "".into()),
+				Some(Arc::new(
+					agentgateway::cel::Expression::new_strict(
+						r#"destination.address + ":" + string(destination.port)"#,
+					)
+					.unwrap(),
+				)),
+			),
+			inline_policies: vec![],
+		})
+	} else {
+		gateway
+	};
 	let io = open_actor_egress_tunnel(&gateway, port).await;
 	let mut roots = certs.root_cert.pem().into_bytes();
 	roots.extend_from_slice(include_bytes!(
@@ -1776,13 +1805,16 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 		}
 		.try_into()
 		.unwrap();
-	let mut io = tokio_rustls::TlsConnector::from(tls.base_config().config)
-		.connect(
-			rustls_pki_types::ServerName::try_from("allowed.example").unwrap(),
+	let mut io = tokio::time::timeout(
+		Duration::from_secs(3),
+		tokio_rustls::TlsConnector::from(tls.base_config().config).connect(
+			rustls_pki_types::ServerName::try_from("localhost").unwrap(),
 			io,
-		)
-		.await
-		.unwrap();
+		),
+	)
+	.await
+	.expect("TLS handshake timed out")
+	.unwrap();
 	let gateway_cert = pem::parse(include_bytes!(
 		"../../../../examples/mcp-tls/certs/cert.pem"
 	))
@@ -1815,6 +1847,12 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 		upstream.received_requests().await.unwrap().len(),
 		usize::from(allowed_request)
 	);
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), connect_target.accept())
+			.await
+			.is_err(),
+		"actor egress dialed the CONNECT IP instead of resolving the authorized hostname"
+	);
 }
 
 #[cfg(feature = "crypto-aws-lc")]
@@ -1825,11 +1863,12 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 #[case("unmatched-sni")]
 #[case("http-rule")]
 #[case("api-unavailable")]
+#[case("static-backend")]
 #[tokio::test]
 async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[case] kind: &str) {
 	let (upstream, _certs) = tls_mock().await;
 	let raw_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
-	let address = if kind == "opaque" || kind == "server-first" {
+	let address = if matches!(kind, "opaque" | "server-first" | "static-backend") {
 		raw_upstream.local_addr().unwrap()
 	} else {
 		*upstream.address()
@@ -1851,7 +1890,7 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 	} else {
 		protos::ateapi::EgressRule {
 			tls_passthrough: Some(protos::ateapi::TlsPassthroughRule {
-				hostnames: vec!["allowed.example".to_owned()],
+				hostnames: vec!["localhost".to_owned()],
 				ports,
 			}),
 			..Default::default()
@@ -1866,6 +1905,17 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 		})
 	};
 	let (gateway, _api) = substrate_tls_gateway(policy, address, None).await;
+	let gateway = if kind == "static-backend" {
+		gateway.with_raw_backend(BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new("passthrough".into(), "".into()),
+				Target::Address(address),
+			),
+			inline_policies: vec![],
+		})
+	} else {
+		gateway
+	};
 
 	let mut io = open_actor_egress_tunnel(&gateway, port).await;
 	if kind == "opaque" || kind == "server-first" {
@@ -1893,7 +1943,7 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 		} else if kind == "unmatched-sni" {
 			"denied.example"
 		} else {
-			"allowed.example"
+			"localhost"
 		};
 		let result = tokio::time::timeout(
 			Duration::from_secs(3),

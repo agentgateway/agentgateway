@@ -1223,9 +1223,12 @@ impl Gateway {
 			};
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
-			let egress_mode =
-				substrate::authorize_tls(&super::httpproxy::PolicyClient::new(inp.clone()), &ext, sni)
-					.await?;
+			let egress_mode = substrate::authorize_tls(
+				&super::httpproxy::PolicyClient::new(inp.clone()),
+				&mut ext,
+				sni,
+			)
+			.await?;
 			let best = listeners
 				.best_match_filtered(sni, |protocol| match egress_mode {
 					Some(EgressTlsMode::Intercept) => matches!(protocol, ListenerProtocol::HTTPS(_)),

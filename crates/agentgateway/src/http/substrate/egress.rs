@@ -360,7 +360,7 @@ pub(crate) enum EgressTlsMode {
 
 pub(crate) async fn authorize_tls(
 	client: &PolicyClient,
-	connection: &Extension,
+	connection: &mut Extension,
 	sni: &str,
 ) -> Result<Option<EgressTlsMode>, ProxyError> {
 	let Some(identity) = connection.get::<ActorIdentity>() else {
@@ -375,7 +375,11 @@ pub(crate) async fn authorize_tls(
 		.local_addr
 		.port();
 	let policy = fetch_policy(&policy.target, client, identity).await?;
-	tls_mode(&policy, sni, port).map(Some)
+	let mode = tls_mode(&policy, sni, port)?;
+	if mode == EgressTlsMode::Passthrough {
+		connection.insert(DynamicBackendOverride(Target::from((sni, port))));
+	}
+	Ok(Some(mode))
 }
 
 fn tls_mode(
