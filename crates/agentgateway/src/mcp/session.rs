@@ -181,7 +181,12 @@ impl Session {
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
-		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
+		let mut relay = self.relay.with_policies(inputs.policies);
+		// The guardrails log cell is per-HTTP-request state: a resumed session must
+		// stash mcpGuardrails metadata into the current request's log, not into the
+		// request that created the session.
+		relay.guardrails_log = inputs.guardrails_log;
+		self.relay = Arc::new(relay);
 		self
 	}
 

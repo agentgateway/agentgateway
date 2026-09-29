@@ -330,6 +330,7 @@ pub struct Relay {
 	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
 	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
+	pub(crate) guardrails_log: crate::telemetry::log::McpGuardrailsLog,
 	pub(crate) policy_client: PolicyClient,
 }
 
@@ -338,6 +339,7 @@ pub struct RelayInputs {
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
+	pub guardrails_log: crate::telemetry::log::McpGuardrailsLog,
 	pub client: PolicyClient,
 }
 
@@ -349,6 +351,7 @@ impl RelayInputs {
 		let r = Relay::new_for_request(self.backend, self.policies, self.client, ctx)?;
 		Ok(Relay {
 			mcp_guardrails: self.mcp_guardrails,
+			guardrails_log: self.guardrails_log,
 			..r
 		})
 	}
@@ -370,6 +373,7 @@ impl Relay {
 			)?),
 			policies,
 			mcp_guardrails: None,
+			guardrails_log: Default::default(),
 			policy_client: client,
 		})
 	}
@@ -378,7 +382,22 @@ impl Relay {
 			upstreams: self.upstreams.clone(),
 			policies,
 			mcp_guardrails: self.mcp_guardrails.clone(),
+			guardrails_log: self.guardrails_log.clone(),
 			policy_client: self.policy_client.clone(),
+		}
+	}
+
+	/// The request-phase mcpGuardrails hook merges its processors' metadata into the
+	/// request context extensions after the access-log snapshot was taken, so relay it
+	/// through the per-request log cell to keep `mcpGuardrails.<key>` readable from
+	/// access-log CEL (backend filters read the extensions directly).
+	fn stash_guardrails_metadata(&self, ctx: &upstream::IncomingRequestContext) {
+		if let Some(md) = ctx
+			.extensions()
+			.get::<crate::mcp::guardrails::McpGuardrailsDynamicMetadata>()
+			&& !md.is_empty()
+		{
+			self.guardrails_log.mutate_or_default(|acc| acc.merge(md));
 		}
 	}
 
@@ -711,8 +730,12 @@ impl Relay {
 		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
 			.await
 		{
-			Outcome::Pass => Ok(None),
+			Outcome::Pass => {
+				self.stash_guardrails_metadata(ctx);
+				Ok(None)
+			},
 			Outcome::Mutated(p) => {
+				self.stash_guardrails_metadata(ctx);
 				tracing::debug!(method, "mcpGuardrails: request mutated");
 				Ok(Some(p))
 			},
@@ -1138,6 +1161,7 @@ impl Relay {
 					downstream_modern: ctx_downstream_modern(ctx),
 				});
 			}
+			self.stash_guardrails_metadata(ctx);
 		}
 
 		let futs: Vec<_> = selected_upstreams

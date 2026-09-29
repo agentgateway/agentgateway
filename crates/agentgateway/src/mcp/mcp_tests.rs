@@ -7983,6 +7983,85 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
 }
 
+// mcpGuardrails request-result metadata should be visible to access-log CEL
+// (`frontendPolicies.accessLog.add`), mirroring the backend filters (authz,
+// transformation) that run after the hook and can already read it.
+#[tokio::test]
+async fn mcp_guardrails_metadata_visible_to_access_log_cel() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let trace_id = format!("mcp-guardrails-access-log-{}", uuid::Uuid::new_v4());
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"decision": "allow"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (mut t, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {
+				"mcp_trace": "mcp.tool.arguments.traceId",
+				"mcp_guardrail_decision": "mcpGuardrails != null ? string(mcpGuardrails.decision) : \"\""
+			}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/accessLog".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"traceId": trace_id, "hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_guardrail_decision"),
+		Some(&serde_json::json!("allow")),
+		"mcpGuardrails request-result metadata should be readable from access-log CEL"
+	);
+}
+
 // Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.
 #[tokio::test]
 async fn mcp_guardrails_metadata_consumed_by_list_authz() {

@@ -33,6 +33,12 @@ impl McpGuardrailsDynamicMetadata {
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
+
+	/// Merge another processor's metadata into this bag; later writes win on key
+	/// collisions, mirroring `merge_metadata_into_extensions`.
+	pub fn merge(&mut self, other: &Self) {
+		self.0.extend(other.0.clone());
+	}
 }
 
 mod client;

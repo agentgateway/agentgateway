@@ -179,6 +179,7 @@ impl App {
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
+							guardrails_log: log.mcp_guardrails.clone(),
 							client: client.clone(),
 						},
 					)
@@ -201,6 +202,7 @@ impl App {
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
+							guardrails_log: log.mcp_guardrails.clone(),
 							client: client.clone(),
 						},
 					)
