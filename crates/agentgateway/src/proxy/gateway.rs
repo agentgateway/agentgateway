@@ -1231,7 +1231,9 @@ impl Gateway {
 			.await?;
 			let best = listeners
 				.best_match_filtered(sni, |protocol| match egress_mode {
-					Some(EgressTlsMode::Intercept) => matches!(protocol, ListenerProtocol::HTTPS(_)),
+					Some(EgressTlsMode::Intercept | EgressTlsMode::InterceptDenied) => {
+						matches!(protocol, ListenerProtocol::HTTPS(_))
+					},
 					Some(EgressTlsMode::Passthrough) => matches!(protocol, ListenerProtocol::TLS(None)),
 					None => matches!(
 						protocol,

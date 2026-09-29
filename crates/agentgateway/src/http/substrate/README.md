@@ -17,9 +17,11 @@ The internal destination bind supplies the protocol handlers:
 
 These listeners can cover the same names. The actor's policy chooses HTTPS
 interception or TLS passthrough before listener selection. An unmatched name or
-port, missing SNI, unsupported protocol, or failed policy lookup closes the
-connection. No matching handler also closes the connection; there is no fallback
-to another protocol. Server-first connections time out during protocol detection.
+port selects interception so the HTTP policy can return 403. This completes TLS
+with the actor without contacting an upstream; an allowed HTTP authority cannot
+override that connection's denial. Missing or invalid SNI, unsupported protocols,
+and failed policy lookups close the connection. No matching handler also closes
+the connection. Server-first connections time out during protocol detection.
 Cleartext detection uses the gateway's existing standard HTTP method list and
 HTTP/2 prior-knowledge preface; custom method tokens are not recognized.
 

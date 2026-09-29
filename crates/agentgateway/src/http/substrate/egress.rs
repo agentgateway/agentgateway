@@ -122,6 +122,12 @@ impl RequestPolicyTrait for SubstrateEgress {
 		log.ate_actor_name = Some(identity.actor_name.clone());
 		log.ate_actor_uid = identity.actor_uid.clone();
 		log.ate_atespace = Some(identity.atespace.clone());
+		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
+			return Err(
+				ProxyError::SubstrateEgressDenied("actor egress policy denied TLS destination".to_owned())
+					.into(),
+			);
+		}
 		if req.method() == ::http::Method::CONNECT {
 			return Err(
 				ProxyError::SubstrateEgressDenied(
@@ -355,6 +361,8 @@ async fn fetch_policy(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EgressTlsMode {
 	Intercept,
+	// Complete TLS so the HTTP policy can return 403 without contacting an upstream.
+	InterceptDenied,
 	Passthrough,
 }
 
@@ -393,10 +401,9 @@ fn tls_mode(
 			"missing or invalid TLS SNI".to_owned(),
 		));
 	}
-	let rule =
-		matching_destination_rule(policy, &sni, port, MatchPhase::ClientHello).ok_or_else(|| {
-			ProxyError::SubstrateEgressDenied("actor egress policy denied TLS destination".to_owned())
-		})?;
+	let Some(rule) = matching_destination_rule(policy, &sni, port, MatchPhase::ClientHello) else {
+		return Ok(EgressTlsMode::InterceptDenied);
+	};
 	Ok(if rule.https.is_some() {
 		EgressTlsMode::Intercept
 	} else {
@@ -823,7 +830,7 @@ mod tests {
 	}
 
 	#[test]
-	fn tls_requires_sni_a_tls_rule_and_a_matching_port() {
+	fn tls_rejects_invalid_sni_and_intercepts_unmatched_destinations_for_denial() {
 		let policy = protos::ateapi::EgressPolicy {
 			rules: vec![passthrough(&["*"], ports(&[443]))],
 			..Default::default()
@@ -831,7 +838,10 @@ mod tests {
 		for sni in ["", "127.0.0.1", "bad..example", "example.com.."] {
 			assert!(tls_mode(&policy, sni, 443).is_err(), "{sni}");
 		}
-		assert!(tls_mode(&policy, "api.example.com", 8443).is_err());
+		assert_eq!(
+			tls_mode(&policy, "api.example.com", 8443).unwrap(),
+			EgressTlsMode::InterceptDenied
+		);
 		for rules in [
 			vec![],
 			vec![passthrough(&["*"], None)],
@@ -841,7 +851,10 @@ mod tests {
 				rules,
 				..Default::default()
 			};
-			assert!(tls_mode(&policy, "api.example.com", 443).is_err());
+			assert_eq!(
+				tls_mode(&policy, "api.example.com", 443).unwrap(),
+				EgressTlsMode::InterceptDenied
+			);
 		}
 	}
 

@@ -28,7 +28,7 @@ use crate::http::backendtls::{
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
-use crate::http::substrate::{ActorIdentity, EgressRequestProtocol};
+use crate::http::substrate::{ActorIdentity, EgressRequestProtocol, EgressTlsMode};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
@@ -730,6 +730,7 @@ impl HTTPProxy {
 			.copy::<ActorIdentity>(req.extensions_mut())
 			.is_some()
 		{
+			connection.copy::<EgressTlsMode>(req.extensions_mut());
 			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
 			let protocol = if matches!(
 				self

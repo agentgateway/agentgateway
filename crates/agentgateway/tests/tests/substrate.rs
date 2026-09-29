@@ -1843,11 +1843,151 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
+#[case("unmatched-sni")]
+#[case("unmatched-sni-allowed-authority")]
+#[case("unmatched-port")]
+#[case("empty-policy")]
+#[case("http-rule")]
+#[tokio::test]
+async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind: &str) {
+	let (upstream, certs) = tls_mock().await;
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let address = listener.local_addr().unwrap();
+	let port = address.port();
+	let upstream_address = *upstream.address();
+	let (connected, mut connections) = tokio::sync::mpsc::unbounded_channel();
+	let forwarder = tokio::spawn(async move {
+		loop {
+			let (mut downstream, _) = listener.accept().await.unwrap();
+			connected.send(()).unwrap();
+			tokio::spawn(async move {
+				let mut upstream = TcpStream::connect(upstream_address).await.unwrap();
+				let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+			});
+		}
+	});
+
+	// The same destination must work when allowed, then return an HTTP denial
+	// without even opening a TCP connection when its policy disallows it.
+	for allowed in [true, false] {
+		let hostname = if !allowed && kind.starts_with("unmatched-sni") {
+			"allowed.example"
+		} else {
+			"localhost"
+		};
+		let rule_port = if !allowed && kind == "unmatched-port" {
+			if port == 443 { 444 } else { 443 }
+		} else {
+			port
+		};
+		let ports = Some(protos::ateapi::Ports {
+			numbers: vec![i32::from(rule_port)],
+			..Default::default()
+		});
+		let rule = if !allowed && kind == "http-rule" {
+			protos::ateapi::EgressRule {
+				http: Some(protos::ateapi::HttpRule {
+					hostnames: vec![hostname.to_owned()],
+					ports,
+					effects: None,
+				}),
+				..Default::default()
+			}
+		} else {
+			protos::ateapi::EgressRule {
+				https: Some(protos::ateapi::HttpsRule {
+					hostnames: vec![hostname.to_owned()],
+					ports,
+					effects: None,
+				}),
+				..Default::default()
+			}
+		};
+		let policy = EgressPolicy {
+			rules: if !allowed && kind == "empty-policy" {
+				vec![]
+			} else {
+				vec![rule]
+			},
+			..Default::default()
+		};
+		let (gateway, _api) = substrate_tls_gateway(
+			Ok(policy),
+			address,
+			Some(certs.root_cert.pem().into_bytes()),
+		)
+		.await;
+		let io = open_actor_egress_tunnel(&gateway, port).await;
+		let tls: agentgateway::http::backendtls::BackendTLS =
+			agentgateway::http::backendtls::ResolvedBackendTLS {
+				root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
+				alpn: Some(vec!["http/1.1".to_owned()]),
+				..Default::default()
+			}
+			.try_into()
+			.unwrap();
+		let io = tokio::time::timeout(
+			Duration::from_secs(3),
+			tokio_rustls::TlsConnector::from(tls.base_config().config).connect(
+				rustls_pki_types::ServerName::try_from("localhost").unwrap(),
+				io,
+			),
+		)
+		.await
+		.expect("TLS handshake timed out")
+		.expect("gateway must complete TLS for HTTPS denial");
+		let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(io))
+			.await
+			.unwrap();
+		let connection = tokio::spawn(connection);
+		let authority = if !allowed && kind == "unmatched-sni-allowed-authority" {
+			hostname
+		} else {
+			"localhost"
+		};
+		let request = ::http::Request::builder()
+			.uri("/https-denial")
+			.header(header::HOST, authority)
+			.body(Body::empty())
+			.unwrap();
+		let response = tokio::time::timeout(Duration::from_secs(3), sender.send_request(request))
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(
+			response.status(),
+			if allowed {
+				StatusCode::OK
+			} else {
+				StatusCode::FORBIDDEN
+			}
+		);
+		tokio::time::timeout(Duration::from_secs(3), response.into_body().collect())
+			.await
+			.unwrap()
+			.unwrap();
+		if allowed {
+			connections.recv().await.unwrap();
+		} else {
+			assert!(
+				tokio::time::timeout(Duration::from_millis(50), connections.recv())
+					.await
+					.is_err(),
+				"denied HTTPS opened an upstream connection"
+			);
+		}
+		assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+		connection.abort();
+	}
+	forwarder.abort();
+}
+
+#[cfg(feature = "crypto-aws-lc")]
+#[rstest::rstest]
 #[case("opaque")]
 #[case("server-first")]
 #[case("missing-sni")]
-#[case("unmatched-sni")]
-#[case("http-rule")]
+#[case("missing-https-listener")]
 #[case("api-unavailable")]
 #[case("static-backend")]
 #[tokio::test]
@@ -1864,23 +2004,12 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 		numbers: vec![i32::from(port)],
 		..Default::default()
 	});
-	let rule = if kind == "http-rule" {
-		protos::ateapi::EgressRule {
-			http: Some(protos::ateapi::HttpRule {
-				hostnames: vec!["*".to_owned()],
-				ports,
-				effects: None,
-			}),
-			..Default::default()
-		}
-	} else {
-		protos::ateapi::EgressRule {
-			tls_passthrough: Some(protos::ateapi::TlsPassthroughRule {
-				hostnames: vec!["localhost".to_owned()],
-				ports,
-			}),
-			..Default::default()
-		}
+	let rule = protos::ateapi::EgressRule {
+		tls_passthrough: Some(protos::ateapi::TlsPassthroughRule {
+			hostnames: vec!["localhost".to_owned()],
+			ports,
+		}),
+		..Default::default()
 	};
 	let policy = if kind == "api-unavailable" {
 		Err(tonic::Status::unavailable("control API unavailable"))
@@ -1926,7 +2055,7 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 			.unwrap();
 		let name = if kind == "missing-sni" {
 			"127.0.0.1"
-		} else if kind == "unmatched-sni" {
+		} else if kind == "missing-https-listener" {
 			"denied.example"
 		} else {
 			"localhost"
