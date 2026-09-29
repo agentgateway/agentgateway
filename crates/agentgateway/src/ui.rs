@@ -190,6 +190,15 @@ struct RuntimeInfo {
 	user: Option<RuntimeUser>,
 	build: RuntimeBuildInfo,
 	ui: RuntimeUiInfo,
+	config_reload: RuntimeConfigReloadInfo,
+}
+
+/// Standalone config reload outcome, mirroring the `config_synchronized` metric.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeConfigReloadInfo {
+	synchronized: bool,
+	last_error: Option<String>,
 }
 
 /// Display-only identity from standardAttributes.user, with optional JWT profile details.
@@ -352,6 +361,13 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 				},
 				config_store_mode: app.state.storage.mode,
 			},
+			config_reload: {
+				let last_error = app.state.config_reload_status.last_error();
+				RuntimeConfigReloadInfo {
+					synchronized: last_error.is_none(),
+					last_error,
+				}
+			},
 		}),
 	)
 }
@@ -420,16 +436,24 @@ async fn get_config(State(app): State<App>) -> Result<Json<Value>, ErrorResponse
 }
 
 async fn get_effective_config(State(app): State<App>) -> Result<Json<Value>, ErrorResponse> {
-	let base = app.cfg()?.read_to_string().await?;
-	let config = if app.state.storage.mode == ConfigStoreMode::Hybrid {
-		let resources = app
-			.config_resource_store()?
-			.list(None)
-			.await
-			.map_err(resource_api_error)?;
-		crate::config_store::materialize_config(&base, &resources).map_err(resource_api_error)?
-	} else {
-		base
+	// Serve the configuration the runtime actually accepted. After a failed
+	// reload the on-disk file may hold a rejected config, which "effective"
+	// must not report as running (#3029).
+	let config = match app.state.config_reload_status.accepted() {
+		Some(accepted) => accepted,
+		None => {
+			let base = app.cfg()?.read_to_string().await?;
+			if app.state.storage.mode == ConfigStoreMode::Hybrid {
+				let resources = app
+					.config_resource_store()?
+					.list(None)
+					.await
+					.map_err(resource_api_error)?;
+				crate::config_store::materialize_config(&base, &resources).map_err(resource_api_error)?
+			} else {
+				base
+			}
+		},
 	};
 	let value = yaml::from_str(&config).map_err(ErrorResponse::Anyhow)?;
 	Ok(Json(value))
@@ -1134,6 +1158,41 @@ mod tests {
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
 		}
+	}
+
+	#[tokio::test]
+	async fn effective_config_prefers_last_accepted_over_rejected_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		// The on-disk config was rejected by a reload; the runtime kept the accepted one.
+		fs_err::write(&path, "binds:\n- port: 9999\n  listeners: []\n").unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path));
+		let accepted = "binds:\n- port: 8080\n  listeners: []\n";
+		app
+			.state
+			.config_reload_status
+			.record_success(accepted.to_string());
+
+		let Json(value) = get_effective_config(State(app)).await.unwrap() else {
+			unreachable!("effective config should serialize");
+		};
+		assert_eq!(value, yaml::from_str::<Value>(accepted).unwrap());
+	}
+
+	#[tokio::test]
+	async fn effective_config_falls_back_to_file_when_never_reloaded() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let on_disk = "binds:\n- port: 7070\n  listeners: []\n";
+		fs_err::write(&path, on_disk).unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path));
+
+		let Json(value) = get_effective_config(State(app)).await.unwrap() else {
+			unreachable!("effective config should serialize");
+		};
+		assert_eq!(value, yaml::from_str::<Value>(on_disk).unwrap());
 	}
 
 	#[tokio::test]

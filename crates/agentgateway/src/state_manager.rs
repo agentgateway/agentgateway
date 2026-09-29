@@ -287,6 +287,10 @@ impl LocalClient {
 			.config
 			.budget_policy
 			.apply_registration(config.budget_registration)?;
+		self
+			.config
+			.config_reload_status
+			.record_success(config_content);
 
 		Ok(PreviousState {
 			binds: next_binds,
@@ -313,6 +317,10 @@ impl LocalClient {
 			},
 			Err(e) => {
 				self.metrics.config_synchronized.set(0);
+				self
+					.config
+					.config_reload_status
+					.record_failure(e.to_string());
 				error!("Failed to reload config: {}", e);
 				prev
 			},
@@ -687,5 +695,73 @@ frontendPolicies:
 			.unwrap()
 			.1;
 		assert_eq!(exec.eval(expression).unwrap().as_string().unwrap(), "third");
+	}
+
+	#[tokio::test]
+	async fn rejected_reload_keeps_last_accepted_config_and_records_error() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::tokio::write(&path, local_config("first"))
+			.await
+			.unwrap();
+
+		let mut config = test_config();
+		config.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let config = Arc::new(config);
+		let stores = test_stores();
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
+		let client = test_client();
+		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let local_client = LocalClient {
+			config: config.clone(),
+			cfg: ConfigSource::File(path.clone()),
+			config_resource_store: None,
+			model_catalog: crate::llm::catalog::ModelCatalog::empty(),
+			stores,
+			client,
+			resource_manager,
+			gateway: config.gateway(),
+			metrics,
+		};
+
+		// The initial load records the accepted config.
+		let prev = local_client
+			.reload_config(PreviousState::default())
+			.await
+			.unwrap();
+		assert_eq!(
+			config.config_reload_status.accepted().as_deref(),
+			Some(local_config("first").as_str())
+		);
+		assert!(config.config_reload_status.last_error().is_none());
+
+		// A rejected reload keeps the last accepted config and records the error.
+		let invalid = local_config("invalid").replace("'\"invalid\"'", "'('");
+		fs_err::tokio::write(&path, invalid).await.unwrap();
+		let _ = local_client.reload_config_after_change(prev.clone()).await;
+		let accepted = config
+			.config_reload_status
+			.accepted()
+			.expect("accepted config");
+		assert_eq!(accepted, local_config("first"));
+		assert!(
+			config
+				.config_reload_status
+				.last_error()
+				.is_some_and(|e| !e.is_empty()),
+			"rejected reload should record its error"
+		);
+
+		// A subsequent successful reload replaces the accepted config and clears the error.
+		fs_err::tokio::write(&path, local_config("second"))
+			.await
+			.unwrap();
+		let _ = local_client.reload_config_after_change(prev).await;
+		assert_eq!(
+			config.config_reload_status.accepted().as_deref(),
+			Some(local_config("second").as_str())
+		);
+		assert!(config.config_reload_status.last_error().is_none());
 	}
 }

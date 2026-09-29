@@ -696,6 +696,11 @@ pub struct Config {
 	/// Process-wide budget policy used by standalone configuration.
 	#[serde(skip)]
 	pub budget_policy: Arc<http::budget::BudgetPolicy>,
+	/// Tracks standalone config reload outcomes so the admin API can report the
+	/// configuration the runtime is actually running, even when a newer config
+	/// was rejected.
+	#[serde(skip)]
+	pub config_reload_status: Arc<ConfigReloadStatus>,
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
@@ -713,6 +718,41 @@ pub struct ModelCatalogConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StorageConfig {
 	pub mode: ConfigStoreMode,
+}
+
+/// Outcome of standalone configuration reloads. `Config` carries this so the
+/// admin API (`/api/config/effective`, `/api/runtime`) can distinguish the
+/// configuration the runtime accepted from a newer on-disk config that was
+/// rejected during a reload.
+#[derive(Debug, Default)]
+pub struct ConfigReloadStatus {
+	/// Content of the most recent configuration the runtime accepted (already
+	/// materialized for hybrid config stores). `None` until the first
+	/// successful load.
+	last_accepted: std::sync::RwLock<Option<String>>,
+	/// Error of the most recent failed reload, if any.
+	last_error: std::sync::RwLock<Option<String>>,
+}
+
+impl ConfigReloadStatus {
+	/// Content of the most recent accepted configuration, if any.
+	pub fn accepted(&self) -> Option<String> {
+		self.last_accepted.read().unwrap().clone()
+	}
+
+	/// Error of the most recent failed reload, if any.
+	pub fn last_error(&self) -> Option<String> {
+		self.last_error.read().unwrap().clone()
+	}
+
+	fn record_success(&self, content: String) {
+		*self.last_accepted.write().unwrap() = Some(content);
+		*self.last_error.write().unwrap() = None;
+	}
+
+	fn record_failure(&self, error: String) {
+		*self.last_error.write().unwrap() = Some(error);
+	}
 }
 
 /// A source of model cost catalog data.
