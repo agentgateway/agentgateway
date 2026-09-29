@@ -89,6 +89,11 @@ impl<B: Body> BodyState<B> {
 	/// [`Capped`][super::Capped] error when polled.
 	fn record_bytes(&mut self, mut data: B::Data) -> Bytes {
 		let length = data.remaining();
+		// Empty DATA frames can end a gRPC request. Forward them without adding
+		// empty buffers to BufList, which requires every entry to contain data.
+		if length == 0 {
+			return Bytes::new();
+		}
 		self.max_bytes = self.max_bytes.saturating_sub(length);
 
 		if self.is_capped() {
