@@ -2353,7 +2353,7 @@ binds:
 	};
 	assert_eq!(
 		target_spec.backend,
-		crate::types::agent::SimpleBackendReference::Backend("shared-upstream".into())
+		crate::types::agent::SimpleBackendReference::Backend("/shared-upstream".into())
 	);
 	assert_eq!(target_spec.path, "/mcp");
 }
@@ -2386,6 +2386,93 @@ binds:
 			.contains("path is required when backend is set"),
 		"{err}"
 	);
+}
+
+// A route referencing a top-level backend by its bare name must resolve to the
+// backend's store key (`/name` for the empty local namespace), otherwise the
+// lookup at request time fails with a misleading `service not found`.
+// See https://github.com/agentgateway/agentgateway/issues/3662.
+#[tokio::test]
+async fn test_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: upstream
+    - backends:
+      - backend: /upstream
+"#,
+	)
+	.await
+	.expect("bare and qualified named backend references should normalize");
+
+	let routes = &normalized.listener_routes[0].1;
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	for route in routes {
+		let RouteBackendTarget::Backend(reference) = &route.backends[0].target else {
+			panic!("expected backend reference target");
+		};
+		// Both spellings must resolve to the exact key the backend is registered under.
+		assert_eq!(
+			reference.as_str(),
+			backend_name.as_str(),
+			"reference must match registered key"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_tcp_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  protocol: AUTO
+  listeners:
+  - protocol: TCP
+    tcpRoutes:
+    - backends:
+      - backend: upstream
+"#,
+	)
+	.await
+	.expect("bare TCP named backend reference should normalize");
+
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	let tcp_route = &normalized.listener_tcp_routes[0].1[0];
+	let crate::types::agent::BackendReference::Backend(tcp_reference) =
+		&tcp_route.backends[0].backend
+	else {
+		panic!("expected TCP backend reference");
+	};
+	assert_eq!(tcp_reference.as_str(), backend_name.as_str());
 }
 
 #[test]
