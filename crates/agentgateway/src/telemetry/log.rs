@@ -521,21 +521,6 @@ fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
 	}
 }
 
-fn original_model_from_metadata<'a>(
-	req: Option<&'a cel::RequestSnapshot>,
-	resp: Option<&'a cel::ResponseSnapshot>,
-) -> Option<&'a str> {
-	resp
-		.and_then(|snapshot| snapshot.metadata.as_ref())
-		.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		.or_else(|| {
-			req
-				.and_then(|snapshot| snapshot.metadata.as_ref())
-				.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		})
-		.and_then(Value::as_str)
-}
-
 /// The incoming trace context picks which setting applies: `random_sampling` when the request has
 /// no trace, `client_sampling` when it has one that is sampled, `parent_not_sampled` when it has
 /// one that is not.
@@ -1155,6 +1140,7 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			model_routing: None,
 			guardrails: Default::default(),
 			budgets: None,
 			a2a_method: None,
@@ -1333,6 +1319,7 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub model_routing: Option<llm::model_router::RoutingDecision>,
 	pub guardrails: GuardrailLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
@@ -1680,6 +1667,10 @@ impl Drop for DropOnLog {
 			let guardrails_json = guardrails
 				.as_ref()
 				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
+			let virtual_model = log
+				.model_routing
+				.as_ref()
+				.and_then(|routing| routing.virtual_model.as_ref());
 
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
@@ -1843,6 +1834,27 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.response_model.display()),
+				),
+				(
+					"agw.ai.original_model",
+					log
+						.model_routing
+						.as_ref()
+						.map(|routing| routing.requested_model.as_str().into()),
+				),
+				(
+					"agw.ai.virtual_model",
+					virtual_model.map(|v| v.name.as_str().into()),
+				),
+				(
+					"agw.ai.routing.strategy",
+					virtual_model.map(|v| v.strategy.as_str().into()),
+				),
+				(
+					"agw.ai.routing.target",
+					virtual_model
+						.and_then(|v| v.target)
+						.map(|target| (target as u64).into()),
 				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
@@ -2123,22 +2135,12 @@ impl Drop for DropOnLog {
 				}
 
 				if log_store_enabled {
-					let original_model = original_model_from_metadata(
-						log.request_snapshot.as_deref(),
-						log.response_snapshot.as_ref(),
-					)
-					.map(str::to_owned);
-
 					let mut db_kv = kv.clone();
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
 							Cow::Borrowed("user_agent.name"),
 							user_agent_name(log.request_snapshot.as_deref()).map(Value::String),
-						),
-						(
-							Cow::Borrowed("agw.ai.original_model"),
-							original_model.clone().map(Value::String),
 						),
 						(
 							Cow::Borrowed("agw.api_key.name"),
@@ -3748,6 +3750,97 @@ mod tests {
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
 		);
+	}
+
+	#[test]
+	fn model_routing_span_attributes() {
+		use llm::model_router::{RoutingDecision, RoutingStrategy, VirtualModelDecision};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(metric_test_llm_request());
+		log.model_routing = Some(RoutingDecision {
+			requested_model: "smart-model".to_string(),
+			virtual_model: Some(VirtualModelDecision {
+				name: "smart-model".to_string(),
+				strategy: RoutingStrategy::Conditional,
+				target: Some(1),
+			}),
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.clone())
+		};
+		assert_eq!(
+			value("gen_ai.request.model"),
+			Some(opentelemetry::Value::from("test-model"))
+		);
+		assert_eq!(
+			value("agw.ai.original_model"),
+			Some(opentelemetry::Value::from("smart-model"))
+		);
+		assert_eq!(
+			value("agw.ai.virtual_model"),
+			Some(opentelemetry::Value::from("smart-model"))
+		);
+		assert_eq!(
+			value("agw.ai.routing.strategy"),
+			Some(opentelemetry::Value::from("conditional"))
+		);
+		assert_eq!(
+			value("agw.ai.routing.target"),
+			Some(opentelemetry::Value::I64(1))
+		);
+	}
+
+	#[test]
+	fn concrete_model_routing_span_attributes_omit_virtual_model() {
+		use llm::model_router::RoutingDecision;
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.model_routing = Some(RoutingDecision {
+			requested_model: "test-model".to_string(),
+			virtual_model: None,
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		assert!(has("agw.ai.original_model"));
+		for absent in [
+			"agw.ai.virtual_model",
+			"agw.ai.routing.strategy",
+			"agw.ai.routing.target",
+		] {
+			assert!(!has(absent), "unexpected {absent} span attribute");
+		}
 	}
 
 	#[test]

@@ -2379,7 +2379,14 @@ async fn make_backend_call(
 		if let Some(path_match) = router.trace_path(&req) {
 			log.add(|log| log.path_match = Some(path_match));
 		}
-		let resolved = match router.resolve(&mut req, &inputs.model_catalog).await {
+		let resolved = router.resolve(&mut req, &inputs.model_catalog).await;
+		if let Some(decision) = req
+			.extensions_mut()
+			.remove::<model_router::RoutingDecision>()
+		{
+			log.add(|log| log.model_routing = Some(decision));
+		}
+		let resolved = match resolved {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
