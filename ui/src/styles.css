@@ -4429,6 +4429,22 @@ textarea {
 	overflow-wrap: anywhere;
 }
 
+.chat-stream-cursor {
+	display: inline-block;
+	width: 7px;
+	height: 1em;
+	margin-left: 2px;
+	vertical-align: text-bottom;
+	background: var(--muted);
+	animation: chat-stream-blink 1s steps(2, start) infinite;
+}
+
+@keyframes chat-stream-blink {
+	to {
+		visibility: hidden;
+	}
+}
+
 .message-meta-chips {
 	display: flex;
 	flex-wrap: wrap;

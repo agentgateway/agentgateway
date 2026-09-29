@@ -1197,6 +1197,40 @@ test('LLM playground sends selected virtual model name', async ({ page }) => {
 	expect(gateway.chatRequests[0].model).toBe('resilient');
 });
 
+test('LLM playground renders streamed responses and requests streaming', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.route('**/v1/chat/completions', async route => {
+		gateway.chatRequests.push(route.request().postDataJSON() as Record<string, unknown>);
+		const events = [
+			{ choices: [{ delta: { role: 'assistant', content: 'Hello' } }] },
+			{ choices: [{ delta: { content: ' from' } }] },
+			{ choices: [{ delta: { content: ' the stream' }, finish_reason: 'stop' }] },
+			{
+				choices: [{ delta: {} }],
+				usage: { prompt_tokens: 3, completion_tokens: 5, total_tokens: 8 }
+			}
+		];
+		const body =
+			events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n';
+		await route.fulfill({
+			status: 200,
+			headers: { 'content-type': 'text/event-stream' },
+			body
+		});
+	});
+	await page.goto('/llm/playground');
+
+	await page.getByLabel('User message').fill('ping');
+	await page.getByRole('button', { name: 'Send' }).click();
+
+	await expect(page.locator('.chat-message.assistant .chat-bubble')).toContainText(
+		'Hello from the stream'
+	);
+	await expect(page.locator('.chat-stream-cursor')).toHaveCount(0);
+	await expect.poll(() => gateway.chatRequests.length).toBe(1);
+	expect(gateway.chatRequests[0].stream).toBe(true);
+});
+
 test('MCP playground initializes, lists tools, and calls a tool', async ({ page }) => {
 	const gateway = await mockGateway(page);
 	await page.goto('/mcp/playground');
