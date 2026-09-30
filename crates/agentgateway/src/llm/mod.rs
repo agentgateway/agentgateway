@@ -1675,8 +1675,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Completions))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		// If a user doesn't request usage, we will not get token information which we need
@@ -1724,8 +1723,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Messages))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1766,8 +1764,7 @@ impl AIProvider {
 		}
 		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Gemini))?;
+			.await?;
 		req.streaming = streaming;
 		self.apply_model_alias(policies, &mut req);
 
@@ -1797,8 +1794,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::embeddings::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Embeddings))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1826,8 +1822,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::rerank::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Rerank))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1856,8 +1851,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (mut parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::Responses))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
@@ -1892,8 +1886,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::CountTokens))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
@@ -1952,8 +1945,7 @@ impl AIProvider {
 		// `endpoints/{id}:countTokens` path, say).
 		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::CountTokensRequest>(policies, req, log)
-			.await
-			.map_err(|err| err.with_request_format(InputFormat::GeminiCountTokens))?;
+			.await?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -2006,7 +1998,8 @@ impl AIProvider {
 			{
 				p.unmarshal_request(&bytes, log)
 			} else {
-				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
+				serde_json::from_slice(bytes.as_ref())
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
 			}
 			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else {
@@ -3076,7 +3069,7 @@ impl AIProvider {
 				Some(json::ParsedJson(value)) => serde_json::from_value(value),
 				None => serde_json::from_slice(&bytes),
 			}
-			.map_err(AIError::RequestParsing)?;
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 			let model = req.model();
 			if model.as_deref().is_none() {
 				return Err(AIError::MissingField("model not specified".into()));
@@ -3086,7 +3079,8 @@ impl AIProvider {
 
 		let mut request = match cached {
 			Some(json::ParsedJson(value)) => value,
-			None => serde_json::from_slice(&bytes).map_err(AIError::RequestParsing)?,
+			None => serde_json::from_slice(&bytes)
+				.map_err(|err| AIError::RequestParsing(T::input_format(), err))?,
 		};
 		self.set_provider_request_model(&parts, &mut request, path_model_wins)?;
 		let mut request = if let Some(p) = policies {
@@ -3095,7 +3089,8 @@ impl AIProvider {
 			request
 		};
 		self.finalize_request_model(&mut request)?;
-		let req: T = serde_json::from_value(request).map_err(AIError::RequestParsing)?;
+		let req: T = serde_json::from_value(request)
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 
 		Ok((parts, managed_body, req))
 	}

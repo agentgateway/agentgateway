@@ -169,7 +169,8 @@ pub mod from_messages {
 		req: &types::messages::Request,
 	) -> Result<types::responses::Request, AIError> {
 		validate_raw_request(req)?;
-		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json_util::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let messages::Request {
 			messages,
 			system,

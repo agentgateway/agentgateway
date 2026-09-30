@@ -1,5 +1,6 @@
 ---
 source: crates/llm/src/golden_tests.rs
+assertion_line: 99
 description: src/tests/requests/messages/tool_result_empty.json
 info:
   model: claude-opus-4-6

@@ -107,7 +107,8 @@ pub mod from_messages {
 	pub fn translate_request(
 		req: &types::messages::Request,
 	) -> Result<types::completions::typed::Request, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		Ok(translate_internal(typed))
 	}
 

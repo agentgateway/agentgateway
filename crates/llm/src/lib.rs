@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use agent_core::prelude::Strng;
 pub use agent_core::serdes;
-pub use agent_core::serdes::{apply, attribute_alias, define_schema_aliases, JsonSchema};
+pub use agent_core::serdes::{JsonSchema, apply, attribute_alias, define_schema_aliases};
 use tracing::warn;
 
 define_schema_aliases!();
@@ -96,8 +96,8 @@ pub mod model_path {
 }
 
 pub mod json {
-	use serde::de::DeserializeOwned;
 	use serde::Serialize;
+	use serde::de::DeserializeOwned;
 	use serde_json::Value;
 
 	pub fn traverse<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
@@ -557,11 +557,8 @@ pub enum AIError {
 	ResponseTooLarge,
 	#[error("prompt guard failed")]
 	PromptWebhookError,
-	#[error("failed to parse request: {0}")]
-	RequestParsing(serde_json::Error),
-	// TODO should we always include the format in RequestParsing
 	#[error("failed to parse {0:?} request: {1}")]
-	RequestFormatParsing(InputFormat, serde_json::Error),
+	RequestParsing(InputFormat, serde_json::Error),
 	#[error("failed to marshal request: {0}")]
 	RequestMarshal(serde_json::Error),
 	#[error("failed to parse response: {0}")]
@@ -578,15 +575,6 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
-}
-
-impl AIError {
-	pub fn with_request_format(self, format: InputFormat) -> Self {
-		match self {
-			Self::RequestParsing(source) => Self::RequestFormatParsing(format, source),
-			other => other,
-		}
-	}
 }
 
 #[apply(schema!)]

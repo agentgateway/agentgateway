@@ -331,6 +331,9 @@ const PRESERVED_REST_KEYS: &[&str] = &[
 ];
 
 impl super::RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Completions
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}

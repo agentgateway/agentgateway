@@ -60,7 +60,7 @@ fn prepare_anthropic_body(
 	apply: impl FnOnce(&mut Map<String, Value>),
 ) -> Result<Vec<u8>, AIError> {
 	let mut body: Map<String, Value> =
-		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+		serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
 	body.insert(
 		"anthropic_version".to_string(),
 		Value::String(ANTHROPIC_VERSION.to_string()),

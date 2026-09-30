@@ -271,7 +271,7 @@ pub mod from_completions {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req)
-			.map_err(|err| AIError::RequestFormatParsing(crate::InputFormat::Completions, err))?;
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let xlated = translate_internal(typed, model_id, catalog);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)

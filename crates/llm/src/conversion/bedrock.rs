@@ -405,7 +405,7 @@ pub mod from_embeddings {
 
 	pub fn translate(req: &types::embeddings::Request) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
-			.map_err(AIError::RequestMarshal)?;
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Embeddings, err))?;
 
 		let model = typed.model.as_str();
 
@@ -416,9 +416,10 @@ pub mod from_embeddings {
 			let input = match &typed.input {
 				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
 				types::embeddings::typed::EmbeddingInput::Array(_) => {
-					return Err(AIError::RequestParsing(serde::de::Error::custom(
-						"Nova requires a single string input",
-					)));
+					return Err(AIError::RequestParsing(
+						crate::InputFormat::Embeddings,
+						serde::de::Error::custom("Nova requires a single string input"),
+					));
 				},
 			};
 			let bedrock_req = types::bedrock::NovaEmbeddingRequest {
@@ -475,9 +476,10 @@ pub mod from_embeddings {
 			let input = match &typed.input {
 				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
 				types::embeddings::typed::EmbeddingInput::Array(_) => {
-					return Err(AIError::RequestParsing(serde::de::Error::custom(
-						"Titan requires a single string input",
-					)));
+					return Err(AIError::RequestParsing(
+						crate::InputFormat::Embeddings,
+						serde::de::Error::custom("Titan requires a single string input"),
+					));
 				},
 			};
 			let bedrock_req = types::bedrock::AmazonTitanV2EmbeddingRequest {
@@ -818,7 +820,8 @@ pub mod from_completions {
 		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
+		let typed = json::convert::<_, completions::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) =
 			translate_internal(typed, model_id, provider, headers, prompt_caching, catalog)?;
@@ -1502,7 +1505,8 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let (xlated, tool_name_map) = translate_internal(typed, provider, headers, catalog)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
@@ -2414,8 +2418,8 @@ pub mod from_responses {
 		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let mut typed =
-			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let mut typed = json::convert::<_, responses::CreateResponse>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
