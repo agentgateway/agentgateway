@@ -103,7 +103,16 @@ impl Catalog {
 	}
 
 	pub fn resolve(&self, provider: &str, model: &str) -> Option<&Model> {
-		self.providers.get(provider)?.models.get(model)
+		let models = &self.providers.get(provider)?.models;
+		models.get(model).or_else(|| {
+			// Vertex's OpenAI-compatible endpoint requires `google/<id>`, but the catalog keys Gemini by bare id.
+			let bare = model
+				.strip_prefix("google/")
+				.or_else(|| model.strip_prefix("models/"))
+				.or_else(|| model.strip_prefix("publishers/google/models/"))
+				.filter(|_| provider == "gcp.vertex_ai")?;
+			models.get(bare)
+		})
 	}
 }
 
@@ -492,6 +501,43 @@ mod tests {
 			"another provider's model does not leak"
 		);
 		assert!(catalog.resolve("openai", "no-such-model").is_none());
+	}
+
+	#[test]
+	fn resolve_strips_google_publisher_on_vertex() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{"gemini-3.7-flash":{"rates":{"input":"1"}},"google/pinned":{"rates":{"input":"2"}},"models/pinned":{"rates":{"input":"2"}},"publishers/google/models/pinned":{"rates":{"input":"2"}},"pinned":{"rates":{"input":"3"}}}},
+				"openai":{"models":{"gemini-3.7-flash":{"rates":{"input":"1"}}}}
+			}}"#,
+		)
+		.unwrap();
+		for prefix in ["google/", "models/", "publishers/google/models/"] {
+			assert_eq!(
+				catalog
+					.resolve("gcp.vertex_ai", &format!("{prefix}gemini-3.7-flash"))
+					.unwrap()
+					.rates
+					.input,
+				Some(m("1")),
+				"{prefix}"
+			);
+			assert_eq!(
+				catalog
+					.resolve("gcp.vertex_ai", &format!("{prefix}pinned"))
+					.unwrap()
+					.rates
+					.input,
+				Some(m("2")),
+				"an exact entry wins over the stripped name"
+			);
+			assert!(
+				catalog
+					.resolve("openai", &format!("{prefix}gemini-3.7-flash"))
+					.is_none(),
+				"only vertex strips the publisher"
+			);
+		}
 	}
 
 	#[test]
