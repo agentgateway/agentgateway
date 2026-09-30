@@ -30,7 +30,7 @@ use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{Body, BodyInspection, RecordedBodyHandle, apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::guardrails::McpGuardrailsDynamicMetadata;
-use crate::mcp::{MCPInfo, MCPTool};
+use crate::mcp::{MCPInfo, MCPTool, MCPView};
 use crate::proxy::dtrace;
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
@@ -64,7 +64,7 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	pub mcp: Option<&'a MCPInfo>,
+	pub mcp: Option<MCPView<'a>>,
 
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
@@ -579,7 +579,7 @@ impl<'a> Executor<'a> {
 		self.api_key = ExtensionOrDirect::Extension(ext);
 		self.jwt = ExtensionOrDirect::Extension(ext);
 		self.llm = ExtensionOrDirect::Extension(ext);
-		self.mcp = ext.get::<MCPInfo>();
+		self.mcp = ext.get::<MCPInfo>().map(MCPView::new);
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
 		self.extproc = ExtensionOrDirect::Extension(ext);
@@ -633,7 +633,7 @@ impl<'a> Executor<'a> {
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
 		}
-		this.mcp = Some(mcp);
+		this.mcp = Some(MCPView::new(mcp));
 		this
 	}
 	pub fn new_buffered_request(req: &'a ::http::Request<Option<Bytes>>) -> Self {
@@ -679,7 +679,7 @@ impl<'a> Executor<'a> {
 			response.body_prefix = BodyPrefix(response.body.clone());
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
-		this.mcp = mcp;
+		this.mcp = mcp.map(MCPView::new);
 		this.guardrails = guardrails;
 		if let Some(proxy) = proxy {
 			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
@@ -761,6 +761,20 @@ impl<'a> Executor<'a> {
 	pub fn debug_snapshot(&'a self) -> serde_json::Value {
 		let resolver = ExecutorResolver { executor: self };
 		resolver.slow_debug()
+	}
+
+	pub fn with_mcp_params(mut self, params: Option<&'a dyn DynamicType>) -> Self {
+		if let Some(mcp) = self.mcp.as_mut() {
+			mcp.params = params;
+		}
+		self
+	}
+
+	pub fn with_mcp_result(mut self, result: Option<&'a dyn DynamicType>) -> Self {
+		if let Some(mcp) = self.mcp.as_mut() {
+			mcp.result = result;
+		}
+		self
 	}
 
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
@@ -2318,7 +2332,7 @@ impl ExecutorSerde {
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
 		exec.guardrails = self.guardrails.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
-		exec.mcp = self.mcp.as_ref();
+		exec.mcp = self.mcp.as_ref().map(MCPView::new);
 
 		exec
 	}

@@ -548,6 +548,54 @@ pub struct MCPInfo {
 	pub error: Option<MCPError>,
 }
 
+/// `mcp` in CEL; params and result are borrowed while guardrails evaluate.
+#[derive(Debug, Clone, Copy)]
+pub struct MCPView<'a> {
+	pub info: &'a MCPInfo,
+	// TODO: Expose the selected targets as a list of MCPTarget in mcp.targets for CEL guardrails.
+	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+	pub result: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+}
+
+impl<'a> MCPView<'a> {
+	pub fn new(info: &'a MCPInfo) -> Self {
+		Self {
+			info,
+			params: None,
+			result: None,
+		}
+	}
+}
+
+impl ::cel::types::dynamic::DynamicType for MCPView<'_> {
+	fn field(&self, field: &str) -> Option<::cel::Value<'_>> {
+		let body = match field {
+			"params" => self.params,
+			"result" => self.result,
+			_ => return self.info.field(field),
+		};
+		body.map(|body| ::cel::Value::Dynamic(::cel::types::dynamic::DynamicValue::from_ref(body)))
+	}
+
+	fn materialize(&self) -> ::cel::Value<'_> {
+		use ::cel::types::dynamic::DynamicFlatten;
+		if self.params.is_none() && self.result.is_none() {
+			return self.info.materialize();
+		}
+		let mut map = vector_map::VecMap::with_capacity(13);
+		self.info.materialize_into(&mut map);
+		for (name, body) in [("params", self.params), ("result", self.result)] {
+			if let Some(body) = body {
+				map.insert(
+					name.into(),
+					::cel::Value::Dynamic(::cel::types::dynamic::DynamicValue::from_ref(body)),
+				);
+			}
+		}
+		::cel::Value::Map(::cel::objects::MapValue::Borrow(map))
+	}
+}
+
 impl MCPInfo {
 	/// Builds the MCP information available to HTTP request policies. Response-derived
 	/// fields are populated later by MCP processing.

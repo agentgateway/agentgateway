@@ -1861,7 +1861,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"
@@ -2779,6 +2779,51 @@
                 "backend"
               ]
             }
+          ]
+        },
+        {
+          "description": "In-process CEL guardrail.",
+          "type": "object",
+          "properties": {
+            "when": {
+              "description": "Condition gating the action; absent means always.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expression"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "reject": {
+              "description": "Reject with this message. Exactly one of `reject` or `transform` is required.",
+              "type": [
+                "string",
+                "null"
+              ],
+              "default": null
+            },
+            "transform": {
+              "description": "Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).\nUse `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expression"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "kind": {
+              "type": "string",
+              "const": "cel"
+            }
+          },
+          "required": [
+            "kind"
           ]
         }
       ]
@@ -9500,7 +9545,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"

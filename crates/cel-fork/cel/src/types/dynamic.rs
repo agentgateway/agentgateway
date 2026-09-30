@@ -76,8 +76,12 @@ pub struct DynamicValue<'a> {
 
 impl<'a> DynamicValue<'a> {
 	pub fn new<T: DynamicType>(t: &'a T) -> Self {
+		Self::from_ref(t)
+	}
+
+	pub fn from_ref(t: &'a dyn DynamicType) -> Self {
 		Self {
-			dyn_ref: DynamicRef::Borrowed(t as &dyn DynamicType),
+			dyn_ref: DynamicRef::Borrowed(t),
 		}
 	}
 
