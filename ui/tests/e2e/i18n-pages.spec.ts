@@ -1,5 +1,9 @@
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
+import configSchema from '../../src/generated/schema.json' with { type: 'json' };
+import i18n, { translateText } from '../../src/i18n';
+import en from '../../src/locales/en';
+import zhCN from '../../src/locales/zh-CN';
 import { emptyConfig, mockGateway, sameOriginGatewayConfig } from './fixtures';
 
 const populatedPagePaths = [
@@ -27,6 +31,145 @@ const populatedPagePaths = [
 ] as const;
 
 const setupPagePaths = ['/llm/get-started', '/mcp/get-started', '/traffic/get-started'] as const;
+
+test('translated copy preserves the original inline code formatting', () => {
+	const findings: Array<{ key: string; english: string[]; chinese: string[] }> = [];
+	const inlineCode = (text: string) =>
+		[...new Set([...text.matchAll(/`([^`]+)`/g)].map(match => match[1]))].sort();
+	for (const key of Object.keys(en.translation.copy) as Array<keyof typeof en.translation.copy>) {
+		const english = inlineCode(en.translation.copy[key]);
+		const chinese = inlineCode(zhCN.translation.copy[key]);
+		if (JSON.stringify(english) !== JSON.stringify(chinese)) {
+			findings.push({ key, english, chinese });
+		}
+	}
+	expect(findings).toEqual([]);
+});
+
+test('current provider and guardrail schema help has Chinese translations', async () => {
+	await i18n.changeLanguage('zh-CN');
+	try {
+		const webhook = configSchema.$defs.WebhookFailureMode.description;
+		const baseUrl = configSchema.$defs.LocalLLMParams.properties.baseUrl.description;
+		const target = configSchema.$defs.Webhook.properties.target.description;
+		expect(translateText(webhook)).toContain('防护规则提供商');
+		expect(translateText(webhook)).not.toBe(webhook);
+		expect(translateText(baseUrl)).toContain('上游基础路径');
+		expect(translateText(baseUrl)).not.toBe(baseUrl);
+		expect(translateText(target)).toContain('防护规则 Webhook');
+		expect(translateText(target)).not.toBe(target);
+	} finally {
+		await i18n.changeLanguage('en');
+	}
+});
+
+test('custom provider base URL help explains endpoint paths in Chinese', async ({
+	page
+}, testInfo) => {
+	const config = emptyConfig();
+	const llm = config.llm as { models: unknown[] };
+	llm.models = [
+		{
+			name: 'custom-help',
+			provider: { custom: { formats: [{ type: 'completions' }] } },
+			params: { baseUrl: 'https://api.openai.com/v1' }
+		}
+	];
+	await mockGateway(page, config);
+	await page.goto('/llm/models?lang=zh-CN');
+	await page.getByRole('button', { name: '编辑模型', exact: true }).click();
+	const help = page.getByRole('dialog').locator('.help-icon[aria-label^="上游提供商的基础 URL。"]');
+	await expect(help).toBeVisible();
+	await help.hover();
+	await expect(page.getByRole('tooltip')).toContainText('上游基础路径');
+	await expect(page.getByRole('tooltip')).toContainText('/v1/chat/completions');
+	if (process.env.I18N_SCREENSHOT) {
+		await page.screenshot({ path: testInfo.outputPath('base-url-help-zh-CN.png'), fullPage: true });
+	}
+});
+
+test('Webhook guard fields use status code terminology without losing translated help', async ({
+	page
+}, testInfo) => {
+	await mockGateway(page);
+	await page.goto('/llm/guardrails?lang=zh-CN');
+	await page.getByRole('button', { name: '添加防护规则', exact: true }).first().click();
+	await page.getByRole('combobox', { name: '防护类型', exact: true }).click();
+	await page.getByRole('option', { name: /^Webhook/ }).click();
+	const drawer = page.getByRole('dialog');
+	await expect(drawer.getByText('拒绝状态码', { exact: true })).toBeVisible();
+	await drawer.locator('.help-icon[aria-label*="backendTLS"]').hover();
+	await expect(page.getByRole('tooltip')).toContainText('防护规则 Webhook');
+	const help = drawer.locator('.help-icon[aria-label^="Webhook 无法访问"]');
+	await expect(help).toBeVisible();
+	await help.hover();
+	await expect(page.getByRole('tooltip')).toContainText('默认为');
+	if (process.env.I18N_SCREENSHOT) {
+		await page.screenshot({ path: testInfo.outputPath('webhook-help-zh-CN.png'), fullPage: true });
+	}
+});
+
+for (const language of ['en', 'zh-CN'] as const) {
+	test(`setup redirects use destination names rather than button labels (${language})`, async ({
+		page
+	}) => {
+		await page.addInitScript(() => {
+			const state = window as typeof window & { openingTitles: string[] };
+			state.openingTitles = [];
+			new MutationObserver(records => {
+				for (const record of records) {
+					for (const node of record.addedNodes) {
+						if (!(node instanceof Element)) continue;
+						const banners = node.matches('.status-banner')
+							? [node]
+							: [...node.querySelectorAll('.status-banner')];
+						for (const banner of banners) {
+							const text = banner.textContent ?? '';
+							if (/^(Opening|正在打开)/.test(text)) state.openingTitles.push(text);
+						}
+					}
+				}
+			}).observe(document, { childList: true, subtree: true });
+		});
+		await mockGateway(page);
+		for (const [surface, destination, english, chinese] of [
+			['llm', 'models', 'Models', '模型'],
+			['mcp', 'servers', 'Servers', '服务器'],
+			['traffic', 'gateways', 'Gateways', '网关']
+		]) {
+			await page.goto(`/${surface}/get-started?lang=${language}`);
+			await expect(page).toHaveURL(new RegExp(`/${surface}/${destination}(?:\\?|$)`));
+			const titles = await page.evaluate(
+				() => (window as typeof window & { openingTitles: string[] }).openingTitles
+			);
+			expect(titles).toContain(language === 'en' ? `Opening ${english}` : `正在打开 ${chinese}`);
+		}
+	});
+}
+
+for (const language of ['en', 'zh-CN'] as const) {
+	test(`MCP authorization keeps plain text formatting and localizes YAML preview (${language})`, async ({
+		page
+	}) => {
+		const chinese = language === 'zh-CN';
+		await mockGateway(page);
+		await page.goto(`/mcp/policies?lang=${language}`);
+		await page.getByRole('button', { name: chinese ? /MCP 授权/ : /MCP authorization/i }).click();
+		const drawer = page.getByRole('dialog', {
+			name: chinese ? 'MCP 授权' : 'MCP authorization',
+			exact: true
+		});
+		await expect(drawer.locator('.authz-rule-toolbar small')).toHaveText(
+			chinese
+				? '每个 CEL 表达式都保存在 allow、deny 或 require 下。'
+				: 'Each CEL expression is saved under allow, deny, or require.'
+		);
+		await expect(drawer.locator('.authz-rule-toolbar code')).toHaveCount(0);
+		await expect(drawer.locator('.schema-details summary')).toHaveText(
+			chinese ? '生成的 YAML' : 'Resulting YAML'
+		);
+	});
+}
 
 test('every page avoids word-by-word mixed Chinese copy', async ({ page }, testInfo) => {
 	test.setTimeout(120_000);

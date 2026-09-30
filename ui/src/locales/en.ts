@@ -107,6 +107,12 @@ const en = {
 			traffic: 'Traffic'
 		},
 		copy: {
+			backendThatReceivesGuardrailWebhookRequestsAndTheBackendPoliciesSuchAsBackendTls_58prf0:
+				'Backend that receives guardrail webhook requests, and the backend policies\n(such as `backendTLS`) used when connecting to it. A `host` with an\n`https://` scheme enables TLS with system roots automatically.',
+			definesHowTheProxyBehavesWhenAGuardrailProviderIsUnreachableOrReturnsAnErrorDefa_1hyi1o0:
+				'Defines how the proxy behaves when a guardrail provider is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the provider failure.',
+			baseUrlForTheUpstreamProviderExpandsToHostOverridePathPrefixAndTlsForHttpsUrlsTh_1z13rgg:
+				'Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.\nThe URL path is the upstream base path and defaults to / when omitted.\nProvider-specific endpoint paths are appended to this base path.\nFor example, `https://api.openai.com/v1` sends completions to `/v1/chat/completions`,\nwhile `https://api.openai.com` sends them to `/chat/completions`.',
 			catalogProviderAndReverseTransformationCompiledDuringLocalConfigNormalization:
 				'Catalog provider and reverse transformation compiled during local config normalization.',
 			theMcpTargetForTheCurrentTargetScopedOperation:

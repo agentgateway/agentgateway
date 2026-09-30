@@ -18,7 +18,7 @@ const zhCN = {
 			noOptions: '没有可选项',
 			noMatchesCustomValues: '没有匹配项，但可以使用自定义值。',
 			noValuesFound: '未找到值。',
-			notAvailable: '不适用',
+			notAvailable: '不可用',
 			save: '保存',
 			search: '搜索 {{label}}',
 			searchPlaceholder: '搜索 {{label}}…',
@@ -113,17 +113,23 @@ const zhCN = {
 			traffic: '流量'
 		},
 		copy: {
+			backendThatReceivesGuardrailWebhookRequestsAndTheBackendPoliciesSuchAsBackendTls_58prf0:
+				'用于接收防护规则 Webhook 请求的后端，以及连接该后端时使用的后端策略（例如 `backendTLS`）。带有 `https://` 协议的 `host` 会自动使用系统根证书启用 TLS。',
+			definesHowTheProxyBehavesWhenAGuardrailProviderIsUnreachableOrReturnsAnErrorDefa_1hyi1o0:
+				'定义代理在无法访问防护规则提供商或该提供商返回错误时的行为。\n\n默认值为 `failClosed`。在失败时拒绝模式下，错误会向上传递，并拒绝 LLM 请求；在失败时放行模式下，即使提供商发生故障，也会放行请求。',
+			baseUrlForTheUpstreamProviderExpandsToHostOverridePathPrefixAndTlsForHttpsUrlsTh_1z13rgg:
+				'上游提供商的基础 URL。对于 HTTPS URL，该值会解析为 hostOverride、pathPrefix 和 tls。\nURL 中的路径是上游基础路径；省略时默认为 /。提供商特定的端点路径会追加到此基础路径之后。\n例如，`https://api.openai.com/v1` 会将补全请求发送到 `/v1/chat/completions`，而 `https://api.openai.com` 会将其发送到 `/chat/completions`。',
 			catalogProviderAndReverseTransformationCompiledDuringLocalConfigNormalization:
 				'本地配置规范化期间编译的模型目录提供商标识和反向转换。',
 			theMcpTargetForTheCurrentTargetScopedOperation: '当前针对特定目标的操作对应的 MCP 目标。',
 			theTerminalToolsListResultReturnedToTheClientIfAvailable:
-				'如果可用，则为返回给客户端的最终 `tools/list` 结果。',
+				'如果可用，则为返回给客户端的最终 tools/list 结果。',
 			theTerminalPromptsListResultReturnedToTheClientIfAvailable:
-				'如果可用，则为返回给客户端的最终 `prompts/list` 结果。',
+				'如果可用，则为返回给客户端的最终 prompts/list 结果。',
 			theTerminalResourcesListResultReturnedToTheClientIfAvailable:
-				'如果可用，则为返回给客户端的最终 `resources/list` 结果。',
+				'如果可用，则为返回给客户端的最终 resources/list 结果。',
 			theTerminalResourcesTemplatesListResultReturnedToTheClientIfAvailable:
-				'如果可用，则为返回给客户端的最终 `resources/templates/list` 结果。',
+				'如果可用，则为返回给客户端的最终 resources/templates/list 结果。',
 			issueApiKeysThatCallersUseToAuthenticateToTheGateway:
 				'签发供调用方向网关进行身份验证的 API 密钥。',
 			copyYourNewApiKey: '复制新建的 API 密钥',
@@ -148,13 +154,13 @@ const zhCN = {
 			operationsInExecutionOrderFromTheOutermostCelExpressionInward:
 				'从最外层 CEL 表达式向内、按执行顺序排列的操作。',
 			discoveryControlsWildcardExpansionInTheModelsEndpointDefaultsToTheLocalCatalog:
-				'`discovery` 控制 `models` 端点中的通配符展开。默认为本地模型目录。',
+				'discovery 控制 models 端点中的通配符展开。默认为本地模型目录。',
 			expandWildcardModelNamesUsingTheLocalModelCatalog: '使用本地模型目录展开通配符模型名称。',
 			listConfiguredModelNamesWithoutExpandingWildcards: '列出已配置的模型名称，不展开通配符。',
 			mcpContainsAttributesAboutTheMcpRequestRequestTimeCelIncludesIdentityFieldsToolP_1sr16r6:
 				'`mcp` 包含 MCP 请求的属性。\n请求时 CEL 包含身份字段（`tool`、`prompt`、`resource`、\n`task`）以及 `methodName`。请求完成后的 CEL 还可能包含\n`sessionId`、工具负载和列表结果。',
 			theResolvedTargetForDirectlyAddressedBackendsIncludingThePortForNetworkEndpoints_51t8p6:
-				'直接寻址后端解析出的目标；对于网络端点，其中包含端口。\n`Service` 后端不提供此字段，因为其工作负载端点会单独选择。',
+				'直接寻址后端解析出的目标；对于网络端点，其中包含端口。\nService 后端不提供此字段，因为其工作负载端点会单独选择。',
 			celPlaygroundDescription: '针对示例请求或自定义请求评估策略表达式。',
 			mcpPlaygroundDescription: '通过 MCP 网关列出并调用工具。',
 			llmModelsDescription: '配置调用方可以请求的模型及为其提供服务的提供商。',
@@ -230,8 +236,8 @@ const zhCN = {
 				'提示词日志已启用，但此次请求没有捕获到内容。透传模式下可能会出现这种情况。',
 			readOnlyViewOfEffectiveLlmPoliciesIncludingDatabaseBackedResourcesInHybridMode:
 				'只读查看当前生效的 LLM 策略，包括混合模式下存储在数据库中的资源。',
-			readOnlyViewOfMcpPolicies: '只读查看 `mcp.policies` 配置。',
-			rejectionStatusMustBeAValidHttpStatusCode: '拒绝响应状态必须是有效的 HTTP 状态码。',
+			readOnlyViewOfMcpPolicies: '只读查看 mcp.policies 配置。',
+			rejectionStatusMustBeAValidHttpStatusCode: '拒绝响应状态码必须是有效的 HTTP 状态码。',
 			redirectUriIsRequired: '必须填写重定向 URI。',
 			resourceMetadataMustBeAYamlMapping: '资源元数据必须是 YAML 映射。',
 			resourceMetadataMustBeYamlAndInlineJwksMustBeValidJson:
@@ -379,13 +385,14 @@ const zhCN = {
 			fallbackGroupValue: '回退组 {{value}}',
 			fileConfigurationIsReadOnlyInHybridModeCopyThisDiffAndUpdateTheConfigurationFileDirectly:
 				'文件配置在混合模式下为只读。请复制此差异，直接更新配置文件。',
-			fileOwnedGatewaysCannotBeDeletedHere: '无法在此处删除文件所属的网关',
-			fileOwnedGatewaysMustBeEditedInRawConfiguration: '文件所属的网关必须在原始配置中编辑',
-			fileOwnedKeysCannotBeDeletedHere: '无法在此处删除文件所属的密钥',
-			fileOwnedListenersCannotBeDeletedHere: '无法在此处删除文件所属的监听器',
-			fileOwnedListenersMustBeEditedInRawConfiguration: '文件所属的监听器必须在原始配置中编辑',
-			fileOwnedModelsCannotBeDeletedHere: '无法在此处删除文件所属的模型',
-			fileOwnedServersCannotBeDeletedHere: '无法在此处删除文件所属的服务器',
+			fileOwnedGatewaysCannotBeDeletedHere: '无法在此处删除由文件配置管理的网关',
+			fileOwnedGatewaysMustBeEditedInRawConfiguration: '由文件配置管理的网关必须在原始配置中编辑',
+			fileOwnedKeysCannotBeDeletedHere: '无法在此处删除由文件配置管理的密钥',
+			fileOwnedListenersCannotBeDeletedHere: '无法在此处删除由文件配置管理的监听器',
+			fileOwnedListenersMustBeEditedInRawConfiguration:
+				'由文件配置管理的监听器必须在原始配置中编辑',
+			fileOwnedModelsCannotBeDeletedHere: '无法在此处删除由文件配置管理的模型',
+			fileOwnedServersCannotBeDeletedHere: '无法在此处删除由文件配置管理的服务器',
 			finalTransformation: '最终转换',
 			firstAttempt: '首次尝试',
 			forModelsMissingFromTheProviderList: '，用于提供商列表中缺少的模型。',
@@ -443,7 +450,7 @@ const zhCN = {
 			sourcesAreMergedInOrderDatabaseSourcesLoadFirstAndLaterFileSourcesOverrideThem:
 				'配置源按顺序合并：先加载数据库源，后加载的文件源会覆盖前者。',
 			storesPromptAndCompletionContentInTheDatabasePayload:
-				'将提示词和补全内容存储在数据库负载中。',
+				'将提示词和补全内容存储在数据库的请求日志内容表中。',
 			stripPrefix: '移除前缀',
 			stripValue: '移除 {{value}}',
 			thisApiKeyPolicyIsFileOwnedAndCannotBeModifiedInHybridMode:
@@ -574,7 +581,7 @@ const zhCN = {
 				'`client_id`/`client_secret` 在请求表单正文中发送。',
 			privateKeyJwtClientAssertionRfc7523: '`privateKeyJwt` 客户端断言（RFC 7523）。',
 			requestedTokenTypeParameterWhenUnsetTheFormFieldIsOmittedAndADeclaredResponseTyp_46odee:
-				'`requested_token_type` 参数。未设置时省略此表单字段，并预期声明的响应类型为 `access_token`。',
+				'`requested_token_type` 参数。未设置时省略此表单字段，并预期声明的响应类型为 access_token。',
 			resourceParametersNamingTheProtectedResourceApis: '`resource` 命名受保护资源 API 的参数。',
 			resourceParametersWithTheTargetServiceUris: '带有目标服务 URI 的 `resource` 参数。',
 			scopeValuesForTheRequestedTokenSentSpaceDelimited:
@@ -587,7 +594,7 @@ const zhCN = {
 			text429RateLimited: '429 请求受限',
 			text500ServerError: '500 服务器错误',
 			aCustomProviderSAdvertisedUpstreamWireFormatUnlikeInputFormatThisDescribesWhatTh_fgckra:
-				'自定义提供商声明的上游传输格式。\n\n与 `InputFormat` 不同，此处描述后端接受的格式，而不是客户端发送的格式。与 `RouteType` 不同，它只适用于可转换或透传的 LLM 负载端点；`models`、`passthrough`、`detect` 等通用路由没有 `ProviderFormat`。',
+				'自定义提供商声明的上游传输格式。\n\n与 `InputFormat` 不同，此处描述后端接受的格式，而不是客户端发送的格式。与 `RouteType` 不同，它只适用于可转换或透传的 LLM 负载端点；models、passthrough、detect 等通用路由没有 `ProviderFormat`。',
 			aSourceOfModelCostCatalogData: '模型成本目录数据的来源。',
 			aValidTokenIssuedByAConfiguredIssuerMustBePresentThisIsTheDefaultOption:
 				'必须存在由配置的签发者颁发的有效令牌。\n这是默认选项。',
@@ -669,7 +676,7 @@ const zhCN = {
 			addTarget: '添加目标',
 			addVirtualModel: '添加虚拟模型',
 			additionalMetadataToSendToTheExternalProcessingServiceMapsToTheMetadataContextFi_d3ztkj:
-				'要发送到外部处理服务的附加元数据。\n此配置映射到 `ProcessingRequest` 的 `metadata_context.filter_metadata` 字段，并支持动态 CEL 表达式。',
+				'要发送到外部处理服务的附加元数据。\n此配置映射到 ProcessingRequest 的 `metadata_context.filter_metadata` 字段，并支持动态 CEL 表达式。',
 			additionalOauth2ScopesToRequestOpenidIsAlwaysIncluded:
 				'要请求的其他 OAuth2 作用域。始终包含 `openid`。',
 			additionalScopes: '附加作用域',
@@ -704,10 +711,10 @@ const zhCN = {
 				'当 webhook 防护规则不可用时允许请求通过。',
 			allowTheRequestWhenTheAuthorizationServiceCannotMakeADecision:
 				'当授权服务无法做出决定时允许请求。',
-			allowTheRequestWhenThisCelExpressionIsTrue: '当此 CEL 表达式的计算结果为 `true` 时允许请求。',
+			allowTheRequestWhenThisCelExpressionIsTrue: '当此 CEL 表达式的计算结果为 true 时允许请求。',
 			allowTrafficWhenTheProcessorIsUnavailable: '当处理器不可用时允许流量。',
 			allowDenyFilterOverRequestHeadersMirroringExtAuthzEmptyAllowedForwardsEveryHeade_17m99zk:
-				'用于筛选允许或禁止转发的请求头，与 `ext_authz` 的行为一致：`allowed` 为空时转发所有请求头和伪请求头（如 `:authority`、`:method`）；非空时仅转发列出的名称。`disallowed` 始终优先。普通请求头名称匹配不区分大小写，伪请求头则精确匹配。',
+				'用于筛选允许或禁止转发的请求头，与 ext_authz 的行为一致：`allowed` 为空时转发所有请求头和伪请求头（如 `:authority`、`:method`）；非空时仅转发列出的名称。`disallowed` 始终优先。普通请求头名称匹配不区分大小写，伪请求头则精确匹配。',
 			allowedHeaders: '允许的请求头',
 			allowedMethods: '允许的方法',
 			allowedOrigins: '允许的来源',
@@ -721,7 +728,7 @@ const zhCN = {
 			anApiKeyToAttachToTheRequestIfUnsetThisWillBeAutomaticallyDetectedFromTheEnvironment:
 				'附加到请求的 API 密钥。\n如果未设置，则会自动从环境中检测到。',
 			anAwsStsSessionTagPassedToAssumeRoleForCostAttributionExactlyOneOfValueAndExpressionMustBeSet:
-				'传递给 AWS STS `AssumeRole`、用于成本归因的会话标签。\n`value` 和 `expression` 必须且只能设置其中一项。',
+				'传递给 AWS STS AssumeRole、用于成本归因的会话标签。\n`value` 和 `expression` 必须且只能设置其中一项。',
 			analytics: '分析',
 			analyticsApiError: '分析 API 错误',
 			analyzeApiVersion: '分析 API 版本',
@@ -777,7 +784,7 @@ const zhCN = {
 			audioOut: '音频输出',
 			auth: '身份验证',
 			authConfiguresAuthenticationWhenConnectingToTheLlmProvider:
-				'`auth` 用于配置连接 LLM 提供商时的身份验证。',
+				'auth 用于配置连接 LLM 提供商时的身份验证。',
 			authenticateBrowserRequestsWithOidcAuthorizationCodeFlow:
 				'使用 OIDC 授权码流程验证浏览器请求。',
 			authenticateIncomingRequestsWithApiKeys: '使用 API 密钥验证传入请求。',
@@ -794,11 +801,12 @@ const zhCN = {
 			authorization: '授权',
 			authorizationBehavior: '授权行为',
 			authorizationConfiguresHttpAuthorizationRulesForRequestsToThisModel:
-				'`authorization` 用于配置此模型请求的 HTTP 授权规则。',
+				'authorization 用于配置此模型请求的 HTTP 授权规则。',
 			authorizationEndpoint: '授权端点',
 			authorizationEndpointUsedToStartTheBrowserLoginFlow: '用于启动浏览器登录流程的授权端点。',
 			authorizationHeader: 'Authorization 请求头',
-			authorizationResponseHeadersToCopyIntoTheBackendRequest: '授权响应请求头复制到后端请求中。',
+			authorizationResponseHeadersToCopyIntoTheBackendRequest:
+				'将授权服务返回的响应头复制到后端请求中。',
 			authorizationRulesForIncomingHttpRequests: '传入 HTTP 请求的授权规则。',
 			authorizationRulesForMcpRequests: 'MCP 请求的授权规则。',
 			authorizeIncomingRequestsAfterThisBackendIsSelected: '选择此后端后授权传入请求。',
@@ -848,14 +856,14 @@ const zhCN = {
 			backends: '后端',
 			backends_i9thuc: '后端',
 			backendsDefinesExplicitBackendsThatCanBeReferencedByRoutesAndPoliciesTypicallyIn_1a5i8ts:
-				'`backends` 定义可由路由和策略引用的显式后端。\n路由和策略通常使用内联后端；此配置可让多个配置复用同一后端。',
+				'backends 定义可由路由和策略引用的显式后端。\n路由和策略通常使用内联后端；此配置可让多个配置复用同一后端。',
 			backendTunnelConfiguresTunnelingWhenConnectingToTheLlmProvider:
-				'`backendTunnel` 用于配置连接 LLM 提供商时使用的隧道。',
+				'backendTunnel 用于配置连接 LLM 提供商时使用的隧道。',
 			baseCostCatalogRefreshedValueModelsFromValueProviders:
 				'基础成本目录已刷新：{{value}} 个模型，涉及 {{value}} 个提供商。',
 			baseUrl: '基础 URL',
 			baseUrlForTheUpstreamProviderExpandsToHostOverridePathPrefixAndTlsForHttpsUrls:
-				'上游提供商的基础 URL。HTTPS URL 会展开为 `hostOverride`、`pathPrefix` 和 `tls`。',
+				'上游提供商的基础 URL。HTTPS URL 会展开为 hostOverride、pathPrefix 和 tls。',
 			basicAuth: '基本身份验证',
 			bearerToken: 'Bearer 令牌',
 			bedrockGuardrails: 'Bedrock 防护规则',
@@ -867,7 +875,7 @@ const zhCN = {
 				'外部处理服务不可用或返回错误时的行为。',
 			behaviorWhenTheProcessorIsUnavailableOrReturnsAnError: '处理器不可用或返回错误时的行为。',
 			behaviorWhenTheRemoteRateLimitServiceIsUnavailableOrReturnsAnErrorDefaultsToFail_1bpcema:
-				'远程速率限制服务不可用或返回错误时的处理方式。\n默认为 `failClosed`；服务失败时拒绝请求并返回 500 状态码。',
+				'远程速率限制服务不可用或返回错误时的处理方式。\n默认为 failClosed；服务失败时拒绝请求并返回 500 状态码。',
 			behaviorWhenTheWebhookIsUnreachableOrReturnsAnErrorDefaultsToFailClosed:
 				'Webhook 无法访问或返回错误时的行为。\n默认为 `failClosed`。',
 			bind: '绑定',
@@ -875,7 +883,7 @@ const zhCN = {
 			bindPortThisListenerIsAttachedTo: '绑定此监听器所附加的端口。',
 			bindThisSurfaceOnItsOwnListenerPort: '将此功能入口绑定到独立的监听端口。',
 			bindsDefinesTheLowLevelApiForConfiguringTheProxyEachBindRepresentsASinglePortThe_96e01v:
-				'`binds` 定义用于配置代理的底层 API。\n每个绑定代表代理监听的一个端口，以及该端口对应的完整配置（监听器、路由和后端）。\n此字段已弃用，建议改用 `gateways` 和 `routes`。',
+				'binds 定义用于配置代理的底层 API。\n每个绑定代表代理监听的一个端口，以及该端口对应的完整配置（监听器、路由和后端）。\n此字段已弃用，建议改用 `gateways` 和 `routes`。',
 			blocklistNamesToCheckAgainst: '要检查的阻止列表名称',
 			blocklists: '阻止列表',
 			bodyExpression: '正文表达式',
@@ -928,7 +936,7 @@ const zhCN = {
 				'在发起任何请求之前，根据当前请求计算此 CEL 表达式。结果为 `false` 时禁用重试，只执行首次请求。例如：`request.method == "GET"`。\n重试需要在内存中缓冲请求正文以便重新发送。若已知请求无法重试（例如流式传输或 WebSocket），可通过此表达式避免相应开销。',
 			celExpressionThatComputesARedirectUrlWhenAuthorizationFailsWhenTheAuthorizationS_vhwf5d:
 				'授权失败时用于计算重定向 URL 的 CEL 表达式。\n授权服务返回未授权结果时，网关会重定向到该 URL，而不是直接返回错误。',
-			celExpressionThatComputesAReplacementBody: '计算替换体的 CEL 表达式。',
+			celExpressionThatComputesAReplacementBody: '用于计算替换正文的 CEL 表达式。',
 			celExpressionThatComputesTheAuthorizationRequestBodyStringsAndBytesAreUsedDirect_1etgvrf:
 				'用于计算授权请求正文的 CEL 表达式。\n字符串和字节会直接使用，其他类型的值会编码为 JSON。\n设置后，网关会使用表达式结果，而不再转发传入的请求正文。',
 			celExpressionThatComputesTheAuthorizationRequestPath: '计算授权请求路径的 CEL 表达式。',
@@ -938,7 +946,7 @@ const zhCN = {
 			celExpressionThatDecidesWhetherARequestIsLogged: '决定是否记录请求的 CEL 表达式。',
 			celExpressionThatReturnsHowLongCachedAuthorizationResultsAreReusedTheExpressionI_kb9kvi:
 				'返回授权结果缓存复用期限的 CEL 表达式。\n将授权响应应用到请求后再计算此表达式；结果必须是时长或时间戳。',
-			celExpressionUsedToComputeTheDescriptorEntryValue: 'CEL 表达式用于计算描述符条目值。',
+			celExpressionUsedToComputeTheDescriptorEntryValue: '用于计算描述符条目值的 CEL 表达式。',
 			celExpressionUsedToPopulateTheAgentgatewayGroupRequestLogAttribute:
 				'用于填充 `agentgateway.group` 请求日志属性的 CEL 表达式。',
 			celExpressionUsedToPopulateTheAgentgatewayUserRequestLogAttribute:
@@ -958,7 +966,7 @@ const zhCN = {
 			celReference: 'CEL 参考',
 			certificate: '证书',
 			certificateSourceModeStaticModeUsesCertKeyAsTheLeafCertificateDynamicCaModeUsesC_1dwhpmp:
-				'证书来源模式。静态模式将 `cert`/`key` 用作叶证书；动态 CA 模式则将其用作证书颁发机构，按需签发 SNI 叶证书。',
+				'证书来源模式。静态模式将 cert/key 用作叶证书；动态 CA 模式则将其用作证书颁发机构，按需签发 SNI 叶证书。',
 			chatPlayground: '聊天演练场',
 			chooseFailureBehaviorAndWhichRequestResponsePhasesAreSent:
 				'选择失败行为以及发送哪些请求/响应阶段。',
@@ -972,7 +980,7 @@ const zhCN = {
 			claimRequirementsToEnforceAfterTheTokenSignatureIsVerified:
 				'验证令牌签名后强制执行的声明要求。',
 			claimsThatMustBePresentInTheTokenBeforeValidationOnlyExpNbfAudIssSubAreEnforcedO_ux04jc:
-				'验证前令牌中必须存在的声明。\n仅强制检查 `exp`、`nbf`、`aud`、`iss` 和 `sub`；其他声明（包括 `iat` 和 `jti`）会被忽略。\n默认为 `exp`。使用空列表表示不要求任何声明。',
+				'验证前令牌中必须存在的声明。\n仅强制检查 exp、nbf、aud、iss 和 sub；其他声明（包括 iat 和 jti）会被忽略。\n默认为 exp。使用空列表表示不要求任何声明。',
 			claudeCode: 'Claude Code',
 			claudeDesktop: 'Claude Desktop',
 			claudeSubscriptionKeyDetected: '检测到 Claude 订阅密钥',
@@ -996,12 +1004,12 @@ const zhCN = {
 			codexCli: 'Codex CLI',
 			cohereV2RerankDocumentReranking: 'Cohere /v2/rerank（文档重新排名）',
 			commaSeparatedListOfAdditionalSpiffeTrustDomainsAcceptedOnInboundHboneConnection_ib2a3q:
-				'入站 HBONE 连接接受的其他 SPIFFE 信任域（逗号分隔列表）。本地 `trust_domain` 始终隐式包含。',
+				'入站 HBONE 连接接受的其他 SPIFFE 信任域（逗号分隔列表）。本地 trust_domain 始终隐式包含。',
 			commaSeparatedNames: '逗号分隔的名称。',
 			command: '命令',
 			condition: '条件',
 			conditionMustEvaluateToTrueForThisPolicyToExecuteIfUnsetThePolicyIsTheFallback:
-				'仅当条件的计算结果为 `true` 时才执行此策略。未设置条件时，该策略作为回退策略。',
+				'仅当条件的计算结果为 true 时才执行此策略。未设置条件时，该策略作为回退策略。',
 			conditional: '条件式',
 			conditionalEnablesConditionBasedSelectionOfTheTargetModelEachConditionIsEvaluate_12cw48o:
 				'条件选择支持基于条件选择目标模型。每个条件按顺序评估，直到找到最佳匹配。',
@@ -1064,9 +1072,9 @@ const zhCN = {
 			controlsWhetherRequestsMustIncludeValidBasicAuthCredentials:
 				'控制请求是否必须包含有效的基本身份验证凭据。',
 			controlsWhichIpAddressFamiliesTheDnsResolverWillQueryForUpstreamBackendConnectio_1w5pwyi:
-				'控制 DNS 解析器在建立上游（后端）连接时查询哪些 IP 地址族。\n\n底层映射到 `hickory_resolver` 的 `LookupIpStrategy`。\n\n可通过 `DNS_LOOKUP_FAMILY` 环境变量或配置文件中的 `dns.lookupFamily` 字段设置。\n\n参见：<https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#enum-config-cluster-v3-cluster-dnslookupfamily>',
+				'控制 DNS 解析器在建立上游（后端）连接时查询哪些 IP 地址族。\n\n底层映射到 hickory_resolver 的 `LookupIpStrategy`。\n\n可通过 `DNS_LOOKUP_FAMILY` 环境变量或配置文件中的 `dns.lookupFamily` 字段设置。\n\n参见：<https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto#enum-config-cluster-v3-cluster-dnslookupfamily>',
 			controlsWhichIpAddressFamiliesTheDnsResolverWillQueryForUpstreamConnectionsAccep_h7l2v:
-				'控制 DNS 解析器为上游连接查询哪些 IP 地址族。\n可选值：`All`、`Auto`、`V4Preferred`、`V4Only`、`V6Only`。\n默认为 `Auto`（`enableIpv6` 为 `false` 时仅查询 IPv4，为 `true` 时同时查询 IPv4 和 IPv6）。',
+				'控制 DNS 解析器为上游连接查询哪些 IP 地址族。\n可选值：All、Auto、V4Preferred、V4Only、V6Only。\n默认为 Auto（enableIpv6 为 false 时仅查询 IPv4，为 true 时同时查询 IPv4 和 IPv6）。',
 			controlsWhichRequestAndResponsePartsAreSentToTheExternalProcessingService:
 				'控制将哪些请求和响应部分发送到外部处理服务。',
 			conversation: '对话',
@@ -1077,7 +1085,7 @@ const zhCN = {
 			cost: '成本',
 			costCatalogRefreshFailed: '成本目录刷新失败',
 			costDeterminesTheOptionalExpressionToDetermineTheCostOfTheRequestIfUnsetTypeRequ_z12ji8:
-				'`cost` 指定用于计算请求成本的可选表达式。\n未设置时，`requests` 类型默认为 `1`，`tokens` 类型默认为 `llm.totalTokens`。\n表达式计算失败时跳过该描述符。`requests` 类型的成本在处理请求时计算，`tokens` 类型则在请求完成后计算。',
+				'cost 指定用于计算请求成本的可选表达式。\n未设置时，`requests` 类型默认为 `1`，`tokens` 类型默认为 `llm.totalTokens`。\n表达式计算失败时跳过该描述符。`requests` 类型的成本在处理请求时计算，`tokens` 类型则在请求完成后计算。',
 			costExpression: '成本表达',
 			costRefreshFailed: '成本刷新失败',
 			costs: '成本',
@@ -1115,7 +1123,7 @@ const zhCN = {
 			customRegex: '自定义正则表达式',
 			customRegexPatterns: '自定义正则表达式模式',
 			customSessionNameRoleSessionNameForCloudTrailAndCostUsageReportAttributionMax64C_1kyvvc8:
-				'用于 CloudTrail 和成本与使用情况报告归因的自定义会话名称（`RoleSessionName`）。\n最多 64 个字符，匹配 `[\\w+=,.@-]`。如果未设置，AWS SDK 会生成一个随机会话名称。',
+				'用于 CloudTrail 和成本与使用情况报告归因的自定义会话名称（RoleSessionName）。\n最多 64 个字符，匹配 `[\\w+=,.@-]`。如果未设置，AWS SDK 会生成一个随机会话名称。',
 			customize: '自定义',
 			databaseOnlyFieldsToAddComputedFromCelExpressions:
 				'要添加的仅数据库字段，根据 CEL 表达式计算。',
@@ -1131,9 +1139,9 @@ const zhCN = {
 			defaultRequestValues: '默认请求值',
 			defaultAuthorizationBearerToken: '默认：Authorization: Bearer Token',
 			defaultsAllowsSettingDefaultValuesForTheRequestIfTheseAreNotPresentInTheRequestB_1hv3k3o:
-				'`defaults` 用于设置请求的默认值。仅当请求正文中不存在相应字段时，才会写入这些值。\n如需无条件覆盖已有字段，请使用 `overrides`。',
+				'defaults 用于设置请求的默认值。仅当请求正文中不存在相应字段时，才会写入这些值。\n如需无条件覆盖已有字段，请使用 `overrides`。',
 			defaultsDefinesProviderLevelPolicyDefaultsModelLevelPolicyFieldsOverrideThese:
-				'`defaults` 定义提供商级策略的默认值，模型级策略字段会覆盖这些值。',
+				'defaults 定义提供商级策略的默认值，模型级策略字段会覆盖这些值。',
 			defaultsYaml: '默认 YAML',
 			defineReusableProviderCredentialsAndConnectionSettingsForModels:
 				'为模型定义可重用的提供商凭据和连接设置。',
@@ -1161,14 +1169,14 @@ const zhCN = {
 			deleteVirtualApiKey: '删除虚拟 API 密钥？',
 			deny: '拒绝',
 			denyRequestsWhenTheRateLimitServiceIsUnavailable: '当速率限制服务不可用时拒绝请求。',
-			denyStatus: '拒绝状态',
+			denyStatus: '拒绝状态码',
 			denyTheRequestWhenTheAuthorizationServiceCannotMakeADecision:
 				'当授权服务无法做出决定时拒绝请求。',
-			denyTheRequestWhenThisCelExpressionIsTrue: '当此 CEL 表达式的计算结果为 `true` 时拒绝请求。',
+			denyTheRequestWhenThisCelExpressionIsTrue: '当此 CEL 表达式的计算结果为 true 时拒绝请求。',
 			denyTheRequestWithA500StatusWhenTheRateLimitServiceIsUnavailableDefault:
 				'当速率限制服务不可用时（默认），拒绝状态为 500 的请求。',
 			denyTheRequestWithTheConfiguredHttpStatusCode: '使用配置的 HTTP 状态代码拒绝请求。',
-			denyWithStatus: '拒绝状态',
+			denyWithStatus: '拒绝并返回指定 HTTP 状态码',
 			descriptor: '描述符',
 			descriptorEntriesSentToTheRemoteServiceValuesAreCelExpressionsEvaluatedFromTheRequest:
 				'发送到远程服务的描述符条目。值是根据请求求值的 CEL 表达式。',
@@ -1206,7 +1214,7 @@ const zhCN = {
 			doNotOpenASocketTheBindIsRegisteredForRoutingOnlyAndIsReachableViaInProcessReEnt_9sz4lu:
 				'不打开套接字。此绑定仅注册用于路由，可通过进程内重新进入访问（例如，另一个监听器将 CONNECT 流量重定向到此绑定）。',
 			doNotPreserveMcpSessionStateBetweenRequests: '不要在请求之间保留 MCP 会话状态。',
-			doNotRunThisProcessorForMatchingMethods: '不要运行此处理器来匹配方法。',
+			doNotRunThisProcessorForMatchingMethods: '命中方法时不运行此处理器。',
 			doNotSendHeadersToTheExternalProcessingService: '不要将请求头发送到外部处理服务。',
 			doNotSendTheBodyToTheExternalProcessingService: '请勿将正文发送至外部处理服务。',
 			doNotSendTheBodyToTheProcessor: '请勿将正文发送至处理器。',
@@ -1218,9 +1226,9 @@ const zhCN = {
 			download: '下载',
 			duration: '持续时间',
 			dynamic: '动态',
-			dynamicBackendSelectionIsEnabledForThisBackend: '为此后端启用动态后端选择。',
+			dynamicBackendSelectionIsEnabledForThisBackend: '此后端已启用动态后端选择。',
 			eachCelExpressionIsSavedUnderAllowDenyOrRequire:
-				'每个 CEL 表达式都保存在 `allow`、`deny` 或 `require` 下。',
+				'每个 CEL 表达式都保存在 allow、deny 或 require 下。',
 			edit: '编辑',
 			editValueGuard: '编辑 {{value}} 防护',
 			evictValue: '驱逐时长 {{value}}',
@@ -1285,9 +1293,9 @@ const zhCN = {
 			exposeToolNamesWithoutAddingTheTargetName: '公开工具名称而不添加目标名称。',
 			expression: '表达式',
 			expressionToDetermineTheAmountOfClientSamplingClientSamplingDeterminesWhetherToI_12geacf:
-				'用于确定客户端采样率的表达式。\n如果传入请求已有跟踪，客户端采样会决定是否启动新的跟踪跨度。\n表达式结果应为 0.0 到 1.0（0% 到 100%）之间的浮点数，或布尔值 `true`/`false`。\n默认为 `true`。',
+				'用于确定客户端采样率的表达式。\n如果传入请求已有跟踪，客户端采样会决定是否启动新的跟踪跨度。\n表达式结果应为 0.0 到 1.0（0% 到 100%）之间的浮点数，或布尔值 true/false。\n默认为 true。',
 			expressionToDetermineTheAmountOfRandomSamplingRandomSamplingWillInitiateANewTrac_1d5h2qd:
-				'用于确定随机采样率的表达式。\n如果传入请求尚无跟踪，随机采样会决定是否启动新的跟踪跨度。\n表达式结果应为 0.0 到 1.0（0% 到 100%）之间的浮点数，或布尔值 `true`/`false`。\n默认为 `false`。',
+				'用于确定随机采样率的表达式。\n如果传入请求尚无跟踪，随机采样会决定是否启动新的跟踪跨度。\n表达式结果应为 0.0 到 1.0（0% 到 100%）之间的浮点数，或布尔值 true/false。\n默认为 false。',
 			externalAuthz: '外部授权',
 			externalMcpPolicyProcessors: '外部 MCP 策略处理器。',
 			externalProcessor: '外部处理器',
@@ -1328,7 +1336,7 @@ const zhCN = {
 			from: '来自',
 			fromTheSameDirectory: '来自同一目录。',
 			frontendPoliciesDefinesTopLevelPoliciesApplyingToAllTraffic:
-				'`frontendPolicies` 定义适用于所有流量的顶级策略。',
+				'frontendPolicies 定义适用于所有流量的顶级策略。',
 			full: '完整',
 			fullDuplexStreamed: '全双工流式传输',
 			fullyQuitAndRelaunchClaudeDesktopANew: '完全退出并重新启动 Claude Desktop。重新启动后会显示',
@@ -1347,17 +1355,17 @@ const zhCN = {
 				'此策略附加到的网关、监听器、路由或后端。',
 			gateways: '网关',
 			gatewaysAttachesTheLlmRoutesToNamedGatewaysThisCanTakeTheFormOfGatewayNameOrGate_n9bphz:
-				'`gateways` 将 LLM 路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，LLM API 路由会挂载到该网关；设置了 `port` 时除外。',
+				'gateways 将 LLM 路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，LLM API 路由会挂载到该网关；设置了 `port` 时除外。',
 			gatewaysAttachesTheMcpRoutesToNamedGatewaysThisCanTakeTheFormOfGatewayNameOrGate_19pj37b:
-				'`gateways` 将 MCP 路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，MCP 路由会挂载到该网关；设置了端口时除外。',
+				'gateways 将 MCP 路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，MCP 路由会挂载到该网关；设置了端口时除外。',
 			gatewaysAttachesTheUiAndUiBackendRoutesToNamedGatewaysThisCanTakeTheFormOfGatewa_1hlnrin:
-				'`gateways` 将 UI 及其后端路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，UI 路由会挂载到该网关。',
+				'gateways 将 UI 及其后端路由挂载到具名网关。可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n省略此字段且存在名为 `default` 的网关时，UI 路由会挂载到该网关。',
 			gatewaysAttachesThisRouteToNamedGatewaysOrGatewayListenersThisCanTakeTheFormOfGa_j7n552:
-				'`gateways` 将此路由挂载到具名网关或网关监听器。\n可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n未设置时使用名为 `default` 的网关。',
+				'gateways 将此路由挂载到具名网关或网关监听器。\n可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n未设置时使用名为 default 的网关。',
 			gatewaysAttachesThisRouteToNamedTcpTlsGatewaysOrGatewayListenersThisCanTakeTheFo_6uai65:
-				'`gateways` 将此路由挂载到指定的 TCP/TLS 网关或网关监听器。\n可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n未设置时使用名为 `default` 的网关。',
+				'gateways 将此路由挂载到指定的 TCP/TLS 网关或网关监听器。\n可使用 `<gateway-name>` 挂载到网关，或使用 `<gateway-name>/<listener-name>` 挂载到网关内的特定监听器。\n未设置时使用名为 default 的网关。',
 			gatewaysDefinesTheEntrypointToTheProxySettingUpPortsAndListenersThatFeaturesLlmM_18ageg5:
-				'`gateways` 定义代理入口点，为 LLM、MCP、UI 和路由提供可挂载的端口与监听器。\n每个网关定义代理监听的端口，以及该端口可选的 TLS 设置。',
+				'gateways 定义代理入口点，为 LLM、MCP、UI 和路由提供可挂载的端口与监听器。\n每个网关定义代理监听的端口，以及该端口可选的 TLS 设置。',
 			generateConnectionSettingsAndSnippetsForOpenAiCompatibleLlmClients:
 				'为兼容 OpenAI 的 LLM 客户端生成连接设置和代码片段。',
 			generatedModelConfig: '生成的模型配置',
@@ -1408,10 +1416,11 @@ const zhCN = {
 			headersToSetReplacingAnyExistingValues: '要设置的请求或响应头，替换任何现有值。',
 			health: '健康',
 			healthConfiguresOutlierDetectionForThisModelBackend:
-				'`health` 用于为此模型后端配置异常值检测。',
+				'health 用于为此模型后端配置异常值检测。',
 			healthScoreThresholdBelowWhichAnUnhealthyResponseCanEvictTheBackend:
 				'健康分数阈值，低于该阈值，不健康的响应可能会驱逐后端。',
-			healthScoreToRestoreWhenTheBackendReturnsFromEviction: '当后端从驱逐中返回时恢复健康分数。',
+			healthScoreToRestoreWhenTheBackendReturnsFromEviction:
+				'后端退出驱逐状态时要恢复到的健康分数。',
 			healthThreshold: '健康阈值',
 			help: '帮助',
 			hide: '隐藏',
@@ -1427,7 +1436,7 @@ const zhCN = {
 			hostnames: '主机名',
 			howDownstreamHttpConnectRequestsAreHandled: '如何处理下游 HTTP CONNECT 请求。',
 			howLongAnIdleHttp1ConnectionMayStayOpen: '空闲 HTTP/1 连接可以保持打开状态多长时间。',
-			howLongToEvictAnUnhealthyBackend: '驱逐不健康的后端需要多长时间。',
+			howLongToEvictAnUnhealthyBackend: '不健康后端的暂时驱逐时长。',
 			howOftenTheLocalBucketIsRefilled: '本地存储桶重新装满的频率。',
 			howRequestBodiesAreSentToTheExternalProcessingService: '如何将请求正文发送到外部处理服务。',
 			howResponseBodiesAreSentToTheExternalProcessingService: '如何将响应正文发送到外部处理服务。',
@@ -1437,7 +1446,7 @@ const zhCN = {
 			httpDetails: 'HTTP 详细信息',
 			httpProtocolSettingsForThisBackend: '该后端的 HTTP 协议设置。',
 			httpResponseStatusCodesThatShouldBeRetried: '应重试的 HTTP 响应状态代码。',
-			httpStatus: 'HTTP 状态',
+			httpStatus: 'HTTP 状态码',
 			httpStatusCodeReturnedWhenContentIsRejected: '内容被拒绝时返回的 HTTP 状态代码。',
 			httpStatusCodeToReturnForTheRedirect: '为重定向返回的 HTTP 状态代码。',
 			httpStatusCodeToReturn: '要返回的 HTTP 状态代码。',
@@ -1448,7 +1457,7 @@ const zhCN = {
 			identifierOfTheResourceAuthorizationServerTheIssuedIdJagIsBoundToThisAudience:
 				'资源授权服务器的标识符。已发行的 ID-JAG 对该受众具有约束力。',
 			identifyTheOauth2ClientUsedByTheGatewayDuringTheAuthorizationCodeFlow:
-				'识别网关在授权代码流期间使用的 OAuth2 客户端。',
+				'标识网关在授权码流程中使用的 OAuth2 客户端。',
 			identityProviderTypeUsedToDeriveMcpAuthorizationMetadataAndDefaultJwksUrls:
 				'用于派生 MCP 授权元数据和默认 JWKS URL 的身份提供商类型。',
 			ifATokenExistsValidateItWarningThisAllowsRequestsWithoutAJwtTokenAdditionally401_dgw23w:
@@ -1523,14 +1532,14 @@ const zhCN = {
 			last30Days: '最近 30 天',
 			last7Days: '最近 7 天',
 			leaveEmptyToUseDefault5xxAndConnectionFailureHandling: '留空以使用默认 5xx 和连接失败处理。',
-			leaveTheAuthorityUnchanged: '保持 `:authority` 不变。',
+			leaveTheAuthorityUnchanged: '保持 :authority 不变。',
 			letTheModelCallToolsExposedByTheMcpGateway: '允许模型调用 MCP 网关公开的工具。',
 			limitByRequestCount: '按请求数量限制。',
 			limitByTokenCount: '按令牌数量限制。',
 			limitOverride: '限制覆盖',
 			limitType: '限制类型',
 			limitOverrideDeterminesTheOptionalExpressionToDetermineTheLimitOfTheRequestThisT_6mrd6s:
-				'`limitOverride` 指定一个可选表达式，用于计算请求限制，并告知远程服务器应应用哪项限制。\n注意：此字段不指定请求“成本”；成本由 `cost` 字段指定。\n表达式结果必须是包含 `unit` 和 `requestsPerUnit` 键的映射，例如：\n`{"unit":"second","requestsPerUnit":100}`。\n有效单位为 `second`、`minute`、`hour`、`day`、`month`、`year`。\n表达式计算失败时跳过该描述符。',
+				'limitOverride 指定一个可选表达式，用于计算请求限制，并告知远程服务器应应用哪项限制。\n注意：此字段不指定请求“成本”；成本由 `cost` 字段指定。\n表达式结果必须是包含 `unit` 和 `requestsPerUnit` 键的映射，例如：\n`{"unit":"second","requestsPerUnit":100}`。\n有效单位为 second、minute、hour、day、month、year。\n表达式计算失败时跳过该描述符。',
 			listener: '监听器',
 			listenerPolicies: '监听器策略',
 			listenerThatOwnsThisRoute: '拥有该路由的监听器。',
@@ -1538,10 +1547,10 @@ const zhCN = {
 			listeners: '监听器',
 			listeners_1fzojr3: '监听器 ·',
 			listenersDefinesMultipleNamedListenersUnderThisGatewayWhenSetOnlyPortMayBeConfig_e7d148:
-				'`listeners` 用于在此网关下定义多个具名监听器。设置后，顶层网关只能配置 `port`。',
+				'listeners 用于在此网关下定义多个具名监听器。设置后，顶层网关只能配置 `port`。',
 			llmCosts: 'LLM 成本',
 			llmDefinesASetOfLlmModelsToBeExposedByTheProxyWhenConfiguredLlmModelsWillBeServe_beutm3:
-				'`llm` 定义代理公开的一组 LLM 模型。配置后，这些模型会在关联的 `gateways` 下通过标准服务路径提供服务（`/v1/models`、`/v1/chat/completions` 等）。',
+				'llm 定义代理公开的一组 LLM 模型。配置后，这些模型会在关联的 `gateways` 下通过标准服务路径提供服务（`/v1/models`、`/v1/chat/completions` 等）。',
 			llmGuardrails: 'LLM 防护规则',
 			llmModels: 'LLM 模型',
 			llmPlayground: 'LLM 演练场',
@@ -1602,7 +1611,7 @@ const zhCN = {
 				'匹配传入的 HTTP 和 TCP 流量并附加内联后端。',
 			matches: '匹配条件',
 			matchesSpecifiesTheConditionsUnderWhichThisModelShouldBeUsedInAdditionToMatchingTheModelName:
-				'`matches` 用于指定除模型名称外，使用该模型还需满足的条件。',
+				'matches 用于指定除模型名称外，使用该模型还需满足的条件。',
 			maxAge: '最长有效期',
 			maxRequestBytes: '最大请求字节数',
 			maxTokens: '最大令牌数',
@@ -1634,7 +1643,7 @@ const zhCN = {
 			mcpBehavior: 'MCP 行为',
 			mcpBrowserAccessIsNotAllowed: '不允许通过浏览器访问 MCP',
 			mcpDefinesASetOfMcpServersExposedByTheProxyWhenConfiguredTheMcpServersWillBeServ_15ox9e0:
-				'`mcp` 定义代理公开的一组 MCP 服务器。配置后，这些服务器将在关联的 `gateways` 下通过 `/mcp` 和 `/sse` 提供服务。列表中的所有 MCP 服务器将作为一个虚拟 MCP 服务器提供服务。',
+				'mcp 定义代理公开的一组 MCP 服务器。配置后，这些服务器将在关联的 `gateways` 下通过 /mcp 和 /sse 提供服务。列表中的所有 MCP 服务器将作为一个虚拟 MCP 服务器提供服务。',
 			mcpGatewaySettings: 'MCP 网关设置。',
 			mcpGuardrails: 'MCP 防护规则',
 			mcpPlayground: 'MCP 演练场',
@@ -1643,7 +1652,7 @@ const zhCN = {
 			mcpServers: 'MCP 服务器',
 			mcpToolOutput: 'MCP 工具输出',
 			mcpGateway: 'mcp://gateway',
-			measure: '测量',
+			measure: '指标',
 			menuAppearsInTheMenuBar: '菜单出现在菜单栏中。',
 			messageOffset: '消息偏移量',
 			messageOffsetUsedWhenChoosingWhereToPlaceCacheMarkers:
@@ -1678,14 +1687,14 @@ const zhCN = {
 			modelCostCatalogSourcesEntriesAreMergedInOrderWithLaterEntriesTakingPrecedence:
 				'模型成本目录来源；条目按顺序合并，后面的条目优先。',
 			modelIsResolvedAgainstLlmModelsUsingTheSameWildcardMatchingAsClientRequests:
-				'`model` 会按照与客户端请求相同的通配符匹配规则，在 `llm.models` 中解析。',
+				'model 会按照与客户端请求相同的通配符匹配规则，在 llm.models 中解析。',
 			modelNameAliasesThatRewriteRequestedModelNames: '用于重写请求模型名称的别名。',
 			modelPolicies: '模型策略',
 			modelUsesAWildcardSpecifyTheSpecificModel: '模型使用通配符；请指定具体模型。',
 			modelWarnings: '模型警告',
 			models: '模型',
 			modelsDefinesTheSetOfModelsThatCanBeServedByThisGatewayTheModelNameRefersToTheMo_1qlvcg6:
-				'`models` 定义该网关可提供服务的模型集合。模型名称用于匹配用户请求中的模型；发送给实际 LLM 的模型可针对每个模型单独覆盖。',
+				'models 定义该网关可提供服务的模型集合。模型名称用于匹配用户请求中的模型；发送给实际 LLM 的模型可针对每个模型单独覆盖。',
 			modelsKeysPoliciesAndChatTesting: '模型、密钥、策略和聊天测试。',
 			moderationModel: '内容审核模型',
 			moderationModelToUseDefaultsToOmniModerationLatest:
@@ -1703,13 +1712,13 @@ const zhCN = {
 			name: '名称',
 			nameAlreadyExists: '名称已存在',
 			nameIdentifiesThisListenerForGatewayReferencesLikeGatewaysGatewayNameListenerName:
-				'`name` 用于标识此监听器，以便通过 `gateways: gateway-name/listener-name` 等形式引用。',
+				'name 用于标识此监听器，以便通过 `gateways: gateway-name/listener-name` 等形式引用。',
 			nameIsReferencedFromLlmModelsProviderReference:
-				'该名称由 `llm.models[].provider.reference` 引用。',
+				'该名称由 llm.models[].provider.reference 引用。',
 			nameIsRequired: '名称为必填项',
 			nameIsTheNameOfTheModelWeAreMatchingFromAUsersRequestIfParamsModelIsSetThatWillB_1ti2su5:
-				'`name` 是用于匹配用户请求的模型名称。如果设置了 `params.model`，向 LLM 提供商发送请求时将使用该值；否则使用请求中传入的模型名称。',
-			nameIsThePublicModelNameClientsRequest: '`name` 是客户端请求时使用的公开模型名称。',
+				'name 是用于匹配用户请求的模型名称。如果设置了 params.model，向 LLM 提供商发送请求时将使用该值；否则使用请求中传入的模型名称。',
+			nameIsThePublicModelNameClientsRequest: 'name 是客户端请求时使用的公开模型名称。',
 			namespace: '命名空间',
 			namespaceKeyCelExpression: '命名空间：键：CEL 表达式',
 			never: '从不',
@@ -1805,7 +1814,7 @@ const zhCN = {
 			optional: '可选',
 			optional_1yfbac9: '可选',
 			optionalAwsStsRoleToAssumeBeforeSigningRequests: '签署请求前可以选择代入的 AWS STS 角色。',
-			optionalBearerToken: '可选的 `Bearer` 令牌',
+			optionalBearerToken: '可选的 Bearer 令牌',
 			optionalCelExpressionsForPopulatingUserAndGroupAttributesInDatabaseLogsIfNotSetA_1qxb9rt:
 				'用于填充数据库日志中的用户和组属性的可选 CEL 表达式。如果未设置，将使用默认值。',
 			optionalCelFilterWithKeepSemanticsWhenSetOnlyRequestsForWhichTheExpressionEvalua_1o212j0:
@@ -1823,10 +1832,10 @@ const zhCN = {
 				'随机采样的可选按策略覆盖项。设置后，会覆盖使用此前端策略的请求的全局配置。',
 			optionalToken: '可选令牌',
 			optional06DefaultIs2: '可选，取值范围为 0 到 6，默认为 2。',
-			optionalDefaultsToHttpLocalhost11434V1: '可选，默认为 `http://localhost:11434/v1`。',
-			optionalDefaultsToOmniModerationLatest: '可选，默认为 `omni-moderation-latest`。',
-			optionalDefaultsToUsCentral1: '可选，默认为 `us-central1`。',
-			optionalIfUnsetVertexUsesGlobal: '可选；未设置时，Vertex 将使用 `global` 端点。',
+			optionalDefaultsToHttpLocalhost11434V1: '可选，默认为 http://localhost:11434/v1。',
+			optionalDefaultsToOmniModerationLatest: '可选，默认为 omni-moderation-latest。',
+			optionalDefaultsToUsCentral1: '可选，默认为 us-central1。',
+			optionalIfUnsetVertexUsesGlobal: '可选；未设置时，Vertex 将使用 global 端点。',
 			optionalLeaveUnsetToUseTheGatewayDefault: '可选；不设置即可使用网关默认值。',
 			optionsForSendingTheRequestBodyToTheAuthorizationService: '向授权服务发送请求体的选项。',
 			or: '或',
@@ -1836,7 +1845,7 @@ const zhCN = {
 			otlpHttpPathUsedToExportLogs: '用于导出日志的 OTLP HTTP 路径。',
 			otlpHttpPathUsedToExportTraces: '用于导出跟踪的 OTLP HTTP 路径。',
 			otlpLogExportSettings: 'OTLP 日志导出设置。',
-			otlpPathDefaultIsV1Traces: 'OTLP 路径，默认为 `/v1/traces`。',
+			otlpPathDefaultIsV1Traces: 'OTLP 路径，默认为 /v1/traces。',
 			otlpProtocolUsedToExportLogs: '用于导出日志的 OTLP 协议。',
 			otlpProtocolUsedToExportTracesDefaultsToHttp: '用于导出跟踪的 OTLP 协议。默认为 HTTP。',
 			otlpSpecificAccessLogFieldsIfUnsetTheParentAccessLogFieldsAreUsed:
@@ -1850,17 +1859,17 @@ const zhCN = {
 			overrideTheUpstreamPathForThisProvider: '覆盖此提供商的上游路径。',
 			overrideWhereThisPolicyReadsTheJwtFrom: '覆盖此策略读取 JWT 的位置。',
 			overridesAllowsSettingValuesForTheRequestOverridingAnyExistingValues:
-				'`overrides` 用于设置请求值，并覆盖已有值。',
+				'overrides 用于设置请求值，并覆盖已有值。',
 			overridesYaml: '覆盖 YAML',
 			packAsBytes: '打包为字节',
 			paramsCustomizesParametersForOutgoingRequestsThatUseThisProvider:
-				'`params` 用于自定义使用此提供商的传出请求参数。',
-			paramsCustomizesParametersForTheOutgoingRequest: '`params` 用于自定义传出请求的参数。',
+				'params 用于自定义使用此提供商的传出请求参数。',
+			paramsCustomizesParametersForTheOutgoingRequest: 'params 用于自定义传出请求的参数。',
 			passThroughTheRequestWhileExtractingLlmTelemetryAndRateLimitInputsWhenPossible:
 				'尽可能提取 LLM 遥测和速率限制输入，同时透传请求。',
 			passThroughTheRequestWithoutInterpretingItAsLlmTraffic: '透传请求，不将其解析为 LLM 流量。',
 			passthroughControlsHowRequestsAreHandledByDefaultRequestsWillBeParsedAndTranslat_1kocxkq:
-				'`passthrough` 控制请求的处理方式。默认情况下，系统会根据需要解析并转换请求；启用透传后，请求不会被修改，但可选择使用 `detect` 进行检查。在此模式下，请求必须采用提供商的原生格式。',
+				'passthrough 控制请求的处理方式。默认情况下，系统会根据需要解析并转换请求；启用透传后，请求不会被修改，但可选择使用 `detect` 进行检查。在此模式下，请求必须采用提供商的原生格式。',
 			pasteAJwksDocumentDirectlyIntoThePolicy: '将 JWKS 文档直接粘贴到策略中。',
 			path: '路径',
 			pathExpression: '路径表达式',
@@ -1884,9 +1893,9 @@ const zhCN = {
 			policiesDefinesAdditionalPoliciesThatCanBeAttachedToVariousOtherConfigurationsTh_1vsrjcq:
 				'`policies` 定义可附加到其他各类配置的额外策略。这是一项高级功能；通常应使用路由或网关下的内联 `policies` 字段。',
 			policiesDefinesPoliciesForHandlingIncomingRequestsBeforeAModelIsSelected:
-				'`policies` 定义在选择模型前处理传入请求的策略。',
+				'policies 定义在选择模型前处理传入请求的策略。',
 			policiesDefinesRouteLevelPoliciesForTheUiAndRequiredUiApiRoutes:
-				'`policies` 定义 UI 及其必要 API 路由使用的路由级策略。',
+				'policies 定义 UI 及其必要 API 路由使用的路由级策略。',
 			policyModeIsValue: '策略模式为 {{value}}',
 			priority_one: '{{count}} 个优先级',
 			priority_other: '{{count}} 个优先级',
@@ -1898,8 +1907,8 @@ const zhCN = {
 			port: '端口',
 			portValue: '端口 {{value}}',
 			portDefinesThePortToServeTheLlmRoutesUnderDeprecatedUseGatewaysInstead:
-				'`port` 定义用于提供 LLM 路由服务的端口。该字段已弃用，请改用 `gateways`。',
-			portIsThePortToListenOnForThisGateway: '`port` 是该网关监听的端口。',
+				'port 定义用于提供 LLM 路由服务的端口。该字段已弃用，请改用 `gateways`。',
+			portIsThePortToListenOnForThisGateway: 'port 是该网关监听的端口。',
 			portMustBeBetween1And65535: '端口必须介于 1 和 65535 之间。',
 			portToBindOnOmitItForAnInternalWildcardBindWhichServesAnyDestinationPortViaInPro_1nj7ohf:
 				'要绑定的端口。内部通配符绑定通过进程内路由服务任意目标端口，因此可以省略此项。除非 `mode` 为 `internal`，否则必须指定数字端口。',
@@ -1930,20 +1939,20 @@ const zhCN = {
 				'支持缓存标记的提供商所使用的提示词缓存设置。',
 			promptLoggingIsOff: '提示词日志记录已关闭',
 			promptCachingConfiguresCachePointInsertionForSupportedLlmProviders:
-				'`promptCaching` 用于为支持缓存标记的 LLM 提供商配置缓存点插入。',
+				'promptCaching 用于为支持缓存标记的 LLM 提供商配置缓存点插入。',
 			protectedResourceMetadata: '受保护的资源元数据',
 			protectedResourceMetadataReturnedToMcpClients: '返回给 MCP 客户端的受保护资源元数据。',
 			protocol: '协议',
 			protocolControlsWhetherThisGatewayAcceptsHttpHttpsRoutesOrTcpTlsRoutesWhenOmitte_122yt2l:
-				'`protocol` 控制此网关接受 HTTP/HTTPS 路由还是 TCP/TLS 路由。省略时默认为 HTTP；设置 `tls` 后默认为 HTTPS。',
+				'protocol 控制此网关接受 HTTP/HTTPS 路由还是 TCP/TLS 路由。省略时默认为 HTTP；设置 tls 后默认为 HTTPS。',
 			protocolControlsWhetherThisListenerAcceptsHttpHttpsRoutesOrTcpTlsRoutesWhenOmitt_198kbon:
-				'`protocol` 控制此监听器接受 HTTP/HTTPS 路由还是 TCP/TLS 路由。省略时默认为 HTTP；设置 `tls` 后默认为 HTTPS。',
+				'protocol 控制此监听器接受 HTTP/HTTPS 路由还是 TCP/TLS 路由。省略时默认为 HTTP；设置 tls 后默认为 HTTPS。',
 			protocolUsedToCallTheAuthorizationServiceUseGRpcUnlessTheServiceOnlySupportsHttp:
 				'用于调用授权服务的协议。除非服务仅支持 HTTP，否则请使用 gRPC。',
 			provider: '提供商',
 			providerApiKey: '提供商 API 密钥',
 			providerIdentityForCostCatalogLookupAndTelemetryBuiltInNamedProvidersCohereMistr_1c2sljq:
-				'用于成本目录查找和遥测的提供商标识。内置命名提供商（如 `cohere`、`mistral`）会设置此项，使其成本按正确的目录键解析；自定义提供商也可将其设为匹配目录条目的值。未设置时回退为 `custom`。',
+				'用于成本目录查找和遥测的提供商标识。内置命名提供商（如 cohere、mistral）会设置此项，使其成本按正确的目录键解析；自定义提供商也可将其设为匹配目录条目的值。未设置时回退为 custom。',
 			providerMetadata: '提供商元数据',
 			providerName: '提供商名称',
 			providerOfTheLlmWeAreConnectingTo: '所连接的 LLM 提供商。',
@@ -1952,7 +1961,7 @@ const zhCN = {
 			provider_1k5qy2a: '提供商：',
 			providers: '提供商',
 			providersDefinesReusableLlmProviderDefaultsThatModelsMayReference:
-				'`providers` 定义可由模型引用的可复用 LLM 提供商默认配置。',
+				'providers 定义可由模型引用的可复用 LLM 提供商默认配置。',
 			provisionIncomingCredentialsAndMetadataForCallers: '为调用方提供传入凭据和元数据。',
 			proxyBackendUsedToTunnelTheConnection: '用于建立隧道连接的代理后端。',
 			proxyProtocolVersionsAcceptedFromDownstreamClients: '下游客户端可使用的 PROXY 协议版本。',
@@ -1986,7 +1995,7 @@ const zhCN = {
 			readOnlyRouteInventoryFromTheActiveGatewayDump: '活动网关转储中的只读路由清单。',
 			readOnlyTopLevelPoliciesFromTheActiveGatewayDump: '活动网关转储中的只读顶级策略。',
 			readinessProbeServerAddressInTheFormatIpPortLocalhostPortUnixPathToSocketOrOff:
-				'就绪探针服务器地址，格式为 `ip:port`、`localhost:port`、`unix:/path/to/socket` 或 `off`。',
+				'就绪探针服务器地址，格式为 ip:port、localhost:port、unix:/path/to/socket 或 off。',
 			readonlyMode: '只读模式',
 			readonlyPoliciesUnavailable: '只读策略不可用',
 			ready: '就绪',
@@ -2018,7 +2027,7 @@ const zhCN = {
 			rejectWhenTheProcessorIsUnavailable: '当处理器不可用时拒绝。',
 			rejectWhenTheWebhookIsUnavailableOrErrors: '当 Webhook 不可用或出现错误时拒绝。',
 			rejectionBody: '拒绝响应正文',
-			rejectionStatus: '拒绝状态',
+			rejectionStatus: '拒绝状态码',
 			reloadVsCodeAndTestCopilotSuggestionsOrChat: '重新加载 VS Code 并测试 Copilot 建议或聊天。',
 			remoteRateLimit: '远程速率限制',
 			remoteRateLimitChecksForIncomingRequests: '对传入请求的远程速率限制检查。',
@@ -2055,7 +2064,7 @@ const zhCN = {
 			replaceOnlyTheMatchedPathPrefix: '仅替换匹配的路径前缀。',
 			replaceOnlyThePort: '仅替换端口。',
 			replaceTheFullAuthorityIncludingHostAndOptionalPort:
-				'替换完整的 `:authority`，包括主机和可选端口。',
+				'替换完整的 :authority，包括主机和可选端口。',
 			replaceTheFullRequestPath: '替换完整的请求路径。',
 			request: '请求',
 			request_1058hua: '请求',
@@ -2066,20 +2075,20 @@ const zhCN = {
 			requestContextYaml: '请求上下文 YAML',
 			requestDetail: '请求详情',
 			requestExtraOauth2ScopesTheGatewayAlwaysIncludesOpenid:
-				'请求额外的 OAuth 2.0 作用域。网关始终包含 `openid`。',
+				'请求额外的 OAuth 2.0 作用域。网关始终包含 openid。',
 			requestGuards: '请求防护规则',
 			requestHeaders: '请求头',
 			requestHeadersToSendToTheAuthorizationServiceIfUnsetGRpcSendsAllRequestHeadersAn_136gzan:
 				'发送到授权服务的请求头。\n如果未设置，gRPC 会发送所有请求头，而 HTTP 仅发送 `Authorization`。',
 			requestInProgress: '请求进行中',
-			requestLogIdentity: '请求日志身份',
+			requestLogIdentity: '请求日志身份信息',
 			requestOriginsThatReceiveCorsResponseHeadersUseToMatchAnyOrigin:
 				'接收 CORS 响应头的请求来源。使用 `*` 匹配任何来源。',
 			requestProgress: '请求进度',
 			requestTrailers: '请求尾部字段',
 			requestTransformations: '请求转换',
 			requestHeadersModifiesHeadersInRequestsToTheLlmProvider:
-				'`requestHeaders` 用于修改发送给 LLM 提供商的请求头。',
+				'requestHeaders 用于修改发送给 LLM 提供商的请求头。',
 			requests: '请求数',
 			requestsAreNeverRejectedThisIsUsefulForUsageOfClaimsInLaterStepsAuthorizationLog_etyjeb:
 				'请求永远不会被拒绝。这对于在后续步骤（授权、日志记录等）中使用声明非常有用。\n警告：这允许不带 JWT 令牌的请求！此外不会返回 401 错误，因此不会触发客户端启动 OAuth 流程。',
@@ -2090,8 +2099,8 @@ const zhCN = {
 			requireAValidUsernameAndPassword: '需要有效的用户名和密码。',
 			requireTheSelectedDestinationToMatchAgentgatewaySLocalServiceEndpoints:
 				'要求所选目标与 agentgateway 的本地服务端点匹配。',
-			requireThisCelExpressionToBeTrue: '要求此 CEL 表达式的求值结果为 `true`。',
-			requireThisExpressionToBeTrue: '要求此表达式的求值结果为 `true`。',
+			requireThisCelExpressionToBeTrue: '要求此 CEL 表达式的求值结果为 true。',
+			requireThisExpressionToBeTrue: '要求此表达式的求值结果为 true。',
 			requiredClaims: '所需声明',
 			reset: '重置',
 			resource: '资源',
@@ -2113,7 +2122,7 @@ const zhCN = {
 			responseTrailers: '响应尾部字段',
 			responseTransformations: '响应转换',
 			responseHeadersModifiesHeadersInResponsesFromTheLlmProvider:
-				'`responseHeaders` 用于修改 LLM 提供商返回的响应头。',
+				'responseHeaders 用于修改 LLM 提供商返回的响应头。',
 			restoreHealth: '恢复健康',
 			restrictAcceptedMcpTokensByIssuerAndAudience: '按签发者和受众限制可接受的 MCP 令牌。',
 			restrictAcceptedTokensByIssuerAudienceAndRequiredClaims:
@@ -2127,16 +2136,16 @@ const zhCN = {
 			reviewMigration: '查看迁移',
 			rewriteAllRequestsToThisAdminApiPathPreservingTheOriginalQueryString:
 				'重写对此管理 API 路径的所有请求，保留原始查询字符串。',
-			rewriteTheRequestPathOrAuthorityBeforeForwarding: '转发前重写请求路径或 `authority`。',
+			rewriteTheRequestPathOrAuthorityBeforeForwarding: '转发前重写请求路径或 authority。',
 			rfc7523TheSubjectTokenIsSentAsTheAssertion: 'RFC 7523；主题令牌作为 `assertion` 发送。',
 			rfc8693ActorTokenTypeUrnWhenOmittedDefaultsToAccessTokenAndIsStillSent:
-				'RFC 8693 参与者令牌类型 URN；省略时默认为 `access_token`，但仍会发送。',
+				'RFC 8693 参与者令牌类型 URN；省略时默认为 access_token，但仍会发送。',
 			rfc8693DelegationActorTokenTokenExchangeGrantOnly:
 				'RFC 8693 委托参与者令牌。仅用于令牌交换授权。',
 			rfc8693TokenExchangeTheSubjectTokenIsSentAsSubjectToken:
 				'RFC 8693 令牌交换；主题令牌以 `subject_token` 形式发送。',
 			rfc8693TokenTypeUrnWhenOmittedDefaultsToAccessToken:
-				'RFC 8693 令牌类型 URN；省略时默认为 `access_token`。',
+				'RFC 8693 令牌类型 URN；省略时默认为 access_token。',
 			rootCertificateBundleUsedToVerifyTheBackendCertificate: '用于验证后端证书的根证书包。',
 			routeClaudeDesktopThirdPartyInferenceThroughTheGateway:
 				'通过网关路由 Claude Desktop 第三方推理。',
@@ -2155,15 +2164,15 @@ const zhCN = {
 				'通过网关 HTTP 代理设置路由 Windsurf 流量。',
 			routeYaml: '路由 YAML',
 			routeGroupsProvidesASetOfRouteGroupsUsedForRouteDelegationThisIsAnAdvancedFeatur_12ntlx8:
-				'`routeGroups` 提供一组用于路由委派的路由组。这是一项高级功能，主要用于测试。',
+				'routeGroups 提供一组用于路由委派的路由组。这是一项高级功能，主要用于测试。',
 			routes: '路由',
 			routes_14u6307: '路由',
 			routes_4p3286: '路由 ·',
 			routesDefinesHttpRoutesAttachedToOneOrMoreNamedGateways:
-				'`routes` 定义附加到一个或多个命名网关的 HTTP 路由。',
+				'routes 定义附加到一个或多个命名网关的 HTTP 路由。',
 			routing: '路由',
 			routingSelectsAnExistingLlmModelBackendForEachRequest:
-				'`routing` 会为每个请求选择现有的 LLM 模型后端。',
+				'routing 会为每个请求选择现有的 LLM 模型后端。',
 			routingStrategy: '路由策略',
 			rule: '规则',
 			run: '运行',
@@ -2179,7 +2188,7 @@ const zhCN = {
 			schemeToUseInTheRedirectUrlSuchAsHttpOrHttps:
 				'在重定向 URL 中使用的方案，例如 `http` 或 `https`。',
 			scopes: '作用域',
-			sdkSnippetsUseThisUrlWithV1Appended: 'SDK 代码片段使用此 URL，并在末尾附加 `/v1`。',
+			sdkSnippetsUseThisUrlWithV1Appended: 'SDK 代码片段使用此 URL，并在末尾附加 /v1。',
 			searchValue: '搜索 {{value}}',
 			searchFor: '搜索',
 			secretValueToSendToTheBackend: '要发送到后端的机密值。',
@@ -2218,7 +2227,7 @@ const zhCN = {
 			serviceReferenceServiceMustBeDefinedInTheTopLevelServicesList:
 				'服务引用。服务必须在顶级服务列表中定义。',
 			servicesDefinesTheSetOfServicesThatTheProxyCanRouteToTheseConsistOfWorkloadsThis_9pwt7w:
-				'`services` 定义代理可以路由到的服务集合，这些服务由 `workloads` 组成。这是一项高级功能，主要用于测试；通常优先使用路由上的内联 `backends` 和策略。',
+				'services 定义代理可以路由到的服务集合，这些服务由 `workloads` 组成。这是一项高级功能，主要用于测试；通常优先使用路由上的内联 `backends` 和策略。',
 			session: '会话',
 			sessionTagsPassedToStsAssumeRoleForCostAttributionOnceActivatedAsCostAllocationT_1ce6dym:
 				'传递给 STS AssumeRole 的会话标签，用于成本归因。标签激活为成本分配标签后，会显示在 AWS 成本和使用情况报告的 `resourceTags/user:TagKey` 下。标签值可以是静态值（`value`），也可以是针对每个请求求值的 CEL 表达式（`expression`）。',
@@ -2240,7 +2249,7 @@ const zhCN = {
 			settingsForTemporarilyRemovingUnhealthyBackends: '用于临时移除不健康后端的设置。',
 			severityThreshold: '严重性阈值',
 			severityThreshold06ForFourSeverityLevelsContentAtOrAboveThisLevelIsBlockedDefault2:
-				'严重性阈值。使用 `FourSeverityLevels` 时取值范围为 0 到 6；达到或超过该级别的内容会被阻止。默认为 2。',
+				'严重性阈值。使用 FourSeverityLevels 时取值范围为 0 到 6；达到或超过该级别的内容会被阻止。默认为 2。',
 			sha256HashOfAnApiKeyValueToAcceptInSha256HexFormat:
 				'要接受的 API 密钥值的 SHA-256 哈希值，采用 `sha256:<hex>` 格式。',
 			shaping: '流量整形',
@@ -2250,7 +2259,7 @@ const zhCN = {
 			signBackendRequestsWithAwsCredentials: '使用 AWS 凭证为后端请求签名。',
 			signingKeys: '签名密钥',
 			simpleChatCompletionMessageIsASimplifiedChatMessage:
-				'`SimpleChatCompletionMessage` 表示简化的聊天消息。',
+				'SimpleChatCompletionMessage 表示简化的聊天消息。',
 			skip: '跳过',
 			skipCertificateTrustVerificationForTheBackendConnection: '跳过后端连接的证书信任验证。',
 			skipFailedTargetsUpstreamsAndContinueServingFromHealthyOnesIfAllTargetsFailStillReturnAnError:
@@ -2278,12 +2287,12 @@ const zhCN = {
 			staticResponseBodyEncodedAsBytes: '以字节编码的静态响应正文。',
 			staticTagValue: '静态标记值。',
 			statsMetricsServerAddressInTheFormatIpPortLocalhostPortUnixPathToSocketOrOff:
-				'统计和指标服务器地址，格式为 `ip:port`、`localhost:port`、`unix:/path/to/socket` 或 `off`。',
+				'统计和指标服务器地址，格式为 ip:port、localhost:port、unix:/path/to/socket 或 off。',
 			stream: '流式传输',
 			streamTheBodyBidirectionallyWithTheExternalProcessingService:
 				'通过外部处理服务双向传输正文。',
 			streamTheFullBodyThroughTheExternalProcessor: '通过外部处理器传输完整正文。',
-			streamFalse: '`stream: false`',
+			streamFalse: 'stream: false',
 			streaming: '流式传输',
 			strict: '严格',
 			structuredContent: '结构化内容',
@@ -2307,20 +2316,20 @@ const zhCN = {
 			tcpKeepaliveSettingsForDownstreamConnections: '下游连接的 TCP 保活设置。',
 			tcpProtocolSettingsForThisBackend: '该后端的 TCP 协议设置。',
 			tcpRoutesDefinesTcpRoutesAttachedToOneOrMoreNamedTcpTlsGateways:
-				'`tcpRoutes` 定义附加到一个或多个具名 TCP/TLS 网关的 TCP 路由。',
-			temperature02: '`temperature: 0.2`',
+				'tcpRoutes 定义附加到一个或多个具名 TCP/TLS 网关的 TCP 路由。',
+			temperature02: 'temperature: 0.2',
 			templateId: '模板 ID',
 			theAes256GcmSessionProtectionKeyToBeUsedForSessionTokensIfNotSetSessionsWillNotB_kosx3y:
 				'用于会话令牌的 AES-256-GCM 会话保护密钥。\n如果未设置，会话将不会被加密。\n例如，通过 `openssl rand -hex 32` 生成。',
 			theAzureContentSafetyEndpointHostnameEGResourceNameCognitiveservicesAzureCom:
-				'Azure 内容安全端点的主机名，例如 `<resource-name>.cognitiveservices.azure.com`。',
+				'Azure 内容安全端点的主机名，例如 <resource-name>.cognitiveservices.azure.com。',
 			theAzureResourceNameUsedToConstructTheEndpointHost: '用于构造端点主机的 Azure 资源名称。',
 			theFoundryProjectNameRequiredWhenResourceTypeIsFoundryUsedToConstructPathsApiPro_acq7x8:
 				'Foundry 项目名称；当 `resourceType` 为 `foundry` 时必填。\n用于构造路径：`/api/projects/{projectName}/openai/v1/...`。\n这与用于主机的 `resourceName` 不同。',
 			theGcpProjectId: 'GCP 项目 ID',
-			theGcpRegionDefaultUsCentral1: 'GCP 区域（默认：`us-central1`）',
+			theGcpRegionDefaultUsCentral1: 'GCP 区域（默认：us-central1）',
 			theHttpEndpointClassSuchAsV1ChatCompletionsOrV1MessagesThisIsUsedBothForTheClien_pbt4i9:
-				'HTTP 端点类型，例如 `/v1/chat/completions` 或 `/v1/messages`。\n\n它同时用于匹配的客户端路由和最终发送请求的上游路由。对于聊天请求，两者可能不同：客户端发起的 Anthropic `/v1/messages` 请求对应 `RouteType::Messages` 和 `InputFormat::Messages`，但转换后可能以 `RouteType::Completions` 发送到上游。\n\n`RouteType` 描述 HTTP 端点，`InputFormat` 描述解析后的客户端负载及返回给客户端的响应形状。该类型还包括 `Detect` 和 `Passthrough` 等模式。',
+				'HTTP 端点类型，例如 `/v1/chat/completions` 或 `/v1/messages`。\n\n它同时用于匹配的客户端路由和最终发送请求的上游路由。对于聊天请求，两者可能不同：客户端发起的 Anthropic `/v1/messages` 请求对应 `RouteType::Messages` 和 `InputFormat::Messages`，但转换后可能以 `RouteType::Completions` 发送到上游。\n\n`RouteType` 描述 HTTP 端点，`InputFormat` 描述解析后的客户端负载及返回给客户端的响应形状。该类型还包括 Detect 和 Passthrough 等模式。',
 			theMaximumDurationToKeepAnIdleConnectionAlive: '保持空闲连接活动的最大持续时间。',
 			theMaximumNumberOfConnectionsAllowedInThePoolPerHostnameIfSetThisWillLimitTheTot_2rbbla:
 				'每个主机名的连接池所允许的最大连接数。设置后，会限制与任一主机保持活动的连接总数。注意：系统仍会创建超出限制的连接，但不会让这些连接保持空闲。未设置时不作限制。',
@@ -2345,12 +2354,12 @@ const zhCN = {
 			thisToolDoesNotDeclareArguments: '该工具不声明参数。',
 			timeToWaitForAnHttp2KeepalivePingResponse: '等待 HTTP/2 保活探测响应的时间。',
 			timingAndUsage: '耗时与用量',
-			tlsConfiguresTlsWhenConnectingToTheLlmProvider: '`tls` 用于配置连接 LLM 提供商时采用的 TLS。',
+			tlsConfiguresTlsWhenConnectingToTheLlmProvider: 'tls 用于配置连接 LLM 提供商时采用的 TLS。',
 			tlsDefinesTheTlsSettingsToServeTheLlmRoutesUnderWhenUsingPortDeprecatedUseGatewaysInstead:
-				'`tls` 定义使用 `port` 提供 LLM 路由服务时采用的 TLS 设置。该字段已弃用，请改用 `gateways`。',
+				'tls 定义使用 `port` 提供 LLM 路由服务时采用的 TLS 设置。该字段已弃用，请改用 `gateways`。',
 			tlsEnablesHttpsForThisGatewayMaybeNotBeSetWithListeners:
-				'`tls` 为此网关启用 HTTPS，不能与 `listeners` 同时设置。',
-			tlsEnablesHttpsForThisListener: '`tls` 为此监听器启用 HTTPS。',
+				'tls 为此网关启用 HTTPS，不能与 `listeners` 同时设置。',
+			tlsEnablesHttpsForThisListener: 'tls 为此监听器启用 HTTPS。',
 			tlsSettingsUsedWhenConnectingToTheBackend: '连接到后端时使用的 TLS 设置。',
 			tlsSettingsUsedWhenConnectingToThisBackend: '连接到此后端时使用的 TLS 设置。',
 			to: '至',
@@ -2358,7 +2367,7 @@ const zhCN = {
 			toTheLlmCorsPolicySoThisPlaygroundCanCallTheGatewayFromTheBrowser:
 				'到 LLM CORS 策略，以便这个演练场可以从浏览器调用网关。',
 			toTheMcpCorsPolicyAndExposeMcpSessionIdSoThisPlaygroundCanKeepABrowserSession:
-				'MCP CORS 策略并公开 `Mcp-Session-Id`，以便该演练场保持浏览器会话。',
+				'MCP CORS 策略并公开 Mcp-Session-Id，以便该演练场保持浏览器会话。',
 			toTheMcpCorsPolicySoThePlaygroundCanListAndCallMcpToolsFromTheBrowser:
 				'MCP CORS 策略，以便演练场可以从浏览器列出并调用 MCP 工具。',
 			toggleTheme: '切换主题',
@@ -2366,8 +2375,8 @@ const zhCN = {
 			tokenEndpointAuth: '令牌端点身份验证',
 			tokenEndpointClientAuthenticationMethodForExplicitProviderConfigurationDiscovery_s7q91h:
 				'显式提供商配置所使用的令牌端点客户端身份验证方法。发现模式会从提供商元数据推导该值；显式模式省略此项时，默认为 `clientSecretBasic`。',
-			tokenEndpointPathOnTheBackendDefaultsTo: '后端的令牌端点路径，默认为 `/`。',
-			tokenEndpointUsedToExchangeTheAuthorizationCode: '用于交换授权代码的令牌端点。',
+			tokenEndpointPathOnTheBackendDefaultsTo: '后端的令牌端点路径，默认为 /。',
+			tokenEndpointUsedToExchangeTheAuthorizationCode: '用于交换授权码的令牌端点。',
 			tokenValidation: '令牌验证',
 			tokens: '令牌',
 			tokensPerFill: '每次填充的令牌数',
@@ -2378,7 +2387,7 @@ const zhCN = {
 			toolResult: '工具结果',
 			tools: '工具',
 			toolsDiscovered: '发现的工具',
-			toolsCallPromptsOr: '`tools/call`、`prompts/*` 或 `*`',
+			toolsCallPromptsOr: 'tools/call、prompts/* 或 *',
 			topLevelRuntimePoliciesAreOnlyAvailableWhenTheGatewayIsRunningFromXdsConfig:
 				'仅当网关从 XDS 配置运行时，顶级运行时策略才可用。',
 			topLevelConfigurationSectionAlreadyExists: '顶层配置节已存在。',
@@ -2414,7 +2423,7 @@ const zhCN = {
 			uSSocialSecurityNumberPattern: '美国社会安全号码模式。',
 			uiAccessPolicies: 'UI 访问策略',
 			uiDefinesSettingsForHowTheUiAndUiBackendIsExposedByDefaultTheUiIsExposedOnlyOnTh_ajchhz:
-				'`ui` 定义 UI 及其后端的公开方式。默认情况下，UI 仅通过管理界面（通常为 `localhost:15000`）提供。此设置可将 UI 附加到 `gateways` 以对外提供服务，也可为 UI 流量附加策略。对外公开 UI 时，强烈建议启用身份验证（通常使用 OIDC）。',
+				'ui 定义 UI 及其后端的公开方式。默认情况下，UI 仅通过管理界面（通常为 localhost:15000）提供。此设置可将 UI 附加到 `gateways` 以对外提供服务，也可为 UI 流量附加策略。对外公开 UI 时，强烈建议启用身份验证（通常使用 OIDC）。',
 			uiIsExposedWithoutAuthentication: 'UI 在未进行身份验证的情况下公开',
 			uiSettings: 'UI 设置',
 			unauthenticatedUsersCanAccessTheUiConsiderAddingAuthenticationOrAuthorizationPol_qnhsta:
@@ -2485,7 +2494,7 @@ const zhCN = {
 			userAgents: '用户代理',
 			userAttribute: '用户属性',
 			userDatabaseInHtpasswdFormatCanBeInlineOrLoadedFromAFile:
-				'`htpasswd` 格式的用户数据库，可内联提供或从文件加载。',
+				'htpasswd 格式的用户数据库，可内联提供或从文件加载。',
 			userMessage: '用户消息',
 			user_19x0vko: '用户：',
 			users: '用户',
@@ -2524,9 +2533,9 @@ const zhCN = {
 			virtualModel: '虚拟模型',
 			virtualModelName: '虚拟模型名称',
 			virtualModelsDefinesASetOfModelsThatCanBeServedFromTheGatewayTheModelNameRefersT_17dk90d:
-				'`virtualModels` 定义可由网关提供服务的一组虚拟模型。模型名称指与用户请求匹配的模型名称。与 `models` 字段不同，虚拟模型会根据配置的逻辑动态路由到 `models` 中配置的具体模型。',
+				'virtualModels 定义可由网关提供服务的一组虚拟模型。模型名称指与用户请求匹配的模型名称。与 `models` 字段不同，虚拟模型会根据配置的逻辑动态路由到 `models` 中配置的具体模型。',
 			visibilityControlsWhetherClientsCanRequestThisModelDirectlyRatherThanOnlyViaAVirtualModel:
-				'`visibility` 控制客户端能否直接请求此模型，而非只能通过 `virtualModel` 使用。',
+				'visibility 控制客户端能否直接请求此模型，而非只能通过 `virtualModel` 使用。',
 			vsCodeSettings: 'VS Code 设置',
 			waitingForFinalResponse: '正在等待最终响应',
 			waitingForModelResponse: '正在等待模型响应',
@@ -2536,8 +2545,7 @@ const zhCN = {
 			webhookTarget: 'Webhook 目标',
 			weight: '权重',
 			weighted: '加权',
-			weightedEnablesWeightBasedSelectionOfTheTargetModel:
-				'`weighted` 启用基于权重的目标模型选择。',
+			weightedEnablesWeightBasedSelectionOfTheTargetModel: 'weighted 启用基于权重的目标模型选择。',
 			weightedTargets: '加权目标',
 			welcomeToAgentgateway: '欢迎使用 agentgateway',
 			whenMustEvaluateToTrueForThisTargetToBeSelectedOmitOnlyOnTheFinalFallbackTarget:
@@ -2550,11 +2558,11 @@ const zhCN = {
 			whereTheActorTokenIsReadFromInTheIncomingRequestTheCelExpressionSourceIsPermitte_1ufgpgq:
 				'从传入请求中读取参与者令牌的位置。允许使用 CEL `expression` 源（仅提取）。与主题令牌不同，参与者令牌没有默认来源。',
 			whereTheSubjectTokenIsReadFromAndItsTokenTypeDefaultsToTheAuthorizationBearerHea_18ffgbu:
-				'主题令牌的读取位置及其令牌类型。默认从 `Authorization: Bearer` 请求头读取，令牌类型为 `access_token`。',
+				'主题令牌的读取位置及其令牌类型。默认从 Authorization: Bearer 请求头读取，令牌类型为 access_token。',
 			whereTheTokenIsReadFromInTheIncomingRequestTheCelExpressionSourceIsPermittedExtractionOnly:
 				'从传入请求中读取令牌的位置。允许使用 CEL `expression` 源，但只能提取令牌。',
 			whereToPlaceTheExchangedTokenInTheBackendRequestDefaultsToTheAuthorizationHeader_1az5m3h:
-				'交换所得令牌在后端请求中的放置位置。默认放入 `Authorization` 请求头，并添加 `Bearer ` 前缀。此处不能使用 CEL `expression` 源，因为它无法插入令牌。',
+				'交换所得令牌在后端请求中的放置位置。默认放入 Authorization 请求头，并添加 Bearer  前缀。此处不能使用 CEL `expression` 源，因为它无法插入令牌。',
 			whereToPlaceTheForwardedCredentialInTheBackendRequest: '将转发的凭据放置在后端请求中的位置。',
 			whereToPlaceTheSecretInTheBackendRequest: '机密值在后端请求中的放置位置。',
 			whereToReadTheApiKeyFromInIncomingRequests: '从传入请求中读取 API 密钥的位置。',
@@ -2591,7 +2599,7 @@ const zhCN = {
 			whichTrafficGatewayExposesTheUi: '哪个流量网关公开 UI。',
 			windsurfSettings: 'Windsurf 设置',
 			workloadsDefinesTheSetOfWorkloadsThatTheProxyCanServeTheseAreSelectedByServicesT_su2rlz:
-				'`workloads` 定义代理可以提供服务的工作负载集合，并由 `services` 选择。这是一项高级功能，主要用于测试；通常优先使用路由上的内联 `backends` 和策略。',
+				'workloads 定义代理可以提供服务的工作负载集合，并由 `services` 选择。这是一项高级功能，主要用于测试；通常优先使用路由上的内联 `backends` 和策略。',
 			x: 'x',
 			yamlValueReturnedByCelEvaluation: 'CEL 求值返回的 YAML 值。',
 			addressOfTheCertificateAuthorityUsedToIssueSpiffeCertificates:
@@ -2599,7 +2607,7 @@ const zhCN = {
 			addressOfTheXDsControlPlaneUsedForDynamicConfiguration: '用于动态配置的 xDS 控制平面地址。',
 			alwaysPrefixNamesEvenWithASingleTarget: '始终为名称添加前缀，即使只有一个目标。',
 			arnOfTheBedrockAgentCoreRuntimeArnAwsBedrockAgentcoreRegionAccountRuntimeId:
-				'Bedrock AgentCore 运行时的 ARN（`arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID`）。',
+				'Bedrock AgentCore 运行时的 ARN（arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID）。',
 			authenticationConfigurationForConnectingToTheLlmProvider:
 				'连接 LLM 提供商时使用的身份验证配置。',
 			authenticationTokenForCommunicatingWithTheCertificateAuthority:
@@ -2618,7 +2626,7 @@ const zhCN = {
 			backendPoliciesAppliedToTrafficToThisProvider: '用于处理发往此提供商流量的后端策略。',
 			basePricingRatesForThisModel: '此模型的基础定价费率。',
 			behaviorWhenTheBodyExceedsMaxBytesFailClosedRejectOrFailOpenContinue:
-				'请求正文超过 `maxBytes` 时的处理方式：`failClosed`（拒绝）或 `failOpen`（继续）。',
+				'请求正文超过 maxBytes 时的处理方式：failClosed（拒绝）或 failOpen（继续）。',
 			cachePointInsertionForLlmProvidersThatSupportPromptCaching:
 				'针对支持提示词缓存的 LLM 提供商插入缓存点的配置。',
 			celExpressionEvaluatedAgainstEachRequestToProduceTheSessionNameForExampleJwtSubO_68dvwh:
@@ -2629,11 +2637,11 @@ const zhCN = {
 			conditionsPathMethodHeadersQueryThatSelectThisRoute:
 				'用于选择此路由的条件（路径、方法、请求头和查询参数）。',
 			configDefinesTopLevelSettingsForDnsAdminNetworkingObservabilityAndSessionManagem_yywaxh:
-				'`config` 定义 DNS、管理、网络、可观测性和会话管理的顶层设置。与其他部分不同，这些设置仅在启动时应用，不会动态重新加载。',
+				'config 定义 DNS、管理、网络、可观测性和会话管理的顶层设置。与其他部分不同，这些设置仅在启动时应用，不会动态重新加载。',
 			configurationForUpstreamConnectionsIncludingKeepalivesTimeoutsAndPooling:
 				'上游连接配置，包括保活、超时和连接池。',
 			connectionUrlForTheRequestLogDatabaseAPostgresOrPostgresqlUrlUsesPostgresAnyOthe_14gqjn4:
-				'请求日志数据库的连接 URL。以 `postgres://` 或 `postgresql://` 开头时使用 Postgres，其他值均视为 SQLite 数据库。',
+				'请求日志数据库的连接 URL。以 postgres:// 或 postgresql:// 开头时使用 Postgres，其他值均视为 SQLite 数据库。',
 			connectToARemoteMcpServerOverHttpWithServerSentEventsSseStreaming:
 				'通过 HTTP 连接远程 MCP 服务器，并使用服务器发送事件（SSE）进行流式传输。',
 			contextLengthPricingTiersThatOverrideTheBaseRates: '覆盖基础费率的上下文长度定价层级。',
@@ -2655,13 +2663,13 @@ const zhCN = {
 			customFieldsToAddToOrRemoveFromLogEntries: '要在日志条目中添加或移除的自定义字段。',
 			customFieldsToAddToOrRemoveFromTraceSpans: '要在追踪跨度中添加或移除的自定义字段。',
 			customSessionNameRoleSessionNameForCloudTrailAndCostUsageReportAttributionEither_88b0jv:
-				'用于 CloudTrail 和成本与使用情况报告归因的自定义会话名称（`RoleSessionName`）。可以是静态字符串，也可以是包含针对每个请求求值的 CEL 表达式的 `{expression: ...}`。最长 64 个字符，需匹配 `[\\w+=,.@-]`。未设置时，AWS SDK 会生成随机会话名称。',
+				'用于 CloudTrail 和成本与使用情况报告归因的自定义会话名称（RoleSessionName）。可以是静态字符串，也可以是包含针对每个请求求值的 CEL 表达式的 `{expression: ...}`。最长 64 个字符，需匹配 `[\\w+=,.@-]`。未设置时，AWS SDK 会生成随机会话名称。',
 			distributedTracingConfiguration: '分布式追踪配置。',
 			durationAfterWhichUnusedPooledConnectionsAreReleased: '释放连接池中未使用连接前的等待时长。',
 			enableIpv6AddressResolutionAndBindingDefaultsToTrue:
-				'启用 IPv6 地址解析和绑定。默认为 `true`。',
+				'启用 IPv6 地址解析和绑定。默认为 true。',
 			enableTcpKeepaliveProbesOnBackendConnectionsDefaultsToTrue:
-				'在后端连接上启用 TCP 保活探测。默认为 `true`。',
+				'在后端连接上启用 TCP 保活探测。默认为 true。',
 			endpointQualifierVersionOrAliasForTheAgentCoreRuntimeInvocation:
 				'调用 AgentCore 运行时时使用的端点限定符（版本或别名）。',
 			exactOrRegexPatternTheHeaderValueMustMatch: '请求头值必须匹配的精确值或正则表达式。',
@@ -2700,7 +2708,7 @@ const zhCN = {
 			httpRoutesAttachedDirectlyToThisListener: '直接附加到此监听器的 HTTP 路由。',
 			httpRoutesGroupedTogetherForDelegationAndReuse: '为委派和复用而组合在一起的 HTTP 路由。',
 			identifierForTheClusterThisGatewayRunsInDefaultsToKubernetes:
-				'此网关所在集群的标识符。默认为 `Kubernetes`。',
+				'此网关所在集群的标识符。默认为 Kubernetes。',
 			identifierForThisBackendReferencedByRoutes: '此后端的标识符，供路由引用。',
 			identifierForThisRouteGroupReferencedByDelegatingRoutes: '此路由组的标识符，供委派路由引用。',
 			identifierOfTheBedrockGuardrailToApply: '要应用的 Bedrock 防护规则标识符。',
@@ -2729,7 +2737,7 @@ const zhCN = {
 			maximumTimeToWaitWhenEstablishingAConnectionToAnUpstreamDefaultsTo10Seconds:
 				'与上游建立连接时的最长等待时间。默认为 10 秒。',
 			mcpServerTargetsToMultiplexTogether: '要进行多路复用的 MCP 服务器目标。',
-			messageRoleSuchAsSystemUserOrAssistant: '消息角色，例如 `system`、`user` 或 `assistant`。',
+			messageRoleSuchAsSystemUserOrAssistant: '消息角色，例如 system、user 或 assistant。',
 			messageTextContent: '消息的文本内容。',
 			metricNamesToExcludeFromCollection: '不采集的指标名称。',
 			metricsConfigurationIncludingMetricRemovalAndCustomFields:
@@ -2783,7 +2791,7 @@ const zhCN = {
 			numberOfUnacknowledgedProbesBeforeTheConnectionIsConsideredDead:
 				'连接被视为已断开前允许的未确认探测次数。',
 			numberOfWorkerThreadsForTheAsyncRuntimeAcceptsANumberOrAStringSuchAsAuto:
-				'异步运行时的工作线程数。可以是数字，也可以是 `auto` 等字符串。',
+				'异步运行时的工作线程数。可以是数字，也可以是 auto 等字符串。',
 			oauth20ClientSecretSentViaHttpBasicAuthToTheAuthorizationServer:
 				'通过 HTTP Basic Auth 发送给授权服务器的 OAuth 2.0 客户端密钥。',
 			otlpCollectorEndpointUrlForExportingTraces: '用于导出追踪数据的 OTLP 收集器端点 URL。',
@@ -2791,7 +2799,7 @@ const zhCN = {
 			outlierDetectionAndHealthCheckingForThisProviderBackend:
 				'对此提供商后端执行异常检测和健康检查。',
 			pathMatchRuleExactPrefixOrRegexDefaultsToAPrefixMatch:
-				'路径匹配规则（精确、前缀或正则表达式）。默认为 `/` 前缀匹配。',
+				'路径匹配规则（精确、前缀或正则表达式）。默认为 / 前缀匹配。',
 			pathToAFileOnDiskContainingTheModelCostCatalog: '磁盘上包含模型成本目录的文件路径。',
 			pathToAFileOnDiskToLoadTheValueFrom: '用于加载值的磁盘文件路径。',
 			pathToARootCaCertificateFileUsedToValidateClientCertificates:
@@ -2803,7 +2811,7 @@ const zhCN = {
 			policiesAppliedToThisMcpTarget: '应用于此 MCP 目标的策略。',
 			portOnTheMcpServerToConnectTo: '要连接的 MCP 服务器端口。',
 			portOnTheTargetServiceToRouteTo: '要路由到的目标服务端口。',
-			portToTargetAsAnAlternativeToListenerName: '作为目标的端口，可代替 `listener_name`。',
+			portToTargetAsAnAlternativeToListenerName: '作为目标的端口，可代替 listener_name。',
 			prefixNamesWithTheTargetNameOnlyWhenThereAreMultipleTargets:
 				'仅在存在多个目标时，使用目标名称作为名称前缀。',
 			pricingRatesForThisTierOverlaidOnTheBaseModelRates:
@@ -2811,7 +2819,7 @@ const zhCN = {
 			protocolThisListenerAcceptsHttpHttpsTcpTlsOrHbone:
 				'此监听器接受的协议：HTTP、HTTPS、TCP、TLS 或 HBONE。',
 			protocolUsedToTunnelBackendConnectionsSuchAsDirectOrHbone:
-				'用于建立后端连接隧道的协议，例如 `Direct` 或 `HBONE`。',
+				'用于建立后端连接隧道的协议，例如 Direct 或 HBONE。',
 			queryParameterNameToMatch: '要匹配的查询参数名称。',
 			queryParametersThatMustMatchForThisRouteToApply: '应用此路由时必须匹配的查询参数。',
 			relativeProportionOfTrafficSentToThisTargetModelDefaultsTo1:
@@ -2830,7 +2838,7 @@ const zhCN = {
 			routeLevelPoliciesAppliedBeforeBackendSelection: '选择后端之前应用的路由级策略。',
 			routeToAServiceDefinedInTheTopLevelServicesList: '路由到顶层 `services` 列表中定义的服务。',
 			sessionNameRoleSessionNameInConfigurationFormAStaticStringOrACelExpressionEvalua_zywvwc:
-				'配置中的会话名称（`RoleSessionName`）：可以是静态字符串，也可以是针对每个请求求值的 CEL 表达式。该字段未使用带标签格式，因此普通字符串仍保持原有含义。',
+				'配置中的会话名称（RoleSessionName）：可以是静态字符串，也可以是针对每个请求求值的 CEL 表达式。该字段未使用带标签格式，因此普通字符串仍保持原有含义。',
 			specificListenerWithinTheGatewayIfUnsetTargetsTheGatewayItself:
 				'网关内的特定监听器；未设置时以网关本身为目标。',
 			specificListenerWithinTheListenerSetToTarget: '监听器集中要作为目标的特定监听器。',
@@ -2855,10 +2863,10 @@ const zhCN = {
 			weightedBackendsThisRouteForwardsTrafficTo: '此路由将流量转发到的加权后端。',
 			weightedBackendsThisTcpRouteForwardsTrafficTo: '此 TCP 路由将流量转发到的加权后端。',
 			whetherToKeepAPersistentSessionAcrossRequestsStatefulOrCreateOnePerRequestStateless:
-				'是在多个请求之间保留持久会话（`Stateful`），还是为每个请求创建独立会话（`Stateless`）。',
+				'是在多个请求之间保留持久会话（Stateful），还是为每个请求创建独立会话（Stateless）。',
 			yourChangesHaveNotBeenSavedAndWillBeLost: '你的更改尚未保存，关闭后将丢失。',
 			configDefinesTopLevelSettingsForDnsAdminNetworkingObservabilityAndSessionManagem_2uetmx:
-				'`config` 定义 DNS、管理、网络、可观测性和会话管理的顶层设置。与其他部分不同，这些设置仅在启动时应用；只有 `modelCatalog` 会动态重新加载。',
+				'config 定义 DNS、管理、网络、可观测性和会话管理的顶层设置。与其他部分不同，这些设置仅在启动时应用；只有 modelCatalog 会动态重新加载。',
 			controlsWhetherUiManagedConfigurationIsWrittenToTheConfigFileOrADbOverlay:
 				'控制 UI 管理的配置写入配置文件还是数据库覆盖层。',
 			maximumNumberOfConnectionsToOpenInThisDatabaseSConnectionPoolDefaultsTo5WhenTheR_y8kw5t:
@@ -2869,7 +2877,7 @@ const zhCN = {
 				'读取文件基线，并将 UI 管理的覆盖资源存储到配置的数据库中。',
 			injectArtificialLatencyBeforeForwardingRequests: '在转发请求前注入人为延迟。',
 			denyTheRequestWhenThisCelExpressionIsTrueThisModeIsNotRecommendedBecauseExpressi_8r8xmb:
-				'当此 CEL 表达式的计算结果为 `true` 时拒绝请求。不建议使用此模式，因为表达式求值失败时不会拒绝请求；优先使用 `Allow` 或 `Require`。如果必须使用，请针对求值错误谨慎设计表达式。',
+				'当此 CEL 表达式的计算结果为 true 时拒绝请求。不建议使用此模式，因为表达式求值失败时不会拒绝请求；优先使用 `Allow` 或 `Require`。如果必须使用，请针对求值错误谨慎设计表达式。',
 			celExpressionThatComputesTheFullSetOfHeadersReplacingAllExistingHeadersTheExpres_k52u6e:
 				'用于计算完整请求头集合的 CEL 表达式，会替换所有现有请求头。表达式必须求值为请求头名称到值的映射（值可以是字符串；重复请求头可以使用字符串数组）。伪请求头（`:method`、`:path` 等）会被忽略；请使用 `set`/`add` 显式设置。`replace` 会在 `add`/`set`/`remove` 之前应用，因此后续操作仍基于替换后的请求头执行。',
 			signAShortLivedJwtWithAPrivateKeyOnEachRequest: '使用私钥为每个请求签发短期 JWT。',
@@ -2938,19 +2946,19 @@ const zhCN = {
 			aNamedCustomProviderConfigurationMaintainedByAgentgatewayThesePresetsDeliberatel_rc86d8:
 				'由 agentgateway 维护的命名自定义提供商配置。这些预设与 `Provider` 并列：独立配置和 xDS 配置都会在此展开，从而保持端点和格式行为一致。',
 			idIsAStableIdentityForThisModelConfigEntryTheNameFieldRemainsTheModelMatchPattern:
-				'`id` 是此模型配置条目的稳定标识；`name` 字段仍表示模型匹配模式。',
+				'id 是此模型配置条目的稳定标识；`name` 字段仍表示模型匹配模式。',
 			finalTransformationAllowsSettingValuesFromCelExpressionsForTheRequestOverridingA_5b0fab:
 				'`final_transformation` 允许使用 CEL 表达式为请求设置值，并覆盖现有值。它在请求转换为提供商格式后执行，因此可以进行提供商特定的转换。',
 			browserOriginsThatMayCallThisListenerUseExactOriginsSuchAsHttpLocalhost19000:
-				'可调用此监听器的浏览器来源。请使用 `http://localhost:19000` 等精确来源。',
+				'可调用此监听器的浏览器来源。请使用 http://localhost:19000 等精确来源。',
 			requestHeadersAllowedByBrowserPreflightChecksUseWhileDebuggingThenNarrowItForProduction:
-				'浏览器预检请求允许的请求头。调试时可使用 `*`，生产环境请缩小范围。',
+				'浏览器预检请求允许的请求头。调试时可使用 *，生产环境请缩小范围。',
 			httpMethodsAllowedByBrowserPreflightChecksPlaygroundsTypicallyNeedGetAndPost:
 				'浏览器预检请求允许的 HTTP 方法。演练场通常需要 GET 和 POST。',
 			responseHeadersBrowserJavaScriptCanReadMcpPlaygroundsNeedMcpSessionId:
-				'浏览器 JavaScript 可以读取的响应头。MCP 演练场需要 `Mcp-Session-Id`。',
+				'浏览器 JavaScript 可以读取的响应头。MCP 演练场需要 Mcp-Session-Id。',
 			strictRequiresAValidJwtOptionalValidatesOnlyWhenPresentAndPermissiveNeverRejectsRequests:
-				'`strict` 要求有效 JWT，`optional` 仅在 JWT 存在时验证，`permissive` 从不拒绝请求。',
+				'strict 要求有效 JWT，optional 仅在 JWT 存在时验证，permissive 从不拒绝请求。',
 			expectedIssuerClaimForAcceptedJwts: '已接受 JWT 应具备的预期签发者声明。',
 			acceptedAudienceClaimsLeaveEmptyOnlyWhenTheGatewayShouldNotEnforceAudienceMatching:
 				'已接受的受众声明。仅当网关不应强制匹配受众时留空。',
@@ -2958,7 +2966,7 @@ const zhCN = {
 				'用于验证 JWT 签名的 JWKS。可以是内联 JSON、文件引用或远程 URL 对象。',
 			whetherThisLimitCountsRequestsImmediatelyOrTokensAfterAnLlmResponseCompletes:
 				'此限制是立即按请求计数，还是在 LLM 响应完成后按令牌计数。',
-			howOftenTokensAreReplenishedSuchAs1s60sOr1m: '令牌补充的频率，例如 `1s`、`60s` 或 `1m`。',
+			howOftenTokensAreReplenishedSuchAs1s60sOr1m: '令牌补充的频率，例如 1s、60s 或 1m。',
 			maximumBurstSizeForThisLocalRateLimitBucket: '此本地速率限制桶允许的最大突发量。',
 			numberOfTokensAddedBackToTheBucketEveryFillInterval: '每个填充间隔向桶中补充的令牌数。',
 			selectTheGuardrailIntegrationOrRuleTypeToApply: '选择要应用的防护规则集成或规则类型。',
@@ -2968,7 +2976,7 @@ const zhCN = {
 			playgroundMcpCorsInstruction:
 				'将 {{value}} 添加到 MCP CORS 策略，以便此演练场可以从浏览器列出并调用 MCP 工具。',
 			playgroundMcpSessionCorsInstruction:
-				'将 {{value}} 添加到 MCP CORS 策略并公开 `Mcp-Session-Id`，以便此演练场可以保持浏览器会话。',
+				'将 {{value}} 添加到 MCP CORS 策略并公开 Mcp-Session-Id，以便此演练场可以保持浏览器会话。',
 			gooseModelNamesInstruction:
 				'无法输入自定义模型名称；对于提供商列表中缺失的模型，请在 {{value}} 中设置 {{value}}。',
 			unsupportedTargetDescription:
@@ -3068,7 +3076,7 @@ const zhCN = {
 			entry_one: '{{count}} 项',
 			entry_other: '{{count}} 项',
 			addAMetadataNameBeforeSavingThisVirtualApiKey: '保存此虚拟 API key 前，请先添加元数据名称。',
-			cannotBeCombinedWithOtherModelPatterns: '`*` 不能与其他模型匹配模式组合。',
+			cannotBeCombinedWithOtherModelPatterns: '* 不能与其他模型匹配模式组合。',
 			wildcardsAreOnlySupportedAtTheBeginningOrEndOfAPattern:
 				'通配符只能位于匹配模式的开头或结尾。',
 			aModelPatternCanContainAtMostOneWildcard: '一个模型匹配模式最多只能包含一个通配符。',
@@ -3125,7 +3133,7 @@ const zhCN = {
 			modelArmorDetailsNotSet: '未设置 Model Armor 详情。',
 			rawGuardYamlPreserved: '原始防护规则 YAML 已保留。如需编辑不支持的配置，请使用原始配置。',
 			reject: '拒绝',
-			summaryWithRejection: '{{value}}；拒绝状态：{{value}}。',
+			summaryWithRejection: '{{value}}；拒绝状态码：{{value}}。',
 			webhookTargetNotSet: '未设置 Webhook 目标。',
 			azureEndpointNotSet: '未设置 Azure 端点。',
 			trajectory: '轨迹',
@@ -3144,7 +3152,7 @@ const zhCN = {
 			encrypted: '已加密',
 			encryptedBytes: '已加密（{{value}} 字节）',
 			histogramRepresentationToCollectNativeHistogramsAreExposedOnlyThroughThePromethe_18b5wxk:
-				'要采集的直方图表示形式。原生直方图仅通过 Prometheus protobuf 格式公开。默认为 `classic`。',
+				'要采集的直方图表示形式。原生直方图仅通过 Prometheus protobuf 格式公开。默认为 classic。',
 			additionalRequestHeadersWhoseValuesShouldBeRedactedFromTraceAndDebugOutput:
 				'其值应从追踪和调试输出中脱敏的额外请求头。',
 			freeformCapabilityRoutingTagsForThisModel: '此模型的自由格式能力/路由标签。',
@@ -3275,7 +3283,7 @@ const zhCN = {
 				'`guardrails` 中每个条目对应一次 prompt-guard 防护规则干预，发生在请求或响应阶段。仅在请求完成后运行的 CEL 中提供，例如日志和指标字段。',
 			recordsOnePromptGuardGuardrailIntervention: '记录一次 prompt-guard 防护规则干预。',
 			thePhaseTheGuardrailIntervenedInRequestOrResponse:
-				'防护规则介入的阶段：`request` 或 `response`。',
+				'防护规则介入的阶段：request 或 response。',
 			theGuardKindThatIntervenedSuchAsBedrockGuardrails:
 				'发生干预的防护规则类型，例如 `bedrockGuardrails`。',
 			theActionTheGuardrailTookMaskRejectAuditFailOpen:

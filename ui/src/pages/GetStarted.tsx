@@ -22,7 +22,7 @@ const surfaceConfig: Record<
 		description: string;
 		enabled: (config: GatewayConfig | undefined) => boolean;
 		destination: string;
-		destinationLabel: string;
+		destinationName: string;
 	}
 > = {
 	llm: {
@@ -34,8 +34,8 @@ const surfaceConfig: Record<
 		},
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
-		get destinationLabel() {
-			return tr('copy.continueToValue', [tr('copy.models')]);
+		get destinationName() {
+			return tr('copy.models');
 		}
 	},
 	mcp: {
@@ -47,8 +47,8 @@ const surfaceConfig: Record<
 		},
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
-		get destinationLabel() {
-			return tr('copy.continueToValue', [tr('copy.servers')]);
+		get destinationName() {
+			return tr('copy.servers');
 		}
 	},
 	traffic: {
@@ -61,8 +61,8 @@ const surfaceConfig: Record<
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
-		get destinationLabel() {
-			return tr('copy.continueToValue', [tr('copy.gateways')]);
+		get destinationName() {
+			return tr('copy.gateways');
 		}
 	}
 };
@@ -133,7 +133,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	if (!loading && !configError && enabled) {
 		return (
 			<div className="page-stack">
-				<StatusBanner state="loading" title={tr('copy.openingValue', [surface.destinationLabel])} />
+				<StatusBanner state="loading" title={tr('copy.openingValue', [surface.destinationName])} />
 			</div>
 		);
 	}
@@ -185,7 +185,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 				<div className="button-row">
 					{enabled ? (
 						<Link className="button primary" to={surface.destination}>
-							{surface.destinationLabel}
+							{tr('copy.continueToValue', [surface.destinationName])}
 						</Link>
 					) : (
 						<button
