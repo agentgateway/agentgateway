@@ -2642,14 +2642,14 @@ fn system_message_between_tool_use_and_tool_result_falls_back_to_system() {
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 
-	// Bedrock's Converse API rejects a message that mixes plain content
-	// (text) with a `toolResult` block in the same turn. The system message
-	// here sits between an Assistant(tool_use) and a User(tool_result): it
-	// can't merge backward (previous message is Assistant) and can't merge
-	// forward (the next message is entirely ToolResult content), so it must
-	// fall back to the top-level `system` field for this occurrence -
-	// safe, though it reintroduces the cache-prefix shift for just this
-	// message rather than corrupting the tool_result turn.
+	// Bedrock requires a `toolResult` to be the block immediately following
+	// its `toolUse`. The system message here sits between an
+	// Assistant(tool_use) and a User(tool_result): it can't merge backward
+	// (previous message is Assistant) and can't merge forward (that would
+	// put text ahead of the ToolResult block Bedrock requires to lead),
+	// so it must fall back to the top-level `system` field for this
+	// occurrence - safe, though it reintroduces the cache-prefix shift for
+	// just this message rather than corrupting the tool_result turn.
 	assert_eq!(out.messages.len(), 3);
 	assert_eq!(out.messages[0].role, types::bedrock::Role::User);
 	assert_eq!(out.messages[1].role, types::bedrock::Role::Assistant);
@@ -2678,18 +2678,18 @@ fn system_message_between_tool_use_and_tool_result_falls_back_to_system() {
 }
 
 #[test]
-fn system_message_after_tool_result_falls_back_to_system() {
+fn system_message_after_tool_result_appends_in_place() {
 	use types::messages::typed as messages;
 
 	let provider = mid_system_test_provider();
 
 	// [user, assistant(tool_use), user(tool_result), system]. This is the
 	// most common real-world shape (Claude Code appends its reminder right
-	// after a tool result, as the last message in the request). The system
-	// message can't merge backward into the tool_result-only message
-	// without mixing content types, and there's no following message to
-	// merge forward into, so it must fall back to the top-level `system`
-	// field.
+	// after a tool result, as the last message in the request). Bedrock
+	// requires a `toolResult` to be the block immediately after its
+	// `toolUse`, but trailing text after it is fine, so this merges
+	// backward into the tool_result message instead of falling back to
+	// the top-level `system` field.
 	let req = mid_system_base_request(
 		vec![
 			messages::Message {
@@ -2736,22 +2736,21 @@ fn system_message_after_tool_result_falls_back_to_system() {
 	let tool_result_content = &out.messages[2].content;
 	assert_eq!(
 		tool_result_content.len(),
-		1,
-		"the tool_result turn must contain only the ToolResult block, never mixed with text"
+		2,
+		"the reminder text must be appended after the ToolResult block, in the same turn"
 	);
 	assert!(matches!(
 		&tool_result_content[0],
 		types::bedrock::ContentBlock::ToolResult(_)
 	));
+	assert!(matches!(
+		&tool_result_content[1],
+		types::bedrock::ContentBlock::Text(text) if text.contains("reminder")
+	));
 
-	let system = out
-		.system
-		.expect("system present (fallback for the unsafe mid-conversation message)");
 	assert!(
-		system.iter().any(
-			|b| matches!(b, types::bedrock::SystemContentBlock::Text { text } if text.contains("reminder"))
-		),
-		"the reminder text must have been hoisted into the top-level system field"
+		out.system.is_none(),
+		"no fallback needed: trailing text after a resolved toolResult is safe"
 	);
 }
 

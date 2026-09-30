@@ -1681,8 +1681,8 @@ pub mod from_messages {
 		// conversation must be woven into the message list in position instead,
 		// or it silently shifts the cached prefix on every later turn. It is
 		// held here until we know it can be attached to a neighboring message
-		// without mixing plain content with `toolResult` blocks in the same
-		// turn (Bedrock's Converse API rejects that combination).
+		// without landing ahead of a `toolResult` that Bedrock requires to
+		// come immediately after its `toolUse` (see `contains_tool_result`).
 		let mut leading_system = true;
 		let mut held_system_content: Vec<bedrock::ContentBlock> = Vec::new();
 		for msg in req.messages {
@@ -1941,8 +1941,12 @@ pub mod from_messages {
 			}
 
 			if !held_system_content.is_empty() {
-				let can_append_previous = matches!(messages.last(), Some(last) if last.role == bedrock::Role::User)
-					&& !helpers::contains_tool_result(&messages.last().unwrap().content);
+				// Appending after an existing message is always safe, even if that
+				// message ends in a `toolResult`: Bedrock only requires the
+				// `toolResult` to come immediately after its `toolUse`, not that it
+				// be the last thing in the turn, so trailing text after it is fine.
+				let can_append_previous =
+					matches!(messages.last(), Some(last) if last.role == bedrock::Role::User);
 				if can_append_previous {
 					messages
 						.last_mut()
@@ -1954,11 +1958,13 @@ pub mod from_messages {
 					merged.append(&mut content);
 					content = merged;
 				} else {
-					// Neither neighbor can safely take this without mixing plain
-					// content with a `toolResult` block in the same turn (Bedrock
-					// rejects that). Fall back to the top-level `system` field for
-					// just this occurrence — safe, though it reintroduces the cache
-					// shift for this specific message.
+					// Neither neighbor can safely take this: the previous message
+					// isn't a `user` turn to append after, and prepending text before
+					// this message's `toolResult` would put it ahead of the block
+					// Bedrock requires to come immediately after its `toolUse`. Fall
+					// back to the top-level `system` field for just this occurrence —
+					// safe, though it reintroduces the cache shift for this specific
+					// message.
 					let target = system_content.get_or_insert_with(Vec::new);
 					for block in held_system_content.drain(..) {
 						match block {
@@ -1979,8 +1985,8 @@ pub mod from_messages {
 		}
 
 		if !held_system_content.is_empty() {
-			let can_append_previous = matches!(messages.last(), Some(last) if last.role == bedrock::Role::User)
-				&& !helpers::contains_tool_result(&messages.last().unwrap().content);
+			let can_append_previous =
+				matches!(messages.last(), Some(last) if last.role == bedrock::Role::User);
 			if can_append_previous {
 				messages
 					.last_mut()
@@ -3902,9 +3908,9 @@ mod helpers {
 		}
 	}
 
-	/// Bedrock's Converse API rejects a message that mixes a `toolResult`
-	/// block with plain content (text/image/etc.) in the same turn. Anything
-	/// we weave into an existing message must check this first.
+	/// Bedrock requires a `toolResult` to be the block immediately following
+	/// its `toolUse`. Content can be appended *after* an existing
+	/// `toolResult` safely, but must never be prepended before one.
 	pub fn contains_tool_result(content: &[bedrock::ContentBlock]) -> bool {
 		content
 			.iter()
