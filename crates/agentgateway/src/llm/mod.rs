@@ -1675,7 +1675,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Completions))?;
 		self.apply_model_alias(policies, &mut req);
 
 		// If a user doesn't request usage, we will not get token information which we need
@@ -1723,7 +1724,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Messages))?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1764,7 +1766,8 @@ impl AIProvider {
 		}
 		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Gemini))?;
 		req.streaming = streaming;
 		self.apply_model_alias(policies, &mut req);
 
@@ -1794,7 +1797,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::embeddings::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Embeddings))?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1822,7 +1826,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::rerank::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Rerank))?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
@@ -1851,7 +1856,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (mut parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::Responses))?;
 		self.apply_model_alias(policies, &mut req);
 
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
@@ -1886,7 +1892,8 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError> {
 		let (parts, managed_body, mut req) = self
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::CountTokens))?;
 		self.apply_model_alias(policies, &mut req);
 
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
@@ -1945,7 +1952,8 @@ impl AIProvider {
 		// `endpoints/{id}:countTokens` path, say).
 		let (parts, managed_body, mut req) = self
 			.read_gemini_body_and_default_model::<types::gemini::CountTokensRequest>(policies, req, log)
-			.await?;
+			.await
+			.map_err(|err| err.with_request_format(InputFormat::GeminiCountTokens))?;
 		self.apply_model_alias(policies, &mut req);
 
 		self
