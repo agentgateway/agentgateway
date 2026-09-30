@@ -65,6 +65,8 @@ pub struct McpGuardrails {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// Flattened alternatives must reject fields belonging to a different action.
+#[cfg_attr(feature = "schema", schemars(extend("unevaluatedProperties" = false)))]
 pub struct Processor {
 	/// Allowlist: only methods listed here run through this processor, at the
 	/// configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),
@@ -85,53 +87,23 @@ pub enum ProcessorKind {
 }
 
 /// In-process CEL guardrail.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(try_from = "RawCel", rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[apply(schema!)]
 pub struct Cel {
+	/// Condition gating the action; absent means always.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub when: Option<Arc<cel::Expression>>,
 	#[serde(flatten)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub action: CelAction,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
 pub enum CelAction {
+	/// Reject with this message. Exactly one of `reject` or `transform` is required.
 	// TODO: make this a CEL expression.
 	Reject(String),
-	Transform(Arc<cel::Expression>),
-}
-
-#[apply(schema_de!)]
-struct RawCel {
-	/// Condition gating the action; absent means always.
-	#[serde(default)]
-	when: Option<Arc<cel::Expression>>,
-	/// Reject with this message. Exactly one of `reject` or `transform` is required.
-	#[serde(default)]
-	reject: Option<String>,
 	/// Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).
 	/// Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.
-	#[serde(default)]
-	transform: Option<Arc<cel::Expression>>,
-}
-
-impl TryFrom<RawCel> for Cel {
-	type Error = &'static str;
-
-	fn try_from(raw: RawCel) -> Result<Self, Self::Error> {
-		let action = match (raw.reject, raw.transform) {
-			(Some(message), None) => CelAction::Reject(message),
-			(None, Some(transform)) => CelAction::Transform(transform),
-			_ => return Err("cel processor must set exactly one of 'reject' or 'transform'"),
-		};
-		Ok(Cel {
-			when: raw.when,
-			action,
-		})
-	}
+	Transform(Arc<cel::Expression>),
 }
 
 impl McpGuardrails {
@@ -517,12 +489,22 @@ processors:
 
 	#[test]
 	fn cel_requires_one_action() {
-		for action in ["", "reject: denied\n    transform: mcp.params"] {
+		for (action, valid) in [
+			("", false),
+			("reject: denied", true),
+			("transform: mcp.params", true),
+			("reject: denied\n    transform: mcp.params", false),
+			("transform: mcp.params\n    reject: denied", false),
+			("reject: null", false),
+			("transform: null", false),
+			("reject: denied\n    transform: null", false),
+			("reject: null\n    transform: mcp.params", false),
+		] {
 			let cfg = format!(
-				"processors:\n  - kind: cel\n    methods: {{ \"tools/call\": request }}\n    {action}\n"
+				"processors:\n  - kind: cel\n    methods: {{ 'tools/call': request }}\n    {action}\n"
 			);
-			let err = serde_norway::from_str::<McpGuardrails>(&cfg).unwrap_err();
-			assert!(err.to_string().contains("exactly one"), "{err}");
+			let parsed = serde_norway::from_str::<McpGuardrails>(&cfg);
+			assert_eq!(parsed.is_ok(), valid, "{cfg}: {parsed:?}");
 		}
 	}
 

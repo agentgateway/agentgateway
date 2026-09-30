@@ -2794,28 +2794,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "default": null
-            },
-            "reject": {
-              "description": "Reject with this message. Exactly one of `reject` or `transform` is required.",
-              "type": [
-                "string",
-                "null"
-              ],
-              "default": null
-            },
-            "transform": {
-              "description": "Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).\nUse `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.",
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/Expression"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null
+              ]
             },
             "kind": {
               "type": "string",
@@ -2824,9 +2803,36 @@
           },
           "required": [
             "kind"
+          ],
+          "oneOf": [
+            {
+              "description": "Reject with this message. Exactly one of `reject` or `transform` is required.",
+              "type": "object",
+              "properties": {
+                "reject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reject"
+              ]
+            },
+            {
+              "description": "Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).\nUse `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.",
+              "type": "object",
+              "properties": {
+                "transform": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "required": [
+                "transform"
+              ]
+            }
           ]
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "Phase": {
       "type": "string",
