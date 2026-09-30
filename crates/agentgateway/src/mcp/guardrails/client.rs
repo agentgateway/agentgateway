@@ -13,13 +13,12 @@ use crate::cel;
 use crate::http::envoy_proto_common::json_to_prost_value;
 use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
-use crate::mcp::guardrails::MCPBody;
 use crate::mcp::guardrails::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::guardrails::wire::{
 	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
 };
 use crate::mcp::guardrails::{
-	FailureMode, HeaderFilter, McpGuardrailsDynamicMetadata, Outcome, Remote,
+	FailureMode, HeaderFilter, MCPBody, McpGuardrailsDynamicMetadata, Outcome, Remote,
 };
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;

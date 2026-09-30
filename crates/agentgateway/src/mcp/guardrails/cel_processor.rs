@@ -3,9 +3,8 @@ use serde_json::Value as Json;
 use tracing::debug;
 
 use crate::cel;
-use crate::mcp::guardrails::MCPBody;
 use crate::mcp::guardrails::client::PERMISSION_DENIED;
-use crate::mcp::guardrails::{Cel, CelAction, Outcome};
+use crate::mcp::guardrails::{Cel, CelAction, MCPBody, Outcome};
 use crate::mcp::upstream::IncomingRequestContext;
 
 enum Eval {
