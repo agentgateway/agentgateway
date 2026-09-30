@@ -2199,6 +2199,7 @@ pub struct ExecutorSerde {
 	/// `task`) plus `methodName`. Post-request CEL may also include fields like
 	/// `sessionId`, tool payloads, and list results.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<MCPView<'static>>"))]
 	pub mcp: Option<MCPInfo>,
 
 	/// `backend` contains information about the backend being used.

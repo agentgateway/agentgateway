@@ -550,10 +550,19 @@ pub struct MCPInfo {
 
 /// `mcp` in CEL; params and result are borrowed while guardrails evaluate.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 pub struct MCPView<'a> {
+	#[cfg_attr(feature = "schema", schemars(flatten))]
 	pub info: &'a MCPInfo,
 	// TODO: Expose the selected targets as a list of MCPTarget in mcp.targets for CEL guardrails.
+	/// Current request parameters, with the same structure as the `params` object in an MCP request.
+	/// Available only during request-phase CEL guardrails.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
 	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+	/// Current response result, with the same structure as the `result` object in an MCP response.
+	/// Available only during response-phase CEL guardrails.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
 	pub result: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
 }
 
