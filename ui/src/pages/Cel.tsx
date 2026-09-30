@@ -181,9 +181,7 @@ export function CelPage() {
 		<div className="page-stack">
 			<PageHeader
 				title={tr('copy.celPlayground')}
-				description={tr(
-					'copy.evaluatePolicyExpressionsAgainstSampleOrCustomRequestContextUsingTheGatewayCelEndpoint'
-				)}
+				description={tr('copy.celPlaygroundDescription')}
 				actions={
 					<>
 						<a

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import type { GatewayConfig } from '../../src/types';
 import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
@@ -186,7 +187,7 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /LLM/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: /MCP/ })).toBeVisible();
-	await page.getByRole('button', { name: /APIs/ }).click();
+	await page.getByRole('button', { name: /^Enable Traffic/ }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].gateways).toMatchObject({
@@ -208,7 +209,6 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByText('3 of 3 enabled')).toBeVisible();
 	await page.getByRole('button', { name: 'Continue' }).click();
 	await expect(page.getByRole('heading', { name: 'Gateway Overview' })).toBeVisible();
 });
@@ -357,7 +357,7 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	await page.goto('/');
 
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeDisabled();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeDisabled();
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -373,7 +373,7 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	});
 	expect(gateway.postedConfigs[1].mcp).not.toHaveProperty('port');
 
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeVisible();
 	await expect(page.locator('.nav-list').getByRole('link', { name: 'Gateways' })).toBeVisible();
 });
 
@@ -574,7 +574,7 @@ test('XDS mode lists models from the config dump as read-only', async ({ page })
 	await expect(row('default/llama.llm')).toContainText('default/llama/backend.llm');
 	await expect(row('default/smart.llm')).toContainText('Virtual');
 	await expect(row('default/smart.llm')).toContainText('2 weighted targets');
-	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) invalid');
+	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) Invalid');
 	await expect(row('default/tiered.llm')).toContainText('1 rule, fallback');
 	await expect(row('default/tiered.llm')).toContainText('gpt-4o, llama');
 	await expect(row('default/resilient.llm')).toContainText('Failover');
@@ -1209,6 +1209,44 @@ test('reveals a virtual API key explicitly', async ({ page }) => {
 	await expect(page.getByText('agw_sk_testkey123456789')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Show full key' }).click();
 	await expect(page.getByText('agw_sk_testkey123456789')).toBeVisible();
+});
+
+test('creates a hashed virtual API key with a localized one-time reveal', async ({ page }) => {
+	const gateway = await mockGateway(page);
+	await page.goto('/llm/keys?lang=zh-CN');
+	await page.getByRole('button', { name: '新建密钥', exact: true }).click();
+	await page.getByRole('textbox', { name: '名称', exact: true }).fill('hashed-i18n-test');
+	await expect(page.getByRole('checkbox', { name: /存储原始密钥/ })).not.toBeChecked();
+	await page.getByRole('button', { name: '保存密钥', exact: true }).click();
+
+	const dialog = page.getByRole('alertdialog', { name: '复制新建的 API 密钥' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toContainText('此密钥之后不会再次显示，请立即复制。');
+	const rawKey = await dialog.locator('.virtual-key-value code').textContent();
+	expect(rawKey).toMatch(/^agw_sk_/);
+	const savedConfig = gateway.postedConfigs.at(-1) as GatewayConfig | undefined;
+	const keys = savedConfig?.llm?.policies?.apiKey?.keys ?? [];
+	const savedKey = keys.find(key => key.metadata?.name === 'hashed-i18n-test');
+	expect(savedKey).toBeDefined();
+	expect(savedKey).not.toHaveProperty('key');
+	if (!savedKey || !('keyHash' in savedKey)) throw new Error('Expected a hashed key');
+	expect(savedKey.keyHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+	const expectedHash = await page.evaluate(async key => {
+		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+		return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+	}, rawKey ?? '');
+	expect(savedKey.keyHash).toBe(`sha256:${expectedHash}`);
+
+	await dialog.getByRole('button', { name: '完成', exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	const row = page.getByRole('row').filter({ hasText: 'hashed-i18n-test' });
+	await expect(row).toContainText('已哈希');
+	await expect(row).not.toContainText(rawKey ?? '');
+	await page.reload();
+	await expect(page.getByRole('alertdialog', { name: '复制新建的 API 密钥' })).toHaveCount(0);
+	await expect(page.getByRole('row').filter({ hasText: 'hashed-i18n-test' })).toContainText(
+		'已哈希'
+	);
 });
 
 test('warns that API key budgets require the primary database', async ({ page }) => {

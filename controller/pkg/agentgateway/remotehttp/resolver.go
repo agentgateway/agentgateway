@@ -42,6 +42,7 @@ type Inputs struct {
 }
 
 type ResolveInput struct {
+	ParentKind       string
 	ParentName       string
 	DefaultNamespace string
 	BackendRef       *gwv1.BackendObjectReference
@@ -148,7 +149,8 @@ func (r *defaultResolver) Resolve(krtctx krt.HandlerContext, input ResolveInput)
 		return nil, fmt.Errorf("backendRef or url is required")
 	}
 	path := strings.TrimPrefix(input.Path, "/")
-	resolved, err := r.resolveConnection(krtctx, input.ParentName, input.DefaultNamespace, *input.BackendRef, input.DefaultPort)
+	parent := fmt.Sprintf("%s %s/%s", input.ParentKind, input.DefaultNamespace, input.ParentName)
+	resolved, err := r.resolveConnection(krtctx, parent, input.DefaultNamespace, *input.BackendRef, input.DefaultPort)
 	if err != nil {
 		return nil, err
 	}

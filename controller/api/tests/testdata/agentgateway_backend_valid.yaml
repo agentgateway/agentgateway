@@ -211,3 +211,51 @@ spec:
           path: /api/chat
       host: llm.example.com
       port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-backend-runtimepreferred-guardrail
+spec:
+  ai:
+    provider:
+      bedrock:
+        endpointPreference: RuntimePreferred
+        guardrail:
+          identifier: test-guardrail
+          version: "1"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-backend-mantlepreferred
+spec:
+  ai:
+    provider:
+      bedrock:
+        endpointPreference: MantlePreferred
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-backend-mantleonly
+spec:
+  ai:
+    provider:
+      bedrock:
+        endpointPreference: MantleOnly
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-group-runtimeonly-guardrail
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: bedrock
+        bedrock:
+          endpointPreference: RuntimeOnly
+          guardrail:
+            identifier: test-guardrail
+            version: "1"

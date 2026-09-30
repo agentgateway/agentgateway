@@ -36,7 +36,7 @@ pub async fn fetch_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> 
 	let client = reqwest::Client::builder()
 		.redirect(reqwest::redirect::Policy::limited(10))
 		.build()?;
-	let catalog: model::Catalog = client
+	let mut catalog: model::Catalog = client
 		.get(CATALOG_URL)
 		.send()
 		.await
@@ -46,7 +46,7 @@ pub async fn fetch_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> 
 		.json()
 		.await
 		.context("decode model catalog from GitHub")?;
-	catalog.validate()?;
+	catalog.validate_newer()?;
 	let providers = catalog.providers.len();
 	let models = catalog
 		.providers

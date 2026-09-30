@@ -1,0 +1,49 @@
+---
+source: crates/agentgateway/tests/tests/llm.rs
+expression: results
+---
+{
+  "default/unrestricted": [
+    "public/discovery-a",
+    "public/discovery-b",
+    "discovery-a",
+    "discovery-b",
+    "unknown/*",
+    "unsafe/*",
+    "alias"
+  ],
+  "default/restricted": [
+    "public/discovery-a",
+    "discovery-a",
+    "discovery-b",
+    "alias"
+  ],
+  "catalog/unrestricted": [
+    "public/discovery-a",
+    "public/discovery-b",
+    "discovery-a",
+    "discovery-b",
+    "unknown/*",
+    "unsafe/*",
+    "alias"
+  ],
+  "catalog/restricted": [
+    "public/discovery-a",
+    "discovery-a",
+    "discovery-b",
+    "alias"
+  ],
+  "disabled/unrestricted": [
+    "public/discovery-a",
+    "public/discovery-*",
+    "discovery-*",
+    "unknown/*",
+    "unsafe/*",
+    "alias"
+  ],
+  "disabled/restricted": [
+    "public/discovery-a",
+    "discovery-*",
+    "alias"
+  ]
+}

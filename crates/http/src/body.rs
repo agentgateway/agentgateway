@@ -72,6 +72,9 @@ struct BodyInner {
 	needs_inspection: bool,
 	representation: Representation,
 	extensions: ::http::Extensions,
+	// Absolute deadline for buffering reads. Unlike extensions, it belongs to the
+	// exchange rather than the content, so it survives content replacement.
+	deadline: Option<tokio::time::Instant>,
 	recorded: Option<RecordedBodyHandle>,
 	observers: BodyObservers,
 }
@@ -82,6 +85,7 @@ pub struct ReplayBodyState {
 	needs_inspection: bool,
 	inspection: Option<BodyInspection>,
 	extensions: ::http::Extensions,
+	deadline: Option<tokio::time::Instant>,
 	record_limit: Option<usize>,
 	observers: std::sync::Arc<parking_lot::Mutex<BodyObservers>>,
 }
@@ -122,6 +126,7 @@ impl ReplayBodyState {
 		let mut body = Body(Box::new(BodyInner {
 			needs_inspection: self.needs_inspection,
 			extensions: self.extensions.clone(),
+			deadline: self.deadline,
 			representation,
 			recorded: None,
 			observers: BodyObservers::default(),
@@ -201,6 +206,7 @@ impl Body {
 			needs_inspection: self.0.needs_inspection,
 			inspection: self.inspection(),
 			extensions: self.0.extensions.clone(),
+			deadline: self.0.deadline,
 			record_limit: self.0.recorded.as_ref().map(RecordedBodyHandle::limit),
 			observers: std::sync::Arc::new(parking_lot::Mutex::new(std::mem::take(
 				&mut self.0.observers,
@@ -218,6 +224,7 @@ impl Body {
 		Body(Box::new(BodyInner {
 			needs_inspection: false,
 			extensions: ::http::Extensions::new(),
+			deadline: None,
 			representation: Representation::Streaming {
 				body: RawBody::new(body),
 				inspected_prefix: None,
@@ -299,6 +306,7 @@ impl Body {
 	}
 
 	/// Consume the remaining body into contiguous bytes, enforcing `limit`.
+	/// Enforces the remaining [`Self::deadline`] budget when set.
 	/// Fresh buffered bodies can return their bytes without being boxed, polled,
 	/// and collected again.
 	pub async fn into_bytes(self, limit: usize) -> Result<Bytes, axum_core::Error> {
@@ -312,7 +320,14 @@ impl Body {
 		{
 			return Ok(bytes.clone());
 		}
-		axum::body::to_bytes(self.into_boxed(), limit).await
+		let deadline = self.0.deadline;
+		let read = axum::body::to_bytes(self.into_boxed(), limit);
+		match deadline {
+			Some(deadline) => tokio::time::timeout_at(deadline, read)
+				.await
+				.map_err(axum_core::Error::new)?,
+			None => read.await,
+		}
 	}
 
 	/// Wrap delivery while retaining state derived from the original content.
@@ -374,6 +389,7 @@ impl Body {
 		Body(Box::new(BodyInner {
 			needs_inspection: self.0.needs_inspection,
 			extensions: std::mem::take(&mut self.0.extensions),
+			deadline: self.0.deadline,
 			representation,
 			recorded: None,
 			observers: BodyObservers::default(),
@@ -511,7 +527,24 @@ impl Body {
 		self.0.needs_inspection = true;
 	}
 
+	/// Absolute deadline enforced by buffering reads (`into_bytes`, `inspect`).
+	pub fn deadline(&self) -> Option<tokio::time::Instant> {
+		self.0.deadline
+	}
+
+	pub fn set_deadline(&mut self, deadline: tokio::time::Instant) {
+		self.0.deadline = Some(deadline);
+	}
+
+	/// Inspect within the remaining [`Self::deadline`] budget, when set.
 	pub async fn inspect(&mut self, limit: usize) -> anyhow::Result<BodyInspection> {
+		match self.0.deadline {
+			Some(deadline) => tokio::time::timeout_at(deadline, self.inspect_inner(limit)).await?,
+			None => self.inspect_inner(limit).await,
+		}
+	}
+
+	async fn inspect_inner(&mut self, limit: usize) -> anyhow::Result<BodyInspection> {
 		if let Some(inspection) = self.cached_inspection(limit) {
 			return Ok(inspection);
 		}
@@ -620,6 +653,7 @@ impl From<Bytes> for Body {
 		Body(Box::new(BodyInner {
 			needs_inspection: false,
 			extensions: ::http::Extensions::new(),
+			deadline: None,
 			representation: Representation::Buffered {
 				bytes,
 				emitted: false,

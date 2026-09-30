@@ -393,7 +393,6 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						{tr('copy.stream')}
-						{stream ? <span className="stream-live-dot" aria-label={tr('copy.streaming')} /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button

@@ -149,13 +149,14 @@ pub mod from_completions {
 			mime_from_ext_token(hint).map(str::to_string)
 		}
 	}
-	pub fn translate(req: &types::completions::Request) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req)?;
+	pub fn translate(req: &types::completions::Request, is_vertex: bool) -> Result<Vec<u8>, AIError> {
+		let out = build_request(req, is_vertex)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
+		is_vertex: bool,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = req
 			.model
@@ -183,7 +184,7 @@ pub mod from_completions {
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, model);
+		let generation_config = build_generation_config(req, model, is_vertex);
 
 		let cached_content = req
 			.rest
@@ -623,7 +624,9 @@ pub mod from_completions {
 					.get("description")
 					.and_then(Value::as_str)
 					.map(str::to_string),
-				parameters: f.get("parameters").map(normalize_gemini_schema),
+				parameters: f
+					.get("parameters")
+					.map(|s| normalize_gemini_schema(s, false)),
 				rest: Default::default(),
 			})
 			.collect();
@@ -676,6 +679,7 @@ pub mod from_completions {
 	fn build_generation_config(
 		req: &types::completions::Request,
 		model: &str,
+		is_vertex: bool,
 	) -> Option<vg::GenerationConfig> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
@@ -687,7 +691,7 @@ pub mod from_completions {
 			_ => Vec::new(),
 		};
 
-		let (response_mime_type, response_schema) = response_format(req);
+		let (response_mime_type, response_schema) = response_format(req, is_vertex);
 		let thinking_config = thinking_config(req, model);
 
 		let cfg = vg::GenerationConfig {
@@ -717,7 +721,10 @@ pub mod from_completions {
 		}
 	}
 
-	fn response_format(req: &types::completions::Request) -> (Option<String>, Option<Value>) {
+	fn response_format(
+		req: &types::completions::Request,
+		is_vertex: bool,
+	) -> (Option<String>, Option<Value>) {
 		let Some(rf) = req.rest.get("response_format") else {
 			return (None, None);
 		};
@@ -725,10 +732,11 @@ pub mod from_completions {
 			Some("json_object") => (Some("application/json".into()), None),
 			Some("json_schema") => {
 				// Unwrap OpenAI's {schema, strict, name, description} and normalize the bare schema.
+				// Vertex AI accepts additionalProperties in responseSchema; the Gemini API does not.
 				let schema = rf
 					.get("json_schema")
 					.and_then(|js| js.get("schema"))
-					.map(normalize_gemini_schema);
+					.map(|s| normalize_gemini_schema(s, is_vertex));
 				(Some("application/json".into()), schema)
 			},
 			_ => (None, None),
@@ -767,15 +775,20 @@ pub mod from_completions {
 		"minProperties",
 		"maxProperties",
 		"example",
+		"additionalProperties",
 		"propertyOrdering",
 	];
 
-	/// Normalize an OpenAI/Pydantic JSON Schema into Gemini's responseSchema subset.
-	pub(super) fn normalize_gemini_schema(schema: &Value) -> Value {
+	/// Normalize an OpenAI JSON Schema into the Gemini/Vertex subset.
+	///
+	/// Set `preserve_ap` to `true` for Vertex AI `responseSchema` — Vertex accepts
+	/// `additionalProperties`. Set it to `false` for the Gemini API `responseSchema` and for
+	/// `functionDeclarations[].parameters` (both reject the key).
+	pub(super) fn normalize_gemini_schema(schema: &Value, preserve_ap: bool) -> Value {
 		let mut out = schema.clone();
 		let defs = take_defs(&mut out);
 		inline_refs(&mut out, &defs, &mut Vec::new());
-		clean_schema_node(&mut out);
+		clean_schema_node(&mut out, preserve_ap);
 		out
 	}
 
@@ -792,8 +805,9 @@ pub mod from_completions {
 		defs
 	}
 
-	/// Visit each direct child schema (`items`, `properties`, `anyOf`, `allOf`), shared by both passes
-	/// so they recurse the same keywords. (`clean_schema_node` flattens `allOf` first, so it is a no-op here.)
+	/// Visit each direct child schema (`items`, `properties`, `anyOf`, `allOf`, the schema form of
+	/// `additionalProperties`), shared by both passes so they recurse the same keywords.
+	/// (`clean_schema_node` flattens `allOf` first, so it is a no-op here.)
 	fn for_each_child_schema(
 		map: &mut serde_json::Map<String, Value>,
 		mut f: impl FnMut(&mut Value),
@@ -812,6 +826,13 @@ pub mod from_completions {
 					f(v);
 				}
 			}
+		}
+		// Boolean forms carry no subschema. An empty object means "anything goes" and must stay
+		// empty: recursing would let the typeless default rewrite it into {"type":"object"}.
+		if let Some(ap) = map.get_mut("additionalProperties")
+			&& ap.as_object().is_some_and(|o| !o.is_empty())
+		{
+			f(ap);
 		}
 	}
 
@@ -995,12 +1016,12 @@ pub mod from_completions {
 	}
 
 	/// Rewrite a single schema node and its children into Gemini's accepted shape.
-	fn clean_schema_node(node: &mut Value) {
+	fn clean_schema_node(node: &mut Value, preserve_ap: bool) {
 		let map = match node {
 			Value::Object(map) => map,
 			Value::Array(arr) => {
 				for v in arr.iter_mut() {
-					clean_schema_node(v);
+					clean_schema_node(v, preserve_ap);
 				}
 				return;
 			},
@@ -1034,9 +1055,6 @@ pub mod from_completions {
 			}
 		}
 
-		// additionalProperties is unsupported (boolean form and open-dict form alike).
-		map.remove("additionalProperties");
-
 		// Default any remaining typeless, non-union, non-enum node to an object.
 		if !map.contains_key("type") && !map.contains_key("anyOf") && !map.contains_key("enum") {
 			map.insert("type".to_string(), "object".into());
@@ -1051,8 +1069,10 @@ pub mod from_completions {
 			map.remove("format");
 		}
 
-		for_each_child_schema(map, clean_schema_node);
-		map.retain(|k, _| ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()));
+		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
+		map.retain(|k, _| {
+			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
+		});
 	}
 
 	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer

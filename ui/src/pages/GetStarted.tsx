@@ -1,18 +1,14 @@
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Bot, Network, Server } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { refreshBaseCosts } from '@/api/costsApi';
 import { gatewayOptions } from '@/components/GatewayBindingEditor';
 import { Dropdown, FieldGroup, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
 import { startupGatewayRefs } from '@/config';
-import { refreshBaseCostsAndConfigure } from '@/costs';
 import {
 	useEffectiveGatewayConfig,
 	useEnableSurface,
 	useMcpConfigData,
-	useTrafficConfigData,
-	useUpdateConfig
+	useTrafficConfigData
 } from '@/hooks';
 import { tr } from '@/i18n';
 import type { GatewayConfig } from '@/types';
@@ -23,9 +19,7 @@ const surfaceConfig: Record<
 	SurfaceKind,
 	{
 		title: string;
-		name: string;
 		description: string;
-		icon: typeof Bot;
 		enabled: (config: GatewayConfig | undefined) => boolean;
 		destination: string;
 		destinationLabel: string;
@@ -35,15 +29,9 @@ const surfaceConfig: Record<
 		get title() {
 			return tr('copy.enableLlm');
 		},
-		get name() {
-			return tr('copy.models');
-		},
 		get description() {
-			return tr(
-				'copy.createTheLlmConfigurationSectionSoModelsProvidersKeysGuardrailsLogsAndPlayground_197f4qj'
-			);
+			return tr('copy.addLlmSettingsToTheConfigurationThenSetUpModels');
 		},
-		icon: Bot,
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
 		get destinationLabel() {
@@ -54,15 +42,9 @@ const surfaceConfig: Record<
 		get title() {
 			return tr('copy.enableMcp');
 		},
-		get name() {
-			return tr('copy.servers');
-		},
 		get description() {
-			return tr(
-				'copy.createTheMcpConfigurationSectionSoServersAndMcpPlaygroundToolsCanBeConfigured'
-			);
+			return tr('copy.addMcpSettingsToTheConfigurationThenConnectServers');
 		},
-		icon: Server,
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
 		get destinationLabel() {
@@ -73,15 +55,9 @@ const surfaceConfig: Record<
 		get title() {
 			return tr('copy.enableTraffic');
 		},
-		get name() {
-			return tr('copy.gateways');
-		},
 		get description() {
-			return tr(
-				'copy.createTheTrafficConfigurationSectionSoHttpGatewaysRoutesBackendsAndPoliciesCanBeConfigured'
-			);
+			return tr('copy.addTrafficSettingsToTheConfigurationThenSetUpGatewaysAndRoutes');
 		},
-		icon: Network,
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
@@ -107,11 +83,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	const config = useEffectiveGatewayConfig();
 	const mcpData = useMcpConfigData();
 	const trafficData = useTrafficConfigData();
-	const update = useUpdateConfig();
 	const enableSurface = useEnableSurface();
 	const navigate = useNavigate();
 	const surface = surfaceConfig[props.surface];
-	const Icon = surface.icon;
 	const effectiveConfig =
 		props.surface === 'mcp'
 			? mcpData.data
@@ -146,16 +120,11 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			return;
 		}
 		try {
-			const { hybrid } = await enableSurface.mutateAsync({
+			await enableSurface.mutateAsync({
 				surface: props.surface,
 				gateway: gateway || undefined
 			});
 			void navigate({ to: surface.destination });
-			if (props.surface === 'llm') {
-				void (hybrid ? refreshBaseCosts() : refreshBaseCostsAndConfigure(update)).catch(
-					() => undefined
-				);
-			}
 		} catch {
 			// The enable mutation exposes the save error.
 		}
@@ -181,25 +150,13 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 					{configError.message}
 				</StatusBanner>
 			) : null}
-			{enableSurface.isError || update.isError ? (
+			{enableSurface.isError ? (
 				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
-					{enableSurface.error?.message ?? update.error?.message}
+					{enableSurface.error?.message}
 				</StatusBanner>
 			) : null}
 
 			<Panel className="surface-enable-panel">
-				<div className="surface-enable-heading">
-					<span className="policy-form-section-icon">
-						<Icon size={18} />
-					</span>
-					<div>
-						<h3>{enabled ? tr('copy.valueEnabled', [surface.name]) : surface.title}</h3>
-						<p>
-							{enabled ? tr('copy.topLevelConfigurationSectionAlreadyExists') : surface.description}
-						</p>
-					</div>
-				</div>
-
 				{!enabled && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
 						<summary>{tr('copy.advanced')}</summary>
@@ -234,7 +191,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 						<button
 							className="button primary"
 							type="button"
-							disabled={loading || enableSurface.isPending || update.isPending}
+							disabled={loading || enableSurface.isPending}
 							onClick={() => void enable()}
 						>
 							{tr('copy.enable')}

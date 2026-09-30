@@ -40,8 +40,10 @@ export function CustomFormats(props: {
 		props.setModel(current => {
 			const currentCustom = customProvider(current.provider);
 			const nextFormats = checked
-				? [...currentCustom.formats, { type }]
-				: currentCustom.formats.filter((format: ProviderFormatConfig) => format.type !== type);
+				? [...(currentCustom.formats ?? []), { type }]
+				: (currentCustom.formats ?? []).filter(
+						(format: ProviderFormatConfig) => format.type !== type
+					);
 			return {
 				...current,
 				provider: { custom: { ...currentCustom, formats: nextFormats } }
@@ -57,7 +59,7 @@ export function CustomFormats(props: {
 				provider: {
 					custom: {
 						...current.provider.custom,
-						formats: current.provider.custom.formats.map((format: ProviderFormatConfig) =>
+						formats: (current.provider.custom.formats ?? []).map((format: ProviderFormatConfig) =>
 							format.type === type ? { ...format, path: path || null } : format
 						)
 					}
@@ -69,7 +71,7 @@ export function CustomFormats(props: {
 	return (
 		<div className="format-grid">
 			{formats.map(type => {
-				const selected = custom.formats.find(
+				const selected = custom.formats?.find(
 					(format: ProviderFormatConfig) => format.type === type
 				);
 				return (

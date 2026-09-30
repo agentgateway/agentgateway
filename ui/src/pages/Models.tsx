@@ -114,10 +114,7 @@ export function ModelsPage() {
 	if (mode.isLoading) {
 		return (
 			<div className="page-stack">
-				<PageHeader
-					title={tr('copy.llmModels')}
-					description={tr('copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior')}
-				/>
+				<PageHeader title={tr('copy.llmModels')} description={tr('copy.llmModelsDescription')} />
 				<Panel>
 					<StatusBanner state="loading" title={tr('copy.detectingConfigurationMode')} />
 				</Panel>
@@ -309,7 +306,7 @@ function ModelsEditorPage() {
 		<div className="page-stack">
 			<PageHeader
 				title={tr('copy.llmModels')}
-				description={tr('copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior')}
+				description={tr('copy.llmModelsDescription')}
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={openNewVirtualModel}>

@@ -135,6 +135,8 @@ type PolicyCtx struct {
 	SourceGVK   schema.GroupVersionKind
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+	// Inline backend policies use the backend's JWKS owner.
+	JWKSOwner *jwks.RemoteJwksOwner
 
 	// CredentialResolver resolves credential refs: the built-in Secret resolver
 	// in OSS, or an injected resolver (which may itself be a chain). Access it

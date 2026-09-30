@@ -13,7 +13,7 @@ import {
 	Trash2,
 	X
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trans } from 'react-i18next';
 
 import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
@@ -35,7 +35,7 @@ import {
 	Tooltip
 } from '@/components/Primitives';
 import { getApiKeyPolicy, isDatabaseConfigResource, upsertVirtualKey } from '@/config';
-import { hasKeyValue, keyValue, maskKey } from '@/credentialDisplay';
+import { hasKeyValue, keyDisplay, keyHintMetadata, keyValue } from '@/credentialDisplay';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import {
 	useBudgetStatus,
@@ -60,6 +60,7 @@ const fileOwnedPolicyMessage = () =>
 	tr('copy.thisApiKeyPolicyIsFileOwnedAndCannotBeModifiedInHybridMode');
 const managedMetadataPrefix = 'agentgateway.dev/';
 const apiKeyIdMetadata = 'agentgateway.dev/id';
+const keyHashSupported = Boolean(globalThis.crypto?.subtle);
 
 export function KeysPage() {
 	const {
@@ -89,6 +90,7 @@ export function KeysPage() {
 		key: VirtualApiKey;
 	} | null>(null);
 	const [deleteKey, setDeleteKey] = useState<VirtualApiKey | null>(null);
+	const [createdKey, setCreatedKey] = useState<string | null>(null);
 	const [disablePolicyOpen, setDisablePolicyOpen] = useState(false);
 	const [keyDrawer, setKeyDrawer] = useStickyQueryParam('key');
 	const linkedKey = linkedVirtualKey(keyDrawer, keys);
@@ -113,7 +115,7 @@ export function KeysPage() {
 		return hybrid && id && isDatabaseConfigResource(resources, 'llm.apiKey', id) ? id : undefined;
 	}
 
-	function saveKey(key: VirtualApiKey, previousKey?: string) {
+	function saveKey(key: VirtualApiKey, previousKey?: string, createdRawKey?: string) {
 		const previous = previousKey ? keys.find(item => keyValue(item) === previousKey) : undefined;
 		const previousIndex = previous ? keys.indexOf(previous) : -1;
 		const previousId = previous ? keyId(previous) || `@index:${previousIndex}` : undefined;
@@ -121,7 +123,15 @@ export function KeysPage() {
 		if (value.metadata && typeof value.metadata === 'object') {
 			value.metadata = withoutServerMetadata(metadataObject(value.metadata));
 		}
-		upsertResource.mutate({ kind: 'llm.apiKey', value, previousId }, { onSuccess: closeKeyDrawer });
+		upsertResource.mutate(
+			{ kind: 'llm.apiKey', value, previousId },
+			{
+				onSuccess: () => {
+					closeKeyDrawer();
+					if (createdRawKey) setCreatedKey(createdRawKey);
+				}
+			}
+		);
 	}
 
 	function removeKey(key: VirtualApiKey) {
@@ -164,7 +174,7 @@ export function KeysPage() {
 		<div className="page-stack">
 			<PageHeader
 				title={tr('copy.virtualApiKeys')}
-				description={tr('copy.provisionIncomingCredentialsAndMetadataForCallers')}
+				description={tr('copy.issueApiKeysThatCallersUseToAuthenticateToTheGateway')}
 				actions={
 					<div className="button-row">
 						{policy ? (
@@ -292,7 +302,7 @@ export function KeysPage() {
 											{keyName(item) || <span className="muted">{tr('copy.unnamedKey')}</span>}
 										</td>
 										<td className="key-cell">
-											<VirtualKeyValue value={keyValue(item)} />
+											<VirtualKeyValue apiKey={item} />
 										</td>
 										<td>
 											<AllowedModelsSummary value={item.allowedModels} />
@@ -377,6 +387,18 @@ export function KeysPage() {
 					}}
 				>
 					<p>{tr('copy.deleteNamedResourceQuestion', [virtualKeyDeleteLabel(deleteKey)])}</p>
+				</ConfirmDialog>
+			) : null}
+			{createdKey ? (
+				<ConfirmDialog
+					title={tr('copy.copyYourNewApiKey')}
+					confirmLabel={tr('copy.done')}
+					cancelLabel={null}
+					onCancel={() => {}}
+					onConfirm={() => setCreatedKey(null)}
+				>
+					<p>{tr('copy.thisKeyWillNotBeShownAgainCopyItNow')}</p>
+					<VirtualKeyValue apiKey={{ key: createdKey }} revealed />
 				</ConfirmDialog>
 			) : null}
 			{disablePolicyOpen ? (
@@ -584,7 +606,7 @@ function KeyEditor(props: {
 	saving: boolean;
 	saveError?: string | null;
 	onCancel: () => void;
-	onSave: (key: VirtualApiKey, previousKey?: string) => void;
+	onSave: (key: VirtualApiKey, previousKey?: string, createdRawKey?: string) => void;
 }) {
 	const isNew = !props.previousKey;
 	const initialMetadata = metadataObject(props.initial.metadata);
@@ -592,6 +614,9 @@ function KeyEditor(props: {
 	const [keyMode, setKeyMode] = useState<'auto' | 'custom'>(isNew ? 'auto' : 'custom');
 	const [key, setKey] = useState(isNew || !hasKeyValue(props.initial) ? '' : props.initial.key);
 	const [replaceKey, setReplaceKey] = useState(false);
+	const [storeRaw, setStoreRaw] = useState(!keyHashSupported);
+	const [generatedKey] = useState(() => `agw_sk_${randomKey(32)}`);
+	const [hashed, setHashed] = useState<{ key: string; hash: string } | null>(null);
 	const [metadataValues, setMetadataValues] = useState(() =>
 		stringMetadata(withoutManagedMetadata(initialMetadata))
 	);
@@ -608,12 +633,25 @@ function KeyEditor(props: {
 		structuredClone(props.initial.budgets ?? [])
 	);
 	const [submitted, setSubmitted] = useState(false);
-	const generatedKey = useRef<string | null>(null);
+	const replacing = isNew || replaceKey;
+	const rawKey = isNew && keyMode === 'auto' ? generatedKey : key;
+	const hashPending = replacing && !storeRaw && hashed?.key !== rawKey;
+	useEffect(() => {
+		if (storeRaw || !rawKey) return;
+		let current = true;
+		void sha256KeyHash(rawKey).then(hash => {
+			if (current) setHashed({ key: rawKey, hash });
+		});
+		return () => {
+			current = false;
+		};
+	}, [storeRaw, rawKey]);
 	const draft = JSON.stringify({
 		name,
 		keyMode,
 		key,
 		replaceKey,
+		storeRaw,
 		metadataValues,
 		modelAccess,
 		allowedModels,
@@ -658,17 +696,24 @@ function KeyEditor(props: {
 	].filter((value): value is string => typeof value === 'string');
 
 	function virtualKey() {
-		const metadata = {
+		const metadata: Record<string, unknown> = {
 			...metadataValues,
 			...(name.trim() ? { name: name.trim() } : {})
 		};
-		let nextKey = isNew || replaceKey ? key : '';
-		if (isNew && keyMode === 'auto') {
-			generatedKey.current ??= `agw_sk_${randomKey(32)}`;
-			nextKey = generatedKey.current;
+		let value: VirtualApiKey;
+		if (!replacing) {
+			if (initialMetadata[keyHintMetadata] !== undefined) {
+				metadata[keyHintMetadata] = initialMetadata[keyHintMetadata];
+			}
+			value = { ...props.initial, metadata };
+		} else if (storeRaw) {
+			value = { key: rawKey, metadata };
+		} else {
+			if (rawKey.length >= 20) {
+				metadata[keyHintMetadata] = `${rawKey.slice(0, 7)}...${rawKey.slice(-4)}`;
+			}
+			value = { keyHash: hashed?.hash ?? '', metadata };
 		}
-		const value: VirtualApiKey =
-			isNew || replaceKey ? { key: nextKey, metadata } : { ...props.initial, metadata };
 		if (modelAccess === 'unrestricted') delete value.allowedModels;
 		else value.allowedModels = modelAccess === 'deny' ? [] : allowedModels;
 		if (budgets.length) value.budgets = budgets;
@@ -684,7 +729,7 @@ function KeyEditor(props: {
 	function save() {
 		const virtualKey = nextVirtualKey();
 		if (!virtualKey) return;
-		props.onSave(virtualKey, props.previousKey);
+		props.onSave(virtualKey, props.previousKey, isNew && !storeRaw ? rawKey : undefined);
 	}
 
 	return (
@@ -711,7 +756,10 @@ function KeyEditor(props: {
 					}
 					saveLabel={tr('copy.saveKey')}
 					saving={props.saving}
-					saveDisabled={keyMode === 'custom' && !key.trim()}
+					saveDisabled={
+						(((isNew && keyMode === 'custom') || (!isNew && replaceKey)) && !key.trim()) ||
+						hashPending
+					}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={() => Boolean(nextVirtualKey())}
@@ -764,7 +812,7 @@ function KeyEditor(props: {
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
 				>
 					<div className="key-editor-value-row">
-						<VirtualKeyValue value={keyValue(props.initial)} />
+						<VirtualKeyValue apiKey={props.initial} />
 						<button
 							className="button"
 							type="button"
@@ -796,6 +844,24 @@ function KeyEditor(props: {
 						placeholder="agw_sk_..."
 					/>
 				</Field>
+			) : null}
+			{replacing ? (
+				<label className="config-option-row">
+					<input
+						type="checkbox"
+						checked={storeRaw}
+						disabled={!keyHashSupported}
+						onChange={event => setStoreRaw(event.target.checked)}
+					/>
+					<span>
+						<strong>{tr('copy.storeRawKey')}</strong>
+						<small>
+							{keyHashSupported
+								? tr('copy.ifUncheckedTheKeyWillNotBeShownAgainAfterSaving')
+								: tr('copy.theRawKeyMustBeStoredUnlessThisPageIsServedOverHttpsOrLocalhost')}
+						</small>
+					</span>
+				</label>
 			) : null}
 			<CollapsiblePolicySection
 				icon={<CircleDollarSign size={17} />}
@@ -1182,6 +1248,11 @@ function newVirtualKey(): VirtualApiKey {
 	};
 }
 
+async function sha256KeyHash(value: string) {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+	return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function randomKey(length: number) {
 	const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 	const bytes = new Uint8Array(length);
@@ -1196,7 +1267,7 @@ function keyName(key: VirtualApiKey) {
 
 function virtualKeyDeleteLabel(key: VirtualApiKey) {
 	const name = keyName(key).trim();
-	return name || maskKey(keyValue(key));
+	return name || keyDisplay(key);
 }
 
 function duplicateKeyName(name: string, keys: VirtualApiKey[]) {
@@ -1271,12 +1342,23 @@ async function copyVirtualKey(key: string): Promise<boolean> {
 	}
 }
 
-function VirtualKeyValue(props: { value: string }) {
-	const [shown, setShown] = useState(false);
+function VirtualKeyValue(props: { apiKey: VirtualApiKey; revealed?: boolean }) {
+	const [shown, setShown] = useState(props.revealed ?? false);
 	const [copied, setCopied] = useState(false);
+	if (!hasKeyValue(props.apiKey)) {
+		return (
+			<div className="virtual-key-value">
+				<code>{keyDisplay(props.apiKey)}</code>
+				<Tooltip content={tr('copy.thisKeyCannotBeShownAgain')}>
+					<span className="badge">{tr('copy.hashed')}</span>
+				</Tooltip>
+			</div>
+		);
+	}
+	const value = props.apiKey.key;
 	return (
 		<div className="virtual-key-value">
-			<code>{shown ? props.value : maskKey(props.value)}</code>
+			<code>{shown ? value : keyDisplay(props.apiKey)}</code>
 			<div className="virtual-key-value-actions">
 				<Tooltip content={tr(shown ? 'copy.hideFullKey' : 'copy.showFullKey')}>
 					<button
@@ -1295,7 +1377,7 @@ function VirtualKeyValue(props: { value: string }) {
 						type="button"
 						aria-label={tr('copy.copyKey')}
 						onClick={() => {
-							void copyVirtualKey(props.value).then(success => {
+							void copyVirtualKey(value).then(success => {
 								if (success) {
 									setCopied(true);
 									window.setTimeout(() => setCopied(false), 1400);
@@ -1397,12 +1479,15 @@ function metadataObject(value: unknown): Record<string, unknown> {
 function withoutManagedMetadata(value: Record<string, unknown>) {
 	const next = withoutServerMetadata(value);
 	delete next.name;
+	delete next[keyHintMetadata];
 	return next;
 }
 
 function withoutServerMetadata(value: Record<string, unknown>) {
 	return Object.fromEntries(
-		Object.entries(value).filter(([key]) => !key.startsWith(managedMetadataPrefix) && key !== 'id')
+		Object.entries(value).filter(
+			([key]) => key === keyHintMetadata || (!key.startsWith(managedMetadataPrefix) && key !== 'id')
+		)
 	);
 }
 

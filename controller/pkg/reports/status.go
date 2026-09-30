@@ -104,6 +104,15 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 				resolvedRefsMessage = lisCondition.Message
 			}
 		}
+		// Preserve foreign listener conditions verbatim when rebuilding status, including
+		// their observedGeneration and lastTransitionTime (GatewayPreserveForeignConditions).
+		if oldLisStatusIndex != -1 {
+			for _, condition := range gw.Status.Listeners[oldLisStatusIndex].Conditions {
+				if meta.FindStatusCondition(finalConditions, condition.Type) == nil {
+					finalConditions = append(finalConditions, condition)
+				}
+			}
+		}
 		lisReport.Status.Conditions = finalConditions
 
 		finalListeners = append(finalListeners, lisReport.Status)

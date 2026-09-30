@@ -340,6 +340,7 @@ pub(crate) const MCP_SETTINGS_FIELDS: [&str; 5] = [
 const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
 const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
 const API_KEY_CREATED_AT_METADATA: &str = "agentgateway.dev/createdAt";
+const API_KEY_HINT_METADATA: &str = "agentgateway.dev/keyHint";
 
 /// Older file keys have no stored ID, so expose their array position to the resource API.
 fn file_api_key_id(value: &Value, index: usize) -> String {
@@ -849,6 +850,7 @@ pub fn merge_model_catalog_sources(
 				// timestamped catalog rather than guessing from the resource timestamp,
 				// which may also reflect an unrelated custom-overlay edit.
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			});
 		}
 		sources.push(crate::ModelCatalogSource::InlineCatalog { inline });
@@ -911,9 +913,9 @@ pub(crate) fn materialize_config(
 	base: &str,
 	resources: &[ConfigResource],
 ) -> anyhow::Result<String> {
-	let mut config: Value = crate::yamlviajson::from_str(base)?;
+	let mut config: Value = crate::yaml::from_str(base)?;
 	overlay_config_resources(&mut config, resources)?;
-	crate::yamlviajson::to_string(&config)
+	crate::yaml::to_string(&config)
 }
 
 fn overlay_config_resources(
@@ -1400,7 +1402,8 @@ fn validate_api_key_metadata(value: &Value) -> anyhow::Result<()> {
 		.and_then(|metadata| {
 			metadata
 				.keys()
-				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX))
+				// Key hint is not really required to be trusted so we can allow that
+				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX) && *field != API_KEY_HINT_METADATA)
 		}) {
 		return Err(
 			ConfigResourceError::InvalidRequest(format!(
@@ -1920,6 +1923,7 @@ mod tests {
 			Some(crate::llm::catalog::CatalogMetadata {
 				source: None,
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			})
 		);
 	}
@@ -2227,7 +2231,7 @@ mcp:
 		];
 
 		let materialized = materialize_config(base, &resources).expect("materialize");
-		let value: Value = crate::yamlviajson::from_str(&materialized).expect("parse materialized");
+		let value: Value = crate::yaml::from_str(&materialized).expect("parse materialized");
 
 		assert_eq!(
 			value.pointer("/config/modelCatalog/0/inline/providers/database/models/database-model"),

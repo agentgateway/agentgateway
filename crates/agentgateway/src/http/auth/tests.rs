@@ -343,7 +343,7 @@ fn test_authorization_location_expression_extracts_from_cel() {
 #[test]
 fn test_authorization_location_expression_deserializes_flat_expression() {
 	let location: AuthorizationLocation =
-		crate::serdes::yamlviajson::from_str(r#"expression: 'request.headers["authorization"]'"#)
+		crate::serdes::yaml::from_str(r#"expression: 'request.headers["authorization"]'"#)
 			.expect("expression location should deserialize");
 
 	let expression = location
@@ -1122,7 +1122,7 @@ fn test_backend_auth_serde_backward_compat_no_credentials() {
 		value: SecretString::new("primary".into()),
 		location: None,
 	});
-	let yaml = serde_yaml::to_string(&policy).expect("serialize");
+	let yaml = serde_norway::to_string(&policy).expect("serialize");
 	assert!(
 		yaml.contains("backendAuth")
 			&& yaml.contains("key:")
@@ -1143,7 +1143,7 @@ fn test_backend_auth_serde_with_credentials_includes_field() {
 		}),
 		credentials: vec![credential("x-extra", "v", None)],
 	});
-	let yaml = serde_yaml::to_string(&policy).expect("serialize");
+	let yaml = serde_norway::to_string(&policy).expect("serialize");
 	assert!(
 		yaml.contains("credentials:") && yaml.contains("x-extra"),
 		"credentials should appear in serialized output: {yaml}"

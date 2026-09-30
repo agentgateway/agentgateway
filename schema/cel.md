@@ -135,9 +135,11 @@
 |`destination.address`|string|The IP address of the downstream request destination at agentgateway.|
 |`destination.port`|integer|The port of the downstream request destination at agentgateway.|
 |`destination.hostname`|string|The requested destination hostname, when known. For TLS connections this is the sniffed SNI.|
-|`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,<br>`task`) plus `methodName`. Post-request CEL may also include fields like<br>`sessionId` and tool payloads.|
+|`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,<br>`task`) plus `methodName`. Post-request CEL may also include fields like<br>`sessionId`, tool payloads, and list results.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
+|`mcp.target`|object||
+|`mcp.target.name`|string|The MCP target for the current target-scoped operation.|
 |`mcp.tool`|object||
 |`mcp.tool.target`|string|The target handling the tool call after multiplexing resolution.|
 |`mcp.tool.name`|string|The resolved tool name sent to the upstream target.|
@@ -154,8 +156,13 @@
 |`mcp.task`|object||
 |`mcp.task.target`|string|The target handling the task.|
 |`mcp.task.name`|string|The task ID.|
+|`mcp.toolsList`|any|The terminal tools/list result returned to the client, if available.|
+|`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
+|`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
+|`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
+|`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|

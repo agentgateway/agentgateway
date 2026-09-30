@@ -15,6 +15,7 @@ pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub provider_override: Option<Strng>,
 	/// Supported API payload formats and optional path overrides for this provider.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub formats: Vec<ProviderFormatConfig>,
 }
 

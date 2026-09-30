@@ -279,9 +279,9 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		.as_object_mut()
 		.expect("default standalone config must be an object")
 		.insert("llm".to_string(), Value::Object(llm));
-	let yaml = crate::yamlviajson::to_string(&config)?;
-	let _: crate::types::local::LocalConfig = crate::yamlviajson::from_str(&yaml)
-		.context("generated agentgateway configuration is invalid")?;
+	let yaml = crate::yaml::to_string(&config)?;
+	let _: crate::types::local::LocalConfig =
+		crate::yaml::from_str(&yaml).context("generated agentgateway configuration is invalid")?;
 	Ok(ImportResult {
 		source: source.to_string(),
 		config,
@@ -371,7 +371,7 @@ impl ConfigImporter for LiteLlmImporter {
 
 	fn import(&self, input: &str) -> anyhow::Result<ImportPlan> {
 		let config: LiteLlmConfig =
-			crate::yamlviajson::from_str(input).context("invalid LiteLLM configuration")?;
+			crate::yaml::from_str(input).context("invalid LiteLLM configuration")?;
 		if config.model_list.is_empty() {
 			bail!("LiteLLM configuration does not contain any model_list entries");
 		}

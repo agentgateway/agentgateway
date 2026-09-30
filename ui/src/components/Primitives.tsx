@@ -700,7 +700,7 @@ export function ConfirmDialog(props: {
 	title: string;
 	children?: ReactNode;
 	confirmLabel?: ReactNode;
-	cancelLabel?: ReactNode;
+	cancelLabel?: ReactNode | null;
 	destructive?: boolean;
 	confirmDisabled?: boolean;
 	onCancel: () => void;
@@ -765,9 +765,11 @@ export function ConfirmDialog(props: {
 				</div>
 				{props.children ? <div className="confirm-dialog-body">{props.children}</div> : null}
 				<div className="confirm-dialog-footer">
-					<button className="button" type="button" onClick={props.onCancel}>
-						{props.cancelLabel ?? t('common.cancel')}
-					</button>
+					{props.cancelLabel === null ? null : (
+						<button className="button" type="button" onClick={props.onCancel}>
+							{props.cancelLabel ?? t('common.cancel')}
+						</button>
+					)}
 					<button
 						className={props.destructive ? 'button danger' : 'button primary'}
 						type="button"

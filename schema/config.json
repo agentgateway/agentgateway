@@ -8484,6 +8484,16 @@
           "description": "Name identifying this MCP target, used to prefix tool and resource names when multiplexing.",
           "type": "string"
         },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "policies": {
           "description": "Transport policies for connecting to this target's backend. Not supported\non stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to\nthe full target set and belong on the route or `mcp.policies`.",
           "anyOf": [
@@ -9296,10 +9306,7 @@
           }
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "formats"
-      ]
+      "additionalProperties": false
     },
     "ProviderFormatConfig": {
       "type": "object",
@@ -11859,6 +11866,11 @@
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
+        "discovery": {
+          "description": "discovery controls wildcard expansion in the models endpoint. Defaults to the local catalog.",
+          "$ref": "#/$defs/Discovery",
+          "default": "catalog"
+        },
         "pathPrefix": {
           "description": "pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.\nDefaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.\nThe prefix is removed before model routing.",
           "type": "string",
@@ -11924,6 +11936,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "Discovery": {
+      "oneOf": [
+        {
+          "description": "Expand wildcard model names using the local model catalog.",
+          "type": "string",
+          "const": "catalog"
+        },
+        {
+          "description": "List configured model names without expanding wildcards.",
+          "type": "string",
+          "const": "disabled"
+        }
+      ]
     },
     "LocalLLMProvider": {
       "type": "object",

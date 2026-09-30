@@ -65,7 +65,8 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: backend default/test-jwks not found, policy default/jwt-remote-resolver-backend-missing
+        message: backend default/test-jwks not found, referenced by AgentgatewayPolicy
+          default/jwt-remote-resolver-backend-missing
         reason: PartiallyValid
         status: "True"
         type: Accepted

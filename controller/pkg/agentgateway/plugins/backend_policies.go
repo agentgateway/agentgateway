@@ -696,10 +696,12 @@ func translateMCPAuthenticationSpec(
 	}
 
 	var errs []error
-	translatedInlineJwks, err := resolveJWKSInlineForOwner(
-		ctx,
-		jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, authnPolicy.JWKS),
-	)
+	owner := ctx.JWKSOwner
+	if owner == nil {
+		policyOwner := jwks.PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, authnPolicy.JWKS)
+		owner = &policyOwner
+	}
+	translatedInlineJwks, err := resolveJWKSInlineForOwner(ctx, *owner)
 	if err != nil {
 		logger.Error("failed resolving jwks", "error", err)
 		errs = append(errs, err)

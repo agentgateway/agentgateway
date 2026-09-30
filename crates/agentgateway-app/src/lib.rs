@@ -256,7 +256,7 @@ fn default_config_contents(dir: &std::path::Path) -> anyhow::Result<String> {
 	let db = dir.join("data.db");
 	let config =
 		agentgateway::types::local::default_standalone_config(&format!("sqlite://{}", db.display()));
-	let yaml = agentgateway::yamlviajson::to_string(&config)?;
+	let yaml = agentgateway::yaml::to_string(&config)?;
 	Ok(format!(
 		"# yaml-language-server: $schema=https://agentgateway.dev/schema/config\n{yaml}"
 	))

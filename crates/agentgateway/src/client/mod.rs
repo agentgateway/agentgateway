@@ -742,6 +742,7 @@ impl Client {
 			);
 			let buffer_limit = http::buffer_limit(&req);
 			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
+			let deadline = to.map(|to| tokio::time::Instant::now() + to.0);
 
 			// We are leaving agentgateway code so no longer need our specialized body; Boxing is fine here.
 			let call = client.request(req.map(http::Body::into_boxed));
@@ -755,8 +756,8 @@ impl Client {
 					ProxyError::UpstreamCallFailed(err)
 				}
 			};
-			let resp = if let Some(to) = to {
-				match tokio::time::timeout(to.0, call).await {
+			let resp = if let Some(deadline) = deadline {
+				match tokio::time::timeout_at(deadline, call).await {
 					Err(_) => Err(ProxyError::UpstreamCallTimeout),
 					Ok(Err(err)) => Err(map_error(err)),
 					Ok(Ok(resp)) => Ok(resp),
@@ -798,7 +799,13 @@ impl Client {
 				.extensions_mut()
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
-			Ok(resp.map(http::Body::new))
+			Ok(resp.map(|body| {
+				let mut body = http::Body::new(body);
+				if let Some(deadline) = deadline {
+					body.set_deadline(deadline);
+				}
+				body
+			}))
 		}
 	}
 }

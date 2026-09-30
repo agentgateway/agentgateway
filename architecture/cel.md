@@ -5,14 +5,6 @@ CEL is an expression language that can evaluate user-defined (at runtime) expres
 
 A simple example of an expression that could be used for MCP authorization: `jwt.sub == "test-user" && mcp.tool.name == "add"`.
 
-Request-time CEL also includes `mcp.methodName` alongside the identity fields (`mcp.tool`,
-`mcp.prompt`, `mcp.resource`, `mcp.task`), so a policy can distinguish e.g. listing a tool from
-calling it.
-
-For post-request logging, tracing, and metrics CEL, MCP tool calls also expose payload fields such as
-`mcp.sessionId`, `mcp.tool.arguments`, `mcp.tool.result`, and `mcp.tool.error` - these remain absent
-during RBAC evaluation.
-
 While CEL is not as powerful as alternatives like Lua or WASM, it is pretty fast and good enough for many use cases.
 
 Agentgateway currently uses CEL for:

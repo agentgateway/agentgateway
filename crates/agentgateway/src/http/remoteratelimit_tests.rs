@@ -856,7 +856,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
 	assert_eq!(rrl.domain, "test");
 }
@@ -873,7 +873,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
 }
 
@@ -890,7 +890,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
 
 	// Test FailClosed (PascalCase alias)
@@ -904,7 +904,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
 }
 
@@ -919,7 +919,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(
 		rrl.failure_mode,
 		FailureMode::FailClosed,

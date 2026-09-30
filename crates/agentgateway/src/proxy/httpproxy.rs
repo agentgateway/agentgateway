@@ -1002,6 +1002,7 @@ impl HTTPProxy {
 			let info = backend.backend_info();
 			req.extensions_mut().insert(BackendContext {
 				name: info.backend_name,
+				endpoint: None,
 				backend_type: info.backend_type,
 				protocol: backend
 					.backend_protocol()
@@ -1320,6 +1321,11 @@ impl HTTPProxy {
 			call_target: backend_call.target.clone(),
 			inputs: self.inputs.clone(),
 		};
+		set_backend_cel_context(
+			req,
+			Some(&log),
+			backend_call.static_target.then_some(&backend_call.target),
+		);
 		{
 			let mut maybe_log = Some(&mut *log);
 			apply_backend_policies(
@@ -1333,7 +1339,6 @@ impl HTTPProxy {
 			.await?;
 		}
 		log.endpoint = Some(backend_call.target.clone());
-		set_backend_cel_context(req, Some(&log));
 		log.request_snapshot = snapshot_connect_request(log, req).map(Arc::new);
 
 		// CONNECT establishes a raw byte tunnel after any configured backend transport
@@ -2378,7 +2383,7 @@ async fn make_backend_call(
 		if let Some(path_match) = router.trace_path(&req) {
 			log.add(|log| log.path_match = Some(path_match));
 		}
-		let resolved = match router.resolve(&mut req).await {
+		let resolved = match router.resolve(&mut req, &inputs.model_catalog).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
@@ -2637,7 +2642,7 @@ async fn make_backend_call(
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
 			let backend = backend.clone();
-			set_backend_cel_context(&mut req, log.as_ref());
+			set_backend_cel_context(&mut req, log.as_ref(), None);
 			let name = name.clone();
 			let Some(log) = log else {
 				return Err(
@@ -2663,6 +2668,11 @@ async fn make_backend_call(
 			.backend_policies
 			.register_cel_expressions(log.cel.ctx());
 	}
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -2702,7 +2712,11 @@ async fn make_backend_call(
 	let llm_request_policies =
 		route_policies.merge_backend_policies(backend_call.backend_policies.llm.clone());
 
-	set_backend_cel_context(&mut req, log.as_ref());
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
@@ -3229,13 +3243,18 @@ async fn handle_substrate_backend_selection(
 	}
 }
 
-fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
+fn set_backend_cel_context(
+	req: &mut http::Request,
+	log: Option<&&mut RequestLog>,
+	endpoint: Option<&Target>,
+) {
 	if let Some(l) = log
 		&& let Some(bp) = l.backend_protocol
 		&& let Some(bi) = &l.backend_info
 	{
 		req.extensions_mut().insert(BackendContext {
 			name: bi.backend_name.clone(),
+			endpoint: endpoint.map(|target| target.to_string().into()),
 			backend_type: bi.backend_type,
 			protocol: bp,
 		});
@@ -3322,6 +3341,7 @@ pub fn build_service_call(
 		&& service_override.destination_passthrough
 	{
 		return Ok(BackendCall {
+			static_target: false,
 			target: Target::Address(destination),
 			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
@@ -3495,6 +3515,7 @@ pub fn build_service_call(
 	};
 
 	Ok(BackendCall {
+		static_target: false,
 		target,
 		span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 		http_version_override,
@@ -4671,6 +4692,7 @@ fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<
 }
 
 pub struct BackendCall {
+	static_target: bool,
 	pub target: Target,
 	pub span_target: Option<Strng>,
 	pub http_version_override: Option<::http::Version>,
@@ -4693,6 +4715,7 @@ impl BackendCall {
 			Target::Address(_) | Target::UnixSocket(_) => None,
 		};
 		Self {
+			static_target: true,
 			target,
 			span_target,
 			http_version_override: None,

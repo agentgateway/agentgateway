@@ -272,6 +272,13 @@ impl CatalogSnapshot {
 		}
 	}
 
+	/// Borrow model IDs for one provider from this immutable snapshot.
+	/// Returns `None` when the catalog does not know the provider.
+	pub(crate) fn model_ids(&self, provider: &str) -> Option<impl Iterator<Item = &str>> {
+		let provider = self.catalog.as_ref()?.providers.get(provider)?;
+		Some(provider.models.keys().map(String::as_str))
+	}
+
 	fn list_models(&self) -> ModelCatalogModels {
 		let Some(catalog) = &self.catalog else {
 			return ModelCatalogModels {

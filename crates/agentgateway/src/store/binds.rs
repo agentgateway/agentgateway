@@ -1671,6 +1671,9 @@ impl Store {
 			&& let Some(o) = self.policies_by_target.get_mut(&old.target)
 		{
 			o.remove(&pol);
+			if o.is_empty() {
+				self.policies_by_target.remove(&old.target);
+			}
 		}
 	}
 	#[instrument(
@@ -1811,6 +1814,9 @@ impl Store {
 			// Remove the old target. We may add it back, though.
 			if let Some(o) = self.policies_by_target.get_mut(&old.target) {
 				o.remove(&pol.key);
+				if o.is_empty() {
+					self.policies_by_target.remove(&old.target);
+				}
 			}
 		}
 		self
@@ -2384,6 +2390,30 @@ impl agent_xds::Handler<ADPResource> for StoreUpdater {
 				},
 			}
 		}
+
+		// Reclaim excess capacity after the batch, leaving headroom for future updates.
+		macro_rules! shrink {
+			($($field:ident),+ $(,)?) => {
+				$(
+					let map = &mut state.$field;
+					if map.capacity() > 1024 && map.len() < map.capacity() / 4 {
+						map.shrink_to(map.len() * 2);
+					}
+				)+
+			};
+		}
+		shrink!(
+			binds,
+			resources,
+			policies_by_key,
+			policies_by_target,
+			backends,
+			model_routes,
+			model_routers,
+			listeners,
+			http_routes,
+			tcp_routes,
+		);
 
 		if rejects.is_empty() {
 			Ok(())

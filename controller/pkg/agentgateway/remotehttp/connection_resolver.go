@@ -22,7 +22,7 @@ type connection struct {
 
 func (r *defaultResolver) resolveConnection(
 	krtctx krt.HandlerContext,
-	parentName, defaultNS string,
+	parent, defaultNS string,
 	backendRef gwv1.BackendObjectReference,
 	defaultPort string,
 ) (*connection, error) {
@@ -43,7 +43,7 @@ func (r *defaultResolver) resolveConnection(
 			nil,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("error setting tls options; service %s/%s, policy: %s, %w", backendRef.Name, refNamespace, types.NamespacedName{Namespace: defaultNS, Name: parentName}, err)
+			return nil, fmt.Errorf("error setting tls options; service %s/%s, referenced by %s, %w", backendRef.Name, refNamespace, parent, err)
 		}
 
 		connectHost := kubeutils.GetServiceHostname(string(backendRef.Name), refNamespace)
@@ -60,7 +60,7 @@ func (r *defaultResolver) resolveConnection(
 	default:
 		return r.resolveBackendConnection(
 			krtctx,
-			types.NamespacedName{Namespace: defaultNS, Name: parentName},
+			parent,
 			refNamespace,
 			schema.GroupKind{Group: string(group), Kind: string(kind)},
 			backendRef,
@@ -70,24 +70,24 @@ func (r *defaultResolver) resolveConnection(
 
 func (r *defaultResolver) resolveBackendConnection(
 	krtctx krt.HandlerContext,
-	policy types.NamespacedName,
+	parent string,
 	refNamespace string,
 	gk schema.GroupKind,
 	backendRef gwv1.BackendObjectReference,
 ) (*connection, error) {
 	backendNN := types.NamespacedName{Name: string(backendRef.Name), Namespace: refNamespace}
 	if r.backendResolvers[gk] == nil {
-		return nil, fmt.Errorf("unsupported backend kind %s.%s for policy %s", gk.Group, gk.Kind, policy)
+		return nil, fmt.Errorf("unsupported backend kind %s.%s for %s", gk.Group, gk.Kind, parent)
 	}
 	backend, err := r.resolveBackend(krtctx, backendNN, gk)
 	if err != nil {
 		return nil, err
 	}
 	if backend == nil {
-		return nil, fmt.Errorf("backend %s not found, policy %s", backendNN, policy)
+		return nil, fmt.Errorf("backend %s not found, referenced by %s", backendNN, parent)
 	}
 	if backend.Static == nil {
-		return nil, fmt.Errorf("only static backends are supported; backend: %s, policy: %s", backendNN, policy)
+		return nil, fmt.Errorf("only static backends are supported; backend: %s, referenced by %s", backendNN, parent)
 	}
 
 	resolvedTLS, err := r.resolveTLS(
@@ -101,7 +101,7 @@ func (r *defaultResolver) resolveBackendConnection(
 		backend.Policies,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("error setting tls options; backend: %s, policy: %s, %w", backendNN, policy, err)
+		return nil, fmt.Errorf("error setting tls options; backend: %s, referenced by %s, %w", backendNN, parent, err)
 	}
 
 	var connectHost string

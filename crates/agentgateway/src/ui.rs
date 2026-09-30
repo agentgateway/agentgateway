@@ -23,7 +23,7 @@ use crate::config_store::{
 	ConfigResourceUpsertRequest, ConfigResourcesResponse, PreparedResource,
 };
 use crate::llm::catalog::ModelCatalog;
-use crate::{Config, ConfigSource, ConfigStoreMode, yamlviajson};
+use crate::{Config, ConfigSource, ConfigStoreMode, yaml};
 
 const BASE_COSTS_FILE: &str = "base-costs.json";
 const CONFIG_SCHEMA_HEADER: &str =
@@ -431,7 +431,7 @@ async fn get_effective_config(State(app): State<App>) -> Result<Json<Value>, Err
 	} else {
 		base
 	};
-	let value = yamlviajson::from_str(&config).map_err(ErrorResponse::Anyhow)?;
+	let value = yaml::from_str(&config).map_err(ErrorResponse::Anyhow)?;
 	Ok(Json(value))
 }
 
@@ -457,10 +457,27 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 			));
 		},
 	};
-	let yaml_content = yamlviajson::to_string(&config_json).map_err(ErrorResponse::Anyhow)?;
-	let yaml_file_content = format!("{CONFIG_SCHEMA_HEADER}{yaml_content}");
+	let current = fs_err::tokio::read_to_string(file_path)
+		.await
+		.map_err(anyhow::Error::from)?;
+	let yaml_file_content = {
+		let mut document =
+			yaml_serde_edit::YamlObject::<Value>::parse(&current).map_err(anyhow::Error::from)?;
+		document
+			.set(config_json.clone())
+			.map_err(anyhow::Error::from)?;
+		let content = document.get_string();
+		if content
+			.lines()
+			.any(|line| line.trim_start().starts_with("# yaml-language-server:"))
+		{
+			content.to_owned()
+		} else {
+			format!("{CONFIG_SCHEMA_HEADER}{content}")
+		}
+	};
 
-	if let Err(e) = validate_config_in_task(app, yaml_content).await {
+	if let Err(e) = validate_config_in_task(app, yaml_file_content.clone()).await {
 		return Err(ErrorResponse::String(e.to_string()));
 	}
 
@@ -508,7 +525,7 @@ async fn list_stored_config_resources(
 
 async fn read_file_config(app: &App) -> Result<Value, ErrorResponse> {
 	let config = app.cfg()?.read_to_string().await?;
-	yamlviajson::from_str(&config).map_err(ErrorResponse::Anyhow)
+	yaml::from_str(&config).map_err(ErrorResponse::Anyhow)
 }
 
 async fn upsert_config_resources_by_kind(
@@ -1116,6 +1133,48 @@ mod tests {
 			resource_manager: crate::resource_manager::ResourceManager::new(client)
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
+		}
+	}
+
+	#[tokio::test]
+	async fn config_writes_preserve_yaml_comments_and_validate_before_writing() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+
+		for header in ["", "# yaml-language-server: $schema=./custom-schema.json\n"] {
+			let original = format!(
+				"{header}# My gateway\nbinds:\n- port: 8080\n  listeners: []\n\n# Keep this section\nconfig: {{}} # global settings\n"
+			);
+			fs_err::write(&path, &original).unwrap();
+			let mut updated: Value = yaml::from_str(&original).unwrap();
+			updated["binds"][0]["port"] = serde_json::json!(9090);
+			let _ = write_config(State(app.clone()), Json(updated.clone()))
+				.await
+				.unwrap();
+			let written = fs_err::read_to_string(&path).unwrap();
+			let expected = original.replace("port: 8080", "port: 9090");
+			let expected = if header.is_empty() {
+				format!("{CONFIG_SCHEMA_HEADER}{expected}")
+			} else {
+				expected
+			};
+			assert_eq!(written, expected);
+			assert_eq!(yaml::from_str::<Value>(&written).unwrap(), updated);
+
+			let _ = write_config(State(app.clone()), Json(updated.clone()))
+				.await
+				.unwrap();
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), written);
+
+			updated["binds"][0]["port"] = serde_json::json!("invalid");
+			assert!(
+				write_config(State(app.clone()), Json(updated))
+					.await
+					.is_err()
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), written);
 		}
 	}
 

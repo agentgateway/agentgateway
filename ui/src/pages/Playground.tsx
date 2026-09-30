@@ -500,9 +500,7 @@ export function PlaygroundPage() {
 		<div className="page-stack">
 			<PageHeader
 				title={tr('copy.llmPlayground')}
-				description={tr(
-					'copy.sendARealChatCompletionRequestThroughTheConfiguredGatewayForSetupDebugging'
-				)}
+				description={tr('copy.llmPlaygroundDescription')}
 			/>
 			{configDataLoading ? (
 				<StatusBanner state="loading" title={tr('copy.loadingLlmConfiguration')} />

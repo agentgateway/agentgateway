@@ -62,6 +62,7 @@ const zhCN = {
 			value: '值'
 		},
 		shell: {
+			breadcrumb: '面包屑导航',
 			accountLabel: '账户：{{value}}',
 			accountMenu: '账户信息',
 			clientSetup: '客户端设置',
@@ -112,6 +113,55 @@ const zhCN = {
 			traffic: '流量'
 		},
 		copy: {
+			catalogProviderAndReverseTransformationCompiledDuringLocalConfigNormalization:
+				'本地配置规范化期间编译的模型目录提供商标识和反向转换。',
+			theMcpTargetForTheCurrentTargetScopedOperation: '当前针对特定目标的操作对应的 MCP 目标。',
+			theTerminalToolsListResultReturnedToTheClientIfAvailable:
+				'如果可用，则为返回给客户端的最终 `tools/list` 结果。',
+			theTerminalPromptsListResultReturnedToTheClientIfAvailable:
+				'如果可用，则为返回给客户端的最终 `prompts/list` 结果。',
+			theTerminalResourcesListResultReturnedToTheClientIfAvailable:
+				'如果可用，则为返回给客户端的最终 `resources/list` 结果。',
+			theTerminalResourcesTemplatesListResultReturnedToTheClientIfAvailable:
+				'如果可用，则为返回给客户端的最终 `resources/templates/list` 结果。',
+			issueApiKeysThatCallersUseToAuthenticateToTheGateway:
+				'签发供调用方向网关进行身份验证的 API 密钥。',
+			copyYourNewApiKey: '复制新建的 API 密钥',
+			thisKeyWillNotBeShownAgainCopyItNow: '此密钥之后不会再次显示，请立即复制。',
+			storeRawKey: '存储原始密钥',
+			ifUncheckedTheKeyWillNotBeShownAgainAfterSaving: '如果不勾选，保存后将无法再次显示该密钥。',
+			theRawKeyMustBeStoredUnlessThisPageIsServedOverHttpsOrLocalhost:
+				'除非当前页面通过 HTTPS 或 localhost 提供，否则必须存储原始密钥。',
+			thisKeyCannotBeShownAgain: '此密钥无法再次显示',
+			hashed: '已哈希',
+			addLlmSettingsToTheConfigurationThenSetUpModels: '添加 LLM 配置，然后设置模型。',
+			addMcpSettingsToTheConfigurationThenConnectServers: '添加 MCP 配置，然后连接服务器。',
+			addTrafficSettingsToTheConfigurationThenSetUpGatewaysAndRoutes:
+				'添加流量配置，然后设置网关和路由。',
+			chooseWhatThisGatewayWillServeAnythingSkippedCanBeEnabledLater:
+				'选择此网关要提供的能力。暂时跳过的功能之后仍可启用。',
+			modelsProvidersAndApiKeys: '模型、提供商和 API 密钥。',
+			mcpServersAndTools: 'MCP 服务器和工具。',
+			httpAndTcpRoutesAndBackends: 'HTTP 和 TCP 路由及后端。',
+			operationsAppliedToAProviderModelToRecoverItsPublicName:
+				'用于将提供商模型名称还原为公开名称的操作。',
+			operationsInExecutionOrderFromTheOutermostCelExpressionInward:
+				'从最外层 CEL 表达式向内、按执行顺序排列的操作。',
+			discoveryControlsWildcardExpansionInTheModelsEndpointDefaultsToTheLocalCatalog:
+				'`discovery` 控制 `models` 端点中的通配符展开。默认为本地模型目录。',
+			expandWildcardModelNamesUsingTheLocalModelCatalog: '使用本地模型目录展开通配符模型名称。',
+			listConfiguredModelNamesWithoutExpandingWildcards: '列出已配置的模型名称，不展开通配符。',
+			mcpContainsAttributesAboutTheMcpRequestRequestTimeCelIncludesIdentityFieldsToolP_1sr16r6:
+				'`mcp` 包含 MCP 请求的属性。\n请求时 CEL 包含身份字段（`tool`、`prompt`、`resource`、\n`task`）以及 `methodName`。请求完成后的 CEL 还可能包含\n`sessionId`、工具负载和列表结果。',
+			theResolvedTargetForDirectlyAddressedBackendsIncludingThePortForNetworkEndpoints_51t8p6:
+				'直接寻址后端解析出的目标；对于网络端点，其中包含端口。\n`Service` 后端不提供此字段，因为其工作负载端点会单独选择。',
+			celPlaygroundDescription: '针对示例请求或自定义请求评估策略表达式。',
+			mcpPlaygroundDescription: '通过 MCP 网关列出并调用工具。',
+			llmModelsDescription: '配置调用方可以请求的模型及为其提供服务的提供商。',
+			llmPlaygroundDescription: '通过网关发送测试请求。',
+			usingEmbeddedCostCatalog: '使用内置成本目录',
+			embeddedCostCatalogDescription:
+				'agentgateway 内置模型定价目录。刷新基础目录即可获取最新定价数据。',
 			automaticValue: '自动（{{value}}）',
 			apiKeyBudgetsRequireDatabaseConfiguration:
 				'API 密钥预算功能要求先配置 <code>config.database</code>。',
@@ -127,7 +177,7 @@ const zhCN = {
 			azureSeverityThresholdMustBeAnIntegerFrom0To6: 'Azure 严重级别阈值必须是 0 到 6 之间的整数。',
 			bedrockEndpoint: 'Bedrock 端点',
 			bedrockEndpointDescription:
-				'Mantle 原生支持 Anthropic 和 OpenAI API，以及受支持的服务端工具和后台请求。使用 Mantle 需要专用的 AWS 权限。若要使用现有 Bedrock 部署、Bedrock Guardrails、跨区域推理或 Claude 结构化输出，请选择 Runtime。模型目录若标注某模型仅能通过另一端点提供，“优先使用”模式会自动切换到该端点；目录中未收录的模型则按所选偏好路由。“仅使用”模式会强制聊天请求走所选端点，不支持该端点的模型会导致请求失败。请求失败后，两种模式都不会改用另一个端点重试。此设置不影响嵌入和重排序请求。',
+				'Mantle 原生支持 Anthropic 和 OpenAI API，以及受支持的服务端工具和后台请求。使用 Mantle 需要专用的 AWS 权限。若要使用现有 Bedrock 部署、内联 Bedrock 防护规则、跨区域推理或 Claude 结构化输出，请选择 Runtime。在“防护规则”页面配置的 Bedrock 防护规则可与任一端点配合使用。“优先使用”模式会在模型目录标记某模型只能通过另一端点提供时自动切换；目录中未收录的模型则按你的偏好选择端点。内联防护规则会阻止回退到 Mantle，且不能与任一 Mantle 模式同时使用。“仅使用”模式会强制聊天请求走所选端点，不支持该端点的模型将导致请求失败。两种模式都不会在请求失败后改用另一个端点重试。嵌入和重排序不受影响。',
 			bedrockModelsShouldSetAnAwsRegion: '请为 Bedrock 模型设置 AWS 区域。',
 			bedrockGuardrailsRequireIdentifierVersionAndRegion:
 				'Bedrock 防护规则必须填写标识符、版本和区域。',
@@ -135,7 +185,6 @@ const zhCN = {
 			clientSecretIsRequired: '必须填写客户端密钥。',
 			commandRequired: '请填写启动命令。',
 			contentPassedWithoutModification: '内容未经修改，已通过检查。',
-			customProvidersNeedAtLeastOneSupportedFormat: '自定义提供商至少要配置一种受支持的 API 格式。',
 			defaultIssuerDiscoveryEndpoint: '默认：使用 issuer + /.well-known/openid-configuration',
 			duplicateRuleExpression: '规则表达式重复。',
 			enterAValueOrChooseUnset: '请填写值，或选择“未设置”。',
@@ -1215,8 +1264,6 @@ const zhCN = {
 			environmentYaml: '环境变量 YAML',
 			error: '错误',
 			evaluate: '评估',
-			evaluatePolicyExpressionsAgainstSampleOrCustomRequestContextUsingTheGatewayCelEndpoint:
-				'使用网关 CEL 端点根据示例或自定义请求上下文评估策略表达式。',
 			evaluateRequestCountDescriptorsWhileProcessingTheRequest: '在处理请求时评估请求计数描述符。',
 			evaluateTokenDescriptorsAfterTheLlmResponseCompletes: 'LLM 响应完成后评估令牌描述符。',
 			everyListedHeaderConditionMustMatch: '每个列出的请求头条件都必须匹配。',
@@ -1419,8 +1466,6 @@ const zhCN = {
 			incomingRequestHeadersToForwardToTheWebhook: '要转发到 Webhook 的传入请求头。',
 			inheritance: '继承',
 			initialize: '初始化',
-			initializeAGatewayMcpSessionListToolsAndCallAToolThroughTheMcpListener:
-				'初始化网关 MCP 会话、列出工具并通过 MCP 监听器调用工具。',
 			initializeFirst: '请先初始化',
 			initializeOrSendAToolRequestToInspectMcpBehavior:
 				'初始化会话或发送工具请求，以检查 MCP 行为。',
@@ -1738,8 +1783,6 @@ const zhCN = {
 			oauth2ClientSecretUsedForTokenExchange: '用于令牌交换的 OAuth 2.0 客户端密钥。',
 			of3Enabled: '已启用 3 个',
 			off: '关闭',
-			onboardProviderBackedModelsAndConfigureModelSpecificBehavior:
-				'接入提供商模型并配置模型级行为。',
 			onlyQueryForAIpv4Records: '仅查询 A（IPv4）记录。',
 			onlyQueryForAaaaIpv6Records: '仅查询 AAAA（IPv6）记录。',
 			onlyTheFinalConditionalTargetCanOmitACondition: '只有最终的条件目标可以省略条件。',
@@ -2155,8 +2198,6 @@ const zhCN = {
 			sendABoundedBodyBufferAndAllowTruncation: '发送有界正文缓冲区，并允许截断。',
 			sendAConfiguredSecretValueToTheBackend: '将配置的机密值发送到后端。',
 			sendACopyOfMatchingRequestsToAnotherBackend: '将匹配请求的副本发送到另一个后端。',
-			sendARealChatCompletionRequestThroughTheConfiguredGatewayForSetupDebugging:
-				'通过已配置的网关发送真实的聊天补全请求，用于调试设置。',
 			sendContentToAnExternalGuardrailService: '将内容发送到外部防护规则服务。',
 			sendHeadersToTheExternalProcessingService: '将请求头发送到外部处理服务。',
 			sendRequestAndResponseDataToAnExternalProcessingService:

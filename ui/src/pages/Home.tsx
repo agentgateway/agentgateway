@@ -4,10 +4,8 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
-import { refreshBaseCosts } from '@/api/costsApi';
 import { PageHeader, StatusBanner } from '@/components/Primitives';
 import { ensureLlm, fileOwnedMcpSettingFields } from '@/config';
-import { refreshBaseCostsAndConfigure } from '@/costs';
 import {
 	useConfigDumpMode,
 	useEnableSurface,
@@ -77,14 +75,10 @@ export function HomePage() {
 	const traffic = trafficStats(trafficData.data);
 	const [startupEvaluated, setStartupEvaluated] = useState(false);
 	const [startupFlow, setStartupFlow] = useState(false);
-	const [costRefreshError, setCostRefreshError] = useState<string | null>(null);
 	const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
 	const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 	const showStartup = Boolean(config.data && startupFlow);
-	const selectedSurfaces =
-		Number(hasLlm || locallyEnabled.has('llm')) +
-		Number(hasMcp || locallyEnabled.has('mcp')) +
-		Number(hasTraffic || locallyEnabled.has('apis'));
+	const anySurfaceEnabled = hasLlm || hasMcp || hasTraffic || locallyEnabled.size > 0;
 
 	useEffect(() => {
 		if (!config.data || pageDataLoading || pageDataError || startupEvaluated) return;
@@ -93,22 +87,11 @@ export function HomePage() {
 	}, [config.data, pageDataError, pageDataLoading, hasLlm, hasMcp, hasTraffic, startupEvaluated]);
 
 	async function enableSurface(surface: StartupSurface) {
-		setCostRefreshError(null);
 		try {
-			const { hybrid } = await enable.mutateAsync({
+			await enable.mutateAsync({
 				surface: surface === 'apis' ? 'traffic' : surface
 			});
 			setLocallyEnabled(current => new Set(current).add(surface));
-			if (surface === 'llm') {
-				try {
-					if (hybrid) await refreshBaseCosts();
-					else await refreshBaseCostsAndConfigure(update);
-				} catch (err) {
-					setCostRefreshError(
-						err instanceof Error ? err.message : 'Failed to refresh base cost catalog'
-					);
-				}
-			}
 		} catch {
 			// The enable mutation exposes the save error.
 		}
@@ -147,11 +130,7 @@ export function HomePage() {
 				>
 					<div className="startup-copy">
 						<h2 id="startup-title">{tr('copy.welcomeToAgentgateway')}</h2>
-						<p>
-							{tr(
-								'copy.agentgatewayIsAGatewayThatCanRouteSecureAndObserveLlmMcpAndTraditionalApiTraffic_sbsjep'
-							)}
-						</p>
+						<p>{tr('copy.chooseWhatThisGatewayWillServeAnythingSkippedCanBeEnabledLater')}</p>
 					</div>
 
 					{pageDataError ? (
@@ -164,16 +143,10 @@ export function HomePage() {
 							{enable.error?.message ?? update.error?.message}
 						</StatusBanner>
 					) : null}
-					{costRefreshError ? (
-						<StatusBanner state="warn" title={tr('copy.costCatalogRefreshFailed')}>
-							{costRefreshError}
-						</StatusBanner>
-					) : null}
-
 					<div className="startup-chip-grid">
 						<StartupChip
 							label="LLM"
-							description={tr('copy.modelsKeysPoliciesAndChatTesting')}
+							description={tr('copy.modelsProvidersAndApiKeys')}
 							enabled={hasLlm || locallyEnabled.has('llm')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Bot size={24} />}
@@ -181,15 +154,15 @@ export function HomePage() {
 						/>
 						<StartupChip
 							label="MCP"
-							description={tr('copy.serversToolsAndMcpPlaygroundFlows')}
+							description={tr('copy.mcpServersAndTools')}
 							enabled={hasMcp || locallyEnabled.has('mcp')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Server size={24} />}
 							onClick={() => void enableSurface('mcp')}
 						/>
 						<StartupChip
-							label={tr('copy.apis')}
-							description={tr('copy.httpAndTcpListenersRoutesAndPolicyControls')}
+							label={tr('copy.traffic')}
+							description={tr('copy.httpAndTcpRoutesAndBackends')}
 							enabled={hasTraffic || locallyEnabled.has('apis')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Network size={24} />}
@@ -197,9 +170,8 @@ export function HomePage() {
 						/>
 					</div>
 
-					{selectedSurfaces > 0 ? (
+					{anySurfaceEnabled ? (
 						<div className="startup-actions">
-							<span>{tr('copy.valueOf3Enabled', [selectedSurfaces])}</span>
 							<button
 								className="button primary"
 								type="button"
@@ -235,14 +207,6 @@ export function HomePage() {
 			) : pageDataError ? (
 				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{pageDataError.message}
-				</StatusBanner>
-			) : costRefreshError ? (
-				<StatusBanner state="warn" title={tr('copy.costCatalogRefreshFailed')}>
-					{costRefreshError}
-				</StatusBanner>
-			) : !hasLlm && !hasMcp && !hasTraffic ? (
-				<StatusBanner state="warn" title={tr('copy.noGatewaySurfacesEnabledYet')}>
-					{tr('copy.enableTheCapabilitiesYouWantToOperateFromTheSetupPath')}
 				</StatusBanner>
 			) : warnings.length ? (
 				<StatusBanner state="warn" title={tr('copy.valueWarningValue', { count: warnings.length })}>
@@ -494,7 +458,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>{tr('copy.notEnabled')}</span>
 				</div>
 				<button className="button" type="button" disabled={props.disabled} onClick={props.onEnable}>
 					{tr('copy.enableValue', [props.title])}
@@ -509,7 +472,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>{tr('copy.enabled_17fi4vy')}</span>
 				</div>
 				{props.setupNeeded ? (
 					<p>{translateText(props.setupText)}</p>

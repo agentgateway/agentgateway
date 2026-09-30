@@ -4,6 +4,7 @@ use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
+use itertools::Itertools;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -17,6 +18,9 @@ use crate::{apply, cel, llm, schema_enum, schema_ser_schema};
 
 #[apply(schema_ser_schema!)]
 pub struct ModelRoute {
+	/// Catalog provider and reverse transformation compiled during local config normalization.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub discovery: Option<llm::discovery::ModelDiscovery>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub id: Option<String>,
 	pub name: String,
@@ -76,6 +80,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<(EndpointMatch, Option<llm::RouteType>, &
 			("/v1/images/variations", Some(Detect)),
 			("/v1/audio/transcriptions", None),
 			("/v1/ocr", Some(Detect)),
+			("/v1/systemone", Some(Detect)),
 			("/v1/embeddings", Some(Embeddings)),
 			("/v1/rerank", Some(Rerank)),
 			("/v2/rerank", Some(Rerank)),
@@ -189,6 +194,7 @@ pub struct ConditionalTarget {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRouter {
+	discovery: llm::discovery::Discovery,
 	#[serde(skip_serializing_if = "String::is_empty")]
 	path_prefix: String,
 	models: Vec<ModelRoute>,
@@ -233,9 +239,15 @@ impl ModelRouter {
 	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
 			path_prefix: String::new(),
+			discovery: Default::default(),
 			models,
 			virtual_models,
 		}
+	}
+
+	pub fn with_discovery(mut self, discovery: llm::discovery::Discovery) -> Self {
+		self.discovery = discovery;
+		self
 	}
 
 	pub fn with_path_prefix(mut self, path_prefix: String) -> Self {
@@ -269,7 +281,11 @@ impl ModelRouter {
 		Some(strng::format!("{prefix}{template}"))
 	}
 
-	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
+	pub async fn resolve(
+		&self,
+		req: &mut Request,
+		catalog: &llm::catalog::ModelCatalog,
+	) -> ResolveResult {
 		if !self.path_prefix.is_empty() {
 			let original = req.uri().clone();
 			let rewritten = http::modify_req_uri(req, |uri| {
@@ -309,7 +325,7 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(response);
 		}
 		if is_model_list_request(req) {
-			return ResolveResult::DirectResponse(self.model_list_response(req));
+			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
@@ -353,23 +369,46 @@ impl ModelRouter {
 		}
 	}
 
-	fn model_list_response(&self, req: &Request) -> Response {
+	fn model_list_response(&self, req: &Request, catalog: &llm::catalog::ModelCatalog) -> Response {
+		let catalog =
+			(self.discovery == llm::discovery::Discovery::Catalog).then(|| catalog.snapshot());
 		let data = self
 			.models
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
 			.flat_map(|model| {
-				api_key_discoverable_models(req, &model.name)
-					.map(|name| model_list_entry(name, model.created))
+				let names: Vec<String> = if let Some(catalog) = &catalog
+					&& let Some(discovery) = &model.discovery
+					&& let Some(model_ids) = catalog.model_ids(&discovery.provider)
+				{
+					model_ids
+						// Get all models from the catalog. Apply our transformation to it
+						// For example, an expression `model.stripPrefix("foo/")` would become Prefix(foo/);
+						// we would take gpt-4o and make it foo/gpt-4o.
+						.filter_map(|name| discovery.transformation.apply(name))
+						.filter(|name| {
+							// Now check it still matches the model match (e.g 'foo/*') and we are authorized for this model
+							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
+						})
+						.map(|name| name.into_owned())
+						.collect()
+				} else {
+					api_key_discoverable_models(req, &model.name)
+						.map(str::to_owned)
+						.collect()
+				};
+				names.into_iter().map(|name| (name, model.created))
 			})
 			.chain(
 				self
 					.virtual_models
 					.iter()
 					.filter(|model| api_key_model_authorized(req, &model.name))
-					.map(|model| model_list_entry(&model.name, model.created)),
+					.map(|model| (model.name.clone(), model.created)),
 			)
+			.unique_by(|(name, _)| name.clone())
+			.map(|(name, created)| model_list_entry(&name, created))
 			.collect::<Vec<_>>();
 		let body = serde_json::json!({
 			"data": data,
@@ -1058,6 +1097,7 @@ mod tests {
 	#[tokio::test]
 	async fn conditional_virtual_model_can_use_llm_request() {
 		let model = |name: &str| ModelRoute {
+			discovery: None,
 			id: None,
 			name: name.to_string(),
 			created: 0,
@@ -1106,7 +1146,9 @@ mod tests {
 			.expect("valid request");
 
 		assert!(matches!(
-			router.resolve(&mut req).await,
+			router
+				.resolve(&mut req, &llm::catalog::ModelCatalog::default())
+				.await,
 			ResolveResult::Backend(_)
 		));
 		let cached = req
@@ -1166,7 +1208,10 @@ mod tests {
 			router.trace_path(&req).as_deref(),
 			Some("/public/foo/v1/models")
 		);
-		let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(response) = router
+			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
+			.await
+		else {
 			panic!("expected discovery")
 		};
 		assert_eq!(response.status(), ::http::StatusCode::OK);
@@ -1185,7 +1230,10 @@ mod tests {
 				.body(http::Body::empty())
 				.unwrap();
 			assert!(router.trace_path(&req).is_none());
-			let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+			let ResolveResult::DirectResponse(response) = router
+				.resolve(&mut req, &llm::catalog::ModelCatalog::default())
+				.await
+			else {
 				panic!("expected rejection")
 			};
 			assert_eq!(response.status(), ::http::StatusCode::NOT_FOUND);
@@ -1212,7 +1260,10 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"weighted-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(resp) = router
+			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
+			.await
+		else {
 			panic!("invalid weighted target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
@@ -1254,7 +1305,10 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"conditional-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(resp) = router
+			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
+			.await
+		else {
 			panic!("invalid conditional target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
@@ -1278,6 +1332,7 @@ mod tests {
 			),
 		)));
 		let model = ModelRoute {
+			discovery: None,
 			id: None,
 			name: "gpt-5-mini".to_string(),
 			created: 0,
@@ -1784,8 +1839,12 @@ mod tests {
 	}
 
 	#[test]
-	fn native_routes_send_ocr_through_detect() {
+	fn native_routes_send_custom_endpoints_through_detect() {
 		assert_eq!(classify_route("/v1/ocr"), Some(llm::RouteType::Detect));
+		assert_eq!(
+			classify_route("/v1/systemone"),
+			Some(llm::RouteType::Detect)
+		);
 	}
 
 	#[test]

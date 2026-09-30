@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -407,6 +408,7 @@ struct ExtProcInstance {
 	request_stream_polled: Option<tokio::sync::oneshot::Receiver<()>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
+	cleanly_closed: Arc<AtomicBool>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -443,6 +445,7 @@ impl ExtProcInstance {
 			request_stream_polled: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
+			cleanly_closed: Arc::new(AtomicBool::new(false)),
 			metadata_context,
 			req_attributes,
 			resp_attributes,
@@ -461,6 +464,7 @@ impl ExtProcInstance {
 			return Err(Error::RequestSend);
 		};
 		let failure_mode = self.failure_mode;
+		let cleanly_closed = self.cleanly_closed.clone();
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
 		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
@@ -508,6 +512,7 @@ impl ExtProcInstance {
 						if let Some(span) = span.as_deref_mut() {
 							span.record_grpc_status(tonic::Code::Ok);
 						}
+						cleanly_closed.store(true, Ordering::Relaxed);
 						return;
 					},
 					Err(error) => {
@@ -555,13 +560,18 @@ impl ExtProcInstance {
 	}
 
 	async fn send_request(&mut self, req: ProcessingRequest) -> Result<(), Error> {
-		self
+		let result = self
 			.tx_req
 			.as_ref()
 			.ok_or(Error::RequestSend)?
 			.send(req)
 			.await
-			.map_err(|_| Error::RequestSend)
+			.map_err(|_| Error::RequestSend);
+		if result.is_err() && self.cleanly_closed.load(Ordering::Relaxed) {
+			self.skipped = true;
+			return Ok(());
+		}
+		result
 	}
 
 	fn request_sender(&self) -> Result<Sender<ProcessingRequest>, Error> {
@@ -968,6 +978,9 @@ impl ExtProcInstance {
 					return Ok((req, None));
 				}
 				return Err(e);
+			}
+			if self.skipped {
+				return Ok((req, None));
 			}
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		}
@@ -1464,6 +1477,10 @@ impl ExtProcInstance {
 		if self.skipped {
 			return Ok((response, None));
 		}
+		if self.cleanly_closed.load(Ordering::Relaxed) {
+			self.skipped = true;
+			return Ok((response, None));
+		}
 		let response_trailers = Arc::new(Mutex::new(None));
 		let headers = resp_to_header_map(&response);
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
@@ -1532,6 +1549,9 @@ impl ExtProcInstance {
 					observability_mode: false,
 				})
 				.await?;
+			if self.skipped {
+				return Ok((http::Response::from_parts(parts, body), None));
+			}
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		}
 

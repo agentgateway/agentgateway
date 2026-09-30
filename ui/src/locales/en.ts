@@ -56,6 +56,7 @@ const en = {
 			value: 'value'
 		},
 		shell: {
+			breadcrumb: 'Breadcrumb',
 			accountLabel: 'Account: {{value}}',
 			accountMenu: 'Your account',
 			clientSetup: 'Client Setup',
@@ -106,6 +107,62 @@ const en = {
 			traffic: 'Traffic'
 		},
 		copy: {
+			catalogProviderAndReverseTransformationCompiledDuringLocalConfigNormalization:
+				'Catalog provider and reverse transformation compiled during local config normalization.',
+			theMcpTargetForTheCurrentTargetScopedOperation:
+				'The MCP target for the current target-scoped operation.',
+			theTerminalToolsListResultReturnedToTheClientIfAvailable:
+				'The terminal tools/list result returned to the client, if available.',
+			theTerminalPromptsListResultReturnedToTheClientIfAvailable:
+				'The terminal prompts/list result returned to the client, if available.',
+			theTerminalResourcesListResultReturnedToTheClientIfAvailable:
+				'The terminal resources/list result returned to the client, if available.',
+			theTerminalResourcesTemplatesListResultReturnedToTheClientIfAvailable:
+				'The terminal resources/templates/list result returned to the client, if available.',
+			issueApiKeysThatCallersUseToAuthenticateToTheGateway:
+				'Issue API keys that callers use to authenticate to the gateway.',
+			copyYourNewApiKey: 'Copy your new API key',
+			thisKeyWillNotBeShownAgainCopyItNow: 'This key will not be shown again. Copy it now.',
+			storeRawKey: 'Store raw key',
+			ifUncheckedTheKeyWillNotBeShownAgainAfterSaving:
+				'If unchecked, the key will not be shown again after saving.',
+			theRawKeyMustBeStoredUnlessThisPageIsServedOverHttpsOrLocalhost:
+				'The raw key must be stored unless this page is served over HTTPS or localhost.',
+			thisKeyCannotBeShownAgain: 'This key cannot be shown again',
+			hashed: 'hashed',
+			addLlmSettingsToTheConfigurationThenSetUpModels:
+				'Add LLM settings to the configuration, then set up models.',
+			addMcpSettingsToTheConfigurationThenConnectServers:
+				'Add MCP settings to the configuration, then connect servers.',
+			addTrafficSettingsToTheConfigurationThenSetUpGatewaysAndRoutes:
+				'Add traffic settings to the configuration, then set up gateways and routes.',
+			chooseWhatThisGatewayWillServeAnythingSkippedCanBeEnabledLater:
+				'Choose what this gateway will serve. Anything skipped can be enabled later.',
+			modelsProvidersAndApiKeys: 'Models, providers, and API keys.',
+			mcpServersAndTools: 'MCP servers and tools.',
+			httpAndTcpRoutesAndBackends: 'HTTP and TCP routes and backends.',
+			operationsAppliedToAProviderModelToRecoverItsPublicName:
+				'Operations applied to a provider model to recover its public name.',
+			operationsInExecutionOrderFromTheOutermostCelExpressionInward:
+				'Operations in execution order, from the outermost CEL expression inward.',
+			discoveryControlsWildcardExpansionInTheModelsEndpointDefaultsToTheLocalCatalog:
+				'discovery controls wildcard expansion in the models endpoint. Defaults to the local catalog.',
+			expandWildcardModelNamesUsingTheLocalModelCatalog:
+				'Expand wildcard model names using the local model catalog.',
+			listConfiguredModelNamesWithoutExpandingWildcards:
+				'List configured model names without expanding wildcards.',
+			mcpContainsAttributesAboutTheMcpRequestRequestTimeCelIncludesIdentityFieldsToolP_1sr16r6:
+				'`mcp` contains attributes about the MCP request.\nRequest-time CEL includes identity fields (`tool`, `prompt`, `resource`,\n`task`) plus `methodName`. Post-request CEL may also include fields like\n`sessionId`, tool payloads, and list results.',
+			theResolvedTargetForDirectlyAddressedBackendsIncludingThePortForNetworkEndpoints_51t8p6:
+				'The resolved target for directly addressed backends, including the port for network endpoints.\nAbsent for Service backends, whose workload endpoints are selected separately.',
+			celPlaygroundDescription: 'Evaluate policy expressions against a sample or custom request.',
+			mcpPlaygroundDescription: 'List and call tools through the MCP gateway.',
+			llmModelsDescription:
+				'Configure the models callers can request and the providers that serve them.',
+			llmPlaygroundDescription: 'Send test requests through the gateway.',
+			usingEmbeddedCostCatalog: 'Using the embedded cost catalog',
+			embeddedCostCatalogDescription:
+				'Agentgateway includes a built-in catalog of model pricing. Refresh the base catalog to get the latest pricing data.',
 			automaticValue: 'Automatic ({{value}})',
 			apiKeyBudgetsRequireDatabaseConfiguration:
 				'API key budgets require <code>config.database</code> to be configured.',
@@ -114,11 +171,9 @@ const en = {
 			azureModelsShouldSetAResourceName: 'Azure models should set a resource name.',
 			bedrockEndpoint: 'Bedrock endpoint',
 			bedrockEndpointDescription:
-				'Mantle supports native Anthropic and OpenAI APIs, including supported server-side tools and background requests. It requires Mantle-specific AWS permissions. Choose Runtime for existing Bedrock deployments, Bedrock Guardrails, cross-region inference, or Claude structured outputs. Prefer modes automatically select the other endpoint for models the catalog lists as available only there; unknown models use your preference. Only modes force the selected endpoint for chat, so unsupported models fail. Neither mode retries failed requests on the other endpoint. Embeddings and reranking are unaffected.',
+				'Mantle supports native Anthropic and OpenAI APIs, including supported server-side tools and background requests. It requires Mantle-specific AWS permissions. Choose Runtime for existing Bedrock deployments, inline Bedrock guardrails, cross-region inference, or Claude structured outputs. Bedrock guardrails configured on the Guardrails page work with either endpoint. Prefer modes automatically select the other endpoint for models the catalog lists as available only there; unknown models use your preference. Inline guardrails prevent fallback to Mantle and cannot be combined with either Mantle mode. Only modes force the selected endpoint for chat, so unsupported models fail. Neither mode retries failed requests on the other endpoint. Embeddings and reranking are unaffected.',
 			bedrockModelsShouldSetAnAwsRegion: 'Bedrock models should set an AWS region.',
 			commandRequired: 'Command is required.',
-			customProvidersNeedAtLeastOneSupportedFormat:
-				'Custom providers need at least one supported format.',
 			enterAValueOrChooseUnset: 'Enter a value, or choose Unset.',
 			exactValue: 'Exact value',
 			atLeastOneAuthorizationRuleIsRequired: 'At least one authorization rule is required.',
@@ -1293,8 +1348,6 @@ const en = {
 			environmentYaml: 'Environment YAML',
 			error: 'Error',
 			evaluate: 'Evaluate',
-			evaluatePolicyExpressionsAgainstSampleOrCustomRequestContextUsingTheGatewayCelEndpoint:
-				'Evaluate policy expressions against sample or custom request context using the gateway CEL endpoint.',
 			evaluateRequestCountDescriptorsWhileProcessingTheRequest:
 				'Evaluate request-count descriptors while processing the request.',
 			evaluateTokenDescriptorsAfterTheLlmResponseCompletes:
@@ -1521,8 +1574,6 @@ const en = {
 				'Incoming request headers to forward to the webhook.',
 			inheritance: 'Inheritance',
 			initialize: 'Initialize',
-			initializeAGatewayMcpSessionListToolsAndCallAToolThroughTheMcpListener:
-				'Initialize a gateway MCP session, list tools, and call a tool through the MCP listener.',
 			initializeFirst: 'Initialize first',
 			initializeOrSendAToolRequestToInspectMcpBehavior:
 				'Initialize or send a tool request to inspect MCP behavior.',
@@ -1874,8 +1925,6 @@ const en = {
 			oauth2ClientSecretUsedForTokenExchange: 'OAuth2 client secret used for token exchange.',
 			of3Enabled: 'of 3 enabled',
 			off: 'Off',
-			onboardProviderBackedModelsAndConfigureModelSpecificBehavior:
-				'Onboard provider-backed models and configure model-specific behavior.',
 			onlyQueryForAIpv4Records: 'Only query for A (IPv4) records.',
 			onlyQueryForAaaaIpv6Records: 'Only query for AAAA (IPv6) records.',
 			onlyTheFinalConditionalTargetCanOmitACondition:
@@ -2330,8 +2379,6 @@ const en = {
 			sendAConfiguredSecretValueToTheBackend: 'Send a configured secret value to the backend.',
 			sendACopyOfMatchingRequestsToAnotherBackend:
 				'Send a copy of matching requests to another backend.',
-			sendARealChatCompletionRequestThroughTheConfiguredGatewayForSetupDebugging:
-				'Send a real chat completion request through the configured gateway for setup debugging.',
 			sendContentToAnExternalGuardrailService: 'Send content to an external guardrail service.',
 			sendHeadersToTheExternalProcessingService: 'Send headers to the external processing service.',
 			sendRequestAndResponseDataToAnExternalProcessingService:

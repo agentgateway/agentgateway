@@ -114,15 +114,14 @@ step_deploy_metallb() {
    kubectl wait -n metallb-system pod --timeout=120s -l app=metallb --for=condition=Ready
   if [ -z "${METALLB_IPS4+x}" ]; then
     # Take IPs from the end of the docker kind network subnet to use for MetalLB IPs
-    DOCKER_KIND_SUBNET="$(docker inspect kind | jq '.[0].IPAM.Config[0].Subnet' -r)"
+    DOCKER_KIND_SUBNET="$(docker inspect kind | jq -r '.[0].IPAM.Config[].Subnet | select(contains(":") | not)')"
     METALLB_IPS4=()
     while read -r ip; do
       METALLB_IPS4+=("$ip")
     done < <(cidr_to_ips "$DOCKER_KIND_SUBNET" | tail -n 100)
     METALLB_IPS6=()
-    if [[ "$(docker inspect kind | jq '.[0].IPAM.Config | length' -r)" == 2 ]]; then
-      # Two configs? Must be dual stack.
-      DOCKER_KIND_SUBNET="$(docker inspect kind | jq '.[0].IPAM.Config[1].Subnet' -r)"
+    DOCKER_KIND_SUBNET="$(docker inspect kind | jq -r '.[0].IPAM.Config[].Subnet | select(contains(":"))')"
+    if [[ -n "$DOCKER_KIND_SUBNET" ]]; then
       while read -r ip; do
         METALLB_IPS6+=("$ip")
       done < <(cidr_to_ips "$DOCKER_KIND_SUBNET" | tail -n 100)

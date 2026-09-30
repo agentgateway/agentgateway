@@ -49,7 +49,14 @@ func GatewaysForDeployerTransformationFunc(
 			ports.Insert(l.Port)
 		}
 
-		lsets := krt.Fetch(kctx, listenerSets, krt.FilterIndex(byParentRefIndex, TargetRefIndexKey{
+		// Track spec and internal-port changes through generation and the annotation.
+		lsets := krt.PartialFetch(kctx, listenerSets, func(ls *gwv1.ListenerSet) *gwv1.ListenerSet {
+			return ls
+		}, func(a, b *gwv1.ListenerSet) bool {
+			return a.Name == b.Name && a.Namespace == b.Namespace && a.UID == b.UID &&
+				a.Generation == b.Generation && a.CreationTimestamp.Equal(&b.CreationTimestamp) &&
+				a.Annotations[annotations.InternalPorts] == b.Annotations[annotations.InternalPorts]
+		}, krt.FilterIndex(byParentRefIndex, TargetRefIndexKey{
 			Group:     wellknown.GatewayGroup,
 			Kind:      wellknown.GatewayKind,
 			Name:      gw.GetName(),

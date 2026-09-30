@@ -2358,7 +2358,11 @@ pub enum RejectAuditAction {
 #[apply(schema!)]
 pub struct RequestRejection {
 	/// Response body returned when content is rejected.
-	#[serde(default = "default_body", serialize_with = "ser_string_or_bytes")]
+	#[serde(
+		default = "default_body",
+		serialize_with = "ser_string_or_bytes",
+		deserialize_with = "de_string_or_bytes"
+	)]
 	pub body: Bytes,
 	/// HTTP status code returned when content is rejected.
 	#[serde(default = "default_code", with = "http_serde::status_code")]

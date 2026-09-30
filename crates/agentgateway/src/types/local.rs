@@ -85,7 +85,7 @@ impl NormalizedLocalConfig {
 		// Avoid shell expanding the comment for schema. Probably there are better ways to do this!
 		let s = s.replace("# yaml-language-server: $schema", "#");
 		let s = shellexpand::full(&s)?;
-		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
+		let local_config: LocalConfig = serdes::yaml::from_str(&s)?;
 		let mut registration_config = config.clone();
 		let registration_policy = Arc::new(config.budget_policy.registration_policy());
 		registration_config.budget_policy = registration_policy.clone();
@@ -105,9 +105,10 @@ impl NormalizedLocalConfig {
 }
 
 pub fn migrate_deprecated_local_config(s: &str) -> anyhow::Result<String> {
-	let cfg: serde_json::Value = serdes::yamlviajson::from_str(s)?;
-	let cfg = migrate_deprecated_frontend_policies(cfg)?;
-	serdes::yamlviajson::to_string(&cfg)
+	let mut document = yaml_serde_edit::YamlObject::<serde_json::Value>::parse(s)?;
+	let cfg = migrate_deprecated_frontend_policies(document.get().clone())?;
+	document.set(cfg)?;
+	Ok(document.get_string().to_owned())
 }
 
 fn migrate_deprecated_frontend_policies(
@@ -139,8 +140,7 @@ fn migrate_deprecated_frontend_policies(
 		"config".to_string(),
 		serde_json::Value::Object(deprecated_config),
 	);
-	let deprecated_cfg_yaml =
-		serdes::yamlviajson::to_string(&serde_json::Value::Object(deprecated_root))?;
+	let deprecated_cfg_yaml = serdes::yaml::to_string(&serde_json::Value::Object(deprecated_root))?;
 	let deprecated_cfg = crate::config::parse_config(deprecated_cfg_yaml, None)?;
 
 	let mut frontend_policies: LocalFrontendPolicies = serde_json::from_value(
@@ -426,6 +426,9 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	/// discovery controls wildcard expansion in the models endpoint. Defaults to the local catalog.
+	#[serde(default)]
+	discovery: llm::discovery::Discovery,
 	/// pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.
 	/// Defaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.
 	/// The prefix is removed before model routing.
@@ -1608,6 +1611,15 @@ impl LocalAIBackend {
 		for g in providers {
 			let mut group = vec![];
 			for p in g {
+				if let AIProvider::Bedrock(bedrock) = &p.provider
+					&& (bedrock.guardrail_identifier.is_some() || bedrock.guardrail_version.is_some())
+					&& matches!(
+						bedrock.endpoint_preference,
+						crate::llm::bedrock::BedrockEndpointPreference::MantlePreferred
+							| crate::llm::bedrock::BedrockEndpointPreference::MantleOnly
+					) {
+					bail!("Bedrock guardrails cannot be used with MantlePreferred or MantleOnly");
+				}
 				validate_inference_routing_scope(
 					p.policies.as_ref(),
 					InferenceRoutingScope::AIProviderPolicies,
@@ -1715,6 +1727,9 @@ impl LocalBackend {
 			LocalBackend::Internal(tgt) => vec![Backend::Internal(name, tgt.clone()).into()],
 			LocalBackend::Dynamic { target } => vec![Backend::Dynamic(name, target.clone()).into()],
 			LocalBackend::MCP(tgt) => {
+				if tgt.targets.len() <= 1 && tgt.targets.iter().any(|target| target.condition.is_some()) {
+					bail!("mcp target condition requires at least two configured targets");
+				}
 				let mut targets = vec![];
 				let mut backends = vec![];
 				for (idx, t) in tgt.targets.iter().enumerate() {
@@ -1793,6 +1808,7 @@ impl LocalBackend {
 					};
 					let t = McpTarget {
 						name: t.name.clone(),
+						condition: t.condition.clone(),
 						spec,
 					};
 					targets.push(Arc::new(t));
@@ -1905,6 +1921,8 @@ pub struct LocalMcpBackend {
 pub struct LocalMcpTarget {
 	/// Name identifying this MCP target, used to prefix tool and resource names when multiplexing.
 	pub name: McpTargetName,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub condition: Option<Arc<cel::Expression>>,
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
 	/// Transport policies for connecting to this target's backend. Not supported
@@ -4349,6 +4367,7 @@ async fn convert_llm_config(
 	Vec<BackendWithPolicies>,
 )> {
 	let LocalLLMConfig {
+		discovery,
 		path_prefix,
 		gateways: _,
 		port,
@@ -4507,12 +4526,6 @@ async fn convert_llm_config(
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Custom(custom_provider)) => {
-				if custom_provider.formats.is_empty() && model_config.passthrough.is_none() {
-					bail!(
-						"custom provider for model {} must specify at least one format",
-						model_config.name
-					);
-				}
 				if p.host_override.is_none() {
 					bail!(
 						"custom provider for model {} requires params.baseUrl",
@@ -4565,6 +4578,33 @@ async fn convert_llm_config(
 			};
 			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
+
+		let discovery = if !model_config.name.contains('*')
+			|| provider.override_model().is_some()
+			|| model_config
+				.overrides
+				.as_ref()
+				.is_some_and(|p| p.contains_key("model"))
+			|| model_config
+				.final_transformation
+				.as_ref()
+				.is_some_and(|p| p.contains_key("model"))
+		{
+			None
+		} else {
+			match model_config
+				.transformation
+				.as_ref()
+				.and_then(|p| p.get("model"))
+			{
+				Some(expression) => llm::model_transform::reverse_model_transformation(expression),
+				None => Some(llm::model_transform::ModelTransformation::Identity),
+			}
+			.map(|transformation| llm::discovery::ModelDiscovery {
+				provider: provider.provider(),
+				transformation,
+			})
+		};
 
 		// Create AI backend
 		let named_provider = NamedAIProvider {
@@ -4639,6 +4679,7 @@ async fn convert_llm_config(
 		});
 
 		router_models.push(llm::model_router::ModelRoute {
+			discovery,
 			id: model_config.id.clone(),
 			name: model_config.name.clone(),
 			created: startup_timestamp,
@@ -4752,7 +4793,8 @@ async fn convert_llm_config(
 	}
 
 	let router = llm::model_router::ModelRouter::new(router_models, router_virtual_models)
-		.with_path_prefix(path_prefix.to_string());
+		.with_path_prefix(path_prefix.to_string())
+		.with_discovery(discovery);
 	let router_backend_key = strng::new("llm:router");
 	all_backends.push(BackendWithPolicies {
 		backend: Backend::LLMRouter(local_name(router_backend_key.clone()), Arc::new(router)),

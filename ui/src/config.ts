@@ -396,14 +396,6 @@ export function modelWarnings(model: LlmModel): string[] {
 	if (provider === 'azure' && !model.params?.azureResourceName) {
 		warnings.push(tr('copy.azureModelsShouldSetAResourceName'));
 	}
-	if (
-		provider === 'custom' &&
-		typeof model.provider !== 'string' &&
-		'custom' in model.provider &&
-		!model.provider.custom.formats.length
-	) {
-		warnings.push(tr('copy.customProvidersNeedAtLeastOneSupportedFormat'));
-	}
 	return warnings;
 }
 

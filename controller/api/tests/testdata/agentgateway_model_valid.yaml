@@ -193,3 +193,16 @@ spec:
       - modelRef:
           name: anthropic-models
         model: anthropic/claude-haiku-4-5
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: bedrock-model-default-guardrail
+spec:
+  parentRefs:
+  - name: ai-gateway
+  provider: Bedrock
+  bedrock:
+    guardrail:
+      identifier: test-guardrail
+      version: "1"

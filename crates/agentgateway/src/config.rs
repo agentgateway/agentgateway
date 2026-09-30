@@ -37,7 +37,7 @@ pub fn parse_config(
 	// Shellexpend before parsing it
 	let contents = contents.replace("# yaml-language-server: $schema", "#");
 	let contents = shellexpand::full(&contents)?;
-	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
+	let nested: NestedRawConfig = serdes::yaml::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
 	let sensitive_headers = raw

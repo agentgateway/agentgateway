@@ -423,6 +423,7 @@ backends:
         name: "llm:router"
         namespace: ""
         target:
+          discovery: catalog
           models:
             - name: llama-3.1-8b-instant
               created: 0

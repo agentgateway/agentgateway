@@ -169,9 +169,7 @@ export function McpPlaygroundPage() {
 		<div className="page-stack">
 			<PageHeader
 				title={tr('copy.mcpPlayground')}
-				description={tr(
-					'copy.initializeAGatewayMcpSessionListToolsAndCallAToolThroughTheMcpListener'
-				)}
+				description={tr('copy.mcpPlaygroundDescription')}
 			/>
 			{needsCors ? (
 				<StatusBanner

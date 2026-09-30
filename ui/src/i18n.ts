@@ -17,6 +17,7 @@ function normalizeLanguage(value: string | null | undefined): AppLanguage | unde
 }
 
 function initialLanguage(): AppLanguage {
+	if (typeof window === 'undefined') return 'en';
 	const urlLanguage = new URLSearchParams(window.location.search).get('lang');
 	const storedLanguage = window.localStorage.getItem(languageStorageKey);
 	return (

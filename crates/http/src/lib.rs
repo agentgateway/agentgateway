@@ -96,6 +96,7 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 		.unwrap_or(DEFAULT_BUFFER_LIMIT)
 }
 
+/// Read with a size limit and the remaining [`Body::deadline`] budget.
 pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<bytes::Bytes, Error> {
 	body.into_bytes(limit).await
 }

@@ -116,6 +116,7 @@ backends:
         name: "llm:router"
         namespace: ""
         target:
+          discovery: catalog
           pathPrefix: /foo
           models:
             - name: anthropic/*
@@ -129,7 +130,10 @@ backends:
                 llm: {}
                 authorization: ~
               backendPolicies: []
-            - name: example/*
+            - discovery:
+                provider: completions-shared
+                transformation: identity
+              name: example/*
               created: 0
               visibility: public
               headerMatches: []

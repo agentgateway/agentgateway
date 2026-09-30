@@ -1501,6 +1501,35 @@ mod immediate_and_failure {
 	use super::*;
 
 	#[tokio::test]
+	async fn clean_stream_close_passes_through_response() {
+		let mock = body_mock(b"upstream-response").await;
+		let processing_options = json!({
+			"requestBodyMode": "fullDuplexStreamed",
+			"responseBodyMode": "fullDuplexStreamed",
+			"requestHeaderMode": "send",
+			"responseHeaderMode": "send",
+			"requestTrailerMode": "send",
+			"responseTrailerMode": "send",
+		});
+		let (mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_processing_options(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(CleanCloseAfterRequestExtProc::default),
+			"{}",
+			Some(processing_options),
+		)
+		.await;
+
+		let res = send_request_body(io, Method::POST, "http://lo", b"request").await;
+		assert_eq!(res.status(), 200);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"upstream-response");
+		let upstream_requests = mock.received_requests().await.unwrap_or_default();
+		assert_eq!(upstream_requests.len(), 1);
+		assert_eq!(upstream_requests[0].body.as_slice(), b"request");
+	}
+
+	#[tokio::test]
 	async fn immediate_response_request() {
 		let mock = simple_mock().await;
 		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock(
@@ -3146,6 +3175,40 @@ impl Handler for NopExtProc {
 		}
 		self.sent_resp_body = true;
 		Ok(())
+	}
+}
+
+#[derive(Debug, Default)]
+struct CleanCloseAfterRequestExtProc {
+	request_complete: bool,
+}
+
+#[async_trait::async_trait]
+impl Handler for CleanCloseAfterRequestExtProc {
+	async fn handle_request_body(
+		&mut self,
+		body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(request_body_response(Some(CommonResponse {
+				body_mutation: Some(BodyMutation {
+					mutation: Some(body_mutation::Mutation::StreamedResponse(
+						proto::StreamedBodyResponse {
+							body: body.body.clone(),
+							end_of_stream: body.end_of_stream,
+						},
+					)),
+				}),
+				..Default::default()
+			})))
+			.await;
+		self.request_complete = body.end_of_stream;
+		Ok(())
+	}
+
+	fn close_stream(&self) -> bool {
+		self.request_complete
 	}
 }
 

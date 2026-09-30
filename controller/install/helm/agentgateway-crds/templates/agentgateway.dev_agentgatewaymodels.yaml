@@ -155,6 +155,11 @@ spec:
                     pattern: ^[a-z0-9-]+$
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: Bedrock guardrails cannot be used with MantlePreferred
+                    or MantleOnly
+                  rule: '!has(self.guardrail) || !has(self.endpointPreference) ||
+                    !(self.endpointPreference in [''MantlePreferred'', ''MantleOnly''])'
               custom:
                 description: Provider-specific settings for a custom provider.
                 properties:

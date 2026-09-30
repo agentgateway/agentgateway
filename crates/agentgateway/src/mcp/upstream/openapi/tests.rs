@@ -1777,6 +1777,7 @@ async fn test_openapi_from_url() {
 	let local_backend = LocalBackend::MCP(LocalMcpBackend {
 		targets: vec![Arc::new(LocalMcpTarget {
 			name: "users-api".into(),
+			condition: None,
 			spec: local_target_spec,
 			policies: None,
 		})],

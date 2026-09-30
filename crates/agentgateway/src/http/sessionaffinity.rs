@@ -98,7 +98,7 @@ mod tests {
 
 	#[test]
 	fn policy_deserializes_cel_source() {
-		let policy: Policy = serde_yaml::from_str(
+		let policy: Policy = serde_norway::from_str(
 			r#"
 source: request.headers["x-session-id"]
 "#,

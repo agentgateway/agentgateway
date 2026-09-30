@@ -77,21 +77,28 @@ pub struct TransformerConfig {
 	pub metadata: Vec<(Strng, cel::Expression)>,
 }
 
+fn body_from_value(v: cel::Value<'_>) -> anyhow::Result<Option<Bytes>> {
+	// Null means "do not replace", the same contract header set uses for a null value.
+	// value_as_byte_or_json would otherwise serialize null as the four bytes `null`.
+	if matches!(v, cel::Value::Null) {
+		return Ok(None);
+	}
+	cel::value_as_byte_or_json(v).map(Some)
+}
+
 fn eval_body(
 	r: &RequestOrResponse,
 	expr: &Expression,
 	request: Option<&cel::RequestSnapshot>,
-) -> anyhow::Result<Bytes> {
+) -> anyhow::Result<Option<Bytes>> {
 	match r {
 		RequestOrResponse::Request(r) => {
 			let exec = cel::Executor::new_request(r);
-			let v = exec.eval(expr)?;
-			cel::value_as_byte_or_json(v)
+			body_from_value(exec.eval(expr)?)
 		},
 		RequestOrResponse::Response(r) => {
 			let exec = cel::Executor::new_response(request, r);
-			let v = exec.eval(expr)?;
-			cel::value_as_byte_or_json(v)
+			body_from_value(exec.eval(expr)?)
 		},
 	}
 }
@@ -140,17 +147,18 @@ fn json_to_header_value(v: &serde_json::Value) -> Option<HeaderValue> {
 }
 
 impl Transformation {
-	pub fn apply_request(&self, req: &mut crate::http::Request) {
+	pub fn apply_request(&self, req: &mut crate::http::Request) -> anyhow::Result<()> {
 		if let Some(config) = &self.request {
-			Self::apply(req.into(), config, None);
+			Self::apply(req.into(), config, None)?;
 		}
+		Ok(())
 	}
 
 	pub fn apply_response(
 		&self,
 		resp: &mut crate::http::Response,
 		request: Option<&RequestSnapshot>,
-	) {
+	) -> anyhow::Result<()> {
 		if let Some(request_metadata) = request.and_then(|req| req.metadata.as_ref()) {
 			// Transformation metadata is currently stored in request/response extensions.
 			// Seed request metadata into the response extension so response-phase CEL,
@@ -169,8 +177,9 @@ impl Transformation {
 			}
 		}
 		if let Some(config) = &self.response {
-			Self::apply(resp.into(), config, request);
+			Self::apply(resp.into(), config, request)?;
 		}
+		Ok(())
 	}
 
 	fn exec_header<'a>(
@@ -197,7 +206,7 @@ impl Transformation {
 		mut r: RequestOrResponse<'a>,
 		cfg: &TransformerConfig,
 		request: Option<&'a RequestSnapshot>,
-	) {
+	) -> anyhow::Result<()> {
 		if !cfg.metadata.is_empty() {
 			for (name, expr) in &cfg.metadata {
 				if let Ok(v) = eval_metadata(&r, expr, request) {
@@ -252,10 +261,14 @@ impl Transformation {
 			r.headers().remove(k);
 		}
 		if let Some(b) = &cfg.body {
-			// If it fails, set an empty body
-			let b = eval_body(&r, b, request).unwrap_or_default();
-			r.replace_body_bytes(b);
+			// Null leaves the body. Any other success replaces it.
+			let bytes = eval_body(&r, b, request)
+				.map_err(|err| anyhow::anyhow!("transformation body expression failed: {err}"))?;
+			if let Some(bytes) = bytes {
+				r.replace_body_bytes(bytes);
+			}
 		}
+		Ok(())
 	}
 
 	fn get_meta<'a>(r: &'a mut RequestOrResponse<'_>) -> &'a mut TransformationMetadata {
@@ -281,7 +294,9 @@ impl crate::store::RequestPolicyTrait for Transformation {
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
 	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
-		self.apply_request(req);
+		self
+			.apply_request(req)
+			.map_err(crate::proxy::ProxyError::Processing)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 
@@ -310,7 +325,9 @@ impl store::BackendPolicyTrait for Transformation {
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self.apply_request(req);
+		self
+			.apply_request(req)
+			.map_err(crate::proxy::ProxyError::Processing)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 }
@@ -321,7 +338,9 @@ impl store::ResponsePolicyTrait for Transformation {
 		log: &mut RequestLog,
 		resp: &mut Response,
 	) -> Result<PolicyResponse, ProxyResponse> {
-		self.apply_response(resp, log.request_snapshot.as_deref());
+		self
+			.apply_response(resp, log.request_snapshot.as_deref())
+			.map_err(crate::proxy::ProxyError::Processing)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
 }

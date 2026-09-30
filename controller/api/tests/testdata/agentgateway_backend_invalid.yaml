@@ -308,3 +308,33 @@ spec:
           name: llm-service
         formats:
         - type: Completions
+---
+_err: Bedrock guardrails cannot be used with MantlePreferred or MantleOnly
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-backend-mantlepreferred-guardrail
+spec:
+  ai:
+    provider:
+      bedrock:
+        endpointPreference: MantlePreferred
+        guardrail:
+          identifier: test-guardrail
+          version: "1"
+---
+_err: Bedrock guardrails cannot be used with MantlePreferred or MantleOnly
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: bedrock-group-mantleonly-guardrail
+spec:
+  ai:
+    groups:
+    - providers:
+      - name: bedrock
+        bedrock:
+          endpointPreference: MantleOnly
+          guardrail:
+            identifier: test-guardrail
+            version: "1"

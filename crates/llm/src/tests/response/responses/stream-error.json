@@ -2,7 +2,10 @@ event: response.created
 data: {"type":"response.created","sequence_number":1,"response":{"id":"resp_terminal","object":"response","created_at":123,"model":"gpt-5.6-luna","status":"in_progress","output":[]}}
 
 event: error
-data: {"type":"error","sequence_number":2,"code":"server_error","message":"provider failed","param":null}
+data: {"type":"error","sequence_number":2,"code":"rate_limit_exceeded","message":"provider failed","param":null}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","item_id":"msg_partial","output_index":0,"content_index":0,"delta":"This must not appear.","sequence_number":3}
 
 data: [DONE]
 

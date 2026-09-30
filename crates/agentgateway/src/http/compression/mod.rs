@@ -153,6 +153,8 @@ where
 	)))
 }
 
+/// Buffer and decompress within the attached body deadline, limiting decoded bytes.
+/// Adds no timeout when no deadline is attached.
 pub async fn to_bytes_with_decompression(
 	body: crate::http::Body,
 	encoding: Option<&ContentEncoding>,
@@ -165,7 +167,15 @@ pub async fn to_bytes_with_decompression(
 		},
 		Some(ce) => match detect_encoding(ce) {
 			EncodingDecision::Single(enc) => {
-				Ok((Some(enc), decode_body(body.into_boxed(), enc, limit).await?))
+				let deadline = body.deadline();
+				let read = decode_body(body.into_boxed(), enc, limit);
+				let bytes = match deadline {
+					Some(deadline) => tokio::time::timeout_at(deadline, read)
+						.await
+						.map_err(axum_core::Error::new)??,
+					None => read.await?,
+				};
+				Ok((Some(enc), bytes))
 			},
 			EncodingDecision::None => Ok((None, body.into_bytes(limit).await.map_err(map_body_error)?)),
 			EncodingDecision::Multiple | EncodingDecision::Unsupported => Err(Error::UnsupportedEncoding),
@@ -402,5 +412,29 @@ mod tests {
 		let ce = make_content_encoding(GZIP);
 		let result = to_bytes_with_decompression(body, Some(&ce), 10).await;
 		assert!(matches!(result, Err(Error::LimitExceeded)));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn test_buffered_decompression_deadline() {
+		use std::convert::Infallible;
+		use std::time::Duration;
+
+		use futures_util::StreamExt;
+		use tokio::time::{Instant, advance};
+
+		let compressed = encode_body(b"hello", GZIP).await.unwrap();
+		let stream = futures_util::stream::once(async move {
+			Ok::<_, Infallible>(compressed.slice(..compressed.len() - 1))
+		})
+		.chain(futures_util::stream::pending());
+		let mut body = Body::from_stream(stream);
+		let start = Instant::now();
+		body.set_deadline(start + Duration::from_secs(5));
+		advance(Duration::from_secs(3)).await;
+
+		let ce = make_content_encoding(GZIP);
+		let result = to_bytes_with_decompression(body, Some(&ce), 1024).await;
+		assert!(matches!(result, Err(Error::Body(_))));
+		assert_eq!(Instant::now() - start, Duration::from_secs(5));
 	}
 }

@@ -63,6 +63,21 @@ jobs:
         fi
         go test ./controller/pkg/cli/catalog
 
+    - name: Generate pull request description
+      if: steps.changes.outputs.changed == 'true'
+      shell: bash
+      run: |
+        npx -y gron@4.4.0 < "$RUNNER_TEMP/model-catalog-old.json" > "$RUNNER_TEMP/model-catalog-old.gron"
+        npx -y gron@4.4.0 < "$RUNNER_TEMP/model-catalog-new.json" > "$RUNNER_TEMP/model-catalog-new.gron"
+        {
+          echo 'Automated refresh of the checked-in model catalog from models.dev.'
+          echo
+          echo '```diff'
+          diff -u --label a/catalog/model-catalog.json --label b/catalog/model-catalog.json \
+            "$RUNNER_TEMP/model-catalog-old.gron" "$RUNNER_TEMP/model-catalog-new.gron" || [ "$?" -eq 1 ]
+          echo '```'
+        } > "$RUNNER_TEMP/model-catalog-pr.md"
+
     - name: Commit and open or update pull request
       if: steps.changes.outputs.changed == 'true'
       shell: bash
@@ -91,7 +106,7 @@ jobs:
             --base main \
             --head "$BRANCH" \
             --title 'Update model catalog' \
-            --body 'Automated refresh of the checked-in model catalog from models.dev.'
+            --body-file "$RUNNER_TEMP/model-catalog-pr.md"
         else
-          echo "Updated pull request #$pr"
+          gh pr edit "$pr" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/model-catalog-pr.md"
         fi
