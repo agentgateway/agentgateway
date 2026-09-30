@@ -32,13 +32,11 @@ info:
             "cachePoint": {
               "type": "default"
             }
+          },
+          {
+            "text": "The following skills are available for use."
           }
         ]
-      }
-    ],
-    "system": [
-      {
-        "text": "The following skills are available for use."
       }
     ],
     "inferenceConfig": {

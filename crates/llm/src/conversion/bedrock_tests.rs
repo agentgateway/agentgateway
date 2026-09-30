@@ -2230,3 +2230,581 @@ fn test_messages_unrecognized_cache_control_ttl_omits_ttl_field() {
 
 	assert_eq!(cache_point.ttl, None);
 }
+
+#[test]
+fn test_messages_cache_control_on_dropped_block_still_inserts_cache_point() {
+	use types::messages::typed as messages;
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("eu-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	// A ServerToolUse block has no Bedrock equivalent and is dropped during
+	// translation, but its cache_control must still land a cache point —
+	// this is the block Claude Code's sliding breakpoint often ends up on.
+	let req = messages::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::Assistant,
+			content: vec![
+				messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "hello".to_string(),
+					citations: None,
+					cache_control: None,
+				}),
+				messages::ContentBlock::ServerToolUse {
+					id: "srvtool_1".to_string(),
+					name: "web_search".to_string(),
+					input: serde_json::json!({}),
+					cache_control: Some(messages::CacheControlEphemeral::Ephemeral { ttl: None }),
+				},
+			],
+		}],
+		system: None,
+		tools: None,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let content = &out.messages.first().expect("one message").content;
+
+	assert!(
+		content
+			.iter()
+			.all(|b| !matches!(b, types::bedrock::ContentBlock::ToolUse(_))),
+		"the unsupported ServerToolUse block itself must still be dropped"
+	);
+	assert!(
+		content
+			.iter()
+			.any(|b| matches!(b, types::bedrock::ContentBlock::CachePoint(_))),
+		"cache_control on the dropped ServerToolUse block must still insert a cache point"
+	);
+}
+
+fn mid_system_test_provider() -> Provider {
+	Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	}
+}
+
+fn mid_system_base_request(
+	messages: Vec<types::messages::typed::Message>,
+	system: Option<types::messages::typed::SystemPrompt>,
+) -> types::messages::typed::Request {
+	types::messages::typed::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		system,
+		messages,
+		tools: None,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	}
+}
+
+#[test]
+fn leading_system_messages_go_to_top_level_system() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	// A leading system prompt via `req.system` still goes to the top-level
+	// `system` field and doesn't produce a synthetic message.
+	let req = mid_system_base_request(
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hi".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		Some(messages::SystemPrompt::Text("You are helpful.".to_string())),
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let system = out.system.expect("system present");
+	assert_eq!(system.len(), 1);
+	assert!(
+		matches!(&system[0], types::bedrock::SystemContentBlock::Text { text }
+		if text == "You are helpful.")
+	);
+	assert_eq!(out.messages.len(), 1);
+	assert_eq!(out.messages[0].role, types::bedrock::Role::User);
+
+	// A leading `role: "system"` entry inside `messages` (not `req.system`)
+	// must also still land in the top-level `system` field, and must not
+	// appear as its own message.
+	let req = mid_system_base_request(
+		vec![
+			messages::Message {
+				role: messages::Role::System,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "You are also helpful.".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "hi".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+		],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let system = out.system.expect("system present");
+	assert_eq!(system.len(), 1);
+	assert!(
+		matches!(&system[0], types::bedrock::SystemContentBlock::Text { text }
+		if text == "You are also helpful.")
+	);
+	assert_eq!(
+		out.messages.len(),
+		1,
+		"the leading system message must not become its own message"
+	);
+	assert_eq!(out.messages[0].role, types::bedrock::Role::User);
+}
+
+#[test]
+fn mid_conversation_system_messages_keep_the_prefix_stable() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	fn text_msg(role: messages::Role, text: &str) -> messages::Message {
+		messages::Message {
+			role,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: text.to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}
+	}
+
+	let leading_system = Some(messages::SystemPrompt::Text(
+		"You are Claude Code.".to_string(),
+	));
+
+	// Turn 2: [user, assistant, mid-system, user]
+	let turn2_messages = vec![
+		text_msg(messages::Role::User, "do X"),
+		text_msg(messages::Role::Assistant, "did X"),
+		text_msg(
+			messages::Role::System,
+			"<system-reminder>reminder A</system-reminder>",
+		),
+		text_msg(messages::Role::User, "do Y"),
+	];
+
+	// Turn 3: turn 2's messages plus one more exchange plus one more
+	// mid-conversation system message.
+	let mut turn3_messages = turn2_messages.clone();
+	turn3_messages.push(text_msg(messages::Role::Assistant, "did Y"));
+	turn3_messages.push(text_msg(
+		messages::Role::System,
+		"<system-reminder>reminder B</system-reminder>",
+	));
+	turn3_messages.push(text_msg(messages::Role::User, "do Z"));
+
+	let (turn2_out, _) = super::from_messages::translate_internal(
+		mid_system_base_request(turn2_messages, leading_system.clone()),
+		&provider,
+		None,
+	)
+	.unwrap();
+	let (turn3_out, _) = super::from_messages::translate_internal(
+		mid_system_base_request(turn3_messages, leading_system.clone()),
+		&provider,
+		None,
+	)
+	.unwrap();
+
+	// The leading system prompt is untouched by mid-conversation injections.
+	assert_eq!(
+		serde_json::to_value(&turn2_out.system).unwrap(),
+		serde_json::to_value(&turn3_out.system).unwrap()
+	);
+
+	// Strip CachePoint blocks before comparing, since cache point placement
+	// can shift turn to turn; none of the messages here carry cache_control,
+	// so this is mostly a no-op safety net.
+	fn strip_cache_points(msgs: &[types::bedrock::Message]) -> Vec<serde_json::Value> {
+		msgs
+			.iter()
+			.map(|m| {
+				let content: Vec<_> = m
+					.content
+					.iter()
+					.filter(|b| !matches!(b, types::bedrock::ContentBlock::CachePoint(_)))
+					.collect();
+				serde_json::json!({ "role": m.role, "content": content })
+			})
+			.collect()
+	}
+
+	let t2 = strip_cache_points(&turn2_out.messages);
+	let t3 = strip_cache_points(&turn3_out.messages);
+
+	assert!(t3.len() >= t2.len());
+	assert_eq!(
+		&t3[..t2.len()],
+		&t2[..],
+		"turn2's messages must be a strict prefix of turn3's"
+	);
+}
+
+#[test]
+fn mid_conversation_system_message_with_cache_control_keeps_cache_point() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	fn ephemeral() -> Option<messages::CacheControlEphemeral> {
+		Some(messages::CacheControlEphemeral::Ephemeral { ttl: None })
+	}
+
+	// 5 cache_control markers in total: leading system, two in the first
+	// user message, the mid-conversation system message, and one more
+	// afterwards. Only 4 cache points may be inserted globally.
+	let req = mid_system_base_request(
+		vec![
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![
+					messages::ContentBlock::Text(messages::ContentTextBlock {
+						text: "u1a".to_string(),
+						citations: None,
+						cache_control: ephemeral(),
+					}),
+					messages::ContentBlock::Text(messages::ContentTextBlock {
+						text: "u1b".to_string(),
+						citations: None,
+						cache_control: ephemeral(),
+					}),
+				],
+			},
+			messages::Message {
+				role: messages::Role::Assistant,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "a1".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+			messages::Message {
+				role: messages::Role::System,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "mid-system".to_string(),
+					citations: None,
+					cache_control: ephemeral(),
+				})],
+			},
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "u2".to_string(),
+					citations: None,
+					cache_control: ephemeral(),
+				})],
+			},
+		],
+		Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "leading".to_string(),
+				cache_control: ephemeral(),
+			},
+		])),
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+
+	let system_cache_points = out
+		.system
+		.as_ref()
+		.map(|s| {
+			s.iter()
+				.filter(|b| matches!(b, types::bedrock::SystemContentBlock::CachePoint { .. }))
+				.count()
+		})
+		.unwrap_or(0);
+	let message_cache_points: usize = out
+		.messages
+		.iter()
+		.flat_map(|m| m.content.iter())
+		.filter(|b| matches!(b, types::bedrock::ContentBlock::CachePoint(_)))
+		.count();
+
+	assert_eq!(
+		system_cache_points + message_cache_points,
+		4,
+		"the global cache point cap of 4 must be enforced across system + messages"
+	);
+
+	// The mid-conversation system message must have merged into the
+	// message list as a Text block, and (given cap consumption in
+	// encounter order: leading, u1a, u1b, mid-system are the first 4
+	// markers) it should have received its own cache point, immediately
+	// after its Text block.
+	let all_blocks: Vec<&types::bedrock::ContentBlock> =
+		out.messages.iter().flat_map(|m| m.content.iter()).collect();
+	let mid_system_idx = all_blocks
+		.iter()
+		.position(|b| matches!(b, types::bedrock::ContentBlock::Text(t) if t == "mid-system"))
+		.expect("mid-system text block must be present");
+	assert!(
+		matches!(
+			all_blocks.get(mid_system_idx + 1),
+			Some(types::bedrock::ContentBlock::CachePoint(_))
+		),
+		"the mid-conversation system message's cache_control should have consumed the 4th cache point"
+	);
+}
+
+#[test]
+fn system_message_between_tool_use_and_tool_result_falls_back_to_system() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	// [user, assistant(tool_use), system, user(tool_result)]. A tool_result
+	// must appear in a user-role message, so the mid-conversation system
+	// message sits between the assistant's tool_use and that user turn.
+	let req = mid_system_base_request(
+		vec![
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "run the tool".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+			messages::Message {
+				role: messages::Role::Assistant,
+				content: vec![messages::ContentBlock::ToolUse {
+					id: "tool_1".to_string(),
+					name: "bash".to_string(),
+					input: serde_json::json!({"cmd": "ls"}),
+					cache_control: None,
+				}],
+			},
+			messages::Message {
+				role: messages::Role::System,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "<system-reminder>reminder</system-reminder>".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::ToolResult {
+					tool_use_id: "tool_1".to_string(),
+					content: messages::ToolResultContent::Text("file1\nfile2".to_string()),
+					cache_control: None,
+					is_error: None,
+				}],
+			},
+		],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+
+	// Bedrock's Converse API rejects a message that mixes plain content
+	// (text) with a `toolResult` block in the same turn. The system message
+	// here sits between an Assistant(tool_use) and a User(tool_result): it
+	// can't merge backward (previous message is Assistant) and can't merge
+	// forward (the next message is entirely ToolResult content), so it must
+	// fall back to the top-level `system` field for this occurrence -
+	// safe, though it reintroduces the cache-prefix shift for just this
+	// message rather than corrupting the tool_result turn.
+	assert_eq!(out.messages.len(), 3);
+	assert_eq!(out.messages[0].role, types::bedrock::Role::User);
+	assert_eq!(out.messages[1].role, types::bedrock::Role::Assistant);
+	assert_eq!(out.messages[2].role, types::bedrock::Role::User);
+
+	let tool_result_content = &out.messages[2].content;
+	assert_eq!(
+		tool_result_content.len(),
+		1,
+		"the tool_result turn must contain only the ToolResult block, never mixed with text"
+	);
+	assert!(matches!(
+		&tool_result_content[0],
+		types::bedrock::ContentBlock::ToolResult(_)
+	));
+
+	let system = out
+		.system
+		.expect("system present (fallback for the unsafe mid-conversation message)");
+	assert!(
+		system.iter().any(
+			|b| matches!(b, types::bedrock::SystemContentBlock::Text { text } if text.contains("reminder"))
+		),
+		"the reminder text must have been hoisted into the top-level system field"
+	);
+}
+
+#[test]
+fn system_message_after_tool_result_falls_back_to_system() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	// [user, assistant(tool_use), user(tool_result), system]. This is the
+	// most common real-world shape (Claude Code appends its reminder right
+	// after a tool result, as the last message in the request). The system
+	// message can't merge backward into the tool_result-only message
+	// without mixing content types, and there's no following message to
+	// merge forward into, so it must fall back to the top-level `system`
+	// field.
+	let req = mid_system_base_request(
+		vec![
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "run the tool".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+			messages::Message {
+				role: messages::Role::Assistant,
+				content: vec![messages::ContentBlock::ToolUse {
+					id: "tool_1".to_string(),
+					name: "bash".to_string(),
+					input: serde_json::json!({"cmd": "ls"}),
+					cache_control: None,
+				}],
+			},
+			messages::Message {
+				role: messages::Role::User,
+				content: vec![messages::ContentBlock::ToolResult {
+					tool_use_id: "tool_1".to_string(),
+					content: messages::ToolResultContent::Text("file1\nfile2".to_string()),
+					cache_control: None,
+					is_error: None,
+				}],
+			},
+			messages::Message {
+				role: messages::Role::System,
+				content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "<system-reminder>reminder</system-reminder>".to_string(),
+					citations: None,
+					cache_control: None,
+				})],
+			},
+		],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+
+	assert_eq!(out.messages.len(), 3);
+	let tool_result_content = &out.messages[2].content;
+	assert_eq!(
+		tool_result_content.len(),
+		1,
+		"the tool_result turn must contain only the ToolResult block, never mixed with text"
+	);
+	assert!(matches!(
+		&tool_result_content[0],
+		types::bedrock::ContentBlock::ToolResult(_)
+	));
+
+	let system = out
+		.system
+		.expect("system present (fallback for the unsafe mid-conversation message)");
+	assert!(
+		system.iter().any(
+			|b| matches!(b, types::bedrock::SystemContentBlock::Text { text } if text.contains("reminder"))
+		),
+		"the reminder text must have been hoisted into the top-level system field"
+	);
+}
+
+#[test]
+fn consecutive_mid_conversation_system_messages_merge() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	fn sys(text: &str) -> messages::Message {
+		messages::Message {
+			role: messages::Role::System,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: text.to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}
+	}
+	fn user(text: &str) -> messages::Message {
+		messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: text.to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}
+	}
+
+	let req = mid_system_base_request(
+		vec![
+			user("hello"),
+			sys("reminder A"),
+			sys("reminder B"),
+			user("world"),
+		],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+
+	// Everything after the first user message must merge into ONE User
+	// message, in order.
+	assert_eq!(out.messages.len(), 1);
+	assert_eq!(out.messages[0].role, types::bedrock::Role::User);
+	let texts: Vec<&str> = out.messages[0]
+		.content
+		.iter()
+		.map(|b| match b {
+			types::bedrock::ContentBlock::Text(t) => t.as_str(),
+			_ => panic!("expected only Text blocks"),
+		})
+		.collect();
+	assert_eq!(texts, vec!["hello", "reminder A", "reminder B", "world"]);
+}

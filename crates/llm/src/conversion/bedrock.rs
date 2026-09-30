@@ -1674,32 +1674,68 @@ pub mod from_messages {
 		});
 
 		// Convert typed Anthropic messages to Bedrock messages
-		let mut messages = Vec::new();
+		let mut messages: Vec<bedrock::Message> = Vec::new();
+		// Bedrock's cache prefix must stay append-only: only a system message
+		// that appears before any user/assistant turn can safely live in the
+		// top-level `system` field. A system message that shows up mid-
+		// conversation must be woven into the message list in position instead,
+		// or it silently shifts the cached prefix on every later turn. It is
+		// held here until we know it can be attached to a neighboring message
+		// without mixing plain content with `toolResult` blocks in the same
+		// turn (Bedrock's Converse API rejects that combination).
+		let mut leading_system = true;
+		let mut held_system_content: Vec<bedrock::ContentBlock> = Vec::new();
 		for msg in req.messages {
 			let role = match msg.role {
 				messages::Role::Assistant => bedrock::Role::Assistant,
 				messages::Role::User => bedrock::Role::User,
 				messages::Role::System => {
-					for block in msg.content {
-						if let messages::ContentBlock::Text(messages::ContentTextBlock {
-							text,
-							cache_control,
-							..
-						}) = block
-						{
-							let system_content = system_content.get_or_insert_with(Vec::new);
-							system_content.push(bedrock::SystemContentBlock::Text { text });
-							helpers::maybe_insert_cache_point(
-								system_content,
-								cache_control.is_some(),
-								helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
-								&mut cache_points_used,
-							);
+					if leading_system {
+						for block in msg.content {
+							if let messages::ContentBlock::Text(messages::ContentTextBlock {
+								text,
+								cache_control,
+								..
+							}) = block
+							{
+								let system_content = system_content.get_or_insert_with(Vec::new);
+								system_content.push(bedrock::SystemContentBlock::Text { text });
+								helpers::maybe_insert_cache_point(
+									system_content,
+									cache_control.is_some(),
+									helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+									&mut cache_points_used,
+								);
+							}
+						}
+					} else {
+						// Mid-conversation: cannot go to top-level `system` without
+						// shifting the cached prefix. Hold it and weave it into the
+						// message list once we see whether the neighboring message
+						// is safe to attach to (see `flush_held_system_content`).
+						for block in msg.content {
+							if let messages::ContentBlock::Text(messages::ContentTextBlock {
+								text,
+								cache_control,
+								..
+							}) = block
+							{
+								if !text.is_empty() {
+									held_system_content.push(bedrock::ContentBlock::Text(text));
+								}
+								helpers::maybe_insert_cache_point(
+									&mut held_system_content,
+									cache_control.is_some(),
+									helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+									&mut cache_points_used,
+								);
+							}
 						}
 					}
 					continue;
 				},
 			};
+			leading_system = false;
 
 			// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
 			let mut content = Vec::with_capacity(msg.content.len() * 2);
@@ -1836,16 +1872,61 @@ pub mod from_messages {
 						false,
 						None,
 					),
-					messages::ContentBlock::WebSearchToolResult { .. } => continue,
+					// These block types have no Bedrock equivalent and are dropped, but a
+					// cache_control on one of them must still land a cache point at this
+					// position — otherwise Claude Code's sliding breakpoint (often placed
+					// on the last block of the last message) silently disappears along
+					// with the block, and every later turn misses cache for everything
+					// after the previous surviving breakpoint.
+					messages::ContentBlock::WebSearchToolResult { cache_control, .. } => {
+						helpers::maybe_insert_cache_point(
+							&mut content,
+							cache_control.is_some(),
+							helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+							&mut cache_points_used,
+						);
+						continue;
+					},
 					messages::ContentBlock::RedactedThinking { data } => (
 						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
 							redacted_content: data,
 						}),
 						false,
+						None,
 					),
-					messages::ContentBlock::Document(_) => continue,
-					messages::ContentBlock::SearchResult(_) => continue,
-					messages::ContentBlock::ServerToolUse { .. } => continue,
+					messages::ContentBlock::Document(messages::ContentDocumentBlock {
+						cache_control,
+						..
+					}) => {
+						helpers::maybe_insert_cache_point(
+							&mut content,
+							cache_control.is_some(),
+							helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+							&mut cache_points_used,
+						);
+						continue;
+					},
+					messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+						cache_control,
+						..
+					}) => {
+						helpers::maybe_insert_cache_point(
+							&mut content,
+							cache_control.is_some(),
+							helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+							&mut cache_points_used,
+						);
+						continue;
+					},
+					messages::ContentBlock::ServerToolUse { cache_control, .. } => {
+						helpers::maybe_insert_cache_point(
+							&mut content,
+							cache_control.is_some(),
+							helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl())),
+							&mut cache_points_used,
+						);
+						continue;
+					},
 					messages::ContentBlock::Unknown => continue,
 				};
 
@@ -1859,7 +1940,67 @@ pub mod from_messages {
 				);
 			}
 
-			messages.push(bedrock::Message { role, content });
+			if !held_system_content.is_empty() {
+				let can_append_previous = matches!(messages.last(), Some(last) if last.role == bedrock::Role::User)
+					&& !helpers::contains_tool_result(&messages.last().unwrap().content);
+				if can_append_previous {
+					messages
+						.last_mut()
+						.unwrap()
+						.content
+						.append(&mut held_system_content);
+				} else if role == bedrock::Role::User && !helpers::contains_tool_result(&content) {
+					let mut merged = std::mem::take(&mut held_system_content);
+					merged.append(&mut content);
+					content = merged;
+				} else {
+					// Neither neighbor can safely take this without mixing plain
+					// content with a `toolResult` block in the same turn (Bedrock
+					// rejects that). Fall back to the top-level `system` field for
+					// just this occurrence — safe, though it reintroduces the cache
+					// shift for this specific message.
+					let target = system_content.get_or_insert_with(Vec::new);
+					for block in held_system_content.drain(..) {
+						match block {
+							bedrock::ContentBlock::Text(text) => {
+								target.push(bedrock::SystemContentBlock::Text { text });
+							},
+							bedrock::ContentBlock::CachePoint(cache_point) => {
+								target.push(bedrock::SystemContentBlock::CachePoint { cache_point });
+							},
+							_ => {},
+						}
+					}
+				}
+				held_system_content.clear();
+			}
+
+			helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
+		}
+
+		if !held_system_content.is_empty() {
+			let can_append_previous = matches!(messages.last(), Some(last) if last.role == bedrock::Role::User)
+				&& !helpers::contains_tool_result(&messages.last().unwrap().content);
+			if can_append_previous {
+				messages
+					.last_mut()
+					.unwrap()
+					.content
+					.append(&mut held_system_content);
+			} else {
+				let target = system_content.get_or_insert_with(Vec::new);
+				for block in held_system_content.drain(..) {
+					match block {
+						bedrock::ContentBlock::Text(text) => {
+							target.push(bedrock::SystemContentBlock::Text { text });
+						},
+						bedrock::ContentBlock::CachePoint(cache_point) => {
+							target.push(bedrock::SystemContentBlock::CachePoint { cache_point });
+						},
+						_ => {},
+					}
+				}
+			}
 		}
 
 		// Build inference config from typed fields
@@ -3759,6 +3900,15 @@ mod helpers {
 			Some("5m") => Some(bedrock::CachePointTtl::FiveMinutes),
 			_ => None,
 		}
+	}
+
+	/// Bedrock's Converse API rejects a message that mixes a `toolResult`
+	/// block with plain content (text/image/etc.) in the same turn. Anything
+	/// we weave into an existing message must check this first.
+	pub fn contains_tool_result(content: &[bedrock::ContentBlock]) -> bool {
+		content
+			.iter()
+			.any(|b| matches!(b, bedrock::ContentBlock::ToolResult(_)))
 	}
 
 	pub trait CachePointTarget {
