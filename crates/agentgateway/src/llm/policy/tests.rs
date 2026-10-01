@@ -82,6 +82,7 @@ fn guardrail_metric(
 async fn audit_mode_records_allow_when_nothing_matches() {
 	let guard = ResponseGuard {
 		rejection: Default::default(),
+		scope: default_response_scope(),
 		kind: ResponseGuardKind::Regex(RegexRules {
 			action: Action::Audit,
 			rules: vec![RegexRule::Regex {
@@ -124,6 +125,7 @@ async fn audit_mode_records_allow_when_nothing_matches() {
 async fn audit_mode_records_audit_and_passes_through_on_match() {
 	let guard = ResponseGuard {
 		rejection: Default::default(),
+		scope: default_response_scope(),
 		kind: ResponseGuardKind::Regex(RegexRules {
 			action: Action::Audit,
 			rules: vec![RegexRule::Regex {
@@ -218,6 +220,7 @@ async fn streaming_guard_records_one_metric_per_stream() {
 
 	let guard = ResponseGuard {
 		rejection: Default::default(),
+		scope: default_response_scope(),
 		kind: ResponseGuardKind::Regex(RegexRules {
 			action: Action::Audit,
 			rules: vec![RegexRule::Regex {
@@ -989,7 +992,8 @@ fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: 
 
 /// Same as `apply_bedrock_request_mask`, but for responses.
 fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], masked: &[&str]) {
-	assert_eq!(Policy::response_texts(resp), sent);
+	let (texts, in_scope) = Policy::scoped_response_texts(resp, &default_response_scope());
+	assert_eq!(texts, sent);
 	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(masked, bedrock_anonymized_assessments()),
 		sent.len(),
@@ -997,9 +1001,11 @@ fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], maske
 		&bedrock_test_config(),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
-	let (_, rejection) =
-		Policy::apply_response_guard_outcome(outcome.map_mask(ResponseGuardMutation::Texts), resp)
-			.unwrap();
+	let (_, rejection) = Policy::apply_response_guard_outcome(
+		outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+		resp,
+	)
+	.unwrap();
 	assert!(rejection.is_none());
 }
 
@@ -2572,6 +2578,7 @@ fn run_apply_regex_response(
 	fmt: ChatFmt,
 	action: Action,
 	rules: Vec<RegexRule>,
+	scope: Vec<ContentScope>,
 	input: serde_json::Value,
 ) -> (GuardrailAction, serde_json::Value) {
 	let rules = RegexRules { action, rules };
@@ -2579,23 +2586,23 @@ fn run_apply_regex_response(
 	match fmt {
 		ChatFmt::Anthropic => {
 			let mut resp: crate::llm::types::messages::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Completions => {
 			let mut resp: crate::llm::types::completions::Response =
 				serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Responses => {
 			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Gemini => {
 			let mut resp: crate::llm::types::gemini::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp.0).unwrap())
 		},
 	}
@@ -3506,7 +3513,8 @@ fn test_apply_regex_response_preserves_tool_structure(
 	#[case] input: serde_json::Value,
 	#[case] expected: Option<serde_json::Value>,
 ) {
-	let (action, actual) = run_apply_regex_response(fmt, action, rules, input);
+	let (action, actual) =
+		run_apply_regex_response(fmt, action, rules, default_response_scope(), input);
 	match expected {
 		Some(expected) => {
 			assert_eq!(action, GuardrailAction::Mask);
@@ -3514,6 +3522,80 @@ fn test_apply_regex_response_preserves_tool_structure(
 		},
 		None => assert_eq!(action, GuardrailAction::Reject),
 	}
+}
+
+// The model put an SSN in a tool call's arguments; the agent would act on it.
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic(
+	ChatFmt::Anthropic,
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "tool_use", "id": "toolu_01", "name": "save_note", "input": {"note": "ssn 123-45-6789"}}
+		]
+	}),
+	"/content/0/input/note",
+	serde_json::json!("ssn <SSN>")
+)]
+#[case::completions(
+	ChatFmt::Completions,
+	serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [{"message": {"role": "assistant", "tool_calls": [
+			{"id": "call_01", "type": "function", "function": {
+				"name": "save_note", "arguments": "{\"note\":\"ssn 123-45-6789\"}"
+			}}
+		]}}]
+	}),
+	"/choices/0/message/tool_calls/0/function/arguments",
+	serde_json::json!("{\"note\":\"ssn <SSN>\"}")
+)]
+#[case::responses(
+	ChatFmt::Responses,
+	serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "function_call", "arguments": "{\"note\":\"ssn 123-45-6789\"}",
+				"call_id": "call_01", "name": "save_note"}
+		]
+	}),
+	"/output/0/arguments",
+	serde_json::json!("{\"note\":\"ssn <SSN>\"}")
+)]
+#[case::gemini(
+	ChatFmt::Gemini,
+	serde_json::json!({
+		"candidates": [{"content": {"role": "model", "parts": [
+			{"functionCall": {"name": "save_note", "args": {"note": "ssn 123-45-6789"}}}
+		]}}]
+	}),
+	"/candidates/0/content/parts/0/functionCall/args/note",
+	serde_json::json!("ssn <SSN>")
+)]
+fn test_apply_regex_response_tool_input_scope(
+	#[case] fmt: ChatFmt,
+	#[case] input: serde_json::Value,
+	#[case] pointer: &str,
+	#[case] masked: serde_json::Value,
+) {
+	let (action, actual) = run_apply_regex_response(
+		fmt,
+		Action::Mask,
+		ssn_only(),
+		default_response_scope(),
+		input.clone(),
+	);
+	assert_eq!(action, GuardrailAction::Allow);
+	assert_eq!(actual.pointer(pointer), input.pointer(pointer));
+
+	let scope = vec![ContentScope::Messages, ContentScope::ToolInput];
+	let (action, actual) = run_apply_regex_response(fmt, Action::Mask, ssn_only(), scope, input);
+	assert_eq!(action, GuardrailAction::Mask);
+	assert_eq!(actual.pointer(pointer), Some(&masked));
 }
 
 #[cfg(test)]

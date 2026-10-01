@@ -257,11 +257,24 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for c in &mut self.choices {
 			if let Some(text) = &mut c.message.content {
-				f(text);
+				f(ContentScope::Messages, text);
 			}
+			// tool call args are json-in-json, same as the request side
+			if let Some(serde_json::Value::Array(calls)) = c.message.rest.get_mut("tool_calls") {
+				for call in calls {
+					super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+					super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				}
+			}
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
 		}
 	}
 }

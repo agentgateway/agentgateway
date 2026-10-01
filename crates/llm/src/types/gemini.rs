@@ -597,10 +597,13 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self.0)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for candidate in &mut self.0.candidates {
 			if let Some(content) = &mut candidate.content {
-				visit_content_text(content, f);
+				for part in &mut content.parts {
+					visit_tool_part_text(part, f);
+				}
+				visit_content_text(content, &mut |text| f(ContentScope::Messages, text));
 			}
 		}
 	}

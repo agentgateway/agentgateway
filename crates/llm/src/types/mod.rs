@@ -93,7 +93,7 @@ pub trait ResponseType: Send + Sync {
 		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
 }
 
 /// A category of request content that a prompt guard can inspect.

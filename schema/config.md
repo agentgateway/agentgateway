@@ -3112,6 +3112,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -10833,6 +10834,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -14799,6 +14801,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -18727,6 +18730,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults.*`|any||
 |`binds[].listeners[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -24868,6 +24872,7 @@
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`policies[].policy.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`policies[].policy.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`policies[].policy.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`policies[].policy.ai.defaults.*`|any||
 |`policies[].policy.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -32589,6 +32594,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].ai.policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.policies.ai.defaults.*`|any||
 |`backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -36555,6 +36561,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -40481,6 +40488,7 @@
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].policies.ai.defaults.*`|any||
 |`backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -43482,6 +43490,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -51203,6 +51212,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -55169,6 +55179,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -59097,6 +59108,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].policies.ai.defaults.*`|any||
 |`routeGroups[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -64767,6 +64779,7 @@
 |`routes[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].policies.ai.defaults.*`|any||
 |`routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -72488,6 +72501,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.policies.ai.defaults.*`|any||
 |`routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -76454,6 +76468,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.defaults.*`|any||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -80382,6 +80397,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].policies.ai.defaults.*`|any||
 |`routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
@@ -84762,6 +84778,7 @@
 |`llm.models[].guardrails.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].guardrails.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`llm.models[].guardrails.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`llm.models[].guardrails.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.models[].promptCaching`|object|promptCaching configures cache point insertion for supported LLM providers.|
 |`llm.models[].promptCaching.cacheSystem`|boolean|Add cache markers to system prompts when supported by the provider.|
 |`llm.models[].promptCaching.cacheMessages`|boolean|Add cache markers to chat messages when supported by the provider.|
@@ -88684,6 +88701,7 @@
 |`llm.policies.guardrails.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`llm.policies.guardrails.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`llm.policies.guardrails.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`llm.policies.guardrails.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.policies.localRateLimit`|[]object|Local rate limits for incoming requests.|
 |`llm.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
@@ -92259,6 +92277,7 @@
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`mcp.policies.ai.promptGuard.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`mcp.policies.ai.promptGuard.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`mcp.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`mcp.policies.ai.defaults.*`|any||
 |`mcp.policies.ai.overrides`|object|Request body values that replace client-provided values.|

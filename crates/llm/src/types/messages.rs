@@ -638,10 +638,11 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for c in &mut self.content {
-			if let Some(text) = &mut c.text {
-				f(text);
+			match &mut c.text {
+				Some(text) => f(ContentScope::Messages, text),
+				None => visit_tool_part_text(&mut c.rest, f),
 			}
 		}
 	}
@@ -1426,10 +1427,16 @@ pub mod typed {
 			serde_json::to_vec(&self)
 		}
 
-		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ContentScope, &mut String)) {
 			for block in &mut self.content {
-				if let ContentBlock::Text(t) = block {
-					f(&mut t.text);
+				match block {
+					ContentBlock::Text(t) => f(crate::types::ContentScope::Messages, &mut t.text),
+					ContentBlock::ToolUse { input, .. } | ContentBlock::ServerToolUse { input, .. } => {
+						crate::types::visit_json_strings(input, &mut |text| {
+							f(crate::types::ContentScope::ToolInput, text)
+						});
+					},
+					_ => {},
 				}
 			}
 		}

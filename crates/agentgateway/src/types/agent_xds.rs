@@ -1085,7 +1085,12 @@ fn convert_backend_ai_policy(
 					})
 				},
 			};
-			Some(llm::policy::ResponseGuard { rejection, kind })
+			Some(llm::policy::ResponseGuard {
+				rejection,
+				// TODO: plumb response guard scope through xDS
+				scope: llm::policy::default_response_scope(),
+				kind,
+			})
 		});
 
 		let streaming =

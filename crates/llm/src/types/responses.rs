@@ -196,6 +196,27 @@ fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut 
 	}
 }
 
+/// Output tool items are typed; visit them through the same per-item table as the request
+/// side, writing back only when a visitor changed something.
+fn visit_output_tool_item(item: &mut OutputItem, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	let Ok(mut value) = serde_json::to_value(&*item) else {
+		return;
+	};
+	let mut changed = false;
+	visit_tool_item_text(&mut value, &mut |scope, text| {
+		let original = text.clone();
+		f(scope, text);
+		changed |= *text != original;
+	});
+	if !changed {
+		return;
+	}
+	match serde_json::from_value(value) {
+		Ok(updated) => *item = updated,
+		Err(e) => tracing::warn!("failed to write back rewritten output item: {e}"),
+	}
+}
+
 /// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
 const PRESERVED_REST_KEYS: &[&str] = &[
 	// Anthropic-style cache breakpoint, accepted by some OpenAI-compat providers
@@ -933,22 +954,24 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for o in &mut self.output {
-			if let OutputItem::Message(msg) = o {
-				for c in &mut msg.content {
-					if let Content::OutputText(t) = c {
-						if t.annotations.is_empty() && t.logprobs.is_none() {
-							f(&mut t.text);
-							continue;
-						}
-						// offset-based metadata cannot survive a text rewrite
-						let original = t.text.clone();
-						f(&mut t.text);
-						if t.text != original {
-							t.annotations.clear();
-							t.logprobs = None;
-						}
+			let OutputItem::Message(msg) = o else {
+				visit_output_tool_item(o, f);
+				continue;
+			};
+			for c in &mut msg.content {
+				if let Content::OutputText(t) = c {
+					if t.annotations.is_empty() && t.logprobs.is_none() {
+						f(ContentScope::Messages, &mut t.text);
+						continue;
+					}
+					// offset-based metadata cannot survive a text rewrite
+					let original = t.text.clone();
+					f(ContentScope::Messages, &mut t.text);
+					if t.text != original {
+						t.annotations.clear();
+						t.logprobs = None;
 					}
 				}
 			}
