@@ -4,7 +4,7 @@ The egress policies use the protocol-based API from
 [Substrate PR #1751](https://github.com/agent-substrate/substrate/pull/1751).
 
 Configure `substrateEgressActorResolution` on the CONNECT frontend. Its control
-API backend handles both `GetActor` (before accepting CONNECT) and
+API backend handles both `GetActor` (before returning 200 to CONNECT) and
 `GetActorEgressPolicy` (when the inner TLS ClientHello arrives). Actor traffic is
 classified from its first bytes, independently of the destination port.
 
