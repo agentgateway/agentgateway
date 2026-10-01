@@ -5124,6 +5124,11 @@ func (in *PromptguardResponse) DeepCopyInto(out *PromptguardResponse) {
 		*out = new(CustomResponse)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Scope != nil {
+		in, out := &in.Scope, &out.Scope
+		*out = make([]ContentScope, len(*in))
+		copy(*out, *in)
+	}
 	if in.Regex != nil {
 		in, out := &in.Regex, &out.Regex
 		*out = new(Regex)

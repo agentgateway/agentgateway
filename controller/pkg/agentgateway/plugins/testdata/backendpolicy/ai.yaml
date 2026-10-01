@@ -38,6 +38,9 @@ spec:
         response:
           - response:
               message: "regex rejected on response"
+            scope:
+              - Messages
+              - ToolInput
             regex:
               builtins:
                 - Email
@@ -196,6 +199,9 @@ output:
               rejection:
                 body: cmVnZXggcmVqZWN0ZWQgb24gcmVzcG9uc2U=
                 status: 403
+              scope:
+              - CONTENT_SCOPE_MESSAGES
+              - CONTENT_SCOPE_TOOL_INPUT
             - webhook:
                 action: REJECT_AUDIT_ACTION_REJECT
             - bedrockGuardrails:

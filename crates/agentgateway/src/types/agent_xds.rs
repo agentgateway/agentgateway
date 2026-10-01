@@ -21,7 +21,6 @@ use std::sync::Arc;
 
 use ::http::{HeaderName, StatusCode};
 use frozen_collections::FzHashSet;
-use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
@@ -867,11 +866,14 @@ fn convert_provider_format_config(
 	})
 }
 
-fn convert_content_scopes(scopes: &[i32]) -> Result<Vec<llm::ContentScope>, ProtoError> {
+fn convert_content_scopes(
+	scopes: &[i32],
+	default: fn() -> Vec<llm::ContentScope>,
+) -> Result<Vec<llm::ContentScope>, ProtoError> {
 	use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
 
 	if scopes.is_empty() {
-		return Ok(llm::policy::default_content_scope());
+		return Ok(default());
 	}
 	scopes
 		.iter()
@@ -994,7 +996,7 @@ fn convert_backend_ai_policy(
 				};
 				let guard = llm::policy::RequestGuard {
 					rejection,
-					scope: convert_content_scopes(&reqp.scope)?,
+					scope: convert_content_scopes(&reqp.scope, llm::policy::default_content_scope)?,
 					kind,
 				};
 
@@ -1085,12 +1087,21 @@ fn convert_backend_ai_policy(
 					})
 				},
 			};
-			Some(llm::policy::ResponseGuard {
+			let scope = match convert_content_scopes(&reqp.scope, llm::policy::default_response_scope) {
+				Ok(scope) => scope,
+				Err(e) => return Some(Err(e)),
+			};
+			let guard = llm::policy::ResponseGuard {
 				rejection,
-				// TODO: plumb response guard scope through xDS
-				scope: llm::policy::default_response_scope(),
+				scope,
 				kind,
-			})
+			};
+			Some(
+				guard
+					.validate_scope()
+					.map(|()| guard)
+					.map_err(ProtoError::Generic),
+			)
 		});
 
 		let streaming =
@@ -1108,7 +1119,7 @@ fn convert_backend_ai_policy(
 		Ok(llm::policy::PromptGuard {
 			streaming,
 			request,
-			response: response.collect_vec(),
+			response: response.collect::<Result<Vec<_>, ProtoError>>()?,
 		})
 	});
 
@@ -4316,16 +4327,23 @@ mod tests {
 
 		// unset scope keeps today's default so existing configs are unaffected
 		assert_eq!(
-			convert_content_scopes(&[]).unwrap(),
+			convert_content_scopes(&[], llm::policy::default_content_scope).unwrap(),
 			llm::policy::default_content_scope()
+		);
+		assert_eq!(
+			convert_content_scopes(&[], llm::policy::default_response_scope).unwrap(),
+			llm::policy::default_response_scope()
 		);
 		// opting in to tool scanning
 		assert_eq!(
-			convert_content_scopes(&[
-				ProtoScope::Messages as i32,
-				ProtoScope::ToolOutput as i32,
-				ProtoScope::ToolInput as i32,
-			])
+			convert_content_scopes(
+				&[
+					ProtoScope::Messages as i32,
+					ProtoScope::ToolOutput as i32,
+					ProtoScope::ToolInput as i32,
+				],
+				llm::policy::default_content_scope,
+			)
 			.unwrap(),
 			vec![
 				llm::ContentScope::Messages,
@@ -4333,8 +4351,12 @@ mod tests {
 				llm::ContentScope::ToolInput,
 			]
 		);
-		convert_content_scopes(&[ProtoScope::Unspecified as i32]).unwrap_err();
-		convert_content_scopes(&[42]).unwrap_err();
+		convert_content_scopes(
+			&[ProtoScope::Unspecified as i32],
+			llm::policy::default_content_scope,
+		)
+		.unwrap_err();
+		convert_content_scopes(&[42], llm::policy::default_content_scope).unwrap_err();
 
 		// TODO respect scopes in all guard types
 		let ai = Ai {
@@ -4349,6 +4371,37 @@ mod tests {
 			..Default::default()
 		};
 		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("non-default scope"), "{err}");
+
+		// response guards: regex can opt in to tool calls, webhook cannot
+		let convert_response_guard = |kind, scope| {
+			let ai = Ai {
+				prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
+					response: vec![proto::agent::backend_policy_spec::ai::ResponseGuard {
+						rejection: None,
+						kind: Some(kind),
+						scope,
+					}],
+					..Default::default()
+				}),
+				..Default::default()
+			};
+			convert_backend_ai_policy(&ai, &mut Diagnostics::default())
+		};
+		let policy = convert_response_guard(
+			response_guard::Kind::Regex(Default::default()),
+			vec![ProtoScope::Messages as i32, ProtoScope::ToolInput as i32],
+		)
+		.unwrap();
+		assert_eq!(
+			policy.prompt_guard.unwrap().response[0].scope,
+			vec![llm::ContentScope::Messages, llm::ContentScope::ToolInput]
+		);
+		let err = convert_response_guard(
+			response_guard::Kind::Webhook(Default::default()),
+			vec![ProtoScope::ToolInput as i32],
+		)
+		.unwrap_err();
 		assert!(err.to_string().contains("non-default scope"), "{err}");
 	}
 
