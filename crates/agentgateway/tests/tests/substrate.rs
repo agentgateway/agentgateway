@@ -1,4 +1,4 @@
-use agentgateway::test_helpers::{ateapimock, credprovidermock};
+use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
@@ -300,6 +300,141 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 		actor_requests[0].headers.get("x-ate-target-port").unwrap(),
 		"80"
 	);
+}
+
+struct TraceparentHandler(IngressHandler, Arc<StdMutex<Vec<String>>>);
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for TraceparentHandler {
+	async fn resume_actor(
+		&mut self,
+		request: &protos::ateapi::ResumeActorRequest,
+	) -> Result<ResumeActorResponse, tonic::Status> {
+		self.0.resume_actor(request).await
+	}
+
+	fn resume_actor_metadata(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		let tp = metadata.get("traceparent").and_then(|v| v.to_str().ok());
+		self.1.lock().unwrap().extend(tp.map(str::to_owned));
+	}
+}
+
+struct TraceHandler {
+	spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+}
+
+#[async_trait::async_trait]
+impl oteltracemock::Handler for TraceHandler {
+	async fn export(
+		&mut self,
+		request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+	) -> Result<
+		opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+		tonic::Status,
+	> {
+		self.spans.lock().unwrap().extend(
+			request
+				.resource_spans
+				.iter()
+				.flat_map(|resource| &resource.scope_spans)
+				.flat_map(|scope| &scope.spans)
+				.cloned(),
+		);
+		oteltracemock::ok_response()
+	}
+}
+
+#[tokio::test]
+async fn actor_ingress_propagates_trace_context_to_resume_actor() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || TraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+	let actor = simple_mock().await;
+	let seen = Arc::new(StdMutex::new(Vec::new()));
+	let api = ateapimock::AteApiMock::new({
+		let (seen, pod_ip) = (seen.clone(), actor.address().ip().to_string());
+		move || {
+			let inner = IngressHandler {
+				pod_ip: pod_ip.clone(),
+				calls: Default::default(),
+				resumed: true,
+				uid: ACTOR_UID,
+			};
+			TraceparentHandler(inner, seen.clone())
+		}
+	})
+	.spawn()
+	.await;
+
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_frontend_policy(json!({"tracing": {"host": otel.address.to_string()}}))
+		.await;
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": api.address.to_string(),
+				"connectTargetPort": actor.address().port(),
+			}
+		}))
+		.await;
+
+	let client_tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+	let response = send_request_headers(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		"http://my-actor.demo.actors.resources.substrate.ate.dev/",
+		&[
+			("ate-target-actor", "demo/my-actor"),
+			("traceparent", client_tp),
+		],
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+
+	// Same trace and sampled flag, but the gateway's own span as parent.
+	let seen = seen.lock().unwrap().clone();
+	assert_eq!(seen.len(), 1, "{seen:?}");
+	assert_eq!(seen[0][..36], client_tp[..36]);
+	assert_ne!(seen[0][36..52], client_tp[36..52]);
+	assert!(seen[0].ends_with("-01"), "{}", seen[0]);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while spans.lock().unwrap().len() < 2 {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.unwrap();
+
+	let spans = spans.lock().unwrap();
+	let resume_actor = spans
+		.iter()
+		.find(|span| span.name == "ateapi.Control/ResumeActor")
+		.expect("ResumeActor client span should be exported");
+	let request = spans
+		.iter()
+		.find(|span| {
+			span.trace_id == resume_actor.trace_id && span.span_id == resume_actor.parent_span_id
+		})
+		.expect("parent request span should be exported");
+	assert_eq!(resume_actor.trace_id, request.trace_id);
+	assert_eq!(resume_actor.parent_span_id, request.span_id);
 }
 
 #[tokio::test]
