@@ -533,23 +533,21 @@ type ServerTools struct {
 	// +optional
 	MCPServers []ServerToolMCPServer `json:"mcpServers,omitempty"`
 
-	// Maximum number of follow-up model calls for one client request.
+	// Maximum number of follow-up model calls for one client request. Defaults to 3.
 	// The client's `max_uses` is honoured as a lower cap.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=32
-	// +kubebuilder:default=3
 	// +optional
 	MaxIterations *int32 `json:"maxIterations,omitempty"`
 
 	// Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+	// Defaults to 65536.
 	// +kubebuilder:validation:Minimum=1024
-	// +kubebuilder:default=65536
 	// +optional
 	MaxResultBytes *int32 `json:"maxResultBytes,omitempty"`
 
-	// Interval between keepalive `ping` events while a streaming turn is held back.
+	// Interval between keepalive `ping` events while a streaming turn is held back. Defaults to `15s`.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="keepaliveInterval must be at least 1 second"
-	// +kubebuilder:default="15s"
 	// +optional
 	KeepaliveInterval *Duration `json:"keepaliveInterval,omitempty"`
 

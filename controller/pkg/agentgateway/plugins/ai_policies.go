@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -394,13 +396,12 @@ func processServerTools(ctx PolicyCtx, namespace string, st *agentgateway.Server
 			Arguments:    serverToolArguments(server.Arguments, "mcpServer "+ptr.OrEmpty(server.Label), &errs),
 		})
 	}
-	if st.MaxIterations != nil {
-		out.MaxIterations = new(uint32(*st.MaxIterations)) //nolint:gosec // G115: MaxIterations is validated by kubebuilder to be >= 1
-	}
-	if st.MaxResultBytes != nil {
-		out.MaxResultBytes = new(uint32(*st.MaxResultBytes)) //nolint:gosec // G115: MaxResultBytes is validated by kubebuilder to be >= 1024
-	}
+	out.MaxIterations = new(uint32(ptr.OrDefault(st.MaxIterations, 3)))       //nolint:gosec // G115: MaxIterations is validated by kubebuilder to be >= 1
+	out.MaxResultBytes = new(uint32(ptr.OrDefault(st.MaxResultBytes, 65536))) //nolint:gosec // G115: MaxResultBytes is validated by kubebuilder to be >= 1024
 	out.KeepaliveInterval = durationToProto(st.KeepaliveInterval)
+	if out.KeepaliveInterval == nil {
+		out.KeepaliveInterval = durationpb.New(15 * time.Second)
+	}
 	if st.FailureMode == agentgateway.FailOpen {
 		out.FailureMode = api.BackendPolicySpec_Ai_ServerTools_FAIL_OPEN
 	}

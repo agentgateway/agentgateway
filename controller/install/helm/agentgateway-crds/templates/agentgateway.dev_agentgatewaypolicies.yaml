@@ -3555,9 +3555,8 @@ spec:
                             - FailOpen
                             type: string
                           keepaliveInterval:
-                            default: 15s
                             description: Interval between keepalive `ping` events
-                              while a streaming turn is held back.
+                              while a streaming turn is held back. Defaults to `15s`.
                             maxLength: 32
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
@@ -3565,18 +3564,17 @@ spec:
                             - message: keepaliveInterval must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           maxIterations:
-                            default: 3
                             description: |-
-                              Maximum number of follow-up model calls for one client request.
+                              Maximum number of follow-up model calls for one client request. Defaults to 3.
                               The client's `max_uses` is honoured as a lower cap.
                             format: int32
                             maximum: 32
                             minimum: 1
                             type: integer
                           maxResultBytes:
-                            default: 65536
-                            description: Maximum size of one tool result fed back
-                              to the model, in bytes. Larger results are cut.
+                            description: |-
+                              Maximum size of one tool result fed back to the model, in bytes. Larger results are cut.
+                              Defaults to 65536.
                             format: int32
                             minimum: 1024
                             type: integer
