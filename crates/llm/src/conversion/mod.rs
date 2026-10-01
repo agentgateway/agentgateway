@@ -24,13 +24,28 @@ pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {
 /// valid JSON. Anthropic requires `tool_use.input` to be an object, so that becomes `{}`.
 ///
 /// Everything else is parsed and passed through unchanged, including values that are malformed
-/// or not an object (this would avoid changing silently the upstream response).
+/// or not an object (this avoids changing the upstream response during response translation).
 pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 	if arguments.is_empty() {
 		return serde_json::json!({});
 	}
 	serde_json::from_str::<serde_json::Value>(arguments)
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
+}
+
+/// Request translation is stricter than response translation: Anthropic only accepts an object
+/// for `tool_use.input`, so malformed JSON and non-object values must fail before the upstream
+/// request is sent.
+pub(crate) fn tool_arguments_to_input_strict(
+	arguments: &str,
+) -> Result<serde_json::Value, serde_json::Error> {
+	let value = tool_arguments_to_input(arguments);
+	if !value.is_object() {
+		return Err(serde::de::Error::custom(
+			"tool call arguments must decode to a JSON object",
+		));
+	}
+	Ok(value)
 }
 
 #[cfg(test)]
@@ -40,7 +55,7 @@ mod rerank_tests;
 mod tests {
 	use serde_json::json;
 
-	use super::tool_arguments_to_input;
+	use super::{tool_arguments_to_input, tool_arguments_to_input_strict};
 
 	#[test]
 	fn thinking_budget_buckets() {
@@ -88,5 +103,17 @@ mod tests {
 			json!("{\"location\": \"Par")
 		);
 		assert_eq!(tool_arguments_to_input("  "), json!("  "));
+	}
+
+	#[test]
+	fn strict_arguments_require_a_json_object() {
+		assert_eq!(tool_arguments_to_input_strict("").unwrap(), json!({}));
+		assert_eq!(tool_arguments_to_input_strict("{}").unwrap(), json!({}));
+		for arguments in ["[]", "null", "5", "\"value\"", "{\"location\": \"Par", "  "] {
+			assert!(
+				tool_arguments_to_input_strict(arguments).is_err(),
+				"{arguments:?}"
+			);
+		}
 	}
 }
