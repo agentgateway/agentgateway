@@ -40,6 +40,54 @@ fn codex_request() -> crate::types::responses::Request {
 	.unwrap()
 }
 
+#[test]
+fn responses_image_is_preserved_in_chat_completions_translation() {
+	let request: crate::types::responses::Request = serde_json::from_value(json!({
+		"model": "moonshotai/Kimi-K3",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "Describe this image."},
+				{"type": "input_image", "image_url": "data:image/png;base64,aGVsbG8=", "detail": "high"}
+			]},
+			{"type": "message", "role": "user", "content": [
+				{"type": "input_text", "text": "Describe this second image."},
+				{"type": "input_image", "image_url": "https://example.com/image.png", "detail": "low"}
+			]}
+		]
+	}))
+	.unwrap();
+
+	let translated = from_responses::translate_request(&request).unwrap();
+	let translated = serde_json::to_value(translated).unwrap();
+	let content = &translated["messages"][0]["content"];
+	assert_eq!(content[0]["text"], "Describe this image.");
+	assert_eq!(
+		content[1]["image_url"]["url"],
+		"data:image/png;base64,aGVsbG8="
+	);
+	assert_eq!(content[1]["image_url"]["detail"], "high");
+	let item_content = &translated["messages"][1]["content"];
+	assert_eq!(item_content[0]["text"], "Describe this second image.");
+	assert_eq!(
+		item_content[1]["image_url"]["url"],
+		"https://example.com/image.png"
+	);
+	assert_eq!(item_content[1]["image_url"]["detail"], "low");
+}
+
+#[test]
+fn responses_file_backed_image_is_rejected_instead_of_dropped() {
+	let request: crate::types::responses::Request = serde_json::from_value(json!({
+		"model": "moonshotai/Kimi-K3",
+		"input": [{"role": "user", "content": [
+			{"type": "input_image", "file_id": "file_123", "detail": "auto"}
+		]}]
+	}))
+	.unwrap();
+	let err = from_responses::translate_request(&request).unwrap_err();
+	assert!(matches!(err, crate::AIError::UnsupportedConversion(_)));
+}
+
 fn chunk(delta: Value, finish: Value) -> Value {
 	json!({"id": "chatcmpl_test", "object": "chat.completion.chunk", "created": 1,
 		"model": "moonshotai/Kimi-K3", "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]})

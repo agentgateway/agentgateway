@@ -17,7 +17,7 @@
     "context_window": 65536,
     "effective_context_window_percent": 95,
     "truncation_policy": {"mode": "tokens", "limit": 10000},
-    "input_modalities": ["text"],
+    "input_modalities": ["text", "image"],
     "supports_search_tool": false
   }]
 }

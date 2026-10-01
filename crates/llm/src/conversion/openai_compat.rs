@@ -9,6 +9,7 @@ mod tools;
 pub use tools::ResponseToolMap;
 
 pub mod from_responses {
+	use agent_core::strng;
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
 
@@ -31,9 +32,42 @@ pub mod from_responses {
 	) -> Result<(completions::Request, super::ResponseToolMap), AIError> {
 		let mut raw = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
 		let tools = super::ResponseToolMap::normalize_request(&mut raw)?;
+		validate_input_media(&raw)?;
 		let typed =
 			serde_json::from_value::<responses::CreateResponse>(raw).map_err(AIError::RequestMarshal)?;
 		Ok((translate_internal(typed), tools))
+	}
+
+	fn validate_input_media(raw: &serde_json::Value) -> Result<(), AIError> {
+		let Some(items) = raw.get("input").and_then(serde_json::Value::as_array) else {
+			return Ok(());
+		};
+		for item in items {
+			let Some(parts) = item.get("content").and_then(serde_json::Value::as_array) else {
+				continue;
+			};
+			for part in parts {
+				match part.get("type").and_then(serde_json::Value::as_str) {
+					Some("input_image")
+						if part
+							.get("image_url")
+							.and_then(serde_json::Value::as_str)
+							.is_none() =>
+					{
+						return Err(AIError::UnsupportedConversion(strng::literal!(
+							"Responses file-backed images cannot be represented by chat completions"
+						)));
+					},
+					Some("input_file") => {
+						return Err(AIError::UnsupportedConversion(strng::literal!(
+							"Responses file inputs cannot be represented by chat completions"
+						)));
+					},
+					_ => {},
+				}
+			}
+		}
+		Ok(())
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
@@ -82,6 +116,18 @@ pub mod from_responses {
 													completions::RequestMessageContentPartText {
 														text: text.text,
 														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+													},
+												))
+											},
+											InputContent::InputImage(image) => {
+												let url = image.image_url?;
+												Some(completions::RequestUserMessageContentPart::ImageUrl(
+													completions::RequestMessageContentPartImage {
+														image_url: completions::ImageUrl {
+															url,
+															detail: Some(image.detail),
+														},
+														prompt_cache_breakpoint: None,
 													},
 												))
 											},
@@ -204,6 +250,18 @@ pub mod from_responses {
 															completions::RequestMessageContentPartText {
 																text: text.text,
 																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+															},
+														))
+													},
+													InputContent::InputImage(image) => {
+														let url = image.image_url?;
+														Some(completions::RequestUserMessageContentPart::ImageUrl(
+															completions::RequestMessageContentPartImage {
+																image_url: completions::ImageUrl {
+																	url,
+																	detail: Some(image.detail),
+																},
+																prompt_cache_breakpoint: None,
 															},
 														))
 													},
