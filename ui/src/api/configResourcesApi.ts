@@ -105,9 +105,8 @@ async function writeConfig<T>(path: string, init: RequestInit): Promise<T> {
 		return response;
 	} catch (error) {
 		if (error instanceof ApiError && error.status === 409) {
-			// Drop the pin so the next write revalidates server-side rather than wedging on a
-			// generation this client cannot refresh by itself.
-			observedGeneration = null;
+			// Keep the pin until a refetch replaces it; retrying stale UI data unpinned can
+			// overwrite a concurrent edit even if server-side validation succeeds.
 			throw new ConfigConflictError(error.message);
 		}
 		throw error;
