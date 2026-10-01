@@ -14,7 +14,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
-use crate::{apply, AIError, LLMRequest, LLMResponse};
+use crate::{AIError, LLMRequest, LLMResponse, apply};
 
 pub enum ChatRequest {
 	Completions(completions::Request),
