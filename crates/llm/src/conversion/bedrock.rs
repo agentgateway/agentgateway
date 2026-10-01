@@ -6,9 +6,9 @@ use http::Response;
 use rand::RngExt;
 use tracing::trace;
 
+use crate::AIError;
 use crate::types::completions::typed::UsagePromptDetails;
 use crate::types::{bedrock, messages, responses};
-use crate::AIError;
 
 #[cfg(test)]
 #[path = "bedrock_tests.rs"]
@@ -308,7 +308,7 @@ fn invalid_request_error(bytes: &[u8]) -> Result<bytes::Bytes, AIError> {
 pub mod from_rerank {
 	use crate::bedrock::Provider;
 	use crate::types::ResponseType;
-	use crate::{logged_response_parsing, types, AIError};
+	use crate::{AIError, logged_response_parsing, types};
 
 	/// Build a full Bedrock model ARN if the caller supplied a bare model id.
 	fn model_arn(model: &str, region: &str) -> String {
@@ -401,7 +401,7 @@ pub mod from_rerank {
 
 pub mod from_embeddings {
 	use crate::types::ResponseType;
-	use crate::{json, logged_response_parsing, types, AIError};
+	use crate::{AIError, json, logged_response_parsing, types};
 
 	pub fn translate(req: &types::embeddings::Request) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
@@ -640,9 +640,9 @@ pub mod from_completions {
 
 	use super::helpers;
 	use crate::bedrock::Provider;
-	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::types::ResponseType;
-	use crate::{json, logged_response_parsing, parse, types, AIError, StreamingUsageGuard};
+	use crate::types::completions::typed::UsagePromptDetails;
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	fn push_text_content(
 		out: &mut Vec<bedrock::ContentBlock>,
@@ -1494,7 +1494,7 @@ pub mod from_messages {
 	use super::helpers;
 	use crate::bedrock::Provider;
 	use crate::types::ResponseType;
-	use crate::{json, logged_response_parsing, parse, types, AIError, StreamingUsageGuard};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
 	pub fn translate(
@@ -2358,7 +2358,7 @@ pub mod from_responses {
 	use crate::bedrock::Provider;
 	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
-	use crate::{json, logged_response_parsing, parse, types, AIError, StreamingUsageGuard};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	// Bedrock Converse supported document formats:
 	// https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_DocumentBlock.html
@@ -3608,7 +3608,7 @@ pub mod from_responses {
 }
 
 pub mod from_anthropic_token_count {
-	use crate::{types, AIError};
+	use crate::{AIError, types};
 
 	pub fn translate(
 		req: &types::count_tokens::Request,
@@ -3653,9 +3653,9 @@ mod helpers {
 	use std::collections::HashMap;
 	use std::sync::LazyLock;
 
+	use crate::AIError;
 	use crate::types::completions::typed::PromptCacheBreakpointParam;
 	use crate::types::messages::typed::CacheControlEphemeral;
-	use crate::AIError;
 
 	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
 	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
