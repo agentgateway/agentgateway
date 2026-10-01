@@ -3,6 +3,7 @@ import { Eye } from 'lucide-react';
 import { Drawer, EmptyState, Panel, Tooltip, YamlBlock } from '@/components/Primitives';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import type { DumpModel, VirtualModelRouting } from '@/gateway-admin';
+import { tr } from '@/i18n';
 import { routeBackendLabel } from '@/pages/traffic/TrafficConfigDumpPanel';
 
 export function DumpModelsView(props: { models: DumpModel[] }) {
@@ -14,20 +15,20 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 			<Panel>
 				{!props.models.length ? (
 					<EmptyState
-						title="No models"
-						description="No models are present in the active gateway dump."
+						title={tr('copy.noModels')}
+						description={tr('copy.noModelsInActiveGatewayDump')}
 					/>
 				) : (
 					<div className="table-wrap">
 						<table className="dump-models-table">
 							<thead>
 								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Visibility</th>
-									<th>Target</th>
-									<th>Listener</th>
-									<th aria-label="Actions" />
+									<th>{tr('copy.name')}</th>
+									<th>{tr('copy.type')}</th>
+									<th>{tr('copy.visibility')}</th>
+									<th>{tr('copy.target')}</th>
+									<th>{tr('copy.listener')}</th>
+									<th aria-label={tr('copy.actions')} />
 								</tr>
 							</thead>
 							<tbody>
@@ -53,11 +54,11 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 											</td>
 											<td>{model.listenerKey}</td>
 											<td className="row-actions">
-												<Tooltip content="View model">
+												<Tooltip content={tr('copy.viewModel')}>
 													<button
 														className="icon-button"
 														type="button"
-														aria-label={`View ${model.name}`}
+														aria-label={tr('copy.viewValue', model.name)}
 														onClick={() => setSelectedKey(model.key)}
 													>
 														<Eye size={16} />
@@ -81,19 +82,19 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 				>
 					<div className="drawer-summary-list">
 						<div>
-							<span>Visibility</span>
+							<span>{tr('copy.visibility')}</span>
 							<strong>{modelVisibilityLabel(selectedModel)}</strong>
 						</div>
 						<div>
-							<span>Target</span>
+							<span>{tr('copy.target')}</span>
 							<strong>{modelTarget(selectedModel).summary}</strong>
 						</div>
 						<div>
-							<span>Listener</span>
+							<span>{tr('copy.listener')}</span>
 							<strong>{selectedModel.listenerKey}</strong>
 						</div>
 					</div>
-					<span className="field-label">Model YAML</span>
+					<span className="field-label">{tr('copy.modelYaml')}</span>
 					<YamlBlock value={selectedModel} />
 				</Drawer>
 			) : null}
@@ -102,11 +103,14 @@ export function DumpModelsView(props: { models: DumpModel[] }) {
 }
 
 function modelTypeLabel(model: DumpModel) {
-	return 'concrete' in model.kind ? 'Concrete' : 'Virtual';
+	return 'concrete' in model.kind ? tr('copy.concrete') : tr('copy.virtualModel');
 }
 
 function modelVisibilityLabel(model: DumpModel) {
-	return 'concrete' in model.kind ? model.kind.concrete.visibility : '—';
+	if (!('concrete' in model.kind)) return '—';
+	return model.kind.concrete.visibility === 'public'
+		? tr('copy.publicModelVisibility')
+		: tr('copy.internalModelVisibility');
 }
 
 function modelTarget(model: DumpModel): { summary: string; detail?: string } {
@@ -120,9 +124,12 @@ function virtualRoutingTarget(routing: VirtualModelRouting): { summary: string; 
 	if ('weighted' in routing) {
 		const count = routing.weighted.length;
 		return {
-			summary: `${count} weighted ${count === 1 ? 'target' : 'targets'}`,
+			summary: tr('copy.valueWeightedTargets', { count }),
 			detail: routing.weighted
-				.map(target => `${target.model} (${target.weight})${target.invalid ? ' invalid' : ''}`)
+				.map(
+					target =>
+						`${target.model} (${target.weight})${target.invalid ? ` ${tr('copy.invalid')}` : ''}`
+				)
 				.join(', ')
 		};
 	}
@@ -130,11 +137,13 @@ function virtualRoutingTarget(routing: VirtualModelRouting): { summary: string; 
 		const rules = routing.conditional.filter(target => target.when?.trim()).length;
 		const hasFallback = routing.conditional.some(target => !target.when?.trim());
 		return {
-			summary: `${rules} ${rules === 1 ? 'rule' : 'rules'}${hasFallback ? ', fallback' : ''}`,
+			summary: hasFallback
+				? tr('copy.valueRulesWithFallback', { count: rules })
+				: tr('copy.valueRules', { count: rules }),
 			detail: routing.conditional
-				.map(target => `${target.model}${target.invalid ? ' invalid' : ''}`)
+				.map(target => `${target.model}${target.invalid ? ` ${tr('copy.invalid')}` : ''}`)
 				.join(', ')
 		};
 	}
-	return { summary: 'Failover', detail: routeBackendLabel(routing.failover.backend) };
+	return { summary: tr('copy.failover'), detail: routeBackendLabel(routing.failover.backend) };
 }

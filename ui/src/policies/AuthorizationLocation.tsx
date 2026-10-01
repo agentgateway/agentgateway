@@ -4,6 +4,7 @@ import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { AuthorizationLocation } from '@/gateway-config';
+import { tr, translateText } from '@/i18n';
 import { AdvancedSettingPanel, AdvancedSettingRow } from '@/policies/PolicyLayout';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -101,9 +102,11 @@ export function CredentialLocationSetting(props: {
 		return (
 			<AdvancedSettingRow
 				icon={<KeyRound size={17} />}
-				title="Credential location"
+				title={tr('copy.credentialLocation')}
 				description={
-					props.defaultDescription ?? 'By default, callers send Authorization: Bearer token.'
+					props.defaultDescription
+						? translateText(props.defaultDescription)
+						: tr('copy.defaultAuthorizationBearerToken')
 				}
 				action={
 					<button
@@ -112,7 +115,7 @@ export function CredentialLocationSetting(props: {
 						onClick={() => props.onChange({ ...props.value, mode: 'header' })}
 					>
 						<SlidersHorizontal size={15} />
-						Customize
+						{tr('copy.customize')}
 					</button>
 				}
 			/>
@@ -122,8 +125,12 @@ export function CredentialLocationSetting(props: {
 	return (
 		<AdvancedSettingPanel
 			icon={<KeyRound size={17} />}
-			title="Credential location"
-			description={props.description ?? 'Override where this policy reads the credential.'}
+			title={tr('copy.credentialLocation')}
+			description={
+				props.description
+					? translateText(props.description)
+					: tr('copy.overrideWhereThisPolicyReadsTheCredential')
+			}
 			action={
 				<button
 					className="button"
@@ -131,27 +138,35 @@ export function CredentialLocationSetting(props: {
 					onClick={() => props.onChange({ ...props.value, mode: 'default' })}
 				>
 					<X size={15} />
-					Use default
+					{tr('copy.useDefault')}
 				</button>
 			}
 		>
 			<div className="location-override-panel">
 				<FieldGroup
-					label="Location type"
+					label={tr('copy.locationType')}
 					tooltip={props.help.definition(
 						'AuthorizationLocation',
 						'Choose where the credential is read from or written to.'
 					)}
 				>
 					<EnumSelector
-						ariaLabel="Location type"
+						ariaLabel={tr('copy.locationType')}
 						value={props.value.mode}
 						options={[
-							{ value: 'header', label: 'Header' },
-							{ value: 'queryParameter', label: 'Query parameter' },
-							{ value: 'cookie', label: 'Cookie' },
+							{ value: 'header', label: tr('copy.header') },
+							{
+								value: 'queryParameter',
+								label: tr('copy.queryParameter')
+							},
+							{ value: 'cookie', label: tr('copy.cookie') },
 							...(props.allowExpression !== false || props.value.mode === 'expression'
-								? [{ value: 'expression' as const, label: 'CEL expression' }]
+								? [
+										{
+											value: 'expression' as const,
+											label: tr('copy.celExpression')
+										}
+									]
 								: [])
 						]}
 						schema={props.help.node(['$defs', 'AuthorizationLocation'])}
@@ -161,7 +176,7 @@ export function CredentialLocationSetting(props: {
 				{props.value.mode === 'header' ? (
 					<div className="form-grid">
 						<Field
-							label="Header name"
+							label={tr('copy.headerName_8vzq77')}
 							tooltip={props.help.field<AuthorizationLocation>(
 								'AuthorizationLocation',
 								'header.name'
@@ -179,7 +194,7 @@ export function CredentialLocationSetting(props: {
 							/>
 						</Field>
 						<Field
-							label="Header prefix"
+							label={tr('copy.headerPrefix')}
 							tooltip={props.help.field<AuthorizationLocation>(
 								'AuthorizationLocation',
 								'header.prefix'
@@ -200,7 +215,7 @@ export function CredentialLocationSetting(props: {
 				) : null}
 				{props.value.mode === 'queryParameter' ? (
 					<Field
-						label="Query parameter name"
+						label={tr('copy.queryParameterName')}
 						tooltip={props.help.field<AuthorizationLocation>(
 							'AuthorizationLocation',
 							'queryParameter.name'
@@ -220,7 +235,7 @@ export function CredentialLocationSetting(props: {
 				) : null}
 				{props.value.mode === 'cookie' ? (
 					<Field
-						label="Cookie name"
+						label={tr('copy.cookieName')}
 						tooltip={props.help.field<AuthorizationLocation>(
 							'AuthorizationLocation',
 							'cookie.name'
@@ -240,14 +255,11 @@ export function CredentialLocationSetting(props: {
 				) : null}
 				{props.value.mode === 'expression' ? (
 					<FieldGroup
-						label="CEL expression"
+						label={tr('copy.celExpression')}
 						tooltip={props.help.field<AuthorizationLocation>('AuthorizationLocation', 'expression')}
 					>
 						{props.allowExpression === false ? (
-							<small>
-								CEL expressions can extract credentials but cannot insert them. Choose Header, Query
-								parameter, or Cookie for backend auth.
-							</small>
+							<small>{tr('copy.celCredentialExtractionOnly')}</small>
 						) : null}
 						<MiniMonacoEditor
 							language="cel"

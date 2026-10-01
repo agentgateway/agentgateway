@@ -60,6 +60,7 @@ import {
 } from '@/config';
 import { queryParam, useStickyQueryParam } from '@/drawerRouteState';
 import { useLlmConfigData, useUpdateConfig } from '@/hooks';
+import { tr } from '@/i18n';
 import { llmModelOptions } from '@/llmModelOptions';
 import {
 	ANALYTICS_DIMENSIONS,
@@ -159,7 +160,7 @@ export function LogsPage() {
 			setResponse(logs);
 		} catch (err) {
 			if (loadSeq !== loadSeqRef.current) return;
-			setError(err instanceof Error ? err.message : 'Failed to load logs');
+			setError(err instanceof Error ? err.message : tr('copy.failedToLoadLogs'));
 		} finally {
 			if (loadSeq === loadSeqRef.current) setLoading(false);
 		}
@@ -219,7 +220,7 @@ export function LogsPage() {
 				}
 			} catch (err) {
 				if (!controller.signal.aborted)
-					setError(err instanceof Error ? err.message : 'Log stream failed');
+					setError(err instanceof Error ? err.message : tr('copy.logStreamFailed'));
 			}
 		})();
 		return () => controller.abort();
@@ -274,7 +275,7 @@ export function LogsPage() {
 			setExpanded(nextLog);
 		} catch (err) {
 			if (detailSeq !== detailSeqRef.current) return;
-			setError(err instanceof Error ? err.message : 'Failed to load log detail');
+			setError(err instanceof Error ? err.message : tr('copy.failedToLoadLogDetail'));
 		} finally {
 			if (detailSeq === detailSeqRef.current) stopDeferredExpandedLoading();
 		}
@@ -311,35 +312,35 @@ export function LogsPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Logs"
-				description="Inspect recent LLM calls and request/response payloads."
+				title={tr('copy.logs')}
+				description={tr('copy.inspectRecentLlmCallsAndRequestResponsePayloads')}
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={() => setSettings('logs')}>
 							<Settings size={16} />
-							Settings
+							{tr('copy.settings')}
 						</button>
 						<button className="button" type="button" disabled={loading} onClick={load}>
 							<RefreshCw size={16} className={loading ? 'spin' : undefined} />
-							Refresh
+							{tr('copy.refresh')}
 						</button>
 					</div>
 				}
 			/>
 			{configDataLoading ? (
-				<StatusBanner state="loading" title="Loading LLM configuration" />
+				<StatusBanner state="loading" title={tr('copy.loadingLlmConfiguration')} />
 			) : configDataError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{configDataError.message}
 				</StatusBanner>
 			) : null}
 			{error ? (
-				<StatusBanner state="bad" title="Logs API error">
+				<StatusBanner state="bad" title={tr('copy.logsApiError')}>
 					{error}
 				</StatusBanner>
 			) : null}
 			{updateConfig.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{updateConfig.error.message}
 				</StatusBanner>
 			) : null}
@@ -357,8 +358,8 @@ export function LogsPage() {
 									label: value
 								}))}
 								values={logFilters[dimension]}
-								placeholder={`All ${meta.filterLabel.toLowerCase()}`}
-								allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+								placeholder={tr('copy.allValue', meta.filterLabel)}
+								allLabel={tr('copy.allValue', meta.filterLabel)}
 								onChange={values =>
 									setLogFilters(current => ({
 										...current,
@@ -370,19 +371,19 @@ export function LogsPage() {
 					})}
 					<MultiCheckboxDropdown
 						kind="filter"
-						label="HTTP status"
+						label={tr('copy.httpStatus')}
 						options={[
-							{ value: '200', label: '200 OK' },
-							{ value: '400', label: '400 Bad request' },
-							{ value: '401', label: '401 Unauthorized' },
-							{ value: '403', label: '403 Forbidden' },
-							{ value: '404', label: '404 Not found' },
-							{ value: '429', label: '429 Rate limited' },
-							{ value: '500', label: '500 Server error' }
+							{ value: '200', label: tr('copy.text200Ok') },
+							{ value: '400', label: tr('copy.text400BadRequest') },
+							{ value: '401', label: tr('copy.text401Unauthorized') },
+							{ value: '403', label: tr('copy.text403Forbidden') },
+							{ value: '404', label: tr('copy.text404NotFound') },
+							{ value: '429', label: tr('copy.text429RateLimited') },
+							{ value: '500', label: tr('copy.text500ServerError') }
 						]}
 						values={status ? [status] : []}
-						placeholder="Any status"
-						allLabel="Any status"
+						placeholder={tr('copy.anyStatus')}
+						allLabel={tr('copy.anyStatus')}
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
 					<label className="toggle-row logs-stream-toggle">
@@ -391,7 +392,7 @@ export function LogsPage() {
 							checked={stream}
 							onChange={event => setStream(event.target.checked)}
 						/>
-						Stream
+						{tr('copy.stream')}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
@@ -402,7 +403,7 @@ export function LogsPage() {
 								setStatus('');
 							}}
 						>
-							Clear filters
+							{tr('copy.clearFilters')}
 						</button>
 					) : null}
 				</div>
@@ -411,9 +412,11 @@ export function LogsPage() {
 			<Panel className="logs-results-panel">
 				{visibleLogs.length === 0 ? (
 					<EmptyState
-						title={loading ? 'Loading logs' : 'No log entries'}
+						title={loading ? tr('copy.loadingLogs') : tr('copy.noLogEntries')}
 						description={
-							loading ? 'Fetching recent LLM calls.' : 'No LLM calls match the current filters.'
+							loading
+								? tr('copy.fetchingRecentLlmCalls')
+								: tr('copy.noLlmCallsMatchTheCurrentFilters')
 						}
 					/>
 				) : (
@@ -434,17 +437,17 @@ export function LogsPage() {
 							</colgroup>
 							<thead>
 								<tr>
-									<th>Time</th>
-									<th className="center">Status</th>
-									<th>Model</th>
-									<th>Prompt</th>
-									<th>Turn</th>
-									<th className="num">Duration</th>
-									<th className="num">In</th>
-									<th className="num">Out</th>
-									<th className="num">Cache</th>
-									<th className="num">Cost</th>
-									<th aria-label="Expand" />
+									<th>{tr('copy.time')}</th>
+									<th className="center">{tr('copy.status')}</th>
+									<th>{tr('copy.model')}</th>
+									<th>{tr('copy.prompt')}</th>
+									<th>{tr('copy.turn')}</th>
+									<th className="num">{tr('copy.duration')}</th>
+									<th className="num">{tr('copy.in')}</th>
+									<th className="num">{tr('copy.out')}</th>
+									<th className="num">{tr('copy.cache')}</th>
+									<th className="num">{tr('copy.cost')}</th>
+									<th aria-label={tr('copy.inspect')} />
 								</tr>
 							</thead>
 							{visibleLogs.map(entry => (
@@ -462,8 +465,8 @@ export function LogsPage() {
 						</table>
 						<div className="log-table-footer">
 							{loading
-								? 'Refreshing...'
-								: `Showing ${formatNumber(visibleLogs.length)} recent calls`}
+								? tr('copy.refreshing')
+								: tr('copy.valueRecentCalls', formatNumber(visibleLogs.length))}
 						</div>
 					</div>
 				)}
@@ -521,15 +524,15 @@ function LogsSettingsDrawer(props: {
 	};
 	return (
 		<Drawer
-			title="Log settings"
+			title={tr('copy.logSettings_12oqjpq')}
 			onClose={props.onClose}
 			dirty={dirty}
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
 					config={props.config}
-					diffTitle="Log settings config diff"
-					saveLabel="Save settings"
+					diffTitle={tr('copy.logSettingsConfigDiff')}
+					saveLabel={tr('copy.saveSettings')}
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={() => props.onSave(values)}
@@ -547,11 +550,8 @@ function LogsSettingsDrawer(props: {
 					onChange={event => setEnabled(event.target.checked)}
 				/>
 				<span>
-					<strong>Include prompts and completions in logs</strong>
-					<small>
-						Stores prompt and completion content in the database payload. Metadata, usage, timing,
-						and cost are always logged.
-					</small>
+					<strong>{tr('copy.includePromptsAndCompletionsInLogs')}</strong>
+					<small>{tr('copy.storesPromptAndCompletionContentInTheDatabasePayload')}</small>
 				</span>
 			</label>
 			<section className="policy-form-section log-attribute-settings">
@@ -560,17 +560,20 @@ function LogsSettingsDrawer(props: {
 						<User size={16} />
 					</span>
 					<div>
-						<h4>Request log identity</h4>
+						<h4>{tr('copy.requestLogIdentity')}</h4>
 						<p>
-							Optional CEL expressions for populating user and group attributes in database logs. If
-							not set a default will be used.
+							{tr(
+								'copy.optionalCelExpressionsForPopulatingUserAndGroupAttributesInDatabaseLogsIfNotSetA_1qxb9rt'
+							)}
 						</p>
 					</div>
 				</div>
 				<div className="policy-form-section-body">
 					<FieldGroup
-						label="User attribute"
-						tooltip="CEL expression used to populate the agentgateway.user request log attribute."
+						label={tr('copy.userAttribute')}
+						tooltip={tr(
+							'copy.celExpressionUsedToPopulateTheAgentgatewayUserRequestLogAttribute_r3ojz7'
+						)}
 					>
 						<MiniMonacoEditor
 							className="micro"
@@ -581,8 +584,10 @@ function LogsSettingsDrawer(props: {
 						/>
 					</FieldGroup>
 					<FieldGroup
-						label="Group attribute"
-						tooltip="CEL expression used to populate the agentgateway.group request log attribute."
+						label={tr('copy.groupAttribute')}
+						tooltip={tr(
+							'copy.celExpressionUsedToPopulateTheAgentgatewayGroupRequestLogAttribute_n5btzx'
+						)}
 					>
 						<MiniMonacoEditor
 							className="micro"
@@ -595,7 +600,7 @@ function LogsSettingsDrawer(props: {
 				</div>
 			</section>
 			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{props.saveError}
 				</StatusBanner>
 			) : null}
@@ -782,7 +787,7 @@ export function AnalyticsPage() {
 			);
 		} catch (err) {
 			if (loadSeq !== loadSeqRef.current) return;
-			setError(err instanceof Error ? err.message : 'Failed to load analytics');
+			setError(err instanceof Error ? err.message : tr('copy.failedToLoadAnalytics'));
 		} finally {
 			if (loadSeq === loadSeqRef.current) setLoading(false);
 		}
@@ -843,8 +848,8 @@ export function AnalyticsPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Analytics"
-				description="Analyze LLM traffic by model, user, and provider."
+				title={tr('copy.analytics')}
+				description={tr('copy.analyzeLlmTrafficByModelUserAndProvider')}
 				actions={
 					<div className="button-row">
 						<AnalyticsExportDropdown
@@ -857,7 +862,7 @@ export function AnalyticsPage() {
 				}
 			/>
 			{error ? (
-				<StatusBanner state="bad" title="Analytics API error">
+				<StatusBanner state="bad" title={tr('copy.analyticsApiError')}>
 					{error}
 				</StatusBanner>
 			) : null}
@@ -866,14 +871,14 @@ export function AnalyticsPage() {
 					<div className="analytics-controls-left">
 						<MultiCheckboxDropdown
 							kind="group"
-							label="Group by"
+							label={tr('copy.groupBy')}
 							options={ANALYTICS_DIMENSIONS.map(dimension => ({
 								value: dimension.value,
 								label: dimension.label
 							}))}
 							values={selectedGroupBy}
-							placeholder="Total"
-							allLabel="Total"
+							placeholder={tr('copy.total')}
+							allLabel={tr('copy.total')}
 							onChange={updateGroupBy}
 						/>
 						{ANALYTICS_DIMENSIONS.map(meta => {
@@ -888,22 +893,22 @@ export function AnalyticsPage() {
 										label: value
 									}))}
 									values={filters[dimension]}
-									placeholder={`All ${meta.filterLabel.toLowerCase()}`}
-									allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+									placeholder={tr('copy.allValue', meta.filterLabel)}
+									allLabel={tr('copy.allValue', meta.filterLabel)}
 									onChange={values => updateFilter(dimension, values)}
 								/>
 							);
 						})}
 					</div>
 					<div className="analytics-controls-right">
-						<FieldGroup label="Measure">
+						<FieldGroup label={tr('copy.measure')}>
 							<EnumSelector
-								ariaLabel="Measure"
+								ariaLabel={tr('copy.measure')}
 								value={metric}
 								options={[
-									{ value: 'tokens', label: 'Tokens' },
-									{ value: 'cost', label: 'Cost' },
-									{ value: 'requests', label: 'Requests' }
+									{ value: 'tokens', label: tr('copy.tokens') },
+									{ value: 'cost', label: tr('copy.cost') },
+									{ value: 'requests', label: tr('copy.requests') }
 								]}
 								onChange={setMetric}
 							/>
@@ -914,11 +919,14 @@ export function AnalyticsPage() {
 			<Panel className="monitoring-activity-card">
 				<div className="monitoring-card-header">
 					<div>
-						<h3>Traffic over time</h3>
+						<h3>{tr('copy.trafficOverTime')}</h3>
 						<p>
 							{loading
-								? 'Loading analytics...'
-								: `${formatCost(totalCost)} / ${formatNumber(totalTokens)} tokens / ${formatNumber(totalRequests)} calls`}
+								? tr('copy.loadingAnalytics')
+								: `${formatCost(totalCost)} / ${tr('copy.valueTokensValueCalls', [
+										formatNumber(totalTokens),
+										formatNumber(totalRequests)
+									])}`}
 						</p>
 					</div>
 					<span className="muted-copy">{logTimeRangeLabel(timeRange)}</span>
@@ -928,11 +936,19 @@ export function AnalyticsPage() {
 			<Panel className="monitoring-activity-card">
 				<div className="monitoring-card-header">
 					<div>
-						<h3>Breakdown</h3>
+						<h3>{tr('copy.breakdown')}</h3>
 						<p>
 							{selectedGroupBy.length
-								? `${analyticsMetricLabel(metric)} by ${selectedGroupBy.map(dimension => ANALYTICS_DIMENSIONS.find(item => item.value === dimension)?.label.toLowerCase()).join(', ')}`
-								: `${analyticsMetricLabel(metric)} total`}
+								? tr('copy.valueByValue', [
+										analyticsMetricLabel(metric),
+										selectedGroupBy
+											.map(
+												dimension =>
+													ANALYTICS_DIMENSIONS.find(item => item.value === dimension)?.label
+											)
+											.join(', ')
+									])
+								: tr('copy.valueTotal', analyticsMetricLabel(metric))}
 						</p>
 					</div>
 				</div>
@@ -966,7 +982,7 @@ function AnalyticsExportDropdown(props: {
 				onClick={() => setOpen(current => !current)}
 			>
 				<Download size={16} />
-				Export
+				{tr('copy.export')}
 				<ChevronDown size={15} />
 			</button>
 			{open ? (
@@ -979,7 +995,7 @@ function AnalyticsExportDropdown(props: {
 							setOpen(false);
 						}}
 					>
-						CSV
+						{tr('copy.csv')}
 					</button>
 				</div>
 			) : null}
@@ -1026,9 +1042,9 @@ function csvCell(value: unknown) {
 }
 
 function analyticsMetricLabel(metric: AnalyticsMetric) {
-	if (metric === 'requests') return 'Requests';
-	if (metric === 'cost') return 'Cost';
-	return 'Tokens';
+	if (metric === 'requests') return tr('copy.requests');
+	if (metric === 'cost') return tr('copy.cost');
+	return tr('copy.tokens');
 }
 
 function formatCost(value: number, minimumFractionDigits = 0) {
@@ -1072,7 +1088,13 @@ function analyticsRecordCost(value: unknown) {
 type RenderedLogMessagePart =
 	| { type: 'text'; text: string }
 	| { type: 'toolCall'; id?: string; name: string; arguments?: unknown }
-	| { type: 'toolResult'; id?: string; name?: string; content?: unknown; isError?: boolean }
+	| {
+			type: 'toolResult';
+			id?: string;
+			name?: string;
+			content?: unknown;
+			isError?: boolean;
+	  }
 	| { type: 'reasoning'; content?: unknown };
 
 type RenderedLogMessage = {
@@ -1127,10 +1149,10 @@ function logMessagePreview(entry: LogEntry) {
 
 function logTurn(entry: LogEntry) {
 	const labels = {
-		user: 'User',
-		assistant: 'Assistant',
-		toolCall: 'Tool call',
-		toolResult: 'Tool result'
+		user: tr('copy.user'),
+		assistant: tr('copy.assistant'),
+		toolCall: tr('copy.toolCall'),
+		toolResult: tr('copy.toolResult')
 	};
 	const input = entry.turn?.input ? labels[entry.turn.input] : null;
 	const output = entry.turn?.output ? labels[entry.turn.output] : null;
@@ -1140,8 +1162,8 @@ function logTurn(entry: LogEntry) {
 function LogTurnBadge(props: { entry: LogEntry }) {
 	const input = props.entry.turn?.input;
 	const output = props.entry.turn?.output;
-	const label = logTurn(props.entry) || 'Unknown turn';
-	const variant = `${input ?? 'unknown'}-${output ?? 'unknown'}`;
+	const label = logTurn(props.entry) || tr('copy.unknownTurn');
+	const variant = (input ?? 'unknown') + '-' + (output ?? 'unknown');
 	const common =
 		(input === 'user' || input === 'toolResult') &&
 		(output === 'assistant' || output === 'toolCall');
@@ -1243,12 +1265,12 @@ function LogGuardrailBadge(props: { entry: LogEntry }) {
 	const failedOpen = guards.some(guard => guard.action === 'failOpen');
 	const state = rejected ? 'rejected' : failedOpen ? 'failed-open' : masked ? 'masked' : 'inactive';
 	const label = rejected
-		? 'Guardrail rejected'
+		? tr('copy.guardrailRejected')
 		: failedOpen
-			? 'Guardrail failed open'
+			? tr('copy.guardrailFailedOpen')
 			: masked
-				? 'Guardrail masked content'
-				: 'Guardrail present — no action taken';
+				? tr('copy.guardrailMaskedContent')
+				: tr('copy.guardrailPresentNoAction');
 	const Icon = rejected ? ShieldBan : masked ? ShieldEllipsis : Shield;
 	return (
 		<Tooltip
@@ -1258,8 +1280,8 @@ function LogGuardrailBadge(props: { entry: LogEntry }) {
 					{guards.map((guard, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: Log evaluations are immutable and may repeat the same guard.
 						<div key={index}>
-							{String(guard.phase ?? '')}: {String(guard.guard ?? 'guardrail')} (
-							{String(guard.action ?? 'unknown')})
+							{guardPhaseLabel(guard.phase)}: {String(guard.guard ?? tr('copy.guardrail'))} (
+							{guardrailOutcomeLabel(String(guard.action ?? 'unknown'))})
 						</div>
 					))}
 				</>
@@ -1276,21 +1298,30 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 	const guards = logGuardrails(props.entry);
 	if (!guards.length) return null;
 	const outcomes: Record<string, { label: string; description: string }> = {
-		allow: { label: 'Allowed', description: 'Content passed without modification.' },
-		reject: { label: 'Rejected', description: 'The guardrail blocked the call.' },
-		mask: { label: 'Masked', description: 'The guardrail modified content before continuing.' },
+		allow: {
+			label: tr('copy.guardrailOutcomeAllowed'),
+			description: tr('copy.contentPassedWithoutModification')
+		},
+		reject: {
+			label: tr('copy.guardrailOutcomeRejected'),
+			description: tr('copy.guardrailBlockedCall')
+		},
+		mask: {
+			label: tr('copy.guardrailOutcomeMasked'),
+			description: tr('copy.guardrailModifiedContentBeforeContinuing')
+		},
 		audit: {
-			label: 'Audit only',
-			description: 'The guardrail flagged content without blocking or masking it.'
+			label: tr('copy.auditOnly'),
+			description: tr('copy.guardrailFlaggedContentWithoutBlockingOrMasking')
 		},
 		failOpen: {
-			label: 'Failed open',
-			description: 'The guardrail could not complete its check; the call continued.'
+			label: tr('copy.failOpen'),
+			description: tr('copy.guardrailCouldNotCompleteItsCheckCallContinued')
 		}
 	};
 	return (
 		<section className="log-detail-section">
-			<h4>Guardrails</h4>
+			<h4>{tr('copy.guardrails')}</h4>
 			<div className="log-guardrail-list">
 				{guards.map((guard, index) => {
 					const action = String(guard.action ?? 'unknown');
@@ -1313,20 +1344,14 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 							</span>
 							<div className="log-guardrail-context">
 								<div className="log-guardrail-heading">
-									<strong>{String(guard.guard ?? 'Guardrail')}</strong>
-									<span className="log-op-chip">
-										{guard.phase === 'request'
-											? 'Request'
-											: guard.phase === 'response'
-												? 'Response'
-												: String(guard.phase ?? 'Unknown phase')}
-									</span>
+									<strong>{String(guard.guard ?? tr('copy.guardrail'))}</strong>
+									<span className="log-op-chip">{guardPhaseLabel(guard.phase)}</span>
 									<span className={`log-guardrail-badge ${state}`}>{outcome?.label ?? action}</span>
 								</div>
 								{outcome ? <p>{outcome.description}</p> : null}
 								{typeof guard.guardrailId === 'string' ? (
 									<p>
-										Guardrail ID: <code>{guard.guardrailId}</code>
+										{tr('copy.guardrailIdentifier')}: <code>{guard.guardrailId}</code>
 									</p>
 								) : null}
 							</div>
@@ -1336,6 +1361,21 @@ function LogGuardrailDetails(props: { entry: LogEntry }) {
 			</div>
 		</section>
 	);
+}
+
+function guardPhaseLabel(phase: unknown) {
+	if (phase === 'request') return tr('copy.request_1058hua');
+	if (phase === 'response') return tr('copy.response_nrnldq');
+	return String(phase ?? tr('copy.unknown'));
+}
+
+function guardrailOutcomeLabel(action: string) {
+	if (action === 'allow') return tr('copy.guardrailOutcomeAllowed');
+	if (action === 'reject') return tr('copy.guardrailOutcomeRejected');
+	if (action === 'mask') return tr('copy.guardrailOutcomeMasked');
+	if (action === 'audit') return tr('copy.auditOnly');
+	if (action === 'failOpen') return tr('copy.failOpen');
+	return action;
 }
 
 function LogCallRow(props: {
@@ -1352,7 +1392,7 @@ function LogCallRow(props: {
 	const preview = logMessagePreview(props.entry);
 	const requestModel = props.entry.genAi.requestModel ?? null;
 	const responseModel = props.entry.genAi.responseModel ?? null;
-	const primaryModel = originalModel ?? requestModel ?? 'unknown model';
+	const primaryModel = originalModel ?? requestModel ?? tr('copy.unknownModel');
 	const resolvedModel = responseModel ?? requestModel;
 	const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
 	const operation = props.entry.genAi.operationName ?? 'chat';
@@ -1434,7 +1474,9 @@ function LogCallRow(props: {
 				<tr className="log-row-detail">
 					<td colSpan={11}>
 						<div className="expanded-log">
-							{props.loading ? <StatusBanner state="loading" title="Loading log payload" /> : null}
+							{props.loading ? (
+								<StatusBanner state="loading" title={tr('copy.loadingLogPayload')} />
+							) : null}
 							<LogDetailView
 								entry={props.detail}
 								promptLoggingEnabled={props.promptLoggingEnabled}
@@ -1530,7 +1572,7 @@ function LogDetailView(props: {
 	const original = originalModelForLog(props.entry);
 	const request = props.entry.genAi.requestModel ?? null;
 	const response = props.entry.genAi.responseModel ?? null;
-	const primaryModel = original ?? request ?? 'unknown model';
+	const primaryModel = original ?? request ?? tr('copy.unknownModel');
 	const hasRouting =
 		(original != null && request != null && original !== request) ||
 		(response != null && request != null && response !== request);
@@ -1540,9 +1582,14 @@ function LogDetailView(props: {
 	function jumpToConversation(anchorId: string) {
 		if (conversationRef.current) conversationRef.current.open = true;
 		window.requestAnimationFrame(() => {
-			document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			const hash = `#${anchorId}`;
-			if (window.location.hash !== hash) window.history.pushState(null, '', hash);
+			document.getElementById(anchorId)?.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center'
+			});
+			const hash = '#' + anchorId;
+			if (window.location.hash !== hash) {
+				window.history.pushState(null, '', hash);
+			}
 		});
 	}
 
@@ -1556,7 +1603,6 @@ function LogDetailView(props: {
 		});
 		return () => window.cancelAnimationFrame(frame);
 	}, [props.entry.id, trajectoryAnchors]);
-
 	return (
 		<div className="log-detail-view">
 			<div className="log-detail-top">
@@ -1581,29 +1627,29 @@ function LogDetailView(props: {
 			</div>
 
 			{props.entry.error ? (
-				<StatusBanner state="bad" title="Gateway error">
+				<StatusBanner state="bad" title={tr('copy.gatewayError')}>
 					{props.entry.error}
 				</StatusBanner>
 			) : null}
 
 			<div className="log-stat-row">
-				<LogStat label="Duration" value={formatDuration(props.entry.durationMs)} />
+				<LogStat label={tr('copy.duration')} value={formatDuration(props.entry.durationMs)} />
 				{usage.timeToFirstTokenMs != null ? (
-					<LogStat label="First token" value={formatDuration(usage.timeToFirstTokenMs)} />
+					<LogStat label={tr('copy.firstToken')} value={formatDuration(usage.timeToFirstTokenMs)} />
 				) : null}
 				{usage.tokensPerSecond != null ? (
 					<LogStat
-						label="Speed"
+						label={tr('copy.speed')}
 						value={`${formatNumber(Math.round(usage.tokensPerSecond))} tok/s`}
 					/>
 				) : null}
 				<LogStat
-					label="Tokens"
+					label={tr('copy.tokens')}
 					value={usage.totalTokens != null ? formatNumber(usage.totalTokens) : 'n/a'}
 				/>
 				{usage.cacheReadTokens != null && usage.inputTokens != null && usage.inputTokens > 0 ? (
 					<LogStat
-						label="Cache hit"
+						label={tr('copy.cacheHit')}
 						value={`${Math.min(
 							Math.round((usage.cacheReadTokens / usage.inputTokens) * 100),
 							100
@@ -1611,7 +1657,7 @@ function LogDetailView(props: {
 					/>
 				) : null}
 				<LogStat
-					label="Cost"
+					label={tr('copy.cost')}
 					value={
 						usage.totalCost != null && usage.totalCost > 0
 							? formatCost(usage.totalCost, usage.costDigits)
@@ -1624,27 +1670,39 @@ function LogDetailView(props: {
 
 			<div className="log-detail-grid">
 				<section className="log-detail-section">
-					<h4>Request</h4>
+					<h4>{tr('copy.request_1058hua')}</h4>
 					{hasRouting ? (
 						<div className="model-route">
-							<ModelRouteStep label="Client requested" value={original ?? request ?? 'n/a'} />
-							<ModelRouteStep label="Gateway sent" value={request ?? 'n/a'} />
-							<ModelRouteStep label="Provider returned" value={response ?? 'n/a'} last />
+							<ModelRouteStep
+								label={tr('copy.clientRequested')}
+								value={original ?? request ?? 'n/a'}
+							/>
+							<ModelRouteStep label={tr('copy.gatewaySent')} value={request ?? 'n/a'} />
+							<ModelRouteStep label={tr('copy.providerReturned')} value={response ?? 'n/a'} last />
 						</div>
 					) : null}
 					<div className="log-field-grid">
-						{!hasRouting ? <LogField label="Model" value={primaryModel} mono /> : null}
-						<LogField label="Provider" value={providerDisplayName(provider ?? 'unknown')} />
-						<LogField label="Operation" value={props.entry.genAi.operationName ?? 'unknown'} />
-						<LogField label="HTTP status" value={String(props.entry.httpStatus ?? 'n/a')} />
-						{userAgent ? <LogField label="Client" value={userAgent} /> : null}
-						{identity.user ? <LogField label="User" value={identity.user} /> : null}
-						{identity.group ? <LogField label="Group" value={identity.group} /> : null}
-						<LogField label="Completed" value={formatDate(props.entry.completedAt)} />
+						{!hasRouting ? <LogField label={tr('copy.model')} value={primaryModel} mono /> : null}
+						<LogField
+							label={tr('copy.provider')}
+							value={providerDisplayName(provider ?? 'unknown')}
+						/>
+						<LogField
+							label={tr('copy.operation')}
+							value={props.entry.genAi.operationName ?? 'unknown'}
+						/>
+						<LogField
+							label={tr('copy.httpStatus')}
+							value={String(props.entry.httpStatus ?? 'n/a')}
+						/>
+						{userAgent ? <LogField label={tr('copy.client')} value={userAgent} /> : null}
+						{identity.user ? <LogField label={tr('copy.user')} value={identity.user} /> : null}
+						{identity.group ? <LogField label={tr('copy.group')} value={identity.group} /> : null}
+						<LogField label={tr('copy.completed')} value={formatDate(props.entry.completedAt)} />
 					</div>
 				</section>
 				<section className="log-detail-section">
-					<h4>Usage</h4>
+					<h4>{tr('copy.usage')}</h4>
 					<LogUsagePanel usage={usage} />
 				</section>
 			</div>
@@ -1655,9 +1713,9 @@ function LogDetailView(props: {
 				<details className="log-conversation" ref={conversationRef}>
 					<summary>
 						<ChevronRight className="log-conversation-chevron" size={15} />
-						<span className="log-conversation-title">Conversation</span>
+						<span className="log-conversation-title">{tr('copy.conversation')}</span>
 						<span className="log-conversation-count">
-							{messages.length === 1 ? '1 message' : `${formatNumber(messages.length)} messages`}
+							{tr('copy.valueMessages', { count: messages.length })}
 						</span>
 					</summary>
 					<div className="log-thread">
@@ -1674,26 +1732,25 @@ function LogDetailView(props: {
 					</div>
 				</details>
 			) : props.promptLoggingEnabled ? (
-				<StatusBanner state="info" title="No prompt or completion content recorded">
-					Prompt logging is enabled, but no content was captured for this request. This can happen
-					in passthrough mode.
+				<StatusBanner state="info" title={tr('copy.noPromptOrCompletionContentRecorded')}>
+					{tr('copy.promptLoggingEnabledButNoContentCapturedForRequestPassthroughMode')}
 				</StatusBanner>
 			) : (
-				<StatusBanner state="info" title="Prompt logging is off">
-					Enable "Include prompts and completions in logs" in{' '}
+				<StatusBanner state="info" title={tr('copy.promptLoggingIsOff')}>
+					{tr('copy.enableIncludePromptsAndCompletionsInLogsIn')}{' '}
 					{props.onOpenSettings ? (
 						<button className="link-button" type="button" onClick={props.onOpenSettings}>
-							log settings
+							{tr('copy.logSettings')}
 						</button>
 					) : (
-						'log settings'
+						tr('copy.logSettings')
 					)}{' '}
-					to capture request and response payloads.
+					{tr('copy.toCaptureRequestAndResponsePayloads')}
 				</StatusBanner>
 			)}
 
 			<details className="log-raw-details">
-				<summary>Raw log JSON</summary>
+				<summary>{tr('copy.rawLogJson')}</summary>
 				<JsonBlock value={props.entry} />
 			</details>
 		</div>
@@ -1712,52 +1769,43 @@ type TrajectoryEvent = {
 	system?: boolean;
 };
 
-const TRAJECTORY_LANES: Array<{ lane: TrajectoryLane; label: string }> = [
-	{ lane: 'input', label: 'Input' },
-	{ lane: 'model', label: 'Model' },
-	{ lane: 'tool-call', label: 'Tool call' },
-	{ lane: 'tool-result', label: 'Tool result' }
-];
+const TRAJECTORY_LANES: TrajectoryLane[] = ['input', 'model', 'tool-call', 'tool-result'];
 
 function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: string) => void }) {
 	const [selected, setSelected] = useState<number | null>(null);
 	if (!props.events.length) return null;
-
 	const selectedEvent = selected == null ? null : props.events[selected];
 	const chartStyle = {
-		minWidth: `${Math.max(420, props.events.length * 24 + 92)}px`
+		minWidth: Math.max(420, props.events.length * 24 + 92) + 'px'
 	};
 	const trackStyle = {
 		gridTemplateColumns: props.events
-			.map(event => `minmax(14px, ${event.approxTokens}fr)`)
+			.map(event => 'minmax(14px, ' + event.approxTokens + 'fr)')
 			.join(' ')
 	};
-
 	return (
 		<section className="log-trajectory" aria-labelledby="log-trajectory-title">
 			<div className="log-trajectory-header">
-				<h3 id="log-trajectory-title">Trajectory</h3>
-				<span>
-					{formatNumber(props.events.length)} step{props.events.length === 1 ? '' : 's'}
-				</span>
+				<h3 id="log-trajectory-title">{tr('copy.trajectory')}</h3>
+				<span>{tr('copy.trajectorySteps', { count: props.events.length })}</span>
 			</div>
 			<div className="log-trajectory-scroll">
 				<div className="log-trajectory-chart" style={chartStyle}>
-					{TRAJECTORY_LANES.map(({ lane, label }) => (
+					{TRAJECTORY_LANES.map(lane => (
 						<div className="log-trajectory-row" key={lane}>
-							<span className="log-trajectory-label">{label}</span>
+							<span className="log-trajectory-label">{tr(trajectoryLaneKey(lane))}</span>
 							<div className="log-trajectory-track" style={trackStyle}>
 								{props.events.map((event, index) =>
 									event.lane === lane ? (
 										<button
-											aria-label={`Step ${index + 1}: ${event.label}`}
+											aria-label={tr('copy.trajectoryStep', [index + 1, event.label])}
 											aria-pressed={selected === index}
 											className={`log-trajectory-bar ${lane}${event.system ? ' system' : ''}${selected === index ? ' selected' : ''}`}
 											key={`${lane}-${
 												// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 												index
 											}`}
-											title={`Step ${index + 1}: ${event.label}`}
+											title={tr('copy.trajectoryStep', [index + 1, event.label])}
 											type="button"
 											onClick={() => setSelected(current => (current === index ? null : index))}
 											onDoubleClick={() => {
@@ -1783,24 +1831,31 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			</div>
 			<div className="log-trajectory-caption" aria-live="polite">
 				<span>
-					{selected != null && selectedEvent
-						? `Step ${selected + 1} ${selectedEvent.label}`
-						: 'Width shows approximate tokens'}
+					{selectedEvent
+						? tr('copy.trajectoryStepLabel', [(selected ?? 0) + 1, selectedEvent.label])
+						: tr('copy.widthShowsApproximateTokens')}
 				</span>
 				{selectedEvent ? (
 					<a
-						href={`#${selectedEvent.anchorId}`}
+						href={'#' + selectedEvent.anchorId}
 						onClick={event => {
 							event.preventDefault();
 							props.onJump(selectedEvent.anchorId);
 						}}
 					>
-						Jump to conversation
+						{tr('copy.jumpToConversation')}
 					</a>
 				) : null}
 			</div>
 		</section>
 	);
+}
+
+function trajectoryLaneKey(lane: TrajectoryLane) {
+	if (lane === 'input') return 'copy.input';
+	if (lane === 'model') return 'copy.model';
+	if (lane === 'tool-call') return 'copy.toolCall';
+	return 'copy.toolResult';
 }
 
 function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
@@ -1817,7 +1872,11 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 							...base,
 							lane: model ? 'model' : 'input',
 							label: trajectoryMessageLabel(
-								model ? 'Model' : message.role === 'system' ? 'System' : 'User',
+								model
+									? tr('copy.model')
+									: message.role === 'system'
+										? tr('copy.system')
+										: tr('copy.user'),
 								part.text
 							),
 							approxTokens: approximateTokenCount(part.text),
@@ -1829,9 +1888,9 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 						events.push({
 							...base,
 							lane: 'tool-call',
-							label: `Tool call: ${part.name}`,
+							label: tr('copy.trajectoryToolCall', part.name),
 							approxTokens: approximateTokenCount(
-								`${part.name}\n${trajectoryValueText(part.arguments)}`
+								part.name + '\n' + trajectoryValueText(part.arguments)
 							)
 						});
 						break;
@@ -1839,12 +1898,11 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 						events.push({
 							...base,
 							lane: 'tool-result',
-							label: `Tool result: ${part.name ?? 'unknown'}`,
+							label: tr('copy.trajectoryToolResult', part.name ?? tr('copy.unknown')),
 							approxTokens: approximateTokenCount(trajectoryValueText(part.content))
 						});
 						break;
 					case 'reasoning':
-						// Encrypted reasoning size is not a meaningful token estimate.
 						break;
 				}
 			}
@@ -1855,7 +1913,7 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 			if (message.content.trim()) {
 				events.push({
 					lane: 'model',
-					label: trajectoryMessageLabel('Model', message.content),
+					label: trajectoryMessageLabel(tr('copy.model'), message.content),
 					approxTokens: approximateTokenCount(message.content),
 					messageIndex
 				});
@@ -1863,9 +1921,9 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 			for (const call of message.toolCalls ?? []) {
 				events.push({
 					lane: 'tool-call',
-					label: `Tool call: ${call.name}`,
+					label: tr('copy.trajectoryToolCall', call.name),
 					approxTokens: approximateTokenCount(
-						`${call.name}\n${trajectoryValueText(call.arguments)}`
+						call.name + '\n' + trajectoryValueText(call.arguments)
 					),
 					messageIndex
 				});
@@ -1873,7 +1931,7 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 		} else if (message.role === 'tool') {
 			events.push({
 				lane: 'tool-result',
-				label: `Tool result: ${message.name ?? 'unknown'}`,
+				label: tr('copy.trajectoryToolResult', message.name ?? tr('copy.unknown')),
 				approxTokens: approximateTokenCount(message.content),
 				messageIndex
 			});
@@ -1881,7 +1939,7 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 			events.push({
 				lane: 'input',
 				label: trajectoryMessageLabel(
-					message.role === 'system' ? 'System' : 'User',
+					message.role === 'system' ? tr('copy.system') : tr('copy.user'),
 					message.content
 				),
 				approxTokens: approximateTokenCount(message.content),
@@ -1892,7 +1950,7 @@ function trajectoryEvents(messages: RenderedLogMessage[]): TrajectoryEvent[] {
 	}
 	return events.map((event, index) => ({
 		...event,
-		anchorId: `conversation-step-${index + 1}`
+		anchorId: 'conversation-step-' + (index + 1)
 	}));
 }
 
@@ -1913,8 +1971,8 @@ function trajectoryValueText(value: unknown) {
 function trajectoryMessageLabel(prefix: string, content: string) {
 	const compact = content.replace(/\s+/g, ' ').trim();
 	if (!compact) return prefix;
-	const preview = compact.length > 64 ? `${compact.slice(0, 61)}...` : compact;
-	return `${prefix}: ${preview}`;
+	const preview = compact.length > 64 ? compact.slice(0, 61) + '...' : compact;
+	return tr('copy.trajectoryMessageValue', [prefix, preview]);
 }
 
 function LogStat(props: { label: string; value: string; sub?: string }) {
@@ -1983,62 +2041,62 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 		kind?: 'input-group' | 'input-detail' | 'output-group' | 'output-detail';
 	}> = [
 		{
-			label: 'Input',
+			label: tr('copy.input'),
 			kind: 'input-group'
 		},
 		{
-			label: 'Uncached',
+			label: tr('copy.uncached'),
 			swatch: 'input',
 			tokens: inputBreakdown?.uncached,
 			cost: usage.inputCost,
 			kind: 'input-detail'
 		},
 		{
-			label: 'Cache write',
+			label: tr('copy.cacheWrite'),
 			swatch: 'cache-write',
 			tokens: inputBreakdown?.cacheWrite ?? usage.cacheWriteTokens,
 			cost: usage.cacheWriteCost,
 			kind: 'input-detail'
 		},
 		{
-			label: 'Cache read',
+			label: tr('copy.cacheRead'),
 			swatch: 'cache-read',
 			tokens: inputBreakdown?.cacheRead ?? usage.cacheReadTokens,
 			cost: usage.cacheReadCost,
 			kind: 'input-detail'
 		},
 		{
-			label: 'Audio',
+			label: tr('copy.audio'),
 			swatch: 'audio',
 			tokens: inputBreakdown?.audio ?? usage.inputAudioTokens,
 			cost: usage.inputAudioCost,
 			kind: 'input-detail'
 		},
 		{
-			label: 'Output',
+			label: tr('copy.output'),
 			kind: 'output-group'
 		},
 		{
-			label: 'Reported total',
+			label: tr('copy.reportedTotal'),
 			tokens: outputBreakdownUnavailable ? usage.outputTokens : undefined,
 			kind: 'output-detail'
 		},
 		{
-			label: 'Generated',
+			label: tr('copy.generated'),
 			swatch: 'output',
 			tokens: outputBreakdown?.generated,
 			cost: usage.outputCost,
 			kind: 'output-detail'
 		},
 		{
-			label: 'Reasoning',
+			label: tr('copy.reasoning'),
 			swatch: 'reasoning',
 			tokens: outputBreakdown?.reasoning ?? usage.reasoningTokens,
 			cost: usage.reasoningCost,
 			kind: 'output-detail'
 		},
 		{
-			label: 'Audio',
+			label: tr('copy.audio'),
 			swatch: 'audio',
 			tokens: outputBreakdown?.audio ?? usage.outputAudioTokens,
 			cost: usage.outputAudioCost,
@@ -2047,10 +2105,10 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 	];
 	const rows = allRows.filter(
 		row =>
-			row.label === 'Input' ||
-			row.label === 'Uncached' ||
-			row.label === 'Output' ||
-			row.label === 'Generated' ||
+			row.kind === 'input-group' ||
+			(row.kind === 'input-detail' && row.swatch === 'input') ||
+			row.kind === 'output-group' ||
+			(row.kind === 'output-detail' && row.swatch === 'output') ||
 			Boolean(row.tokens) ||
 			Boolean(row.cost)
 	);
@@ -2060,7 +2118,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 				<div className="log-usage-bars">
 					{showBar ? (
 						<div className="log-usage-bar-row">
-							<span className="log-usage-bar-label">Tokens</span>
+							<span className="log-usage-bar-label">{tr('copy.tokens')}</span>
 							<TokenBar
 								input={inputTokens}
 								output={outputTokens}
@@ -2075,7 +2133,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 					) : null}
 					{showCostBar ? (
 						<div className="log-usage-bar-row">
-							<span className="log-usage-bar-label">Cost</span>
+							<span className="log-usage-bar-label">{tr('copy.cost')}</span>
 							<CostBar usage={usage} />
 						</div>
 					) : null}
@@ -2084,8 +2142,8 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 			<div className="log-usage-table">
 				<div className="log-usage-row head">
 					<span />
-					<span>Tokens</span>
-					<span>Cost</span>
+					<span>{tr('copy.tokens')}</span>
+					<span>{tr('copy.cost')}</span>
 				</div>
 				{rows.map(row => (
 					<div
@@ -2107,7 +2165,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 					</div>
 				))}
 				<div className="log-usage-row total">
-					<span className="log-usage-label">Total</span>
+					<span className="log-usage-label">{tr('copy.total')}</span>
 					<span className="log-usage-tokens">
 						{usage.totalTokens != null ? formatNumber(usage.totalTokens) : ''}
 					</span>
@@ -2122,12 +2180,15 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 	);
 }
 
-const LOG_ROLE_LABELS: Record<RenderedLogMessage['role'], string> = {
-	system: 'System',
-	user: 'User',
-	assistant: 'Assistant',
-	tool: 'Tool'
-};
+function logRoleLabel(role: RenderedLogMessage['role']) {
+	const keys = {
+		system: 'copy.system',
+		user: 'copy.user',
+		assistant: 'copy.assistant',
+		tool: 'copy.tool'
+	} as const;
+	return tr(keys[role]);
+}
 
 function LogMessageView(props: { message: RenderedLogMessage; events: TrajectoryEvent[] }) {
 	const message = props.message;
@@ -2150,14 +2211,16 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 	);
 
 	return (
-		<article className={`log-msg ${message.role}`} id={messageAnchor}>
+		<article className={`log-msg ${message.role}`}>
 			<header className="log-msg-header">
-				<span className="log-msg-role">{LOG_ROLE_LABELS[message.role]}</span>
+				<span className="log-msg-role">{logRoleLabel(message.role)}</span>
 				{message.role === 'tool' && message.name ? (
 					<code className="log-msg-name">{message.name}</code>
 				) : null}
 				{copyValue ? (
-					<span className="log-msg-meta">{formatNumber(copyValue.length)} chars</span>
+					<span className="log-msg-meta">
+						{tr('copy.valueCharacters', formatNumber(copyValue.length))}
+					</span>
 				) : null}
 				{copyValue ? <CopyButton value={copyValue} /> : null}
 			</header>
@@ -2182,15 +2245,17 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								onClick={() => setCollapsed(current => !current)}
 							>
 								{collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-								{collapsed ? `Show all (${formatNumber(content.length)} chars)` : 'Collapse'}
+								{collapsed
+									? tr('copy.showAllValueCharacters', formatNumber(content.length))
+									: tr('copy.collapse')}
 							</button>
 						) : null}
 					</>
 				) : message.role === 'tool' && !hasToolResults ? (
-					<LogToolBlock kind="result" name={message.name ?? 'unknown'} value={content} />
+					<LogToolBlock kind="result" name={message.name ?? tr('copy.unknown')} value={content} />
 				) : content ? (
 					<>
-						<LogMarkdown content={content} collapsed={collapsed} />
+						<LogMarkdown content={content} collapsed={collapsed} anchorId={messageAnchor} />
 						{collapsible ? (
 							<button
 								className="log-msg-toggle"
@@ -2198,7 +2263,9 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 								onClick={() => setCollapsed(current => !current)}
 							>
 								{collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-								{collapsed ? `Show all (${formatNumber(content.length)} chars)` : 'Collapse'}
+								{collapsed
+									? tr('copy.showAllValueCharacters', formatNumber(content.length))
+									: tr('copy.collapse')}
 							</button>
 						) : null}
 					</>
@@ -2220,8 +2287,13 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 				{!message.parts && hasToolResults
 					? message.toolResults?.map((result, index) => (
 							<LogToolBlock
+								anchorId={
+									props.events.find(
+										event => event.lane === 'tool-result' && event.partIndex == null
+									)?.anchorId
+								}
 								kind="result"
-								name={result.name ?? 'unknown'}
+								name={result.name ?? tr('copy.unknown')}
 								value={result.content}
 								isError={result.isError}
 								key={`${result.id ?? result.name ?? 'result'}-${
@@ -2243,7 +2315,7 @@ function LogMessageView(props: { message: RenderedLogMessage; events: Trajectory
 						))
 					: null}
 				{!content && !hasToolCalls && !hasToolResults && !hasReasoning ? (
-					<span className="log-msg-empty">empty message</span>
+					<span className="log-msg-empty">{tr('copy.emptyMessage')}</span>
 				) : null}
 			</div>
 		</article>
@@ -2255,19 +2327,22 @@ function LogMessagePartView(props: {
 	collapsed: boolean;
 	anchorId?: string;
 }) {
-	const part = props.part;
-	switch (part.type) {
+	switch (props.part.type) {
 		case 'text':
-			return part.text ? (
-				<LogMarkdown content={part.text} collapsed={props.collapsed} anchorId={props.anchorId} />
+			return props.part.text ? (
+				<LogMarkdown
+					content={props.part.text}
+					collapsed={props.collapsed}
+					anchorId={props.anchorId}
+				/>
 			) : null;
 		case 'toolCall':
 			return (
 				<LogToolBlock
 					anchorId={props.anchorId}
 					kind="call"
-					name={part.name}
-					value={part.arguments}
+					name={props.part.name}
+					value={props.part.arguments}
 				/>
 			);
 		case 'toolResult':
@@ -2275,13 +2350,13 @@ function LogMessagePartView(props: {
 				<LogToolBlock
 					anchorId={props.anchorId}
 					kind="result"
-					name={part.name ?? 'unknown'}
-					value={part.content}
-					isError={part.isError}
+					name={props.part.name ?? tr('copy.unknown')}
+					value={props.part.content}
+					isError={props.part.isError}
 				/>
 			);
 		case 'reasoning':
-			return <LogReasoningBlock content={part.content} />;
+			return <LogReasoningBlock content={props.part.content} />;
 	}
 }
 
@@ -2295,21 +2370,24 @@ function reasoningDisplayText(content: unknown) {
 	if (!content || typeof content !== 'object') {
 		return typeof content === 'string' && content.trim()
 			? content
-			: 'Reasoning details unavailable';
+			: tr('copy.reasoningDetailsUnavailable');
 	}
 	const record = content as Record<string, unknown>;
 	const summary = reasoningSummaryText(record.summary);
 	if (summary) return summary;
-
 	const encrypted = record.encrypted_content ?? record.encryptedContent;
-	if (typeof encrypted !== 'string' || !encrypted) return 'Reasoning details unavailable';
+	if (typeof encrypted !== 'string' || !encrypted) {
+		return tr('copy.reasoningDetailsUnavailable');
+	}
 	const bytes = decodedBase64UrlLength(encrypted);
-	return bytes == null ? 'Encrypted' : `Encrypted (${formatNumber(bytes)} bytes)`;
+	return bytes == null ? tr('copy.encrypted') : tr('copy.encryptedBytes', formatNumber(bytes));
 }
 
 function reasoningSummaryText(value: unknown): string {
 	if (typeof value === 'string') return value.trim();
-	if (Array.isArray(value)) return value.map(reasoningSummaryText).filter(Boolean).join('\n');
+	if (Array.isArray(value)) {
+		return value.map(reasoningSummaryText).filter(Boolean).join('\n');
+	}
 	if (!value || typeof value !== 'object') return '';
 	const record = value as Record<string, unknown>;
 	return reasoningSummaryText(record.text ?? record.content);
@@ -2354,7 +2432,7 @@ const logMarkdownRenderer = new marked.Renderer();
 logMarkdownRenderer.html = ({ text }) => escapeLogMarkdownHtml(text).replaceAll('\n', '<br>');
 logMarkdownRenderer.link = ({ text }) => escapeLogMarkdownHtml(text);
 logMarkdownRenderer.image = ({ text }) =>
-	text ? `[image: ${escapeLogMarkdownHtml(text)}]` : '[image]';
+	text ? '[image: ' + escapeLogMarkdownHtml(text) + ']' : '[image]';
 
 const LOG_MARKDOWN_TAGS = [
 	'blockquote',
@@ -2433,7 +2511,7 @@ function LogToolBlock(props: {
 		props.kind === 'result' && typeof props.value === 'string'
 			? (() => {
 					try {
-						return JSON.parse(props.value) as unknown;
+						return JSON.parse(props.value as string) as unknown;
 					} catch {
 						return null;
 					}
@@ -2442,7 +2520,9 @@ function LogToolBlock(props: {
 	const copyValue = summary;
 	return (
 		<div
-			className={`log-tool-block ${props.kind}${props.isError ? ' error' : ''}${open ? ' open' : ''}`}
+			className={
+				'log-tool-block ' + props.kind + (props.isError ? ' error' : '') + (open ? ' open' : '')
+			}
 			id={props.anchorId}
 		>
 			<div className="log-tool-head">
@@ -2454,12 +2534,16 @@ function LogToolBlock(props: {
 				>
 					{isCall ? <Wrench size={13} /> : <Braces size={13} />}
 					<span className="log-tool-kind">
-						{isCall ? 'tool call' : props.kind === 'reasoning' ? 'reasoning' : 'result'}
+						{isCall
+							? tr('copy.toolCall')
+							: props.kind === 'reasoning'
+								? tr('copy.reasoning')
+								: tr('copy.toolResult')}
 					</span>
 					{props.kind !== 'reasoning' ? <code className="log-tool-name">{props.name}</code> : null}
 					{!open ? (
 						<span className="log-tool-summary">
-							{summary || (isCall ? 'no args' : 'empty result')}
+							{summary || (isCall ? tr('copy.noArgs') : tr('copy.emptyResult'))}
 						</span>
 					) : null}
 					<ChevronDown className="log-tool-chevron" size={14} />
@@ -2469,13 +2553,15 @@ function LogToolBlock(props: {
 			{open ? (
 				<div className="log-tool-body">
 					{typeof props.value === 'string' && parsedResult == null ? (
-						<pre className="log-tool-text">{props.value || 'empty result'}</pre>
+						<pre className="log-tool-text">{props.value || tr('copy.emptyResult')}</pre>
 					) : parsedResult != null ? (
 						<JsonBlock value={parsedResult} />
 					) : props.value != null ? (
 						<JsonBlock value={props.value} />
 					) : (
-						<pre className="log-tool-text">{isCall ? 'no arguments' : 'empty result'}</pre>
+						<pre className="log-tool-text">
+							{isCall ? tr('copy.noArgs') : tr('copy.emptyResult')}
+						</pre>
 					)}
 				</div>
 			) : null}
@@ -2580,7 +2666,9 @@ function messageFromUnknown(value: unknown): RenderedLogMessage[] {
 	if (typeof value !== 'object' || Array.isArray(value))
 		return [{ role: 'user', content: contentText(value) }];
 	const record = value as Record<string, unknown>;
-	if (Array.isArray(record.parts)) return [messageFromNormalizedParts(record)];
+	if (Array.isArray(record.parts)) {
+		return [messageFromNormalizedParts(record)];
+	}
 	const role = normalizeRole(record.role);
 	const content = contentText(record.content ?? record.text ?? record.message ?? '');
 	const toolCalls = toolCallsFromUnknown(record.tool_calls ?? record.toolCalls);
@@ -2604,23 +2692,27 @@ function messageFromNormalizedParts(record: Record<string, unknown>): RenderedLo
 					parts.push({ type: 'text', text: value.text });
 				}
 				break;
-			case 'toolCall':
-				toolCalls.push({
+			case 'toolCall': {
+				const call = {
 					id: typeof value.id === 'string' ? value.id : undefined,
 					name: typeof value.name === 'string' ? value.name : 'unknown',
 					arguments: value.arguments
-				});
-				parts.push({ type: 'toolCall', ...toolCalls[toolCalls.length - 1] });
+				};
+				toolCalls.push(call);
+				parts.push({ type: 'toolCall', ...call });
 				break;
-			case 'toolResult':
-				toolResults.push({
+			}
+			case 'toolResult': {
+				const result = {
 					id: typeof value.id === 'string' ? value.id : undefined,
 					name: typeof value.name === 'string' ? value.name : undefined,
 					content: value.content,
 					isError: typeof value.isError === 'boolean' ? value.isError : undefined
-				});
-				parts.push({ type: 'toolResult', ...toolResults[toolResults.length - 1] });
+				};
+				toolResults.push(result);
+				parts.push({ type: 'toolResult', ...result });
 				break;
+			}
 			case 'reasoning':
 				reasoning.push(value.content);
 				parts.push({ type: 'reasoning', content: value.content });
@@ -2719,19 +2811,19 @@ function TokenCells(props: { entry: LogEntry }) {
 		<>
 			<td
 				className="log-td-num"
-				title={input != null ? `${formatNumber(input)} input tokens` : undefined}
+				title={input != null ? tokenCountTitle(input, tr('copy.input')) : undefined}
 			>
 				{input == null ? '—' : formatCompactNumber(input)}
 			</td>
 			<td
 				className="log-td-num"
-				title={output != null ? `${formatNumber(output)} output tokens` : undefined}
+				title={output != null ? tokenCountTitle(output, tr('copy.output')) : undefined}
 			>
 				{output == null ? '—' : formatCompactNumber(output)}
 			</td>
 			<td
 				className="log-td-num"
-				title={cacheRead != null ? `${formatNumber(cacheRead)} cached input tokens` : undefined}
+				title={cacheRead != null ? tokenCountTitle(cacheRead, tr('copy.cacheRead')) : undefined}
 			>
 				{cachePercent == null ? '—' : `${cachePercent}%`}
 			</td>
@@ -2767,7 +2859,7 @@ function CopyButton(props: { value: string }) {
 		<button
 			className={`copy-button${copied ? ' copied' : ''}`}
 			type="button"
-			aria-label="Copy to clipboard"
+			aria-label={tr('copy.copyToClipboard')}
 			onClick={handleCopy}
 		>
 			{copied ? <Check size={11} /> : <Copy size={11} />}
@@ -2809,15 +2901,15 @@ function TokenBar(props: {
 	const reasoningPct = (reasoning / total) * 100;
 	const outputAudioPct = (outputAudio / total) * 100;
 	const title = [
-		`input: ${formatNumber(input)}`,
-		`uncached: ${formatNumber(uncached)}`,
-		cacheRead ? `cache read: ${formatNumber(cacheRead)}` : null,
-		cacheWrite ? `cache write: ${formatNumber(cacheWrite)}` : null,
-		inputAudio ? `input audio: ${formatNumber(inputAudio)}` : null,
-		props.splitOutput ? `generated: ${formatNumber(generated)}` : null,
-		props.splitOutput && reasoning ? `reasoning: ${formatNumber(reasoning)}` : null,
-		props.splitOutput && outputAudio ? `output audio: ${formatNumber(outputAudio)}` : null,
-		!props.splitOutput ? `output: ${formatNumber(output)}` : null
+		usageValueLabel(tr('copy.input'), input),
+		usageValueLabel(tr('copy.uncached'), uncached),
+		cacheRead ? usageValueLabel(tr('copy.cacheRead'), cacheRead) : null,
+		cacheWrite ? usageValueLabel(tr('copy.cacheWrite'), cacheWrite) : null,
+		inputAudio ? usageValueLabel(tr('copy.inputAudio'), inputAudio) : null,
+		props.splitOutput ? usageValueLabel(tr('copy.generated'), generated) : null,
+		props.splitOutput && reasoning ? usageValueLabel(tr('copy.reasoning'), reasoning) : null,
+		props.splitOutput && outputAudio ? usageValueLabel(tr('copy.outputAudio'), outputAudio) : null,
+		!props.splitOutput ? usageValueLabel(tr('copy.output'), output) : null
 	]
 		.filter(Boolean)
 		.join(' / ');
@@ -2869,18 +2961,20 @@ function TokenBar(props: {
 function CostBar(props: { usage: LogUsageDetail }) {
 	const usage = props.usage;
 	const components = [
-		['input', usage.inputCost, 'token-bar-input'],
-		['cache read', usage.cacheReadCost, 'token-bar-cache-read'],
-		['cache write', usage.cacheWriteCost, 'token-bar-cache-write'],
-		['input audio', usage.inputAudioCost, 'token-bar-audio'],
-		['generated', usage.outputCost, 'token-bar-output'],
-		['reasoning', usage.reasoningCost, 'token-bar-reasoning'],
-		['output audio', usage.outputAudioCost, 'token-bar-audio']
+		['input', usage.inputCost, 'token-bar-input', tr('copy.input')],
+		['cache-read', usage.cacheReadCost, 'token-bar-cache-read', tr('copy.cacheRead')],
+		['cache-write', usage.cacheWriteCost, 'token-bar-cache-write', tr('copy.cacheWrite')],
+		['input-audio', usage.inputAudioCost, 'token-bar-audio', tr('copy.inputAudio')],
+		['generated', usage.outputCost, 'token-bar-output', tr('copy.generated')],
+		['reasoning', usage.reasoningCost, 'token-bar-reasoning', tr('copy.reasoning')],
+		['output-audio', usage.outputAudioCost, 'token-bar-audio', tr('copy.outputAudio')]
 	] as const;
 	const total = components.reduce((sum, [, cost]) => sum + Math.max(cost ?? 0, 0), 0);
 	if (!total) return null;
 	const title = components
-		.flatMap(([label, cost]) => (cost != null && cost > 0 ? [`${label}: ${formatCost(cost)}`] : []))
+		.flatMap(([, cost, , label]) =>
+			cost != null && cost > 0 ? [usageValueLabel(label, formatCost(cost))] : []
+		)
 		.join(' / ');
 	return (
 		<UsageBar
@@ -2892,6 +2986,17 @@ function CostBar(props: { usage: LogUsageDetail }) {
 			}))}
 		/>
 	);
+}
+
+function tokenCountTitle(count: number, kind: string) {
+	return tr('copy.tokenCountWithType', [formatNumber(count), kind.toLowerCase()]);
+}
+
+function usageValueLabel(key: string, value: number | string) {
+	return tr('copy.trajectoryMessageValue', [
+		key,
+		typeof value === 'number' ? formatNumber(value) : value
+	]);
 }
 
 function UsageBar(props: {

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 
+import { tr } from '@/i18n';
 import type { PolicyKey } from '@/policies/types';
 
 export const policyUi: Partial<
@@ -38,58 +39,94 @@ export const policyUi: Partial<
 		}
 	>
 > = {
-	apiKey: { title: 'API keys', icon: KeyRound },
+	apiKey: {
+		get title() {
+			return tr('copy.apiKeys');
+		},
+		icon: KeyRound
+	},
 	authorization: {
-		title: 'Authorization',
+		get title() {
+			return tr('copy.authorization');
+		},
 		icon: ShieldCheck,
 		customEditor: 'authorization'
 	},
 	backendAuth: {
-		title: 'Backend auth',
+		get title() {
+			return tr('copy.backendAuth');
+		},
 		icon: LockKeyhole,
 		customEditor: 'backendAuth'
 	},
-	basicAuth: { title: 'Basic auth', icon: LockKeyhole },
+	basicAuth: {
+		get title() {
+			return tr('copy.basicAuth');
+		},
+		icon: LockKeyhole
+	},
 	cors: { title: 'CORS', icon: Workflow, customEditor: 'cors' },
 	extAuthz: {
-		title: 'External authz',
+		get title() {
+			return tr('copy.externalAuthz');
+		},
 		icon: CircuitBoard,
 		customEditor: 'extAuthz'
 	},
 	extProc: {
-		title: 'External processor',
+		get title() {
+			return tr('copy.externalProcessor');
+		},
 		icon: SlidersHorizontal,
 		customEditor: 'extProc'
 	},
-	jwtAuth: { title: 'JWT auth', icon: FileKey2, customEditor: 'jwtAuth' },
+	jwtAuth: {
+		get title() {
+			return tr('copy.jwtAuth');
+		},
+		icon: FileKey2,
+		customEditor: 'jwtAuth'
+	},
 	localRateLimit: {
-		title: 'Local rate limit',
+		get title() {
+			return tr('copy.localRateLimit');
+		},
 		icon: Timer,
 		customEditor: 'localRateLimit'
 	},
 	mcpAuthentication: {
-		title: 'MCP authentication',
+		get title() {
+			return tr('copy.mcpAuthentication');
+		},
 		icon: KeyRound,
 		customEditor: 'mcpAuthentication'
 	},
 	mcpAuthorization: {
-		title: 'MCP authorization',
+		get title() {
+			return tr('copy.mcpAuthorization');
+		},
 		icon: ShieldCheck,
 		customEditor: 'mcpAuthorization'
 	},
 	mcpGuardrails: {
-		title: 'MCP guardrails',
+		get title() {
+			return tr('copy.mcpGuardrails');
+		},
 		icon: Shield,
 		customEditor: 'mcpGuardrails'
 	},
 	oidc: { title: 'OIDC', icon: Fingerprint, customEditor: 'oidc' },
 	remoteRateLimit: {
-		title: 'Remote rate limit',
+		get title() {
+			return tr('copy.remoteRateLimit');
+		},
 		icon: Braces,
 		customEditor: 'remoteRateLimit'
 	},
 	transformations: {
-		title: 'Transformations',
+		get title() {
+			return tr('copy.transformations');
+		},
 		icon: Shield,
 		customEditor: 'transformations'
 	}

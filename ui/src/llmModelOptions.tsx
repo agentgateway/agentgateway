@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { providerReferenceName } from '@/config';
+import { tr } from '@/i18n';
 import { modelProviderLabel, resolveModelName } from '@/modelResolution';
 import type { LlmConfig, LlmModel, LlmVirtualModel, ProviderName } from '@/types';
 
@@ -39,7 +40,7 @@ export function llmModelOptions(llm: LlmConfig | null | undefined): LlmModelOpti
 			kind: 'virtual' as const,
 			name: model.name,
 			label: model.name,
-			description: 'Virtual model',
+			description: tr('copy.virtualModel'),
 			icon: <GitBranch size={16} />,
 			searchText: `${model.name} virtual model`,
 			virtualModel: model

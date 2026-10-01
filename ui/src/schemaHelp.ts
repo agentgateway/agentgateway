@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import configSchema from '@/generated/schema.json';
+import { translateText } from '@/i18n';
 
 type JsonObject = { [key: string]: unknown };
 const schema = configSchema as JsonObject;
@@ -85,22 +86,28 @@ export function useSchemaHelp(): SchemaHelp {
 			},
 			description(path: Array<string | number>, fallback?: string) {
 				const key = path.join('.');
-				return helpOverrides[key] ?? schemaDescription(schema, path) ?? fallback;
+				return localizeSchemaDescription(
+					helpOverrides[key] ?? schemaDescription(schema, path) ?? fallback
+				);
 			},
 			definition(defName: string, fallback?: string) {
-				return schemaDescription(schema, ['$defs', defName]) ?? fallback;
+				return localizeSchemaDescription(schemaDescription(schema, ['$defs', defName]) ?? fallback);
 			},
 			fieldNode<T>(defName: string, propertyPath: DeepPath<T>) {
 				return propertyNode(schema, defName, splitPropertyPath(propertyPath));
 			},
 			field<T>(defName: string, propertyPath: DeepPath<T>, fallback?: string) {
-				return propertyDescription(schema, defName, splitPropertyPath(propertyPath)) ?? fallback;
+				return localizeSchemaDescription(
+					propertyDescription(schema, defName, splitPropertyPath(propertyPath)) ?? fallback
+				);
 			},
 			propertyNode(defName: string, propertyPath: string[]) {
 				return propertyNode(schema, defName, propertyPath);
 			},
 			propertyDescription(defName: string, propertyPath: string[], fallback?: string) {
-				return propertyDescription(schema, defName, propertyPath) ?? fallback;
+				return localizeSchemaDescription(
+					propertyDescription(schema, defName, propertyPath) ?? fallback
+				);
 			},
 			objectProperties(path: Array<string | number>) {
 				const value = readPath(schema, path);
@@ -119,6 +126,10 @@ function schemaDescription(schema: JsonObject | null, path: Array<string | numbe
 	if (!value || typeof value !== 'object') return undefined;
 	const description = (value as { description?: unknown }).description;
 	return typeof description === 'string' && description.trim() ? description.trim() : undefined;
+}
+
+function localizeSchemaDescription(value: string | undefined) {
+	return value ? translateText(value) : undefined;
 }
 
 function propertyDescription(schema: JsonObject | null, defName: string, propertyPath: string[]) {

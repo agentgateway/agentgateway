@@ -10,6 +10,7 @@ import {
 	useMcpConfigData,
 	useTrafficConfigData
 } from '@/hooks';
+import { tr } from '@/i18n';
 import type { GatewayConfig } from '@/types';
 
 type SurfaceKind = 'llm' | 'mcp' | 'traffic';
@@ -21,30 +22,48 @@ const surfaceConfig: Record<
 		description: string;
 		enabled: (config: GatewayConfig | undefined) => boolean;
 		destination: string;
-		destinationLabel: string;
+		destinationName: string;
 	}
 > = {
 	llm: {
-		title: 'Enable LLM',
-		description: 'Add LLM settings to the configuration, then set up models.',
+		get title() {
+			return tr('copy.enableLlm');
+		},
+		get description() {
+			return tr('copy.addLlmSettingsToTheConfigurationThenSetUpModels');
+		},
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
-		destinationLabel: 'Continue to models'
+		get destinationName() {
+			return tr('copy.models');
+		}
 	},
 	mcp: {
-		title: 'Enable MCP',
-		description: 'Add MCP settings to the configuration, then connect servers.',
+		get title() {
+			return tr('copy.enableMcp');
+		},
+		get description() {
+			return tr('copy.addMcpSettingsToTheConfigurationThenConnectServers');
+		},
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
-		destinationLabel: 'Continue to servers'
+		get destinationName() {
+			return tr('copy.servers');
+		}
 	},
 	traffic: {
-		title: 'Enable Traffic',
-		description: 'Add traffic settings to the configuration, then set up gateways and routes.',
+		get title() {
+			return tr('copy.enableTraffic');
+		},
+		get description() {
+			return tr('copy.addTrafficSettingsToTheConfigurationThenSetUpGatewaysAndRoutes');
+		},
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
-		destinationLabel: 'Continue to gateways'
+		get destinationName() {
+			return tr('copy.gateways');
+		}
 	}
 };
 
@@ -114,7 +133,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	if (!loading && !configError && enabled) {
 		return (
 			<div className="page-stack">
-				<StatusBanner state="loading" title={`Opening ${surface.destinationLabel.toLowerCase()}`} />
+				<StatusBanner state="loading" title={tr('copy.openingValue', [surface.destinationName])} />
 			</div>
 		);
 	}
@@ -123,14 +142,16 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 		<div className="page-stack">
 			<PageHeader title={surface.title} description={surface.description} />
 
-			{loading ? <StatusBanner state="loading" title="Loading gateway configuration" /> : null}
+			{loading ? (
+				<StatusBanner state="loading" title={tr('copy.loadingGatewayConfiguration')} />
+			) : null}
 			{configError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{configError.message}
 				</StatusBanner>
 			) : null}
 			{enableSurface.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{enableSurface.error?.message}
 				</StatusBanner>
 			) : null}
@@ -138,19 +159,21 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			<Panel className="surface-enable-panel">
 				{!enabled && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
-						<summary>Advanced</summary>
-						<FieldGroup label="Gateway">
+						<summary>{tr('copy.advanced')}</summary>
+						<FieldGroup label={tr('copy.gateway')}>
 							<Dropdown
-								ariaLabel="Gateway"
+								ariaLabel={tr('copy.gateway')}
 								value={gateway}
 								onChange={setGateway}
 								options={[
 									{
 										value: '',
-										label: `Automatic (${Array.isArray(defaultGateways) ? defaultGateways.join(', ') : defaultGateways})`,
+										label: tr('copy.automaticValue', [
+											Array.isArray(defaultGateways) ? defaultGateways.join(', ') : defaultGateways
+										]),
 										description: options.length
-											? 'Use the configured gateway.'
-											: 'Create a default gateway.'
+											? tr('copy.useTheConfiguredGateway')
+											: tr('copy.createADefaultGateway')
 									},
 									...options
 								]}
@@ -162,7 +185,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 				<div className="button-row">
 					{enabled ? (
 						<Link className="button primary" to={surface.destination}>
-							{surface.destinationLabel}
+							{tr('copy.continueToValue', [surface.destinationName])}
 						</Link>
 					) : (
 						<button
@@ -171,11 +194,11 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 							disabled={loading || enableSurface.isPending}
 							onClick={() => void enable()}
 						>
-							Enable
+							{tr('copy.enable')}
 						</button>
 					)}
 					<Link className="button" to="/">
-						Back to home
+						{tr('copy.backToHome')}
 					</Link>
 				</div>
 			</Panel>

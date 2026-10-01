@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 
 import { formatNumber } from '@/components/Primitives';
+import { currentLanguage, tr } from '@/i18n';
 import type { AnalyticsGroup, AnalyticsTimeBucket, LogFilters, TimeRange } from '@/types';
 
 export type AnalyticsDimension = 'model' | 'user' | 'group' | 'provider' | 'userAgent';
@@ -21,11 +22,51 @@ export const ANALYTICS_DIMENSIONS: Array<{
 	label: string;
 	filterLabel: string;
 }> = [
-	{ value: 'model', label: 'Model', filterLabel: 'Models' },
-	{ value: 'user', label: 'User', filterLabel: 'Users' },
-	{ value: 'group', label: 'Group', filterLabel: 'Groups' },
-	{ value: 'provider', label: 'Provider', filterLabel: 'Providers' },
-	{ value: 'userAgent', label: 'User agent', filterLabel: 'User agents' }
+	{
+		value: 'model',
+		get label() {
+			return tr('copy.model');
+		},
+		get filterLabel() {
+			return tr('copy.models');
+		}
+	},
+	{
+		value: 'user',
+		get label() {
+			return tr('copy.user');
+		},
+		get filterLabel() {
+			return tr('copy.users');
+		}
+	},
+	{
+		value: 'group',
+		get label() {
+			return tr('copy.group');
+		},
+		get filterLabel() {
+			return tr('copy.groups');
+		}
+	},
+	{
+		value: 'provider',
+		get label() {
+			return tr('copy.provider');
+		},
+		get filterLabel() {
+			return tr('copy.providers');
+		}
+	},
+	{
+		value: 'userAgent',
+		get label() {
+			return tr('copy.userAgent');
+		},
+		get filterLabel() {
+			return tr('copy.userAgents');
+		}
+	}
 ];
 
 export function AnalyticsTimelineChart(props: {
@@ -37,7 +78,7 @@ export function AnalyticsTimelineChart(props: {
 	return (
 		<div className="analytics-chart-frame">
 			{props.data.length ? null : (
-				<div className="activity-empty">No analytics in the selected window.</div>
+				<div className="activity-empty">{tr('copy.noAnalyticsInTheSelectedWindow')}</div>
 			)}
 			<ResponsiveContainer width="100%" height="100%">
 				<RechartsBarChart data={props.data} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
@@ -100,7 +141,7 @@ export function AnalyticsBreakdownChart(props: {
 	return (
 		<div className="analytics-chart-frame compact horizontal breakdown">
 			{props.data.length ? null : (
-				<div className="activity-empty">No analytics in the selected window.</div>
+				<div className="activity-empty">{tr('copy.noAnalyticsInTheSelectedWindow')}</div>
 			)}
 			<div className="analytics-breakdown-scroll" style={{ maxHeight: viewportHeight }}>
 				<div className="analytics-breakdown-chart" style={{ height: contentHeight }}>
@@ -227,11 +268,13 @@ function AnalyticsBreakdownTooltip(props: {
 			</span>
 			<span>
 				<i style={{ background: '#64748b' }} />
-				Tokens<code>{formatNumber(item.tokens ?? 0)}</code>
+				{tr('copy.tokens')}
+				<code>{formatNumber(item.tokens ?? 0)}</code>
 			</span>
 			<span>
 				<i style={{ background: '#64748b' }} />
-				Calls<code>{formatNumber(item.requests ?? 0)}</code>
+				{tr('copy.calls')}
+				<code>{formatNumber(item.requests ?? 0)}</code>
 			</span>
 		</div>
 	);
@@ -363,8 +406,9 @@ export function mergeAnalyticsFilterOptions(
 				next[value].length === current[value].length &&
 				next[value].every((option, index) => option === current[value][index])
 		)
-	)
+	) {
 		return current;
+	}
 	return next;
 }
 
@@ -414,7 +458,7 @@ export function analyticsTimelineData(
 	const bucketCount = Math.max(1, Math.ceil(rangeMs / bucketMs));
 	const dayMs = 24 * 60 * 60 * 1000;
 	const axisFormatter = new Intl.DateTimeFormat(
-		undefined,
+		currentLanguage(),
 		bucketMs >= dayMs
 			? { month: 'short', day: 'numeric' }
 			: rangeMs > 48 * 60 * 60 * 1000
@@ -425,7 +469,7 @@ export function analyticsTimelineData(
 					}
 	);
 	const tooltipFormatter = new Intl.DateTimeFormat(
-		undefined,
+		currentLanguage(),
 		bucketMs >= dayMs
 			? { month: 'short', day: 'numeric' }
 			: rangeMs > 48 * 60 * 60 * 1000
@@ -597,7 +641,7 @@ function analyticsGroupValue(group: Record<string, unknown>, dimension: Analytic
 }
 
 function analyticsDisplayName(values: Partial<Record<AnalyticsDimension, string>>) {
-	if (!Object.values(values).some(Boolean)) return 'Total';
+	if (!Object.values(values).some(Boolean)) return tr('copy.total');
 	const model = values.model || '';
 	const provider = values.provider || '';
 	const user = values.user || '';
@@ -650,9 +694,9 @@ function formatAxisCost(value: number) {
 }
 
 function measureLabel(measure: AnalyticsMeasure) {
-	if (measure === 'requests') return 'Requests';
-	if (measure === 'cost') return 'Cost';
-	return 'Tokens';
+	if (measure === 'requests') return tr('copy.requests');
+	if (measure === 'cost') return tr('copy.cost');
+	return tr('copy.tokens');
 }
 
 function formatMeasureValue(value: number, measure: AnalyticsMeasure) {

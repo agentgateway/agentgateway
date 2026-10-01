@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FieldGroup, StatusBanner } from '@/components/Primitives';
 import { SchemaHelpPanel } from '@/components/SchemaHelpPanel';
 import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
+import { tr } from '@/i18n';
 import { toYamlText } from '@/policies/policyUtils';
 import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { SchemaHelp } from '@/schemaHelp';
@@ -57,7 +58,7 @@ export function GenericPolicyEditor(props: {
 			}}
 		>
 			{error ? (
-				<StatusBanner state="bad" title="Invalid YAML">
+				<StatusBanner state="bad" title={tr('copy.invalidYaml')}>
 					{error}
 				</StatusBanner>
 			) : null}
@@ -66,7 +67,7 @@ export function GenericPolicyEditor(props: {
 				help={props.help}
 				showDescription={props.showSchemaDescription}
 			/>
-			<FieldGroup label="Policy YAML" className="policy-yaml-editor-field">
+			<FieldGroup label={tr('copy.policyYaml')} className="policy-yaml-editor-field">
 				<SchemaYamlEditor
 					className="policy-yaml-editor"
 					invalid={Boolean(error)}

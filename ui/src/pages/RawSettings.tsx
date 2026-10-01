@@ -4,6 +4,7 @@ import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
 import { Dropdown, FieldGroup, Panel, StatusBanner } from '@/components/Primitives';
 import type { LocalUIConfig } from '@/gateway-config';
 import { useEffectiveGatewayConfig, useUpdateConfig } from '@/hooks';
+import { tr } from '@/i18n';
 import { PolicyCatalogPage } from '@/pages/Policies';
 import type { PolicyKey } from '@/policies/types';
 import type { GatewayConfig, TrafficGateway } from '@/types';
@@ -12,7 +13,9 @@ const noneGateway = '__none__';
 
 const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 	{
-		title: 'UI access policies',
+		get title() {
+			return tr('copy.uiAccessPolicies');
+		},
 		keys: [
 			'oidc',
 			'jwtAuth',
@@ -29,8 +32,8 @@ const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 export function RawSettingsPage() {
 	return (
 		<PolicyCatalogPage
-			title="UI Settings"
-			description="Expose the UI on a traffic gateway and configure policies that protect the UI."
+			title={tr('copy.uiSettings')}
+			description={tr('copy.exposeTheUiOnATrafficGatewayAndConfigurePoliciesThatProtectTheUi')}
 			schemaRoot="LocalUIPolicy"
 			resourceKind="ui.policy"
 			sections={uiPolicySections}
@@ -83,15 +86,18 @@ function UiGatewayPanel() {
 	return (
 		<Panel>
 			<div className="form-grid">
-				<FieldGroup label="Public UI gateway" tooltip="Which traffic gateway exposes the UI.">
+				<FieldGroup
+					label={tr('copy.publicUiGateway')}
+					tooltip={tr('copy.whichTrafficGatewayExposesTheUi')}
+				>
 					<Dropdown
 						ariaLabel="Public UI gateway"
 						value={draftGateway}
 						options={[
 							{
 								value: noneGateway,
-								label: 'None (admin interface only)',
-								description: 'Do not expose the UI on a traffic gateway.'
+								label: tr('copy.noneAdminInterfaceOnly'),
+								description: tr('copy.doNotExposeTheUiOnATrafficGateway')
 							},
 							...gatewayOptions
 						]}
@@ -104,7 +110,7 @@ function UiGatewayPanel() {
 				<ConfigDiffSaveActions
 					config={config.data}
 					diffTitle="UI gateway config diff"
-					saveLabel="Save UI gateway"
+					saveLabel={tr('copy.saveUiGateway')}
 					saving={update.isPending}
 					saveDisabled={!config.data || draftGateway === (selectedGateway ?? noneGateway)}
 					onSave={() =>
@@ -116,16 +122,16 @@ function UiGatewayPanel() {
 				/>
 			</div>
 			{!gatewayOptions.length ? (
-				<StatusBanner state="warn" title="No gateways configured">
-					Add a gateway before exposing the UI.
+				<StatusBanner state="warn" title={tr('copy.noGatewaysConfigured')}>
+					{tr('copy.addAGatewayBeforeExposingTheUi')}
 				</StatusBanner>
 			) : null}
 			{update.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{update.error.message}
 				</StatusBanner>
 			) : null}
-			{update.isSuccess ? <StatusBanner state="ok" title="Gateway saved" /> : null}
+			{update.isSuccess ? <StatusBanner state="ok" title={tr('copy.gatewaySaved')} /> : null}
 		</Panel>
 	);
 }
@@ -145,14 +151,14 @@ function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
 		return [
 			{
 				value: name,
-				label: `${name} (all listeners)`,
+				label: tr('copy.valueAllListeners', [name]),
 				description: gatewayDescription(gateway)
 			},
 			...listeners.map((listener, index) => {
 				const listenerName = listener.name ?? `listener${index}`;
 				return {
 					value: `${name}/${listenerName}`,
-					label: `${name}/${listenerName}`,
+					label: tr('copy.valueValue', [name, listenerName]),
 					description: listener.hostname || gatewayDescription(gateway)
 				};
 			})

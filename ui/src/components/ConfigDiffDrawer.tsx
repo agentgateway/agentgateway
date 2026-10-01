@@ -2,18 +2,22 @@ import '@/monacoWorkers';
 import { DiffEditor } from '@monaco-editor/react';
 import { FileText, Save } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Drawer, Tooltip } from '@/components/Primitives';
 import { cloneConfig } from '@/config';
 import { configureConfigYamlMonaco } from '@/configMonaco';
 import { allowNextHybridFileWrite, useHybridFileWriteOverrideKeys, useRuntimeInfo } from '@/hooks';
+import { tr } from '@/i18n';
 import { toYamlText } from '@/policies/policyUtils';
 import type { GatewayConfig } from '@/types';
 
-const hybridFileWriteMessage =
-	'File configuration is read-only in hybrid mode. Copy this diff and update the configuration file directly.';
-const hybridFileWriteOverrideMessage =
-	'Override active. Click to write this change to the configuration file.';
+const hybridFileWriteMessage = () =>
+	tr(
+		'copy.fileConfigurationIsReadOnlyInHybridModeCopyThisDiffAndUpdateTheConfigurationFileDirectly'
+	);
+const hybridFileWriteOverrideMessage = () =>
+	tr('copy.overrideActiveClickToWriteThisChangeToTheConfigurationFile');
 
 export function ConfigSaveButton(props: {
 	children: ReactNode;
@@ -48,8 +52,8 @@ export function ConfigSaveButton(props: {
 		<Tooltip
 			content={
 				overrideKeysActive
-					? hybridFileWriteOverrideMessage
-					: (props.hybridFileWriteMessage ?? hybridFileWriteMessage)
+					? hybridFileWriteOverrideMessage()
+					: (props.hybridFileWriteMessage ?? hybridFileWriteMessage())
 			}
 		>
 			{button}
@@ -82,6 +86,7 @@ export function ConfigDiffDrawer(props: {
 	onClose: () => void;
 	onSave?: () => void;
 }) {
+	const { t } = useTranslation();
 	const modelId = useId();
 	const modelPath = `inmemory://config-diff/${encodeURIComponent(props.title)}/${encodeURIComponent(modelId)}`;
 	const saveButton = props.onSave ? (
@@ -91,7 +96,7 @@ export function ConfigDiffDrawer(props: {
 			onClick={props.onSave}
 		>
 			<Save size={16} />
-			Save
+			{t('common.save')}
 		</ConfigSaveButton>
 	) : null;
 	return (
@@ -102,7 +107,7 @@ export function ConfigDiffDrawer(props: {
 			footer={
 				<div className="button-row">
 					<button className="button" type="button" onClick={props.onClose}>
-						Close
+						{t('common.close')}
 					</button>
 					{saveButton}
 				</div>
@@ -161,6 +166,7 @@ export function ConfigDiffSaveActions(props: {
 	beforeDiff?: () => boolean;
 	applyDiff: (config: GatewayConfig) => void;
 }) {
+	const { t } = useTranslation();
 	const [diff, setDiff] = useState<{
 		original: string;
 		modified: string;
@@ -197,7 +203,7 @@ export function ConfigDiffSaveActions(props: {
 			onClick={viewDiff}
 		>
 			<FileText size={16} />
-			View diff
+			{t('common.viewDiff')}
 		</button>
 	);
 
@@ -206,10 +212,14 @@ export function ConfigDiffSaveActions(props: {
 			<div className="button-row">
 				{props.onCancel ? (
 					<button className="button" type="button" onClick={props.onCancel}>
-						Cancel
+						{t('common.cancel')}
 					</button>
 				) : null}
-				{props.diffDisabled ? <Tooltip content="No diff">{diffButton}</Tooltip> : diffButton}
+				{props.diffDisabled ? (
+					<Tooltip content={tr('copy.noDiff')}>{diffButton}</Tooltip>
+				) : (
+					diffButton
+				)}
 				<ConfigSaveButton
 					disabled={props.saving || props.saveDisabled}
 					allowHybridWrite={Boolean(props.resourceDiff)}

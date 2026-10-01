@@ -1,3 +1,5 @@
+import { tr } from '@/i18n';
+
 export const apiBase = import.meta.env.VITE_AGENTGATEWAY_API ?? '';
 
 let redirecting = false;
@@ -15,7 +17,7 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 		const uiLogin =
 			location?.startsWith('/') && !location.startsWith('//') && !location.includes('\\');
 		if (!uiLogin && !hasSuccessfulRequest) {
-			throw new Error('Authentication required. Please sign in and reload the page.');
+			throw new Error(tr('copy.authenticationRequiredSignInAndReload'));
 		}
 		if (!redirecting) {
 			redirecting = true;

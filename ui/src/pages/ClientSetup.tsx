@@ -26,6 +26,7 @@ import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
 import { useLlmConfigData } from '@/hooks';
+import { tr } from '@/i18n';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
@@ -142,21 +143,21 @@ export function ClientSetupPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Client Setup"
-				description="Generate connection settings and snippets for LLM clients."
+				title={tr('copy.clientSetup')}
+				description={tr('copy.generateConnectionSettingsAndSnippetsForOpenAiCompatibleLlmClients')}
 			/>
 			{configDataError ? (
-				<StatusBanner state="bad" title="Configuration API unavailable">
+				<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 					{configDataError.message}
 				</StatusBanner>
 			) : null}
 			{modelOptions.length === 0 && !modelsLoading ? (
-				<StatusBanner state="warn" title="No models configured">
-					Create an LLM model before wiring clients to the gateway.
+				<StatusBanner state="warn" title={tr('copy.noModelsConfigured')}>
+					{tr('copy.createAnLlmModelBeforeWiringClientsToTheGateway')}
 				</StatusBanner>
 			) : null}
 			{claudeSubscriptionWarning(selectedModelConfig, providers) ? (
-				<StatusBanner state="warn" title="Claude subscription key detected">
+				<StatusBanner state="warn" title={tr('copy.claudeSubscriptionKeyDetected')}>
 					{claudeSubscriptionWarning(selectedModelConfig, providers)}
 				</StatusBanner>
 			) : null}
@@ -164,9 +165,12 @@ export function ClientSetupPage() {
 			<section className="client-setup-layout">
 				<Panel className="client-setup-controls">
 					<div className="section-heading">
-						<h3>Connection</h3>
+						<h3>{tr('copy.connection')}</h3>
 					</div>
-					<Field label="Gateway base URL" hint="SDK snippets use this URL with /v1 appended.">
+					<Field
+						label={tr('copy.gatewayBaseUrl')}
+						hint={tr('copy.sdkSnippetsUseThisUrlWithV1Appended')}
+					>
 						<input
 							value={effectiveBaseUrl}
 							onChange={event => {
@@ -176,16 +180,16 @@ export function ClientSetupPage() {
 							placeholder={derivedBaseUrl}
 						/>
 					</Field>
-					<FieldGroup label="Model">
+					<FieldGroup label={tr('copy.model')}>
 						<Dropdown
 							ariaLabel="Model"
 							value={selectedModel}
-							placeholder="No models"
+							placeholder={tr('copy.noModels')}
 							searchable
 							options={modelOptions.map(item => ({
 								value: item.name,
 								label: item.name,
-								description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+								description: item.kind === 'virtual' ? tr('copy.virtualModel') : undefined,
 								icon: item.icon,
 								searchText: item.searchText
 							}))}
@@ -193,7 +197,10 @@ export function ClientSetupPage() {
 						/>
 					</FieldGroup>
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
-						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
+						<Field
+							label={tr('copy.specificModel')}
+							hint={tr('copy.modelUsesAWildcardSpecifyTheSpecificModel')}
+						>
 							<div className="target-resolved-composite">
 								{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
 								<CatalogModelSelector
@@ -201,12 +208,12 @@ export function ClientSetupPage() {
 									value={specificModelSuffix}
 									provider={selectedCatalogProvider}
 									onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
-									placeholder="Select or type a model"
+									placeholder={tr('copy.selectOrTypeAModel')}
 								/>
 							</div>
 						</Field>
 					) : null}
-					<FieldGroup label="Virtual API key">
+					<FieldGroup label={tr('copy.virtualApiKey')}>
 						<Dropdown
 							ariaLabel="Virtual API key"
 							value={
@@ -220,7 +227,7 @@ export function ClientSetupPage() {
 								})),
 								{
 									value: '__raw__',
-									label: 'Raw value',
+									label: tr('copy.rawValue'),
 									icon: <Code2 size={16} />
 								}
 							]}
@@ -235,7 +242,7 @@ export function ClientSetupPage() {
 						/>
 					</FieldGroup>
 					{apiKeyMode === 'raw' || rawVirtualKeys.length === 0 ? (
-						<Field label="Raw API key">
+						<Field label={tr('copy.rawApiKey')}>
 							<input
 								value={rawKey}
 								onChange={event => setRawKey(event.target.value)}
@@ -245,16 +252,16 @@ export function ClientSetupPage() {
 					) : null}
 					<div className="client-setup-summary">
 						<div>
-							<span>Base URL</span>
+							<span>{tr('copy.baseUrl')}</span>
 							<code>{effectiveBaseUrl.replace(/\/$/, '')}/v1</code>
 						</div>
 						<div>
-							<span>Model</span>
-							<code>{requestModel || 'No model selected'}</code>
+							<span>{tr('copy.model')}</span>
+							<code>{requestModel || tr('copy.noModelSelected')}</code>
 						</div>
 						<div>
-							<span>Auth</span>
-							<code>{apiKey ? `Bearer ${maskKey(apiKey)}` : 'None'}</code>
+							<span>{tr('copy.auth')}</span>
+							<code>{apiKey ? `Bearer ${maskKey(apiKey)}` : tr('copy.none_deku7v')}</code>
 						</div>
 					</div>
 				</Panel>
@@ -303,7 +310,7 @@ function ClientRecipeCard(props: {
 	return (
 		<Panel className="client-recipe-card">
 			<div className="client-recipe-toolbar">
-				<FieldGroup label="Integration">
+				<FieldGroup label={tr('copy.integration')}>
 					<Dropdown
 						ariaLabel="Integration"
 						className="client-recipe-select"
@@ -353,7 +360,7 @@ function CopyButton(props: { value: string }) {
 			}}
 		>
 			{copied ? <Check size={16} /> : <Clipboard size={16} />}
-			{copied ? 'Copied' : 'Copy'}
+			{tr(copied ? 'common.copied' : 'copy.copy')}
 		</button>
 	);
 }
@@ -380,7 +387,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 		{
 			id: 'curl',
 			title: 'curl',
-			description: 'Send a chat completion request to agentgateway with curl.',
+			description: tr('copy.clientSetupCurlDescription'),
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
@@ -394,8 +401,8 @@ ${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
 		},
 		{
 			id: 'claude-code',
-			title: 'Claude Code',
-			description: 'Connect Claude Code to agentgateway using the Anthropic Messages API.',
+			title: tr('copy.claudeCode'),
+			description: tr('copy.clientSetupClaudeCodeDescription'),
 			icon: 'claude',
 			language: 'bash',
 			code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
@@ -405,23 +412,18 @@ claude --model ${JSON.stringify(args.model)}`
 		},
 		{
 			id: 'claude-desktop',
-			title: 'Claude Desktop',
-			description: 'Connect Claude Desktop to agentgateway using third-party inference settings.',
+			title: tr('copy.claudeDesktop'),
+			description: tr('copy.clientSetupClaudeDesktopDescription'),
 			icon: 'claude',
 			steps: [
 				<>
-					Open Claude Desktop and enable developer mode: <strong>Help</strong> &gt;{' '}
-					<strong>Troubleshooting</strong> &gt; <strong>Enable Developer Mode</strong>.
+					{tr('copy.openClaudeDesktopAndEnableDeveloperMode')}
+					<strong>{tr('copy.help')}</strong> &gt; <strong>{tr('copy.troubleshooting')}</strong> &gt;{' '}
+					<strong>{tr('copy.enableDeveloperMode')}</strong>.
 				</>,
-				<>
-					Fully quit and relaunch Claude Desktop. A new <strong>Developer</strong> menu appears in
-					the menu bar.
-				</>,
-				<>
-					Open <strong>Developer</strong> &gt; <strong>Configure Third-Party Inference</strong> &gt;{' '}
-					<strong>Gateway</strong>.
-				</>,
-				<>Enter the gateway URL and virtual API key, save, then restart Claude Desktop.</>
+				<>{tr('copy.claudeDesktopRestartInstruction')}</>,
+				<>{tr('copy.claudeDesktopOpenDeveloperMenu')}</>,
+				<>{tr('copy.enterTheGatewayUrlAndVirtualApiKeySaveThenRestartClaudeDesktop')}</>
 			],
 			language: 'text',
 			code: `Gateway URL: ${base}
@@ -429,8 +431,8 @@ API Key: ${requiredApiKey}`
 		},
 		{
 			id: 'codex',
-			title: 'Codex CLI',
-			description: 'Connect Codex CLI to agentgateway with a custom model provider.',
+			title: tr('copy.codexCli'),
+			description: tr('copy.clientSetupCodexCliDescription'),
 			icon: 'codex',
 			language: 'bash',
 			code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
@@ -447,15 +449,11 @@ codex --model "${args.model}" \\
 		{
 			id: 'opencode',
 			title: 'OpenCode',
-			description: 'Connect OpenCode to agentgateway.',
+			description: tr('copy.clientSetupOpenCodeDescription'),
 			icon: 'opencode',
 			steps: [
-				<>
-					Create this <code>opencode.json</code> in your project root.
-				</>,
-				<>
-					Run <code>opencode</code> from the same directory.
-				</>
+				<>{tr('copy.openCodeCreateConfigInstruction', ['opencode.json'])}</>,
+				<>{tr('copy.openCodeRunInstruction', ['opencode'])}</>
 			],
 			language: 'bash',
 			code: `
@@ -485,17 +483,11 @@ opencode`
 		{
 			id: 'pi',
 			title: 'Pi',
-			description: 'Connect Pi to agentgateway using the Responses API.',
+			description: tr('copy.clientSetupPiDescription'),
 			icon: 'pi',
 			steps: [
-				<>
-					Add this configuration to <code>~/.pi/agent/models.json</code>. If the file exists, merge
-					the <code>agentgateway</code> entry into its <code>providers</code> object.
-				</>,
-				<>
-					Start <code>pi</code>, then use <code>/model</code> to select <code>{args.model}</code>{' '}
-					under <code>agentgateway</code>.
-				</>
+				tr('copy.clientSetupPiConfigInstruction'),
+				tr('copy.clientSetupPiSelectModel', [args.model])
 			],
 			language: 'json',
 			code: JSON.stringify(
@@ -516,20 +508,18 @@ opencode`
 		{
 			id: 'goose',
 			title: 'Goose',
-			description: 'Connect Goose to agentgateway using its OpenAI provider.',
+			description: tr('copy.clientSetupGooseDescription'),
 			icon: 'goose',
 			steps: [
 				<>
-					Run <code>goose configure</code> &gt; <strong>Configure Providers</strong> &gt;{' '}
-					<strong>OpenAI</strong>, or export the variables below before starting a session.
+					{tr('copy.run')} <code>goose configure</code> &gt;{' '}
+					<strong>{tr('copy.configureProviders')}</strong> &gt; <strong>OpenAI</strong>
+					{tr('copy.orExportTheVariablesBelowBeforeStartingASession')}
 				</>,
 				<>
-					To persist the settings, add them to <code>~/.config/goose/config.yaml</code>.
+					{tr('copy.toPersistTheSettingsAddThemTo')} <code>~/.config/goose/config.yaml</code>.
 				</>,
-				<>
-					<code>goose configure</code> cannot enter custom model names; set <code>GOOSE_MODEL</code>{' '}
-					in <code>config.yaml</code> for models missing from the provider list.
-				</>
+				<>{tr('copy.gooseModelNamesInstruction', ['config.yaml', 'GOOSE_MODEL'])}</>
 			],
 			language: 'bash',
 			code: `export GOOSE_PROVIDER=openai
@@ -544,19 +534,12 @@ goose session`
 		{
 			id: 'cursor',
 			title: 'Cursor',
-			description: 'Connect Cursor to agentgateway using the OpenAI base URL override.',
+			description: tr('copy.clientSetupCursorDescription'),
 			icon: 'cursor',
 			steps: [
-				<>
-					Open <strong>Cursor Settings</strong> &gt; <strong>Models</strong>.
-				</>,
-				<>
-					Enable <strong>Override OpenAI Base URL</strong> and set it to <code>{base}</code>.
-				</>,
-				<>
-					Add <code>{args.model}</code> as a custom model, then test from <strong>Ask</strong> or{' '}
-					<strong>Plan</strong> mode.
-				</>
+				<>{tr('copy.cursorOpenModelsInstruction')}</>,
+				<>{tr('copy.cursorOverrideBaseUrlInstruction', [base])}</>,
+				<>{tr('copy.cursorAddModelInstruction', [args.model])}</>
 			],
 			language: 'text',
 			code: `Override OpenAI Base URL: ${base}
@@ -565,17 +548,13 @@ Custom model: ${args.model}`
 		},
 		{
 			id: 'github-copilot',
-			title: 'GitHub Copilot',
-			description: 'Connect VS Code Copilot Business or Enterprise to agentgateway.',
+			title: tr('copy.gitHubCopilot'),
+			description: tr('copy.clientSetupGithubCopilotDescription'),
 			icon: 'copilot',
 			steps: [
-				<>
-					Open <strong>VS Code Settings</strong> and search for <code>github.copilot</code>.
-				</>,
-				<>
-					Edit <code>settings.json</code> and set the advanced proxy URL.
-				</>,
-				<>Reload VS Code and test Copilot suggestions or chat.</>
+				<>{tr('copy.copilotOpenSettingsInstruction', ['github.copilot'])}</>,
+				<>{tr('copy.copilotEditSettingsInstruction', ['settings.json'])}</>,
+				<>{tr('copy.reloadVsCodeAndTestCopilotSuggestionsOrChat')}</>
 			],
 			language: 'json',
 			code: `{
@@ -587,26 +566,23 @@ Custom model: ${args.model}`
 		{
 			id: 'windsurf',
 			title: 'Windsurf',
-			description: 'Connect Windsurf to agentgateway using its HTTP proxy setting.',
+			description: tr('copy.clientSetupWindsurfDescription'),
 			icon: 'windsurf',
 			steps: [
+				<>{tr('copy.windsurfOpenSettingsInstruction')}</>,
 				<>
-					Open <strong>Windsurf Settings</strong>.
+					{tr('copy.searchFor')}
+					<strong>{tr('copy.httpProxy')}</strong>.
 				</>,
-				<>
-					Search for <strong>Http: Proxy</strong>.
-				</>,
-				<>
-					Set the proxy URL to <code>{base}</code> and save.
-				</>
+				<>{tr('copy.windsurfSetProxyInstruction', [base])}</>
 			],
 			language: 'text',
 			code: `Http: Proxy: ${base}`
 		},
 		{
 			id: 'openai-js',
-			title: 'OpenAI JavaScript SDK',
-			description: 'Call agentgateway using the OpenAI JavaScript SDK.',
+			title: tr('copy.openAiJavaScriptSdk'),
+			description: tr('copy.clientSetupOpenAiJsSdkDescription'),
 			icon: 'codex',
 			provider: 'openai',
 			language: 'ts',
@@ -626,8 +602,8 @@ console.log(response.choices[0]?.message?.content);`
 		},
 		{
 			id: 'openai-python',
-			title: 'OpenAI Python SDK',
-			description: 'Call agentgateway using the OpenAI Python SDK.',
+			title: tr('copy.openAiPythonSdk'),
+			description: tr('copy.clientSetupOpenAiPythonSdkDescription'),
 			icon: 'codex',
 			provider: 'openai',
 			language: 'python',

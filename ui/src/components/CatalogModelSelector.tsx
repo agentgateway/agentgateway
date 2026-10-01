@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import { listCostModels } from '@/api/costsApi';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
+import { tr } from '@/i18n';
 
 export function CatalogModelSelector(props: {
 	ariaLabel: string;
@@ -35,11 +36,11 @@ export function CatalogModelSelector(props: {
 			value={props.value}
 			options={options}
 			onChange={props.onChange}
-			placeholder={props.placeholder ?? 'Select or type a model'}
+			placeholder={props.placeholder ?? tr('copy.selectOrTypeAModel')}
 			emptyText={
 				catalog.isLoading
-					? 'Loading model catalog...'
-					: 'No catalog matches. Custom model names are allowed.'
+					? tr('copy.loadingModelCatalog')
+					: tr('copy.noCatalogMatchesCustomModelNamesAreAllowed')
 			}
 		/>
 	);

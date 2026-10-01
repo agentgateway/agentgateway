@@ -5,6 +5,7 @@ import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector
 import { FieldGroup, StatusBanner } from '@/components/Primitives';
 import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
 import type { BackendAuth } from '@/gateway-config';
+import { tr } from '@/i18n';
 import {
 	emptyPassthroughDraft,
 	type PassthroughDraft,
@@ -21,8 +22,12 @@ type AuthKind = 'passthrough' | 'raw';
 const authKindOptions: Array<EnumSelectorOption<AuthKind>> = [
 	{
 		value: 'passthrough',
-		label: 'Passthrough',
-		description: 'Forward the validated incoming JWT to the backend.',
+		get label() {
+			return tr('copy.passthrough');
+		},
+		get description() {
+			return tr('copy.forwardTheValidatedIncomingJwtToTheBackend');
+		},
 		icon: <ShieldCheck size={16} />
 	},
 	{
@@ -32,9 +37,12 @@ const authKindOptions: Array<EnumSelectorOption<AuthKind>> = [
 		// editor yet (key, gcp, aws, azure, copilot, oauth, crossAppAccess), and
 		// stays as the escape hatch even once those land.
 		value: 'raw',
-		label: 'Raw YAML',
-		description:
-			'Edit the policy YAML directly, with schema autocompletion — for methods without a structured editor yet: key, AWS, GCP, Azure, Copilot, OAuth, cross-app access.',
+		get label() {
+			return tr('copy.rawYaml');
+		},
+		get description() {
+			return tr('copy.editBackendAuthPolicyYamlDirectly');
+		},
 		icon: <FileCode2 size={16} />
 	}
 ];
@@ -70,12 +78,12 @@ export function BackendAuthPolicyEditor(props: {
 			setError(null);
 			const parsed = parseSchemaYamlEditorValue(yamlText);
 			if (isEmptyValue(parsed)) {
-				setError('Backend auth cannot be empty.');
+				setError(tr('copy.backendAuthCannotBeEmpty'));
 				return;
 			}
 			props.onSave(parsed as BackendAuth);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Invalid YAML');
+		} catch {
+			setError(tr('copy.invalidYaml'));
 		}
 	}
 
@@ -89,14 +97,14 @@ export function BackendAuthPolicyEditor(props: {
 			}}
 		>
 			<FieldGroup
-				label="Auth method"
+				label={tr('copy.authMethod')}
 				tooltip={props.help.definition(
 					'BackendAuth',
 					'Select how the gateway authenticates to the backend.'
 				)}
 			>
 				<EnumSelector
-					ariaLabel="Auth method"
+					ariaLabel={tr('copy.authMethod')}
 					value={kind}
 					options={authKindOptions}
 					onChange={next => {
@@ -114,11 +122,11 @@ export function BackendAuthPolicyEditor(props: {
 			) : (
 				<>
 					{error ? (
-						<StatusBanner state="bad" title="Invalid YAML">
+						<StatusBanner state="bad" title={tr('copy.invalidYaml')}>
 							{error}
 						</StatusBanner>
 					) : null}
-					<FieldGroup label="Backend auth YAML">
+					<FieldGroup label={tr('copy.backendAuthYaml')}>
 						<SchemaYamlEditor
 							path="agentgateway-policy-backend-auth-raw.yaml"
 							schema={schema ?? {}}

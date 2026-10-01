@@ -27,6 +27,7 @@ import type { ComponentType } from 'react';
 import { useMemo, useState } from 'react';
 
 import { Drawer, EmptyState, Tooltip, YamlBlock } from '@/components/Primitives';
+import { tr, translateText } from '@/i18n';
 import { PolicyEditorBody, type PolicyEditorKind } from '@/policies/PolicyDrawer';
 import { policyEnabled, policySummary, titleFromKey } from '@/policies/policyUtils';
 import { policyUi } from '@/policies/registry';
@@ -54,13 +55,22 @@ type TrafficPolicyItem = TrafficPolicyMeta & {
 };
 
 const trafficPolicySections: Array<{ title: string; keys: string[] }> = [
-	{ title: 'Backend', keys: ['backendTLS', 'backendTunnel', 'backendAuth'] },
 	{
-		title: 'Security',
+		get title() {
+			return tr('copy.backend');
+		},
+		keys: ['backendTLS', 'backendTunnel', 'backendAuth']
+	},
+	{
+		get title() {
+			return tr('copy.security');
+		},
 		keys: ['cors', 'apiKey', 'basicAuth', 'jwtAuth', 'oidc', 'authorization', 'extAuthz', 'csrf']
 	},
 	{
-		title: 'Mutation',
+		get title() {
+			return tr('copy.mutation');
+		},
 		keys: [
 			'transformations',
 			'extProc',
@@ -72,14 +82,23 @@ const trafficPolicySections: Array<{ title: string; keys: string[] }> = [
 		]
 	},
 	{
-		title: 'Shaping',
+		get title() {
+			return tr('copy.shaping');
+		},
 		keys: ['localRateLimit', 'remoteRateLimit', 'requestMirror', 'retry', 'timeout', 'buffer']
 	},
 	{
-		title: 'AI',
+		get title() {
+			return tr('copy.ai');
+		},
 		keys: ['mcpAuthorization', 'mcpGuardrails', 'mcpAuthentication', 'a2a', 'ai']
 	},
-	{ title: 'Routing', keys: ['health', 'inferenceRouting', 'http', 'tcp'] }
+	{
+		get title() {
+			return tr('copy.routing');
+		},
+		keys: ['health', 'inferenceRouting', 'http', 'tcp']
+	}
 ];
 
 const trafficPolicyTitles: Record<string, string> = {
@@ -159,10 +178,10 @@ export function TrafficPolicySection(props: {
 			)[key];
 			return {
 				key,
-				title: trafficPolicyTitles[key] ?? ui?.title ?? titleFromKey(key),
+				title: trafficPolicyTitles[key] ?? ui?.title ?? translateText(titleFromKey(key)),
 				description:
 					help.propertyDescription(props.schemaRoot, [key], 'Configured from schema.') ??
-					'Configured from schema.',
+					translateText('Configured from schema.'),
 				icon: trafficPolicyIcons[key] ?? ui?.icon ?? Shield,
 				customEditor: ui?.customEditor
 			};
@@ -208,7 +227,7 @@ export function TrafficPolicySection(props: {
 							? enabled
 									.map(policy => `${policy.title}${policy.summary ? `: ${policy.summary}` : ''}`)
 									.join(' · ')
-							: 'No policies configured'}
+							: tr('copy.noPoliciesConfigured')}
 					</small>
 				</span>
 				<ChevronRight size={17} />
@@ -238,7 +257,7 @@ export function TrafficPolicySection(props: {
 								<button
 									className="icon-button danger"
 									type="button"
-									aria-label="Delete policy"
+									aria-label={tr('copy.deletePolicy')}
 									disabled={!policyEnabled(props.policies, selectedMeta.key)}
 									onClick={() => setPolicy(selectedMeta.key, null)}
 								>
@@ -251,7 +270,7 @@ export function TrafficPolicySection(props: {
 						selectedMeta && selectedFormId ? (
 							<button className="button primary" type="submit" form={selectedFormId}>
 								<Save size={16} />
-								Save
+								{tr('copy.save')}
 							</button>
 						) : undefined
 					}
@@ -303,13 +322,13 @@ function TrafficPolicyCatalog(props: {
 				))
 			) : (
 				<EmptyState
-					title="No policy fields"
-					description="No schema properties are available for this policy object."
+					title={tr('copy.noPolicyFields')}
+					description={tr('copy.noSchemaPropertiesAreAvailableForThisPolicyObject')}
 				/>
 			)}
 			{props.policies ? (
 				<details className="nested-details">
-					<summary>Current policy YAML</summary>
+					<summary>{tr('copy.currentPolicyYaml')}</summary>
 					<YamlBlock value={props.policies} />
 				</details>
 			) : null}
@@ -335,7 +354,7 @@ function TrafficPolicyTile(props: { policy: TrafficPolicyItem; onOpen: (key: str
 				<small>{props.policy.summary || props.policy.description}</small>
 			</span>
 			<span className={props.policy.enabled ? 'badge ok' : 'badge'}>
-				{props.policy.enabled ? 'enabled' : 'disabled'}
+				{props.policy.enabled ? tr('copy.enabled') : tr('copy.disabled')}
 			</span>
 		</button>
 	);
@@ -355,7 +374,7 @@ function TrafficPolicyEditor(props: {
 			<div className="traffic-policy-editor-topbar">
 				<button className="button" type="button" onClick={props.onBack}>
 					<ArrowLeft size={16} />
-					Policies
+					{tr('copy.policies_raqot3')}
 				</button>
 			</div>
 			<div className="section-heading">
@@ -399,5 +418,5 @@ function groupTrafficPolicies(items: TrafficPolicyItem[]) {
 	const other = items
 		.filter(policy => !known.has(policy.key))
 		.sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.title.localeCompare(b.title));
-	return other.length ? [...sections, { title: 'Other', policies: other }] : sections;
+	return other.length ? [...sections, { title: tr('copy.other'), policies: other }] : sections;
 }

@@ -5,6 +5,7 @@ import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { LocalMcpAuthentication } from '@/gateway-config';
+import { tr } from '@/i18n';
 import { ListEditor } from '@/policies/ListEditor';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
@@ -60,7 +61,7 @@ export function McpAuthenticationPolicyEditor(props: {
 			return build();
 		} catch {
 			return {
-				error: 'Resource metadata must be YAML and inline JWKS must be valid JSON.'
+				error: tr('copy.resourceMetadataMustBeYamlAndInlineJwksMustBeValidJson')
 			};
 		}
 	}
@@ -68,23 +69,29 @@ export function McpAuthenticationPolicyEditor(props: {
 	function save() {
 		try {
 			const nextErrors: FieldErrors = {};
-			if (!issuer.trim()) nextErrors.issuer = 'Issuer is required.';
-			if (!jwksValue.trim()) nextErrors.jwks = 'JWKS source is required.';
+			if (!issuer.trim()) nextErrors.issuer = tr('copy.issuerIsRequired');
+			if (!jwksValue.trim()) nextErrors.jwks = tr('copy.jwksSourceIsRequired');
 			if (jwksMode === 'inline') JSON.parse(jwksValue);
 			if (resourceMetadata.trim()) {
 				const parsed = parseYamlText(resourceMetadata);
 				if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-					nextErrors.metadata = 'Resource metadata must be a YAML mapping.';
+					nextErrors.metadata = tr('copy.resourceMetadataMustBeAYamlMapping');
 			}
 			setErrors(nextErrors);
 			if (Object.keys(nextErrors).length) {
-				setError('Fix the highlighted fields before saving.');
+				setError(tr('copy.fixTheHighlightedFieldsBeforeSaving'));
 				return;
 			}
 			setError(null);
 			props.onSave(build());
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Invalid MCP authentication policy');
+			setError(
+				err instanceof SyntaxError
+					? tr('copy.resourceMetadataMustBeYamlAndInlineJwksMustBeValidJson')
+					: err instanceof Error
+						? err.message
+						: tr('copy.invalidMcpAuthenticationPolicy')
+			);
 		}
 	}
 
@@ -99,21 +106,21 @@ export function McpAuthenticationPolicyEditor(props: {
 		>
 			<PolicySection
 				icon={<ShieldCheck size={17} />}
-				title="Enforcement"
-				description="Control whether MCP requests must present a valid JWT."
+				title={tr('copy.enforcement')}
+				description={tr('copy.controlWhetherMcpRequestsMustPresentAValidJwt')}
 			>
 				<FieldGroup
-					label="Validation mode"
+					label={tr('copy.validationMode')}
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'mode')}
 				>
 					<EnumSelector
-						ariaLabel="Validation mode"
+						ariaLabel={tr('copy.validationMode')}
 						value={mode}
 						schema={props.help.node(['$defs', 'McpAuthenticationMode'])}
 						labels={{
-							strict: 'Strict',
-							optional: 'Optional',
-							permissive: 'Permissive'
+							strict: tr('copy.strict'),
+							optional: tr('copy.optional_1yfbac9'),
+							permissive: tr('copy.permissive')
 						}}
 						onChange={value => setMode(value as AuthMode)}
 					/>
@@ -122,11 +129,11 @@ export function McpAuthenticationPolicyEditor(props: {
 
 			<PolicySection
 				icon={jwksMode === 'url' ? <DatabaseZap size={17} /> : <FileKey2 size={17} />}
-				title="Signing keys"
-				description="Configure the JWKS source used to verify token signatures."
+				title={tr('copy.signingKeys')}
+				description={tr('copy.configureTheJwksSourceUsedToVerifyTokenSignatures')}
 			>
 				<FieldGroup
-					label="JWKS source"
+					label={tr('copy.jwksSource')}
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'jwks')}
 				>
 					<div className="segmented-control compact">
@@ -138,7 +145,7 @@ export function McpAuthenticationPolicyEditor(props: {
 								setJwksValue('');
 							}}
 						>
-							Remote URL
+							{tr('copy.remoteUrl')}
 						</button>
 						<button
 							className={jwksMode === 'file' ? 'active' : ''}
@@ -148,7 +155,7 @@ export function McpAuthenticationPolicyEditor(props: {
 								setJwksValue('');
 							}}
 						>
-							Local file
+							{tr('copy.localFile')}
 						</button>
 						<button
 							className={jwksMode === 'inline' ? 'active' : ''}
@@ -158,13 +165,13 @@ export function McpAuthenticationPolicyEditor(props: {
 								setJwksValue('{\n  "keys": []\n}');
 							}}
 						>
-							Inline JSON
+							{tr('copy.inlineJson')}
 						</button>
 					</div>
 				</FieldGroup>
 				{jwksMode === 'inline' ? (
 					<FieldGroup
-						label="Inline JWKS"
+						label={tr('copy.inlineJwks')}
 						className={errors.jwks ? 'invalid' : undefined}
 						hint={errors.jwks}
 					>
@@ -177,7 +184,7 @@ export function McpAuthenticationPolicyEditor(props: {
 					</FieldGroup>
 				) : (
 					<Field
-						label={jwksMode === 'url' ? 'JWKS URL' : 'JWKS file'}
+						label={jwksMode === 'url' ? tr('copy.jwksUrl') : tr('copy.jwksFile')}
 						className={errors.jwks ? 'invalid' : undefined}
 						hint={errors.jwks}
 					>
@@ -196,11 +203,11 @@ export function McpAuthenticationPolicyEditor(props: {
 
 			<PolicySection
 				icon={<Globe2 size={17} />}
-				title="Token validation"
-				description="Restrict accepted MCP tokens by issuer and audience."
+				title={tr('copy.tokenValidation')}
+				description={tr('copy.restrictAcceptedMcpTokensByIssuerAndAudience')}
 			>
 				<Field
-					label="Issuer"
+					label={tr('copy.issuer')}
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'issuer')}
 					className={errors.issuer ? 'invalid' : undefined}
 					hint={errors.issuer}
@@ -213,32 +220,32 @@ export function McpAuthenticationPolicyEditor(props: {
 					/>
 				</Field>
 				<ListEditor
-					label="Audiences"
+					label={tr('copy.audiences')}
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'audiences')}
 					values={audiences}
-					placeholder="mcp://gateway"
-					emptyText="No audience restriction configured."
+					placeholder={tr('copy.mcpGateway')}
+					emptyText={tr('copy.noAudienceRestrictionConfigured')}
 					onChange={setAudiences}
 				/>
 				<Field
-					label="Client ID"
+					label={tr('copy.clientId')}
 					tooltip={props.help.field<LocalMcpAuthentication>('LocalMcpAuthentication', 'clientId')}
 				>
 					<input
 						value={clientId ?? ''}
 						onChange={event => setClientId(event.target.value)}
-						placeholder="optional OAuth client ID"
+						placeholder={tr('copy.optionalOauthClientId')}
 					/>
 				</Field>
 			</PolicySection>
 
 			<PolicySection
 				icon={<KeyRound size={17} />}
-				title="Protected resource metadata"
-				description="Metadata advertised to MCP clients for OAuth protected resources."
+				title={tr('copy.protectedResourceMetadata')}
+				description={tr('copy.metadataAdvertisedToMcpClientsForOauthProtectedResources')}
 			>
 				<FieldGroup
-					label="Resource metadata YAML"
+					label={tr('copy.resourceMetadataYaml')}
 					tooltip={props.help.field<LocalMcpAuthentication>(
 						'LocalMcpAuthentication',
 						'resourceMetadata'
@@ -257,7 +264,7 @@ export function McpAuthenticationPolicyEditor(props: {
 
 			<ResultingYaml value={preview} />
 			{error ? (
-				<StatusBanner state="bad" title="Invalid MCP authentication policy">
+				<StatusBanner state="bad" title={tr('copy.invalidMcpAuthenticationPolicy')}>
 					{error}
 				</StatusBanner>
 			) : null}

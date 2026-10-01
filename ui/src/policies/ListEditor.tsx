@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { FieldGroup } from '@/components/Primitives';
+import { tr } from '@/i18n';
 import { appendUnique } from '@/policies/policyUtils';
 
 export function ListEditor(props: {
@@ -33,16 +34,16 @@ export function ListEditor(props: {
 								<span>{value}</span>
 								<button
 									type="button"
-									aria-label={`Remove ${value}`}
+									aria-label={tr('copy.removeValue', [value])}
 									onClick={() => props.onChange(props.values.filter(item => item !== value))}
 								>
-									x
+									{tr('copy.x')}
 								</button>
 							</span>
 						))}
 					</div>
 				) : (
-					<div className="empty-inline">{props.emptyText ?? 'No values configured.'}</div>
+					<div className="empty-inline">{props.emptyText ?? tr('copy.noValuesConfigured')}</div>
 				)}
 				<div className="list-editor-row">
 					<input
@@ -57,7 +58,7 @@ export function ListEditor(props: {
 						placeholder={props.placeholder}
 					/>
 					<button className="button" type="button" onClick={() => add(draft)}>
-						Add
+						{tr('copy.add')}
 					</button>
 					{props.actions}
 				</div>

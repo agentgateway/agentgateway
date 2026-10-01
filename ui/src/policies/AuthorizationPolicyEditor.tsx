@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { EmptyState, StatusBanner } from '@/components/Primitives';
+import { tr } from '@/i18n';
 import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { AuthorizationDraft } from '@/policies/types';
 
@@ -19,12 +20,32 @@ type AuthzRule = {
 const defaultNewRule = 'request.path.startsWith("/v1/")';
 const celPlaygroundExpressionKey = 'agw.cel.pendingExpression';
 const effectOptions: Array<EnumSelectorOption<RuleEffect>> = [
-	{ value: 'allow', label: 'Allow', description: 'Permit matching requests.' },
-	{ value: 'deny', label: 'Deny', description: 'Reject matching requests.' },
+	{
+		value: 'allow',
+		get label() {
+			return tr('copy.allow');
+		},
+		get description() {
+			return tr('copy.permitMatchingRequests');
+		}
+	},
+	{
+		value: 'deny',
+		get label() {
+			return tr('copy.deny');
+		},
+		get description() {
+			return tr('copy.rejectMatchingRequests');
+		}
+	},
 	{
 		value: 'require',
-		label: 'Require',
-		description: 'Require this expression to be true.'
+		get label() {
+			return tr('copy.require');
+		},
+		get description() {
+			return tr('copy.requireThisExpressionToBeTrue');
+		}
 	}
 ];
 
@@ -95,7 +116,7 @@ export function AuthorizationPolicyEditor(props: {
 		setErrors(validationErrors);
 		if (Object.keys(validationErrors).length) {
 			setEditingIndex(Number(Object.keys(validationErrors)[0]));
-			setSummaryError('Fix the highlighted authorization rules before saving.');
+			setSummaryError(tr('copy.fixHighlightedAuthorizationRulesBeforeSaving'));
 			return;
 		}
 		setSummaryError(null);
@@ -113,25 +134,23 @@ export function AuthorizationPolicyEditor(props: {
 		>
 			<div className="authz-rule-toolbar">
 				<div>
-					<strong>
-						{rules.length} {rules.length === 1 ? 'rule' : 'rules'}
-					</strong>
-					<small>Each CEL expression is saved under allow, deny, or require.</small>
+					<strong>{tr('copy.authorizationRuleCount', { count: rules.length })}</strong>
+					<small>{tr('copy.eachCelExpressionIsSavedUnderAllowDenyOrRequire')}</small>
 				</div>
 				<button className="button" type="button" onClick={addRule}>
 					<Plus size={16} />
-					Add rule
+					{tr('copy.addRule')}
 				</button>
 			</div>
 
 			{rules.length === 0 ? (
 				<EmptyState
-					title="No authorization rules"
-					description="Add a CEL expression to start authorizing requests."
+					title={tr('copy.noAuthorizationRules')}
+					description={tr('copy.addACelExpressionToStartAuthorizingRequests')}
 					action={
 						<button className="button primary" type="button" onClick={addRule}>
 							<Plus size={16} />
-							Add rule
+							{tr('copy.addRule')}
 						</button>
 					}
 				/>
@@ -148,15 +167,22 @@ export function AuthorizationPolicyEditor(props: {
 								<div className="authz-rule-header">
 									<div>
 										<div className="authz-rule-title">
-											<strong>Rule {index + 1}</strong>
-											<span className={`badge authz-effect ${rule.effect}`}>{rule.effect}</span>
+											<strong>{tr('copy.ruleNumber', [index + 1])}</strong>
+											<span className={`badge authz-effect ${rule.effect}`}>
+												{tr(`copy.${rule.effect}`)}
+											</span>
 										</div>
-										{!editing ? <code>{rule.expression.trim() || 'Empty rule'}</code> : null}
+										{!editing ? (
+											<code>{rule.expression.trim() || tr('copy.emptyRule')}</code>
+										) : null}
 									</div>
 									<div className="row-actions">
 										<div className="authz-effect-select">
 											<EnumSelector
-												ariaLabel={`Rule ${index + 1} effect`}
+												ariaLabel={tr('copy.authorizationRuleEffectLabel', [
+													index + 1,
+													tr(`copy.${rule.effect}`)
+												])}
 												value={rule.effect}
 												options={effectOptions}
 												onChange={value => updateEffect(index, value)}
@@ -168,7 +194,7 @@ export function AuthorizationPolicyEditor(props: {
 											onClick={() => setEditingIndex(editing ? null : index)}
 										>
 											<Pencil size={14} />
-											{editing ? 'Done' : 'Edit'}
+											{editing ? tr('copy.done') : tr('copy.edit')}
 										</button>
 										<Link
 											className="table-action"
@@ -178,7 +204,7 @@ export function AuthorizationPolicyEditor(props: {
 											}
 										>
 											<Braces size={14} />
-											Playground
+											{tr('copy.playground')}
 										</Link>
 										<button
 											className="table-action danger"
@@ -186,7 +212,7 @@ export function AuthorizationPolicyEditor(props: {
 											onClick={() => removeRule(index)}
 										>
 											<Trash2 size={14} />
-											Delete
+											{tr('copy.delete')}
 										</button>
 									</div>
 								</div>
@@ -218,14 +244,14 @@ export function AuthorizationPolicyEditor(props: {
 
 			<ResultingYaml value={preview} />
 			{summaryError ? (
-				<StatusBanner state="bad" title="Invalid authorization policy">
+				<StatusBanner state="bad" title={tr('copy.invalidAuthorizationPolicy')}>
 					{summaryError}
 				</StatusBanner>
 			) : null}
 			{!props.formId ? (
 				<button className="button primary" type="submit" disabled={props.saving}>
 					<Save size={16} />
-					Apply authorization
+					{tr('copy.applyAuthorization')}
 				</button>
 			) : null}
 		</form>
@@ -289,18 +315,18 @@ function buildAuthorization(rules: AuthzRule[]): AuthorizationDraft {
 function validateRules(rules: AuthzRule[]) {
 	const errors: Record<number, string> = {};
 	if (rules.length === 0) {
-		errors[0] = 'At least one authorization rule is required.';
+		errors[0] = tr('copy.atLeastOneAuthorizationRuleIsRequired');
 		return errors;
 	}
 	const seen = new Set<string>();
 	rules.forEach((rule, index) => {
 		const trimmed = rule.expression.trim();
 		if (!trimmed) {
-			errors[index] = 'Rule expression is required.';
+			errors[index] = tr('copy.ruleExpressionIsRequired');
 			return;
 		}
 		if (seen.has(trimmed)) {
-			errors[index] = 'Duplicate rule expression.';
+			errors[index] = tr('copy.duplicateRuleExpression');
 			return;
 		}
 		seen.add(trimmed);

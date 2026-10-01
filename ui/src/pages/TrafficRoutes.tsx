@@ -30,6 +30,7 @@ import {
 	useUpdateConfig,
 	useUpsertConfigResource
 } from '@/hooks';
+import { tr } from '@/i18n';
 import { ReadonlyModeBanner, TrafficDumpRoutesView } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { TrafficPolicySection } from '@/pages/traffic/TrafficPolicySection';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
@@ -71,11 +72,11 @@ export function TrafficRoutesPage() {
 		return (
 			<div className="page-stack">
 				<PageHeader
-					title="Traffic Routes"
-					description="Match incoming HTTP and TCP traffic and attach inline backends."
+					title={tr('copy.trafficRoutes')}
+					description={tr('copy.matchIncomingHttpAndTcpTrafficAndAttachInlineBackends')}
 				/>
 				<Panel>
-					<StatusBanner state="loading" title="Detecting traffic configuration mode" />
+					<StatusBanner state="loading" title={tr('copy.detectingTrafficConfigurationMode')} />
 				</Panel>
 			</div>
 		);
@@ -84,8 +85,8 @@ export function TrafficRoutesPage() {
 		return (
 			<div className="page-stack">
 				<PageHeader
-					title="Traffic Routes"
-					description="Read-only route inventory from the active gateway dump."
+					title={tr('copy.trafficRoutes')}
+					description={tr('copy.readOnlyRouteInventoryFromTheActiveGatewayDump')}
 				/>
 				<ReadonlyModeBanner />
 				<TrafficDumpRoutesView dump={mode.data.dump} />
@@ -201,8 +202,8 @@ function TrafficRoutesEditorPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Traffic Routes"
-				description="Match incoming HTTP and TCP traffic and attach inline backends."
+				title={tr('copy.trafficRoutes')}
+				description={tr('copy.matchIncomingHttpAndTcpTrafficAndAttachInlineBackends')}
 				actions={
 					listeners.length ? (
 						<button
@@ -214,38 +215,38 @@ function TrafficRoutesEditorPage() {
 							}}
 						>
 							<Plus size={16} />
-							Add route
+							{tr('copy.addRoute')}
 						</button>
 					) : undefined
 				}
 			/>
 
 			{update.isError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{update.error.message}
 				</StatusBanner>
 			) : null}
-			{update.isSuccess ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{update.isSuccess ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 			{stats.invalidListeners ? (
-				<StatusBanner state="warn" title="Some listeners mix HTTP and TCP routes">
-					Split mixed listeners before using the route form.
+				<StatusBanner state="warn" title={tr('copy.someListenersMixHttpAndTcpRoutes')}>
+					{tr('copy.splitMixedListenersBeforeUsingTheRouteForm')}
 				</StatusBanner>
 			) : null}
 
 			<Panel>
 				{config.isLoading ? (
-					<StatusBanner state="loading" title="Loading traffic routes" />
+					<StatusBanner state="loading" title={tr('copy.loadingTrafficRoutes')} />
 				) : config.isError ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{config.error?.message}
 					</StatusBanner>
 				) : !routes.length ? (
 					<EmptyState
-						title="No traffic routes configured"
+						title={tr('copy.noTrafficRoutesConfigured')}
 						description={
 							hasLegacyBinds
-								? 'Add a route under an HTTP or TCP listener.'
-								: 'Use traffic gateways for new HTTP routing configuration.'
+								? tr('copy.addARouteUnderAnHttpOrTcpListener')
+								: tr('copy.useTrafficGatewaysForNewHttpRoutingConfiguration')
 						}
 						action={
 							hasLegacyBinds ? (
@@ -259,12 +260,12 @@ function TrafficRoutesEditorPage() {
 									}}
 								>
 									<RouteIcon size={16} />
-									Add route
+									{tr('copy.addRoute')}
 								</button>
 							) : (
 								<Link className="button primary" to="/traffic/gateways">
 									<RouteIcon size={16} />
-									Manage gateways
+									{tr('copy.manageGateways')}
 								</Link>
 							)
 						}
@@ -274,12 +275,12 @@ function TrafficRoutesEditorPage() {
 						<table>
 							<thead>
 								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Bind</th>
-									<th>Listener</th>
-									<th>Match</th>
-									<th>Backends</th>
+									<th>{tr('copy.name')}</th>
+									<th>{tr('copy.type')}</th>
+									<th>{tr('copy.bind')}</th>
+									<th>{tr('copy.listener')}</th>
+									<th>{tr('copy.match')}</th>
+									<th>{tr('copy.backends_i9thuc')}</th>
 									<th />
 								</tr>
 							</thead>
@@ -309,21 +310,21 @@ function TrafficRoutesEditorPage() {
 										<td>{context.kind === 'http' ? httpPathSummary(context.route) : 'TCP'}</td>
 										<td>{backendListSummary(context.route.backends)}</td>
 										<td className="row-actions">
-											<Tooltip content="Edit route">
+											<Tooltip content={tr('copy.editRoute')}>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label="Edit route"
+													aria-label={tr('copy.editRoute')}
 													onClick={() => openEditRoute(context)}
 												>
 													<Pencil size={16} />
 												</button>
 											</Tooltip>
-											<Tooltip content="Delete route">
+											<Tooltip content={tr('copy.deleteRoute')}>
 												<button
 													className="icon-button danger"
 													type="button"
-													aria-label="Delete route"
+													aria-label={tr('copy.deleteRoute')}
 													disabled={update.isPending}
 													onClick={() => setDeletingRoute(context)}
 												>
@@ -365,9 +366,9 @@ function TrafficRoutesEditorPage() {
 			) : null}
 			{deletingRoute ? (
 				<ConfirmDialog
-					title="Delete route?"
+					title={tr('copy.deleteRoute_akv0fs')}
 					destructive
-					confirmLabel="Delete route"
+					confirmLabel={tr('copy.deleteRoute')}
 					confirmDisabled={update.isPending}
 					onCancel={() => setDeletingRoute(null)}
 					onConfirm={() =>
@@ -384,9 +385,9 @@ function TrafficRoutesEditorPage() {
 					}
 				>
 					<p>
-						Delete{' '}
-						<strong>{routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}</strong>?
-						Traffic matching this route will no longer reach its backends.
+						{tr('copy.deleteRouteQuestion', [
+							routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)
+						])}
 					</p>
 				</ConfirmDialog>
 			) : null}
@@ -471,8 +472,8 @@ function GatewayRoutesEditorPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="Traffic Routes"
-				description="Attach HTTP and TCP routes to traffic gateways."
+				title={tr('copy.trafficRoutes')}
+				description={tr('copy.attachHttpAndTcpRoutesToTrafficGateways')}
 				actions={
 					<button
 						className="button primary"
@@ -481,40 +482,40 @@ function GatewayRoutesEditorPage() {
 						onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
 					>
 						<Plus size={16} />
-						Add route
+						{tr('copy.addRoute')}
 					</button>
 				}
 			/>
 
 			{saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{saveError}
 				</StatusBanner>
 			) : null}
-			{saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{saved ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 
 			<Panel>
 				{config.isLoading ? (
-					<StatusBanner state="loading" title="Loading traffic routes" />
+					<StatusBanner state="loading" title={tr('copy.loadingTrafficRoutes')} />
 				) : config.isError ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{config.error?.message}
 					</StatusBanner>
 				) : !hasGatewayOptions ? (
 					<EmptyState
-						title="No traffic gateways configured"
-						description="Add a gateway before attaching routes."
+						title={tr('copy.noTrafficGatewaysConfigured')}
+						description={tr('copy.addAGatewayBeforeAttachingRoutes')}
 						action={
 							<Link className="button primary" to="/traffic/gateways">
 								<RouteIcon size={16} />
-								Manage gateways
+								{tr('copy.manageGateways')}
 							</Link>
 						}
 					/>
 				) : !routes.length ? (
 					<EmptyState
-						title="No traffic routes configured"
-						description="Attach a route to a gateway."
+						title={tr('copy.noTrafficRoutesConfigured')}
+						description={tr('copy.attachARouteToAGateway')}
 						action={
 							<button
 								className="button primary"
@@ -522,7 +523,7 @@ function GatewayRoutesEditorPage() {
 								onClick={() => openAddRoute(httpGatewayOptions.length ? 'http' : 'tcp')}
 							>
 								<RouteIcon size={16} />
-								Add route
+								{tr('copy.addRoute')}
 							</button>
 						}
 					/>
@@ -531,11 +532,11 @@ function GatewayRoutesEditorPage() {
 						<table>
 							<thead>
 								<tr>
-									<th>Name</th>
-									<th>Kind</th>
-									<th>Gateway</th>
-									<th>Match</th>
-									<th>Backends</th>
+									<th>{tr('copy.name')}</th>
+									<th>{tr('copy.kind')}</th>
+									<th>{tr('copy.gateway')}</th>
+									<th>{tr('copy.match')}</th>
+									<th>{tr('copy.backends_i9thuc')}</th>
 									<th />
 								</tr>
 							</thead>
@@ -546,21 +547,23 @@ function GatewayRoutesEditorPage() {
 										<td>
 											<span className="badge">{kind.toUpperCase()}</span>
 										</td>
-										<td>{effectiveGatewayRouteRef(route, config.data, kind) || 'Unassigned'}</td>
+										<td>
+											{effectiveGatewayRouteRef(route, config.data, kind) || tr('copy.unassigned')}
+										</td>
 										<td>{kind === 'http' ? httpPathSummary(route) : 'TCP'}</td>
 										<td>{backendListSummary(route.backends)}</td>
 										<td className="row-actions">
 											<Tooltip
 												content={
 													resourceId
-														? 'Edit route'
-														: 'Unnamed routes must be edited in raw configuration'
+														? tr('copy.editRoute')
+														: tr('copy.unnamedRoutesMustBeEditedInRawConfiguration')
 												}
 											>
 												<button
 													className="icon-button"
 													type="button"
-													aria-label="Edit route"
+													aria-label={tr('copy.editRoute')}
 													disabled={!resourceId}
 													onClick={() =>
 														setEditing({
@@ -577,16 +580,16 @@ function GatewayRoutesEditorPage() {
 											<Tooltip
 												content={
 													!resourceId
-														? 'Unnamed routes must be deleted in raw configuration'
+														? tr('copy.unnamedRoutesMustBeDeletedInRawConfiguration')
 														: traffic.hybrid && !databaseRoute(kind, resourceId)
-															? 'File-owned routes cannot be deleted here'
-															: 'Delete route'
+															? tr('copy.fileOwnedRoutesCannotBeDeletedHere')
+															: tr('copy.deleteRoute')
 												}
 											>
 												<button
 													className="icon-button danger"
 													type="button"
-													aria-label="Delete route"
+													aria-label={tr('copy.deleteRoute')}
 													disabled={
 														!resourceId || (traffic.hybrid && !databaseRoute(kind, resourceId))
 													}
@@ -696,11 +699,11 @@ function GatewayRouteEditor(props: {
 
 	function save() {
 		if (!route.name?.trim()) {
-			setError('Enter a route name.');
+			setError(tr('copy.enterARouteName'));
 			return;
 		}
 		if (!gateway) {
-			setError('Select a gateway.');
+			setError(tr('copy.selectAGateway'));
 			return;
 		}
 		props.onSave({
@@ -715,8 +718,8 @@ function GatewayRouteEditor(props: {
 		<Drawer
 			title={
 				props.editing.resourceId || typeof props.editing.routeIndex === 'number'
-					? 'Edit route'
-					: 'Add route'
+					? tr('copy.editRoute')
+					: tr('copy.addRoute')
 			}
 			onClose={props.onCancel}
 			footer={
@@ -730,19 +733,19 @@ function GatewayRouteEditor(props: {
 								}
 							: undefined
 					}
-					diffTitle="Route config diff"
-					saveLabel="Save route"
+					diffTitle={tr('copy.routeConfigDiff')}
+					saveLabel={tr('copy.saveRoute')}
 					saving={props.saving}
 					saveDisabled={!route.name?.trim()}
 					onCancel={props.onCancel}
 					onSave={save}
 					beforeDiff={() => {
 						if (!route.name?.trim()) {
-							setError('Enter a route name.');
+							setError(tr('copy.enterARouteName'));
 							return false;
 						}
 						if (!gateway) {
-							setError('Select a gateway.');
+							setError(tr('copy.selectAGateway'));
 							return false;
 						}
 						return true;
@@ -770,9 +773,9 @@ function GatewayRouteEditor(props: {
 			{error ? <StatusBanner state="bad" title={error} /> : null}
 			<div className="route-editor-stack">
 				{!props.editing.resourceId && typeof props.editing.routeIndex !== 'number' ? (
-					<FieldGroup label="Kind" tooltip="Route protocol family.">
+					<FieldGroup label={tr('copy.kind')} tooltip={tr('copy.routeProtocolFamily')}>
 						<EnumSelector
-							ariaLabel="Route kind"
+							ariaLabel={tr('copy.kind')}
 							value={kind}
 							options={[
 								{ value: 'http', label: 'HTTP' },
@@ -789,9 +792,12 @@ function GatewayRouteEditor(props: {
 						/>
 					</FieldGroup>
 				) : null}
-				<FieldGroup label="Gateway" tooltip="Gateway or gateway listener that owns this route.">
+				<FieldGroup
+					label={tr('copy.gateway')}
+					tooltip={tr('copy.gatewayOrGatewayListenerThatOwnsThisRoute')}
+				>
 					<Dropdown
-						ariaLabel="Gateway"
+						ariaLabel={tr('copy.gateway')}
 						value={gateway}
 						options={gatewayOptions}
 						onChange={value => {
@@ -803,7 +809,7 @@ function GatewayRouteEditor(props: {
 
 				<div className="form-grid">
 					<Field
-						label="Name"
+						label={tr('copy.name')}
 						tooltip={
 							kind === 'http'
 								? props.help.field<TrafficRoute>('LocalRoute', 'name')
@@ -817,7 +823,7 @@ function GatewayRouteEditor(props: {
 						/>
 					</Field>
 					<Field
-						label="Hostnames"
+						label={tr('copy.hostnames')}
 						tooltip={
 							kind === 'http'
 								? props.help.field<TrafficRoute>(
@@ -835,7 +841,7 @@ function GatewayRouteEditor(props: {
 						<input
 							value={(route.hostnames ?? []).join(', ')}
 							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
-							placeholder="example.com, *.example.com"
+							placeholder={tr('copy.exampleComExampleCom')}
 						/>
 					</Field>
 				</div>
@@ -856,14 +862,14 @@ function GatewayRouteEditor(props: {
 				/>
 
 				<TrafficPolicySection
-					title="Route policies"
+					title={tr('copy.routePolicies')}
 					schemaRoot={kind === 'http' ? 'FilterOrPolicy' : 'TCPFilterOrPolicy'}
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
 
 				<details open>
-					<summary>Resulting YAML</summary>
+					<summary>{tr('copy.resultingYaml')}</summary>
 					<YamlBlock value={preview} />
 				</details>
 			</div>
@@ -914,7 +920,7 @@ function RouteEditor(props: {
 	function save() {
 		const [bindIndex, listenerIndex] = listenerKey.split(':').map(Number);
 		if (!selectedListener) {
-			setError('Select a listener.');
+			setError(tr('copy.selectAListener'));
 			return;
 		}
 		props.onSave({
@@ -928,21 +934,23 @@ function RouteEditor(props: {
 
 	return (
 		<Drawer
-			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
+			title={
+				typeof props.editing.routeIndex === 'number' ? tr('copy.editRoute') : tr('copy.addRoute')
+			}
 			onClose={props.onCancel}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
 					config={props.config}
-					diffTitle="Route config diff"
-					saveLabel="Save route"
+					diffTitle={tr('copy.routeConfigDiff')}
+					saveLabel={tr('copy.saveRoute')}
 					saving={props.saving}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={() => {
 						if (!selectedListener) {
-							setError('Select a listener.');
+							setError(tr('copy.selectAListener'));
 							return false;
 						}
 						return true;
@@ -964,13 +972,17 @@ function RouteEditor(props: {
 			{error ? <StatusBanner state="bad" title={error} /> : null}
 			<div className="route-editor-stack">
 				{typeof props.editing.routeIndex !== 'number' ? (
-					<FieldGroup label="Listener" tooltip="Listener that owns this route.">
+					<FieldGroup label={tr('copy.listener')} tooltip={tr('copy.listenerThatOwnsThisRoute')}>
 						<Dropdown
-							ariaLabel="Listener"
+							ariaLabel={tr('copy.listener')}
 							value={listenerKey}
 							options={props.listeners.map(item => ({
 								value: `${item.bindIndex}:${item.listenerIndex}`,
-								label: `:${item.bind.port ?? '*'} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`
+								label: tr('copy.valueValueValue', [
+									item.bind.port ?? '*',
+									listenerDisplayName(item.listener, item.listenerIndex),
+									listenerRouteKind(item.listener).toUpperCase()
+								])
 							}))}
 							onChange={value => {
 								setListenerKey(value);
@@ -987,7 +999,7 @@ function RouteEditor(props: {
 
 				<div className="form-grid">
 					<Field
-						label="Name"
+						label={tr('copy.name')}
 						tooltip={
 							effectiveKind === 'http'
 								? props.help.field<TrafficRoute>('LocalRoute', 'name')
@@ -1001,7 +1013,7 @@ function RouteEditor(props: {
 						/>
 					</Field>
 					<Field
-						label="Hostnames"
+						label={tr('copy.hostnames')}
 						tooltip={props.help.field<TrafficRoute>(
 							'LocalRoute',
 							'hostnames',
@@ -1011,7 +1023,7 @@ function RouteEditor(props: {
 						<input
 							value={(route.hostnames ?? []).join(', ')}
 							onChange={event => setRoute({ ...route, hostnames: splitList(event.target.value) })}
-							placeholder="example.com, *.example.com"
+							placeholder={tr('copy.exampleComExampleCom')}
 						/>
 					</Field>
 				</div>
@@ -1028,14 +1040,14 @@ function RouteEditor(props: {
 				/>
 
 				<TrafficPolicySection
-					title="Route policies"
+					title={tr('copy.routePolicies')}
 					schemaRoot={effectiveKind === 'http' ? 'FilterOrPolicy' : 'TCPFilterOrPolicy'}
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
 
 				<details open>
-					<summary>Resulting YAML</summary>
+					<summary>{tr('copy.resultingYaml')}</summary>
 					<YamlBlock value={preview} />
 				</details>
 			</div>
@@ -1062,11 +1074,11 @@ function HttpMatchEditor(props: {
 		<>
 			<div className="form-grid">
 				<FieldGroup
-					label="Path match"
+					label={tr('copy.pathMatch')}
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
 				>
 					<EnumSelector
-						ariaLabel="Path match"
+						ariaLabel={tr('copy.pathMatch')}
 						value={pathType}
 						options={pathTypes.map(value => ({
 							value,
@@ -1081,7 +1093,10 @@ function HttpMatchEditor(props: {
 						}
 					/>
 				</FieldGroup>
-				<Field label="Path" tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}>
+				<Field
+					label={tr('copy.path')}
+					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'path')}
+				>
 					<input
 						value={pathValue}
 						onChange={event =>
@@ -1094,7 +1109,7 @@ function HttpMatchEditor(props: {
 					/>
 				</Field>
 				<Field
-					label="Method"
+					label={tr('copy.method')}
 					tooltip={props.help.field<GeneratedRouteMatch>('RouteMatch', 'method')}
 				>
 					<input
@@ -1126,8 +1141,8 @@ function HeaderConditionsEditor(props: {
 		<div className="traffic-match-editor">
 			<div className="traffic-match-editor-header">
 				<div>
-					<h4>Headers</h4>
-					<p>Every listed header condition must match.</p>
+					<h4>{tr('copy.headers')}</h4>
+					<p>{tr('copy.everyListedHeaderConditionMustMatch')}</p>
 				</div>
 				<button
 					className="button small"
@@ -1135,7 +1150,7 @@ function HeaderConditionsEditor(props: {
 					onClick={() => props.onChange([...props.headers, { name: '', value: { exact: '' } }])}
 				>
 					<Plus size={16} />
-					Add header
+					{tr('copy.addHeader')}
 				</button>
 			</div>
 			{props.headers.length ? (
@@ -1157,7 +1172,7 @@ function HeaderConditionsEditor(props: {
 					))}
 				</div>
 			) : (
-				<div className="empty-inline">No header conditions.</div>
+				<div className="empty-inline">{tr('copy.noHeaderConditions')}</div>
 			)}
 		</div>
 	);
@@ -1184,16 +1199,16 @@ function HeaderConditionRow(props: {
 		<div className="header-match-row">
 			<div className="condition-inputs">
 				<input
-					aria-label="Header name"
+					aria-label={tr('copy.headerName_8vzq77')}
 					value={props.header.name}
 					onChange={event => props.onChange({ ...props.header, name: event.target.value })}
-					placeholder="Header name"
+					placeholder={tr('copy.headerName_8vzq77')}
 				/>
 				<input
-					aria-label="Header value"
+					aria-label={tr('copy.headerValue')}
 					value={text}
 					onChange={event => setText(event.target.value)}
-					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+					placeholder={mode === 'regex' ? tr('copy.regexValue') : tr('copy.exactValue')}
 				/>
 			</div>
 			<div className="condition-actions">
@@ -1203,13 +1218,13 @@ function HeaderConditionRow(props: {
 						checked={mode === 'regex'}
 						onChange={event => setMode(event.target.checked)}
 					/>
-					Regex
+					{tr('copy.regex')}
 				</label>
-				<Tooltip content="Remove header condition">
+				<Tooltip content={tr('copy.removeHeaderCondition')}>
 					<button
 						className="icon-button danger"
 						type="button"
-						aria-label="Remove header condition"
+						aria-label={tr('copy.removeHeaderCondition')}
 						onClick={props.onRemove}
 					>
 						<Trash2 size={15} />
@@ -1228,8 +1243,8 @@ function QueryConditionsEditor(props: {
 		<div className="traffic-match-editor">
 			<div className="traffic-match-editor-header">
 				<div>
-					<h4>Query</h4>
-					<p>Every listed query condition must match.</p>
+					<h4>{tr('copy.query')}</h4>
+					<p>{tr('copy.everyListedQueryConditionMustMatch')}</p>
 				</div>
 				<button
 					className="button small"
@@ -1237,7 +1252,7 @@ function QueryConditionsEditor(props: {
 					onClick={() => props.onChange([...props.query, { name: '', value: { exact: '' } }])}
 				>
 					<Plus size={16} />
-					Add query
+					{tr('copy.addQuery')}
 				</button>
 			</div>
 			{props.query.length ? (
@@ -1259,7 +1274,7 @@ function QueryConditionsEditor(props: {
 					))}
 				</div>
 			) : (
-				<div className="empty-inline">No query conditions.</div>
+				<div className="empty-inline">{tr('copy.noQueryConditions')}</div>
 			)}
 		</div>
 	);
@@ -1286,16 +1301,16 @@ function QueryConditionRow(props: {
 		<div className="header-match-row">
 			<div className="condition-inputs">
 				<input
-					aria-label="Query name"
+					aria-label={tr('copy.queryName')}
 					value={props.query.name}
 					onChange={event => props.onChange({ ...props.query, name: event.target.value })}
-					placeholder="Query name"
+					placeholder={tr('copy.queryName')}
 				/>
 				<input
-					aria-label="Query value"
+					aria-label={tr('copy.queryValue')}
 					value={text}
 					onChange={event => setText(event.target.value)}
-					placeholder={mode === 'regex' ? 'Regex value' : 'Exact value'}
+					placeholder={mode === 'regex' ? tr('copy.regexValue') : tr('copy.exactValue')}
 				/>
 			</div>
 			<div className="condition-actions">
@@ -1305,13 +1320,13 @@ function QueryConditionRow(props: {
 						checked={mode === 'regex'}
 						onChange={event => setMode(event.target.checked)}
 					/>
-					Regex
+					{tr('copy.regex')}
 				</label>
-				<Tooltip content="Remove query condition">
+				<Tooltip content={tr('copy.removeQueryCondition')}>
 					<button
 						className="icon-button danger"
 						type="button"
-						aria-label="Remove query condition"
+						aria-label={tr('copy.removeQueryCondition')}
 						onClick={props.onRemove}
 					>
 						<Trash2 size={15} />
@@ -1341,8 +1356,8 @@ function RouteBackendsEditor(props: {
 		<div className="traffic-backend-editor">
 			<div className="traffic-match-editor-header">
 				<div>
-					<h4>Backends</h4>
-					<p>Traffic that matches this route is forwarded to these targets.</p>
+					<h4>{tr('copy.backends_i9thuc')}</h4>
+					<p>{tr('copy.trafficThatMatchesThisRouteIsForwardedToTheseTargets')}</p>
 				</div>
 				<button
 					className="button small"
@@ -1350,7 +1365,7 @@ function RouteBackendsEditor(props: {
 					onClick={() => props.onChange([...props.backends, makeBackend(props.kind, 'host')])}
 				>
 					<Plus size={16} />
-					Add backend
+					{tr('copy.addBackend')}
 				</button>
 			</div>
 			{props.backends.length ? (
@@ -1374,7 +1389,7 @@ function RouteBackendsEditor(props: {
 					))}
 				</div>
 			) : (
-				<div className="empty-inline">No backends configured.</div>
+				<div className="empty-inline">{tr('copy.noBackendsConfigured')}</div>
 			)}
 		</div>
 	);
@@ -1393,13 +1408,13 @@ function RouteBackendRow(props: {
 			<div className="route-backend-row readonly">
 				<div>
 					<strong>{backendSummary(props.backend)}</strong>
-					<span>Unsupported backend shape in this form</span>
+					<span>{tr('copy.unsupportedBackendShapeInThisForm')}</span>
 				</div>
-				<Tooltip content="Remove backend">
+				<Tooltip content={tr('copy.removeBackend')}>
 					<button
 						className="icon-button danger"
 						type="button"
-						aria-label="Remove backend"
+						aria-label={tr('copy.removeBackend')}
 						onClick={props.onRemove}
 					>
 						<Trash2 size={15} />
@@ -1417,20 +1432,20 @@ function RouteBackendRow(props: {
 			<div className="route-backend-main">
 				<div className="route-backend-inputs">
 					<FieldGroup
-						label="Target type"
+						label={tr('copy.targetType')}
 						tooltip={props.help.definition(
 							props.kind === 'http' ? 'LocalRouteBackend' : 'LocalTCPRouteBackend'
 						)}
 					>
 						<EnumSelector
-							ariaLabel="Backend target type"
+							ariaLabel={tr('copy.targetType')}
 							value={type}
 							options={backendKindOptions(props.kind)}
 							onChange={value => props.onChange(makeBackend(props.kind, value, backend))}
 						/>
 					</FieldGroup>
 					<Field
-						label="Weight"
+						label={tr('copy.weight')}
 						tooltip={
 							props.kind === 'http'
 								? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'weight')
@@ -1460,7 +1475,7 @@ function RouteBackendRow(props: {
 					onChange={props.onChange}
 				/>
 				<TrafficPolicySection
-					title="Backend policies"
+					title={tr('copy.backendPolicies')}
 					schemaRoot={policyRoot}
 					policies={backendPolicies(backend)}
 					onChange={policies =>
@@ -1468,11 +1483,11 @@ function RouteBackendRow(props: {
 					}
 				/>
 			</div>
-			<Tooltip content="Remove backend">
+			<Tooltip content={tr('copy.removeBackend')}>
 				<button
 					className="icon-button danger"
 					type="button"
-					aria-label="Remove backend"
+					aria-label={tr('copy.removeBackend')}
 					onClick={props.onRemove}
 				>
 					<Trash2 size={15} />
@@ -1493,7 +1508,7 @@ function BackendTargetFields(props: {
 		return (
 			<div className="route-backend-target-grid single">
 				<Field
-					label="Host"
+					label={tr('copy.host')}
 					tooltip={
 						props.kind === 'http'
 							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'host')
@@ -1521,7 +1536,7 @@ function BackendTargetFields(props: {
 		return (
 			<div className="route-backend-target-grid single">
 				<Field
-					label="Backend reference"
+					label={tr('copy.backendReference')}
 					tooltip={
 						props.kind === 'http'
 							? props.help.field<TrafficRouteBackend>('LocalRouteBackend', 'backend')
@@ -1550,7 +1565,7 @@ function BackendTargetFields(props: {
 		const serviceName = splitServiceName(service.name);
 		return (
 			<div className="route-backend-target-grid service">
-				<Field label="Namespace">
+				<Field label={tr('copy.namespace')}>
 					<input
 						value={serviceName.namespace}
 						onChange={event =>
@@ -1567,7 +1582,7 @@ function BackendTargetFields(props: {
 						placeholder="default"
 					/>
 				</Field>
-				<Field label="Hostname">
+				<Field label={tr('copy.hostname')}>
 					<input
 						value={serviceName.hostname}
 						onChange={event =>
@@ -1584,7 +1599,7 @@ function BackendTargetFields(props: {
 						placeholder="api"
 					/>
 				</Field>
-				<Field label="Port">
+				<Field label={tr('copy.port')}>
 					<input
 						type="number"
 						min={1}
@@ -1610,7 +1625,7 @@ function BackendTargetFields(props: {
 	if (props.targetKind === 'routeGroup' && isRouteGroupBackend(props.backend)) {
 		return (
 			<div className="route-backend-target-grid single">
-				<Field label="Route group">
+				<Field label={tr('copy.routeGroup')}>
 					<input
 						value={props.backend.routeGroup}
 						onChange={event =>
@@ -1630,7 +1645,9 @@ function BackendTargetFields(props: {
 
 	if (props.targetKind === 'dynamic') {
 		return (
-			<div className="empty-inline">Dynamic backend selection is enabled for this backend.</div>
+			<div className="empty-inline">
+				{tr('copy.dynamicBackendSelectionIsEnabledForThisBackend')}
+			</div>
 		);
 	}
 
@@ -1669,15 +1686,15 @@ function cleanBackend(backend: TrafficRouteBackend | TrafficTcpRouteBackend) {
 
 function backendKindOptions(kind: RouteKind): Array<EnumSelectorOption<EditableBackendKind>> {
 	const base: Array<EnumSelectorOption<EditableBackendKind>> = [
-		{ value: 'host', label: 'Host' },
-		{ value: 'service', label: 'Service' },
-		{ value: 'backend', label: 'Backend reference' }
+		{ value: 'host', label: tr('copy.host') },
+		{ value: 'service', label: tr('copy.service') },
+		{ value: 'backend', label: tr('copy.backendReference') }
 	];
 	if (kind === 'tcp') return base;
 	return [
 		...base,
-		{ value: 'dynamic', label: 'Dynamic' },
-		{ value: 'routeGroup', label: 'Route group' }
+		{ value: 'dynamic', label: tr('copy.dynamic') },
+		{ value: 'routeGroup', label: tr('copy.routeGroup') }
 	];
 }
 
@@ -1846,7 +1863,7 @@ function cleanHttpMatch(match: HttpMatch): HttpMatch {
 function backendListSummary(
 	backends: Array<TrafficRouteBackend | TrafficTcpRouteBackend> | null | undefined
 ) {
-	if (!backends?.length) return 'No backends';
+	if (!backends?.length) return tr('copy.noBackendsConfigured');
 	return backends.map(backendSummary).join(', ');
 }
 
@@ -1930,7 +1947,7 @@ function gatewayReferenceOptions(config: GatewayConfig | null | undefined, kind:
 		return [
 			{
 				value: name,
-				label: `${name} (all ${kind.toUpperCase()} listeners)`,
+				label: tr('copy.valueAllValueListeners', [name, kind.toUpperCase()]),
 				description: gateway.port ? `Port ${gateway.port}` : undefined
 			},
 			...compatibleListeners.map(listener => {
@@ -1938,7 +1955,7 @@ function gatewayReferenceOptions(config: GatewayConfig | null | undefined, kind:
 				const listenerName = listener.name ?? `listener${listenerIndex}`;
 				return {
 					value: `${name}/${listenerName}`,
-					label: `${name}/${listenerName}`,
+					label: tr('copy.valueValue', [name, listenerName]),
 					description: listener.hostname ?? undefined
 				};
 			})
@@ -2028,9 +2045,9 @@ function writeTrafficRouteSearch(
 }
 
 function pathLabel(value: string) {
-	if (value === 'pathPrefix') return 'Prefix';
-	if (value === 'exact') return 'Exact';
-	return 'Regex';
+	if (value === 'pathPrefix') return tr('copy.prefixMatch');
+	if (value === 'exact') return tr('copy.exactMatch');
+	return tr('copy.regex');
 }
 
 function splitList(value: string) {

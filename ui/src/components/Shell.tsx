@@ -1,4 +1,5 @@
 import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
+import type { TFunction } from 'i18next';
 import {
 	BarChart3,
 	Bolt,
@@ -14,6 +15,7 @@ import {
 	Globe,
 	Home,
 	KeyRound,
+	Languages,
 	LogOut,
 	Menu,
 	MessageSquarePlus,
@@ -30,12 +32,13 @@ import {
 	UserRound
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { apiBase } from '@/api/base';
 import type { RuntimeUser } from '@/api/runtimeApi';
 import logoDark from '@/assets/agw-dark.svg';
 import logoLight from '@/assets/agw-light.svg';
-import { StatusBanner, Tooltip, useDismissiblePopover } from '@/components/Primitives';
+import { Dropdown, StatusBanner, Tooltip, useDismissiblePopover } from '@/components/Primitives';
 import {
 	useConfigDumpMode,
 	useEffectiveGatewayConfig,
@@ -43,6 +46,7 @@ import {
 	useRuntimeInfo,
 	useTrafficConfigData
 } from '@/hooks';
+import { type AppLanguage, currentLanguage, setLanguage, tr } from '@/i18n';
 
 type NavItemConfig = {
 	to: string;
@@ -53,25 +57,8 @@ type NavItemConfig = {
 	exact?: boolean;
 };
 
-const projectLinks = [
-	{
-		label: 'GitHub',
-		href: 'https://github.com/agentgateway/agentgateway',
-		icon: GitFork
-	},
-	{
-		label: 'Documentation',
-		href: 'https://agentgateway.dev/docs/standalone/latest/',
-		icon: Globe
-	},
-	{
-		label: 'Feedback',
-		href: 'https://github.com/agentgateway/agentgateway/issues/new?title=UI%20feedback%3A%20&body=Thanks%20for%20trying%20the%20agentgateway%20UI.%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%20instead%3F%0A%0AAny%20screenshots%2C%20logs%2C%20or%20config%20that%20would%20help%3F',
-		icon: MessageSquarePlus
-	}
-] as const;
-
 export function Shell() {
+	const { t } = useTranslation();
 	const router = useRouterState();
 	const runtime = useRuntimeInfo();
 	const mode = useConfigDumpMode();
@@ -105,7 +92,25 @@ export function Shell() {
 				'tcpRoutes' in trafficData.data
 			: true;
 	const hasBinds = dumpMode ? true : config.data ? Boolean(config.data.binds?.length) : false;
-	const navGroups = navigationGroups({
+	const language = currentLanguage();
+	const projectLinks = [
+		{
+			label: 'GitHub',
+			href: 'https://github.com/agentgateway/agentgateway',
+			icon: GitFork
+		},
+		{
+			label: t('shell.documentation'),
+			href: 'https://agentgateway.dev/docs/standalone/latest/',
+			icon: Globe
+		},
+		{
+			label: t('shell.feedback'),
+			href: 'https://github.com/agentgateway/agentgateway/issues/new?title=UI%20feedback%3A%20&body=Thanks%20for%20trying%20the%20agentgateway%20UI.%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%20instead%3F%0A%0AAny%20screenshots%2C%20logs%2C%20or%20config%20that%20would%20help%3F',
+			icon: MessageSquarePlus
+		}
+	] as const;
+	const navGroups = navigationGroups(t, {
 		hasLlm,
 		hasMcp,
 		hasTraffic,
@@ -124,6 +129,10 @@ export function Shell() {
 		document.documentElement.dataset.theme = theme;
 	}, [theme]);
 
+	useEffect(() => {
+		document.documentElement.lang = language;
+	}, [language]);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		setMobileNavOpen(false);
@@ -132,11 +141,19 @@ export function Shell() {
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">
-				<Link to="/" className="brand" aria-label="agentgateway home">
-					<img className="brand-logo brand-logo-light" src={logoLight} alt="agentgateway" />
-					<img className="brand-logo brand-logo-dark" src={logoDark} alt="agentgateway" />
+				<Link to="/" className="brand" aria-label={t('nav.home')}>
+					<img
+						className="brand-logo brand-logo-light"
+						src={logoLight}
+						alt={tr('copy.agentgateway')}
+					/>
+					<img
+						className="brand-logo brand-logo-dark"
+						src={logoDark}
+						alt={tr('copy.agentgateway')}
+					/>
 				</Link>
-				<nav className="nav-list" aria-label="Primary">
+				<nav className="nav-list" aria-label={t('shell.primaryNavigation')}>
 					{navGroups.map(group => (
 						<NavSection
 							key={group.title}
@@ -180,7 +197,7 @@ export function Shell() {
 								<span>{currentNav.label}</span>
 							</button>
 							{mobileNavOpen ? (
-								<nav className="mobile-nav-menu" aria-label="Primary">
+								<nav className="mobile-nav-menu" aria-label={t('shell.primaryNavigation')}>
 									{navGroups.map(group => (
 										<MobileNavSection
 											key={group.title}
@@ -193,7 +210,7 @@ export function Shell() {
 							) : null}
 						</div>
 						{matchedNav && currentGroup && (
-							<nav className="breadcrumb" aria-label="Breadcrumb">
+							<nav className="breadcrumb" aria-label={t('shell.breadcrumb')}>
 								<span>{currentGroup.title}</span>
 								<ChevronRight size={14} />
 								<span aria-current="page">{matchedNav.label}</span>
@@ -201,12 +218,28 @@ export function Shell() {
 						)}
 					</div>
 					<div className="topbar-controls">
+						<Dropdown
+							className="language-select"
+							ariaLabel={t('language.select')}
+							value={language}
+							triggerIcon={<Languages size={16} aria-hidden="true" />}
+							options={[
+								{ value: 'en', label: t('language.english') },
+								{
+									value: 'zh-CN',
+									label: t('language.simplifiedChinese')
+								}
+							]}
+							onChange={value => {
+								void setLanguage(value as AppLanguage);
+							}}
+						/>
 						{runtime.data?.user && <UserMenu user={runtime.data.user} />}
-						<Tooltip content="Toggle theme">
+						<Tooltip content={t('shell.toggleTheme')}>
 							<button
 								className="icon-button"
 								type="button"
-								aria-label="Toggle theme"
+								aria-label={t('shell.toggleTheme')}
 								onClick={() => {
 									const next = theme === 'dark' ? 'light' : 'dark';
 									localStorage.setItem('theme', next);
@@ -219,11 +252,11 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
-					{runtime.data?.ui.configStoreMode === 'readOnly' && (
-						<StatusBanner state="info" title="Read-only mode">
-							The UI is configured as read-only. Editing is disabled.
+					{runtime.data?.ui.configStoreMode === 'readOnly' ? (
+						<StatusBanner state="info" title={tr('copy.readonlyMode')}>
+							{tr('copy.theUiIsConfiguredAsReadOnlyEditingIsDisabled')}
 						</StatusBanner>
-					)}
+					) : null}
 					<Outlet />
 				</main>
 			</div>
@@ -238,7 +271,7 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 		setOpen(false);
 		trigger.current?.focus();
 	});
-	const label = user.name || user.email || user.subject || 'Signed in';
+	const label = user.name || user.email || user.subject || tr('shell.signedIn');
 	const initials = user.name
 		? user.name
 				.split(/\s+/)
@@ -257,7 +290,7 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 				ref={trigger}
 				className="user-menu-trigger"
 				type="button"
-				aria-label={`Account: ${label}`}
+				aria-label={tr('shell.accountLabel', [label])}
 				aria-expanded={open}
 				aria-controls="user-menu-panel"
 				onClick={() => setOpen(!open)}
@@ -269,9 +302,13 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 				<ChevronDown size={14} aria-hidden="true" />
 			</button>
 			{open && (
-				<section id="user-menu-panel" className="user-menu-panel" aria-label="Your account">
+				<section
+					id="user-menu-panel"
+					className="user-menu-panel"
+					aria-label={tr('shell.accountMenu')}
+				>
 					<div className="user-menu-identity">
-						<span className="user-menu-caption">Signed in as</span>
+						<span className="user-menu-caption">{tr('shell.signedInAs')}</span>
 						<strong>{label}</strong>
 						{user.email && user.email !== label && <span>{user.email}</span>}
 					</div>
@@ -279,7 +316,7 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 						<form action={`${apiBase}/api/auth/logout`} method="post">
 							<button className="user-menu-signout" type="submit">
 								<LogOut size={16} aria-hidden="true" />
-								Sign out
+								{tr('shell.signOut')}
 							</button>
 						</form>
 					)}
@@ -289,74 +326,89 @@ function UserMenu({ user }: { user: RuntimeUser }) {
 	);
 }
 
-function navigationGroups(options: {
-	hasBinds: boolean;
-	hasLlm: boolean;
-	hasMcp: boolean;
-	hasTraffic: boolean;
-	dumpMode: boolean;
-}): ReadonlyArray<{ title: string; items: readonly NavItemConfig[] }> {
+function navigationGroups(
+	t: TFunction,
+	options: {
+		hasBinds: boolean;
+		hasLlm: boolean;
+		hasMcp: boolean;
+		hasTraffic: boolean;
+		dumpMode: boolean;
+	}
+): ReadonlyArray<{ title: string; items: readonly NavItemConfig[] }> {
 	const groups: Array<{ title: string; items: readonly NavItemConfig[] }> = [
 		{
-			title: 'Gateway',
-			items: [{ to: '/', label: 'Home', icon: Home }]
+			title: t('nav.gateway'),
+			items: [{ to: '/', label: t('nav.home'), icon: Home }]
 		}
 	];
 	if (!options.dumpMode) {
 		groups.push({
-			title: 'LLM',
+			title: t('nav.llm'),
 			items: options.hasLlm
 				? [
-						{ to: '/llm/models', label: 'Models', icon: Bot },
-						{ to: '/llm/providers', label: 'Providers', icon: Boxes },
+						{ to: '/llm/models', label: t('nav.models'), icon: Bot },
+						{ to: '/llm/providers', label: t('nav.providers'), icon: Boxes },
 
 						{
 							to: '/llm/policies',
-							label: 'Policies',
+							label: t('nav.policies'),
 							icon: Bolt,
 							groupStart: true
 						},
-						{ to: '/llm/guardrails', label: 'Guardrails', icon: Shield },
-						{ to: '/llm/keys', label: 'Virtual API Keys', icon: KeyRound },
-						{ to: '/llm/costs', label: 'Costs', icon: Coins },
+						{ to: '/llm/guardrails', label: t('nav.guardrails'), icon: Shield },
+						{ to: '/llm/keys', label: t('nav.keys'), icon: KeyRound },
+						{ to: '/llm/costs', label: t('nav.costs'), icon: Coins },
 
 						{
 							to: '/llm/analytics',
-							label: 'Analytics',
+							label: t('nav.analytics'),
 							icon: BarChart3,
 							groupStart: true
 						},
-						{ to: '/llm/logs', label: 'Logs', icon: ScrollText },
+						{ to: '/llm/logs', label: t('nav.logs'), icon: ScrollText },
 
 						{
 							to: '/llm/client-setup',
-							label: 'Client Setup',
+							label: t('nav.clientSetup'),
 							icon: Cable,
 							groupStart: true
 						},
-						{ to: '/llm/playground', label: 'Chat Playground', icon: Play }
+						{
+							to: '/llm/playground',
+							label: t('nav.chatPlayground'),
+							icon: Play
+						}
 					]
 				: [
 						{
 							to: '/llm/get-started',
-							label: 'Get started',
+							label: t('nav.getStarted'),
 							icon: Bot,
 							placeholder: true
 						}
 					]
 		});
 		groups.push({
-			title: 'MCP',
+			title: t('nav.mcp'),
 			items: options.hasMcp
 				? [
-						{ to: '/mcp/servers', label: 'Servers', icon: Server },
-						{ to: '/mcp/policies', label: 'Policies', icon: ShieldCheck },
-						{ to: '/mcp/playground', label: 'Tool Playground', icon: Play }
+						{ to: '/mcp/servers', label: t('nav.servers'), icon: Server },
+						{
+							to: '/mcp/policies',
+							label: t('nav.policies'),
+							icon: ShieldCheck
+						},
+						{
+							to: '/mcp/playground',
+							label: t('nav.toolPlayground'),
+							icon: Play
+						}
 					]
 				: [
 						{
 							to: '/mcp/get-started',
-							label: 'Get started',
+							label: t('nav.getStarted'),
 							icon: Server,
 							placeholder: true
 						}
@@ -364,56 +416,68 @@ function navigationGroups(options: {
 		});
 	} else {
 		groups.push({
-			title: 'LLM',
-			items: [{ to: '/llm/models', label: 'Models', icon: Bot }]
+			title: t('nav.llm'),
+			items: [{ to: '/llm/models', label: t('nav.models'), icon: Bot }]
 		});
 	}
 	groups.push({
-		title: 'Traffic',
+		title: t('nav.traffic'),
 		items: options.dumpMode
 			? [
-					{ to: '/traffic/listeners', label: 'Listeners', icon: Network },
-					{ to: '/traffic/routes', label: 'Routes', icon: Route },
-					{ to: '/traffic/policies', label: 'Policies', icon: ShieldCheck }
+					{
+						to: '/traffic/listeners',
+						label: t('nav.listeners'),
+						icon: Network
+					},
+					{ to: '/traffic/routes', label: t('nav.routes'), icon: Route },
+					{
+						to: '/traffic/policies',
+						label: t('nav.policies'),
+						icon: ShieldCheck
+					}
 				]
 			: options.hasTraffic
 				? [
-						{ to: '/traffic/gateways', label: 'Gateways', icon: Network },
+						{
+							to: '/traffic/gateways',
+							label: t('nav.gateways'),
+							icon: Network
+						},
 						...(options.hasBinds
 							? [
 									{
 										to: '/traffic/listeners',
-										label: 'Listeners',
+										label: t('nav.listeners'),
 										icon: Network
 									}
 								]
 							: []),
-						{ to: '/traffic/routes', label: 'Routes', icon: Route }
+						{ to: '/traffic/routes', label: t('nav.routes'), icon: Route }
 					]
 				: [
 						{
 							to: '/traffic/get-started',
-							label: 'Get started',
+							label: t('nav.getStarted'),
 							icon: Network,
 							placeholder: true
 						}
 					]
 	});
 	groups.push({
-		title: 'Tools',
+		title: t('nav.tools'),
 		items: options.dumpMode
-			? [{ to: '/cel', label: 'CEL Playground', icon: Braces }]
+			? [{ to: '/cel', label: t('nav.celPlayground'), icon: Braces }]
 			: [
-					{ to: '/cel', label: 'CEL Playground', icon: Braces },
+					{ to: '/cel', label: t('nav.celPlayground'), icon: Braces },
 					{
 						to: '/raw-config',
-						label: 'Raw Configuration',
+						label: t('nav.rawConfiguration'),
 						icon: FileCode2,
 						exact: true
 					},
 					{
 						to: '/settings',
-						label: 'Settings',
+						label: t('nav.settings'),
 						icon: SlidersHorizontal
 					}
 				]

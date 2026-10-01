@@ -25,6 +25,7 @@ import {
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import { tr } from '@/i18n';
 import { ProviderConfigEditor } from '@/pages/models/ProviderConfigEditor';
 import { cleanEmpty } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
@@ -108,38 +109,40 @@ export function ProvidersPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="LLM Providers"
-				description="Define reusable provider credentials and connection settings for models."
+				title={tr('copy.llmProviders')}
+				description={tr('copy.defineReusableProviderCredentialsAndConnectionSettingsForModels')}
 				actions={
 					<button className="button primary" type="button" onClick={openNewProvider}>
 						<Plus size={16} />
-						Add provider
+						{tr('copy.addProvider')}
 					</button>
 				}
 			/>
 
 			{saveError ? (
-				<StatusBanner state="bad" title="Save failed">
+				<StatusBanner state="bad" title={tr('copy.saveFailed')}>
 					{saveError}
 				</StatusBanner>
 			) : null}
-			{saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+			{saved ? <StatusBanner state="ok" title={tr('copy.configurationSaved')} /> : null}
 
 			<Panel>
 				{isLoading ? (
-					<StatusBanner state="loading" title="Loading providers" />
+					<StatusBanner state="loading" title={tr('copy.loadingProviders')} />
 				) : error ? (
-					<StatusBanner state="bad" title="Configuration API unavailable">
+					<StatusBanner state="bad" title={tr('copy.configurationApiUnavailable')}>
 						{error.message}
 					</StatusBanner>
 				) : providers.length === 0 ? (
 					<EmptyState
-						title="No shared providers configured"
-						description="Add a provider when multiple models should share the same credentials or upstream connection settings."
+						title={tr('copy.noSharedProvidersConfigured')}
+						description={tr(
+							'copy.addAProviderWhenMultipleModelsShouldShareTheSameCredentialsOrUpstreamConnectionSettings'
+						)}
 						action={
 							<button className="button primary" type="button" onClick={openNewProvider}>
 								<Plus size={16} />
-								Add provider
+								{tr('copy.addProvider')}
 							</button>
 						}
 					/>
@@ -148,11 +151,11 @@ export function ProvidersPage() {
 						<table>
 							<thead>
 								<tr>
-									<th>Name</th>
-									{hybrid ? <th>Source</th> : null}
-									<th>Provider</th>
-									<th>Upstream model</th>
-									<th>Used by</th>
+									<th>{tr('copy.name')}</th>
+									{hybrid ? <th>{tr('copy.source')}</th> : null}
+									<th>{tr('copy.provider')}</th>
+									<th>{tr('copy.upstreamModel')}</th>
+									<th>{tr('copy.usedBy')}</th>
 									<th />
 								</tr>
 							</thead>
@@ -169,7 +172,9 @@ export function ProvidersPage() {
 											<td className="strong">{provider.name}</td>
 											{hybrid ? (
 												<td>
-													<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
+													<span className="badge">
+														{databaseBacked ? tr('copy.database') : tr('copy.file')}
+													</span>
 												</td>
 											) : null}
 											<td>
@@ -177,31 +182,31 @@ export function ProvidersPage() {
 													provider={providerLabel(provider.provider) as ProviderName}
 												/>
 											</td>
-											<td>{provider.params?.model || 'Incoming model'}</td>
+											<td>{provider.params?.model || tr('copy.incomingModel')}</td>
 											<td>
 												{usage.length ? (
 													<span className="badge ok">
-														{usage.length} {usage.length === 1 ? 'model' : 'models'}
+														{tr('copy.valueModels', { count: usage.length })}
 													</span>
 												) : (
-													<span className="badge">unused</span>
+													<span className="badge">{tr('copy.unused')}</span>
 												)}
 											</td>
 											<td className="row-actions">
-												<Tooltip content="Add model using this provider">
+												<Tooltip content={tr('copy.addModelUsingProvider')}>
 													<Link
 														className="icon-button"
-														aria-label="Add model using provider"
+														aria-label={tr('copy.addModelUsingProvider')}
 														to="/llm/models"
 														search={{ provider: provider.name }}
 													>
 														<Bot size={16} />
 													</Link>
 												</Tooltip>
-												<Tooltip content="Edit provider">
+												<Tooltip content={tr('copy.editProvider')}>
 													<button
 														className="icon-button"
-														aria-label="Edit provider"
+														aria-label={tr('copy.editProvider')}
 														type="button"
 														onClick={() => openEditProvider(provider)}
 													>
@@ -219,7 +224,7 @@ export function ProvidersPage() {
 												>
 													<button
 														className="icon-button danger"
-														aria-label="Delete provider"
+														aria-label={tr('copy.deleteProvider')}
 														type="button"
 														disabled={usage.length > 0 || saving || (hybrid && !databaseBacked)}
 														onClick={() => setDeletingProvider(provider.name)}
@@ -252,16 +257,14 @@ export function ProvidersPage() {
 			) : null}
 			{deletingProvider ? (
 				<ConfirmDialog
-					title="Delete provider?"
+					title={tr('copy.deleteProvider_1j44lo')}
 					destructive
-					confirmLabel="Delete provider"
+					confirmLabel={tr('copy.deleteProvider')}
 					confirmDisabled={saving}
 					onCancel={() => setDeletingProvider(null)}
 					onConfirm={() => deleteProvider(deletingProvider)}
 				>
-					<p>
-						Delete <strong>{deletingProvider}</strong>? This cannot be undone.
-					</p>
+					<p>{tr('copy.deleteNamedResourceQuestion', [deletingProvider])}</p>
 				</ConfirmDialog>
 			) : null}
 		</div>
@@ -329,7 +332,7 @@ function ProviderEditor(props: {
 		>
 			<div className="form-grid">
 				<Field
-					label="Provider name"
+					label={tr('copy.providerName')}
 					tooltip={props.help.field<LlmProvider>(
 						'LocalLLMProvider',
 						'name',
@@ -369,7 +372,7 @@ function ProviderEditor(props: {
 			/>
 
 			<details>
-				<summary>Generated provider config</summary>
+				<summary>{tr('copy.generatedProviderConfig')}</summary>
 				<YamlBlock value={preview ?? {}} />
 			</details>
 		</Drawer>

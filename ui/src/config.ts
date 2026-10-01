@@ -1,5 +1,6 @@
 import type { ConfigResource, ConfigResourceKind } from '@/api/configResourcesApi';
 import { keyValue } from '@/credentialDisplay';
+import { tr } from '@/i18n';
 import type {
 	GatewayConfig,
 	LlmApiKeyPolicy,
@@ -374,24 +375,26 @@ export function setUiLogAttributeExpressions(
 
 export function modelWarnings(model: LlmModel): string[] {
 	const warnings: string[] = [];
-	if (!model.provider) warnings.push('Provider is required.');
+	if (!model.provider) warnings.push(tr('copy.providerIsRequired'));
 	const provider = providerLabel(model.provider);
 	if (provider === 'reference') {
-		if (!providerReferenceName(model.provider)) warnings.push('Provider reference is required.');
+		if (!providerReferenceName(model.provider))
+			warnings.push(tr('copy.providerReferenceIsRequired'));
 		const extraParams = Object.keys(model.params ?? {}).filter(key => key !== 'model');
-		if (extraParams.length > 0) warnings.push('Referenced models can only set the upstream model.');
-		if (!model.name.trim()) warnings.push('Model name is required.');
+		if (extraParams.length > 0)
+			warnings.push(tr('copy.referencedModelsCanOnlySetTheUpstreamModel'));
+		if (!model.name.trim()) warnings.push(tr('copy.modelNameIsRequired'));
 		return warnings;
 	}
-	if (!model.name.trim()) warnings.push('Model name is required.');
+	if (!model.name.trim()) warnings.push(tr('copy.modelNameIsRequired'));
 	if (provider === 'vertex' && !model.params?.vertexProject) {
-		warnings.push('Vertex models should set a project.');
+		warnings.push(tr('copy.vertexModelsShouldSetAProject'));
 	}
 	if (provider === 'bedrock' && !model.params?.awsRegion) {
-		warnings.push('Bedrock models should set an AWS region.');
+		warnings.push(tr('copy.bedrockModelsShouldSetAnAwsRegion'));
 	}
 	if (provider === 'azure' && !model.params?.azureResourceName) {
-		warnings.push('Azure models should set a resource name.');
+		warnings.push(tr('copy.azureModelsShouldSetAResourceName'));
 	}
 	return warnings;
 }
@@ -432,7 +435,7 @@ export function configWarnings(
 	}
 	for (const model of models) {
 		for (const warning of modelWarnings(model)) {
-			warnings.push(`${model.name || 'Unnamed model'}: ${warning}`);
+			warnings.push(tr('copy.modelWarning', [model.name || tr('copy.unnamedModel'), warning]));
 		}
 	}
 	const duplicateMcpTargets = mcpTargets

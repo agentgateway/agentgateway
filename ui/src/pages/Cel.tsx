@@ -1,3 +1,4 @@
+import { tr } from '@/i18n';
 import '@/monacoWorkers';
 import Editor from '@monaco-editor/react';
 import { dump, load } from 'js-yaml';
@@ -179,8 +180,8 @@ export function CelPage() {
 	return (
 		<div className="page-stack">
 			<PageHeader
-				title="CEL Playground"
-				description="Evaluate policy expressions against a sample or custom request."
+				title={tr('copy.celPlayground')}
+				description={tr('copy.celPlaygroundDescription')}
 				actions={
 					<>
 						<a
@@ -189,23 +190,24 @@ export function CelPage() {
 							rel="noreferrer"
 							target="_blank"
 						>
-							<ExternalLink size={16} /> CEL reference
+							<ExternalLink size={16} />
+							{tr('copy.celReference')}
 						</a>
 						<button className="button primary" type="button" disabled={loading} onClick={run}>
 							<Play size={16} />
-							Evaluate
+							{tr('copy.evaluate')}
 						</button>
 					</>
 				}
 			/>
 			{error ? (
-				<StatusBanner state="bad" title="CEL error">
+				<StatusBanner state="bad" title={tr('copy.celError')}>
 					{error}
 				</StatusBanner>
 			) : null}
 			<section className="two-column wide-left">
 				<Panel>
-					<FieldGroup label="Expression">
+					<FieldGroup label={tr('copy.expression')}>
 						<div className="editor-wrap short">
 							<Editor
 								beforeMount={configureCelMonaco}
@@ -221,7 +223,7 @@ export function CelPage() {
 							/>
 						</div>
 					</FieldGroup>
-					<FieldGroup label="Request context YAML">
+					<FieldGroup label={tr('copy.requestContextYaml')}>
 						<div className="editor-wrap">
 							<Editor
 								beforeMount={configureConfigYamlMonaco}
@@ -244,8 +246,8 @@ export function CelPage() {
 				</Panel>
 				<Panel>
 					<div className="section-heading">
-						<h3>Result</h3>
-						<p>YAML value returned by CEL evaluation.</p>
+						<h3>{tr('copy.result')}</h3>
+						<p>{tr('copy.yamlValueReturnedByCelEvaluation')}</p>
 					</div>
 					{hasResult ? <YamlBlock value={result ?? null} /> : null}
 				</Panel>

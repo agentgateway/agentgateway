@@ -1,5 +1,6 @@
 import { ChevronDown, Funnel, Layers3 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useDismissiblePopover } from '@/components/Primitives';
 
@@ -12,10 +13,11 @@ export function MultiCheckboxDropdown(props: {
 	allLabel?: string;
 	onChange: (values: string[]) => void;
 }) {
+	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const ref = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
 	const selected = props.options.filter(option => props.values.includes(option.value));
-	const summary = selected.length ? selected[0].label : (props.placeholder ?? 'Select');
+	const summary = selected.length ? selected[0].label : (props.placeholder ?? t('common.select'));
 	const hasExplicitSelection = selected.length > 0 && summary !== props.placeholder;
 	const extraCount = selected.length > 1 ? selected.length - 1 : 0;
 	const Icon = props.kind === 'group' ? Layers3 : Funnel;
@@ -72,7 +74,7 @@ export function MultiCheckboxDropdown(props: {
 							</label>
 						))
 					) : (
-						<p className="muted-copy">No values found.</p>
+						<p className="muted-copy">{t('common.noValuesFound')}</p>
 					)}
 				</div>
 			) : null}
