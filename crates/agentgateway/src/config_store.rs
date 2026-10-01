@@ -1554,6 +1554,10 @@ async fn list_postgres(
 	kind: Option<ConfigResourceKind>,
 ) -> anyhow::Result<Snapshot> {
 	let mut tx = pool.begin().await?;
+	// READ COMMITTED takes a new snapshot per statement; both reads must see the same commit.
+	sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+		.execute(&mut *tx)
+		.await?;
 	let generation: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
 		.fetch_one(&mut *tx)
 		.await?;
