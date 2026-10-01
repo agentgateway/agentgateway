@@ -4098,6 +4098,7 @@ fn signed_response_text_is_scanned_but_never_masked(#[case] fmt: ChatFmt, #[case
 	];
 	let (_, original) =
 		run_apply_regex_response(fmt, Action::Audit, vec![], scope.clone(), input.clone());
+	let pattern = regex::Regex::new("^signed ").unwrap();
 	for (action, expected) in [
 		(Action::Mask, GuardrailAction::Reject),
 		(Action::Reject, GuardrailAction::Reject),
@@ -4107,7 +4108,7 @@ fn signed_response_text_is_scanned_but_never_masked(#[case] fmt: ChatFmt, #[case
 			fmt,
 			action,
 			vec![RegexRule::Regex {
-				pattern: regex::Regex::new("^signed ").unwrap(),
+				pattern: pattern.clone(),
 			}],
 			scope.clone(),
 			input.clone(),
