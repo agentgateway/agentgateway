@@ -2,10 +2,10 @@ name: Controller build cache
 description: Set up Go and optional Rust toolchains and restore source-aware controller build caches
 
 inputs:
-  rust-version:
-    description: Rust toolchain version
+  rust:
+    description: Set up Rust and its build cache
     required: false
-    default: ""
+    default: "false"
   go-version:
     description: Go toolchain version
     required: true
@@ -22,7 +22,7 @@ runs:
   using: composite
   steps:
   - name: Check runner info
-    if: ${{ inputs.rust-version != '' }}
+    if: ${{ inputs.rust == 'true' }}
     shell: bash
     run: |
       cat /sys/fs/cgroup/cpu.stat || true
@@ -35,10 +35,9 @@ runs:
     run: echo "$GITHUB_WORKSPACE/tools" >> "$GITHUB_PATH"
 
   - name: Set up Rust build cache
-    if: ${{ inputs.rust-version != '' }}
+    if: ${{ inputs.rust == 'true' }}
     uses: ./.github/actions/rust-build-cache
     with:
-      rust-version: ${{ inputs.rust-version }}
       cache-key: controller-e2e
       save: ${{ inputs.save }}
 

@@ -33,7 +33,7 @@ info:
   "parsed": {
     "input_tokens": 7,
     "output_tokens": 0,
-    "total_tokens": 7,
+    "total_tokens": 8,
     "provider_model": "gemini-2.5-flash"
   }
 }

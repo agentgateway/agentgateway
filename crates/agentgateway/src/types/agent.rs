@@ -1244,11 +1244,46 @@ pub enum PathMatch {
 	Exact(Strng),
 	PathPrefix(Strng),
 	Regex(
-		#[serde(with = "serde_regex")]
+		#[serde(with = "serde_path_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		regex::Regex,
 	),
 	Invalid,
+}
+
+const PATH_REGEX_PREFIX: &str = "^(?:";
+const PATH_REGEX_SUFFIX: &str = ")$";
+
+impl PathMatch {
+	/// Compiles a path regex that must match the entire path.
+	pub fn regex(pattern: &str) -> Result<regex::Regex, regex::Error> {
+		// Validate the pattern on its own so it cannot escape the anchoring group.
+		regex::Regex::new(pattern)?;
+		regex::Regex::new(&format!("{PATH_REGEX_PREFIX}{pattern}{PATH_REGEX_SUFFIX}"))
+	}
+
+	/// Returns the user provided pattern of a regex built with [`PathMatch::regex`].
+	pub fn regex_pattern(r: &regex::Regex) -> &str {
+		r.as_str()
+			.strip_prefix(PATH_REGEX_PREFIX)
+			.and_then(|p| p.strip_suffix(PATH_REGEX_SUFFIX))
+			.unwrap_or(r.as_str())
+	}
+}
+
+mod serde_path_regex {
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	use super::PathMatch;
+
+	pub fn serialize<S: Serializer>(r: &regex::Regex, s: S) -> Result<S::Ok, S::Error> {
+		s.serialize_str(PathMatch::regex_pattern(r))
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<regex::Regex, D::Error> {
+		let pattern = String::deserialize(d)?;
+		PathMatch::regex(&pattern).map_err(serde::de::Error::custom)
+	}
 }
 
 #[apply(schema!)]
@@ -2463,7 +2498,7 @@ fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(s) => s.len(),
 		PathMatch::PathPrefix(s) => s.len(),
-		PathMatch::Regex(r) => r.as_str().len(),
+		PathMatch::Regex(r) => PathMatch::regex_pattern(r).len(),
 		PathMatch::Invalid => 0,
 	}
 }

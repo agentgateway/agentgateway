@@ -49,6 +49,9 @@ impl TryInto<typed::Request> for &Request {
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Embeddings
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}

@@ -169,7 +169,8 @@ pub mod from_messages {
 		req: &types::messages::Request,
 	) -> Result<types::responses::Request, AIError> {
 		validate_raw_request(req)?;
-		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json_util::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let messages::Request {
 			messages,
 			system,
@@ -730,8 +731,16 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.input_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	fn translate_response_internal(

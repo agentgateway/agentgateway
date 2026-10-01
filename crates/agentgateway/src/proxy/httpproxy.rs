@@ -970,7 +970,7 @@ impl HTTPProxy {
 					strng::format!("{}/*", p)
 				}
 			},
-			PathMatch::Regex(r) => r.as_str().into(),
+			PathMatch::Regex(r) => PathMatch::regex_pattern(r).into(),
 			PathMatch::Invalid => strng::literal!("<invalid>"),
 		});
 		cel::ProxyContext::mutate(&mut req, |ctx| {

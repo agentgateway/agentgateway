@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::llm::{Provider as _, vertex};
+
 // Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
 // loaded leniently. `validate` rejects them for catalogs written for this version.
 pub type Unknown = BTreeMap<String, serde_json::Value>;
@@ -103,7 +105,13 @@ impl Catalog {
 	}
 
 	pub fn resolve(&self, provider: &str, model: &str) -> Option<&Model> {
-		self.providers.get(provider)?.models.get(model)
+		let models = &self.providers.get(provider)?.models;
+		models.get(model).or_else(|| {
+			if provider != vertex::Provider::NAME.as_str() {
+				return None;
+			}
+			models.get(vertex::Provider::canonical_model(model).as_str())
+		})
 	}
 }
 
@@ -492,6 +500,34 @@ mod tests {
 			"another provider's model does not leak"
 		);
 		assert!(catalog.resolve("openai", "no-such-model").is_none());
+	}
+
+	#[test]
+	fn resolve_vertex_aliases() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{
+					"gemini-x":{"rates":{"input":"1"}},
+					"claude-x@20250929":{"rates":{"input":"2"}},
+					"google/pinned":{"rates":{"input":"3"}},
+					"pinned":{"rates":{"input":"4"}}
+				}},
+				"openai":{"models":{"gemini-x":{"rates":{"input":"1"}}}}
+			}}"#,
+		)
+		.unwrap();
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("gcp.vertex_ai", "google/gemini-x"), Some(m("1")));
+		assert_eq!(
+			input("gcp.vertex_ai", "publishers/google/models/gemini-x"),
+			Some(m("1"))
+		);
+		assert_eq!(
+			input("gcp.vertex_ai", "anthropic/claude-x-20250929"),
+			Some(m("2"))
+		);
+		assert_eq!(input("gcp.vertex_ai", "google/pinned"), Some(m("3")));
+		assert_eq!(input("openai", "google/gemini-x"), None);
 	}
 
 	#[test]

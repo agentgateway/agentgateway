@@ -141,23 +141,8 @@ export function cloneConfig(config: GatewayConfig): GatewayConfig {
 }
 
 export function ensureLlm(config: GatewayConfig): LlmConfig {
-	if (!config.llm) {
-		config.llm = { models: [] };
-		ensureLlmFrontendDefaults(config);
-	}
+	config.llm ??= { models: [] };
 	return config.llm;
-}
-
-export function ensureLlmFrontendDefaults(config: GatewayConfig) {
-	config.frontendPolicies ??= {};
-	if (!config.frontendPolicies.http) {
-		config.frontendPolicies.http = {
-			// Raise the global body-buffer cap above the 2Mi default so the LLM filter
-			// can read ~800k-1M-token request bodies (about 3-4 MB JSON) without rejecting
-			// them as AIError::RequestTooLarge.
-			maxBufferSize: 33554432
-		};
-	}
 }
 
 export function ensureMcp(config: GatewayConfig): McpConfig {

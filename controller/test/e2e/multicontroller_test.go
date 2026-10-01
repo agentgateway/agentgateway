@@ -31,6 +31,7 @@ const (
 
 func TestMultipleControllers(tt *testing.T) {
 	t := New(tt)
+	t.Parallel() // Uses resources not shared with the other parallel tests.
 
 	assertGatewayClassController(t, base.AgentgatewayClassName, base.AgentgatewayControllerName)
 

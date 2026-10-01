@@ -476,6 +476,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Responses
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}

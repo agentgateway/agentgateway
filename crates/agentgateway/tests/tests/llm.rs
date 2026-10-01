@@ -1216,7 +1216,7 @@ async fn llm_custom_provider_uses_upstream_route_fallback() {
 	let response_body: Value =
 		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
 	assert_eq!(response_body["object"], "chat.completion");
-	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["prompt_tokens"], 40);
 	assert_eq!(response_body["usage"]["completion_tokens"], 21);
 
 	let request = single_upstream_request(&mock).await;

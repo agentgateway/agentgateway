@@ -56,6 +56,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Detect
+	}
 	fn supports_model(&self) -> bool {
 		false
 	}

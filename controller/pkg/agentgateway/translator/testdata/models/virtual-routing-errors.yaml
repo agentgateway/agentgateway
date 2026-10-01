@@ -176,6 +176,7 @@ output:
       concreteModel:
         backend:
           backend: default/wildcard-model/backend.llm
+        discoveryProvider: openai
         modelVisibility: INTERNAL
       key: default/wildcard-model.llm
       listenerKey: default/virtual-model-errors.llm

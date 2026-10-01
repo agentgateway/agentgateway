@@ -23,9 +23,9 @@ info:
     "model": "claude-haiku-4-5-20251001",
     "service_tier": "standard",
     "usage": {
-      "prompt_tokens": 15,
+      "prompt_tokens": 40,
       "completion_tokens": 21,
-      "total_tokens": 36,
+      "total_tokens": 61,
       "prompt_tokens_details": {
         "cached_tokens": 12,
         "cache_write_tokens": 13

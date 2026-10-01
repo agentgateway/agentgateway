@@ -55,10 +55,11 @@ listener_routes:
               redirectUri: "http://localhost:3000/oauth/callback"
               session:
                 cookieName: agw_oidc_s_37ad2d531026450e
+                refreshCookieName: agw_oidc_r_37ad2d531026450e
                 transactionCookiePrefix: agw_oidc_t_37ad2d531026450e
                 sameSite: lax
                 secure: auto
-                ttl: 1h0m0s
+                ttl: 168h0m0s
                 transactionTtl: 5m0s
                 encoder: aes
               scopes:

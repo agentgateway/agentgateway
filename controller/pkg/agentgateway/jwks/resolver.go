@@ -88,7 +88,7 @@ func (r *defaultResolver) checkBackendRefGrant(krtctx krt.HandlerContext, owner 
 	}
 
 	ref := owner.Remote.BackendRef
-	if ref.Namespace == nil || string(*ref.Namespace) == owner.DefaultNamespace {
+	if ref == nil || ref.Namespace == nil || string(*ref.Namespace) == owner.DefaultNamespace {
 		return nil
 	}
 

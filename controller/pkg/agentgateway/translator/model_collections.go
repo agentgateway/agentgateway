@@ -461,6 +461,22 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 				Backend:         backendRef(backend.Key),
 			},
 		}
+		if strings.Contains(effectiveModelName(model), "*") {
+			provider := strings.ToLower(string(*model.Spec.Provider))
+			switch *model.Spec.Provider {
+			case agentgateway.ModelProviderGemini:
+				provider = "gcp.gemini"
+			case agentgateway.ModelProviderVertexAI:
+				provider = "gcp.vertex_ai"
+			case agentgateway.ModelProviderBedrock:
+				provider = "aws.bedrock"
+			case agentgateway.ModelProviderCustom:
+				if model.Spec.Custom.ProviderOverride != nil {
+					provider = *model.Spec.Custom.ProviderOverride
+				}
+			}
+			route.GetConcreteModel().DiscoveryProvider = &provider
+		}
 		resources = append(resources, backendResource(backend))
 	} else if model.Spec.VirtualModel != nil {
 		virtual, generated, err := translateVirtualModel(ctx, model, parent)

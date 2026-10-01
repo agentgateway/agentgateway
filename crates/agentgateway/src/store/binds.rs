@@ -2958,6 +2958,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: None,
 			authorization: None,
@@ -3065,6 +3066,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: None,
 			authorization: None,
@@ -3201,6 +3203,7 @@ mod tests {
 						kind: Some(backend_reference::Kind::Backend(format!("/default/{name}"))),
 					}),
 					backend_policies: vec![],
+					..Default::default()
 				})),
 				ai_policy: None,
 				authorization: None,

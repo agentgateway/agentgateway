@@ -17777,8 +17777,10 @@ type ModelRoute_ConcreteModel struct {
 	ModelVisibility ModelRoute_ConcreteModel_ModelVisibility `protobuf:"varint,1,opt,name=model_visibility,json=modelVisibility,proto3,enum=agentgateway.dev.resource.ModelRoute_ConcreteModel_ModelVisibility" json:"model_visibility,omitempty"`
 	Backend         *BackendReference                        `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
 	BackendPolicies []*BackendPolicySpec                     `protobuf:"bytes,3,rep,name=backend_policies,json=backendPolicies,proto3" json:"backend_policies,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Catalog provider identity for wildcard discovery.
+	DiscoveryProvider *string `protobuf:"bytes,4,opt,name=discovery_provider,json=discoveryProvider,proto3,oneof" json:"discovery_provider,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ModelRoute_ConcreteModel) Reset() {
@@ -17830,6 +17832,13 @@ func (x *ModelRoute_ConcreteModel) GetBackendPolicies() []*BackendPolicySpec {
 		return x.BackendPolicies
 	}
 	return nil
+}
+
+func (x *ModelRoute_ConcreteModel) GetDiscoveryProvider() string {
+	if x != nil && x.DiscoveryProvider != nil {
+		return *x.DiscoveryProvider
+	}
+	return ""
 }
 
 type ModelRoute_VirtualModel_Weighted struct {
@@ -19601,7 +19610,7 @@ const file_resource_proto_rawDesc = "" +
 	"\fSubjectToken\x12H\n" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
-	"token_type\x18\x02 \x01(\tR\ttokenType\"\xa6\r\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\"\xf1\r\n" +
 	"\n" +
 	"ModelRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
@@ -19635,15 +19644,17 @@ const file_resource_proto_rawDesc = "" +
 	"\x05_when\x1aQ\n" +
 	"\bFailover\x12E\n" +
 	"\abackend\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackendB\t\n" +
-	"\arouting\x1a\xcc\x02\n" +
+	"\arouting\x1a\x97\x03\n" +
 	"\rConcreteModel\x12n\n" +
 	"\x10model_visibility\x18\x01 \x01(\x0e2C.agentgateway.dev.resource.ModelRoute.ConcreteModel.ModelVisibilityR\x0fmodelVisibility\x12E\n" +
 	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12W\n" +
-	"\x10backend_policies\x18\x03 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPolicies\"+\n" +
+	"\x10backend_policies\x18\x03 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPolicies\x122\n" +
+	"\x12discovery_provider\x18\x04 \x01(\tH\x00R\x11discoveryProvider\x88\x01\x01\"+\n" +
 	"\x0fModelVisibility\x12\n" +
 	"\n" +
 	"\x06PUBLIC\x10\x00\x12\f\n" +
-	"\bINTERNAL\x10\x01B\x06\n" +
+	"\bINTERNAL\x10\x01B\x15\n" +
+	"\x13_discovery_providerB\x06\n" +
 	"\x04kind*I\n" +
 	"\bProtocol\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\b\n" +
@@ -20648,6 +20659,7 @@ func file_resource_proto_init() {
 		(*ModelRoute_VirtualModel_Conditional_)(nil),
 		(*ModelRoute_VirtualModel_Failover_)(nil),
 	}
+	file_resource_proto_msgTypes[209].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[214].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

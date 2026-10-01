@@ -2325,6 +2325,8 @@ message ModelRoute {
     ModelVisibility model_visibility = 1;
     BackendReference backend = 2;
     repeated BackendPolicySpec backend_policies = 3;
+    // Catalog provider identity for wildcard discovery.
+    optional string discovery_provider = 4;
   }
   // Unique resource key for this model route. This is used for xDS resource
   // identity/update/delete, not for virtual model target selection.

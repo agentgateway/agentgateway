@@ -6,6 +6,14 @@ fi
 
 WD=$(cd "$(dirname "$0")"; pwd)
 
-TOOL=$(cd "$WD"; go tool -n "$1")
+if [ -n "${GOCACHEPROG:-}" ]; then
+  # Keep each package's executable, preserving its name for generated-code headers.
+  TOOL="$WD/.bin/$1"
+  mkdir -p "$(dirname "$TOOL")" || exit 1
+  # Let Go validate build inputs and reuse cached compilation/linking results.
+  (cd "$WD" && go build -o "$TOOL" "$1") || exit $?
+else
+  TOOL=$(cd "$WD"; go tool -n "$1") || exit $?
+fi
 shift
 exec "$TOOL" "$@"

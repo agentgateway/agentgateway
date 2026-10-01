@@ -219,17 +219,26 @@ impl SubstrateEgress {
 			return Ok(secret);
 		}
 
-		let channel = provider
-			.target
-			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate));
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+		let channel = provider.target.grpc_channel(policy_client.clone());
+		let mut request = tonic::Request::new(protos::credprovider::FetchSecretRequest {
+			uri: uri.to_owned(),
+			actor_spiffe_id: actor_identity,
+		});
+		let mut span = policy_client.start_grpc_span(
+			&mut request,
+			provider.target.target.as_ref(),
+			"/credprovider.CredentialProvider/FetchSecret",
+		);
 		let mut provider =
 			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
-		let response = provider
-			.fetch_secret(protos::credprovider::FetchSecretRequest {
-				uri: uri.to_owned(),
-				actor_spiffe_id: actor_identity,
-			})
-			.await
+		let response = provider.fetch_secret(request).await;
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&response);
+		}
+		drop(span);
+		let response = response
 			.map_err(|status| credential_provider_error(uri, status))?
 			.into_inner();
 		let secret = credential_secret(response.opaque_bytes)?;
@@ -336,19 +345,30 @@ async fn fetch_policy(
 	client: &PolicyClient,
 	identity: &ActorIdentity,
 ) -> Result<protos::ateapi::EgressPolicy, ProxyError> {
-	let channel = target
-		.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate));
+	let policy_client =
+		client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Substrate);
+	let channel = target.grpc_channel(policy_client.clone());
 	let mut control = protos::ateapi::control_client::ControlClient::new(channel);
+	let mut request = tonic::Request::new(protos::ateapi::GetActorEgressPolicyRequest {
+		actor: Some(protos::ateapi::ObjectRef {
+			atespace: identity.atespace.clone(),
+			name: identity.actor_name.clone(),
+		}),
+	});
+	let mut span = policy_client.start_grpc_span(
+		&mut request,
+		target.target.as_ref(),
+		"/ateapi.Control/GetActorEgressPolicy",
+	);
 	let response = crate::proxy::dtrace::scope_future(
 		Some(TRACE_POLICY_KIND),
-		control.get_actor_egress_policy(protos::ateapi::GetActorEgressPolicyRequest {
-			actor: Some(protos::ateapi::ObjectRef {
-				atespace: identity.atespace.clone(),
-				name: identity.actor_name.clone(),
-			}),
-		}),
+		control.get_actor_egress_policy(request),
 	)
 	.await;
+	if let Some(span) = span.as_deref_mut() {
+		span.record_grpc_result(&response);
+	}
+	drop(span);
 	match response {
 		Ok(response) => Ok(response.into_inner()),
 		Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => Err(

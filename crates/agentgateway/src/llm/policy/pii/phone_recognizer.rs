@@ -43,14 +43,13 @@ impl Recognizer for PhoneRecognizer {
 
 		for caps in CANDIDATE_RE.captures_iter(text) {
 			let m = caps.get(2).unwrap();
+			let candidate = m.as_str().trim_end_matches(|c: char| !c.is_ascii_digit());
 			let mut best: Option<RecognizerResult> = None;
 
 			for &region in &self.regions {
 				let Some(country) = to_country(region) else {
 					continue;
 				};
-				let candidate = m.as_str();
-
 				if let Ok(num) = parse(Some(country), candidate) {
 					if !num.is_valid() {
 						continue;
@@ -64,7 +63,7 @@ impl Recognizer for PhoneRecognizer {
 						entity_type: "PHONE_NUMBER".to_string(),
 						matched: candidate.to_string(),
 						start: m.start(),
-						end: m.end(),
+						end: m.start() + candidate.len(),
 						score,
 					};
 

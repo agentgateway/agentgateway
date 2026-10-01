@@ -2020,7 +2020,7 @@ impl McpBackendHost {
 	pub fn process(&self) -> anyhow::Result<ProcessedMcpBackendHost> {
 		Ok(match self {
 			McpBackendHost::Backend { backend, path } => ProcessedMcpBackendHost::Reference {
-				backend: SimpleBackendReference::Backend(backend.clone()),
+				backend: SimpleBackendReference::Backend(local_backend_reference(backend)),
 				path: path.clone(),
 			},
 			McpBackendHost::Host { host, port, path } => match (host, port, path) {
@@ -5204,7 +5204,7 @@ pub async fn convert_route(
 						name: name.clone(),
 						port: *port,
 					},
-					LocalBackend::Backend(n) => BackendReference::Backend(n.clone()),
+					LocalBackend::Backend(n) => BackendReference::Backend(local_backend_reference(n)),
 					LocalBackend::Invalid => BackendReference::Invalid,
 					_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 				};
@@ -5668,7 +5668,7 @@ async fn convert_tcp_route(
 				name: name.clone(),
 				port: *port,
 			},
-			LocalTCPBackend::Backend(name) => BackendReference::Backend(name.clone()),
+			LocalTCPBackend::Backend(name) => BackendReference::Backend(local_backend_reference(name)),
 			LocalTCPBackend::Invalid => BackendReference::Invalid,
 			_ => BackendReference::Backend(strng::format!("/{}", backend_key)),
 		};
@@ -5811,6 +5811,19 @@ impl LocalTLSServerConfig {
 
 pub fn local_name(name: Strng) -> ResourceName {
 	ResourceName::new(name, "".into())
+}
+
+/// Local config backend references are written as bare names (`backend: my-backend`),
+/// but backend store keys render as `namespace/name` (see `Backend::name`), and
+/// top-level backends are registered with an empty namespace, yielding `/my-backend`.
+/// Normalize a bare reference to that empty-namespace key; references that already
+/// carry a namespace prefix (`namespace/name` or `/name`) pass through unchanged.
+fn local_backend_reference(name: &Strng) -> BackendKey {
+	if name.as_str().contains('/') {
+		name.clone()
+	} else {
+		strng::format!("/{}", name)
+	}
 }
 
 pub fn de_from_local_backend_policy<'de: 'a, 'a, D>(

@@ -233,6 +233,73 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.NotContains(t, out, "curlimages/curl")
 }
 
+func TestStandaloneChartPodDisruptionBudget(t *testing.T) {
+	testCases := []struct {
+		name       string
+		valuesYAML string
+		want       string
+		notWant    string
+	}{
+		{
+			name:    "default minAvailable",
+			want:    "minAvailable: 1",
+			notWant: "maxUnavailable:",
+		},
+		{
+			name:       "custom minAvailable",
+			valuesYAML: "  minAvailable: 2\n",
+			want:       "minAvailable: 2",
+			notWant:    "maxUnavailable:",
+		},
+		{
+			name:       "percentage minAvailable",
+			valuesYAML: "  minAvailable: 50%\n",
+			want:       "minAvailable: 50%",
+			notWant:    "maxUnavailable:",
+		},
+		{
+			name:       "maxUnavailable overrides default minAvailable",
+			valuesYAML: "  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "percentage maxUnavailable",
+			valuesYAML: "  maxUnavailable: 50%\n",
+			want:       "maxUnavailable: 50%",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "maxUnavailable overrides explicit minAvailable",
+			valuesYAML: "  minAvailable: 2\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "empty minAvailable workaround",
+			valuesYAML: "  minAvailable: \"\"\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "null minAvailable workaround",
+			valuesYAML: "  minAvailable: null\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, stderr, err := renderStandaloneChart(t, "replicaCount: 2\npodDisruptionBudget:\n  enabled: true\n"+tc.valuesYAML)
+			require.NoError(t, err, "helm template failed: %s", stderr)
+			require.Contains(t, out, "kind: PodDisruptionBudget")
+			require.Contains(t, out, "\n  "+tc.want+"\n")
+			require.NotContains(t, out, "\n  "+tc.notWant)
+		})
+	}
+}
+
 func TestStandaloneChartOIDCCookieSecret(t *testing.T) {
 	out, stderr, err := renderStandaloneChart(t, `oidc:
   enabled: true

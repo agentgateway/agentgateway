@@ -689,7 +689,7 @@ impl Gateway {
 				} else {
 					raw_stream
 				};
-				let err = Self::terminate_connect_tunnel(inputs, stream, policies, drain).await;
+				let err = Self::terminate_connect_tunnel(bind_name, inputs, stream, policies, drain).await;
 				if let Err(e) = err {
 					warn!(src.addr = %peer_addr, "connect tunnel error: {e}");
 				}
@@ -713,6 +713,7 @@ impl Gateway {
 	}
 
 	async fn terminate_connect_tunnel(
+		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: FrontendPolices,
@@ -722,7 +723,6 @@ impl Gateway {
 		let connection = Arc::new(raw_stream.get_ext());
 		let buffer = policies.http.as_ref().and_then(|h| h.max_buffer_size);
 		let server = auto_server(policies.http.as_ref());
-		let substrate_egress_actor_resolution = policies.substrate_egress_actor_resolution.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
@@ -730,7 +730,8 @@ impl Gateway {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
-				let substrate_egress_actor_resolution = substrate_egress_actor_resolution.clone();
+				let substrate_egress_actor_resolution =
+					Self::frontend_policies_for_bind(&bind_name, &inputs).substrate_egress_actor_resolution;
 				async move {
 					let mut req = req.map(crate::http::Body::new);
 					if let Some(buffer) = buffer {
@@ -956,7 +957,8 @@ impl Gateway {
 		let max_connection_duration = policies
 			.http
 			.as_ref()
-			.and_then(|h| h.max_connection_duration);
+			.and_then(|h| h.max_connection_duration)
+			.map(crate::client::jittered);
 		let max_requests = policies
 			.http
 			.as_ref()

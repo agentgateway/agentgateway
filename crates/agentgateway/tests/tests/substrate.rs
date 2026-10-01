@@ -1,4 +1,4 @@
-use agentgateway::test_helpers::{ateapimock, credprovidermock};
+use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
@@ -1372,6 +1372,126 @@ async fn substrate_egress_connect_status(
 	}
 }
 
+#[tokio::test]
+async fn substrate_egress_actor_resolution_refreshes_on_long_lived_tunnel() {
+	#[derive(Clone)]
+	struct CountingHandler {
+		calls: Arc<AtomicUsize>,
+	}
+
+	#[async_trait::async_trait]
+	impl ateapimock::Handler for CountingHandler {
+		async fn get_actor(
+			&mut self,
+			_request: &protos::ateapi::GetActorRequest,
+		) -> Result<Actor, tonic::Status> {
+			self.calls.fetch_add(1, Ordering::Relaxed);
+			Ok(Actor {
+				metadata: Some(ResourceMetadata {
+					uid: "uid-1".to_owned(),
+					..Default::default()
+				}),
+				status: Some(ActorStatus {
+					state: ActorState::Running as i32,
+					worker_assignment: None,
+				}),
+			})
+		}
+	}
+
+	let first_calls = Arc::new(AtomicUsize::new(0));
+	let first_api = ateapimock::AteApiMock::new({
+		let calls = first_calls.clone();
+		move || CountingHandler {
+			calls: calls.clone(),
+		}
+	})
+	.spawn()
+	.await;
+	let second_calls = Arc::new(AtomicUsize::new(0));
+	let second_api = ateapimock::AteApiMock::new({
+		let calls = second_calls.clone();
+		move || CountingHandler {
+			calls: calls.clone(),
+		}
+	})
+	.spawn()
+	.await;
+
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15012".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = "0.0.0.0:18080".parse().unwrap();
+	inner.mode = BindMode::Internal;
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15012);
+	gateway
+		.attach_frontend_policy(json!({
+			"substrateEgressActorResolution": {
+				"host": first_api.address.to_string(),
+			}
+		}))
+		.await;
+
+	let io = gateway.serve_tunnel_with_tls_info(
+		strng::literal!("outer"),
+		Some(TLSConnectionInfo {
+			src_identity: Some(TlsInfo {
+				certificate: Some(
+					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+				),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+	);
+	let (mut sender, connection) =
+		hyper::client::conn::http2::Builder::new(hyper_util::rt::TokioExecutor::new())
+			.handshake(hyper_util::rt::TokioIo::new(io))
+			.await
+			.unwrap();
+	let connection = tokio::spawn(connection);
+
+	let connect = || {
+		::http::Request::builder()
+			.method(Method::CONNECT)
+			.uri("allowed.example:18080")
+			.body(Body::empty())
+			.unwrap()
+	};
+	assert_eq!(
+		sender.send_request(connect()).await.unwrap().status(),
+		StatusCode::OK
+	);
+	assert_eq!(first_calls.load(Ordering::Relaxed), 1);
+
+	gateway
+		.pi
+		.stores
+		.binds
+		.write()
+		.remove_policy(strng::literal!("pol/1"));
+	gateway
+		.attach_frontend_policy(json!({
+			"substrateEgressActorResolution": {
+				"host": second_api.address.to_string(),
+			}
+		}))
+		.await;
+
+	assert_eq!(
+		sender.send_request(connect()).await.unwrap().status(),
+		StatusCode::OK
+	);
+	assert_eq!(first_calls.load(Ordering::Relaxed), 1);
+	assert_eq!(second_calls.load(Ordering::Relaxed), 1);
+	connection.abort();
+}
+
 async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::DuplexStream {
 	let mut io = gateway.serve_tunnel_with_tls_info(
 		strng::literal!("outer"),
@@ -2223,6 +2343,288 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 			.is_err(),
 		"denied traffic dialed the raw TCP backend"
 	);
+}
+
+/// Records the `traceparent` each Substrate gRPC call receives, tagged by method.
+#[derive(Clone)]
+struct Traceparents<H> {
+	inner: H,
+	pending: Option<String>,
+	seen: Arc<StdMutex<Vec<(&'static str, String)>>>,
+}
+
+impl<H> Traceparents<H> {
+	fn new(inner: H, seen: Arc<StdMutex<Vec<(&'static str, String)>>>) -> Self {
+		Self {
+			inner,
+			pending: None,
+			seen,
+		}
+	}
+
+	fn stash(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		self.pending = metadata
+			.get("traceparent")
+			.and_then(|v| v.to_str().ok())
+			.map(str::to_owned);
+	}
+
+	fn record(&mut self, method: &'static str) {
+		if let Some(tp) = self.pending.take() {
+			self.seen.lock().unwrap().push((method, tp));
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for Traceparents<CredentialEgressHandler> {
+	fn metadata(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		self.stash(metadata);
+	}
+
+	async fn get_actor(
+		&mut self,
+		request: &protos::ateapi::GetActorRequest,
+	) -> Result<Actor, tonic::Status> {
+		self.record("GetActor");
+		self.inner.get_actor(request).await
+	}
+
+	async fn get_actor_egress_policy(
+		&mut self,
+		request: &protos::ateapi::GetActorEgressPolicyRequest,
+	) -> Result<EgressPolicy, tonic::Status> {
+		self.record("GetActorEgressPolicy");
+		self.inner.get_actor_egress_policy(request).await
+	}
+}
+
+#[async_trait::async_trait]
+impl credprovidermock::Handler for Traceparents<CredentialHandler> {
+	fn metadata(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		self.stash(metadata);
+	}
+
+	async fn fetch_secret(
+		&mut self,
+		request: &protos::credprovider::FetchSecretRequest,
+	) -> Result<protos::credprovider::FetchSecretResponse, tonic::Status> {
+		self.record("FetchSecret");
+		self.inner.fetch_secret(request).await
+	}
+}
+
+struct CollectTraces(Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>);
+
+#[async_trait::async_trait]
+impl oteltracemock::Handler for CollectTraces {
+	async fn export(
+		&mut self,
+		request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+	) -> Result<
+		opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+		tonic::Status,
+	> {
+		self.0.lock().unwrap().extend(
+			request
+				.resource_spans
+				.iter()
+				.flat_map(|resource| &resource.scope_spans)
+				.flat_map(|scope| &scope.spans)
+				.cloned(),
+		);
+		oteltracemock::ok_response()
+	}
+}
+
+fn hex_id(id: &[u8]) -> String {
+	id.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[tokio::test]
+async fn substrate_egress_propagates_trace_context_to_policy_and_credential_calls() {
+	unsafe {
+		// Drop export time to make tests fast
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = spans.clone();
+		move || CollectTraces(spans.clone())
+	})
+	.spawn()
+	.await;
+	let upstream = simple_mock().await;
+	let port = upstream.address().port();
+	let policy = EgressPolicy {
+		rules: vec![protos::ateapi::EgressRule {
+			http: Some(protos::ateapi::HttpRule {
+				hostnames: vec!["localhost".to_owned()],
+				ports: Some(protos::ateapi::Ports {
+					numbers: vec![i32::from(port)],
+					..Default::default()
+				}),
+				effects: Some(protos::ateapi::HttpRuleEffects {
+					replace_headers: vec![protos::ateapi::CredentialHeader {
+						header: "authorization".to_owned(),
+						prefix: "Bearer ".to_owned(),
+						credential_uri: "ate-secret://kubernetes.io/default/upstream-token".to_owned(),
+					}],
+				}),
+			}),
+			..Default::default()
+		}],
+		..Default::default()
+	};
+	let seen = Arc::new(StdMutex::new(Vec::new()));
+	let api = ateapimock::AteApiMock::new({
+		let seen = seen.clone();
+		move || {
+			Traceparents::new(
+				CredentialEgressHandler {
+					policy: Ok(policy.clone()),
+				},
+				seen.clone(),
+			)
+		}
+	})
+	.spawn()
+	.await;
+	let credential_provider = credprovidermock::CredentialProviderMock::new({
+		let seen = seen.clone();
+		move || {
+			Traceparents::new(
+				CredentialHandler {
+					calls: Default::default(),
+				},
+				seen.clone(),
+			)
+		}
+	})
+	.spawn()
+	.await;
+
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15014".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+	inner.mode = BindMode::Internal;
+	let mut gateway = crate::tests::dfp::setup_dfp_bind()
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15014);
+	gateway
+		.attach_frontend_policy(json!({
+			"tracing": { "host": otel.address.to_string() },
+			"substrateEgressActorResolution": {
+				"host": api.address.to_string(),
+			}
+		}))
+		.await;
+	gateway
+		.attach_route_policy(json!({
+			"substrateEgress": {
+				"host": api.address.to_string(),
+				"credentialProviders": [{
+					"uriAuthority": "kubernetes.io",
+					"target": { "host": credential_provider.address.to_string() }
+				}]
+			}
+		}))
+		.await;
+
+	let mut io = gateway.serve_tunnel_with_tls_info(
+		strng::literal!("outer"),
+		Some(TLSConnectionInfo {
+			src_identity: Some(TlsInfo {
+				certificate: Some(
+					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+				),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+	);
+	io.write_all(
+		format!("CONNECT 127.0.0.2:{port} HTTP/1.1\r\nHost: 127.0.0.2:{port}\r\n\r\n").as_bytes(),
+	)
+	.await
+	.unwrap();
+	let mut connect_response = [0; 128];
+	let response_len = io.read(&mut connect_response).await.unwrap();
+	assert!(
+		String::from_utf8_lossy(&connect_response[..response_len]).starts_with("HTTP/1.1 200 OK\r\n")
+	);
+
+	let client_tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+	io.write_all(
+		format!(
+			"GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer actor-supplied\r\ntraceparent: {client_tp}\r\nConnection: close\r\n\r\n"
+		)
+		.as_bytes(),
+	)
+	.await
+	.unwrap();
+	let mut response = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut response))
+		.await
+		.expect("timed out waiting for tunneled response")
+		.unwrap();
+	assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"));
+
+	// CONNECT-time GetActor precedes any request trace, so only the two
+	// request-path calls carry one. Each continues the client's sampled trace
+	// under a gateway span.
+	let seen = seen.lock().unwrap().clone();
+	let methods: Vec<_> = seen.iter().map(|(method, _)| *method).collect();
+	assert_eq!(methods, ["GetActorEgressPolicy", "FetchSecret"], "{seen:?}");
+	for (method, tp) in &seen {
+		assert_eq!(tp[..36], client_tp[..36], "{method}: {tp}");
+		assert_ne!(tp[36..52], client_tp[36..52], "{method}: {tp}");
+		assert!(tp.ends_with("-01"), "{method}: {tp}");
+	}
+
+	// The traceparent each server received names that call's exported client
+	// span, which is a child of the gateway's request span.
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while spans.lock().unwrap().len() < 3 {
+			tokio::time::sleep(Duration::from_millis(10)).await;
+		}
+	})
+	.await
+	.expect("timed out waiting for exported spans");
+	let spans = spans.lock().unwrap();
+	let request = spans
+		.iter()
+		.find(|span| hex_id(&span.parent_span_id) == client_tp[36..52])
+		.expect("request span should be exported");
+	for (method, tp) in &seen {
+		let path = match *method {
+			"GetActorEgressPolicy" => "/ateapi.Control/GetActorEgressPolicy",
+			"FetchSecret" => "/credprovider.CredentialProvider/FetchSecret",
+			other => panic!("unexpected method {other}"),
+		};
+		let span = spans
+			.iter()
+			.find(|span| {
+				span.name == "Substrate"
+					&& span.attributes.iter().any(|attribute| {
+						attribute.key == "http.path"
+							&& matches!(
+								attribute.value.as_ref().and_then(|value| value.value.as_ref()),
+								Some(
+									opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(
+										value
+									)
+								) if value == path
+							)
+					})
+			})
+			.unwrap_or_else(|| panic!("{path} span should be exported"));
+		assert_eq!(hex_id(&span.span_id), tp[36..52], "{path}");
+		assert_eq!(span.parent_span_id, request.span_id, "{path}");
+	}
 }
 
 #[tokio::test]

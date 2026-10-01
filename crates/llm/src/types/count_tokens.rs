@@ -20,6 +20,9 @@ pub struct Request {
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::CountTokens
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}

@@ -875,10 +875,7 @@ mod responses {
 		("reasoning", ALL_BEDROCK),
 		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		(
-			"cache_write",
-			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
-		),
+		("cache_write", ALL_BEDROCK),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,

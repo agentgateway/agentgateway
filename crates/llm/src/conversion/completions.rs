@@ -107,15 +107,27 @@ pub mod from_messages {
 	pub fn translate_request(
 		req: &types::messages::Request,
 	) -> Result<types::completions::typed::Request, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.prompt_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: u
+				.completion_tokens_details
+				.as_ref()
+				.and_then(|d| d.reasoning_tokens),
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	/// First string among the candidate extension values, in precedence order.
@@ -537,6 +549,10 @@ pub mod from_messages {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
 					r.response.output_tokens = Some(usage.completion_tokens as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.reasoning_tokens = usage
+						.completion_tokens_details
+						.as_ref()
+						.and_then(|d| d.reasoning_tokens);
 					r.response.cache_creation_input_tokens =
 						cache_creation_input_tokens.map(|tokens| tokens as u64);
 					r.response.cached_input_tokens = cache_read_input_tokens.map(|tokens| tokens as u64);

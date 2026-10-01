@@ -6501,7 +6501,7 @@
       ]
     },
     "LocalOidcConfig": {
-      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated document navigations redirect to the provider login flow. Browser requests\npositively identified as non-navigation requests return 401 so the caller can initiate a\ndocument navigation.",
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated document navigations redirect to the provider login flow. Browser requests\npositively identified as non-navigation requests return 401 so the caller can initiate a\ndocument navigation.\n\nConcurrent session refreshes are coalesced per gateway replica, with results reused for\n30 seconds; temporary failures are cached for one second. With multiple replicas, configure\nthe provider's refresh-token reuse grace period (for example, Okta's rotation grace period)\nto accommodate concurrent refreshes. A late rejection from another replica can otherwise\nclear a newly rotated refresh cookie.\n\nSession refresh requires the provider to return a new `id_token` in each refresh response.\nProviders that omit it require the user to sign in again when the stored ID token expires.",
       "type": "object",
       "properties": {
         "issuer": {
@@ -6571,7 +6571,7 @@
           "type": "string"
         },
         "scopes": {
-          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "description": "Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when\nthe provider requires it to issue a refresh token; returned refresh tokens are used\nautomatically.",
           "type": "array",
           "items": {
             "type": "string"
