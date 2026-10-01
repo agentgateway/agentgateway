@@ -25,6 +25,18 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: invalid-oauth-token-exchange-backend
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: oauth-jwt-bearer-backend
   namespace: agentgateway-base
 spec:
@@ -74,6 +86,21 @@ spec:
   rules:
   - backendRefs:
     - name: oauth-token-exchange-backend
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: invalid-oauth-token-exchange
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "invalid-oauth-token-exchange.com"
+  rules:
+  - backendRefs:
+    - name: invalid-oauth-token-exchange-backend
       port: 80
 ---
 apiVersion: gateway.networking.k8s.io/v1
@@ -253,6 +280,31 @@ spec:
         clientAuth:
           clientId: oauth-e2e-client
           method: ClientSecretPost
+        cache:
+          inMemory:
+            maxEntries: 0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: invalid-oauth-token-exchange
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: invalid-oauth-token-exchange-backend
+  backend:
+    auth:
+      oauthTokenExchange:
+        backendRef:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: oauth-dummy-idp
+          port: 8443
+        path: /token-exchange
+        subjectToken:
+          tokenType: not-a-token-type
         cache:
           inMemory:
             maxEntries: 0

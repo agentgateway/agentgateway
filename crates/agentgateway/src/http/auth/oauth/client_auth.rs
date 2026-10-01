@@ -7,10 +7,10 @@ use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use rustls::pki_types::PrivateKeyDer;
 use rustls::pki_types::pem::PemObject;
 use secrecy::{ExposeSecret, SecretString};
-use tracing::warn;
 
 use super::super::jws::{JwtSigningAlg, SigningKey, signing_alg_from_proto};
 use super::super::{jwt_claim_times, unix_timestamp_now};
+use super::{OAuthConfigWarning, log_config_warnings};
 use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
@@ -48,9 +48,10 @@ impl<'de> serde::Deserialize<'de> for OAuthClientAuth {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		RawOAuthClientAuthConfig::deserialize(deserializer)?
-			.try_into()
-			.map_err(serde::de::Error::custom)
+		let (auth, warnings) = Self::from_raw(RawOAuthClientAuthConfig::deserialize(deserializer)?)
+			.map_err(serde::de::Error::custom)?;
+		log_config_warnings(warnings);
+		Ok(auth)
 	}
 }
 
@@ -121,7 +122,8 @@ enum RawOAuthClientAuth {
 		signing_key: SecretString,
 		/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 		/// correspond to `signing_key` for token endpoints to validate assertions.
-		/// A mismatch or comparison failure is logged and does not prevent loading.
+		/// A mismatch or comparison failure is reported as a load warning and does
+		/// not prevent loading.
 		#[cfg_attr(
 			feature = "schema",
 			schemars(with = "Option<crate::serdes::FileOrInline>")
@@ -152,10 +154,9 @@ struct RawDefaultClientSecretBasicAuth {
 	client_secret: SecretString,
 }
 
-impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
-	type Error = String;
-
-	fn try_from(raw: RawOAuthClientAuthConfig) -> Result<Self, Self::Error> {
+impl OAuthClientAuth {
+	fn from_raw(raw: RawOAuthClientAuthConfig) -> Result<(Self, Vec<OAuthConfigWarning>), String> {
+		let mut warnings = Vec::new();
 		let (client_id, method) = match raw {
 			RawOAuthClientAuthConfig::Tagged(RawOAuthClientAuth::ClientSecretBasic {
 				client_id,
@@ -184,7 +185,7 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 				kid,
 				assertion_audience,
 			}) => {
-				let private_key_jwt = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+				let (private_key_jwt, warning) = PrivateKeyJwt::load(RawPrivateKeyJwt {
 					signing_key,
 					certificate,
 					certificate_header,
@@ -192,13 +193,14 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 					kid,
 					assertion_audience,
 				})?;
+				warnings.extend(warning);
 				(
 					client_id,
 					OAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt),
 				)
 			},
 		};
-		Ok(Self { client_id, method })
+		Ok((Self { client_id, method }, warnings))
 	}
 }
 
@@ -224,8 +226,8 @@ pub enum OAuthClientAuthMethod {
 	PrivateKeyJwt(PrivateKeyJwt),
 }
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
-#[serde(try_from = "RawPrivateKeyJwt", rename_all = "camelCase")]
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PrivateKeyJwt {
 	#[serde(skip)]
@@ -235,11 +237,22 @@ pub struct PrivateKeyJwt {
 	alg: JwtSigningAlg,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	x5c: Option<Vec<String>>,
-	#[serde(rename = "x5t#S256", skip_serializing_if = "Option::is_none")]
-	x5t_s256: Option<String>,
+	#[serde(flatten, skip_serializing_if = "Option::is_none")]
+	certificate_header: Option<JwtCertificateHeader>,
 	assertion_audience: String,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+enum JwtCertificateHeader {
+	X5c {
+		x5c: Vec<String>,
+	},
+	X5tS256 {
+		#[serde(rename = "x5t#S256")]
+		thumbprint: String,
+	},
 }
 
 impl fmt::Debug for PrivateKeyJwt {
@@ -248,10 +261,21 @@ impl fmt::Debug for PrivateKeyJwt {
 			.field("signing_key", &"[REDACTED]")
 			.field("alg", &self.alg)
 			.field("kid", &self.kid)
-			.field("x5c", &self.x5c.as_ref().map(|_| "[REDACTED]"))
-			.field("x5t#S256", &self.x5t_s256)
+			.field("certificate_header", &self.certificate_header)
 			.field("assertion_audience", &self.assertion_audience)
 			.finish()
+	}
+}
+
+impl fmt::Debug for JwtCertificateHeader {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::X5c { .. } => f.write_str("X5c([REDACTED])"),
+			Self::X5tS256 { thumbprint } => f
+				.debug_struct("X5tS256")
+				.field("thumbprint", thumbprint)
+				.finish(),
+		}
 	}
 }
 
@@ -265,7 +289,8 @@ pub(super) struct RawPrivateKeyJwt {
 	pub(super) signing_key: SecretString,
 	/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 	/// correspond to `signing_key` for token endpoints to validate assertions.
-	/// A mismatch or comparison failure is logged and does not prevent loading.
+	/// A mismatch or comparison failure is reported as a load warning and does
+	/// not prevent loading.
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<crate::serdes::FileOrInline>")
@@ -280,10 +305,8 @@ pub(super) struct RawPrivateKeyJwt {
 	pub(super) assertion_audience: String,
 }
 
-impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
-	type Error = String;
-
-	fn try_from(raw: RawPrivateKeyJwt) -> Result<Self, Self::Error> {
+impl PrivateKeyJwt {
+	pub(super) fn load(raw: RawPrivateKeyJwt) -> Result<(Self, Option<OAuthConfigWarning>), String> {
 		if raw.assertion_audience.is_empty() {
 			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
 		}
@@ -291,9 +314,11 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 		let signing_key_pem = raw.signing_key.expose_secret();
 		let signing_key = SigningKey::from_pem(raw.alg, signing_key_pem.trim().as_bytes())
 			.map_err(|e| format!("failed to parse oauth private_key_jwt signing_key: {e}"))?;
-		let certificate_headers = match (raw.certificate, raw.certificate_header) {
+		let (certificate_header, warning) = match (raw.certificate, raw.certificate_header) {
 			(Some(certificate), Some(certificate_header)) => {
-				load_certificate_headers(certificate, certificate_header, signing_key_pem)?
+				let (certificate_header, warning) =
+					load_certificate_headers(certificate, certificate_header, signing_key_pem)?;
+				(Some(certificate_header), warning)
 			},
 			(Some(_), None) => {
 				return Err(
@@ -305,30 +330,26 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 					"oauth private_key_jwt certificate is required when certificate_header is set".into(),
 				);
 			},
-			(None, None) => CertificateHeaders::default(),
+			(None, None) => (None, None),
 		};
-		Ok(Self {
-			signing_key,
-			alg: raw.alg,
-			kid: raw.kid,
-			x5c: certificate_headers.x5c,
-			x5t_s256: certificate_headers.x5t_s256,
-			assertion_audience: raw.assertion_audience,
-		})
+		Ok((
+			Self {
+				signing_key,
+				alg: raw.alg,
+				kid: raw.kid,
+				certificate_header,
+				assertion_audience: raw.assertion_audience,
+			},
+			warning,
+		))
 	}
-}
-
-#[derive(Default)]
-struct CertificateHeaders {
-	x5c: Option<Vec<String>>,
-	x5t_s256: Option<String>,
 }
 
 fn load_certificate_headers(
 	certificate: RedactedCertificate,
 	certificate_header: CertificateHeader,
 	signing_key_pem: &str,
-) -> Result<CertificateHeaders, String> {
+) -> Result<(JwtCertificateHeader, Option<OAuthConfigWarning>), String> {
 	let certificate_pem = certificate
 		.0
 		.load()
@@ -350,34 +371,30 @@ fn load_certificate_headers(
 			.map_err(|e| format!("failed to parse oauth private_key_jwt certificate: {e}"))?;
 	}
 
-	warn_if_certificate_key_mismatch(signing_key_pem, leaf.contents());
+	let warning = certificate_key_mismatch_warning(signing_key_pem, leaf.contents());
 
-	Ok(match certificate_header {
-		CertificateHeader::X5c => CertificateHeaders {
-			x5c: Some(
-				certificates
-					.into_iter()
-					.map(|certificate| STANDARD.encode(certificate.contents()))
-					.collect(),
-			),
-			x5t_s256: None,
+	let header = match certificate_header {
+		CertificateHeader::X5c => JwtCertificateHeader::X5c {
+			x5c: certificates
+				.into_iter()
+				.map(|certificate| STANDARD.encode(certificate.contents()))
+				.collect(),
 		},
-		CertificateHeader::X5tS256 => CertificateHeaders {
-			x5c: None,
-			x5t_s256: Some(URL_SAFE_NO_PAD.encode(crate::crypto::digest::sha256(leaf.contents()))),
+		CertificateHeader::X5tS256 => JwtCertificateHeader::X5tS256 {
+			thumbprint: URL_SAFE_NO_PAD.encode(crate::crypto::digest::sha256(leaf.contents())),
 		},
-	})
+	};
+	Ok((header, warning))
 }
 
-fn warn_if_certificate_key_mismatch(signing_key_pem: &str, leaf_certificate_der: &[u8]) {
+fn certificate_key_mismatch_warning(
+	signing_key_pem: &str,
+	leaf_certificate_der: &[u8],
+) -> Option<OAuthConfigWarning> {
 	match certificate_key_matches(signing_key_pem, leaf_certificate_der) {
-		Ok(true) => {},
-		Ok(false) => {
-			warn!("oauth private_key_jwt certificate public key does not match signing_key");
-		},
-		Err(error) => {
-			warn!(%error, "unable to compare oauth private_key_jwt certificate public key with signing_key");
-		},
+		Ok(true) => None,
+		Ok(false) => Some(OAuthConfigWarning::CertificateKeyMismatch),
+		Err(error) => Some(OAuthConfigWarning::CertificateKeyComparisonFailed(error)),
 	}
 }
 
@@ -385,21 +402,21 @@ fn certificate_key_matches(
 	signing_key_pem: &str,
 	leaf_certificate_der: &[u8],
 ) -> Result<bool, String> {
-	let signing_key = PrivateKeyDer::from_pem_slice(signing_key_pem.as_bytes()).map_err(|e| {
-		format!("failed to validate oauth private_key_jwt signing_key against certificate: {e}")
-	})?;
 	let provider = crate::transport::tls::provider();
 	let signing_key = crate::crypto::tls::key_provider(&provider)
-		.load_private_key(signing_key)
-		.map_err(|e| {
-			format!("failed to validate oauth private_key_jwt signing_key against certificate: {e}")
-		})?;
-	let signing_key_spki = signing_key.public_key().ok_or_else(|| {
-		"failed to validate oauth private_key_jwt signing_key against certificate: public key is unavailable"
-			.to_string()
-	})?;
+		.load_private_key(
+			PrivateKeyDer::from_pem_slice(signing_key_pem.as_bytes())
+				.map_err(|e| format!("cannot parse signingKey for comparison: {e}"))?,
+		)
+		.map_err(|e| format!("cannot load signingKey for comparison: {e}"))?;
+
+	let signing_key_spki = signing_key
+		.public_key()
+		.ok_or_else(|| "signingKey public key is unavailable".to_string())?;
+
 	let (_, certificate) = x509_parser::parse_x509_certificate(leaf_certificate_der)
-		.map_err(|e| format!("failed to parse oauth private_key_jwt certificate: {e}"))?;
+		.map_err(|e| format!("cannot parse certificate: {e}"))?;
+
 	Ok(signing_key_spki.as_ref() == certificate.public_key().raw)
 }
 
@@ -439,12 +456,13 @@ impl OAuthClientAuth {
 	}
 }
 
-impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
-	type Error = ProtoError;
-
-	fn try_from(c: proto::OAuthClientAuth) -> Result<Self, Self::Error> {
+impl OAuthClientAuth {
+	pub(super) fn from_proto(
+		c: proto::OAuthClientAuth,
+	) -> Result<(Self, Vec<OAuthConfigWarning>), ProtoError> {
 		use proto::o_auth_client_auth::Method;
 
+		let mut warnings = Vec::new();
 		let method = match Method::try_from(c.method) {
 			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
 				if c.private_key_jwt.is_some() {
@@ -472,16 +490,14 @@ impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 						"oauth private_key_jwt must not set client_secret".into(),
 					));
 				}
-				OAuthClientAuthMethod::PrivateKeyJwt(
-					c.private_key_jwt
-						.ok_or_else(|| {
-							ProtoError::Generic(
-								"oauth private_key_jwt settings are required with the PRIVATE_KEY_JWT method"
-									.into(),
-							)
-						})?
-						.try_into()?,
-				)
+				let private_key_jwt = c.private_key_jwt.ok_or_else(|| {
+					ProtoError::Generic(
+						"oauth private_key_jwt settings are required with the PRIVATE_KEY_JWT method".into(),
+					)
+				})?;
+				let (private_key_jwt, warning) = load_private_key_jwt_from_proto(private_key_jwt)?;
+				warnings.extend(warning);
+				OAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt)
 			},
 			Err(_) => {
 				return Err(ProtoError::EnumParse(
@@ -494,28 +510,24 @@ impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 			method,
 		};
 		auth.validate_load().map_err(ProtoError::Generic)?;
-		Ok(auth)
+		Ok((auth, warnings))
 	}
 }
 
-impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
-	type Error = ProtoError;
-
-	fn try_from(
-		private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
-	) -> Result<Self, Self::Error> {
-		Self::try_from(RawPrivateKeyJwt {
-			signing_key: SecretString::from(private_key_jwt.signing_key),
-			certificate: (!private_key_jwt.certificate.is_empty())
-				.then_some(FileOrInline::Inline(private_key_jwt.certificate).into()),
-			certificate_header: certificate_header_from_proto(private_key_jwt.certificate_header)?,
-			alg: signing_alg_from_proto(private_key_jwt.alg)
-				.ok_or_else(|| ProtoError::EnumParse("unknown oauth private_key_jwt signing alg".into()))?,
-			kid: private_key_jwt.kid,
-			assertion_audience: private_key_jwt.assertion_audience,
-		})
-		.map_err(ProtoError::Generic)
-	}
+fn load_private_key_jwt_from_proto(
+	private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
+) -> Result<(PrivateKeyJwt, Option<OAuthConfigWarning>), ProtoError> {
+	PrivateKeyJwt::load(RawPrivateKeyJwt {
+		signing_key: SecretString::from(private_key_jwt.signing_key),
+		certificate: (!private_key_jwt.certificate.is_empty())
+			.then_some(FileOrInline::Inline(private_key_jwt.certificate).into()),
+		certificate_header: certificate_header_from_proto(private_key_jwt.certificate_header)?,
+		alg: signing_alg_from_proto(private_key_jwt.alg)
+			.ok_or_else(|| ProtoError::EnumParse("unknown oauth private_key_jwt signing alg".into()))?,
+		kid: private_key_jwt.kid,
+		assertion_audience: private_key_jwt.assertion_audience,
+	})
+	.map_err(ProtoError::Generic)
 }
 
 #[apply(schema_enum!)]
@@ -569,8 +581,13 @@ pub(super) fn sign_client_assertion(
 	};
 
 	let mut header = private_key.alg.header(private_key.kid.clone());
-	header.x5c = private_key.x5c.clone();
-	header.x5t_s256 = private_key.x5t_s256.clone();
+	match &private_key.certificate_header {
+		Some(JwtCertificateHeader::X5c { x5c }) => header.x5c = Some(x5c.clone()),
+		Some(JwtCertificateHeader::X5tS256 { thumbprint }) => {
+			header.x5t_s256 = Some(thumbprint.clone());
+		},
+		None => {},
+	}
 	private_key
 		.signing_key
 		.encode(&header, &claims)

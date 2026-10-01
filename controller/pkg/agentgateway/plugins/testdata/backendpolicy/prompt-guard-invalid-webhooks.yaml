@@ -113,4 +113,12 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      - lastTransitionTime: fake
+        message: |-
+          Policy is attached; part of its configuration was rejected: webhook header "x-session-id" is not a valid CEL expression: not( valid cel
+          failed to build webhook: unable to find the Service default/missing-guardrails
+          webhook header "x-session-id" is not a valid CEL expression: not( valid cel
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
