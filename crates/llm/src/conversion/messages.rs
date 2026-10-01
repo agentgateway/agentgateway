@@ -9,6 +9,10 @@ use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
 use crate::{AIError, StreamingUsageGuard, parse};
 
+#[cfg(test)]
+#[path = "messages_tests.rs"]
+mod messages_tests;
+
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
 fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> Option<u64> {
@@ -761,17 +765,31 @@ pub mod from_completions {
 					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
-					input_tokens = message.usage.input_tokens;
-					output_tokens = message.usage.output_tokens;
-					cache_read_input_tokens = message.usage.cache_read_input_tokens;
-					cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
+					// `message_start.usage` is a PROVISIONAL placeholder on some
+					// Anthropic-compatible upstreams: Fireworks reports an
+					// all-zero usage here and the real cumulative usage only on
+					// the final `message_delta` (live-verified 2026-10-01).
+					// Materializing those zeros as usage evidence fabricates
+					// complete zero-token attempts when the stream ends without
+					// a usable `message_delta` — unknown is never zero. An
+					// all-zero placeholder contributes nothing; every dimension
+					// waits for positive evidence.
+					let placeholder = message.usage.input_tokens == 0 && message.usage.output_tokens == 0;
+					if !placeholder {
+						input_tokens = message.usage.input_tokens;
+						output_tokens = message.usage.output_tokens;
+						cache_read_input_tokens = message.usage.cache_read_input_tokens;
+						cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
+					}
 					log.update(|r| {
-						r.response.output_tokens = Some(message.usage.output_tokens as u64);
-						r.response.input_tokens = Some(message.usage.input_tokens as u64);
-						r.response.cached_input_tokens =
-							message.usage.cache_read_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_input_tokens =
-							message.usage.cache_creation_input_tokens.map(|i| i as u64);
+						if !placeholder {
+							r.response.output_tokens = Some(message.usage.output_tokens as u64);
+							r.response.input_tokens = Some(message.usage.input_tokens as u64);
+							r.response.cached_input_tokens =
+								message.usage.cache_read_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_input_tokens =
+								message.usage.cache_creation_input_tokens.map(|i| i as u64);
+						}
 						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 						r.response.provider_model = Some(strng::new(&message.model))
 					});
@@ -1133,12 +1151,25 @@ pub fn passthrough_stream(
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
+				// `message_start.usage` is a PROVISIONAL placeholder on some
+				// Anthropic-compatible upstreams: Fireworks reports an
+				// all-zero usage here and the real cumulative usage only on
+				// the final `message_delta` (live-verified 2026-10-01).
+				// Materializing those zeros as usage evidence fabricates
+				// complete zero-token attempts when the stream ends without
+				// a usable `message_delta` — unknown is never zero. An
+				// all-zero placeholder contributes nothing; every dimension
+				// waits for positive evidence.
+				let placeholder = message.usage.input_tokens == 0 && message.usage.output_tokens == 0;
 				log.update(|r| {
-					r.response.output_tokens = Some(message.usage.output_tokens as u64);
-					r.response.input_tokens = Some(message.usage.input_tokens as u64);
-					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
-					r.response.cache_creation_input_tokens =
-						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					if !placeholder {
+						r.response.output_tokens = Some(message.usage.output_tokens as u64);
+						r.response.input_tokens = Some(message.usage.input_tokens as u64);
+						r.response.cached_input_tokens =
+							message.usage.cache_read_input_tokens.map(|i| i as u64);
+						r.response.cache_creation_input_tokens =
+							message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					}
 					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
