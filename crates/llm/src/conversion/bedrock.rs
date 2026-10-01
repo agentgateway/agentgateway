@@ -1840,18 +1840,13 @@ pub mod from_messages {
 					| messages::ContentBlock::WebSearchToolResult { cache_control, .. }
 					| messages::ContentBlock::ServerToolUse { cache_control, .. } => {
 						// Keep the breakpoint on the retained prefix when dropping unsupported content.
-						let prefix = if content.is_empty() {
-							messages.last_mut().map(|message| &mut message.content)
-						} else {
-							Some(&mut content)
-						};
-						if let Some(prefix) = prefix {
-							helpers::insert_cache_point_on_prefix(
-								prefix,
-								cache_control.as_ref(),
-								&mut cache_points_used,
-							);
-						}
+						helpers::insert_cache_point_on_retained_prefix(
+							&mut content,
+							&mut messages,
+							system_content.as_mut(),
+							cache_control.as_ref(),
+							&mut cache_points_used,
+						);
 						continue;
 					},
 					messages::ContentBlock::Unknown => continue,
@@ -1867,7 +1862,7 @@ pub mod from_messages {
 			}
 
 			if !content.is_empty() {
-				messages.push(bedrock::Message { role, content });
+				helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 			}
 		}
 
@@ -3778,6 +3773,36 @@ mod helpers {
 				ttl: ttl.clone(),
 				..create_cache_point()
 			})
+		}
+	}
+
+	pub fn insert_cache_point_on_retained_prefix(
+		content: &mut Vec<bedrock::ContentBlock>,
+		messages: &mut [bedrock::Message],
+		system: Option<&mut Vec<bedrock::SystemContentBlock>>,
+		breakpoint: impl CachePoint,
+		cache_points_used: &mut usize,
+	) {
+		let prefix = std::iter::once(content)
+			.chain(
+				messages
+					.iter_mut()
+					.rev()
+					.map(|message| &mut message.content),
+			)
+			.find(|blocks| {
+				blocks
+					.iter()
+					.any(|block| !matches!(block, bedrock::ContentBlock::ReasoningContent(_)))
+			});
+		if let Some(prefix) = prefix {
+			insert_cache_point_on_prefix(prefix, breakpoint, cache_points_used);
+		} else if let Some(system) = system
+			&& matches!(
+				system.last(),
+				Some(bedrock::SystemContentBlock::Text { .. })
+			) {
+			maybe_insert_cache_point(system, breakpoint, cache_points_used);
 		}
 	}
 

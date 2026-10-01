@@ -16,7 +16,7 @@ info:
             type: ephemeral
         - type: text
           text: No preceding content to cache
-    - role: user
+    - role: assistant
       content:
         - type: document
           source:
@@ -94,12 +94,7 @@ info:
             "cachePoint": {
               "type": "default"
             }
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": [
+          },
           {
             "text": "Before search result"
           },
@@ -187,7 +182,7 @@ info:
         "content": "No preceding content to cache"
       },
       {
-        "role": "user",
+        "role": "assistant",
         "content": ""
       },
       {

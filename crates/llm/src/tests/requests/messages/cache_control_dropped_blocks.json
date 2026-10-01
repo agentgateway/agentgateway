@@ -23,7 +23,7 @@
       ]
     },
     {
-      "role": "user",
+      "role": "assistant",
       "content": [
         {
           "type": "document",

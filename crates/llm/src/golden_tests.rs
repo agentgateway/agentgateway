@@ -196,6 +196,7 @@ mod requests {
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
 		),
 		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_reasoning_prefix", &[BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
