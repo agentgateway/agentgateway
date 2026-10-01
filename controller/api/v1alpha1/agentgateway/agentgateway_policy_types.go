@@ -338,35 +338,30 @@ type Health struct {
 
 // Settings for probing a backend on a timer.
 type ActiveHealthCheck struct {
-	// HTTP path to probe.
-	// +kubebuilder:default="/health"
+	// HTTP path to probe. Defaults to `/health`.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=2048
 	// +kubebuilder:validation:XValidation:rule="self.startsWith('/')",message="path must start with /"
 	// +optional
 	Path *string `json:"path,omitempty"`
 
-	// Time between probes of one backend.
+	// Time between probes of one backend. Defaults to `10s`.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
-	// +kubebuilder:default="10s"
 	// +optional
 	Interval *Duration `json:"interval,omitempty"`
 
-	// How long to wait for a probe response before counting it as a failure.
+	// How long to wait for a probe response before counting it as a failure. Defaults to `3s`.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="timeout must be at least 100 milliseconds"
-	// +kubebuilder:default="3s"
 	// +optional
 	Timeout *Duration `json:"timeout,omitempty"`
 
-	// Consecutive successful probes before an evicted backend is restored.
+	// Consecutive successful probes before an evicted backend is restored. Defaults to 1.
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:default=1
 	// +optional
 	HealthyThreshold *int32 `json:"healthyThreshold,omitempty"`
 
-	// Consecutive failed probes before the backend is evicted.
+	// Consecutive failed probes before the backend is evicted. Defaults to 3.
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:default=3
 	// +optional
 	UnhealthyThreshold *int32 `json:"unhealthyThreshold,omitempty"`
 

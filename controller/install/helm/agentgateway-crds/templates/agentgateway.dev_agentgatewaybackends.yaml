@@ -6515,16 +6515,15 @@ spec:
                                             maxItems: 16
                                             type: array
                                           healthyThreshold:
-                                            default: 1
                                             description: Consecutive successful probes
                                               before an evicted backend is restored.
+                                              Defaults to 1.
                                             format: int32
                                             minimum: 1
                                             type: integer
                                           interval:
-                                            default: 10s
                                             description: Time between probes of one
-                                              backend.
+                                              backend. Defaults to `10s`.
                                             maxLength: 32
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
@@ -6533,8 +6532,8 @@ spec:
                                                 second
                                               rule: duration(self) >= duration('1s')
                                           path:
-                                            default: /health
-                                            description: HTTP path to probe.
+                                            description: HTTP path to probe. Defaults
+                                              to `/health`.
                                             maxLength: 2048
                                             minLength: 1
                                             type: string
@@ -6542,9 +6541,9 @@ spec:
                                             - message: path must start with /
                                               rule: self.startsWith('/')
                                           timeout:
-                                            default: 3s
                                             description: How long to wait for a probe
                                               response before counting it as a failure.
+                                              Defaults to `3s`.
                                             maxLength: 32
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
@@ -6553,9 +6552,9 @@ spec:
                                                 milliseconds
                                               rule: duration(self) >= duration('100ms')
                                           unhealthyThreshold:
-                                            default: 3
                                             description: Consecutive failed probes
-                                              before the backend is evicted.
+                                              before the backend is evicted. Defaults
+                                              to 3.
                                             format: int32
                                             minimum: 1
                                             type: integer
@@ -15827,15 +15826,14 @@ spec:
                             maxItems: 16
                             type: array
                           healthyThreshold:
-                            default: 1
                             description: Consecutive successful probes before an evicted
-                              backend is restored.
+                              backend is restored. Defaults to 1.
                             format: int32
                             minimum: 1
                             type: integer
                           interval:
-                            default: 10s
-                            description: Time between probes of one backend.
+                            description: Time between probes of one backend. Defaults
+                              to `10s`.
                             maxLength: 32
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
@@ -15843,8 +15841,7 @@ spec:
                             - message: interval must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           path:
-                            default: /health
-                            description: HTTP path to probe.
+                            description: HTTP path to probe. Defaults to `/health`.
                             maxLength: 2048
                             minLength: 1
                             type: string
@@ -15852,9 +15849,8 @@ spec:
                             - message: path must start with /
                               rule: self.startsWith('/')
                           timeout:
-                            default: 3s
                             description: How long to wait for a probe response before
-                              counting it as a failure.
+                              counting it as a failure. Defaults to `3s`.
                             maxLength: 32
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
@@ -15862,9 +15858,8 @@ spec:
                             - message: timeout must be at least 100 milliseconds
                               rule: duration(self) >= duration('100ms')
                           unhealthyThreshold:
-                            default: 3
                             description: Consecutive failed probes before the backend
-                              is evicted.
+                              is evicted. Defaults to 3.
                             format: int32
                             minimum: 1
                             type: integer
