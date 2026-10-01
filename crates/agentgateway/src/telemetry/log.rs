@@ -381,10 +381,7 @@ impl<T: Debug> Debug for AsyncLog<T> {
 /// Per-request accumulator of prompt-guard guardrail evaluations.
 pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
-/// Per-request accumulator of mcpGuardrails dynamic metadata, merged from
-/// request-phase processors. The access-log request snapshot is taken before
-/// the mcpGuardrails hook runs, so this cell (not the snapshot) is how
-/// `mcpGuardrails.<key>` reaches access-log CEL.
+/// Per-request accumulator of mcpGuardrails dynamic metadata.
 pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
 
 #[derive(serde::Serialize, Debug, Default, Clone)]
@@ -797,10 +794,7 @@ impl CelLogging {
 				inputs.proxy,
 			)
 		};
-		// mcpGuardrails dynamic metadata arrives via the request-phase async log, not
-		// the request snapshot: the snapshot is taken before the mcpGuardrails hook
-		// merges the processors' metadata.
-		if let Some(md) = inputs.mcp_guardrails.filter(|md| !md.is_empty()) {
+		if let Some(md) = inputs.mcp_guardrails {
 			executor.mcp_guardrails = cel::ExtensionOrDirect::Direct(Some(md));
 		}
 		CelLoggingExecutor {
@@ -1473,7 +1467,7 @@ impl Drop for DropOnLog {
 
 			let mcp = log.mcp_status.take();
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
-			let mcp_guardrails = log.mcp_guardrails.take().filter(|md| !md.is_empty());
+			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so

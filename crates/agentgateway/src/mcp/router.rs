@@ -135,6 +135,7 @@ impl App {
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
+		req.extensions_mut().insert(log.mcp_guardrails.clone());
 
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
@@ -179,7 +180,6 @@ impl App {
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
-							guardrails_log: log.mcp_guardrails.clone(),
 							client: client.clone(),
 						},
 					)
@@ -202,7 +202,6 @@ impl App {
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
-							guardrails_log: log.mcp_guardrails.clone(),
 							client: client.clone(),
 						},
 					)
