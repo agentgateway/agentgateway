@@ -39,6 +39,7 @@ struct PreparedOidcPolicy {
 	scopes: Vec<String>,
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
+	outbound_tunnel: Option<Arc<crate::client::TunnelSpec>>,
 }
 
 /// Optional browser login entry point and unauthenticated redirect destination.
@@ -139,6 +140,14 @@ pub struct LocalOidcConfig {
 	/// Optional logout endpoint. Independent of login; omit to disable the logout endpoint.
 	#[serde(default)]
 	pub logout: Option<OidcLogout>,
+
+	/// Optional outbound proxy backend to tunnel this policy's own egress through
+	/// (OIDC discovery, JWKS, and token exchange). Mirrors `backendTunnel` on LLM
+	/// providers. Use when the identity provider is only reachable through a forward
+	/// proxy (e.g. a corp egress proxy) that blocks direct outbound HTTPS. Set the
+	/// proxy inline via `{host, port}` so no separate named backend is required.
+	#[serde(rename = "backendTunnel", default)]
+	pub backend_tunnel: Option<crate::types::backend::Tunnel>,
 }
 
 struct DiscoveredProviderMetadata {
@@ -178,6 +187,7 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			backend_tunnel,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
@@ -237,6 +247,18 @@ impl LocalOidcConfig {
 				"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly".into(),
 			));
 		}
+		let outbound_tunnel = build_oidc_tunnel(backend_tunnel)?;
+		// When tunneling is configured, discovery and JWKS fetches must also go
+		// through the proxy. Derive a dedicated tunneled fetcher and reuse it for
+		// the rest of this resolve call.
+		let tunneled_resources;
+		let resources = match outbound_tunnel {
+			Some(ref tunnel) => {
+				tunneled_resources = resources.with_outbound_tunnel((**tunnel).clone());
+				&tunneled_resources
+			},
+			None => resources,
+		};
 		let provider = match explicit_field_count {
 			0 => {
 				let discovery = match discovery {
@@ -288,8 +310,90 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			outbound_tunnel,
 		})
 	}
+}
+
+/// Resolve the OIDC policy's optional `backendTunnel` into an outbound proxy hop.
+/// Only the self-contained inline `{host, port}` proxy form is supported here:
+/// the compile-time OIDC fetch path has no access to the named-backend store, so
+/// named/service references cannot be resolved. The proxy is reached with a plain
+/// HTTP CONNECT (no TLS to the proxy); TLS to the origin is unchanged.
+fn build_oidc_tunnel(
+	tunnel: Option<crate::types::backend::Tunnel>,
+) -> Result<Option<Arc<crate::client::TunnelSpec>>, Error> {
+	let Some(tunnel) = tunnel else {
+		return Ok(None);
+	};
+	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
+	let (host, port) = match tunnel.proxy.as_ref() {
+		SimpleBackendReference::InlineBackend(Target::Hostname(host, port)) => {
+			(host.to_string(), *port)
+		},
+		SimpleBackendReference::InlineBackend(Target::Address(addr)) => {
+			(addr.ip().to_string(), addr.port())
+		},
+		SimpleBackendReference::Invalid => {
+			return Err(Error::Config("invalid backendTunnel.proxy".into()));
+		},
+		SimpleBackendReference::InlineBackend(Target::UnixSocket(_)) => {
+			return Err(Error::Config(
+				"backendTunnel.proxy.host must be a host:port, not a unix socket".into(),
+			));
+		},
+		other => {
+			return Err(Error::Config(format!(
+				"ui.policies.oidc.backendTunnel.proxy must be an inline {{host, port}} (named/service refs aren't resolvable in this path), got {other:?}"
+			)));
+		},
+	};
+	let target = Target::from((host.as_str(), port));
+	let connection = crate::client::ConnectionConfig {
+		transport: crate::client::Transport::Plain(crate::client::ApplicationTransport::Plaintext),
+		tcp: tunnel.policies.iter().find_map(|p| match p {
+			BackendTrafficPolicy::TCP(t) => Some(t.clone()),
+			_ => None,
+		}),
+		max_connection_duration: None,
+	};
+	// Follow the backend tunnel pattern (build_transport): an optional
+	// `backendAuth` on the proxy backend becomes the CONNECT `Proxy-Authorization`
+	// token, so an egress proxy that requires auth can be used.
+	let token = tunnel
+		.policies
+		.iter()
+		.find_map(|p| match p {
+			BackendTrafficPolicy::BackendAuth(auth) => Some(auth),
+			_ => None,
+		})
+		.map(|auth| {
+			crate::http::auth::apply_tunnel_auth(auth)
+				.map_err(|e| Error::Config(format!("backendTunnel proxy backendAuth: {e}")))
+		})
+		.transpose()?;
+	// Only `TCP` (connection tuning) and `backendAuth` (proxy auth) are honored
+	// for the OIDC tunnel. TLS-to-the-proxy, HTTP transforms, authz, etc. are
+	// not representable in this plain-CONNECT path, so reject them up front
+	// rather than silently ignoring a policy the user configured.
+	for policy in &tunnel.policies {
+		let supported = matches!(
+			policy,
+			BackendTrafficPolicy::TCP(_) | BackendTrafficPolicy::BackendAuth(_)
+		);
+		if !supported {
+			return Err(Error::Config(format!(
+				"ui.policies.oidc.backendTunnel does not support policy {policy:?}; only `tcp` and `backendAuth` are honored on the OIDC tunnel"
+			)));
+		}
+	}
+	Ok(Some(Arc::new(crate::client::TunnelSpec {
+		target,
+		connection,
+		connect: tunnel.mode == crate::types::backend::TunnelMode::Connect,
+		connect_headers: Vec::new(),
+		token,
+	})))
 }
 
 async fn discover_provider_metadata(
@@ -425,6 +529,7 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			outbound_tunnel,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
@@ -451,6 +556,7 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			outbound_tunnel,
 		})
 	}
 }
@@ -460,5 +566,140 @@ fn describe_file_inline_or_remote(source: &FileInlineOrRemote) -> String {
 		FileInlineOrRemote::File { file } => format!("file '{}'", file.display()),
 		FileInlineOrRemote::Inline(_) => "inline configuration".into(),
 		FileInlineOrRemote::Remote { url } => format!("uri '{url}'"),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::agent::{BackendTrafficPolicy, Target};
+
+	fn inline_tunnel(
+		host: &str,
+		port: u16,
+		mode: crate::types::backend::TunnelMode,
+	) -> crate::types::backend::Tunnel {
+		crate::types::backend::Tunnel {
+			proxy: Arc::new(crate::types::agent::SimpleBackendReference::InlineBackend(
+				crate::types::agent::Target::from((host, port)),
+			)),
+			mode,
+			policies: Vec::new(),
+		}
+	}
+
+	#[test]
+	fn no_tunnel_returns_none() {
+		assert!(build_oidc_tunnel(None).unwrap().is_none());
+	}
+
+	#[test]
+	fn inline_hostname_proxy_resolves_target() {
+		let spec = build_oidc_tunnel(Some(inline_tunnel(
+			"genproxy.corp.example.com",
+			8080,
+			crate::types::backend::TunnelMode::Connect,
+		)))
+		.unwrap()
+		.unwrap();
+		let Target::Hostname(host, port) = &spec.target else {
+			panic!("expected hostname target");
+		};
+		assert_eq!(host.as_str(), "genproxy.corp.example.com");
+		assert_eq!(*port, 8080);
+		assert!(spec.connect);
+		// Proxy hop is a plain (non-TLS) transport: a forward proxy spoken to over
+		// HTTP CONNECT.
+		assert!(matches!(
+			spec.connection.transport,
+			crate::client::Transport::Plain(crate::client::ApplicationTransport::Plaintext)
+		));
+	}
+
+	#[test]
+	fn inline_ip_proxy_resolves_address() {
+		let spec = build_oidc_tunnel(Some(inline_tunnel(
+			"192.168.1.169",
+			3128,
+			crate::types::backend::TunnelMode::Auto,
+		)))
+		.unwrap()
+		.unwrap();
+		assert!(matches!(spec.target, Target::Address(_)));
+		assert!(!spec.connect);
+	}
+
+	#[test]
+	fn named_backend_reference_is_rejected() {
+		let tunnel = crate::types::backend::Tunnel {
+			proxy: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
+				"ns/backend".into(),
+			)),
+			mode: crate::types::backend::TunnelMode::Connect,
+			policies: Vec::new(),
+		};
+		assert!(build_oidc_tunnel(Some(tunnel)).is_err());
+	}
+
+	#[test]
+	fn deserializes_backend_tunnel_from_json() {
+		let raw = serde_json::json!({
+			"issuer": "https://issuer.example.com",
+			"clientId": "id",
+			"clientSecret": "secret",
+			"redirectURI": "http://localhost:4000/oauth/callback",
+			"backendTunnel": {
+				"proxy": { "host": "genproxy.corp.example.com:8080" },
+				"mode": "connect"
+			}
+		});
+		let cfg: LocalOidcConfig = serde_json::from_value(raw).expect("parse LocalOidcConfig");
+		let Some(tunnel) = cfg.backend_tunnel else {
+			panic!("expected backend_tunnel");
+		};
+		let spec = build_oidc_tunnel(Some(tunnel)).unwrap().unwrap();
+		let Target::Hostname(host, _) = &spec.target else {
+			panic!("expected hostname");
+		};
+		assert_eq!(host.as_str(), "genproxy.corp.example.com");
+	}
+
+	#[test]
+	fn backend_auth_becomes_proxy_authorization_token() {
+		let mut tunnel = inline_tunnel(
+			"proxy.example.com",
+			8080,
+			crate::types::backend::TunnelMode::Connect,
+		);
+		tunnel.policies.push(BackendTrafficPolicy::BackendAuth(
+			crate::http::auth::BackendAuth::new(crate::http::auth::BackendAuthKind::Key {
+				value: secrecy::SecretString::new("my-key".into()),
+				location: None,
+			}),
+		));
+		let spec = build_oidc_tunnel(Some(tunnel)).unwrap().unwrap();
+		let token = spec.token.clone().expect("proxy-auth token should be set");
+		assert_eq!(token.to_str().unwrap(), "Bearer my-key");
+	}
+
+	#[test]
+	fn unsupported_policies_are_rejected() {
+		let mut tunnel = inline_tunnel(
+			"proxy.example.com",
+			8080,
+			crate::types::backend::TunnelMode::Connect,
+		);
+		// A policy other than `tcp`/`backendAuth` (here `http`) is not
+		// representable on the plain-CONNECT OIDC tunnel and must be rejected,
+		// not silently ignored.
+		tunnel.policies.push(BackendTrafficPolicy::HTTP(
+			crate::types::backend::HTTP::default(),
+		));
+		let err = build_oidc_tunnel(Some(tunnel)).unwrap_err();
+		let msg = err.to_string();
+		assert!(
+			msg.contains("does not support policy"),
+			"expected an unsupported-policy config error, got: {msg}"
+		);
 	}
 }

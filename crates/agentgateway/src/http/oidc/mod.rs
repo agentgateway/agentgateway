@@ -140,6 +140,13 @@ pub struct OidcPolicy {
 	pub redirect_uri: RedirectUri,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
+	/// Optional forward-proxy hop this policy's outbound egress (token exchange)
+	/// tunnels through. Mirrors `backendTunnel`; the runtime exchange builds a
+	/// tunneled outbound client from this instead of the plain app-wide client.
+	/// Computed at config time, not round-tripped from config, so it is skipped
+	/// during serialization.
+	#[serde(skip)]
+	pub outbound_tunnel: Option<Arc<crate::client::TunnelSpec>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

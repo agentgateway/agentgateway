@@ -26,6 +26,26 @@ use crate::*;
 pub struct Client {
 	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
+	/// When set, every `simple_call` (and the raw outbound helper) tunnels through
+	/// this proxy backend using CONNECT, regardless of the request's host. Used by
+	/// features whose outbound egress has no backend of its own to attach a tunnel
+	/// to (e.g. the OIDC browser-auth policy's discovery and token exchanges). A
+	/// dedicated clone is made and shared only by that feature; the shared app-wide
+	/// client keeps this unset.
+	tunnel_to: Option<Arc<TunnelSpec>>,
+}
+
+/// A resolved outbound proxy hop for `Client::simple_call` tunneling. The
+/// `target` is the proxy backend's socket address; the request URI keeps its own
+/// host, which becomes the CONNECT authority.
+#[derive(Debug, Clone)]
+pub struct TunnelSpec {
+	pub target: Target,
+	pub connection: ConnectionConfig,
+	pub connect: bool,
+	pub connect_headers: Vec<(HeaderName, HeaderValue)>,
+	/// Optional `Proxy-Authorization` value for an authenticated forward proxy.
+	pub token: Option<HeaderValue>,
 }
 
 impl Debug for Client {
@@ -573,7 +593,22 @@ impl Client {
 			metrics,
 		};
 		let client = b.build(connector.clone());
-		Client { client, connector }
+		Client {
+			client,
+			connector,
+			tunnel_to: None,
+		}
+	}
+
+	/// Return a dedicated clone that routes all `simple_call` egress through the
+	/// given forward-proxy hop (CONNECT). The shared client used for normal
+	/// provider/backend traffic is left untouched.
+	pub fn with_outbound_tunnel(&self, spec: TunnelSpec) -> Client {
+		Client {
+			client: self.client.clone(),
+			connector: self.connector.clone(),
+			tunnel_to: Some(Arc::new(spec)),
+		}
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
@@ -596,11 +631,39 @@ impl Client {
 			ApplicationTransport::Plaintext
 		});
 		let target = Target::from((host, port));
+		// If this client is configured to tunnel its outbound egress, wrap the
+		// application transport in a CONNECT tunnel to the proxy backend. The
+		// request keeps its own authority (the CONNECT destination); the physical
+		// connection goes to the proxy.
+		let connection = if let Some(spec) = &self.tunnel_to {
+			let Transport::Plain(app) = &transport else {
+				unreachable!("plain transport built above");
+			};
+			ConnectionConfig {
+				transport: Transport::Tunnel(
+					app.clone(),
+					TunnelConfig {
+						target: spec.target.clone(),
+						connection: Box::new(spec.connection.clone()),
+						token: spec.token.clone(),
+						connect_headers: spec.connect_headers.clone(),
+						connect: spec.connect,
+					},
+				),
+				tcp: spec.connection.tcp.clone(),
+				max_connection_duration: spec.connection.max_connection_duration,
+			}
+		} else {
+			transport.into()
+		};
 		self
 			.call(Call {
 				req,
+				// Tunneled dials resolve against the proxy (the TunnelConfig
+				// target), so keep the destination as the call target for the
+				// CONNECT authority and pool key.
 				target,
-				connection: transport.into(),
+				connection,
 			})
 			.await
 	}
