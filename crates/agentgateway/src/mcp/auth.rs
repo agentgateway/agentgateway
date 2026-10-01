@@ -28,6 +28,7 @@ pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
 pub(super) async fn apply_token_validation(
 	req: &mut Request,
 	auth: &McpAuthentication,
+	client: &PolicyClient,
 ) -> Result<(), ProxyError> {
 	// skip well-known OAuth endpoints for authn
 	if is_well_known_endpoint(req.uri().path()) {
@@ -48,9 +49,13 @@ pub(super) async fn apply_token_validation(
 		"MCP auth configured; validating Authorization header (mode={:?})",
 		auth.mode
 	);
-	auth.jwt_validator.apply(None, req).await.map_err(|e| {
-		create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
-	})?;
+	auth
+		.jwt_validator
+		.apply(None, req, Some(client))
+		.await
+		.map_err(|e| {
+			create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
+		})?;
 	Ok(())
 }
 
@@ -61,7 +66,7 @@ pub(crate) async fn enforce_authentication(
 ) -> Result<Option<Response>, ProxyError> {
 	// skip well-known OAuth endpoints for authn
 	if !is_well_known_endpoint(req.uri().path()) {
-		apply_token_validation(req, auth).await?;
+		apply_token_validation(req, auth, client).await?;
 	}
 
 	handle_mcp_request(req, auth, client).await

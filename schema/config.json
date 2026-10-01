@@ -4773,6 +4773,17 @@
             "string",
             "null"
           ]
+        },
+        "introspection": {
+          "description": "RFC 7662 Token Introspection configuration for opaque access tokens.\nWhen set, tokens that cannot be parsed as JWTs are introspected against\nthe configured endpoint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalIntrospectionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -4933,6 +4944,89 @@
         }
       },
       "additionalProperties": false
+    },
+    "LocalIntrospectionConfig": {
+      "description": "RFC 7662 Token Introspection configuration for local (file/env) configs.",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery (`introspection_endpoint`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientId": {
+          "description": "OAuth 2.0 client ID of the gateway's own confidential client, used to authenticate\nthe introspection request (RFC 7662 §2.1). This is the gateway's credential, not the\nclient whose token is being validated.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth 2.0 client secret for HTTP Basic authentication to the introspection endpoint.\nMust belong to a confidential client registered with the introspecting IdP.\nOnly `client_secret_basic` is supported; `private_key_jwt` is not.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cacheDuration": {
+          "description": "Cache duration for introspection results. Default: 30s.",
+          "$ref": "#/$defs/Duration",
+          "default": {
+            "secs": 30,
+            "nanos": 0
+          }
+        },
+        "timeout": {
+          "description": "HTTP request timeout. Default: 5s.",
+          "$ref": "#/$defs/Duration",
+          "default": {
+            "secs": 5,
+            "nanos": 0
+          }
+        },
+        "failureMode": {
+          "description": "Failure mode when introspection endpoint is unreachable. Default: FailClosed.",
+          "$ref": "#/$defs/FailureMode2",
+          "default": "failClosed"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId"
+      ]
+    },
+    "Duration": {
+      "type": "object",
+      "properties": {
+        "secs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "nanos": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "secs",
+        "nanos"
+      ]
+    },
+    "FailureMode2": {
+      "description": "Controls behavior when the introspection endpoint is unreachable.",
+      "oneOf": [
+        {
+          "description": "Reject the request with 503 Service Unavailable.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request through without validation.",
+          "type": "string",
+          "const": "failOpen"
+        }
+      ]
     },
     "A2aPolicy": {
       "type": "object",
@@ -6486,18 +6580,35 @@
           }
         },
         "jwks": {
-          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-          "$ref": "#/$defs/FileInlineOrRemote"
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nMutually exclusive with `introspection` — a provider uses either local JWKS verification\nor remote introspection, not both.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "jwtValidationOptions": {
           "description": "Claim requirements to enforce after the token signature is verified.",
           "$ref": "#/$defs/JWTValidationOptions"
+        },
+        "introspection": {
+          "description": "RFC 7662 Token Introspection for opaque access tokens. Mutually exclusive with `jwks` —\na provider uses either local JWKS verification or remote introspection, not both.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalIntrospectionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
-        "issuer",
-        "jwks"
+        "issuer"
       ]
     },
     "LocalOidcConfig": {
@@ -8123,13 +8234,13 @@
         },
         "failureMode": {
           "description": "Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).",
-          "$ref": "#/$defs/FailureMode2",
+          "$ref": "#/$defs/FailureMode3",
           "default": "failClosed"
         }
       },
       "additionalProperties": false
     },
-    "FailureMode2": {
+    "FailureMode3": {
       "type": "string",
       "enum": [
         "failClosed",
