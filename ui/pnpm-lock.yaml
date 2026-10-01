@@ -25,8 +25,8 @@ importers:
         specifier: '=1.170.18'
         version: 1.170.18(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       dompurify:
-        specifier: '=3.4.13'
-        version: 3.4.13
+        specifier: '=3.4.16'
+        version: 3.4.16
       js-yaml:
         specifier: '=5.4.2'
         version: 5.4.2
@@ -567,6 +567,9 @@ packages:
 
   dompurify@3.4.13:
     resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
+
+  dompurify@3.4.16:
+    resolution: {integrity: sha512-sqo+pNp3qRhCIpbgRi1y8Tgk27Bo2Ry7w0dC1NBeNTdZChWjz9Xb/KOoZbRP/R6pQZ80Qw8YhXw13hWWBbMRnQ==}
 
   es-toolkit@1.47.1:
     resolution: {integrity: sha512-5RAqEwf4P4E17p+W75KLOWw/nOvKZzSQpxM32IpI2KZLaVonjTrZ0Ai5ghMaVI9eKC2p8eoQgcBdkEDgzFk6+Q==}
@@ -1280,6 +1283,10 @@ snapshots:
   detect-libc@2.1.2: {}
 
   dompurify@3.4.13:
+    optionalDependencies:
+      '@types/trusted-types': 2.0.7
+
+  dompurify@3.4.16:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
