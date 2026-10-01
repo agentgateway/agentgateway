@@ -58,6 +58,14 @@ spec:
                     kind: AgentgatewayBackend
                     group: agentgateway.dev
                   failureMode: FailOpen
+              - webhook:
+                  backendRef:
+                    name: compression
+                    kind: AgentgatewayBackend
+                    group: agentgateway.dev
+                  protocol: Raw
+                  headers:
+                    ":path": '"/v1/compress"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

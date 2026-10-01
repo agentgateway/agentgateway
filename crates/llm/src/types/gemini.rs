@@ -265,6 +265,11 @@ impl RequestType for Request {
 		serde_json::to_value(&self.inner)
 	}
 
+	fn set_value(&mut self, value: serde_json::Value) -> anyhow::Result<()> {
+		self.inner = serde_json::from_value(value)?;
+		Ok(())
+	}
+
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		if let Some(system) = &mut self.inner.system_instruction {
 			visit_content_text(system, &mut |text| f(ContentScope::SystemPrompt, text));

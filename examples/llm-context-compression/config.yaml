@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Start Headroom and the compression webhook first; see README.md.
+llm:
+  models:
+  - name: "*"
+    provider: openAI
+    params:
+      apiKey: "$OPENAI_API_KEY"
+    guardrails:
+      request:
+      - webhook:
+          target:
+            host: 127.0.0.1:8788
+          protocol: raw
+          headers:
+            ":path": '"/compress"'
+          failureMode: failOpen

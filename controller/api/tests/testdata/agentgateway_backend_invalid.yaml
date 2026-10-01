@@ -28,6 +28,48 @@ spec:
                 auth:
                   oauthTokenExchange: {}
 ---
+_err: "protocol 'Raw' is not supported on response guards"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-response-webhook-raw
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      promptGuard:
+        response:
+        - webhook:
+            backendRef:
+              name: compression
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            protocol: Raw
+---
+_err: "response: webhooks with protocol 'Raw' return their own direct response"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-request-webhook-raw-response
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      promptGuard:
+        request:
+        - response:
+            message: blocked
+          webhook:
+            backendRef:
+              name: compression
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            protocol: Raw
+---
 _err: AI policies require AI
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

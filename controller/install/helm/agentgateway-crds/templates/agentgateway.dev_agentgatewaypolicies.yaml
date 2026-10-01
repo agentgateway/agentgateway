@@ -2131,11 +2131,36 @@ spec:
                                         in webhook requests.
                                       maxProperties: 64
                                       type: object
+                                    protocol:
+                                      description: |-
+                                        Protocol used to talk to the webhook.
+
+                                        `Guardrail` (default): the webhook receives the request messages in a simplified
+                                        role/content shape, and returns a pass, mask, or reject action.
+
+                                        `Raw`: the webhook receives the complete JSON request body. It responds with:
+                                        * `200`: the body is replaced with the response body.
+                                        * `204`: the body is left unchanged.
+                                        * `200` with the `x-agentgateway-direct-response` header: the request is not forwarded; the
+                                          response body, `{"status": <code>, "headers": {...}, "body": <string or JSON>}`, is
+                                          returned to the client instead.
+                                        Any other response is treated as an error. The webhook should not change the `model`, as
+                                        routing decisions have already been made based on it.
+                                        `Raw` is only supported on request guards, and is skipped for realtime requests.
+                                      enum:
+                                      - Guardrail
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'response: webhooks with protocol ''Raw''
+                                  return their own direct response'
+                                rule: '!has(self.response) || !has(self.webhook) ||
+                                  !has(self.webhook.protocol) || self.webhook.protocol
+                                  != ''Raw'''
                               - message: 'scope: only regex and bedrockGuardrails
                                   guards support a non-default scope; other guard
                                   kinds always inspect the default (SystemPrompt +
@@ -3477,11 +3502,35 @@ spec:
                                         in webhook requests.
                                       maxProperties: 64
                                       type: object
+                                    protocol:
+                                      description: |-
+                                        Protocol used to talk to the webhook.
+
+                                        `Guardrail` (default): the webhook receives the request messages in a simplified
+                                        role/content shape, and returns a pass, mask, or reject action.
+
+                                        `Raw`: the webhook receives the complete JSON request body. It responds with:
+                                        * `200`: the body is replaced with the response body.
+                                        * `204`: the body is left unchanged.
+                                        * `200` with the `x-agentgateway-direct-response` header: the request is not forwarded; the
+                                          response body, `{"status": <code>, "headers": {...}, "body": <string or JSON>}`, is
+                                          returned to the client instead.
+                                        Any other response is treated as an error. The webhook should not change the `model`, as
+                                        routing decisions have already been made based on it.
+                                        `Raw` is only supported on request guards, and is skipped for realtime requests.
+                                      enum:
+                                      - Guardrail
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'webhook: protocol ''Raw'' is not supported
+                                  on response guards'
+                                rule: '!has(self.webhook) || !has(self.webhook.protocol)
+                                  || self.webhook.protocol != ''Raw'''
                               - message: exactly one of the fields in [regex webhook
                                   bedrockGuardrails googleModelArmor] must be set
                                 rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)

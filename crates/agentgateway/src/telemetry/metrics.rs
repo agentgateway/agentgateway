@@ -59,6 +59,7 @@ pub enum GuardrailAction {
 	FailOpen,
 	/// Guard ran in observe mode: the verdict was recorded but not enforced.
 	Audit,
+	Rewrite,
 	Mask,
 	Reject,
 }

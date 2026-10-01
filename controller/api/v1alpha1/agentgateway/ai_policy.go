@@ -191,12 +191,37 @@ type Webhook struct {
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
+	// Protocol used to talk to the webhook.
+	//
+	// `Guardrail` (default): the webhook receives the request messages in a simplified
+	// role/content shape, and returns a pass, mask, or reject action.
+	//
+	// `Raw`: the webhook receives the complete JSON request body. It responds with:
+	// * `200`: the body is replaced with the response body.
+	// * `204`: the body is left unchanged.
+	// * `200` with the `x-agentgateway-direct-response` header: the request is not forwarded; the
+	//   response body, `{"status": <code>, "headers": {...}, "body": <string or JSON>}`, is
+	//   returned to the client instead.
+	// Any other response is treated as an error. The webhook should not change the `model`, as
+	// routing decisions have already been made based on it.
+	// `Raw` is only supported on request guards, and is skipped for realtime requests.
+	// +optional
+	Protocol WebhookProtocol `json:"protocol,omitempty"`
+
 	// Action controls whether the webhook's verdict is enforced or only observed.
 	// `Reject` (the default) enforces it; `Audit` records the would-be action
 	// without blocking or masking.
 	// +optional
 	Action *RejectAuditAction `json:"action,omitempty"`
 }
+
+const (
+	WebhookProtocolGuardrail WebhookProtocol = "Guardrail"
+	WebhookProtocolRaw       WebhookProtocol = "Raw"
+)
+
+// +k8s:enum
+type WebhookProtocol string
 
 // Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
@@ -298,6 +323,7 @@ type GoogleModelArmor struct {
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.response) || !has(self.webhook) || !has(self.webhook.protocol) || self.webhook.protocol != 'Raw'",message="response: webhooks with protocol 'Raw' return their own direct response"
 // +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
@@ -343,6 +369,7 @@ type PromptguardRequest struct {
 
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.webhook) || !has(self.webhook.protocol) || self.webhook.protocol != 'Raw'",message="webhook: protocol 'Raw' is not supported on response guards"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The response was rejected due to inappropriate content`.

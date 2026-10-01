@@ -1,0 +1,396 @@
+---
+source: crates/agentgateway/src/llm/policy/tests.rs
+expression: report
+---
+{
+  "Completions": {
+    "messages": [
+      {
+        "role": "system",
+        "name": "system_assistant",
+        "content": "You are a helpful assistant that specializes in technical documentation and code analysis."
+      },
+      {
+        "role": "user",
+        "name": "user_1",
+        "content": "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
+      },
+      {
+        "role": "assistant",
+        "name": "assistant_1",
+        "content": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What's in this image?"
+          },
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,iVBORw0KGgo="
+            }
+          }
+        ]
+      }
+    ],
+    "model": "gpt-4-turbo-preview",
+    "top_p": 0.8999999761581421,
+    "temperature": 0.699999988079071,
+    "stream": false,
+    "frequency_penalty": 0.20000000298023224,
+    "presence_penalty": 0.10000000149011612,
+    "seed": 42,
+    "max_tokens": 1000,
+    "stop": [
+      "\n\n",
+      "END"
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the current weather in a given location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string",
+                "description": "The city and state, e.g. San Francisco, CA"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "celsius",
+                  "fahrenheit"
+                ]
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "function",
+      "function": {
+        "name": "my_function"
+      }
+    },
+    "user": "user_12345",
+    "n": 3,
+    "logit_bias": {
+      "50256": -100
+    },
+    "response_format": {
+      "type": "json_object"
+    },
+    "functions": [
+      {
+        "name": "calculate_fibonacci",
+        "description": "Calculate the nth Fibonacci number using an optimized algorithm",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "n": {
+              "type": "integer",
+              "description": "The position in the Fibonacci sequence (0-indexed)",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "n"
+          ]
+        }
+      }
+    ],
+    "function_call": "auto",
+    "webhook_extension": {
+      "processed": true
+    }
+  },
+  "Messages": {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "First assistant block"
+          },
+          {
+            "type": "text",
+            "text": "Second assistant block",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Cached user text",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "aGVsbG8="
+            },
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_text",
+            "name": "lookup",
+            "input": {}
+          },
+          {
+            "type": "tool_use",
+            "id": "call_array",
+            "name": "lookup",
+            "input": {}
+          },
+          {
+            "type": "tool_use",
+            "id": "call_image",
+            "name": "lookup",
+            "input": {}
+          },
+          {
+            "type": "tool_use",
+            "id": "call_mixed",
+            "name": "lookup",
+            "input": {},
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_text",
+            "content": "text result",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_array",
+            "content": [
+              {
+                "type": "text",
+                "text": "array result",
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_image",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "aGVsbG8="
+                },
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_mixed",
+            "content": [
+              {
+                "type": "text",
+                "text": "before image"
+              },
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "aGVsbG8="
+                },
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              },
+              {
+                "type": "text",
+                "text": "after image"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "System-role block",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-terra",
+    "system": [
+      {
+        "type": "text",
+        "text": "First system block"
+      },
+      {
+        "type": "text",
+        "text": "Second system block",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "max_tokens": 1024,
+    "tools": [
+      {
+        "name": "lookup",
+        "description": "Look up information",
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        },
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "webhook_extension": {
+      "processed": true
+    }
+  },
+  "Responses": {
+    "input": "Hello, world",
+    "model": "gpt-4o",
+    "max_output_tokens": 1024,
+    "webhook_extension": {
+      "processed": true
+    }
+  },
+  "Gemini": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "hi",
+            "someNewPartField": {
+              "nested": [
+                1,
+                2,
+                3
+              ]
+            }
+          }
+        ],
+        "someNewContentField": true
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "someNewPartKind": {
+              "opaque": "blob"
+            }
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "be brief"
+        }
+      ],
+      "someNewSystemField": "x"
+    },
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingBudget": 1024,
+        "someNewThinkingField": "z"
+      },
+      "someNewGenerationField": [
+        "a",
+        "b"
+      ]
+    },
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "f",
+            "someNewDeclField": 1
+          }
+        ],
+        "someNewToolField": "y"
+      }
+    ],
+    "toolConfig": {
+      "functionCallingConfig": {
+        "mode": "AUTO",
+        "someNewKnob": 1
+      },
+      "someNewToolConfigField": 2
+    },
+    "safetySettings": [
+      {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "OFF",
+        "someNewSafetyField": null
+      }
+    ],
+    "modelArmorConfig": {
+      "promptTemplateName": "projects/p/locations/l/templates/t"
+    },
+    "someNewTopLevelField": {
+      "deeply": {
+        "nested": 1
+      }
+    },
+    "webhook_extension": {
+      "processed": true
+    }
+  }
+}
