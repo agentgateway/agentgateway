@@ -277,6 +277,8 @@ pub enum Tool {
 #[derive(Clone, std::fmt::Debug, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachePointBlock {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub ttl: Option<String>,
 	/// Specifies the type of cache point within the CachePointBlock.
 	pub r#type: CachePointType,
 }

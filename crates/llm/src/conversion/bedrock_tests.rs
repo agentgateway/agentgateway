@@ -2058,3 +2058,82 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+#[test]
+fn test_dropped_server_tools_preserve_cache_control() {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	for (existing, dropped, expected) in [
+		(None, None, None),
+		(None, Some("1h"), Some("1h")),
+		(Some("1h"), Some("5m"), Some("1h")),
+		(Some("1h"), None, Some("1h")),
+	] {
+		let marker = dropped.map(|ttl| json!({"type": "ephemeral", "ttl": ttl}));
+		let req = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-5", "max_tokens": 64,
+			"messages": [{"role": "user", "content": "hello"}],
+			"tools": [
+				{"name": "lookup", "input_schema": {"type": "object"}, "cache_control": existing.map(|ttl| json!({"type": "ephemeral", "ttl": ttl}))},
+				{"type": "web_search_20250305", "name": "web_search", "cache_control": marker},
+				{"type": "web_fetch_20250910", "name": "web_fetch", "cache_control": marker}
+			]
+		}))
+		.unwrap();
+		let (out, _) = from_messages::translate_internal(req, &provider, None, None).unwrap();
+		let tools = out.tool_config.unwrap().tools;
+		if let Some(ttl) = expected {
+			assert_eq!(
+				serde_json::to_value(&tools[1]).unwrap()["cachePoint"]["ttl"],
+				ttl
+			);
+		}
+		assert_eq!(tools.len(), if expected.is_some() { 2 } else { 1 });
+		assert_eq!(
+			matches!(tools.last(), Some(types::bedrock::Tool::CachePoint(_))),
+			expected.is_some()
+		);
+	}
+}
+
+#[test]
+fn test_moved_cache_markers_skip_thinking() {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	for prefix in [None, Some("retained")] {
+		let mut content = Vec::new();
+		if let Some(text) = prefix {
+			content.push(json!({"type": "text", "text": text}));
+		}
+		content.extend([
+            json!({"type": "thinking", "thinking": "reasoning", "signature": "signature"}),
+            json!({"type": "document", "source": {"type": "text", "data": "omitted"}, "cache_control": {"type": "ephemeral", "ttl": "1h"}}),
+            json!({"type": "text", "text": "suffix"}),
+        ]);
+		let req = serde_json::from_value(json!({"model": "claude-sonnet-4-5", "max_tokens": 64, "messages": [{"role": "assistant", "content": content}]})).unwrap();
+		let (out, _) = from_messages::translate_internal(req, &provider, None, None).unwrap();
+		let blocks = serde_json::to_value(&out.messages[0]).unwrap()["content"]
+			.as_array()
+			.unwrap()
+			.clone();
+		let checkpoint = blocks
+			.iter()
+			.position(|block| block.get("cachePoint").is_some());
+		assert_eq!(checkpoint, prefix.map(|_| 1));
+		if let Some(index) = checkpoint {
+			assert_eq!(blocks[index - 1]["text"], "retained");
+			assert_eq!(blocks[index]["cachePoint"]["ttl"], "1h");
+		}
+		assert_eq!(blocks.last().unwrap()["text"], "suffix");
+	}
+}
