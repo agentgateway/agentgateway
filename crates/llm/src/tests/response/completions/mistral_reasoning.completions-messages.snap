@@ -1,0 +1,70 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/mistral_reasoning.json
+info:
+  id: 83a905c2fe1e4ec8a2ce8dd5e0a3ec35
+  created: 1790873165
+  model: zai-glm-5-3
+  usage:
+    prompt_tokens: 13
+    total_tokens: 288
+    completion_tokens: 275
+    prompt_tokens_details:
+      cached_tokens: 0
+  object: chat.completion
+  choices:
+    - index: 0
+      finish_reason: stop
+      message:
+        role: assistant
+        index: 0
+        content:
+          - type: thinking
+            thinking:
+              - type: text
+                text: Let me consider how to respond to this greeting effectively.
+            closed: true
+          - type: text
+            text: Hi there! How can I assist you today?
+      logprobs: ~
+      response_error:
+        format_error: ~
+        content_validation:
+          - valid_think_chunk
+          - valid_text_chunk
+        tool_calls_validation: []
+        extra_tags: []
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "Let me consider how to respond to this greeting effectively.",
+        "signature": ""
+      },
+      {
+        "type": "text",
+        "text": "Hi there! How can I assist you today?"
+      }
+    ],
+    "model": "zai-glm-5-3",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 13,
+      "output_tokens": 275,
+      "cache_read_input_tokens": 0
+    }
+  },
+  "parsed": {
+    "input_tokens": 13,
+    "output_tokens": 275,
+    "total_tokens": 288,
+    "cached_input_tokens": 0,
+    "provider_model": "zai-glm-5-3"
+  }
+}
