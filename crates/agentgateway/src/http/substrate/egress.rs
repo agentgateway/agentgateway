@@ -128,10 +128,12 @@ impl RequestPolicyTrait for SubstrateEgress {
 					.into(),
 			);
 		}
-		if req.method() == ::http::Method::CONNECT {
+		if req.method() == ::http::Method::CONNECT
+			|| req.headers().contains_key(::http::header::UPGRADE)
+		{
 			return Err(
 				ProxyError::SubstrateEgressDenied(
-					"nested CONNECT is not an HTTP egress request".to_owned(),
+					"HTTP upgrades, including CONNECT, are denied for actor egress".to_owned(),
 				)
 				.into(),
 			);

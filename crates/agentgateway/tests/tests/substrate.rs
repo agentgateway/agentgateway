@@ -1843,6 +1843,151 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
+#[case(false, "websocket")]
+#[case(true, "websocket")]
+#[case(false, "custom-protocol")]
+#[case(true, "custom-protocol")]
+#[tokio::test]
+async fn substrate_egress_denies_http_upgrades_without_dialing(
+	#[case] https: bool,
+	#[case] upgrade: &str,
+) {
+	let (upstream, root) = if https {
+		let (upstream, certs) = tls_mock().await;
+		(upstream, Some(certs.root_cert.pem().into_bytes()))
+	} else {
+		(simple_mock().await, None)
+	};
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let address = listener.local_addr().unwrap();
+	let port = address.port();
+	let upstream_address = *upstream.address();
+	let (connected, mut connections) = tokio::sync::mpsc::unbounded_channel();
+	let forwarder = tokio::spawn(async move {
+		loop {
+			let (mut downstream, _) = listener.accept().await.unwrap();
+			connected.send(()).unwrap();
+			tokio::spawn(async move {
+				let mut upstream = TcpStream::connect(upstream_address).await.unwrap();
+				let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+			});
+		}
+	});
+	let ports = Some(protos::ateapi::Ports {
+		numbers: vec![i32::from(port)],
+		..Default::default()
+	});
+	let rule = if https {
+		protos::ateapi::EgressRule {
+			https: Some(protos::ateapi::HttpsRule {
+				hostnames: vec!["localhost".to_owned()],
+				ports,
+				effects: None,
+			}),
+			..Default::default()
+		}
+	} else {
+		protos::ateapi::EgressRule {
+			http: Some(protos::ateapi::HttpRule {
+				hostnames: vec!["localhost".to_owned()],
+				ports,
+				effects: None,
+			}),
+			..Default::default()
+		}
+	};
+	let (gateway, _api) = substrate_tls_gateway(
+		Ok(EgressPolicy {
+			rules: vec![rule],
+			..Default::default()
+		}),
+		address,
+		root,
+	)
+	.await;
+	let gateway = if https {
+		gateway
+	} else {
+		let mut inner = simple_bind();
+		inner.address = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+		inner.mode = BindMode::Internal;
+		inner.protocol = BindProtocol::auto;
+		gateway.with_bind(inner)
+	};
+
+	async fn exchange(mut io: impl AsyncRead + AsyncWrite + Unpin, request: &str) -> Vec<u8> {
+		io.write_all(request.as_bytes()).await.unwrap();
+		let mut response = Vec::new();
+		while !response.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+			let mut buf = [0; 256];
+			let n = io.read(&mut buf).await.unwrap();
+			assert_ne!(n, 0, "connection closed before HTTP response headers");
+			response.extend_from_slice(&buf[..n]);
+		}
+		response
+	}
+
+	for upgrading in [false, true] {
+		let io = open_actor_egress_tunnel(&gateway, port).await;
+		let headers = if upgrading {
+			format!(
+				"Connection: keep-alive, UpGrAdE\r\nUpGrAdE: {upgrade}\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+			)
+		} else {
+			"Connection: close\r\n".to_owned()
+		};
+		let request = format!("GET /upgrade HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n");
+		let response = tokio::time::timeout(Duration::from_secs(3), async {
+			if https {
+				let tls: agentgateway::http::backendtls::BackendTLS =
+					agentgateway::http::backendtls::ResolvedBackendTLS {
+						root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
+						alpn: Some(vec!["http/1.1".to_owned()]),
+						..Default::default()
+					}
+					.try_into()
+					.unwrap();
+				let io = tokio_rustls::TlsConnector::from(tls.base_config().config)
+					.connect(
+						rustls_pki_types::ServerName::try_from("localhost").unwrap(),
+						io,
+					)
+					.await
+					.unwrap();
+				exchange(io, &request).await
+			} else {
+				exchange(io, &request).await
+			}
+		})
+		.await
+		.expect("timed out waiting for HTTP response");
+		let expected = if upgrading {
+			"HTTP/1.1 403 Forbidden\r\n"
+		} else {
+			"HTTP/1.1 200 OK\r\n"
+		};
+		assert!(
+			response.starts_with(expected.as_bytes()),
+			"{}",
+			String::from_utf8_lossy(&response)
+		);
+		if upgrading {
+			assert!(
+				tokio::time::timeout(Duration::from_millis(50), connections.recv())
+					.await
+					.is_err(),
+				"denied upgrade opened an upstream connection"
+			);
+		} else {
+			connections.recv().await.unwrap();
+		}
+		assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+	}
+	forwarder.abort();
+}
+
+#[cfg(feature = "crypto-aws-lc")]
+#[rstest::rstest]
 #[case("unmatched-sni")]
 #[case("unmatched-sni-allowed-authority")]
 #[case("unmatched-port")]

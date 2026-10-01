@@ -29,7 +29,8 @@ Every HTTP route serving actor traffic must select a `substrateEgress` request
 policy. It fetches the current policy on each request, checks the authority
 against the HTTP or HTTPS rules for the inner transport, and applies only the
 winning rule's effects. For HTTPS, the ClientHello SNI selects the certificate;
-the request authority is authorized independently. Nested CONNECT is denied.
+the request authority is authorized independently. Upgrades in Substrate are
+denied (including CONNECT).
 
 Both HTTP and TLS passthrough routes require dynamic backends. The gateway
 resolves the authorized HTTP authority or TLS SNI through DNS and uses the
