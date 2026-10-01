@@ -144,6 +144,7 @@ mod requests {
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
+		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
@@ -1869,50 +1870,4 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
 		"explicit"
 	);
-}
-
-#[test]
-fn blank_text_cache_markers_preserve_the_retained_prefix() {
-	let provider = bedrock::Provider {
-		model_override: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-		endpoint_preference: Default::default(),
-	};
-	for role in ["user", "assistant", "system", "developer"] {
-		let blank =
-			json!({"type": "text", "text": " \n", "prompt_cache_breakpoint": {"mode": "explicit"}});
-		let req: types::completions::Request = serde_json::from_value(json!({
-			"model": "anthropic.claude-sonnet-4-5", "messages": [{
-				"role": role,
-				"reasoning_content": "reasoning",
-				"reasoning_signature": "signature",
-				"content": [blank, {"type": "text", "text": "retained"}, blank, blank, {"type": "text", "text": "suffix"}]
-			}]
-		})).unwrap();
-		let bedrock: Value = serde_json::from_slice(
-			&conversion::bedrock::from_completions::translate(&req, &provider, None, None, None)
-				.unwrap()
-				.body,
-		)
-		.unwrap();
-		let system = matches!(role, "system" | "developer");
-		let bedrock = if system {
-			&bedrock["system"]
-		} else {
-			&bedrock["messages"][0]["content"]
-		};
-		if role == "assistant" {
-			assert!(bedrock[0].get("reasoningContent").is_some());
-		}
-		let offset = usize::from(role == "assistant");
-		let bedrock = Value::Array(bedrock.as_array().unwrap()[offset..].to_vec());
-		assert_eq!(
-			bedrock,
-			json!([
-				{"text": "retained"}, {"cachePoint": {"type": "default"}}, {"text": "suffix"}
-			])
-		);
-	}
 }

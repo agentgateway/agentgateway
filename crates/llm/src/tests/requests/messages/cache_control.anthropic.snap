@@ -36,6 +36,7 @@ info:
             data: aGVsbG8=
           cache_control:
             type: ephemeral
+            ttl: 5m
     - role: assistant
       content:
         - type: tool_use
@@ -148,7 +149,8 @@ info:
               "data": "aGVsbG8="
             },
             "cache_control": {
-              "type": "ephemeral"
+              "type": "ephemeral",
+              "ttl": "5m"
             }
           }
         ]

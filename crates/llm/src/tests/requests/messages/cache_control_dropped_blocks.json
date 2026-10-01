@@ -74,15 +74,9 @@
           }
         },
         {
-          "type": "search_result",
-          "source": "https://example.com",
-          "title": "Result",
-          "content": [
-            {
-              "type": "text",
-              "text": "omitted"
-            }
-          ],
+          "type": "web_search_tool_result",
+          "tool_use_id": "srv_1",
+          "content": [],
           "cache_control": {
             "type": "ephemeral"
           }
@@ -101,52 +95,46 @@
           "text": "Before server tool"
         },
         {
+          "type": "thinking",
+          "thinking": "reasoning",
+          "signature": "signature"
+        },
+        {
           "type": "server_tool_use",
           "id": "srv_1",
           "name": "web_search",
           "input": {},
           "cache_control": {
-            "type": "ephemeral"
+            "type": "ephemeral",
+            "ttl": "1h"
           }
         }
       ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "lookup",
+      "input_schema": {
+        "type": "object"
+      }
     },
     {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Before web result"
-        },
-        {
-          "type": "web_search_tool_result",
-          "tool_use_id": "srv_1",
-          "content": [],
-          "cache_control": {
-            "type": "ephemeral"
-          }
-        }
-      ]
+      "type": "web_search_20250305",
+      "name": "web_search",
+      "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+      }
     },
     {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Checkpoint limit reached"
-        },
-        {
-          "type": "document",
-          "source": {
-            "type": "text",
-            "media_type": "text/plain",
-            "data": "omitted"
-          },
-          "cache_control": {
-            "type": "ephemeral"
-          }
-        }
-      ]
+      "name": "over_limit",
+      "input_schema": {
+        "type": "object"
+      },
+      "cache_control": {
+        "type": "ephemeral"
+      }
     }
   ]
 }

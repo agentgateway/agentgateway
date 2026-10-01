@@ -45,12 +45,9 @@ info:
               text: omitted
           cache_control:
             type: ephemeral
-        - type: search_result
-          source: "https://example.com"
-          title: Result
-          content:
-            - type: text
-              text: omitted
+        - type: web_search_tool_result
+          tool_use_id: srv_1
+          content: []
           cache_control:
             type: ephemeral
         - type: text
@@ -59,32 +56,30 @@ info:
       content:
         - type: text
           text: Before server tool
+        - type: thinking
+          thinking: reasoning
+          signature: signature
         - type: server_tool_use
           id: srv_1
           name: web_search
           input: {}
           cache_control:
             type: ephemeral
-    - role: user
-      content:
-        - type: text
-          text: Before web result
-        - type: web_search_tool_result
-          tool_use_id: srv_1
-          content: []
-          cache_control:
-            type: ephemeral
-    - role: user
-      content:
-        - type: text
-          text: Checkpoint limit reached
-        - type: document
-          source:
-            type: text
-            media_type: text/plain
-            data: omitted
-          cache_control:
-            type: ephemeral
+            ttl: 1h
+  tools:
+    - name: lookup
+      input_schema:
+        type: object
+    - type: web_search_20250305
+      name: web_search
+      cache_control:
+        type: ephemeral
+        ttl: 1h
+    - name: over_limit
+      input_schema:
+        type: object
+      cache_control:
+        type: ephemeral
 ---
 {
   "request": {
@@ -126,35 +121,55 @@ info:
           },
           {
             "cachePoint": {
+              "ttl": "1h",
               "type": "default"
             }
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": [
-          {
-            "text": "Before web result"
           },
           {
-            "cachePoint": {
-              "type": "default"
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "reasoning",
+                "signature": "signature"
+              }
             }
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": [
-          {
-            "text": "Checkpoint limit reached"
           }
         ]
       }
     ],
     "inferenceConfig": {
       "maxTokens": 64
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "lookup",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "cachePoint": {
+            "ttl": "1h",
+            "type": "default"
+          }
+        },
+        {
+          "toolSpec": {
+            "name": "over_limit",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "parsed": {
@@ -182,14 +197,6 @@ info:
       {
         "role": "assistant",
         "content": "Before server tool"
-      },
-      {
-        "role": "user",
-        "content": "Before web result"
-      },
-      {
-        "role": "user",
-        "content": "Checkpoint limit reached"
       }
     ]
   }

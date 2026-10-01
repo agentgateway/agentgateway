@@ -52,7 +52,8 @@
             "data": "aGVsbG8="
           },
           "cache_control": {
-            "type": "ephemeral"
+            "type": "ephemeral",
+            "ttl": "5m"
           }
         }
       ]
