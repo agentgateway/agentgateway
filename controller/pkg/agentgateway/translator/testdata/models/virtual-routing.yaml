@@ -73,7 +73,6 @@ spec:
       - modelRef:
           name: openai-models
         model: gpt-5-large
-        weight: 10
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -209,7 +208,7 @@ output:
           - model: gpt-5-mini
             weight: 90
           - model: gpt-5-large
-            weight: 10
+            weight: 1
 - gateway:
     Name: virtual-models
     Namespace: default

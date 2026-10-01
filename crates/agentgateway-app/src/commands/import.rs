@@ -14,7 +14,7 @@ fn import_file(path: PathBuf, output: Option<PathBuf>, source: &str) -> anyhow::
 		database_url: import_database_url(output.as_deref()),
 	};
 	let result = agentgateway::import::import_config_with_options(source, &contents, &options)?;
-	let imported = agentgateway::yamlviajson::to_string(&result.config)?;
+	let imported = agentgateway::yaml::to_string(&result.config)?;
 	for finding in result.findings {
 		eprintln!(
 			"{}: {}: {}",

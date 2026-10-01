@@ -209,7 +209,7 @@ export function ProviderConfigEditor(props: {
 					{provider === 'bedrock' ? (
 						<FieldGroup
 							label="Bedrock endpoint"
-							tooltip="Mantle supports native Anthropic and OpenAI APIs, including supported server-side tools and background requests. It requires Mantle-specific AWS permissions. Choose Runtime for existing Bedrock deployments, Bedrock Guardrails, cross-region inference, or Claude structured outputs. Prefer modes automatically select the other endpoint for models the catalog lists as available only there; unknown models use your preference. Only modes force the selected endpoint for chat, so unsupported models fail. Neither mode retries failed requests on the other endpoint. Embeddings and reranking are unaffected."
+							tooltip="Mantle supports native Anthropic and OpenAI APIs, including supported server-side tools and background requests. It requires Mantle-specific AWS permissions. Choose Runtime for existing Bedrock deployments, inline Bedrock guardrails, cross-region inference, or Claude structured outputs. Bedrock guardrails configured on the Guardrails page work with either endpoint. Prefer modes automatically select the other endpoint for models the catalog lists as available only there; unknown models use your preference. Inline guardrails prevent fallback to Mantle and cannot be combined with either Mantle mode. Only modes force the selected endpoint for chat, so unsupported models fail. Neither mode retries failed requests on the other endpoint. Embeddings and reranking are unaffected."
 						>
 							<EnumSelector<NonNullable<LlmParams['bedrockEndpointPreference']>>
 								ariaLabel="Bedrock endpoint"

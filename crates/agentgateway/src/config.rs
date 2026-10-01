@@ -20,7 +20,7 @@ use crate::{
 	client, serdes, telemetry, types,
 };
 
-const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
+const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey["agentgateway.dev/owner"], apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
 const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
 
 #[derive(Default)]
@@ -37,7 +37,7 @@ pub fn parse_config(
 	// Shellexpend before parsing it
 	let contents = contents.replace("# yaml-language-server: $schema", "#");
 	let contents = shellexpand::full(&contents)?;
-	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
+	let nested: NestedRawConfig = serdes::yaml::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
 	let sensitive_headers = raw

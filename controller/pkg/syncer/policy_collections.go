@@ -43,8 +43,10 @@ func BuildPolicies(agwPlugins plugins.AgwPlugin, references plugins.ReferenceInd
 	}
 	joinPolicies := krt.JoinCollection(allPolicies, krtopts.ToOptions("policies/All")...)
 
-	allPoliciesCol := krt.NewCollection(joinPolicies, func(ctx krt.HandlerContext, i plugins.AgwPolicy) *ir.AgwResource {
-		return new(translator.ToResourceForGateway(*i.Gateway, i))
+	// This only wraps an existing policy pointer. Map it on demand to avoid
+	// retaining KRT input/output maps and a singleton output-key set per policy.
+	allPoliciesCol := krt.MapCollection(joinPolicies, func(i plugins.AgwPolicy) ir.AgwResource {
+		return translator.ToResourceForGateway(*i.Gateway, i)
 	}, krtopts.ToOptions("resources/Policies")...)
 
 	return allPoliciesCol, policyStatusMap

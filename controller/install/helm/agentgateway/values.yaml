@@ -227,10 +227,10 @@ inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
-# -- Configure the experimental AgentgatewayModel API.
+# -- Configure the AgentgatewayModel API.
 agentgatewayModels:
   # -- Enable AgentgatewayModel support in the agentgateway controller.
-  enabled: false
+  enabled: true
 
 # -- Configure the experimental Gateway API XBackend resource.
 xBackend:
@@ -321,3 +321,8 @@ monitoring:
     # -- Labels that the Grafana sidecar uses to discover dashboards.
     labels:
       grafana_dashboard: "1"
+    # -- Annotations on the dashboard ConfigMap. Provisioners that place a dashboard
+    #    by display name read the folder, and sometimes the organization, from an
+    #    annotation rather than a label, because a label value admits no spaces
+    #    (e.g. grafana_folder: "Platform gateways").
+    annotations: {}

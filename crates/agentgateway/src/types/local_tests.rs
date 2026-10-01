@@ -332,9 +332,8 @@ backends:
 fn test_local_backend_policies_reject_unknown_fields() {
 	// serde(flatten) disables deny_unknown_fields on the outer struct, but the
 	// flattened SimpleLocalBackendPolicies still rejects leftover unknown keys.
-	let err =
-		crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
-			.unwrap_err();
+	let err = crate::serdes::yaml::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
+		.unwrap_err();
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
@@ -690,40 +689,6 @@ async fn test_llm_virtual_model_failover_config() {
 #[tokio::test]
 async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
-}
-
-#[test]
-fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
-	let default_routes = super::llm_route_types(None);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"default route table should include explicit message endpoint"
-	);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "*"
-				&& *route_type == crate::llm::RouteType::Passthrough),
-		"default route table should include passthrough wildcard"
-	);
-
-	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
-	assert!(
-		detect_passthrough
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"passthrough override should preserve explicit route defaults"
-	);
-	assert!(
-		detect_passthrough.iter().any(
-			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
-		),
-		"passthrough override should replace wildcard fallback"
-	);
 }
 
 #[tokio::test]
@@ -1585,6 +1550,28 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_local_mcp_target_condition_requires_multiplexing() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  targets:
+  - name: only
+    condition: 'true'
+    stdio:
+      cmd: echo
+"#,
+	)
+	.await
+	.expect_err("a condition on a single MCP target should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("mcp target condition requires at least two configured targets"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_local_mcp_stdio_target_rejects_policies() {
 	let yaml = r#"
 mcp:
@@ -2100,7 +2087,8 @@ binds:
 #[test]
 fn test_migrate_deprecated_local_config_moves_fields() {
 	let _env = ClearTracingEnv::new();
-	let input = r#"
+	let input = r#"# yaml-language-server: $schema=./config.schema.json
+# Gateway settings
 config:
   logging:
     level: info
@@ -2115,9 +2103,27 @@ config:
     headers:
       authorization: token
     otlpProtocol: http
+
+# Public listeners
+binds:
+  - port: 8080 # keep this port
+    listeners: []
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	assert!(
+		out.starts_with("# yaml-language-server: $schema=./config.schema.json\n# Gateway settings\n")
+	);
+	assert!(
+		out
+			.contains("# Public listeners\nbinds:\n  - port: 8080 # keep this port\n    listeners: []\n"),
+		"{out}"
+	);
+	let unchanged = "# Current config\nbinds: [] # no listeners\n";
+	assert_eq!(
+		super::migrate_deprecated_local_config(unchanged).unwrap(),
+		unchanged
+	);
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let cfg = v.get("config").unwrap();
 	let logging = cfg.get("logging").unwrap();
 	assert_eq!(logging.get("level").unwrap(), "info");
@@ -2154,7 +2160,7 @@ config:
     otlpProtocol: http
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	let policies = tracing
 		.get("policies")
@@ -2182,7 +2188,7 @@ config:
     otlpProtocol: http
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	assert_eq!(
 		tracing.get("inlineBackend").unwrap(),
@@ -2205,7 +2211,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
 	let out = super::migrate_deprecated_local_config(&input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	assert_eq!(tracing.get("inlineBackend").unwrap(), expected);
 }

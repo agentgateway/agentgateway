@@ -1,5 +1,140 @@
 use super::parse_data_url;
 
+mod context_overflow {
+	use bytes::Bytes;
+	use http::StatusCode;
+	use serde_json::{Value, json};
+
+	const OVERFLOW: &str =
+		"Your input exceeds the context window of this model. Please adjust your input and try again.";
+
+	fn check(error: Value, status: StatusCode, error_type: &str, message: &str) {
+		let bytes = Bytes::from(serde_json::to_vec(&json!({"error": error})).unwrap());
+		for translate in [
+			super::super::from_messages::translate_error,
+			crate::conversion::responses::from_messages::translate_error,
+		] {
+			let translated = translate(&bytes, status).unwrap();
+			let translated: Value = serde_json::from_slice(&translated).unwrap();
+			assert_eq!(
+				translated,
+				json!({"type": "error", "error": {"type": error_type, "message": message}}),
+				"status={status}, error={error}"
+			);
+		}
+	}
+
+	#[test]
+	fn structured_code_enables_compaction_without_matching_message_text() {
+		check(
+			json!({"type": "invalid_request", "code": "context_length_exceeded", "message": "input rejected"}),
+			StatusCode::BAD_REQUEST,
+			"invalid_request_error",
+			"capability_rejected: prompt_too_long input rejected",
+		);
+	}
+
+	#[test]
+	fn provider_messages_enable_compaction_without_a_usable_code() {
+		for message in [
+			OVERFLOW,
+			"Prompt is too long: 213000 tokens > 200000 maximum",
+			"Input is too long for requested model.",
+			"Request would exceed context limit of 8192 tokens",
+			"This model's maximum context length is 8192 tokens. You requested 9000 tokens.",
+			"Request exceeds model's maximum context limit of 8192 tokens",
+			"Input is longer than the model's context length of 8192 tokens",
+			"INPUT TOKENS EXCEED THE CONFIGURED LIMIT of 8192 tokens",
+			"Request (9000 tokens) exceeds the available context size (8192 tokens)",
+		] {
+			check(
+				json!({"message": message}),
+				StatusCode::BAD_REQUEST,
+				"invalid_request_error",
+				&format!("capability_rejected: prompt_too_long {message}"),
+			);
+		}
+		for code in [Value::Null, json!(400), json!(false), json!([]), json!({})] {
+			check(
+				json!({"message": OVERFLOW, "code": code}),
+				StatusCode::BAD_REQUEST,
+				"invalid_request_error",
+				&format!("capability_rejected: prompt_too_long {OVERFLOW}"),
+			);
+		}
+	}
+
+	#[test]
+	fn unrelated_codes_and_messages_are_not_context_overflow() {
+		for code in ["invalid_value", "request_body_too_large", "bad_request", ""] {
+			check(
+				json!({"code": code, "message": OVERFLOW}),
+				StatusCode::BAD_REQUEST,
+				"invalid_request_error",
+				OVERFLOW,
+			);
+		}
+		for message in [
+			"bad request",
+			"request body too large",
+			"too many tokens per minute",
+			"token limit exceeded for this account",
+			"max_tokens exceeds the maximum output token limit",
+			"string too long. expected a string with maximum length 64",
+		] {
+			for code in [Value::Null, json!(400), json!({})] {
+				check(
+					json!({"code": code, "message": message}),
+					StatusCode::BAD_REQUEST,
+					"invalid_request_error",
+					message,
+				);
+			}
+		}
+	}
+
+	#[test]
+	fn other_http_statuses_keep_their_error_classification() {
+		for (status, error_type) in [
+			(StatusCode::UNAUTHORIZED, "authentication_error"),
+			(StatusCode::FORBIDDEN, "authentication_error"),
+			(StatusCode::PAYLOAD_TOO_LARGE, "api_error"),
+			(StatusCode::TOO_MANY_REQUESTS, "rate_limit_error"),
+			(StatusCode::INTERNAL_SERVER_ERROR, "api_error"),
+		] {
+			check(json!({"message": OVERFLOW}), status, error_type, OVERFLOW);
+			check(
+				json!({"code": "context_length_exceeded", "message": OVERFLOW}),
+				status,
+				error_type,
+				OVERFLOW,
+			);
+		}
+		check(
+			json!({"type": "request_too_large", "code": "request_body_too_large", "message": "request body too large"}),
+			StatusCode::PAYLOAD_TOO_LARGE,
+			"request_too_large",
+			"request body too large",
+		);
+	}
+
+	#[test]
+	fn existing_capability_markers_are_preserved() {
+		for message in [
+			"capability_rejected: prompt_too_long",
+			"upstream rejected input: capability_rejected: prompt_too_long",
+			"capability_rejected: unsupported_parameter",
+		] {
+			check(
+				json!({"type": "invalid_request", "code": "context_length_exceeded", "message": message}),
+				StatusCode::BAD_REQUEST,
+				"invalid_request_error",
+				message,
+			);
+		}
+	}
+}
+
 #[test]
 fn plain_base64_data_url() {
 	assert_eq!(

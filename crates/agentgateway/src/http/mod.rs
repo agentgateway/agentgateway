@@ -759,16 +759,19 @@ pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
+/// Read with the request's size limit and remaining body deadline.
 pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
 }
 
+/// Read with the response's size limit and remaining body deadline.
 pub async fn read_resp_body(resp: Response) -> Result<Bytes, axum_core::Error> {
 	let lim = response_buffer_limit(&resp);
 	read_body_with_limit(resp.into_body(), lim).await
 }
 
+/// Read with the response's size limit and remaining body deadline, retaining its headers.
 pub async fn read_response_body(
 	resp: Response,
 ) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
@@ -777,11 +780,13 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
+/// Inspect within the remaining body deadline.
 pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
 	req.body_mut().inspect(lim).await
 }
 
+/// Inspect within the remaining body deadline.
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	resp.body_mut().inspect(lim).await

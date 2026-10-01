@@ -488,21 +488,25 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 		head.uri = http::Uri::from_parts(uri_parts).map_err(Box::new)?;
 		let req = crate::http::Request::from_parts(head, crate::http::Body::from(body_bytes));
 
-		let resp = handle
+		handle
 			.spawn(async move {
-				client
+				let resp = client
 					.call_reference_with_policies_untraced(req, &backend_ref, &policies)
 					.await
-					.map_err(Box::new)
+					.map_err(Box::new)?;
+
+				// Release the body and extension pool guards on the Tokio runtime.
+				use http_body_util::BodyExt as _;
+				let (mut parts, body) = resp.into_parts();
+				parts.extensions.clear();
+				let collected = body.collect().await.map_err(Box::new)?;
+				Ok::<_, Box<dyn std::error::Error + Send + Sync>>(http::Response::from_parts(
+					parts,
+					collected.to_bytes(),
+				))
 			})
 			.await
-			.map_err(Box::new)??;
-
-		use http_body_util::BodyExt as _;
-		let (parts, body) = resp.into_parts();
-		let collected = body.collect().await.map_err(Box::new)?;
-		let bytes = collected.to_bytes();
-		Ok(http::Response::from_parts(parts, bytes))
+			.map_err(Box::new)?
 	}
 }
 

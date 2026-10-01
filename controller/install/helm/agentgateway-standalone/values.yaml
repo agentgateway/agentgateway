@@ -163,7 +163,9 @@ database:
 
 # OIDC secret that agentgateway uses to sign the Admin UI session cookie.
 oidc:
-  # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. If unset, the chart references a '<release name>-oidc' secret as an optional secret.
+  # -- Inject the OIDC cookie secret environment variable. Enable this when configuring OIDC authentication.
+  enabled: false
+  # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. Defaults to '<release name>-oidc'. The secret is required when 'oidc.enabled' is true.
   cookieSecretName: ""
 
 # -- Additional containers to run in the agentgateway proxy pod, such as a sidecar.

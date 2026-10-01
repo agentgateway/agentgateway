@@ -5430,15 +5430,15 @@
       ]
     },
     "WebhookFailureMode": {
-      "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.",
+      "description": "Defines how the proxy behaves when a guardrail provider is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the provider failure.",
       "oneOf": [
         {
-          "description": "Reject the request when the webhook guardrail is unavailable (default).",
+          "description": "Reject the request when the guardrail provider is unavailable (default).",
           "type": "string",
           "const": "failClosed"
         },
         {
-          "description": "Allow the request through when the webhook guardrail is unavailable.",
+          "description": "Allow the request through when the guardrail provider is unavailable.",
           "type": "string",
           "const": "failOpen"
         }
@@ -5462,6 +5462,10 @@
     "Moderation": {
       "type": "object",
       "properties": {
+        "failureMode": {
+          "description": "Behavior when the provider is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/WebhookFailureMode"
+        },
         "model": {
           "description": "Moderation model to use. Defaults to `omni-moderation-latest`.",
           "type": [
@@ -5491,6 +5495,10 @@
       "description": "Configuration for AWS Bedrock Guardrails integration.",
       "type": "object",
       "properties": {
+        "failureMode": {
+          "description": "Behavior when the provider is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/WebhookFailureMode"
+        },
         "guardrailIdentifier": {
           "description": "The unique identifier of the guardrail",
           "type": "string"
@@ -5530,6 +5538,10 @@
       "description": "Configuration for Google Cloud Model Armor integration.",
       "type": "object",
       "properties": {
+        "failureMode": {
+          "description": "Behavior when the provider is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/WebhookFailureMode"
+        },
         "templateId": {
           "description": "The template ID for the Model Armor configuration",
           "type": "string"
@@ -5571,6 +5583,10 @@
       "description": "Configuration for Azure Content Safety integration.\n\nUses the Azure AI Content Safety APIs to detect harmful content\nand jailbreak attempts. The endpoint and authentication are shared\nacross all enabled features.",
       "type": "object",
       "properties": {
+        "failureMode": {
+          "description": "Behavior when the provider is unreachable or returns an error.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/WebhookFailureMode"
+        },
         "endpoint": {
           "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
           "type": "string"
@@ -8468,6 +8484,16 @@
           "description": "Name identifying this MCP target, used to prefix tool and resource names when multiplexing.",
           "type": "string"
         },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "policies": {
           "description": "Transport policies for connecting to this target's backend. Not supported\non stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to\nthe full target set and belong on the route or `mcp.policies`.",
           "anyOf": [
@@ -9280,10 +9306,7 @@
           }
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "formats"
-      ]
+      "additionalProperties": false
     },
     "ProviderFormatConfig": {
       "type": "object",
@@ -11843,6 +11866,16 @@
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
+        "discovery": {
+          "description": "discovery controls wildcard expansion in the models endpoint. Defaults to the local catalog.",
+          "$ref": "#/$defs/Discovery",
+          "default": "catalog"
+        },
+        "pathPrefix": {
+          "description": "pathPrefix mounts the standard LLM endpoints under this path, for example /foo/v1/messages.\nDefaults to the root. A non-empty prefix must start with `/`. Trailing slashes are ignored.\nThe prefix is removed before model routing.",
+          "type": "string",
+          "default": ""
+        },
         "gateways": {
           "description": "gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.",
           "$ref": "#/$defs/LocalGatewayRefs",
@@ -11903,6 +11936,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "Discovery": {
+      "oneOf": [
+        {
+          "description": "Expand wildcard model names using the local model catalog.",
+          "type": "string",
+          "const": "catalog"
+        },
+        {
+          "description": "List configured model names without expanding wildcards.",
+          "type": "string",
+          "const": "disabled"
+        }
+      ]
     },
     "LocalLLMProvider": {
       "type": "object",

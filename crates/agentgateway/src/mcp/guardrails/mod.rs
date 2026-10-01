@@ -301,7 +301,7 @@ processors:
     methods: { "tools/call": full }
     backend: my-backend
 "#;
-		let ext: McpGuardrails = serde_yaml::from_str(cfg).expect("deser McpGuardrails");
+		let ext: McpGuardrails = serde_norway::from_str(cfg).expect("deser McpGuardrails");
 		assert_eq!(ext.processors.len(), 2);
 
 		let d0 = &ext.processors[0];

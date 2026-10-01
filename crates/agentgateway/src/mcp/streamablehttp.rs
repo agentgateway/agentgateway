@@ -131,6 +131,9 @@ impl StreamableHttpService {
 		let cached = body.remove_extension::<mcp::CachedRequest>();
 		let bytes = match http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,
+			Err(e) if agent_http::is_length_limit_error(&e) => {
+				return mcp::Error::PayloadTooLarge(limit).into();
+			},
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
 		let message = match cached
@@ -169,7 +172,7 @@ impl StreamableHttpService {
 			}
 			let Some(mut session) = self
 				.session_manager
-				.get_or_resume_session(session_id, inputs)?
+				.get_or_resume_session(session_id, inputs, &ctx)?
 			else {
 				return mcp::Error::UnknownSession.into();
 			};
@@ -194,7 +197,7 @@ impl StreamableHttpService {
 		}
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let backend_id = inputs.backend_id.clone();
-		let relay = inputs.build_new_connections()?;
+		let relay = inputs.build_new_connections(&ctx)?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = Box::pin(session.send(ctx, message)).await?;
 
@@ -215,7 +218,7 @@ impl StreamableHttpService {
 		message: ClientJsonRpcMessage,
 		protocol: RequestProtocol,
 	) -> Result<Response, ProxyError> {
-		let relay = inputs.build_new_connections()?;
+		let relay = inputs.build_new_connections(&part)?;
 		// Use stateless session - not registered in session manager
 		let mut session = self.session_manager.create_stateless_session(relay);
 		let initialize_upstream = protocol.uses_sessions();

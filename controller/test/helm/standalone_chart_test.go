@@ -227,19 +227,35 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "readinessProbe:\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 10")
 	require.Contains(t, out, "startupProbe:\n          failureThreshold: 60\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 1\n          successThreshold: 1\n          timeoutSeconds: 2")
 	require.NotContains(t, out, "name: AGENTGATEWAY_ENV")
-	require.Contains(t, out, "name: OIDC_COOKIE_SECRET")
-	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: true")
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "secretKeyRef:")
 	require.NotContains(t, out, `"helm.sh/hook": test`)
 	require.NotContains(t, out, "curlimages/curl")
 }
 
-func TestStandaloneChartConfiguredOIDCCookieSecretIsRequired(t *testing.T) {
+func TestStandaloneChartOIDCCookieSecret(t *testing.T) {
 	out, stderr, err := renderStandaloneChart(t, `oidc:
+  enabled: true
   cookieSecretName: platform-oidc
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
-	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: false")
+	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
 	require.NotContains(t, out, "name: test-release-oidc")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: false
+  cookieSecretName: platform-oidc
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
 }
 
 func TestStandaloneChartInlineConfig(t *testing.T) {

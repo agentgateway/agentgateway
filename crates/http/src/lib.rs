@@ -96,8 +96,17 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 		.unwrap_or(DEFAULT_BUFFER_LIMIT)
 }
 
+/// Read with a size limit and the remaining [`Body::deadline`] budget.
 pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<bytes::Bytes, Error> {
 	body.into_bytes(limit).await
+}
+
+pub fn is_length_limit_error(err: &Error) -> bool {
+	use std::error::Error as _;
+
+	err
+		.source()
+		.is_some_and(|source| source.is::<http_body_util::LengthLimitError>())
 }
 
 pub mod x_headers {

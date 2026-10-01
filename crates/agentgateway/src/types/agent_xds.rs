@@ -931,6 +931,7 @@ fn convert_backend_ai_policy(
 						let md = llm::policy::Moderation {
 							model: m.model.as_deref().map(strng::new),
 							action: convert_reject_audit(m.action),
+							failure_mode: convert_guardrail_failure_mode(m.failure_mode),
 							policies: pols,
 						};
 						llm::policy::RequestGuardKind::OpenAIModeration(md)
@@ -946,6 +947,7 @@ fn convert_backend_ai_policy(
 							project_id: strng::new(&gma.project_id),
 							location: gma.location.as_ref().map(strng::new),
 							action: convert_reject_audit(gma.action),
+							failure_mode: convert_guardrail_failure_mode(gma.failure_mode),
 							policies: pols,
 						})
 					},
@@ -960,6 +962,7 @@ fn convert_backend_ai_policy(
 							guardrail_version: strng::new(&bg.version),
 							region: strng::new(&bg.region),
 							action: convert_reject_audit(bg.action),
+							failure_mode: convert_guardrail_failure_mode(bg.failure_mode),
 							policies: pols,
 						})
 					},
@@ -972,6 +975,7 @@ fn convert_backend_ai_policy(
 						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 							endpoint: strng::new(&acs.endpoint),
 							action: convert_reject_audit(acs.action),
+							failure_mode: Default::default(),
 							policies: pols,
 							cached_azure_auth: Default::default(),
 							analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1036,6 +1040,7 @@ fn convert_backend_ai_policy(
 						project_id: strng::new(&gma.project_id),
 						location: gma.location.as_ref().map(strng::new),
 						action: convert_reject_audit(gma.action),
+						failure_mode: convert_guardrail_failure_mode(gma.failure_mode),
 						policies: pols,
 					})
 				},
@@ -1050,6 +1055,7 @@ fn convert_backend_ai_policy(
 						guardrail_version: strng::new(&bg.version),
 						region: strng::new(&bg.region),
 						action: convert_reject_audit(bg.action),
+						failure_mode: convert_guardrail_failure_mode(bg.failure_mode),
 						policies: pols,
 					})
 				},
@@ -1062,6 +1068,7 @@ fn convert_backend_ai_policy(
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
 						action: convert_reject_audit(acs.action),
+						failure_mode: Default::default(),
 						policies: pols,
 						cached_azure_auth: Default::default(),
 						analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1662,16 +1669,9 @@ impl ModelRoute {
 		let llm_policy = s
 			.ai_policy
 			.as_ref()
-			.map(|policy| {
-				let mut policy = convert_backend_ai_policy(policy, diagnostics)?;
-				// Preserve default model endpoint formats when the policy does not specify routes.
-				if policy.routes.is_empty() {
-					policy.routes = llm::model_router::default_route_types().routes.clone();
-				}
-				Ok::<_, ProtoError>(Arc::new(policy))
-			})
+			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
 			.transpose()?
-			.unwrap_or_else(llm::model_router::default_route_types);
+			.unwrap_or_default();
 		let authorization = s
 			.authorization
 			.as_ref()
@@ -1696,6 +1696,7 @@ impl ModelRoute {
 						.collect::<Result<Vec<_>, _>>()?,
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
+					discovery: None,
 					id: None,
 					name: model_match.model.clone(),
 					created: s.created,
@@ -1703,6 +1704,7 @@ impl ModelRoute {
 					header_matches: vec![],
 					backend,
 					policies: llm::model_router::ModelRoutePolicies {
+						passthrough: None,
 						llm: llm_policy.clone(),
 						authorization,
 					},
@@ -2131,6 +2133,7 @@ fn mcp_target_from_proto(
 
 	Ok(McpTarget {
 		name: strng::new(&s.name),
+		condition: None,
 		spec: match proto {
 			Protocol::Sse => McpTargetSpec::Sse(SseTargetSpec {
 				backend,
@@ -4087,6 +4090,16 @@ fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
 	}
 }
 
+fn convert_guardrail_failure_mode(mode: i32) -> llm::policy::FailureMode {
+	match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(mode) {
+		Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
+			llm::policy::FailureMode::FailOpen
+		},
+		// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+		_ => llm::policy::FailureMode::FailClosed,
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -4104,14 +4117,7 @@ fn convert_webhook(
 		&w.forward_header_matches,
 	)?;
 
-	let failure_mode =
-		match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(w.failure_mode) {
-			Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
-				llm::policy::FailureMode::FailOpen
-			},
-			// Default to FailClosed (proto default is FAIL_CLOSED = 0)
-			_ => llm::policy::FailureMode::FailClosed,
-		};
+	let failure_mode = convert_guardrail_failure_mode(w.failure_mode);
 
 	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
 		.headers
@@ -5458,18 +5464,12 @@ mod tests {
 			model.visibility,
 			llm::model_router::ModelVisibility::Internal
 		);
-		assert!(
-			model
-				.policies
-				.llm
-				.routes
-				.contains_key("/v1/chat/completions")
-		);
+		assert!(model.policies.llm.routes.is_empty());
 		assert!(model.policies.authorization.is_some());
 		assert!(model.policies.llm.transformations.is_some());
 		assert_eq!(
-			model.policies.llm.resolve_route("/v1/messages"),
-			llm::RouteType::Messages
+			llm::model_router::classify_route("/v1/messages"),
+			Some(llm::RouteType::Messages)
 		);
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
@@ -5544,7 +5544,7 @@ mod tests {
 		};
 		assert_eq!(model.name, "fast");
 		assert_eq!(model.created, 1_704_153_600);
-		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
+		assert!(model.llm_policy.routes.is_empty());
 		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
 			panic!("expected weighted routing");
 		};

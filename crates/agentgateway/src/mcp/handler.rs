@@ -21,7 +21,7 @@ use rmcp::model::{
 use tracing::{debug, info, warn};
 
 use crate::http::Response;
-use crate::http::sessionpersistence::MCPSession;
+use crate::http::sessionpersistence::{Encoder, MCPSession};
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
@@ -35,6 +35,36 @@ use crate::telemetry::log::AsyncLog;
 use crate::types::agent::{McpPrefixMode, McpServerOverrides, ResourceName};
 
 const DELIMITER: &str = "_";
+
+// Pagination state is carried by the client using the same base64/AES encoder as sessions.
+// Encode a list of per-target cursors; absent targets are finished.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ListCursor {
+	#[serde(rename = "t")]
+	target_name: String,
+	#[serde(rename = "c")]
+	cursor: String,
+}
+
+fn list_params_mut(request: &mut ClientRequest) -> Option<&mut Option<PaginatedRequestParams>> {
+	match request {
+		ClientRequest::ListToolsRequest(r) => Some(&mut r.params),
+		ClientRequest::ListPromptsRequest(r) => Some(&mut r.params),
+		ClientRequest::ListResourcesRequest(r) => Some(&mut r.params),
+		ClientRequest::ListResourceTemplatesRequest(r) => Some(&mut r.params),
+		_ => None,
+	}
+}
+
+fn list_next_cursor_mut(result: &mut ServerResult) -> Option<&mut Option<String>> {
+	match result {
+		ServerResult::ListToolsResult(r) => Some(&mut r.next_cursor),
+		ServerResult::ListPromptsResult(r) => Some(&mut r.next_cursor),
+		ServerResult::ListResourcesResult(r) => Some(&mut r.next_cursor),
+		ServerResult::ListResourceTemplatesResult(r) => Some(&mut r.next_cursor),
+		_ => None,
+	}
+}
 
 fn resource_name(prefix_names: bool, target: &str, name: &str) -> String {
 	if prefix_names {
@@ -312,8 +342,11 @@ pub struct RelayInputs {
 }
 
 impl RelayInputs {
-	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
-		let r = Relay::new(self.backend, self.policies, self.client)?;
+	pub fn build_new_connections(
+		self,
+		ctx: &upstream::IncomingRequestContext,
+	) -> Result<Relay, mcp::Error> {
+		let r = Relay::new_for_request(self.backend, self.policies, self.client, ctx)?;
 		Ok(Relay {
 			mcp_guardrails: self.mcp_guardrails,
 			..r
@@ -322,14 +355,19 @@ impl RelayInputs {
 }
 
 impl Relay {
-	pub fn new(
+	pub fn new_for_request(
 		backend: McpBackendGroup,
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
+		ctx: &upstream::IncomingRequestContext,
 	) -> Result<Self, mcp::Error> {
 		let client = PolicyClient::new(client.inputs.clone());
 		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new_for_request(
+				client.clone(),
+				backend,
+				ctx,
+			)?),
 			policies,
 			mcp_guardrails: None,
 			policy_client: client,
@@ -1063,7 +1101,7 @@ impl Relay {
 					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
 			})
 			.collect::<Vec<_>>();
-		if selected_upstreams.is_empty() {
+		if selected_upstreams.is_empty() && !self.upstreams.all_targets_conditioned_out() {
 			return Err(UpstreamError::Unavailable(
 				"no upstreams available".to_string(),
 			));
@@ -1154,7 +1192,7 @@ impl Relay {
 				},
 			}
 		}
-		if streams.is_empty() {
+		if streams.is_empty() && !self.upstreams.all_targets_conditioned_out() {
 			// Request fanout has no transport fallback or generic synthetic success.
 			return Err(
 				last_error
@@ -1430,24 +1468,107 @@ impl Relay {
 		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
-		self.send_fanout_to(r, ctx, merge, None).await
+		self
+			.send_fanout_to(r, ctx, merge, None, |_, r| r.clone())
+			.await
 	}
 
-	pub async fn send_fanout_to(
+	pub async fn send_list(
+		&self,
+		mut r: JsonRpcRequest<ClientRequest>,
+		ctx: IncomingRequestContext,
+		merge: Box<MergeFn>,
+		encoder: Encoder,
+	) -> Result<Response, UpstreamError> {
+		let mut upstream_cursors = HashMap::new();
+		let multiplex = self.is_multiplexing();
+		let mut target_names = None;
+		let method = r.request.method().to_string();
+		let params = list_params_mut(&mut r.request)
+			.ok_or_else(|| UpstreamError::InvalidRequest("expected a list request".into()))?;
+		if multiplex && let Some(cursor) = params.as_ref().and_then(|p| p.cursor.as_ref()) {
+			let invalid = || UpstreamError::InvalidRequest("invalid list cursor".to_string());
+			let decoded = encoder.decrypt(cursor).map_err(|_| invalid())?;
+			let cursors: Vec<ListCursor> = serde_json::from_slice(&decoded).map_err(|_| invalid())?;
+			if cursors.is_empty() {
+				return Err(invalid());
+			}
+			for entry in cursors {
+				if self.upstreams.get_name(&entry.target_name).is_none()
+					|| upstream_cursors
+						.insert(entry.target_name, entry.cursor)
+						.is_some()
+				{
+					return Err(invalid());
+				}
+			}
+			target_names = Some(upstream_cursors.keys().cloned().collect());
+		}
+		let merge: Box<MergeFn> = Box::new(move |mut results, cel| {
+			let mut cursors = Vec::new();
+			for (name, result) in &mut results {
+				let cursor =
+					list_next_cursor_mut(result).ok_or_else(|| incompatible_upstream_result(&method))?;
+				if let Some(cursor) = cursor {
+					cursors.push(ListCursor {
+						target_name: name.to_string(),
+						cursor: cursor.clone(),
+					});
+				}
+			}
+			let mut result = merge(results, cel)?;
+			let cursor = if cursors.is_empty() {
+				None
+			} else if !multiplex {
+				cursors.pop().map(|entry| entry.cursor)
+			} else {
+				let json = serde_json::to_string(&cursors).map_err(ClientError::new)?;
+				Some(encoder.encrypt(&json).map_err(ClientError::new)?)
+			};
+			*list_next_cursor_mut(&mut result).ok_or_else(|| incompatible_upstream_result(&method))? =
+				cursor;
+			Ok(result)
+		});
+		self
+			.send_fanout_to(r, ctx, merge, target_names, |name, r| {
+				let mut r = r.clone();
+				if let Some(cursor) = upstream_cursors.get(name) {
+					let params =
+						list_params_mut(&mut r.request).expect("cursor only applies to list requests");
+					params.get_or_insert_default().cursor = Some(cursor.clone());
+				}
+				r
+			})
+			.await
+	}
+
+	async fn send_fanout_to(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
 		mut ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 		target_names: Option<Vec<String>>,
+		request_for_target: impl Fn(&str, &JsonRpcRequest<ClientRequest>) -> JsonRpcRequest<ClientRequest>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		// Preserve discovery errors through the merge for protocol fallback.
 		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
 		let (streams, service_names) = self
-			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
+			.fanout_open_streams(&r, &mut ctx, target_names, request_for_target)
 			.await?;
 
 		let cel = CelExecWrapper::from(ctx.clone());
+		if streams.is_empty() {
+			let result = merge(Vec::new(), &cel)?;
+			return respond_with_guardrails(
+				id,
+				Messages::from_result(r.id.clone(), result),
+				service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+				ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
+				&ctx,
+				self.upstreams.sse_keep_alive,
+			);
+		}
 		let streams = streams
 			.into_iter()
 			.map(|(name, s)| {
@@ -2000,10 +2121,23 @@ fn capture_terminal_mcp_payload(
 ) -> bool {
 	match message {
 		ServerJsonRpcMessage::Response(response) if response.id == *request_id => {
-			if let ServerResult::CallToolResult(result) = &response.result
-				&& let Some(log) = log
-			{
-				log.non_atomic_mutate(|mcp| mcp.capture_call_result(result));
+			if let Some(log) = log {
+				log.non_atomic_mutate(|mcp| match &response.result {
+					ServerResult::CallToolResult(result) => mcp.capture_call_result(result),
+					ServerResult::ListToolsResult(result) => {
+						mcp.tools_list = serde_json::to_value(result).ok();
+					},
+					ServerResult::ListPromptsResult(result) => {
+						mcp.prompts_list = serde_json::to_value(result).ok();
+					},
+					ServerResult::ListResourcesResult(result) => {
+						mcp.resources_list = serde_json::to_value(result).ok();
+					},
+					ServerResult::ListResourceTemplatesResult(result) => {
+						mcp.resource_templates_list = serde_json::to_value(result).ok();
+					},
+					_ => {},
+				});
 			}
 			true
 		},

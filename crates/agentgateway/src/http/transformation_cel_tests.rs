@@ -18,7 +18,7 @@ fn test_transformation() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 	let xfm = build([("x-insert", r#""hello " + request.headers["x-custom-foo"]"#)]);
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }
 
@@ -42,11 +42,106 @@ async fn test_transformation_body() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 	let snap = cel::snapshot_request(&mut req, true);
-	xfm.apply_response(&mut resp, Some(&snap));
+	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
 	let b = http::read_body_with_limit(resp.into_body(), 1000)
 		.await
 		.unwrap();
 	assert_eq!(b.as_ref(), b"helloGET");
+}
+
+#[tokio::test]
+async fn test_transformation_response_body_null_leaves_upstream() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": r#"response.code == 429 ? "refused" : null"#,
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("content-type", "application/json")
+		.header("content-length", "14")
+		.header("x-amzn-requestid", "abc")
+		.body(crate::http::Body::from("upstream-body"))
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
+	assert_eq!(resp.headers().get("content-length").unwrap(), "14");
+	assert_eq!(resp.headers().get("x-amzn-requestid").unwrap(), "abc");
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"upstream-body");
+}
+
+#[tokio::test]
+async fn test_transformation_response_body_match_replaces() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": r#"response.code == 429 ? "refused" : null"#,
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(429)
+		.header("content-type", "application/json")
+		.header("content-length", "0")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
+	assert!(resp.headers().get("content-length").is_none());
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"refused");
+}
+
+#[tokio::test]
+async fn test_transformation_response_body_error_fails() {
+	let mut req = ::http::Request::builder()
+		.method("POST")
+		.uri("https://gateway.example.com/v1/messages")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let xfm: Transformation = serde_json::from_value(serde_json::json!({
+		"request": null,
+		"response": {
+			"body": "1 / 0",
+		},
+	}))
+	.unwrap();
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.header("content-length", "14")
+		.body(crate::http::Body::from("upstream-body"))
+		.unwrap();
+	let snap = cel::snapshot_request(&mut req, true);
+	let err = xfm.apply_response(&mut resp, Some(&snap)).unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("transformation body expression failed"),
+		"{err}"
+	);
+	// The failure is returned before the body is replaced.
+	assert_eq!(resp.headers().get("content-length").unwrap(), "14");
+	let body = http::read_body_with_limit(resp.into_body(), 1000)
+		.await
+		.unwrap();
+	assert_eq!(body.as_ref(), b"upstream-body");
 }
 
 #[tokio::test]
@@ -77,7 +172,7 @@ request.body
 	}))
 	.unwrap();
 
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 
 	assert!(req.headers().get(::http::header::CONTENT_LENGTH).is_none());
 	let body = crate::http::read_body_with_limit(req.into_body(), 1000)
@@ -103,7 +198,7 @@ request.body
 		b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
 	));
 
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 
 	let body = crate::http::read_body_with_limit(req.into_body(), 1000)
 		.await
@@ -150,7 +245,7 @@ json(response.body).with(body,
 		.unwrap();
 
 	let snap = cel::snapshot_request(&mut req, true);
-	xfm.apply_response(&mut resp, Some(&snap));
+	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
 	let body = crate::http::read_body_with_limit(resp.into_body(), 1000)
 		.await
 		.unwrap();
@@ -181,7 +276,7 @@ fn test_transformation_pseudoheader() {
 		(":path", r#""/" + request.uri.split("://")[0]"#),
 		(":authority", r#""example.com""#),
 	]);
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	assert_eq!(req.method().as_str(), "POST");
 	assert_eq!(req.uri().to_string().as_str(), "https://example.com/https");
 }
@@ -194,7 +289,7 @@ fn test_transformation_host_header_lifts_to_authority() {
 		.body(crate::http::Body::empty())
 		.unwrap();
 	let xfm = build([("host", r#""example.com:8443""#)]);
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	assert_eq!(req.uri().to_string().as_str(), "https://example.com:8443/");
 	assert!(req.headers().get(::http::header::HOST).is_none());
 }
@@ -215,7 +310,7 @@ fn test_transformation_replace_headers() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	// Headers not present in the replacement map are dropped.
 	assert!(req.headers().get("x-remove-me").is_none());
 	assert_eq!(req.headers().get("x-kept").unwrap(), "kept-value");
@@ -238,7 +333,7 @@ fn test_transformation_replace_then_set_overrides() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	// replace runs first; set then overrides on top of the replaced headers.
 	assert_eq!(req.headers().get("x-a").unwrap(), "from-set");
 	assert_eq!(req.headers().get("x-b").unwrap(), "b");
@@ -259,7 +354,7 @@ fn test_transformation_replace_repeated_header() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	let values: Vec<_> = req
 		.headers()
 		.get_all("x-multi")
@@ -283,7 +378,7 @@ fn test_transformation_replace_ignores_pseudo_headers() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	// Pseudo-header keys are ignored; the method is unchanged and no `:method` header exists.
 	assert_eq!(req.method().as_str(), "GET");
 	assert_eq!(req.headers().get("x-real").unwrap(), "y");
@@ -305,7 +400,7 @@ fn test_transformation_replace_non_map_leaves_headers() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	// A non-map result must not wipe the existing headers.
 	assert_eq!(req.headers().get("x-orig").unwrap(), "keep");
 }
@@ -327,7 +422,7 @@ fn test_transformation_metadata() {
 		"response": null,
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	let md = req
 		.extensions()
 		.get::<TransformationMetadata>()
@@ -372,10 +467,10 @@ fn test_response_transformation_metadata_available_to_headers() {
 		},
 	}))
 	.unwrap();
-	xfm.apply_request(&mut req);
+	xfm.apply_request(&mut req).unwrap();
 	let snap = cel::snapshot_request(&mut req, true);
 
-	xfm.apply_response(&mut resp, Some(&snap));
+	xfm.apply_response(&mut resp, Some(&snap)).unwrap();
 
 	assert_eq!(resp.headers().get("x-static").unwrap(), "hello-world");
 	assert_eq!(resp.headers().get("x-copied").unwrap(), "from-request");

@@ -31,9 +31,7 @@ use tokio_sse_codec::{Event, Frame as SseFrame, SseDecoder};
 use tokio_util::codec::Decoder;
 use tracing::warn;
 
-use super::{
-	FailureMode, ResponseGuard, ResponseGuardKind, StreamingEvaluator, StreamingGuardrailOutcome,
-};
+use super::{FailureMode, ResponseGuard, StreamingEvaluator, StreamingGuardrailOutcome};
 use crate::cel::RequestSnapshot;
 use crate::llm::policy::{Policy, PromptGuard};
 use crate::proxy::httpproxy::PolicyClient;
@@ -142,10 +140,7 @@ impl Drop for ResponseGuardEvaluator {
 #[async_trait::async_trait]
 impl StreamingEvaluator for ResponseGuardEvaluator {
 	fn failure_mode(&self) -> FailureMode {
-		match &self.guard.kind {
-			ResponseGuardKind::Webhook(wh) => wh.failure_mode,
-			_ => FailureMode::FailOpen,
-		}
+		self.guard.failure_mode()
 	}
 
 	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {

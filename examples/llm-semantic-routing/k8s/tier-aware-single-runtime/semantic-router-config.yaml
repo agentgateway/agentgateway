@@ -1,0 +1,145 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    model: gpt-4.1
+  models:
+    - name: gpt-4.1
+      provider_model_id: gpt-4.1
+      api_format: openai
+      backend_refs:
+        - name: openai
+          endpoint: api.openai.com:443
+          weight: 1
+    - name: gpt-5.4
+      provider_model_id: gpt-5.4
+      api_format: openai
+      backend_refs:
+        - name: openai
+          endpoint: api.openai.com:443
+          weight: 1
+    - name: claude-haiku-4-5-20251001
+      provider_model_id: claude-haiku-4-5-20251001
+      api_format: openai
+      backend_refs:
+        - name: anthropic
+          endpoint: api.anthropic.com:443
+          weight: 1
+    - name: claude-sonnet-4-6
+      provider_model_id: claude-sonnet-4-6
+      api_format: openai
+      backend_refs:
+        - name: anthropic
+          endpoint: api.anthropic.com:443
+          weight: 1
+routing:
+  strategy: priority
+  modelCards:
+    - name: gpt-4.1
+    - name: gpt-5.4
+    - name: claude-haiku-4-5-20251001
+    - name: claude-sonnet-4-6
+  signals:
+    keywords:
+      - name: stem
+        operator: OR
+        keywords:
+          - quantum physics
+          - physics
+          - chemistry
+          - biology
+          - mathematics
+          - engineering
+        case_sensitive: false
+    role_bindings:
+      - name: basic-tier
+        role: basic
+        subjects:
+          - kind: Group
+            name: basic
+      - name: standard-tier
+        role: standard
+        subjects:
+          - kind: Group
+            name: standard
+      - name: pro-tier
+        role: pro
+        subjects:
+          - kind: Group
+            name: pro
+  decisions:
+    - name: basic_stem
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: basic
+          - type: keyword
+            name: stem
+      modelRefs:
+        - model: gpt-5.4
+          use_reasoning: false
+    - name: standard_stem
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: standard
+          - type: keyword
+            name: stem
+      modelRefs:
+        - model: claude-haiku-4-5-20251001
+          use_reasoning: false
+    - name: pro_stem
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: pro
+          - type: keyword
+            name: stem
+      modelRefs:
+        - model: claude-sonnet-4-6
+          use_reasoning: false
+global:
+  router:
+    config_source: file
+    auto_model_name: auto
+    clear_route_cache: false
+    model_selection:
+      enabled: false
+    streamed_body:
+      enabled: true
+      max_bytes: 10485760
+      timeout_sec: 30
+    # Agentgateway sends this header on its subsequent processing pass.
+    skip_processing:
+      enabled: true
+  services:
+    observability:
+      tracing:
+        enabled: false
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-authz-user-id
+        user_groups_header: x-entitlement-tier
+      providers: []
+    ratelimit:
+      providers: []
+  model_catalog:
+    kbs: []
+    embeddings: null
+    modules: null
+  integrations:
+    tools:
+      enabled: false
+  stores:
+    memory: null
+    response_cache:
+      enabled: false
+    vector_store:
+      enabled: false

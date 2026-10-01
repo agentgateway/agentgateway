@@ -1810,3 +1810,21 @@ spec:
           jwks:
             inline: '{"keys":[]}'
           validation: {requiredClaims: [iss]}
+
+---
+_err: 'path is only valid with protocol HTTP'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tracing-path-with-default-grpc
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: test
+  frontend:
+    tracing:
+      backendRef:
+        name: otel-collector
+        port: 4317
+      path: /v1/traces

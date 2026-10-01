@@ -61,8 +61,7 @@ func MergePlugins(plug ...AgwPlugin) AgwPlugin {
 }
 
 // contestedResourceExtensionFields names the collection fields more than one plugin
-// populates. Collection fields are interfaces; ParentResolvers is a slice and
-// accumulates across plugins by design.
+// populates. ParentResolvers is a slice and accumulates across plugins by design.
 func contestedResourceExtensionFields(plug []AgwPlugin) []string {
 	contributors := map[string]int{}
 	for _, p := range plug {
@@ -71,7 +70,7 @@ func contestedResourceExtensionFields(plug []AgwPlugin) []string {
 		}
 		v := reflect.ValueOf(*p.AddResourceExtension)
 		for i := range v.NumField() {
-			if f := v.Field(i); f.Kind() == reflect.Interface && !f.IsNil() {
+			if f := v.Field(i); f.Kind() == reflect.Pointer && !f.IsNil() {
 				contributors[v.Type().Field(i).Name]++
 			}
 		}

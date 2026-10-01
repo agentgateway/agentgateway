@@ -152,6 +152,9 @@ func BuildAgwBackend(
 	backend *agentgateway.AgentgatewayBackend,
 ) ([]*api.Backend, error) {
 	errs := []error{}
+	if owners := jwks.OwnersFromBackend(backend); len(owners) > 0 {
+		ctx.JWKSOwner = &owners[0]
+	}
 	pols, err := TranslateBackendPolicies(ctx, backend.Namespace, backend.Spec.Policies)
 	if err != nil {
 		errs = append(errs, err)
@@ -546,13 +549,13 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		// TODO: publisher?
 		provider.Provider = &api.AIBackend_Provider_Vertex{
 			Vertex: &api.AIBackend_Vertex{
-				Region:    llm.VertexAI.Region,
+				Region:    ptr.NonEmptyOrDefault(llm.VertexAI.Region, "global"),
 				Model:     llm.VertexAI.Model,
 				ProjectId: llm.VertexAI.ProjectId,
 			},
 		}
 	} else if llm.Bedrock != nil {
-		region := llm.Bedrock.Region
+		region := ptr.NonEmptyOrDefault(llm.Bedrock.Region, "us-east-1")
 		var guardrailIdentifier, guardrailVersion *string
 		if llm.Bedrock.Guardrail != nil {
 			guardrailIdentifier = &llm.Bedrock.Guardrail.GuardrailIdentifier

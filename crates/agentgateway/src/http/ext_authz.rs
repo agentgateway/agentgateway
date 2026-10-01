@@ -890,7 +890,9 @@ impl ExtAuthz {
 				// available to CEL before evaluating expressions. This internal ext-authz
 				// response does not pass through the normal proxy response buffering hook,
 				// so inspect it whenever response metadata expressions are configured.
-				let _ = crate::http::inspect_response_body(&mut resp).await;
+				if let Err(e) = http::inspect_response_body(&mut resp).await {
+					return self.handle_auth_failure(&e.to_string());
+				}
 				let m = metadata
 					.iter()
 					.filter_map(|(k, v)| match Self::eval_to_json(req, &resp, v) {
@@ -973,7 +975,7 @@ impl ExtAuthz {
 				response_headers: None,
 			});
 		}
-		let (parts, body) = crate::http::read_response_body(resp)
+		let (parts, body) = http::read_response_body(resp)
 			.await
 			.map_err(|e| ProxyError::Processing(e.into()))?;
 		let cached = CachedHttpPolicyResponse::DirectResponse {

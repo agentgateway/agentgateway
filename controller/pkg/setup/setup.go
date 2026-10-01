@@ -254,7 +254,13 @@ func (s *setup) Start(ctx context.Context) error {
 		krtOpts.WithPrefix("jwks"),
 	))
 	jwksResolver := jwks.NewResolver(resolver, refGrants, agwCollections.Settings.BackendRefGrantMode)
-	jwksLookup := jwks.NewLookup(persistedJWKS, jwksResolver)
+	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		Backends:             agwCollections.Backends,
+		Resolver:             jwksResolver,
+		KrtOpts:              agwCollections.KrtOpts,
+	})
+	jwksLookup := jwks.NewLookup(persistedJWKS, jwksCollections.ResolvedOwners)
 
 	for _, mgrCfgFunc := range s.ExtraManagerConfig {
 		err := mgrCfgFunc(mgr)
@@ -279,7 +285,7 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// build jwks store if it doesn't exist
 	if !runnablesRegistry.Contains(jwks.RunnableName) {
-		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections, persistedJWKS, jwksResolver); err != nil {
+		if err := buildJwksStore(ctx, mgr, s.APIClient, persistedJWKS, jwksCollections); err != nil {
 			return fmt.Errorf("error creating jwks store %w", err)
 		}
 	}
@@ -463,17 +469,9 @@ func buildJwksStore(
 	ctx context.Context,
 	mgr manager.Manager,
 	apiClient apiclient.Client,
-	agwCollections *agwplugins.AgwCollections,
 	persistedJWKS *jwks.PersistedEntries,
-	resolver jwks.Resolver,
+	jwksCollections jwks.Collections,
 ) error {
-	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
-		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
-		Backends:             agwCollections.Backends,
-		Resolver:             resolver,
-		KrtOpts:              agwCollections.KrtOpts,
-	})
-
 	jwksStore := jwks.NewStore(jwksCollections.SharedRequests, persistedJWKS, jwks.DefaultJwksStorePrefix)
 	if err := mgr.Add(jwksStore); err != nil {
 		return err

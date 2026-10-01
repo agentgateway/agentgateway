@@ -1368,6 +1368,9 @@ message BackendPolicySpec {
       // REJECT (default) rejects flagged content; AUDIT records the would-be
       // rejection without blocking.
       RejectAuditAction action = 4;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 5;
     }
 
     message BedrockGuardrails {
@@ -1385,6 +1388,9 @@ message BackendPolicySpec {
       // as decided by AWS at runtime); AUDIT invokes the guardrail and records
       // its assessment without blocking or masking.
       RejectAuditAction action = 6;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 7;
     }
 
     message GoogleModelArmor {
@@ -1402,6 +1408,9 @@ message BackendPolicySpec {
       // REJECT (default) rejects flagged content; AUDIT records the would-be
       // rejection without blocking.
       RejectAuditAction action = 6;
+
+      // Behavior on provider errors. Defaults to FAIL_CLOSED.
+      Webhook.FailureMode failure_mode = 7;
     }
 
     message AzureContentSafety {

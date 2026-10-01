@@ -16,6 +16,8 @@ info:
         properties:
           answer:
             type: number
+          explanation:
+            type: string
         required:
           - answer
         additionalProperties: false
@@ -54,13 +56,17 @@ info:
           "properties": {
             "answer": {
               "type": "number"
+            },
+            "explanation": {
+              "type": "string"
             }
           },
           "required": [
             "answer"
           ],
           "additionalProperties": false
-        }
+        },
+        "strict": false
       }
     }
   },

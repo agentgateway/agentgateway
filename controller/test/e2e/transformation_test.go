@@ -4,18 +4,14 @@ package e2e_test
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/net/http2"
 	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -208,14 +204,12 @@ func sendH2CGrpcRequest(address, authority, methodPath string, protobufPayload [
 	req.Header.Set("Content-Type", "application/grpc")
 	req.Header.Set("TE", "trailers")
 
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
 	client := &http.Client{
 		Timeout: 10 * time.Second,
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-				var d net.Dialer
-				return d.DialContext(ctx, network, addr)
-			},
+		Transport: &http.Transport{
+			Protocols: protocols,
 		},
 	}
 

@@ -50,12 +50,12 @@ spec:
 var exampleGateway = types.NamespacedName{Namespace: "default", Name: "example"}
 
 // Dated older than every Gateway API ListenerSet here, so it takes listener precedence.
-func contributedListenerSet(name, section string, port gwv1.PortNumber, protocol gwv1.ProtocolType, internal bool) translator.ListenerSet {
+func contributedListenerSet(name, section string, port gwv1.PortNumber, protocol gwv1.ProtocolType, internal bool) *translator.ListenerSet {
 	key := utils.InternalGatewayName("default", name, section)
-	return translator.ListenerSet{
+	return &translator.ListenerSet{
 		Name:          key,
-		Parent:        types.NamespacedName{Namespace: "default", Name: name},
-		GatewayParent: exampleGateway,
+		ParentObject:  utils.TypedNamespacedName{Kind: "ListenerSet", NamespacedName: types.NamespacedName{Namespace: "default", Name: name}},
+		ParentGateway: exampleGateway,
 		Valid:         true,
 		ParentInfo: plugins.ParentInfo{
 			ParentGateway:     exampleGateway,
@@ -69,15 +69,15 @@ func contributedListenerSet(name, section string, port gwv1.PortNumber, protocol
 	}
 }
 
-func syncerWithContributedListenerSets(t *testing.T, inputs []any, sets ...translator.ListenerSet) *syncer.Syncer {
+func syncerWithContributedListenerSets(t *testing.T, inputs []any, sets ...*translator.ListenerSet) *syncer.Syncer {
 	_, s := syncerAndStatus(t, inputs, sets...)
 	return s
 }
 
-func syncerAndStatus(t *testing.T, inputs []any, sets ...translator.ListenerSet) (*testutils.TestStatusQueue, *syncer.Syncer) {
+func syncerAndStatus(t *testing.T, inputs []any, sets ...*translator.ListenerSet) (*testutils.TestStatusQueue, *syncer.Syncer) {
 	ctx := testutils.BuildMockPolicyContext(t, inputs)
 	sq, s := testutils.SyncerWithOptions(t, ctx, []string{"ListenerSet"}, syncer.WithExtraListenerSets(
-		func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[translator.ListenerSet] {
+		func(agw *plugins.AgwCollections, krtopts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
 			return krt.NewStaticCollection(nil, sets, krtopts.ToOptions("test/ContributedListenerSets")...)
 		},
 	))

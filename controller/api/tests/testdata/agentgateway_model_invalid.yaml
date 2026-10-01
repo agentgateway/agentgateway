@@ -166,3 +166,18 @@ spec:
   policies:
     auth:
       crossAppAccess: {}
+---
+_err: Bedrock guardrails cannot be used with MantlePreferred or MantleOnly
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: bedrock-model-mantlepreferred-guardrail
+spec:
+  parentRefs:
+  - name: ai-gateway
+  provider: Bedrock
+  bedrock:
+    endpointPreference: MantlePreferred
+    guardrail:
+      identifier: test-guardrail
+      version: "1"

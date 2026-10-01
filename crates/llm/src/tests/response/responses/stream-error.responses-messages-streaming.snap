@@ -5,14 +5,8 @@ description: src/tests/response/responses/stream-error.json
 event: message_start
 data: {"type":"message_start","message":{"id":"resp_terminal","type":"message","role":"assistant","content":[],"model":"gpt-5.6-luna","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
 
-event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":0,"output_tokens":0}}
-
-event: message_stop
-data: {"type":"message_stop"}
-
 event: error
-data: {"type":"error","error":{"type":"server_error","message":"provider failed"}}
+data: {"type":"error","error":{"type":"rate_limit_error","message":"provider failed"}}
 
 
 

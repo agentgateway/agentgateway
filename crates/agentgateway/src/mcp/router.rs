@@ -98,6 +98,7 @@ impl App {
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
+						condition: t.condition.clone(),
 						spec: t.spec.clone(),
 						backend: be.map(|b| b.backend),
 						backend_policies,
@@ -124,6 +125,11 @@ impl App {
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
 		let authn = backend_policies.mcp_authentication;
 		let mcp_guardrails = backend_policies.mcp_guardrails.clone();
+		for target in &backends.targets {
+			if let Some(condition) = target.condition.as_deref() {
+				log.cel.ctx().register_expression(condition);
+			}
+		}
 
 		// Store an empty value, we will populate each field async
 		let logy = log.mcp_status.clone();
@@ -260,6 +266,7 @@ impl Default for McpBackendGroup {
 #[derive(Debug)]
 pub struct McpTarget {
 	pub name: Strng,
+	pub condition: Option<Arc<cel::Expression>>,
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,
 	pub backend: Option<SimpleBackend>,

@@ -705,8 +705,7 @@ func (s *DiscoveryServer) pushDeltaXds(con *Connection, w *model.WatchedResource
 		log.Debug("ADS: REMOVE", "type", GetShortType(w.TypeUrl), "node", con.ID(), "removed", resp.RemovedResources)
 	}
 
-	configSize := ResourceSize(res)
-	//configSizeBytes.With(typeTag.Value(w.TypeUrl)).Record(float64(configSize))
+	configSize := ResourceSize(resp)
 
 	if err := con.sendDelta(resp); err != nil {
 		log.Debug("send failure", "type", GetShortType(w.TypeUrl), "node", con.proxy.ID, "resources", len(res), "size", ByteCount(configSize), "error", err)
@@ -1388,12 +1387,20 @@ func (node *Proxy) DeepCloneWatchedResources() map[string]model.WatchedResource 
 	return m
 }
 
-func ResourceSize(r model.Resources) int {
-	// Approximate size by looking at the Any marshaled size. This avoids high cost
-	// proto.Size, at the expense of slightly under counting.
-	size := 0
-	for _, r := range r {
-		size += len(r.Resource.Value)
+func ResourceSize(resp *discovery.DeltaDiscoveryResponse) int {
+	// Approximate size using payload and string lengths, excluding protobuf framing.
+	size := len(resp.TypeUrl) + len(resp.SystemVersionInfo) + len(resp.Nonce)
+	for _, r := range resp.Resources {
+		size += len(r.GetName()) + len(r.GetVersion())
+		for _, alias := range r.GetAliases() {
+			size += len(alias)
+		}
+		if resource := r.GetResource(); resource != nil {
+			size += len(resource.TypeUrl) + len(resource.Value)
+		}
+	}
+	for _, name := range resp.RemovedResources {
+		size += len(name)
 	}
 	return size
 }

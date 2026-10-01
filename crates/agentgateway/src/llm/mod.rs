@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
@@ -31,12 +31,14 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 pub mod model_router;
+pub mod model_transform;
 pub use agent_llm::{azure, bedrock, vertex};
 
 /// Default body buffer limit once a request enters LLM processing.
 pub const DEFAULT_BUFFER_LIMIT: usize = 32 * 1024 * 1024;
 
 pub mod catalog;
+pub mod discovery;
 pub mod policy;
 
 use policy::streaming_guardrails::GuardedSseBody;
@@ -335,11 +337,18 @@ struct ChatStreamContext {
 /// For a client `InputFormat`, pick the first entry whose `ChatFormat` is
 /// supported by the selected provider/model. Put cheaper or more native
 /// translations before broader fallbacks.
-const CHAT_TRANSLATIONS: &[ChatTranslation] = {
+static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 	const fn chat(input: InputFormat, output: ChatFormat) -> ChatTranslation {
 		ChatTranslation { input, output }
 	}
-	&[
+	// AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS will be removed in v1.7.
+	let [messages_primary, messages_fallback] =
+		if std::env::var("AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS").is_ok_and(|v| v == "true") {
+			[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		} else {
+			[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
+		};
+	vec![
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Gemini, ChatFormat::VertexGemini),
@@ -356,15 +365,15 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
 		// Messages
-		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
-		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
+		chat(InputFormat::Messages, messages_primary),
+		chat(InputFormat::Messages, messages_fallback),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
 		// Missing: Responses -> Messages
 	]
-};
+});
 
 fn render_openai_completions(
 	req: types::ChatRequest,
@@ -458,14 +467,15 @@ fn render_anthropic_messages(
 
 fn render_vertex_gemini(
 	req: types::ChatRequest,
-	_ctx: &ChatRequestContext<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
 		// not depend on Vertex specifics; the Gemini API provider renders through here too.
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			conversion::vertex_gemini::from_completions::translate(&req)
+			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
+			conversion::vertex_gemini::from_completions::translate(&req, is_vertex)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"

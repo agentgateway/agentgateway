@@ -481,6 +481,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::PayloadTooLarge(_)) => StatusCode::PAYLOAD_TOO_LARGE,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::UnknownSession) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::BAD_REQUEST,

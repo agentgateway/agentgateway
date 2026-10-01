@@ -35,10 +35,8 @@ schemars = { workspace = true, optional = true }
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_json_path_to_error.workspace = true
-serde-transcode.workspace = true
 serde_with.workspace = true
-serde_yaml.workspace = true
+serde_norway.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

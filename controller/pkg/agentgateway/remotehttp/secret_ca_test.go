@@ -32,7 +32,7 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	services := krt.NewStaticCollection(nil, []*corev1.Service{
 		testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
 	}, krt.WithStop(stop))
-	secrets := krt.NewStaticCollection(nil, []*corev1.Secret{secret}, krt.WithStop(stop))
+	secrets := krt.NewMutableCollection(nil, []*corev1.Secret{secret}, krt.WithStop(stop))
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, nil, krt.WithStop(stop))
 	policies := krt.NewStaticCollection(nil, []*agentgateway.AgentgatewayPolicy{{
 		Name: "backend-policy", Namespace: namespace,
@@ -47,7 +47,7 @@ func TestResolveSecretCAReactsToRotation(t *testing.T) {
 	backendTLSPolicies := krt.NewStaticCollection[*gwv1.BackendTLSPolicy](nil, nil, krt.WithStop(stop))
 	resolver := remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps:     configMaps,
-		Secrets:        secrets,
+		Secrets:        secrets.AsCollection(),
 		Services:       services,
 		PolicySelector: policyselection.NewSelector(policies, backendTLSPolicies),
 	})

@@ -209,6 +209,13 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	collections := BuildMockCollection(t, inputs)
 	resolver := BuildRemoteHTTPResolver(collections)
 	grants := BuildReferenceGrants(collections)
+	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
+		AgentgatewayPolicies: collections.AgentgatewayPolicies,
+		Backends:             collections.Backends,
+		Resolver:             jwks.NewResolver(resolver, grants, collections.Settings.BackendRefGrantMode),
+		KrtOpts:              collections.KrtOpts,
+	})
+	jwksCollections.ResolvedOwners.WaitUntilSynced(collections.KrtOpts.Stop)
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
 		Collections: collections,
@@ -217,7 +224,7 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 		Resolver:    resolver,
 		JWKSLookup: jwks.NewLookup(
 			jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace, collections.KrtOpts.ToOptions("jwks/PersistedEntries")...),
-			jwks.NewResolver(resolver, grants, collections.Settings.BackendRefGrantMode),
+			jwksCollections.ResolvedOwners,
 		),
 
 		CredentialResolver: plugins.DefaultCredentialResolverFactory(collections),
@@ -287,13 +294,16 @@ func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Res
 }
 
 func BuildJWKSLookup(collections *plugins.AgwCollections) jwks.Lookup {
-	persistedJWKS := jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace)
-	return jwks.NewLookup(
-		persistedJWKS,
-		jwks.NewResolver(
+	persistedJWKS := jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace, collections.KrtOpts.ToOptions("jwks/PersistedEntries")...)
+	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
+		AgentgatewayPolicies: collections.AgentgatewayPolicies,
+		Backends:             collections.Backends,
+		Resolver: jwks.NewResolver(
 			BuildRemoteHTTPResolver(collections),
 			BuildReferenceGrants(collections),
 			collections.Settings.BackendRefGrantMode,
 		),
-	)
+		KrtOpts: collections.KrtOpts,
+	})
+	return jwks.NewLookup(persistedJWKS, jwksCollections.ResolvedOwners)
 }

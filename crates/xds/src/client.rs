@@ -240,6 +240,14 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			}
 		}
 
+		// Reclaim excess capacity after the batch, leaving headroom for future updates.
+		if let Some(resources) = state.known_resources.get_mut(&type_url)
+			&& resources.capacity() > 1024
+			&& resources.len() < resources.capacity() / 4
+		{
+			resources.shrink_to(resources.len() * 2);
+		}
+
 		// Either can fail. Merge the results
 		match (result, decode_failures.is_empty()) {
 			(Ok(()), true) => Ok(()),

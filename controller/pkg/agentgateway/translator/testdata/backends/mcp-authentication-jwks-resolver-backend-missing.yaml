@@ -49,7 +49,7 @@ status:
     conditions:
     - lastTransitionTime: fake
       message: 'failed to translate backend: backend default/test-jwks not found,
-        policy default/inline_policy'
+        referenced by AgentgatewayBackend default/mcp-backend'
       reason: PartiallyValid
       status: "True"
       type: Accepted

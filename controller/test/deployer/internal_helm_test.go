@@ -137,6 +137,10 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 		{
 			Name:      "agentgateway with params level Istio configuration",
 			InputFile: "agentgateway-istio",
+			Settings: &apisettings.Settings{
+				IstioRevision:  "1-30",
+				IstioCaAddress: "https://custom-ca.istio-system.svc:15012",
+			},
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
 				assert.Contains(t, outputYaml, "CLUSTER_ID",

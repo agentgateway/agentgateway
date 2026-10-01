@@ -746,48 +746,18 @@ impl HTTPProxy {
 			.proxy_internal(req, log.as_mut().unwrap(), &mut response_policies)
 			.await
 			.map_err(|e| e.0);
-		let error = ret.as_ref().err().and_then(|e| match e {
-			ProxyResponse::Error(e) => Some(cel::ErrorContext {
-				reason: e.as_reason().to_string(),
-				message: e.to_string(),
-			}),
-			ProxyResponse::DirectResponse(_) => None,
-		});
-
-		log.with(|l| l.error = error.as_ref().map(|e| e.message.clone()));
-		let reason = match &ret {
-			Ok(_) => ProxyResponseReason::Upstream,
-			Err(e) => e.as_reason(),
-		};
+		let (mut resp, mut reason) = resolve_response(ret, log.as_mut().unwrap(), is_grpc_request);
 		let is_upstream_response = reason == ProxyResponseReason::Upstream;
-		let mut resp = ret.unwrap_or_else(|err| match err {
-			ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-			ProxyResponse::DirectResponse(dr) => *dr,
-		});
-		if let Some(error) = error {
-			if let Some(proxy) = resp.extensions_mut().get_mut::<cel::ProxyContext>() {
-				proxy.error = Some(error);
-			} else {
-				resp.extensions_mut().insert(cel::ProxyContext {
-					error: Some(error),
-					..Default::default()
-				});
-			}
-		}
 		if let Some(l) = log.as_mut() {
 			l.cel.ctx().maybe_buffer_response_body(&mut resp).await;
 		}
 
-		let mut resp = match response_policies
+		if let Err(failure) = response_policies
 			.apply(&mut resp, log.as_mut().unwrap(), is_upstream_response)
 			.await
 		{
-			Ok(_) => resp,
-			Err(e) => match e {
-				ProxyResponse::Error(e) => e.into_response_with_grpc(is_grpc_request),
-				ProxyResponse::DirectResponse(dr) => *dr,
-			},
-		};
+			(resp, reason) = resolve_response(Err(failure), log.as_mut().unwrap(), is_grpc_request);
+		}
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
 		llm::encode_deferred_response(&mut resp);
@@ -1032,6 +1002,7 @@ impl HTTPProxy {
 			let info = backend.backend_info();
 			req.extensions_mut().insert(BackendContext {
 				name: info.backend_name,
+				endpoint: None,
 				backend_type: info.backend_type,
 				protocol: backend
 					.backend_protocol()
@@ -1350,6 +1321,11 @@ impl HTTPProxy {
 			call_target: backend_call.target.clone(),
 			inputs: self.inputs.clone(),
 		};
+		set_backend_cel_context(
+			req,
+			Some(&log),
+			backend_call.static_target.then_some(&backend_call.target),
+		);
 		{
 			let mut maybe_log = Some(&mut *log);
 			apply_backend_policies(
@@ -1363,7 +1339,6 @@ impl HTTPProxy {
 			.await?;
 		}
 		log.endpoint = Some(backend_call.target.clone());
-		set_backend_cel_context(req, Some(&log));
 		log.request_snapshot = snapshot_connect_request(log, req).map(Arc::new);
 
 		// CONNECT establishes a raw byte tunnel after any configured backend transport
@@ -2370,6 +2345,21 @@ async fn build_simple_backend_call(
 	Ok((backend_call, maybe_inference))
 }
 
+// Explicit policy routes retain their suffix semantics and override native model classification.
+fn resolve_llm_route_type(
+	policy: Option<&llm::Policy>,
+	model_route_type: Option<RouteType>,
+	path: &str,
+) -> RouteType {
+	if let Some(policy) = policy
+		&& !policy.routes.is_empty()
+	{
+		return policy.resolve_route(path);
+	}
+
+	model_route_type.unwrap_or(RouteType::Completions)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::result_large_err)]
 async fn make_backend_call(
@@ -2384,15 +2374,20 @@ async fn make_backend_call(
 	substrate_state: &mut Option<http::substrate::SubstrateRequestState>,
 ) -> Result<Response, ProxyResponse> {
 	let resolved_backend;
+	let mut model_route_type = None;
 	let backend = if let Backend::LLMRouter(_, router) = backend {
 		// Model routing parses the LLM body before provider request processing.
 		req
 			.extensions_mut()
 			.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
-		let resolved = match router.resolve(&mut req).await {
+		if let Some(path_match) = router.trace_path(&req) {
+			log.add(|log| log.path_match = Some(path_match));
+		}
+		let resolved = match router.resolve(&mut req, &inputs.model_catalog).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
+		model_route_type = Some(resolved.route_type);
 		let selected_backend = resolve_backend(resolved.backend, inputs.as_ref())?;
 		let concrete_policies = get_backend_policies(
 			inputs.as_ref(),
@@ -2544,13 +2539,15 @@ async fn make_backend_call(
 				);
 				// Resolve the LLM route before picking the connection target: some providers serve
 				// routes from different hosts (e.g. Bedrock rerank uses bedrock-agent-runtime).
-				let route_type = route_policies
-					.clone()
-					.merge_backend_policies(effective_policies.llm.clone())
-					.llm
-					.as_ref()
-					.map(|policy| policy.resolve_route(req.uri().path()))
-					.unwrap_or(llm::RouteType::Completions);
+				let route_type = resolve_llm_route_type(
+					route_policies
+						.clone()
+						.merge_backend_policies(effective_policies.llm.clone())
+						.llm
+						.as_deref(),
+					model_route_type,
+					req.uri().path(),
+				);
 				let target = match &provider.host_override {
 					Some(target) => target.clone(),
 					None => provider
@@ -2645,7 +2642,7 @@ async fn make_backend_call(
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
 			let backend = backend.clone();
-			set_backend_cel_context(&mut req, log.as_ref());
+			set_backend_cel_context(&mut req, log.as_ref(), None);
 			let name = name.clone();
 			let Some(log) = log else {
 				return Err(
@@ -2671,6 +2668,11 @@ async fn make_backend_call(
 			.backend_policies
 			.register_cel_expressions(log.cel.ctx());
 	}
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -2710,7 +2712,11 @@ async fn make_backend_call(
 	let llm_request_policies =
 		route_policies.merge_backend_policies(backend_call.backend_policies.llm.clone());
 
-	set_backend_cel_context(&mut req, log.as_ref());
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
@@ -2719,11 +2725,11 @@ async fn make_backend_call(
 				.get_or_insert_with(|| crate::transport::BufferLimit::new(llm::DEFAULT_BUFFER_LIMIT));
 			// LLM requires CEL execution after the snapshot so we do not clear extensions
 			let mut req = req.take_and_snapshot_without_clearing_extensions(log.as_mut())?;
-			let route_type = llm_request_policies
-				.llm
-				.as_ref()
-				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or(llm::RouteType::Completions);
+			let route_type = resolve_llm_route_type(
+				llm_request_policies.llm.as_deref(),
+				model_route_type,
+				req.uri().path(),
+			);
 			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
 				&& let Some(provider_model) = llm.provider.override_model()
 			{
@@ -3237,13 +3243,18 @@ async fn handle_substrate_backend_selection(
 	}
 }
 
-fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
+fn set_backend_cel_context(
+	req: &mut http::Request,
+	log: Option<&&mut RequestLog>,
+	endpoint: Option<&Target>,
+) {
 	if let Some(l) = log
 		&& let Some(bp) = l.backend_protocol
 		&& let Some(bi) = &l.backend_info
 	{
 		req.extensions_mut().insert(BackendContext {
 			name: bi.backend_name.clone(),
+			endpoint: endpoint.map(|target| target.to_string().into()),
 			backend_type: bi.backend_type,
 			protocol: bp,
 		});
@@ -3330,6 +3341,7 @@ pub fn build_service_call(
 		&& service_override.destination_passthrough
 	{
 		return Ok(BackendCall {
+			static_target: false,
 			target: Target::Address(destination),
 			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
@@ -3503,6 +3515,7 @@ pub fn build_service_call(
 	};
 
 	Ok(BackendCall {
+		static_target: false,
 		target,
 		span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 		http_version_override,
@@ -3661,7 +3674,52 @@ fn resolved_workload_target_hostname<'a>(
 	}
 }
 
-fn set_final_response_fields(
+// Resolve both the initial request and any response-policy replacement without consuming
+// response extensions. Final response fields must be captured once, after all policies run.
+pub(crate) fn resolve_response(
+	result: Result<Response, ProxyResponse>,
+	log: &mut RequestLog,
+	is_grpc_request: bool,
+) -> (Response, ProxyResponseReason) {
+	let reason = match &result {
+		Ok(_) => ProxyResponseReason::Upstream,
+		Err(failure) => failure.as_reason(),
+	};
+	let error = match &result {
+		Err(ProxyResponse::Error(error)) => Some(cel::ErrorContext {
+			reason: reason.to_string(),
+			message: match log.error.as_ref() {
+				Some(original) => {
+					format!("response policy failed: {error}; original request failed: {original}")
+				},
+				None => error.to_string(),
+			},
+		}),
+		_ => log.error.as_ref().map(|message| cel::ErrorContext {
+			reason: log.reason.unwrap_or(reason).to_string(),
+			message: message.clone(),
+		}),
+	};
+	log.reason = Some(reason);
+	log.error = error.as_ref().map(|error| error.message.clone());
+	let mut response = result.unwrap_or_else(|failure| match failure {
+		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
+		ProxyResponse::DirectResponse(response) => *response,
+	});
+	if let Some(error) = error {
+		if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
+			context.error = Some(error);
+		} else {
+			response.extensions_mut().insert(cel::ProxyContext {
+				error: Some(error),
+				..Default::default()
+			});
+		}
+	}
+	(response, reason)
+}
+
+pub(crate) fn set_final_response_fields(
 	log: &mut RequestLog,
 	reason: &ProxyResponseReason,
 	resp: &mut Response,
@@ -4634,6 +4692,7 @@ fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<
 }
 
 pub struct BackendCall {
+	static_target: bool,
 	pub target: Target,
 	pub span_target: Option<Strng>,
 	pub http_version_override: Option<::http::Version>,
@@ -4656,6 +4715,7 @@ impl BackendCall {
 			Target::Address(_) | Target::UnixSocket(_) => None,
 		};
 		Self {
+			static_target: true,
 			target,
 			span_target,
 			http_version_override: None,

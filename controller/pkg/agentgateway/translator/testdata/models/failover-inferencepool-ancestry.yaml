@@ -74,6 +74,29 @@ spec:
   targetPorts:
   - number: 8000
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrail-webhook
+  namespace: default
+spec:
+  ports:
+  - port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: guardrail-webhook-policy
+  namespace: default
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: guardrail-webhook
+  backend:
+    http:
+      requestTimeout: 5s
+---
 # Concrete Custom-provider model - attached ONLY to internal-gateway
 # This model has a backendRef to the InferencePool
 apiVersion: agentgateway.dev/v1alpha1
@@ -96,6 +119,13 @@ spec:
       name: llama-pool
     formats:
     - type: Completions
+  policies:
+    promptGuard:
+      request:
+      - webhook:
+          backendRef:
+            name: guardrail-webhook
+            port: 8443
 ---
 # Virtual model with failover - attached ONLY to public-gateway
 # This model references the concrete model as a failover target
@@ -136,6 +166,17 @@ output:
               formats:
               - format: COMPLETIONS
               providerOverride: team-a
+            inlinePolicies:
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.default.svc.cluster.local
+                          namespace: default
             name: backend
             providerBackend:
               port: 8000
@@ -177,6 +218,23 @@ output:
       listenerKey: default/internal-gateway.llm
       match:
         model: local-llama
+- gateway:
+    Name: internal-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
 - gateway:
     Name: internal-gateway
     Namespace: default
@@ -230,6 +288,17 @@ output:
               - format: COMPLETIONS
               model: local-llama
               providerOverride: team-a
+            inlinePolicies:
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.default.svc.cluster.local
+                          namespace: default
             name: local-llama
             providerBackend:
               port: 8000
@@ -272,6 +341,23 @@ output:
         failover:
           backend:
             backend: default/resilient-model/failover.llm
+- gateway:
+    Name: public-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
 - gateway:
     Name: public-gateway
     Namespace: default

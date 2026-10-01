@@ -338,7 +338,6 @@ type BackendEviction struct {
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="duration must be at least 1 second"
-	// +kubebuilder:default="3s"
 	// +optional
 	Duration *Duration `json:"duration,omitempty"`
 
@@ -543,14 +542,12 @@ type LocalCACertificateRef struct {
 	Name gwv1.ObjectName `json:"name"`
 
 	// Kind of the referenced CA certificate source. Omitted defaults to ConfigMap.
-	// +kubebuilder:default=ConfigMap
 	// +kubebuilder:validation:Enum=ConfigMap;Secret
 	// +optional
 	Kind string `json:"kind,omitempty"`
 
 	// Key within the referenced source holding the PEM-encoded CA bundle.
 	// Omitted defaults to `ca.crt`.
-	// +kubebuilder:default="ca.crt"
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253
 	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`
@@ -580,7 +577,6 @@ type BackendTLS struct {
 	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
 	//
 	// +optional
-	// +kubebuilder:default=Inline
 	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
 
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
@@ -723,14 +719,12 @@ type FrontendProxyProtocol struct {
 	// PROXY protocol version to accept.
 	//
 	// If unset, this defaults to `V2`.
-	// +kubebuilder:default=V2
 	// +optional
 	Version ProxyProtocolVersion `json:"version,omitempty"`
 
 	// Whether PROXY headers are required or optional.
 	//
 	// If unset, this defaults to `Strict`.
-	// +kubebuilder:default=Strict
 	// +optional
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
 }
@@ -1206,8 +1200,7 @@ type AuthorizationCookieLocation struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || size(self.providers) == 1",message="jwtAuthentication.mcp requires exactly one provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.mcp) || !has(self.mode) || self.mode == 'Strict'",message="jwtAuthentication.mcp requires mode Strict"
 type JWTAuthentication struct {
-	// Validation mode for JWT authentication.
-	// +kubebuilder:default=Strict
+	// Validation mode for JWT authentication. Defaults to `Strict`.
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
@@ -1326,9 +1319,9 @@ type RemoteJWKS struct {
 	// +optional
 	JwksPath *LongString `json:"jwksPath,omitempty"`
 	// How long a fetched `jwks` document is used before it is re-fetched from the IdP.
+	// Defaults to `5m`.
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
-	// +kubebuilder:default="5m"
 	CacheDuration *Duration `json:"cacheDuration,omitempty"`
 	// Remote JWKS server to reach.
 	PolicyBackendEndpoint `json:",inline"`
@@ -1348,8 +1341,7 @@ const (
 
 // +kubebuilder:validation:ExactlyOneOf=users;secretRef
 type BasicAuthentication struct {
-	// Validation mode for basic authentication.
-	// +kubebuilder:default=Strict
+	// Validation mode for basic authentication. Defaults to `Strict`.
 	// +optional
 	Mode BasicAuthenticationMode `json:"mode,omitempty"`
 
@@ -1422,8 +1414,7 @@ const (
 
 // +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector;configMapSelector
 type APIKeyAuthentication struct {
-	// Validation mode for API key authentication.
-	// +kubebuilder:default=Strict
+	// Validation mode for API key authentication. Defaults to `Strict`.
 	// +optional
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
@@ -2549,8 +2540,7 @@ type MCPAuthentication struct {
 	// +required
 	JWKS RemoteJWKS `json:"jwks"`
 
-	// Validation mode for JWT authentication.
-	// +kubebuilder:default=Strict
+	// Validation mode for JWT authentication. Defaults to `Strict`.
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
@@ -2608,7 +2598,6 @@ type BackendTunnel struct {
 
 	// How requests are sent through the proxy.
 	// Defaults to `Auto`.
-	// +kubebuilder:default=Auto
 	// +optional
 	Mode BackendTunnelMode `json:"mode,omitempty"`
 }
@@ -2830,43 +2819,36 @@ type ProcessingOptions struct {
 	// How request bodies are sent to the external processor.
 	// Defaults to `FullDuplexStreamed`.
 	// +optional
-	// +kubebuilder:default=FullDuplexStreamed
 	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
 
 	// How response bodies are sent to the external processor.
 	// Defaults to `FullDuplexStreamed`.
 	// +optional
-	// +kubebuilder:default=FullDuplexStreamed
 	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`
 
 	// Whether request headers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
-	// +kubebuilder:default=Send
 	RequestHeaderMode *HeaderSendMode `json:"requestHeaderMode,omitempty"`
 
 	// Whether response headers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
-	// +kubebuilder:default=Send
 	ResponseHeaderMode *HeaderSendMode `json:"responseHeaderMode,omitempty"`
 
 	// Whether request trailers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
-	// +kubebuilder:default=Send
 	RequestTrailerMode *TrailerSendMode `json:"requestTrailerMode,omitempty"`
 
 	// Whether response trailers are sent to the external processor.
 	// Defaults to `Send`.
 	// +optional
-	// +kubebuilder:default=Send
 	ResponseTrailerMode *TrailerSendMode `json:"responseTrailerMode,omitempty"`
 
 	// Allows ext_proc `mode_override` values from matching header responses to update
 	// subsequent request/response processing phases for this exchange. Defaults to `false`.
 	// +optional
-	// +kubebuilder:default=false
 	AllowModeOverride bool `json:"allowModeOverride,omitempty"`
 }
 
@@ -3498,7 +3480,7 @@ type AccessLog struct {
 // Ships access logs to an
 // OpenTelemetry-compatible backend via OTLP.
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
-// +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || (has(self.protocol) && self.protocol == 'HTTP')",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"
 type OtlpAccessLog struct {
@@ -3518,8 +3500,7 @@ type OtlpAccessLog struct {
 	// +optional
 	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
 
-	// OTLP protocol variant to use.
-	// +kubebuilder:default=GRPC
+	// OTLP protocol variant to use. Defaults to `GRPC`.
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 
@@ -3589,7 +3570,7 @@ const (
 )
 
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
-// +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
+// +kubebuilder:validation:XValidation:rule="!has(self.path) || (has(self.protocol) && self.protocol == 'HTTP')",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"
 type Tracing struct {
@@ -3597,8 +3578,7 @@ type Tracing struct {
 	// Supported types: `Service` and `AgentgatewayBackend`.
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
-	// OTLP protocol variant to use.
-	// +kubebuilder:default=GRPC
+	// OTLP protocol variant to use. Defaults to `GRPC`.
 	// +optional
 	Protocol OTLPProtocol `json:"protocol,omitempty"`
 

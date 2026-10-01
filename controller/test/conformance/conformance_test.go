@@ -4,8 +4,10 @@ package conformance_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -76,7 +78,10 @@ func TestConformance(t *testing.T) {
 			},
 		}
 	} else {
-		t.Logf("Failed to guess MetalLB address: %v, skipping test", err)
+		if os.Getenv("CI") == "true" {
+			t.Fatalf("Failed to find a MetalLB address for GatewayStaticAddresses: %v", err)
+		}
+		t.Logf("Failed to find a MetalLB address: %v, skipping GatewayStaticAddresses", err)
 		options.SkipTests = append(options.SkipTests, string(features.GatewayStaticAddressesFeature.Name))
 	}
 	options.Debug = true
@@ -183,9 +188,9 @@ func guessMetallbAddress() (string, error) {
 	}
 
 	// Fall back to ConfigMap format (older format)
-	address, err = guessFromConfigMap(cfg)
-	if err != nil {
-		return "", fmt.Errorf("failed to guess address from both IPAddressPool and ConfigMap: %w", err)
+	address, configMapErr := guessFromConfigMap(cfg)
+	if configMapErr != nil {
+		return "", fmt.Errorf("failed to guess address from both IPAddressPool and ConfigMap: %w", errors.Join(err, configMapErr))
 	}
 
 	return address, nil
@@ -257,7 +262,9 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 
 	var config struct {
 		AddressPools []struct {
-			Addresses []string `json:"addresses"`
+			Name       string   `json:"name"`
+			Addresses  []string `json:"addresses"`
+			AutoAssign *bool    `json:"auto-assign"`
 		} `json:"address-pools"`
 	}
 
@@ -268,7 +275,11 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 	var pools []metalLBAddressPool
 	for _, pool := range config.AddressPools {
 		if len(pool.Addresses) > 0 {
-			pools = append(pools, metalLBAddressPool{addresses: pool.Addresses, autoAssign: true})
+			pools = append(pools, metalLBAddressPool{
+				name:       pool.Name,
+				addresses:  pool.Addresses,
+				autoAssign: pool.AutoAssign == nil || *pool.AutoAssign,
+			})
 		}
 	}
 
@@ -276,7 +287,11 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 		return "", fmt.Errorf("no addresses found in ConfigMap")
 	}
 
-	return chooseMetallbAddress(pools, nil)
+	usedAddresses, err := usedLoadBalancerAddresses(cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to list used LoadBalancer addresses: %w", err)
+	}
+	return chooseMetallbAddress(pools, usedAddresses)
 }
 
 type metalLBAddressPool struct {
@@ -312,20 +327,22 @@ func chooseMetallbAddress(pools []metalLBAddressPool, usedAddresses map[string]s
 
 	var firstAutoAssigned string
 	for _, pool := range pools {
-		for _, address := range pool.addresses {
-			for _, candidate := range candidateIPv4Addresses(address) {
-				if _, used := usedAddresses[candidate]; used {
+		var candidates []string
+		for _, address := range slices.Backward(pool.addresses) {
+			candidates = append(candidates, candidateIPv4Addresses(address)...)
+		}
+		for _, candidate := range candidates {
+			if _, used := usedAddresses[candidate]; used {
+				continue
+			}
+			if !pool.autoAssign {
+				if _, overlaps := autoAssignedCandidates[candidate]; overlaps {
 					continue
 				}
-				if !pool.autoAssign {
-					if _, overlaps := autoAssignedCandidates[candidate]; overlaps {
-						continue
-					}
-					return candidate, nil
-				}
-				if firstAutoAssigned == "" {
-					firstAutoAssigned = candidate
-				}
+				return candidate, nil
+			}
+			if firstAutoAssigned == "" {
+				firstAutoAssigned = candidate
 			}
 		}
 	}

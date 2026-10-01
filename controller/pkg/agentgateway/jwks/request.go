@@ -17,7 +17,8 @@ var (
 func ResolveEndpoint(
 	krtctx krt.HandlerContext,
 	resolver remotehttp.Resolver,
-	policyName, defaultNS string,
+	parentKind OwnerKind,
+	parentName, defaultNS string,
 	remoteProvider agentgateway.RemoteJWKS,
 ) (*remotehttp.ResolvedTarget, error) {
 	if resolver == nil {
@@ -25,7 +26,8 @@ func ResolveEndpoint(
 	}
 
 	return resolver.Resolve(krtctx, remotehttp.ResolveInput{
-		ParentName:       policyName,
+		ParentKind:       string(parentKind),
+		ParentName:       parentName,
 		DefaultNamespace: defaultNS,
 		BackendRef:       remoteProvider.BackendRef,
 		URL:              remoteProvider.URL,

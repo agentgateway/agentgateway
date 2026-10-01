@@ -294,6 +294,7 @@ fn model_armor_blocked_records_guardrail_info() {
 	}))
 	.unwrap();
 	let config = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
 		template_id: strng::new("templates/my-template"),
 		project_id: strng::new("proj"),
 		location: None,
@@ -960,6 +961,7 @@ fn bedrock_anonymized_assessments() -> serde_json::Value {
 
 fn bedrock_test_config() -> BedrockGuardrails {
 	BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("gr-test"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
@@ -2223,6 +2225,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
@@ -2267,6 +2270,7 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
@@ -2305,6 +2309,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	use crate::store::BindStore;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
@@ -2343,6 +2348,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let model_armor = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
@@ -2381,6 +2387,7 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 	use crate::store::BindStore;
 
 	let model_armor = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: None,

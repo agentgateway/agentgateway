@@ -1903,6 +1903,8 @@ impl McpServerOverrides {
 #[apply(schema_ser_schema!)]
 pub struct McpTarget {
 	pub name: McpTargetName,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub condition: Option<Arc<crate::cel::Expression>>,
 	#[serde(flatten)]
 	pub spec: McpTargetSpec,
 }
@@ -3774,8 +3776,8 @@ clientSecret: "s3cret"
 resourceMetadata:
   mcpResourceUri: "mcp://test"
 "#;
-		// Parse via yamlviajson, matching how config files are loaded (map-style enum variants).
-		let auth: LocalMcpAuthentication = serdes::yamlviajson::from_str(yaml).unwrap();
+		// Parse via yaml, matching how config files are loaded (map-style enum variants).
+		let auth: LocalMcpAuthentication = serdes::yaml::from_str(yaml).unwrap();
 		assert!(matches!(auth.provider, Some(McpIDP::Entra {})));
 		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
 		assert!(auth.client_secret.is_some());
@@ -3789,7 +3791,7 @@ issuer: "https://example.com"
 jwks: '{"keys":[]}'
 resourceMetadata: {}
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(auth.audiences, None);
 
 		match auth.as_jwt().unwrap() {
@@ -3809,7 +3811,7 @@ jwks: '{"keys":[]}'
 resourceMetadata:
   mcpResourceUri: "mcp://test"
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned()]),
@@ -3827,7 +3829,7 @@ resourceMetadata:
   mcpResourceUri: "mcp://test"
 jwtValidationOptions: {}
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned()]),
@@ -3846,7 +3848,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: []
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert!(
 			auth.jwt_validation_options.required_claims.is_empty(),
 			"required_claims should be empty"
@@ -3864,7 +3866,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: ["exp", "nbf"]
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned(), "nbf".to_owned()])
@@ -3882,7 +3884,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: []
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		let jwt_config = auth.as_jwt().unwrap();
 
 		match jwt_config {
