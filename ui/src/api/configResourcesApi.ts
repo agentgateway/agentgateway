@@ -89,10 +89,6 @@ function rememberGeneration(response: { generation?: number | null }) {
 	return response;
 }
 
-export function forgetConfigGeneration() {
-	observedGeneration = null;
-}
-
 async function writeConfig<T>(path: string, init: RequestInit): Promise<T> {
 	const pin: Record<string, string> =
 		observedGeneration === null ? {} : { 'If-Match': String(observedGeneration) };

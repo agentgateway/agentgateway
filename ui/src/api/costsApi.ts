@@ -1,5 +1,4 @@
 import { requestJson } from '@/api/base';
-import { forgetConfigGeneration } from '@/api/configResourcesApi';
 
 export interface RefreshBaseCostsResponse {
 	file?: string;
@@ -15,15 +14,12 @@ export interface CostCatalogModelsResponse {
 	}>;
 }
 
-export async function refreshBaseCosts() {
-	try {
-		return await requestJson<RefreshBaseCostsResponse>('/api/costs/refresh-base', {
-			method: 'POST'
-		});
-	} finally {
-		// In hybrid mode this rewrites the modelCatalog resource, moving the store generation.
-		forgetConfigGeneration();
-	}
+export function refreshBaseCosts() {
+	// Keep the old generation until resources are refetched, even if the refresh succeeds.
+	// A failed refresh or refetch must not allow stale UI data to be written unpinned.
+	return requestJson<RefreshBaseCostsResponse>('/api/costs/refresh-base', {
+		method: 'POST'
+	});
 }
 
 export function listCostModels() {
