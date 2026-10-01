@@ -82,6 +82,18 @@ fn test_phone_recognizer_does_not_cross_line_breaks() {
 }
 
 #[test]
+fn test_phone_recognizer_adjacent_numbers() {
+	let recognizer = PhoneRecognizer::new();
+	let text = "numbers: 212-555-0100 1-800-555-1234 done";
+	let spans: Vec<&str> = recognizer
+		.recognize(text)
+		.iter()
+		.map(|r| &text[r.start..r.end])
+		.collect();
+	assert_eq!(spans, vec!["212-555-0100", "1-800-555-1234"]);
+}
+
+#[test]
 fn test_url_recognizer() {
 	let recognizer = UrlRecognizer::new();
 

@@ -39,11 +39,10 @@ impl Recognizer for PhoneRecognizer {
 			}
 		}
 
-		let mut results = Vec::new();
+		static TOKEN_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S+").unwrap());
 
-		for caps in CANDIDATE_RE.captures_iter(text) {
-			let m = caps.get(2).unwrap();
-			let candidate = m.as_str().trim_end_matches(|c: char| !c.is_ascii_digit());
+		let best_match = |span: &str, start: usize| -> Option<RecognizerResult> {
+			let candidate = span.trim_end_matches(|c: char| !c.is_ascii_digit());
 			let mut best: Option<RecognizerResult> = None;
 
 			for &region in &self.regions {
@@ -62,8 +61,8 @@ impl Recognizer for PhoneRecognizer {
 					let res = RecognizerResult {
 						entity_type: "PHONE_NUMBER".to_string(),
 						matched: candidate.to_string(),
-						start: m.start(),
-						end: m.start() + candidate.len(),
+						start,
+						end: start + candidate.len(),
 						score,
 					};
 
@@ -81,8 +80,28 @@ impl Recognizer for PhoneRecognizer {
 				}
 			}
 
-			if let Some(r) = best {
-				results.push(r);
+			best
+		};
+
+		let mut results = Vec::new();
+
+		for caps in CANDIDATE_RE.captures_iter(text) {
+			let m = caps.get(2).unwrap();
+			// one candidate may have multiple phonenumbers so take the longest valid match
+			let tokens: Vec<_> = TOKEN_RE.find_iter(m.as_str()).collect();
+			let mut i = 0;
+			while i < tokens.len() {
+				let found = (i..tokens.len()).rev().find_map(|j| {
+					let span = &m.as_str()[tokens[i].start()..tokens[j].end()];
+					best_match(span, m.start() + tokens[i].start()).map(|r| (j, r))
+				});
+				match found {
+					Some((j, r)) => {
+						results.push(r);
+						i = j + 1;
+					},
+					None => i += 1,
+				}
 			}
 		}
 
