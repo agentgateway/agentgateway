@@ -1,0 +1,378 @@
+---
+source: crates/llm/src/golden_tests.rs
+---
+{
+  "scanned": [
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "answer"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "transcript"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "transcript"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "unsigned reasoning"
+    },
+    {
+      "scope": "messages",
+      "signed": true,
+      "text": "signed reasoning"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "argument"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "print(1)"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "query"
+    },
+    {
+      "scope": "toolInput",
+      "signed": true,
+      "text": "signed argument"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "1"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "result"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "result"
+    }
+  ],
+  "masked": {
+    "messages": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "<masked>"
+              },
+              {
+                "text": "<masked>",
+                "thought": true
+              },
+              {
+                "text": "signed reasoning",
+                "thought": true,
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "call",
+                  "args": {
+                    "value": "argument"
+                  }
+                }
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "signed",
+                  "args": {
+                    "value": "signed argument"
+                  }
+                },
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionResponse": {
+                  "name": "tool",
+                  "id": "call",
+                  "response": {
+                    "result": "result"
+                  }
+                }
+              },
+              {
+                "executableCode": {
+                  "language": "PYTHON",
+                  "code": "print(1)"
+                }
+              },
+              {
+                "codeExecutionResult": {
+                  "outcome": "OUTCOME_OK",
+                  "output": "1"
+                }
+              },
+              {
+                "toolCall": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "args": {
+                    "query": "query"
+                  }
+                }
+              },
+              {
+                "toolResponse": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "response": {
+                    "result": "result"
+                  }
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "image/png",
+                  "data": "opaque"
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "audio/wav",
+                  "data": "opaque"
+                },
+                "audioTranscription": {
+                  "text": "<masked>",
+                  "speakerLabel": "speaker",
+                  "words": [
+                    {
+                      "word": "<masked>",
+                      "startOffset": "0s"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "toolInput": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "answer"
+              },
+              {
+                "text": "unsigned reasoning",
+                "thought": true
+              },
+              {
+                "text": "signed reasoning",
+                "thought": true,
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "call",
+                  "args": {
+                    "value": "<masked>"
+                  }
+                }
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "signed",
+                  "args": {
+                    "value": "signed argument"
+                  }
+                },
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionResponse": {
+                  "name": "tool",
+                  "id": "call",
+                  "response": {
+                    "result": "result"
+                  }
+                }
+              },
+              {
+                "executableCode": {
+                  "language": "PYTHON",
+                  "code": "<masked>"
+                }
+              },
+              {
+                "codeExecutionResult": {
+                  "outcome": "OUTCOME_OK",
+                  "output": "1"
+                }
+              },
+              {
+                "toolCall": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "args": {
+                    "query": "<masked>"
+                  }
+                }
+              },
+              {
+                "toolResponse": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "response": {
+                    "result": "result"
+                  }
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "image/png",
+                  "data": "opaque"
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "audio/wav",
+                  "data": "opaque"
+                },
+                "audioTranscription": {
+                  "text": "transcript",
+                  "speakerLabel": "speaker",
+                  "words": [
+                    {
+                      "word": "transcript",
+                      "startOffset": "0s"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "toolOutput": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "answer"
+              },
+              {
+                "text": "unsigned reasoning",
+                "thought": true
+              },
+              {
+                "text": "signed reasoning",
+                "thought": true,
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "call",
+                  "args": {
+                    "value": "argument"
+                  }
+                }
+              },
+              {
+                "functionCall": {
+                  "name": "tool",
+                  "id": "signed",
+                  "args": {
+                    "value": "signed argument"
+                  }
+                },
+                "thoughtSignature": "signature"
+              },
+              {
+                "functionResponse": {
+                  "name": "tool",
+                  "id": "call",
+                  "response": {
+                    "result": "<masked>"
+                  }
+                }
+              },
+              {
+                "executableCode": {
+                  "language": "PYTHON",
+                  "code": "print(1)"
+                }
+              },
+              {
+                "codeExecutionResult": {
+                  "outcome": "OUTCOME_OK",
+                  "output": "<masked>"
+                }
+              },
+              {
+                "toolCall": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "args": {
+                    "query": "query"
+                  }
+                }
+              },
+              {
+                "toolResponse": {
+                  "id": "search",
+                  "toolType": "GOOGLE_SEARCH_WEB",
+                  "response": {
+                    "result": "<masked>"
+                  }
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "image/png",
+                  "data": "opaque"
+                }
+              },
+              {
+                "inlineData": {
+                  "mimeType": "audio/wav",
+                  "data": "opaque"
+                },
+                "audioTranscription": {
+                  "text": "transcript",
+                  "speakerLabel": "speaker",
+                  "words": [
+                    {
+                      "word": "transcript",
+                      "startOffset": "0s"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

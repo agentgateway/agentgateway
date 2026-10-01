@@ -1003,10 +1003,40 @@ fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], maske
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
 	let (_, rejection) = Policy::apply_response_guard_outcome(
 		outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+		&RequestRejection::default(),
 		resp,
 	)
 	.unwrap();
 	assert!(rejection.is_none());
+}
+
+#[test]
+fn bedrock_response_mask_only_replaces_scoped_tool_output() {
+	let mut resp: crate::llm::types::responses::Response = serde_json::from_value(serde_json::json!({
+		"id": "response", "status": "completed", "model": "model", "output": [
+			{"type": "mcp_call", "id": "call", "server_label": "server", "name": "tool", "arguments": "arguments", "output": "sensitive result"},
+			{"type": "function_call", "call_id": "call", "name": "tool", "arguments": "other arguments"}
+		]
+	})).unwrap();
+	let mut expected = serde_json::to_value(&resp).unwrap();
+	expected["output"][0]["output"] = serde_json::json!("masked result");
+	let (texts, in_scope) = Policy::scoped_response_texts(&mut resp, &[ContentScope::ToolOutput]);
+	assert_eq!(texts, ["sensitive result"]);
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(&["masked result"], bedrock_anonymized_assessments()),
+		texts.len(),
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	let (action, rejection) = Policy::apply_response_guard_outcome(
+		outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+		&RequestRejection::default(),
+		&mut resp,
+	)
+	.unwrap();
+	assert_eq!(action, GuardrailAction::Mask);
+	assert!(rejection.is_none());
+	assert_eq!(serde_json::to_value(&resp).unwrap(), expected);
 }
 
 #[test]
@@ -3384,13 +3414,15 @@ fn request_guard_scope_rejects_empty_list() {
 
 #[test]
 fn prompt_guard_scope_support() {
-	// claiming tool coverage on a guard that only ever sees message text must not parse
+	// claiming tool coverage on a guard that only ever sees message text must fail validation
 	let err = serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
 			"openAIModeration": {},
 			"scope": ["messages", "toolInput"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap_err();
 	assert!(err.to_string().contains("non-default scope"), "{err}");
 
@@ -3401,6 +3433,8 @@ fn prompt_guard_scope_support() {
 			"scope": ["messages", "systemPrompt"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap();
 
 	serde_json::from_value::<PromptGuard>(serde_json::json!({
@@ -3413,7 +3447,39 @@ fn prompt_guard_scope_support() {
 			"scope": ["messages", "toolOutput"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap();
+}
+
+#[test]
+fn streaming_response_scope_validation() {
+	for scope in ["messages", "toolInput", "toolOutput", "systemPrompt"] {
+		let config = serde_json::json!({
+			"streaming": "Enabled",
+			"request": [{"regex": {"rules": []}, "scope": ["toolInput", "toolOutput"]}],
+			"response": [{"regex": {"rules": []}, "scope": ["messages", scope]}]
+		});
+		let result = serde_json::from_value::<PromptGuard>(config.clone())
+			.unwrap()
+			.validate();
+		if scope == "messages" {
+			result.unwrap();
+		} else {
+			assert!(
+				result
+					.unwrap_err()
+					.to_string()
+					.contains("streaming response guards only support the messages scope")
+			);
+		}
+		let mut config = config;
+		config["streaming"] = serde_json::json!("Disabled");
+		serde_json::from_value::<PromptGuard>(config)
+			.unwrap()
+			.validate()
+			.unwrap();
+	}
 }
 
 #[cfg(test)]
@@ -3524,7 +3590,6 @@ fn test_apply_regex_response_preserves_tool_structure(
 	}
 }
 
-// The model put an SSN in a tool call's arguments; the agent would act on it.
 #[cfg(test)]
 #[rstest::rstest]
 #[case::anthropic(
@@ -4017,4 +4082,84 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		})
 	);
+}
+
+#[rstest::rstest]
+#[case::completions(ChatFmt::Completions, include_str!("../../../../llm/src/tests/response/completions/guardrails.json"))]
+#[case::messages(ChatFmt::Anthropic, include_str!("../../../../llm/src/tests/response/anthropic/guardrails.json"))]
+#[case::gemini(ChatFmt::Gemini, include_str!("../../../../llm/src/tests/response/vertex-gemini/guardrails.json"))]
+#[case::responses(ChatFmt::Responses, include_str!("../../../../llm/src/tests/response/responses/guardrails.json"))]
+fn signed_response_text_is_scanned_but_never_masked(#[case] fmt: ChatFmt, #[case] fixture: &str) {
+	let input: serde_json::Value = serde_json::from_str(fixture).unwrap();
+	let scope = vec![
+		ContentScope::Messages,
+		ContentScope::ToolInput,
+		ContentScope::ToolOutput,
+	];
+	let (_, original) =
+		run_apply_regex_response(fmt, Action::Audit, vec![], scope.clone(), input.clone());
+	for (action, expected) in [
+		(Action::Mask, GuardrailAction::Reject),
+		(Action::Reject, GuardrailAction::Reject),
+		(Action::Audit, GuardrailAction::Audit),
+	] {
+		let (actual, response) = run_apply_regex_response(
+			fmt,
+			action,
+			vec![RegexRule::Regex {
+				pattern: regex::Regex::new("^signed ").unwrap(),
+			}],
+			scope.clone(),
+			input.clone(),
+		);
+		assert_eq!(actual, expected);
+		assert_eq!(response, original);
+	}
+}
+
+#[test]
+fn bedrock_signed_response_mask_rejects_without_changing_signed_text() {
+	let input = include_str!("../../../../llm/src/tests/response/anthropic/thinking.json");
+	for mask_signed in [false, true] {
+		let mut resp: crate::llm::types::messages::typed::MessagesResponse =
+			serde_json::from_str(input).unwrap();
+		let original = serde_json::to_value(&resp).unwrap();
+		let (texts, in_scope) = Policy::scoped_response_texts(&mut resp, &default_response_scope());
+		let masked: Vec<_> = texts
+			.iter()
+			.map(|text| {
+				if (text == original["content"][0]["thinking"].as_str().unwrap()) == mask_signed {
+					"<masked>"
+				} else {
+					text.as_str()
+				}
+			})
+			.collect();
+		let (outcome, _) = Policy::bedrock_guardrail_outcome(
+			bedrock_intervened(&masked, bedrock_anonymized_assessments()),
+			texts.len(),
+			&RequestRejection::default(),
+			&bedrock_test_config(),
+		);
+		let (action, rejection) = Policy::apply_response_guard_outcome(
+			outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+			&RequestRejection::default(),
+			&mut resp,
+		)
+		.unwrap();
+		assert_eq!(
+			action,
+			if mask_signed {
+				GuardrailAction::Reject
+			} else {
+				GuardrailAction::Mask
+			}
+		);
+		assert_eq!(rejection.is_some(), mask_signed);
+		let actual = serde_json::to_value(&resp).unwrap();
+		assert_eq!(actual["content"][0], original["content"][0]);
+		if !mask_signed {
+			assert_eq!(actual["content"][1]["text"], "<masked>");
+		}
+	}
 }

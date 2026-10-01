@@ -1116,11 +1116,13 @@ fn convert_backend_ai_policy(
 				},
 			};
 
-		Ok(llm::policy::PromptGuard {
+		let guard = llm::policy::PromptGuard {
 			streaming,
 			request,
 			response: response.collect::<Result<Vec<_>, ProtoError>>()?,
-		})
+		};
+		guard.validate().map_err(ProtoError::Generic)?;
+		Ok(guard)
 	});
 
 	let mut policy = llm::Policy {

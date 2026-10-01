@@ -516,7 +516,7 @@ impl Default for StreamingUsageGuard {
 }
 
 pub use types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
+	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseText, ResponseType,
 	SimpleChatCompletionMessage, ToolCall,
 };
 

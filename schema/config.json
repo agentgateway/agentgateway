@@ -5031,7 +5031,7 @@
       "type": "object",
       "properties": {
         "streaming": {
-          "description": "Apply prompt guards to streaming responses and realtime websocket messages.",
+          "description": "Apply prompt guards to streaming responses and realtime websocket messages.\nStreaming response guards only support the messages scope.",
           "$ref": "#/$defs/PromptGuardStreamingMode"
         },
         "request": {
@@ -5196,7 +5196,7 @@
       "additionalProperties": false
     },
     "ContentScope": {
-      "description": "A category of request content that a prompt guard can inspect.",
+      "description": "A category of request or response content that a prompt guard can inspect.\nEncrypted payloads are excluded. Signed response text is scanned but never rewritten;\na mask that would change signed text rejects the response instead.",
       "oneOf": [
         {
           "description": "The system/developer prompt.",
@@ -5204,7 +5204,7 @@
           "const": "systemPrompt"
         },
         {
-          "description": "Regular user/assistant message text.",
+          "description": "Regular user/assistant message text and plaintext reasoning blocks.",
           "type": "string",
           "const": "messages"
         },

@@ -247,3 +247,43 @@ func TestByteSizeYAMLDecodeClampedValue(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamingResponseGuardScopes(t *testing.T) {
+	v := apitests.NewAgentgatewayValidator(t)
+	for _, streaming := range []string{"Enabled", ""} {
+		for _, scope := range []string{"", "Messages", "ToolInput", "ToolOutput", "SystemPrompt"} {
+			t.Run(streaming+"/"+scope, func(t *testing.T) {
+				res := tmpl.EvaluateOrFail(t, `apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: t
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: t
+  backend:
+    ai:
+      promptGuard:
+        {{if .streaming}}streaming: {{.streaming}}{{end}}
+        request:
+        - scope: [ToolInput, ToolOutput]
+          regex:
+            builtins: [Ssn]
+        response:
+        - regex:
+            builtins: [Ssn]
+          {{if .scope}}scope: [{{.scope}}]{{end}}
+`, map[string]any{"streaming": streaming, "scope": scope})
+				err := v.ValidateCustomResourceYAML(res, nil)
+				if streaming == "Enabled" && scope != "" && scope != "Messages" {
+					if err == nil || !strings.Contains(err.Error(), "streaming response guards only support the Messages scope") {
+						t.Fatalf("expected streaming scope validation error, got %v", err)
+					}
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
+	}
+}

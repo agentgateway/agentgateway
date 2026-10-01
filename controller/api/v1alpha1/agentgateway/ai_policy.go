@@ -116,6 +116,8 @@ const (
 )
 
 // Which category of request or response content a prompt guard inspects.
+// Encrypted payloads are excluded. Signed response text is scanned but never rewritten;
+// a mask that would change signed text rejects the response instead.
 // +k8s:enum
 type ContentScope string
 
@@ -123,10 +125,10 @@ const (
 	// The system/developer prompt.
 	ContentScopeSystemPrompt ContentScope = "SystemPrompt"
 
-	// Regular user/assistant message text.
+	// Regular user/assistant message text, including plaintext reasoning.
 	ContentScopeMessages ContentScope = "Messages"
 
-	// Tool call results fed back to the model.
+	// Tool call results, including results from provider-hosted tools.
 	ContentScopeToolOutput ContentScope = "ToolOutput"
 
 	// Tool call arguments, usually produced by the model.
@@ -404,9 +406,11 @@ type PromptguardResponse struct {
 //		    action: MASK
 //
 // +kubebuilder:validation:AtLeastOneFieldSet:fields=request;response
+// +kubebuilder:validation:XValidation:rule="!has(self.streaming) || self.streaming != 'Enabled' || !has(self.response) || self.response.all(g, !has(g.scope) || g.scope.all(s, s == 'Messages'))",message="streaming response guards only support the Messages scope"
 type AIPromptGuard struct {
 	// Apply prompt guards to streaming responses and realtime websocket messages.
 	// Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+	// Streaming response guards only support the Messages scope.
 	// +optional
 	Streaming PromptGuardStreamingMode `json:"streaming,omitempty"`
 

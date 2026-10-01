@@ -1866,3 +1866,55 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 		"explicit"
 	);
 }
+
+mod response_guardrails {
+	use super::*;
+
+	fn test_scopes<T: ResponseType + DeserializeOwned>(path: &str) {
+		let input = fs::read_to_string(fixture_path(path)).unwrap();
+		let mut response: T = serde_json::from_str(&input).unwrap();
+		let mut scanned = Vec::new();
+		response.visit_text_mut(&mut |content, text| {
+			scanned.push(json!({"scope": content.scope, "signed": content.signed, "text": text}));
+		});
+		scanned.sort_by_cached_key(Value::to_string);
+		let mut masked = serde_json::Map::new();
+		for scope in [
+			ContentScope::Messages,
+			ContentScope::ToolInput,
+			ContentScope::ToolOutput,
+		] {
+			let mut response: T = serde_json::from_str(&input).unwrap();
+			response.visit_text_mut(&mut |content, text| {
+				if content.scope == scope && !content.signed {
+					*text = "<masked>".into();
+				}
+			});
+			let name = serde_json::to_value(scope)
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.to_owned();
+			masked.insert(
+				name,
+				serde_json::from_slice(&response.serialize().unwrap()).unwrap(),
+			);
+		}
+		let (snapshot_path, snapshot_name) = snapshot_path_and_name(path, "guardrails");
+		insta::with_settings!({
+			snapshot_path => snapshot_path,
+			prepend_module_to_snapshot => false,
+			omit_expression => true,
+		}, {
+			insta::assert_json_snapshot!(snapshot_name, json!({"scanned": scanned, "masked": masked}));
+		});
+	}
+
+	#[test]
+	fn response_scopes() {
+		test_scopes::<types::completions::Response>("response/completions/guardrails.json");
+		test_scopes::<types::messages::Response>("response/anthropic/guardrails.json");
+		test_scopes::<types::gemini::Response>("response/vertex-gemini/guardrails.json");
+		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
+	}
+}

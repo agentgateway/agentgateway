@@ -2874,6 +2874,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::Authorization(p))
 		}
 		if let Some(mut p) = ai {
+			if let Some(guard) = &p.prompt_guard {
+				guard.validate().map_err(anyhow::Error::msg)?;
+			}
 			p.compile_model_alias_patterns();
 			pols.push(BackendTrafficPolicy::AI(Arc::new(p)))
 		}
@@ -3958,8 +3961,8 @@ fn validate_llm_model_pattern(pattern: &str) -> anyhow::Result<()> {
 fn merge_prompt_guards(
 	shared: Option<PromptGuard>,
 	model: Option<PromptGuard>,
-) -> Option<PromptGuard> {
-	match (shared, model) {
+) -> anyhow::Result<Option<PromptGuard>> {
+	let merged = match (shared, model) {
 		(None, None) => None,
 		(Some(guardrails), None) | (None, Some(guardrails)) => Some(guardrails),
 		(Some(mut shared), Some(model)) => {
@@ -3970,7 +3973,11 @@ fn merge_prompt_guards(
 			shared.response.extend(model.response);
 			Some(shared)
 		},
+	};
+	if let Some(guard) = &merged {
+		guard.validate().map_err(anyhow::Error::msg)?;
 	}
+	Ok(merged)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4410,6 +4417,9 @@ async fn convert_llm_config(
 			timeout,
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
+		if let Some(guard) = &guardrails {
+			guard.validate().map_err(anyhow::Error::msg)?;
+		}
 		shared_prompt_guard = guardrails;
 		let feature_route_policies = split_policies(
 			resources,
@@ -4653,7 +4663,7 @@ async fn convert_llm_config(
 			pols.push(BackendTrafficPolicy::Authorization(authorization));
 		}
 		let prompt_guard =
-			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone());
+			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone())?;
 		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
@@ -5506,6 +5516,9 @@ pub(crate) async fn split_policies_for_target(
 
 	// Route policies (AI is dual-role when targeting a backend)
 	if let Some(mut p) = ai {
+		if let Some(guard) = &p.prompt_guard {
+			guard.validate().map_err(anyhow::Error::msg)?;
+		}
 		p.compile_model_alias_patterns();
 		if backend_target {
 			backend_policies.push(BackendTrafficPolicy::AI(Arc::new(p)));
