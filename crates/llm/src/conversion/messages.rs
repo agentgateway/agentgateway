@@ -23,7 +23,156 @@ fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> O
 
 #[cfg(test)]
 mod tests {
+	use serde_json::json;
+
 	use super::*;
+	use crate::types;
+
+	fn translate_tool_arguments(arguments: &str) -> Result<Vec<u8>, AIError> {
+		let request: types::completions::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-5",
+			"messages": [
+				{ "role": "user", "content": "What is the weather?" },
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_1",
+							"type": "function",
+							"function": { "name": "get_weather", "arguments": arguments }
+						}
+					]
+				},
+				{ "role": "tool", "tool_call_id": "call_1", "content": "sunny" }
+			]
+		}))
+		.expect("valid completions request");
+		from_completions::translate(&request, None)
+	}
+
+	#[test]
+	fn completions_tool_arguments_preserve_use_result_order_and_empty_input() {
+		let request: types::completions::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-5",
+			"messages": [
+				{ "role": "user", "content": "Check Columbus and the current time." },
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_weather",
+							"type": "function",
+							"function": {
+								"name": "get_weather",
+								"arguments": "{\"location\":\"Columbus\"}"
+							}
+						},
+						{
+							"id": "call_time",
+							"type": "function",
+							"function": { "name": "get_time", "arguments": "" }
+						}
+					]
+				},
+				{ "role": "tool", "tool_call_id": "call_weather", "content": "15 C" },
+				{ "role": "tool", "tool_call_id": "call_time", "content": "12:00" },
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_weather_again",
+							"type": "function",
+							"function": {
+								"name": "get_weather",
+								"arguments": "{\"location\":\"Berlin\"}"
+							}
+						}
+					]
+				},
+				{ "role": "tool", "tool_call_id": "call_weather_again", "content": "9 C" }
+			]
+		}))
+		.expect("valid completions request");
+
+		let translated = from_completions::translate(&request, None)
+			.expect("completions->messages translation should succeed");
+		let translated: serde_json::Value =
+			serde_json::from_slice(&translated).expect("translated request should be valid JSON");
+
+		assert_eq!(
+			translated["messages"],
+			json!([
+				{
+					"role": "user",
+					"content": [{ "type": "text", "text": "Check Columbus and the current time." }]
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{
+							"type": "tool_use",
+							"id": "call_weather",
+							"name": "get_weather",
+							"input": { "location": "Columbus" }
+						},
+						{
+							"type": "tool_use",
+							"id": "call_time",
+							"name": "get_time",
+							"input": {}
+						}
+					]
+				},
+				{
+					"role": "user",
+					"content": [{ "type": "tool_result", "tool_use_id": "call_weather", "content": "15 C" }]
+				},
+				{
+					"role": "user",
+					"content": [{ "type": "tool_result", "tool_use_id": "call_time", "content": "12:00" }]
+				},
+				{
+					"role": "assistant",
+					"content": [{
+						"type": "tool_use",
+						"id": "call_weather_again",
+						"name": "get_weather",
+						"input": { "location": "Berlin" }
+					}]
+				},
+				{
+					"role": "user",
+					"content": [{ "type": "tool_result", "tool_use_id": "call_weather_again", "content": "9 C" }]
+				}
+			])
+		);
+	}
+
+	#[test]
+	fn invalid_completions_tool_arguments_fail_closed() {
+		let error = translate_tool_arguments("{\"location\":")
+			.expect_err("malformed JSON arguments must be rejected before calling Anthropic");
+		assert!(
+			matches!(error, AIError::RequestParsing(_)),
+			"expected RequestParsing, got {error:?}"
+		);
+	}
+
+	#[test]
+	fn non_object_completions_tool_arguments_fail_closed() {
+		for arguments in ["null", "[]", "5", "\"location\""] {
+			let error = translate_tool_arguments(arguments).expect_err(
+				"Anthropic tool_use.input requires an object; non-object JSON must be rejected locally",
+			);
+			assert!(
+				matches!(error, AIError::RequestParsing(_)),
+				"arguments {arguments:?}: expected RequestParsing, got {error:?}"
+			);
+		}
+	}
 
 	#[test]
 	fn cap_thinking_budget_enforces_anthropic_bounds() {
@@ -156,7 +305,7 @@ pub mod from_completions {
 
 	fn assistant_content_to_messages(
 		msg: &completions::RequestAssistantMessage,
-	) -> Vec<messages::ContentBlock> {
+	) -> Result<Vec<messages::ContentBlock>, AIError> {
 		let mut out = Vec::new();
 		// An earlier thinking block is replayed ahead of the turn's text and tool calls, as the
 		// provider requires, and only with the signature it was issued with: an unsigned block is
@@ -217,7 +366,8 @@ pub mod from_completions {
 			for tool_call in tool_calls {
 				match tool_call {
 					completions::MessageToolCalls::Function(call) => {
-						let input = crate::conversion::tool_arguments_to_input(&call.function.arguments);
+						let input = crate::conversion::tool_arguments_to_input_strict(&call.function.arguments)
+							.map_err(AIError::RequestParsing)?;
 						out.push(messages::ContentBlock::ToolUse {
 							id: call.id.clone(),
 							name: call.function.name.clone(),
@@ -226,7 +376,8 @@ pub mod from_completions {
 						});
 					},
 					completions::MessageToolCalls::Custom(call) => {
-						let input = crate::conversion::tool_arguments_to_input(&call.custom_tool.input);
+						let input = crate::conversion::tool_arguments_to_input_strict(&call.custom_tool.input)
+							.map_err(AIError::RequestParsing)?;
 						out.push(messages::ContentBlock::ToolUse {
 							id: call.id.clone(),
 							name: call.custom_tool.name.clone(),
@@ -237,7 +388,7 @@ pub mod from_completions {
 				}
 			}
 		}
-		out
+		Ok(out)
 	}
 
 	fn tool_content_to_messages(
@@ -272,7 +423,7 @@ pub mod from_completions {
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, catalog);
+		let xlated = translate_internal(typed, model_id, catalog)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
@@ -280,7 +431,7 @@ pub mod from_completions {
 		req: completions::Request,
 		model_id: String,
 		catalog: crate::model_catalog::Catalog<'_>,
-	) -> messages::Request {
+	) -> Result<messages::Request, AIError> {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		let mut system_blocks = Vec::new();
@@ -350,52 +501,47 @@ pub mod from_completions {
 		};
 
 		// Convert messages to Anthropic format
-		let messages = req
-			.messages
-			.iter()
-			.filter_map(|msg| {
-				let (role, content) = match msg {
-					completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => {
-						return None;
-					},
-					completions::RequestMessage::User(user) => (
-						messages::Role::User,
-						user_content_to_messages(&user.content),
-					),
-					completions::RequestMessage::Assistant(assistant) => (
-						messages::Role::Assistant,
-						assistant_content_to_messages(assistant),
-					),
-					completions::RequestMessage::Tool(tool) => (
-						messages::Role::User,
-						vec![messages::ContentBlock::ToolResult {
-							tool_use_id: tool.tool_call_id.clone(),
-							content: tool_content_to_messages(&tool.content),
+		let mut messages = Vec::new();
+		for msg in &req.messages {
+			let (role, content) = match msg {
+				completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => {
+					continue;
+				},
+				completions::RequestMessage::User(user) => (
+					messages::Role::User,
+					user_content_to_messages(&user.content),
+				),
+				completions::RequestMessage::Assistant(assistant) => (
+					messages::Role::Assistant,
+					assistant_content_to_messages(assistant)?,
+				),
+				completions::RequestMessage::Tool(tool) => (
+					messages::Role::User,
+					vec![messages::ContentBlock::ToolResult {
+						tool_use_id: tool.tool_call_id.clone(),
+						content: tool_content_to_messages(&tool.content),
+						cache_control: None,
+						is_error: None,
+					}],
+				),
+				completions::RequestMessage::Function(function) => {
+					let mut blocks = Vec::new();
+					if let Some(text) = &function.content
+						&& !text.trim().is_empty()
+					{
+						blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+							text: text.clone(),
+							citations: None,
 							cache_control: None,
-							is_error: None,
-						}],
-					),
-					completions::RequestMessage::Function(function) => {
-						let mut blocks = Vec::new();
-						if let Some(text) = &function.content
-							&& !text.trim().is_empty()
-						{
-							blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-								text: text.clone(),
-								citations: None,
-								cache_control: None,
-							}));
-						}
-						(messages::Role::User, blocks)
-					},
-				};
-				if content.is_empty() {
-					None
-				} else {
-					Some(messages::Message { role, content })
-				}
-			})
-			.collect();
+						}));
+					}
+					(messages::Role::User, blocks)
+				},
+			};
+			if !content.is_empty() {
+				messages.push(messages::Message { role, content });
+			}
+		}
 
 		let tools = if let Some(tools) = req.tools {
 			let mapped_tools: Vec<_> = tools
@@ -508,7 +654,7 @@ pub mod from_completions {
 		} else {
 			None
 		};
-		messages::Request {
+		Ok(messages::Request {
 			messages,
 			system,
 			model: model_id,
@@ -523,7 +669,7 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
-		}
+		})
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
