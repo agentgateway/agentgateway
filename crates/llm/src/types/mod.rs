@@ -14,7 +14,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
-use crate::{AIError, LLMRequest, LLMResponse, apply};
+use crate::{apply, AIError, LLMRequest, LLMResponse};
 
 pub enum ChatRequest {
 	Completions(completions::Request),
@@ -111,9 +111,9 @@ impl From<ContentScope> for ResponseText {
 	}
 }
 
-/// A category of request or response content that a prompt guard can inspect.
-/// Encrypted payloads are excluded. Signed response text is scanned but never rewritten;
-/// a mask that would change signed text rejects the response instead.
+/// Which category of request or response content a prompt guard inspects.
+/// Encrypted payloads are excluded. Signed response payloads are scanned but
+/// a mask that would change them rejects the response instead.
 #[apply(schema_enum!)]
 pub enum ContentScope {
 	/// The system/developer prompt.

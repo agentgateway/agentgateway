@@ -994,17 +994,11 @@ fn convert_backend_ai_policy(
 						})
 					},
 				};
-				let guard = llm::policy::RequestGuard {
+				Ok(llm::policy::RequestGuard {
 					rejection,
 					scope: convert_content_scopes(&reqp.scope, llm::policy::default_content_scope)?,
 					kind,
-				};
-
-				// TODO not all guard types properly scan all scopes
-				// avoids silently ignoring configured scopes
-				guard.validate_scope().map_err(ProtoError::Generic)?;
-
-				Ok(guard)
+				})
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
@@ -1091,17 +1085,11 @@ fn convert_backend_ai_policy(
 				Ok(scope) => scope,
 				Err(e) => return Some(Err(e)),
 			};
-			let guard = llm::policy::ResponseGuard {
+			Some(Ok(llm::policy::ResponseGuard {
 				rejection,
 				scope,
 				kind,
-			};
-			Some(
-				guard
-					.validate_scope()
-					.map(|()| guard)
-					.map_err(ProtoError::Generic),
-			)
+			}))
 		});
 
 		let streaming =

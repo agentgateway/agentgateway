@@ -538,7 +538,7 @@
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -8260,7 +8260,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -12227,7 +12227,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -16156,7 +16156,7 @@
 |`binds[].listeners[].routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`binds[].listeners[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -22298,7 +22298,7 @@
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`policies[].policy.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`policies[].policy.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`policies[].policy.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`policies[].policy.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`policies[].policy.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -30020,7 +30020,7 @@
 |`backends[].ai.policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -33987,7 +33987,7 @@
 |`backends[].ai.groups[].providers[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -37914,7 +37914,7 @@
 |`backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`backends[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -40916,7 +40916,7 @@
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routeGroups[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -48638,7 +48638,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -52605,7 +52605,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -56534,7 +56534,7 @@
 |`routeGroups[].routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routeGroups[].routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -62205,7 +62205,7 @@
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routes[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -69927,7 +69927,7 @@
 |`routes[].backends[].ai.policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routes[].backends[].ai.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].backends[].ai.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -73894,7 +73894,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -77823,7 +77823,7 @@
 |`routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`routes[].backends[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].backends[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`routes[].backends[].policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`routes[].backends[].policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -82204,7 +82204,7 @@
 |`llm.models[].backendTunnel.policies.tcp.connectTimeout`|string|Maximum time allowed to establish a backend TCP connection.|
 |`llm.models[].backendTunnel.policies.backendTunnel`|any|Tunnel settings used when connecting to this backend.|
 |`llm.models[].guardrails`|object|guardrails to apply to the request or response|
-|`llm.models[].guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`llm.models[].guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`llm.models[].guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`llm.models[].guardrails.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`llm.models[].guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -86127,7 +86127,7 @@
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`llm.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails`|object|Guardrails to apply to every configured model.|
-|`llm.policies.guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`llm.policies.guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`llm.policies.guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`llm.policies.guardrails.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`llm.policies.guardrails.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
@@ -89703,7 +89703,7 @@
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
-|`mcp.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Streaming response guards only support the messages scope.<br>Possible values: `Disabled`, `Enabled`.|
+|`mcp.policies.ai.promptGuard.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`mcp.policies.ai.promptGuard.request`|[]object|Guards applied to client requests before they reach the LLM.|
 |`mcp.policies.ai.promptGuard.request[].regex`|object|Apply regex-based masking or rejection rules.|
 |`mcp.policies.ai.promptGuard.request[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`, `audit`.|
