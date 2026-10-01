@@ -2113,8 +2113,17 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 #[case("unmatched-port")]
 #[case("empty-policy")]
 #[case("http-rule")]
+#[case("before-network-authorization")]
+#[case("before-network-ext-authz")]
+#[case("before-gateway-ext-authz")]
+#[case("before-route-ext-authz")]
+#[case("before-cors")]
+#[case("before-route-match")]
 #[tokio::test]
-async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind: &str) {
+async fn substrate_egress_https_denial_returns_403_without_dialing(
+	#[case] kind: &str,
+	#[values(false, true)] http2: bool,
+) {
 	let (upstream, certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let address = listener.local_addr().unwrap();
@@ -2131,6 +2140,8 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind:
 			});
 		}
 	});
+
+	let authz = simple_mock().await;
 
 	// The same destination must work when allowed, then return an HTTP denial
 	// without even opening a TCP connection when its policy disallows it.
@@ -2169,24 +2180,63 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind:
 			}
 		};
 		let policy = EgressPolicy {
-			rules: if !allowed && kind == "empty-policy" {
+			rules: if !allowed && (kind == "empty-policy" || kind.starts_with("before-")) {
 				vec![]
 			} else {
 				vec![rule]
 			},
 			..Default::default()
 		};
-		let (gateway, _api) = substrate_tls_gateway(
+		let (mut gateway, _api) = substrate_tls_gateway(
 			Ok(policy),
 			address,
 			Some(certs.root_cert.pem().into_bytes()),
 		)
 		.await;
+		let authz_policy = json!({
+			"host": authz.address().to_string(),
+			"protocol": { "http": {} }
+		});
+		match kind {
+			"before-network-authorization" => {
+				gateway
+					.attach_frontend_policy(json!({
+						"networkAuthorization": { "rules": [if allowed { "true" } else { "false" }] }
+					}))
+					.await;
+			},
+			"before-network-ext-authz" => {
+				gateway
+					.attach_frontend_policy(json!({ "networkExtAuthz": authz_policy }))
+					.await;
+			},
+			"before-gateway-ext-authz" => {
+				gateway
+					.attach_gateway_policy(json!({ "extAuthz": authz_policy }))
+					.await;
+			},
+			"before-route-ext-authz" => {
+				gateway
+					.attach_route_policy(json!({ "extAuthz": authz_policy }))
+					.await;
+			},
+			"before-cors" => {
+				gateway
+					.attach_route_policy(json!({
+						"cors": { "allowOrigins": ["http://example.com"], "allowMethods": ["GET"] }
+					}))
+					.await;
+			},
+			"before-route-match" if !allowed => {
+				gateway.pi.stores.binds.write().remove_route("route".into());
+			},
+			_ => {},
+		}
 		let io = open_actor_egress_tunnel(&gateway, port).await;
 		let tls: agentgateway::http::backendtls::BackendTLS =
 			agentgateway::http::backendtls::ResolvedBackendTLS {
 				root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
-				alpn: Some(vec!["http/1.1".to_owned()]),
+				alpn: Some(vec![if http2 { "h2" } else { "http/1.1" }.to_owned()]),
 				..Default::default()
 			}
 			.try_into()
@@ -2201,24 +2251,43 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind:
 		.await
 		.expect("TLS handshake timed out")
 		.expect("gateway must complete TLS for HTTPS denial");
-		let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(io))
-			.await
-			.unwrap();
-		let connection = tokio::spawn(connection);
 		let authority = if !allowed && kind == "unmatched-sni-allowed-authority" {
 			hostname
 		} else {
 			"localhost"
 		};
+		let preflight = !allowed && kind == "before-cors";
 		let request = ::http::Request::builder()
-			.uri("/https-denial")
+			.method(if preflight {
+				Method::OPTIONS
+			} else {
+				Method::GET
+			})
+			.uri(format!("https://{authority}/https-denial"))
 			.header(header::HOST, authority)
+			.header(header::ORIGIN, "http://example.com")
+			.header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
 			.body(Body::empty())
 			.unwrap();
-		let response = tokio::time::timeout(Duration::from_secs(3), sender.send_request(request))
-			.await
-			.unwrap()
-			.unwrap();
+		let (response, connection) = tokio::time::timeout(Duration::from_secs(3), async {
+			if http2 {
+				let (mut sender, connection) =
+					hyper::client::conn::http2::Builder::new(hyper_util::rt::TokioExecutor::new())
+						.handshake(TokioIo::new(io))
+						.await
+						.unwrap();
+				let connection = tokio::spawn(connection);
+				(sender.send_request(request).await.unwrap(), connection)
+			} else {
+				let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(io))
+					.await
+					.unwrap();
+				let connection = tokio::spawn(connection);
+				(sender.send_request(request).await.unwrap(), connection)
+			}
+		})
+		.await
+		.unwrap();
 		assert_eq!(
 			response.status(),
 			if allowed {
@@ -2227,6 +2296,12 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind:
 				StatusCode::FORBIDDEN
 			}
 		);
+		if kind == "before-cors" {
+			assert_eq!(
+				response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+				allowed.then_some(&::http::HeaderValue::from_static("http://example.com"))
+			);
+		}
 		tokio::time::timeout(Duration::from_secs(3), response.into_body().collect())
 			.await
 			.unwrap()
@@ -2242,6 +2317,11 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(#[case] kind:
 			);
 		}
 		assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+		assert_eq!(
+			authz.received_requests().await.unwrap().len(),
+			usize::from(kind.ends_with("ext-authz")),
+			"denied HTTPS must not call auth services"
+		);
 		connection.abort();
 	}
 	forwarder.abort();

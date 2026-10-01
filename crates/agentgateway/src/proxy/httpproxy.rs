@@ -824,6 +824,25 @@ impl HTTPProxy {
 	) -> Result<Response, SnapshottedProxyResponse> {
 		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
+		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
+			if let Some(actor) = req.extensions().get::<ActorIdentity>() {
+				log.ate_actor_name = Some(actor.actor_name.clone());
+				log.ate_actor_uid = actor.actor_uid.clone();
+				log.ate_atespace = Some(actor.atespace.clone());
+			}
+			log.bind_name = Some(self.bind_name.clone());
+			log.listener_name = self.selected_listener.as_ref().map(|l| l.name.clone());
+			log.host = http::get_host(&req).ok().map(str::to_owned);
+			log.scheme = Some(Scheme::HTTPS);
+			log.server_port = req.uri().port_u16();
+			log.method = Some(req.method().clone());
+			log.path = req.uri().path_and_query().map(ToString::to_string);
+			log.version = Some(req.version());
+			return Err(ProxyError::SubstrateEgressDenied(
+				"actor egress policy denied TLS destination".to_owned(),
+			))
+			.snapshot_on_err(log, &mut req);
+		}
 
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();

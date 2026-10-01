@@ -8,7 +8,8 @@ API backend handles both `GetActor` (before returning 200 to CONNECT) and
 `GetActorEgressPolicy` (when the inner TLS ClientHello arrives). Actor traffic is
 classified from its first bytes, independently of the destination port.
 
-The internal destination bind supplies the protocol handlers:
+Set `protocol: AUTO` on the internal destination bind and supply these protocol
+handlers:
 
 - An HTTP listener and HTTP route for cleartext requests.
 - An HTTPS listener with `dynamicCa` TLS configuration and an HTTP route for
@@ -17,10 +18,11 @@ The internal destination bind supplies the protocol handlers:
 
 These listeners can cover the same names. The actor's policy chooses HTTPS
 interception or TLS passthrough before listener selection. An unmatched name or
-port selects interception so the HTTP policy can return 403. This completes TLS
-with the actor without contacting an upstream; an allowed HTTP authority cannot
-override that connection's denial. Missing or invalid SNI, unsupported protocols,
-and failed policy lookups close the connection. No matching handler also closes
+port selects interception so the gateway can return 403 before routing or auth
+policies run. This completes TLS with the actor without contacting an upstream;
+an allowed HTTP authority cannot override that connection's denial. Missing or
+invalid SNI, unsupported protocols, and failed policy lookups close the connection.
+No matching handler also closes
 the connection. Server-first connections time out during protocol detection.
 Cleartext detection uses the gateway's existing standard HTTP method list and
 HTTP/2 prior-knowledge preface; custom method tokens are not recognized.

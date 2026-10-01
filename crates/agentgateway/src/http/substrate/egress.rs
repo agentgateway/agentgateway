@@ -122,12 +122,6 @@ impl RequestPolicyTrait for SubstrateEgress {
 		log.ate_actor_name = Some(identity.actor_name.clone());
 		log.ate_actor_uid = identity.actor_uid.clone();
 		log.ate_atespace = Some(identity.atespace.clone());
-		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
-			return Err(
-				ProxyError::SubstrateEgressDenied("actor egress policy denied TLS destination".to_owned())
-					.into(),
-			);
-		}
 		if req.method() == ::http::Method::CONNECT
 			|| req.headers().contains_key(::http::header::UPGRADE)
 		{
@@ -383,7 +377,7 @@ async fn fetch_policy(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EgressTlsMode {
 	Intercept,
-	// Complete TLS so the HTTP policy can return 403 without contacting an upstream.
+	// Complete TLS, then return 403 before routing or applying request policies.
 	InterceptDenied,
 	Passthrough,
 }
