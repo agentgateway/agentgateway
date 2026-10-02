@@ -15,6 +15,27 @@ mod messages_tests;
 
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
+/// `message_start.usage` is a PROVISIONAL placeholder on some
+/// Anthropic-compatible upstreams: Fireworks reports an all-zero usage here
+/// and the real cumulative usage only on the final `message_delta`
+/// (live-verified 2026-10-01). Materializing those zeros as usage evidence
+/// fabricates complete zero-token attempts when the stream ends without a
+/// usable `message_delta` — unknown is never zero. An all-zero placeholder
+/// contributes nothing; every dimension waits for positive evidence.
+///
+/// A usage object is a placeholder only when EVERY billing dimension is
+/// zero/absent. `input_tokens` excludes cached tokens, so a fully cached
+/// request legitimately reports `input_tokens = 0` with positive
+/// cache-read/creation counts — that is real billing evidence, not a
+/// placeholder, and must survive even when the final `message_delta` does
+/// not repeat the cache dimensions.
+fn is_message_start_usage_placeholder(usage: &messages::Usage) -> bool {
+	usage.input_tokens == 0
+		&& usage.output_tokens == 0
+		&& usage.cache_read_input_tokens.is_none_or(|t| t == 0)
+		&& usage.cache_creation_input_tokens.is_none_or(|t| t == 0)
+}
+
 fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> Option<u64> {
 	let max_tokens = u64::try_from(max_tokens).unwrap_or(u64::MAX);
 	if budget_tokens < ANTHROPIC_MIN_THINKING_BUDGET_TOKENS
@@ -765,16 +786,7 @@ pub mod from_completions {
 					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
-					// `message_start.usage` is a PROVISIONAL placeholder on some
-					// Anthropic-compatible upstreams: Fireworks reports an
-					// all-zero usage here and the real cumulative usage only on
-					// the final `message_delta` (live-verified 2026-10-01).
-					// Materializing those zeros as usage evidence fabricates
-					// complete zero-token attempts when the stream ends without
-					// a usable `message_delta` — unknown is never zero. An
-					// all-zero placeholder contributes nothing; every dimension
-					// waits for positive evidence.
-					let placeholder = message.usage.input_tokens == 0 && message.usage.output_tokens == 0;
+					let placeholder = super::is_message_start_usage_placeholder(&message.usage);
 					if !placeholder {
 						input_tokens = message.usage.input_tokens;
 						output_tokens = message.usage.output_tokens;
@@ -1151,16 +1163,7 @@ pub fn passthrough_stream(
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
-				// `message_start.usage` is a PROVISIONAL placeholder on some
-				// Anthropic-compatible upstreams: Fireworks reports an
-				// all-zero usage here and the real cumulative usage only on
-				// the final `message_delta` (live-verified 2026-10-01).
-				// Materializing those zeros as usage evidence fabricates
-				// complete zero-token attempts when the stream ends without
-				// a usable `message_delta` — unknown is never zero. An
-				// all-zero placeholder contributes nothing; every dimension
-				// waits for positive evidence.
-				let placeholder = message.usage.input_tokens == 0 && message.usage.output_tokens == 0;
+				let placeholder = is_message_start_usage_placeholder(&message.usage);
 				log.update(|r| {
 					if !placeholder {
 						r.response.output_tokens = Some(message.usage.output_tokens as u64);

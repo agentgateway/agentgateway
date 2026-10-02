@@ -2433,17 +2433,19 @@ impl AIProvider {
 				self.process_rerank_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			_ => {
-				self
-					.process_chat_or_detect_buffered_response(
-						client,
-						req,
-						rate_limit,
-						req_snapshot,
-						logging,
-						model_catalog,
-						buffered,
-					)
-					.await
+				// The buffered chat path carries `LLMResponse`-sized usage
+				// evidence across its internal awaits; keep it off
+				// `process_response`'s statically asserted future size.
+				Box::pin(self.process_chat_or_detect_buffered_response(
+					client,
+					req,
+					rate_limit,
+					req_snapshot,
+					logging,
+					model_catalog,
+					buffered,
+				))
+				.await
 			},
 		}
 	}
@@ -2483,7 +2485,6 @@ impl AIProvider {
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
-				log_content,
 			)?;
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
@@ -2880,11 +2881,14 @@ impl AIProvider {
 		Ok((llm_resp, Bytes::copy_from_slice(&body)))
 	}
 
-	fn native_upstream_llm_response(
-		format: ChatFormat,
-		bytes: &Bytes,
-		log_content: LogContentFields,
-	) -> Option<LLMResponse> {
+	/// Parse a buffered upstream response in its NATIVE wire format and
+	/// extract ONLY the usage evidence for telemetry — content extraction is
+	/// disabled because the caller (`overlay_upstream_usage`) consumes just
+	/// the usage dimensions. `None` when the native parse fails (best-effort;
+	/// the translated client-format response remains the evidence source) or
+	/// for formats without an importable native output type (Bedrock
+	/// Converse).
+	fn native_upstream_llm_response(format: ChatFormat, bytes: &Bytes) -> Option<LLMResponse> {
 		let resp: Box<dyn ResponseType> = match format {
 			ChatFormat::OpenAICompletions => {
 				Self::parse_response::<types::completions::Response>(bytes).ok()?
@@ -2898,7 +2902,7 @@ impl AIProvider {
 			ChatFormat::VertexGemini => Self::parse_response::<types::gemini::Response>(bytes).ok()?,
 			ChatFormat::BedrockConverse => return None,
 		};
-		Some(resp.to_llm_response(log_content))
+		Some(resp.to_llm_response(LogContentFields::USAGE_ONLY))
 	}
 
 	/// Overlay the usage dimensions from the upstream-native evidence onto a
@@ -2937,7 +2941,6 @@ impl AIProvider {
 		req: &LLMRequest,
 		bytes: &Bytes,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
-		log_content: LogContentFields,
 	) -> Result<(Box<dyn ResponseType>, Option<LLMResponse>), AIError> {
 		if req.input_format == InputFormat::Detect {
 			return Ok((
@@ -2970,7 +2973,7 @@ impl AIProvider {
 		// caller, which also fills response content from the translated
 		// type.
 		let upstream_usage = if Self::crosses_chat_formats(req.input_format, translation.output) {
-			Self::native_upstream_llm_response(translation.output, bytes, log_content)
+			Self::native_upstream_llm_response(translation.output, bytes)
 		} else {
 			None
 		};

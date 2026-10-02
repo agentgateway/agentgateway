@@ -14,13 +14,18 @@
 //! zero-token-but-complete provider attempt for every such stream — the
 //! exact production defect signature (succeeded attempts with
 //! input=output=cache_read=cache_write=0 and usage_complete=true).
+//!
+//! The placeholder is ALL-ZERO only: Anthropic `input_tokens` excludes
+//! cached tokens, so a fully cached `message_start` (0/0 with positive
+//! cache-read/creation) is real billing evidence and must survive even
+//! when the final `message_delta` does not repeat the cache dimensions.
 
 use std::sync::{Arc, Mutex};
 
+use agent_http::Body;
 use http_body_util::BodyExt;
 
 use super::passthrough_stream;
-use agent_http::Body;
 use crate::{
 	CacheTokenConvention, InputFormat, LLMInfo, LLMRequest, LLMResponse, LogContentFields,
 	StreamingUsageGuard, StreamingUsageReporter,
@@ -136,4 +141,180 @@ async fn passthrough_stream_message_delta_without_usage_leaves_no_zero_fabricati
 		"message_start placeholder zeros must not become final usage evidence"
 	);
 	assert_eq!(info.response.output_tokens, None);
+}
+
+fn message_start_with_usage(usage_json: &str) -> String {
+	format!(
+		r#"data: {{"type":"message_start","message":{{"id":"msg_c","type":"message","role":"assistant","model":"accounts/fireworks/models/kimi-k3","content":[],"stop_reason":null,"stop_sequence":null,"usage":{usage_json}}}}}"#,
+	)
+}
+
+/// Anthropic `input_tokens` EXCLUDES cached tokens, so a fully cached
+/// request legitimately reports `input_tokens: 0` / `output_tokens: 0` with
+/// a positive `cache_read_input_tokens`. That is real billing evidence —
+/// NOT a placeholder — and must survive even when no `message_delta`
+/// follows. The provider-reported zeros become evidence only because they
+/// come with cache counts, unlike the all-zero case above.
+#[tokio::test]
+async fn passthrough_stream_fully_cached_message_start_keeps_cache_read_evidence() {
+	let input = format!(
+		"{}\n\n{}\n\n",
+		message_start_with_usage(
+			r#"{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":2048}"#
+		),
+		r#"data: {"type":"message_stop"}"#
+	);
+	let info = run_passthrough(input).await;
+	assert_eq!(
+		info.response.cached_input_tokens,
+		Some(2048),
+		"cache-read tokens are billing evidence even with 0/0 input/output"
+	);
+	assert_eq!(info.response.cache_creation_input_tokens, Some(0));
+	assert_eq!(info.response.input_tokens, Some(0));
+	assert_eq!(info.response.output_tokens, Some(0));
+}
+
+/// Same fully-cached shape, but the prompt WROTE a new cache entry
+/// (`cache_creation_input_tokens` only, cache-read absent).
+#[tokio::test]
+async fn passthrough_stream_fully_cached_message_start_keeps_cache_creation_evidence() {
+	let input = format!(
+		"{}\n\n{}\n\n",
+		message_start_with_usage(
+			r#"{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":512}"#
+		),
+		r#"data: {"type":"message_stop"}"#
+	);
+	let info = run_passthrough(input).await;
+	assert_eq!(info.response.cache_creation_input_tokens, Some(512));
+	assert_eq!(
+		info.response.cached_input_tokens, None,
+		"absent cache-read stays unknown, not zero"
+	);
+	assert_eq!(info.response.input_tokens, Some(0));
+	assert_eq!(info.response.output_tokens, Some(0));
+}
+
+/// A `message_delta` that reports only the token counts and does NOT repeat
+/// the cache dimensions must not wipe the `message_start` cache evidence.
+#[tokio::test]
+async fn passthrough_stream_delta_without_cache_fields_keeps_message_start_cache() {
+	let input = format!(
+		"{}\n\n{}\n\n{}\n\n{}\n\n",
+		message_start_with_usage(
+			r#"{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":2048}"#
+		),
+		r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#,
+		r#"data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":8,"output_tokens":20}}"#,
+		r#"data: {"type":"message_stop"}"#
+	);
+	let info = run_passthrough(input).await;
+	assert_eq!(info.response.input_tokens, Some(8), "delta override wins");
+	assert_eq!(info.response.output_tokens, Some(20));
+	assert_eq!(
+		info.response.cached_input_tokens,
+		Some(2048),
+		"cache evidence from message_start must survive a cache-less delta"
+	);
+	assert_eq!(info.response.total_tokens, Some(28));
+}
+
+/// A `message_start` with regular non-zero token usage and no later
+/// `message_delta` remains direct usage evidence (unchanged behavior).
+#[tokio::test]
+async fn passthrough_stream_nonzero_message_start_usage_is_evidence() {
+	let input = format!(
+		"{}\n\n{}\n\n",
+		message_start_with_usage(r#"{"input_tokens":91,"output_tokens":1}"#),
+		r#"data: {"type":"message_stop"}"#
+	);
+	let info = run_passthrough(input).await;
+	assert_eq!(info.response.input_tokens, Some(91));
+	assert_eq!(info.response.output_tokens, Some(1));
+}
+
+/// Drive the Messages→completions streaming translation (the cross-format
+/// path an OpenAI client sees with an Anthropic Messages upstream) and
+/// return both the captured telemetry info and the client-visible bytes.
+async fn run_translate(input: String) -> (LLMInfo, Vec<u8>) {
+	let captured = captured_info();
+	let out = super::from_completions::translate_stream(
+		Body::from(input.into_bytes()),
+		1024 * 1024,
+		StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
+		LogContentFields {
+			completion: true,
+			tool_calls: false,
+		},
+	)
+	.collect()
+	.await
+	.expect("collect stream")
+	.to_bytes();
+	(captured.lock().unwrap().clone(), out.to_vec())
+}
+
+/// Fully-cached `message_start` on the translation path: the cache
+/// dimension is telemetry evidence, and — unchanged behavior — the client
+/// stream carries no usage chunk because none arrived via `message_delta`.
+#[tokio::test]
+async fn translate_stream_fully_cached_message_start_keeps_cache_evidence() {
+	let input = format!(
+		"{}\n\n{}\n\n{}\n\n{}\n\n",
+		message_start_with_usage(
+			r#"{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":2048}"#
+		),
+		r#"data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+		r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#,
+		r#"data: {"type":"message_stop"}"#
+	);
+	let (info, out) = run_translate(input).await;
+	assert_eq!(info.response.cached_input_tokens, Some(2048));
+	assert_eq!(info.response.input_tokens, Some(0));
+	assert_eq!(info.response.output_tokens, Some(0));
+	assert!(
+		!String::from_utf8_lossy(&out).contains("prompt_tokens"),
+		"no usage chunk is synthesized for the client without a message_delta"
+	);
+}
+
+/// Translation path, `message_delta` without cache fields: the client's
+/// final usage chunk must be built from the `message_start` cache evidence
+/// (completions `prompt_tokens` includes cache tokens by convention) and
+/// the telemetry keeps both sources.
+#[tokio::test]
+async fn translate_stream_delta_without_cache_fields_builds_cache_aware_usage() {
+	let input = format!(
+		"{}\n\n{}\n\n{}\n\n{}\n\n{}\n\n",
+		message_start_with_usage(
+			r#"{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":2048}"#
+		),
+		r#"data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}"#,
+		r#"data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}"#,
+		r#"data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":8,"output_tokens":20}}"#,
+		r#"data: {"type":"message_stop"}"#
+	);
+	let (info, out) = run_translate(input).await;
+	assert_eq!(info.response.input_tokens, Some(8));
+	assert_eq!(info.response.output_tokens, Some(20));
+	assert_eq!(info.response.cached_input_tokens, Some(2048));
+	assert_eq!(info.response.total_tokens, Some(28));
+
+	let out_str = String::from_utf8_lossy(&out).into_owned();
+	let usage_chunk = out_str
+		.lines()
+		.map(|l| l.trim_start_matches("data: "))
+		.find(|l| l.contains("prompt_tokens"))
+		.expect("final usage chunk");
+	let v: serde_json::Value = serde_json::from_str(usage_chunk).expect("usage chunk json");
+	let usage = v.get("usage").expect("usage field");
+	assert_eq!(
+		usage["prompt_tokens"],
+		8 + 2048,
+		"prompt_tokens includes cache-read"
+	);
+	assert_eq!(usage["completion_tokens"], 20);
+	assert_eq!(usage["total_tokens"], 8 + 2048 + 20);
+	assert_eq!(usage["prompt_tokens_details"]["cached_tokens"], 2048);
 }

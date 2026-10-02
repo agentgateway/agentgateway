@@ -479,6 +479,16 @@ pub struct LogContentFields {
 	pub tool_calls: bool,
 }
 
+impl LogContentFields {
+	/// Capture no content at all. For usage-only conversions: callers that
+	/// reduce the resulting [`LLMResponse`] to its usage dimensions and
+	/// discard the completion text and tool-call output.
+	pub const USAGE_ONLY: Self = Self {
+		completion: false,
+		tool_calls: false,
+	};
+}
+
 pub trait StreamingUsageReporter: Send {
 	fn update(&self, f: &mut dyn FnMut(&mut LLMInfo));
 	fn report_usage(&mut self);

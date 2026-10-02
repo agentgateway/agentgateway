@@ -10,9 +10,8 @@
 
 use bytes::Bytes;
 
-use crate::llm::AIProvider;
-
 use super::ChatFormat;
+use crate::llm::AIProvider;
 
 fn completions_body(usage_json: &str) -> Bytes {
 	Bytes::from(format!(
@@ -28,12 +27,8 @@ fn native_upstream_usage_present() {
 	let bytes = completions_body(
 		r#""usage":{"prompt_tokens":1000,"completion_tokens":50,"total_tokens":1050,"prompt_tokens_details":{"cached_tokens":800}}"#,
 	);
-	let native = AIProvider::native_upstream_llm_response(
-		ChatFormat::OpenAICompletions,
-		&bytes,
-		Default::default(),
-	)
-	.expect("native parse");
+	let native = AIProvider::native_upstream_llm_response(ChatFormat::OpenAICompletions, &bytes)
+		.expect("native parse");
 	assert_eq!(native.input_tokens, Some(1000));
 	assert_eq!(native.output_tokens, Some(50));
 	assert_eq!(native.total_tokens, Some(1050));
@@ -46,12 +41,8 @@ fn native_upstream_usage_present() {
 #[test]
 fn native_upstream_usage_missing_is_unknown_never_zero() {
 	let bytes = completions_body(r#""usage":null"#);
-	let native = AIProvider::native_upstream_llm_response(
-		ChatFormat::OpenAICompletions,
-		&bytes,
-		Default::default(),
-	)
-	.expect("native parse");
+	let native = AIProvider::native_upstream_llm_response(ChatFormat::OpenAICompletions, &bytes)
+		.expect("native parse");
 	assert_eq!(native.input_tokens, None);
 	assert_eq!(native.output_tokens, None);
 	assert_eq!(native.total_tokens, None);
@@ -64,11 +55,7 @@ fn native_upstream_usage_missing_is_unknown_never_zero() {
 #[test]
 fn native_upstream_parse_failure_is_best_effort() {
 	let bytes = Bytes::from_static(b"<not json>");
-	let native = AIProvider::native_upstream_llm_response(
-		ChatFormat::OpenAICompletions,
-		&bytes,
-		Default::default(),
-	);
+	let native = AIProvider::native_upstream_llm_response(ChatFormat::OpenAICompletions, &bytes);
 	assert!(native.is_none());
 }
 
@@ -127,4 +114,45 @@ fn crosses_formats_matrix() {
 		IF::Gemini,
 		ChatFormat::VertexGemini
 	));
+}
+
+/// Anthropic `input_tokens` EXCLUDES cached tokens: a fully cached request
+/// legitimately reports `input_tokens: 0` with positive cache dimensions.
+/// The native extraction must keep every dimension — cache-only usage is
+/// real billing evidence, not a placeholder.
+#[test]
+fn native_upstream_anthropic_cache_only_usage_is_evidence() {
+	let bytes = Bytes::from(
+		r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":5,"cache_creation_input_tokens":512,"cache_read_input_tokens":2048}}"#,
+	);
+	let native = AIProvider::native_upstream_llm_response(ChatFormat::AnthropicMessages, &bytes)
+		.expect("native parse");
+	assert_eq!(
+		native.input_tokens,
+		Some(0),
+		"fully cached prompt bills 0 uncached input tokens"
+	);
+	assert_eq!(native.output_tokens, Some(5));
+	assert_eq!(native.total_tokens, Some(5));
+	assert_eq!(native.cached_input_tokens, Some(2048));
+	assert_eq!(native.cache_creation_input_tokens, Some(512));
+}
+
+/// The native recovery exists only to overlay usage dimensions; it must not
+/// extract response content even when the body carries choices/text.
+#[test]
+fn native_upstream_extraction_is_usage_only() {
+	let bytes =
+		completions_body(r#""usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}"#);
+	let native = AIProvider::native_upstream_llm_response(ChatFormat::OpenAICompletions, &bytes)
+		.expect("native parse");
+	assert_eq!(native.input_tokens, Some(10));
+	assert!(
+		native.completion.is_none(),
+		"usage-only conversion must not extract completion text"
+	);
+	assert!(
+		native.output_messages.is_none(),
+		"usage-only conversion must not extract tool-call output"
+	);
 }
