@@ -136,9 +136,7 @@ async function main() {
 	mkdirSync(workspace, { recursive: true });
 	const run = mkdtempSync(join(workspace, 'run-'));
 	const output = join(run, 'output');
-	const cache = join(workspace, 'cache');
 	mkdirSync(output);
-	mkdirSync(cache, { recursive: true });
 	const timings: Record<string, number> = {};
 	const start = performance.now();
 	let exitCode = 2;
@@ -225,6 +223,10 @@ async function main() {
 			: [];
 		const nodeVersion = readFileSync(join(run, 'current/ui/.nvmrc'), 'utf8').trim();
 		const pkg = JSON.parse(readFileSync(join(run, 'current/ui/package.json'), 'utf8'));
+		const state = `agentgateway-ui-visual-${createHash('sha256')
+			.update(JSON.stringify([root, renderer, nodeVersion, pkg.packageManager]))
+			.digest('hex')
+			.slice(0, 16)}`;
 		exitCode = runStep(
 			'container',
 			engine,
@@ -235,11 +237,11 @@ async function main() {
 				'--volume',
 				`${run}:/visual:rw`,
 				'--volume',
-				`${cache}:/visual-cache:rw`,
+				`${state}-packages:/visual-cache`,
 				'--volume',
-				'/visual/reference/ui/node_modules',
+				`${state}-reference:/visual/reference/ui/node_modules`,
 				'--volume',
-				'/visual/current/ui/node_modules',
+				`${state}-current:/visual/current/ui/node_modules`,
 				...configArgs,
 				'--env',
 				'NPM_CONFIG_CACHE=/visual-cache/npm',
