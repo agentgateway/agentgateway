@@ -2380,11 +2380,8 @@ async fn make_backend_call(
 			log.add(|log| log.path_match = Some(path_match));
 		}
 		let resolved = router.resolve(&mut req, &inputs.model_catalog).await;
-		if let Some(decision) = req
-			.extensions_mut()
-			.remove::<model_router::RoutingDecision>()
-		{
-			log.add(|log| log.model_routing = Some(decision));
+		if let Some(original_model) = req.extensions_mut().remove::<model_router::OriginalModel>() {
+			log.add(|log| log.original_model = Some(original_model.0));
 		}
 		let resolved = match resolved {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),

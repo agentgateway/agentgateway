@@ -1140,7 +1140,7 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
-			model_routing: None,
+			original_model: None,
 			guardrails: Default::default(),
 			budgets: None,
 			a2a_method: None,
@@ -1319,7 +1319,7 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
-	pub model_routing: Option<llm::model_router::RoutingDecision>,
+	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
@@ -1667,10 +1667,6 @@ impl Drop for DropOnLog {
 			let guardrails_json = guardrails
 				.as_ref()
 				.map(|g| serde_json::Value::Array(g.iter().map(cel::GuardrailInfo::minimal).collect()));
-			let virtual_model = log
-				.model_routing
-				.as_ref()
-				.and_then(|routing| routing.virtual_model.as_ref());
 
 			let emit_ids = agent_core::telemetry::enabled("request", &Level::DEBUG);
 			let mut kv = vec![
@@ -1837,24 +1833,7 @@ impl Drop for DropOnLog {
 				),
 				(
 					"agw.ai.original_model",
-					log
-						.model_routing
-						.as_ref()
-						.map(|routing| routing.requested_model.as_str().into()),
-				),
-				(
-					"agw.ai.virtual_model",
-					virtual_model.map(|v| v.name.as_str().into()),
-				),
-				(
-					"agw.ai.routing.strategy",
-					virtual_model.map(|v| v.strategy.as_str().into()),
-				),
-				(
-					"agw.ai.routing.target",
-					virtual_model
-						.and_then(|v| v.target)
-						.map(|target| (target as u64).into()),
+					log.original_model.as_deref().map(Into::into),
 				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
@@ -3753,9 +3732,7 @@ mod tests {
 	}
 
 	#[test]
-	fn model_routing_span_attributes() {
-		use llm::model_router::{RoutingDecision, RoutingStrategy, VirtualModelDecision};
-
+	fn original_model_span_attribute() {
 		let (tracer, exporter) = test_tracer();
 		let mut log = test_request_log();
 		log.tracer = Some(tracer.clone());
@@ -3763,14 +3740,7 @@ mod tests {
 		outgoing.flags = 1;
 		log.outgoing_span = Some(outgoing);
 		log.llm_request = Some(metric_test_llm_request());
-		log.model_routing = Some(RoutingDecision {
-			requested_model: "smart-model".to_string(),
-			virtual_model: Some(VirtualModelDecision {
-				name: "smart-model".to_string(),
-				strategy: RoutingStrategy::Conditional,
-				target: Some(1),
-			}),
-		});
+		log.original_model = Some("smart-model".to_string());
 
 		drop(DropOnLog::from(log));
 		let _ = tracer.provider.force_flush();
@@ -3785,62 +3755,13 @@ mod tests {
 				.attributes
 				.iter()
 				.find(|attr| attr.key.as_str() == key)
-				.map(|attr| attr.value.clone())
+				.map(|attr| attr.value.to_string())
 		};
+		assert_eq!(value("gen_ai.request.model").as_deref(), Some("test-model"));
 		assert_eq!(
-			value("gen_ai.request.model"),
-			Some(opentelemetry::Value::from("test-model"))
+			value("agw.ai.original_model").as_deref(),
+			Some("smart-model")
 		);
-		assert_eq!(
-			value("agw.ai.original_model"),
-			Some(opentelemetry::Value::from("smart-model"))
-		);
-		assert_eq!(
-			value("agw.ai.virtual_model"),
-			Some(opentelemetry::Value::from("smart-model"))
-		);
-		assert_eq!(
-			value("agw.ai.routing.strategy"),
-			Some(opentelemetry::Value::from("conditional"))
-		);
-		assert_eq!(
-			value("agw.ai.routing.target"),
-			Some(opentelemetry::Value::I64(1))
-		);
-	}
-
-	#[test]
-	fn concrete_model_routing_span_attributes_omit_virtual_model() {
-		use llm::model_router::RoutingDecision;
-
-		let (tracer, exporter) = test_tracer();
-		let mut log = test_request_log();
-		log.tracer = Some(tracer.clone());
-		let mut outgoing = trc::TraceParent::new();
-		outgoing.flags = 1;
-		log.outgoing_span = Some(outgoing);
-		log.model_routing = Some(RoutingDecision {
-			requested_model: "test-model".to_string(),
-			virtual_model: None,
-		});
-
-		drop(DropOnLog::from(log));
-		let _ = tracer.provider.force_flush();
-
-		let spans = exporter.finished_spans();
-		let span = spans
-			.iter()
-			.find(|span| span.name.as_ref() == "unknown")
-			.expect("request span should be exported");
-		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
-		assert!(has("agw.ai.original_model"));
-		for absent in [
-			"agw.ai.virtual_model",
-			"agw.ai.routing.strategy",
-			"agw.ai.routing.target",
-		] {
-			assert!(!has(absent), "unexpected {absent} span attribute");
-		}
 	}
 
 	#[test]

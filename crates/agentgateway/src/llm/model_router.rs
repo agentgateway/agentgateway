@@ -6,11 +6,9 @@ use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
 use itertools::Itertools;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use rand::distr::Distribution;
-use rand::distr::weighted::WeightedIndex;
+use rand::seq::IndexedRandom;
 use serde_json::Value;
 
-use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
@@ -174,57 +172,10 @@ pub enum VirtualModelRouting {
 	Conditional(Vec<ConditionalTarget>),
 }
 
-impl VirtualModelRouting {
-	pub fn strategy(&self) -> RoutingStrategy {
-		match self {
-			Self::Weighted(_) => RoutingStrategy::Weighted,
-			Self::Failover { .. } => RoutingStrategy::Failover,
-			Self::Conditional(_) => RoutingStrategy::Conditional,
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RoutingStrategy {
-	Weighted,
-	Failover,
-	Conditional,
-}
-
-impl RoutingStrategy {
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			Self::Weighted => "weighted",
-			Self::Failover => "failover",
-			Self::Conditional => "conditional",
-		}
-	}
-}
-
-/// How the router served the client's model request. The router stores it as a request extension
-/// so the proxy can attach it to the request log, including when routing ends in an error response.
+/// The model name the client asked for, before any virtual model rewrite. The router stores it as
+/// a request extension so the proxy can attach it to the request log.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RoutingDecision {
-	/// The model name the client asked for, before any virtual model rewrite.
-	pub requested_model: String,
-	/// Set when the requested model is a virtual model.
-	pub virtual_model: Option<VirtualModelDecision>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VirtualModelDecision {
-	pub name: String,
-	pub strategy: RoutingStrategy,
-	/// Index of the selected entry in the routing targets. Failover selects its provider in the
-	/// backend load balancer, so it records no target.
-	pub target: Option<usize>,
-}
-
-fn record_virtual_model_decision(req: &mut Request, decision: VirtualModelDecision) {
-	if let Some(routing) = req.extensions_mut().get_mut::<RoutingDecision>() {
-		routing.virtual_model = Some(decision);
-	}
-}
+pub struct OriginalModel(pub String);
 
 #[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
@@ -389,16 +340,7 @@ impl ModelRouter {
 		}
 		req
 			.extensions_mut()
-			.get_or_insert_with(TransformationMetadata::default)
-			.0
-			.insert(
-				"agentgateway_user_model".to_string(),
-				Value::String(requested_model.model.clone()),
-			);
-		req.extensions_mut().insert(RoutingDecision {
-			requested_model: requested_model.model.clone(),
-			virtual_model: None,
-		});
+			.insert(OriginalModel(requested_model.model.clone()));
 		if let Some(virtual_model) = self
 			.virtual_models
 			.iter()
@@ -485,19 +427,10 @@ impl ModelRouter {
 		req: &mut Request,
 		location: RequestedModelLocation,
 	) -> ResolveResult {
-		let mut decision = VirtualModelDecision {
-			name: virtual_model.name.clone(),
-			strategy: virtual_model.routing.strategy(),
-			target: None,
-		};
-		record_virtual_model_decision(req, decision.clone());
-		let (index, target, invalid) = match &virtual_model.routing {
+		let (target, invalid) = match &virtual_model.routing {
 			VirtualModelRouting::Weighted(targets) => {
-				match WeightedIndex::new(targets.iter().map(|target| target.weight)) {
-					Ok(distribution) => {
-						let index = distribution.sample(&mut rand::rng());
-						(index, targets[index].model.clone(), targets[index].invalid)
-					},
+				match targets.choose_weighted(&mut rand::rng(), |target| target.weight) {
+					Ok(target) => (target.model.clone(), target.invalid),
 					Err(err) => {
 						tracing::debug!(%err, "failed to select weighted virtual model target");
 						return ResolveResult::DirectResponse(llm_error_response(
@@ -525,14 +458,14 @@ impl ModelRouter {
 					Some(llm_request) => cel::Executor::new_llm_request(req, llm_request),
 					None => cel::Executor::new_request(req),
 				};
-				match targets.iter().position(|target| {
+				match targets.iter().find(|target| {
 					target
 						.when
 						.as_ref()
 						.map(|expr| exec.eval_bool(expr))
 						.unwrap_or(true)
 				}) {
-					Some(index) => (index, targets[index].model.clone(), targets[index].invalid),
+					Some(target) => (target.model.clone(), target.invalid),
 					None => {
 						return ResolveResult::DirectResponse(llm_error_response(
 							::http::StatusCode::BAD_REQUEST,
@@ -546,8 +479,6 @@ impl ModelRouter {
 				}
 			},
 		};
-		decision.target = Some(index);
-		record_virtual_model_decision(req, decision);
 		if invalid {
 			tracing::debug!(
 				virtual_model = %virtual_model.name,
@@ -1162,208 +1093,11 @@ mod tests {
 	use crate::transport::BufferLimit;
 	use crate::types::agent::RouteBackendTarget;
 
-	fn test_model(name: &str, visibility: ModelVisibility) -> ModelRoute {
-		ModelRoute {
-			discovery: None,
-			id: None,
-			name: name.to_string(),
-			created: 0,
-			visibility,
-			header_matches: vec![],
-			backend: RouteBackendReference {
-				weight: 1,
-				target: RouteBackendTarget::Invalid,
-				inline_policies: vec![],
-			},
-			policies: ModelRoutePolicies {
-				passthrough: None,
-				llm: Arc::default(),
-				authorization: None,
-			},
-			backend_policies: vec![],
-		}
-	}
-
-	fn completions_request(body: &str) -> Request {
-		::http::Request::builder()
-			.uri("http://example.com/v1/chat/completions")
-			.body(http::Body::from(body.to_string()))
-			.expect("valid request")
-	}
-
-	fn routing_decision(req: &Request) -> RoutingDecision {
+	fn original_model(req: &Request) -> Option<&str> {
 		req
 			.extensions()
-			.get::<RoutingDecision>()
-			.cloned()
-			.expect("routing decision recorded")
-	}
-
-	#[tokio::test]
-	async fn concrete_model_records_requested_model_only() {
-		let router = ModelRouter::new(vec![test_model("gpt-4o", ModelVisibility::Public)], vec![]);
-		let mut req = completions_request(r#"{"model":"gpt-4o"}"#);
-
-		let result = router
-			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
-			.await;
-
-		assert!(matches!(result, ResolveResult::Backend(_)));
-		assert_eq!(
-			routing_decision(&req),
-			RoutingDecision {
-				requested_model: "gpt-4o".to_string(),
-				virtual_model: None,
-			}
-		);
-	}
-
-	#[tokio::test]
-	async fn weighted_virtual_model_records_selected_target() {
-		let router = ModelRouter::new(
-			vec![test_model("cheap-model", ModelVisibility::Internal)],
-			vec![VirtualModelRoute {
-				name: "weighted-model".to_string(),
-				created: 0,
-				llm_policy: Arc::default(),
-				routing: VirtualModelRouting::Weighted(vec![
-					WeightedTarget {
-						model: "never-model".to_string(),
-						weight: 0,
-						invalid: false,
-					},
-					WeightedTarget {
-						model: "cheap-model".to_string(),
-						weight: 1,
-						invalid: false,
-					},
-				]),
-			}],
-		);
-		let mut req = completions_request(r#"{"model":"weighted-model"}"#);
-
-		let result = router
-			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
-			.await;
-
-		assert!(matches!(result, ResolveResult::Backend(_)));
-		assert_eq!(
-			routing_decision(&req),
-			RoutingDecision {
-				requested_model: "weighted-model".to_string(),
-				virtual_model: Some(VirtualModelDecision {
-					name: "weighted-model".to_string(),
-					strategy: RoutingStrategy::Weighted,
-					target: Some(1),
-				}),
-			}
-		);
-	}
-
-	#[tokio::test]
-	async fn conditional_virtual_model_records_matched_target() {
-		let router = ModelRouter::new(
-			vec![
-				test_model("economy-model", ModelVisibility::Internal),
-				test_model("premium-model", ModelVisibility::Internal),
-			],
-			vec![VirtualModelRoute {
-				name: "smart-model".to_string(),
-				created: 0,
-				llm_policy: Arc::default(),
-				routing: VirtualModelRouting::Conditional(vec![
-					ConditionalTarget {
-						model: "economy-model".to_string(),
-						when: Some(Arc::new(
-							cel::Expression::new_strict("llmRequest.max_tokens <= 1024")
-								.expect("valid CEL expression"),
-						)),
-						invalid: false,
-					},
-					ConditionalTarget {
-						model: "premium-model".to_string(),
-						when: Some(Arc::new(
-							cel::Expression::new_strict("llmRequest.max_tokens > 1024")
-								.expect("valid CEL expression"),
-						)),
-						invalid: false,
-					},
-				]),
-			}],
-		);
-		let virtual_model = |target| {
-			Some(VirtualModelDecision {
-				name: "smart-model".to_string(),
-				strategy: RoutingStrategy::Conditional,
-				target,
-			})
-		};
-
-		let mut req = completions_request(r#"{"model":"smart-model","max_tokens":4096}"#);
-		let result = router
-			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
-			.await;
-		assert!(matches!(result, ResolveResult::Backend(_)));
-		assert_eq!(
-			routing_decision(&req),
-			RoutingDecision {
-				requested_model: "smart-model".to_string(),
-				virtual_model: virtual_model(Some(1)),
-			}
-		);
-
-		let mut req = completions_request(r#"{"model":"smart-model"}"#);
-		let result = router
-			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
-			.await;
-		let ResolveResult::DirectResponse(resp) = result else {
-			panic!("request without max_tokens should not match any target");
-		};
-		assert_eq!(resp.status(), ::http::StatusCode::BAD_REQUEST);
-		assert_eq!(
-			routing_decision(&req),
-			RoutingDecision {
-				requested_model: "smart-model".to_string(),
-				virtual_model: virtual_model(None),
-			}
-		);
-	}
-
-	#[tokio::test]
-	async fn failover_virtual_model_records_strategy_without_target() {
-		let router = ModelRouter::new(
-			vec![],
-			vec![VirtualModelRoute {
-				name: "failover-model".to_string(),
-				created: 0,
-				llm_policy: Arc::default(),
-				routing: VirtualModelRouting::Failover {
-					backend: RouteBackendReference {
-						weight: 1,
-						target: RouteBackendTarget::Invalid,
-						inline_policies: vec![],
-					},
-				},
-			}],
-		);
-		let mut req = completions_request(r#"{"model":"failover-model"}"#);
-
-		let result = router
-			.resolve(&mut req, &llm::catalog::ModelCatalog::default())
-			.await;
-
-		assert!(matches!(result, ResolveResult::Backend(_)));
-		assert_eq!(
-			routing_decision(&req),
-			RoutingDecision {
-				requested_model: "failover-model".to_string(),
-				virtual_model: Some(VirtualModelDecision {
-					name: "failover-model".to_string(),
-					strategy: RoutingStrategy::Failover,
-					target: None,
-				}),
-			}
-		);
+			.get::<OriginalModel>()
+			.map(|model| model.0.as_str())
 	}
 
 	#[tokio::test]
@@ -1423,6 +1157,7 @@ mod tests {
 				.await,
 			ResolveResult::Backend(_)
 		));
+		assert_eq!(original_model(&req), Some("smart-model"));
 		let cached = req
 			.body()
 			.extension::<crate::json::ParsedJson>()
@@ -1584,6 +1319,7 @@ mod tests {
 			panic!("invalid conditional target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+		assert_eq!(original_model(&req), Some("conditional-model"));
 		let body = http::read_body_with_limit(resp.into_body(), 1024)
 			.await
 			.expect("error body");
