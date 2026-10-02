@@ -1,4 +1,4 @@
-import { ApiError, requestJson } from '@/api/base';
+import { requestJson } from '@/api/base';
 import type { LocalAttachedRoute, LocalAttachedTCPRoute } from '@/gateway-config';
 import type {
 	LlmConfig,
@@ -75,44 +75,24 @@ export interface ConfigResourcesResponse<K extends ConfigResourceKind = ConfigRe
 	generation?: number | null;
 }
 
-export class ConfigConflictError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = 'ConfigConflictError';
-	}
-}
-
 let observedGeneration: number | null = null;
 
-function rememberGeneration(response: { generation?: number | null }) {
+function rememberGeneration<T extends { generation?: number | null }>(response: T): T {
 	if (typeof response.generation === 'number') observedGeneration = response.generation;
 	return response;
 }
 
-async function writeConfig<T>(path: string, init: RequestInit): Promise<T> {
+async function writeConfig<T extends { generation?: number | null }>(
+	path: string,
+	init: RequestInit
+): Promise<T> {
 	const headers = new Headers(init.headers);
 	if (observedGeneration !== null) headers.set('If-Match', String(observedGeneration));
-	try {
-		const response = await requestJson<T>(path, {
-			...init,
-			headers
-		});
-		rememberGeneration(response as { generation?: number | null });
-		return response;
-	} catch (error) {
-		if (error instanceof ApiError && error.status === 409) {
-			// Keep the pin until a refetch replaces it; retrying stale UI data unpinned can
-			// overwrite a concurrent edit even if server-side validation succeeds.
-			throw new ConfigConflictError(error.message);
-		}
-		throw error;
-	}
+	return rememberGeneration(await requestJson<T>(path, { ...init, headers }));
 }
 
 export async function listConfigResources() {
-	const response = await requestJson<ConfigResourcesResponse>('/api/config/resources');
-	rememberGeneration(response);
-	return response;
+	return rememberGeneration(await requestJson<ConfigResourcesResponse>('/api/config/resources'));
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(
