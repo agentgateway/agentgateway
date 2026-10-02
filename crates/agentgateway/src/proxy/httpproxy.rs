@@ -2274,30 +2274,64 @@ async fn make_backend_call(
 		let resolved = match Box::pin(router.resolve(&mut req)).await {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::ModelList(list) => {
+				let model_access = req
+					.extensions()
+					.get::<crate::http::apikey::ModelAccessPolicy>()
+					.cloned();
+				let mut sibling_requests = list
+					.dynamic_backends
+					.iter()
+					.skip(1)
+					.map(|_| clone_model_list_request(&req))
+					.map(Some)
+					.collect::<Vec<_>>();
+				let mut original_req = Some(req);
+				let mut request_log = log;
 				return Box::pin(async move {
-					let selected_backend = resolve_backend(list.dynamic_backend.backend, inputs.as_ref())?;
-					let concrete_policies = get_backend_policies(
-						inputs.as_ref(),
-						&selected_backend.backend,
-						&selected_backend.inline_policies,
-						route_path.clone(),
-					);
-					let route_policies =
-						route_policies.merge_backend_policies(Some(list.dynamic_backend.llm_policy));
-					let policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
-					let response = Box::pin(make_backend_call(
-						inputs,
-						route_policies,
-						&selected_backend.backend.backend,
-						policies,
-						route_path,
-						req,
-						log,
-						response_policies,
-						allow_codex_model_refresh,
-					))
-					.await?;
-					Ok(merge_model_lists(list.static_models, response).await)
+					let mut responses = Vec::with_capacity(list.dynamic_backends.len());
+					for (index, dynamic_backend) in list.dynamic_backends.into_iter().enumerate() {
+						let sibling_req;
+						let req = if index == 0 {
+							original_req
+								.take()
+								.expect("first model-list request exists")
+						} else {
+							sibling_req = MustSnapshot::new(&mut sibling_requests[index - 1]);
+							sibling_req
+						};
+						let selected_backend =
+							resolve_backend(dynamic_backend.resolved.backend, inputs.as_ref())?;
+						let concrete_policies = get_backend_policies(
+							inputs.as_ref(),
+							&selected_backend.backend,
+							&selected_backend.inline_policies,
+							route_path.clone(),
+						);
+						let route_policies = route_policies
+							.clone()
+							.merge_backend_policies(Some(dynamic_backend.resolved.llm_policy));
+						let policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
+						let result = Box::pin(make_backend_call(
+							inputs.clone(),
+							route_policies,
+							&selected_backend.backend.backend,
+							policies,
+							route_path.clone(),
+							req,
+							if index == 0 { request_log.take() } else { None },
+							response_policies,
+							allow_codex_model_refresh,
+						))
+						.await;
+						match result {
+							Ok(response) => responses.push((response, dynamic_backend.required)),
+							Err(error) if dynamic_backend.required => return Err(error),
+							Err(error) => {
+								debug!(%error, "skipping unavailable optional model catalog source");
+							},
+						}
+					}
+					Ok(merge_model_lists(list.static_models, responses, model_access.as_ref()).await)
 				})
 				.await;
 			},
@@ -2836,15 +2870,18 @@ async fn make_backend_call(
 						)
 						.await;
 					}
-					return Ok(
-						::http::Response::builder()
-							.status(::http::StatusCode::NOT_IMPLEMENTED)
-							.header(::http::header::CONTENT_TYPE, "application/json")
-							.body(http::Body::from(format!(
-								"{{\"error\":\"Route '{route_type:?}' not implemented\"}}"
-							)))
-							.expect("Failed to build response"),
-					);
+					llm
+						.provider
+						.setup_request(
+							&mut req,
+							RouteType::Passthrough,
+							None,
+							llm.path_override.as_deref(),
+							llm.path_prefix.as_deref(),
+							llm.host_override.is_some(),
+						)
+						.map_err(ProxyError::Processing)?;
+					(req, LLMResponsePolicies::default(), None)
 				},
 				RouteType::Passthrough | RouteType::Realtime => {
 					// For passthrough, we only need to setup the response so we get default TLS, hostname, etc set.
@@ -3167,50 +3204,98 @@ async fn make_backend_call(
 
 const CODEX_CATALOG_MAX_BYTES: usize = 1024 * 1024;
 // Codex applies model visibility and edge policy using its native client
-// version. Keep this compatibility version aligned with the tested release.
-const CODEX_CATALOG_CLIENT_VERSION: &str = "0.153.2";
-const CODEX_CATALOG_USER_AGENT: &str = "codex_cli_rs/0.153.2";
+// version. Keep this aligned with the Codex CLI bundled in the desktop app;
+// older client versions may not receive the current model catalog.
+const CODEX_CATALOG_CLIENT_VERSION: &str = "0.155.0-alpha.9.2";
+const CODEX_CATALOG_USER_AGENT: &str = "codex_cli_rs/0.155.0-alpha.9.2";
+
+fn clone_model_list_request(req: &Request) -> Request {
+	let mut cloned = ::http::Request::builder()
+		.method(req.method())
+		.uri(req.uri().clone())
+		.version(req.version())
+		.body(http::Body::empty())
+		.expect("model-list request can be cloned");
+	*cloned.headers_mut() = req.headers().clone();
+	macro_rules! copy_extension {
+		($ty:ty) => {
+			if let Some(value) = req.extensions().get::<$ty>().cloned() {
+				cloned.extensions_mut().insert(value);
+			}
+		};
+	}
+	copy_extension!(SpanWriter);
+	copy_extension!(crate::http::apikey::ModelAccessPolicy);
+	copy_extension!(DynamicBackendOverride);
+	copy_extension!(WaypointService);
+	copy_extension!(TLSConnectionInfo);
+	copy_extension!(TCPConnectionInfo);
+	copy_extension!(AutoHostname);
+	copy_extension!(BackendRequestTimeout);
+	copy_extension!(crate::http::BufferLimit);
+	copy_extension!(crate::cel::SourceContext);
+	copy_extension!(crate::cel::DestinationContext);
+	copy_extension!(RequestTime);
+	cloned
+}
 
 async fn merge_model_lists(
 	mut static_models: Vec<serde_json::Value>,
-	response: Response,
+	responses: Vec<(Response, bool)>,
+	model_access: Option<&crate::http::apikey::ModelAccessPolicy>,
 ) -> Response {
-	let (parts, body) = response.into_parts();
-	if !parts.status.is_success() {
-		// The dynamic entry is an authenticated Codex catalog. Never expose an
-		// upstream error document (such as a Cloudflare challenge) as this API's response.
-		return codex_catalog_unavailable();
-	}
-	let Ok(body) = http::read_body_with_limit(body, CODEX_CATALOG_MAX_BYTES).await else {
-		return codex_catalog_unavailable();
-	};
-	let Ok(mut dynamic) = serde_json::from_slice::<serde_json::Value>(&body) else {
-		return codex_catalog_unavailable();
-	};
-	let Some(entries) = dynamic
-		.get_mut("data")
-		.and_then(serde_json::Value::as_array_mut)
-	else {
-		return codex_catalog_unavailable();
-	};
 	let mut ids = static_models
 		.iter()
 		.filter_map(|entry| entry.get("id").and_then(serde_json::Value::as_str))
 		.map(str::to_owned)
 		.collect::<std::collections::HashSet<_>>();
-	static_models.extend(
-		entries
-			.iter()
-			.filter(|entry| {
-				entry
-					.get("id")
-					.and_then(serde_json::Value::as_str)
-					.is_some_and(|id| ids.insert(id.to_owned()))
-			})
-			.cloned(),
-	);
-	dynamic["data"] = serde_json::Value::Array(static_models);
-	::http::Response::from_parts(parts, http::Body::from(dynamic.to_string()))
+	let mut response_body = serde_json::json!({"object": "list"});
+	let mut has_upstream_body = false;
+	for (response, required) in responses {
+		if !response.status().is_success() {
+			if required {
+				return codex_catalog_unavailable();
+			}
+			continue;
+		}
+		let Ok(body) = http::read_body_with_limit(response.into_body(), CODEX_CATALOG_MAX_BYTES).await
+		else {
+			if required {
+				return codex_catalog_unavailable();
+			}
+			continue;
+		};
+		let Ok(dynamic) = serde_json::from_slice::<serde_json::Value>(&body) else {
+			if required {
+				return codex_catalog_unavailable();
+			}
+			continue;
+		};
+		let Some(entries) = dynamic.get("data").and_then(serde_json::Value::as_array) else {
+			if required {
+				return codex_catalog_unavailable();
+			}
+			continue;
+		};
+		if !has_upstream_body {
+			response_body = dynamic.clone();
+			has_upstream_body = true;
+		}
+		static_models.extend(entries.iter().filter_map(|entry| {
+			let id = entry.get("id").and_then(serde_json::Value::as_str)?;
+			if !ids.insert(id.to_owned()) || model_access.is_some_and(|policy| !policy.allows(id)) {
+				return None;
+			}
+			Some(entry.clone())
+		}));
+	}
+	response_body["data"] = serde_json::Value::Array(static_models);
+	::http::Response::builder()
+		.status(::http::StatusCode::OK)
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.header(::http::header::CACHE_CONTROL, "private, no-cache")
+		.body(http::Body::from(response_body.to_string()))
+		.expect("merged model-list response is valid")
 }
 
 async fn codex_models_response(
@@ -4298,10 +4383,19 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
-		merge_model_lists, resolved_workload_target_hostname, select_service_target_port,
-		spiffe_backend_alpns,
+		CODEX_CATALOG_CLIENT_VERSION, CODEX_CATALOG_USER_AGENT, SpiffeBackendTLS, apply_auto_hostname,
+		apply_llm_request_policies, hop_by_hop_headers, merge_model_lists,
+		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
 	};
+
+	#[test]
+	fn codex_catalog_uses_the_desktop_codex_client_version() {
+		assert_eq!(CODEX_CATALOG_CLIENT_VERSION, "0.155.0-alpha.9.2");
+		assert_eq!(
+			CODEX_CATALOG_USER_AGENT,
+			format!("codex_cli_rs/{CODEX_CATALOG_CLIENT_VERSION}")
+		);
+	}
 
 	#[test]
 	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
@@ -4486,7 +4580,7 @@ mod tests {
 			.body(http::Body::from("<html>Cloudflare challenge</html>"))
 			.expect("response is valid");
 
-		let response = merge_model_lists(vec![], response).await;
+		let response = merge_model_lists(vec![], vec![(response, true)], None).await;
 		assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 		assert_eq!(
 			response.headers()[::http::header::CONTENT_TYPE],
@@ -4496,6 +4590,60 @@ mod tests {
 			serde_json::from_slice(&proxymock::read_body_raw(response.into_body()).await)
 				.expect("sanitized catalog failure is JSON");
 		assert_eq!(body["error"]["code"], "catalog_unavailable");
+	}
+
+	#[tokio::test]
+	async fn model_list_merges_multiple_catalog_sources_and_keeps_static_models() {
+		let response = |models: serde_json::Value| {
+			::http::Response::builder()
+				.status(::http::StatusCode::OK)
+				.body(http::Body::from(models.to_string()))
+				.expect("model-list response is valid")
+		};
+		let static_models = vec![serde_json::json!({"id": "static-model"})];
+		let responses = vec![
+			(
+				response(serde_json::json!({
+				"object": "list",
+				"provider_meta": "preserve",
+				"data": [
+						{"id": "moonshotai/Kimi-K3"},
+						{"id": "static-model"}
+					]
+				})),
+				false,
+			),
+			(
+				response(serde_json::json!({
+					"object": "list",
+					"data": [{"id": "Qwen/Qwen3.6-35B-A3B"}]
+				})),
+				false,
+			),
+			(
+				::http::Response::builder()
+					.status(::http::StatusCode::SERVICE_UNAVAILABLE)
+					.body(http::Body::empty())
+					.expect("unavailable catalog response is valid"),
+				false,
+			),
+		];
+
+		let response = merge_model_lists(static_models, responses, None).await;
+		assert_eq!(response.status(), ::http::StatusCode::OK);
+		let body: serde_json::Value =
+			serde_json::from_slice(&proxymock::read_body_raw(response.into_body()).await).unwrap();
+		assert_eq!(body["provider_meta"], "preserve");
+		let ids = body["data"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|entry| entry["id"].as_str().unwrap())
+			.collect::<Vec<_>>();
+		assert_eq!(
+			ids,
+			["static-model", "moonshotai/Kimi-K3", "Qwen/Qwen3.6-35B-A3B"]
+		);
 	}
 
 	#[test]

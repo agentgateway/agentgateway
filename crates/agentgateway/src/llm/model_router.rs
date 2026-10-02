@@ -148,11 +148,18 @@ pub enum ResolveResult {
 	Backend(ResolvedBackend),
 }
 
-/// Static entries are rendered locally; a wildcard model route can contribute an
-/// authenticated provider catalog without creating a second HTTP route.
+/// Static entries are rendered locally; public wildcard routes can contribute provider catalogs
+/// without creating separate HTTP API routes.
 pub struct ModelList {
 	pub static_models: Vec<serde_json::Value>,
-	pub dynamic_backend: ResolvedBackend,
+	pub dynamic_backends: Vec<DynamicModelBackend>,
+}
+
+pub struct DynamicModelBackend {
+	pub resolved: ResolvedBackend,
+	/// Codex's catalog is required to form a complete model list. Other provider catalogs are
+	/// best-effort so one unavailable provider does not hide models discovered from others.
+	pub required: bool,
 }
 
 /// The model name reserved for the gateway-owned Codex subscription authorization flow.
@@ -301,10 +308,11 @@ impl ModelRouter {
 	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
 		if is_model_list_request(req) {
 			let static_models = self.static_model_list(req);
-			if let Some(dynamic_backend) = self.dynamic_model_backend(req) {
+			let dynamic_backends = self.dynamic_model_backends(req);
+			if !dynamic_backends.is_empty() {
 				return ResolveResult::ModelList(ModelList {
 					static_models,
-					dynamic_backend,
+					dynamic_backends,
 				});
 			}
 			return ResolveResult::DirectResponse(Self::model_list_response(static_models));
@@ -385,7 +393,7 @@ impl ModelRouter {
 			.map(|(_, model)| model)
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			// A wildcard Codex route is an inference dispatch rule, not a model record.
-			.filter(|model| model.name != "*")
+			.filter(|model| !model.name.contains('*'))
 			.filter(|model| model_authorized(model, req))
 			.flat_map(|model| {
 				api_key_discoverable_models(req, &model.name)
@@ -401,16 +409,23 @@ impl ModelRouter {
 			.collect()
 	}
 
-	fn dynamic_model_backend(&self, req: &Request) -> Option<ResolvedBackend> {
-		self.models.iter().enumerate().find_map(|(index, model)| {
-			((model.name == "*" || self.codex_wildcards.contains(&index))
-				&& model.visibility == ModelVisibility::Public
-				&& model_authorized(model, req))
-			.then(|| ResolvedBackend {
-				backend: model.backend.clone(),
-				llm_policy: model.policies.llm.clone(),
+	fn dynamic_model_backends(&self, req: &Request) -> Vec<DynamicModelBackend> {
+		self
+			.models
+			.iter()
+			.enumerate()
+			.filter(|(_, model)| model.name.contains('*'))
+			.filter(|(_, model)| {
+				model.visibility == ModelVisibility::Public && model_authorized(model, req)
 			})
-		})
+			.map(|(index, model)| DynamicModelBackend {
+				resolved: ResolvedBackend {
+					backend: model.backend.clone(),
+					llm_policy: model.policies.llm.clone(),
+				},
+				required: self.codex_wildcards.contains(&index),
+			})
+			.collect()
 	}
 
 	fn model_list_response(data: Vec<serde_json::Value>) -> Response {
@@ -510,30 +525,41 @@ impl ModelRouter {
 	) -> Result<Option<ResolvedBackend>, ()> {
 		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
 		let matches = |index: usize, model: &ModelRoute| {
-			(allow_internal || model.visibility == ModelVisibility::Public)
-				&& (!self.codex_wildcards.contains(&index)
-					|| llm::codex_subscription::upstream_model(requested_model).is_some())
+			(!self.codex_wildcards.contains(&index)
+				|| llm::codex_subscription::upstream_model(requested_model).is_some())
 				&& model_name_matches(&model.name, requested_model)
 				&& header_matches(&model.header_matches, req)
 		};
-		let Some(model) = self
+		let Some((_, model)) = self
 			.models
 			.iter()
 			.enumerate()
-			.find(|(index, model)| matches(*index, model) && model_authorized(model, req))
+			.filter(|(index, model)| matches(*index, model))
+			.min_by_key(|(index, model)| {
+				let wildcard = model.name.contains('*');
+				let codex_dispatch = self.codex_wildcards.contains(index)
+					&& llm::codex_subscription::upstream_model(requested_model).is_some();
+				let rank = if !wildcard {
+					0
+				} else if codex_dispatch {
+					2
+				} else if model.name == "*" {
+					4
+				} else {
+					1
+				};
+				let specificity = model.name.trim_end_matches('*').len();
+				(rank, std::cmp::Reverse(specificity), *index)
+			})
 		else {
-			return if self
-				.models
-				.iter()
-				.enumerate()
-				.any(|(index, model)| matches(index, model))
-			{
-				Err(())
-			} else {
-				Ok(None)
-			};
+			return Ok(None);
 		};
-		let (_, model) = model;
+		if !allow_internal && model.visibility != ModelVisibility::Public {
+			return Ok(None);
+		}
+		if !model_authorized(model, req) {
+			return Err(());
+		}
 		Ok(Some(ResolvedBackend {
 			backend: model.backend.clone(),
 			llm_policy: model.policies.llm.clone(),
@@ -1380,6 +1406,112 @@ mod tests {
 		let response = response_json(response).await;
 		assert_eq!(response["error"]["code"], "model_not_found");
 		assert_eq!(auth.0.load(Ordering::Relaxed), 0);
+	}
+
+	#[tokio::test]
+	async fn model_list_collects_all_public_wildcard_catalog_routes() {
+		let model = |name: &str| ModelRoute {
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let router = ModelRouter::new(
+			vec![model("provider/*"), model("static-model"), model("*")],
+			vec![],
+		);
+		let mut req = ::http::Request::builder()
+			.method(::http::Method::GET)
+			.uri("/v1/models")
+			.body(http::Body::empty())
+			.expect("valid model-list request");
+
+		let ResolveResult::ModelList(list) = router.resolve(&mut req).await else {
+			panic!("wildcard routes must contribute dynamic catalogs");
+		};
+		assert_eq!(list.dynamic_backends.len(), 2);
+		assert_eq!(
+			list
+				.static_models
+				.iter()
+				.map(|model| model["id"].as_str().unwrap())
+				.collect::<Vec<_>>(),
+			["static-model"]
+		);
+		assert!(list.dynamic_backends.iter().all(|source| !source.required));
+	}
+
+	#[test]
+	fn exact_and_codex_routes_precede_a_generic_catalog_fallback() {
+		let model = |name: &str, backend: &str| ModelRoute {
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Backend(strng::new(backend)),
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let codex_backend = "codex";
+		let router = ModelRouter::new(
+			vec![
+				model("*", "tii"),
+				model("moonshotai/Kimi-K3", "kimi"),
+				model(llm::codex_subscription::MODEL_PATTERN, codex_backend),
+			],
+			vec![],
+		)
+		.with_codex_namespaces(|backend| {
+			matches!(&backend.target, RouteBackendTarget::Backend(key) if key.as_str() == codex_backend)
+		});
+		let req = ::http::Request::builder()
+			.uri("/v1/responses")
+			.body(http::Body::empty())
+			.expect("valid request");
+
+		for (name, expected_backend) in [
+			("moonshotai/Kimi-K3", "kimi"),
+			("openai/gpt-6-sol", "codex"),
+			("other-model", "tii"),
+		] {
+			let resolved = router
+				.resolve_concrete_model(name, false, &req)
+				.unwrap()
+				.expect("a model route exists");
+			assert!(matches!(
+				resolved.backend.target,
+				RouteBackendTarget::Backend(ref key) if key.as_str() == expected_backend
+			));
+		}
+
+		let mut hidden = model("internal-model", "hidden");
+		hidden.visibility = ModelVisibility::Internal;
+		let router = ModelRouter::new(vec![model("*", "tii"), hidden], vec![]);
+		assert!(
+			router
+				.resolve_concrete_model("internal-model", false, &req)
+				.unwrap()
+				.is_none()
+		);
 	}
 
 	#[tokio::test]

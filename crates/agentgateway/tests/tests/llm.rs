@@ -895,11 +895,14 @@ async fn llm_codex_subscription_models_uses_catalog_cache() {
 	let request = single_upstream_request(&mock).await;
 	assert_eq!(
 		&request.url[Position::BeforePath..Position::AfterQuery],
-		"/backend-api/codex/models?client_version=0.153.2",
+		"/backend-api/codex/models?client_version=0.155.0-alpha.9.2",
 	);
 	assert_eq!(request.headers["accept"], "application/json");
 	assert_eq!(request.headers["originator"], "codex_cli_rs");
-	assert_eq!(request.headers["user-agent"], "codex_cli_rs/0.153.2");
+	assert_eq!(
+		request.headers["user-agent"],
+		"codex_cli_rs/0.155.0-alpha.9.2"
+	);
 	assert_eq!(
 		request.headers["authorization"],
 		"Bearer test-codex-access-token"
@@ -911,6 +914,48 @@ async fn llm_codex_subscription_models_uses_catalog_cache() {
 	assert_eq!(
 		request.headers["x-openai-internal-codex-residency"],
 		"test-codex-residency"
+	);
+}
+
+#[tokio::test]
+async fn llm_custom_provider_models_forwards_to_openai_compatible_catalog() {
+	let mock = MockServer::start().await;
+	Mock::given(wiremock::matchers::method("GET"))
+		.and(wiremock::matchers::path("/v1/models"))
+		.respond_with(
+			ResponseTemplate::new(StatusCode::OK.as_u16()).set_body_json(json!({
+				"object": "list",
+				"data": [{"id": "moonshotai/Kimi-K3", "object": "model"}]
+			})),
+		)
+		.mount(&mock)
+		.await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Custom(custom::Provider {
+			model: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Completions,
+				path: None,
+			}],
+		}),
+		false,
+	);
+	provider.policies = Some(
+		serde_json::from_value(json!({"ai": {"routes": {"/v1/models": "models"}}}))
+			.expect("model-list route policy"),
+	);
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let response = send_request(io, Method::GET, "http://lo/v1/models").await;
+	assert_eq!(response.status(), StatusCode::OK);
+	let body: Value = serde_json::from_slice(&read_body_raw(response.into_body()).await).unwrap();
+	assert_eq!(body["data"][0]["id"], "moonshotai/Kimi-K3");
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(request.method, Method::GET);
+	assert_eq!(
+		&request.url[Position::BeforePath..Position::AfterPath],
+		"/v1/models"
 	);
 }
 
