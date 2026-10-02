@@ -1501,11 +1501,12 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
-	use std::collections::HashSet;
+	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
 	use agent_core::strng;
 	use agent_http::Body;
+	use base64::Engine;
 	use bytes::Bytes;
 	use types::bedrock;
 	use types::messages::typed as messages;
@@ -2160,6 +2161,9 @@ pub mod from_messages {
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
+		let mut redacted_blocks: HashMap<i32, Vec<u8>> = HashMap::new();
+		let mut pending_reasoning_blocks: HashSet<i32> = HashSet::new();
+		let mut failed = false;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut completion = log_content.completion.then(String::new);
@@ -2167,6 +2171,9 @@ pub mod from_messages {
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
+			if failed {
+				return vec![];
+			}
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
 				Err(e) => {
@@ -2210,6 +2217,13 @@ pub mod from_messages {
 					vec![(event_name, serde_json::to_value(event_data).unwrap())]
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStart(start) => {
+					if matches!(
+						start.start,
+						Some(bedrock::ContentBlockStart::ReasoningContent)
+					) {
+						pending_reasoning_blocks.insert(start.content_block_index);
+						return vec![];
+					}
 					seen_blocks.insert(start.content_block_index);
 					let content_block = match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(s)) => {
@@ -2265,6 +2279,9 @@ pub mod from_messages {
 										cache_control: None,
 									}))
 								},
+								bedrock::ContentBlockDelta::ReasoningContent(
+									bedrock::ReasoningContentBlockDelta::RedactedContent(_),
+								) => None,
 								bedrock::ContentBlockDelta::ReasoningContent(_) => {
 									Some(messages::ContentBlock::Thinking {
 										thinking: String::new(),
@@ -2312,10 +2329,33 @@ pub mod from_messages {
 								bedrock::ReasoningContentBlockDelta::Signature(sig) => {
 									messages::ContentBlockDelta::SignatureDelta { signature: sig }
 								},
-								bedrock::ReasoningContentBlockDelta::RedactedContent(_) => {
-									messages::ContentBlockDelta::ThinkingDelta {
-										thinking: "[REDACTED]".to_string(),
+								bedrock::ReasoningContentBlockDelta::RedactedContent(data) => {
+									let decoded = match base64::prelude::BASE64_STANDARD.decode(data) {
+										Ok(decoded) => decoded,
+										Err(_) => {
+											failed = true;
+											return vec![(
+												"error",
+												serde_json::json!({
+													"type":"error","error":{"type":"api_error","message":"Invalid Bedrock redacted content"}
+												}),
+											)];
+										},
+									};
+									let buffer = redacted_blocks
+										.entry(delta.content_block_index)
+										.or_default();
+									if decoded.len() > buffer_limit.saturating_sub(buffer.len()) {
+										failed = true;
+										return vec![(
+											"error",
+											serde_json::json!({
+												"type":"error","error":{"type":"api_error","message":"Bedrock redacted content exceeds buffer limit"}
+											}),
+										)];
 									}
+									buffer.extend(decoded);
+									return out;
 								},
 								bedrock::ReasoningContentBlockDelta::Unknown => {
 									messages::ContentBlockDelta::ThinkingDelta {
@@ -2342,12 +2382,34 @@ pub mod from_messages {
 					out
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
-					seen_blocks.remove(&stop.content_block_index);
+					let saw_delta = seen_blocks.remove(&stop.content_block_index);
+					let pending_reasoning = pending_reasoning_blocks.remove(&stop.content_block_index);
+					let mut out = Vec::new();
+					let content_block = redacted_blocks
+						.remove(&stop.content_block_index)
+						.map(|data| messages::ContentBlock::RedactedThinking {
+							data: base64::prelude::BASE64_STANDARD.encode(data),
+						})
+						.or_else(|| {
+							(pending_reasoning && !saw_delta).then(|| messages::ContentBlock::Thinking {
+								thinking: String::new(),
+								signature: String::new(),
+							})
+						});
+					if let Some(content_block) = content_block {
+						let event = messages::MessagesStreamEvent::ContentBlockStart {
+							index: stop.content_block_index as usize,
+							content_block,
+						};
+						let (event_name, event_data) = event.into_sse_tuple();
+						out.push((event_name, serde_json::to_value(event_data).unwrap()));
+					}
 					let event = messages::MessagesStreamEvent::ContentBlockStop {
 						index: stop.content_block_index as usize,
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
-					vec![(event_name, serde_json::to_value(event_data).unwrap())]
+					out.push((event_name, serde_json::to_value(event_data).unwrap()));
+					out
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
 					pending_stop_reason = Some(stop.stop_reason);
