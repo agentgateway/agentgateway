@@ -85,10 +85,19 @@ available evidence remain after failures. The reference is never automatically
 updated to accept a candidate image. A chosen reference that lacks a captured
 page is an incomplete comparison, not a matching result.
 
-Package downloads are cached between runs. Both applications are rebuilt and
-both image sets are captured on every run. The runner uses one browser worker to
-limit memory pressure. Disposable source copies and their dependency trees are
-removed when the command finishes; result directories remain available to review.
+Installed dependencies and package downloads stay in three named container
+volumes, outside the worktree. The reference and working-tree installs are
+separate. Each run checks their lockfiles and reuses packages already installed.
+Volumes are scoped to this worktree and the pinned runtime versions. Run one
+comparison at a time per worktree.
+
+Both applications are rebuilt and both image sets are captured on every run.
+The runner uses one browser worker to limit memory pressure. Disposable source
+copies are removed when the command finishes; reports remain available to review.
+Deleting `results.local` removes reports without clearing installed dependencies.
+Use `docker volume ls --filter name=agentgateway-ui-visual-` to find retained
+volumes, and `docker volume rm` with selected names to reclaim that storage when
+no comparison is running. For Podman, use `podman` in both commands.
 
 Functional E2E tests still run directly with `pnpm test:e2e`. The local runner's
 helper tests use `node --test tests/visual-regression/*.test.ts` and require the
