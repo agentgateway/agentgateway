@@ -19,6 +19,8 @@ tower-service.workspace = true
 parking_lot.workspace = true
 hashbrown.workspace = true
 axum-core.workspace = true
+serde.workspace = true
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_matches.workspace = true
@@ -31,3 +33,4 @@ tracing-subscriber.workspace = true
 
 [features]
 default = []
+schema = ["dep:schemars"]

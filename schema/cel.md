@@ -22,9 +22,10 @@
 |`response.body`|string|The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
 |`response.bodyPrefix`|string|The response body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
-|`proxy.error`|object|The final gateway error when the response was synthesized from a failed request.|
+|`proxy.error`|object|The current attempt's gateway error during retry evaluation, or the final gateway error<br>when the response was synthesized from a failed request.<br>CEL additionally exposes the read-only boolean `proxy.error.safeToRetry`, computed from<br>`phase`. It is true for connection-establishment and DNS failures; false includes unknown<br>outcomes. Body replayability and retry limits are enforced separately. This computed<br>property is not included in serialized snapshots.|
 |`proxy.error.reason`|string|Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.|
 |`proxy.error.message`|string|Human-readable failure detail. Exact message is subject to change.|
+|`proxy.error.phase`|enum|Failure phase: `connect` during connection establishment, or `request` when<br>the application request may have been sent. `unclassified` means no upstream<br>phase has been established for this failure.<br>Possible values: `unclassified`, `connect`, `request`.|
 |`proxy.bind`|string|The bind that accepted the request.|
 |`proxy.gateway`|object|The selected Gateway.|
 |`proxy.gateway.namespace`|string|The namespace of the selected Gateway.|
