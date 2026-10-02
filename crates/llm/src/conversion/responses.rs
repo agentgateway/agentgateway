@@ -200,7 +200,9 @@ pub mod from_messages {
 		}
 
 		let output_config = output_config.unwrap_or_default();
-		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort) {
+		if crate::conversion::supports_reasoning_effort(&model)
+			&& let Some(reasoning) = translate_reasoning(thinking, output_config.effort)
+		{
 			rest.insert(
 				"reasoning".to_string(),
 				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
@@ -784,10 +786,11 @@ pub mod from_messages {
 										};
 										// Responses provides a source link, not the source excerpt or
 										// Anthropic's opaque replay index. Do not fabricate either.
+										let citation = serde_json::to_value(citation).ok()?;
 										Some(json!({
 											"type": "web_search_result_location",
-											"url": citation.url,
-											"title": citation.title,
+											"url": citation["url"],
+											"title": citation["title"],
 											"cited_text": "",
 											"encrypted_index": "",
 										}))
@@ -1527,8 +1530,16 @@ pub mod from_messages {
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: error_type(failed.response.error.as_ref().map(|e| e.code.as_str()))
-										.to_string(),
+									r#type: error_type(
+										failed
+											.response
+											.error
+											.as_ref()
+											.and_then(|e| serde_json::to_value(&e.code).ok())
+											.as_ref()
+											.and_then(Value::as_str),
+									)
+									.to_string(),
 									message: failed
 										.response
 										.error

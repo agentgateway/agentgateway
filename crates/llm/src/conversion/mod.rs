@@ -52,6 +52,13 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 	}
 }
 
+/// Older OpenAI chat models have no reasoning support and reject any reasoning effort.
+pub(crate) fn supports_reasoning_effort(model: &str) -> bool {
+	!["gpt-3.5", "gpt-4", "chatgpt-4o"]
+		.iter()
+		.any(|prefix| model.starts_with(prefix))
+}
+
 pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {
 	model
 		.strip_prefix("gpt-")

@@ -683,11 +683,10 @@ pub mod typed {
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
 		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
-		ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
+		PromptCacheBreakpointParamMode, ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
 		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
 		ToolChoiceOptions, WebSearchOptions,
 	};
-	pub use async_openai::types::responses::PromptCacheBreakpointMode;
 	use serde::{Deserialize, Serialize};
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.

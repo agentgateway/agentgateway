@@ -2066,7 +2066,7 @@ impl ListenerSet {
 		})
 	}
 
-	fn best_match_filtered(
+	pub(crate) fn best_match_filtered(
 		&self,
 		host: &str,
 		filter: impl Fn(&ListenerProtocol) -> bool,
@@ -2931,6 +2931,7 @@ pub enum BackendTrafficPolicy {
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
+	UrlRewrite(filters::UrlRewrite),
 	RequestMirror(Vec<filters::RequestMirror>),
 }
 

@@ -1690,11 +1690,55 @@ pub mod from_messages {
 		});
 
 		// Convert typed Anthropic messages to Bedrock messages
-		let mut messages = Vec::new();
+		let mut messages: Vec<bedrock::Message> = Vec::new();
+		// Mid-conversation system messages waiting to be placed after the next tool results.
+		let mut pending_reminders = Vec::new();
 		for msg in req.messages {
 			let role = match msg.role {
 				messages::Role::Assistant => bedrock::Role::Assistant,
 				messages::Role::User => bedrock::Role::User,
+				// Converse has no mid-conversation system role. Hoisting these into `system` would change the
+				// cached prefix ahead of every message, so render them in place as user reminders instead.
+				messages::Role::System if !messages.is_empty() => {
+					let mut reminder = Vec::new();
+					for block in msg.content {
+						if let messages::ContentBlock::Text(messages::ContentTextBlock {
+							text,
+							cache_control,
+							..
+						}) = block
+						{
+							reminder.push(bedrock::ContentBlock::Text(format!(
+								"<system-reminder>\n{text}\n</system-reminder>"
+							)));
+							helpers::maybe_insert_cache_point(
+								&mut reminder,
+								cache_control.is_some(),
+								&mut cache_points_used,
+							);
+						}
+					}
+					// Tool results must directly follow their tool use, so defer the reminder until after them.
+					let awaiting_tool_results = messages.last().is_some_and(|m| {
+						m.role == bedrock::Role::Assistant
+							&& m
+								.content
+								.iter()
+								.any(|b| matches!(b, bedrock::ContentBlock::ToolUse(_)))
+					});
+					if awaiting_tool_results {
+						pending_reminders.extend(reminder);
+					} else if !reminder.is_empty() {
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::User,
+								content: reminder,
+							},
+						);
+					}
+					continue;
+				},
 				messages::Role::System => {
 					for block in msg.content {
 						if let messages::ContentBlock::Text(messages::ContentTextBlock {
@@ -1724,7 +1768,10 @@ pub mod from_messages {
 						text,
 						cache_control,
 						..
-					}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
+					}) => (
+						Some(bedrock::ContentBlock::Text(text)),
+						cache_control.is_some(),
+					),
 					messages::ContentBlock::Image(messages::ContentImageBlock {
 						source,
 						cache_control,
@@ -1733,8 +1780,10 @@ pub mod from_messages {
 							&& let Some(data) = source.get("data").and_then(|v| v.as_str())
 						{
 							(
-								super::CanonicalImage::from_media_type_and_base64(media_type, data)?
-									.into_bedrock_content_block(),
+								Some(
+									super::CanonicalImage::from_media_type_and_base64(media_type, data)?
+										.into_bedrock_content_block(),
+								),
 								cache_control.is_some(),
 							)
 						} else {
@@ -1749,11 +1798,11 @@ pub mod from_messages {
 						input,
 						cache_control,
 					} => (
-						bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+						Some(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: id,
 							name: tool_name_map.register(&name),
 							input,
-						}),
+						})),
 						cache_control.is_some(),
 					),
 					messages::ContentBlock::ToolResult {
@@ -1782,12 +1831,12 @@ pub mod from_messages {
 										source,
 										cache_control,
 									} => {
+										has_cache_control |= cache_control.is_some();
 										if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
 											&& let Some(data) = source.get("data").and_then(|v| v.as_str())
 											&& let Ok(image) =
 												super::CanonicalImage::from_media_type_and_base64(media_type, data)
 										{
-											has_cache_control |= cache_control.is_some();
 											Some(bedrock::ToolResultContentBlock::Image(
 												image.into_bedrock_image_block(),
 											))
@@ -1802,9 +1851,12 @@ pub mod from_messages {
 										has_cache_control |= cache_control.is_some();
 										Some(bedrock::ToolResultContentBlock::Text(tool_name))
 									},
-									messages::ToolResultContentPart::Document { .. }
-									| messages::ToolResultContentPart::SearchResult { .. }
-									| messages::ToolResultContentPart::Unknown => None,
+									messages::ToolResultContentPart::Document { cache_control, .. }
+									| messages::ToolResultContentPart::SearchResult { cache_control, .. } => {
+										has_cache_control |= cache_control.is_some();
+										None
+									},
+									messages::ToolResultContentPart::Unknown => None,
 								})
 								.collect(),
 						};
@@ -1815,11 +1867,13 @@ pub mod from_messages {
 						});
 
 						(
-							bedrock::ContentBlock::ToolResult(bedrock::ToolResultBlock {
-								tool_use_id,
-								content: bedrock_content,
-								status,
-							}),
+							Some(bedrock::ContentBlock::ToolResult(
+								bedrock::ToolResultBlock {
+									tool_use_id,
+									content: bedrock_content,
+									status,
+								},
+							)),
 							has_cache_control,
 						)
 					},
@@ -1827,33 +1881,84 @@ pub mod from_messages {
 						thinking,
 						signature,
 					} => (
-						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
-							reasoning_text: bedrock::ReasoningText {
-								text: thinking,
-								signature: Some(signature).filter(|s| !s.is_empty()),
+						Some(bedrock::ContentBlock::ReasoningContent(
+							bedrock::ReasoningContentBlock::Structured {
+								reasoning_text: bedrock::ReasoningText {
+									text: thinking,
+									signature: Some(signature).filter(|s| !s.is_empty()),
+								},
 							},
-						}),
+						)),
 						false,
 					),
-					messages::ContentBlock::WebSearchToolResult { .. } => continue,
 					messages::ContentBlock::RedactedThinking { data } => (
-						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
-							redacted_content: data,
-						}),
+						Some(bedrock::ContentBlock::ReasoningContent(
+							bedrock::ReasoningContentBlock::Redacted {
+								redacted_content: data,
+							},
+						)),
 						false,
 					),
-					messages::ContentBlock::Document(_) => continue,
-					messages::ContentBlock::SearchResult(_) => continue,
-					messages::ContentBlock::ServerToolUse { .. } => continue,
+					messages::ContentBlock::WebSearchToolResult { cache_control, .. }
+					| messages::ContentBlock::ServerToolUse { cache_control, .. } => {
+						(None, cache_control.is_some())
+					},
+					messages::ContentBlock::Document(messages::ContentDocumentBlock {
+						cache_control,
+						..
+					})
+					| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+						cache_control,
+						..
+					}) => (None, cache_control.is_some()),
 					messages::ContentBlock::Unknown => continue,
 				};
 
+				let Some(bedrock_block) = bedrock_block else {
+					// Bedrock has no equivalent block, so move its cache point onto the preceding content,
+					// which is the previous message when this block leads its message.
+					let target = if content.is_empty() {
+						messages.last_mut().map(|m| &mut m.content)
+					} else {
+						Some(&mut content)
+					};
+					if let Some(target) = target
+						&& !matches!(
+							target.last(),
+							None | Some(bedrock::ContentBlock::CachePoint(_))
+						) {
+						helpers::maybe_insert_cache_point(target, has_cache_control, &mut cache_points_used);
+					}
+					continue;
+				};
 				content.push(bedrock_block);
 
 				helpers::maybe_insert_cache_point(&mut content, has_cache_control, &mut cache_points_used);
 			}
 
-			messages.push(bedrock::Message { role, content });
+			if !pending_reminders.is_empty() {
+				if role == bedrock::Role::User {
+					content.append(&mut pending_reminders);
+				} else {
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: std::mem::take(&mut pending_reminders),
+						},
+					);
+				}
+			}
+			helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
+		}
+		if !pending_reminders.is_empty() {
+			helpers::push_or_merge_message(
+				&mut messages,
+				bedrock::Message {
+					role: bedrock::Role::User,
+					content: pending_reminders,
+				},
+			);
 		}
 
 		// Build inference config from typed fields
@@ -2338,12 +2443,12 @@ pub mod from_responses {
 	use helpers::*;
 	use rand::RngExt;
 	use responses::{
-		AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
-		OutputContent, OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails,
-		ResponseContentPartAddedEvent, ResponseContentPartDoneEvent, ResponseErrorEvent,
-		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
-		ResponseTextDeltaEvent, ResponseUsage,
+		AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
+		OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails,
+		ResponseContentPartAddedEvent, ResponseContentPartDoneEvent, ResponseError, ResponseErrorCode,
+		ResponseErrorEvent, ResponseFunctionCallArgumentsDeltaEvent,
+		ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseStreamEvent, ResponseTextDeltaEvent, ResponseUsage,
 	};
 	use types::bedrock;
 	use types::responses::typed as responses;
@@ -2528,22 +2633,22 @@ pub mod from_responses {
 			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
 				use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
 				match tc {
-					ToolChoiceParam::Mode(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
-					ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
-					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
+					ToolChoiceParam::Option(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
+					ToolChoiceParam::Option(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
+					ToolChoiceParam::Option(ToolChoiceOptions::None) => None,
 					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
 						Some(bedrock::ToolChoice::Tool {
 							name: tool_name_map.register(name),
 						})
 					},
-					ToolChoiceParam::Hosted(_) => {
+					ToolChoiceParam::BuiltIn(_) => {
 						tracing::warn!("Hosted tool choice not supported for Bedrock");
 						None
 					},
 					ToolChoiceParam::AllowedTools(_)
 					| ToolChoiceParam::Mcp(_)
 					| ToolChoiceParam::Custom(_)
-					| ToolChoiceParam::ProgrammaticToolCalling(_)
+					| ToolChoiceParam::ProgrammaticToolCalling
 					| ToolChoiceParam::ApplyPatch
 					| ToolChoiceParam::Shell => {
 						tracing::warn!("Unsupported tool choice for Bedrock: {:?}", tc);
@@ -3551,7 +3656,7 @@ pub mod from_responses {
 							total_tokens: u.total_tokens as u32,
 							input_tokens_details: InputTokenDetails {
 								cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
-								cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
+								cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as i64),
 							},
 							output_tokens_details: OutputTokenDetails {
 								reasoning_tokens: 0,
@@ -3576,8 +3681,8 @@ pub mod from_responses {
 						| Some(bedrock::StopReason::GuardrailIntervened) => response_builder.failed_event(
 							sequence_number,
 							usage_obj,
-							ErrorObject {
-								code: "content_filter".to_string(),
+							ResponseError {
+								code: ResponseErrorCode::Other("content_filter".to_string()),
 								message: "Content filtered by guardrails".to_string(),
 								misalignment: None,
 							},
@@ -4227,8 +4332,8 @@ impl ConverseResponseAdapter {
 
 		let error = match self.stop_reason {
 			bedrock::StopReason::ContentFiltered | bedrock::StopReason::GuardrailIntervened => {
-				Some(responsest::ErrorObject {
-					code: "content_filter".to_string(),
+				Some(responsest::ResponseError {
+					code: responsest::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered by guardrails".to_string(),
 					misalignment: None,
 				})
@@ -4247,7 +4352,7 @@ impl ConverseResponseAdapter {
 				total_tokens: u.total_tokens as u32,
 				input_tokens_details: responsest::InputTokenDetails {
 					cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
-					cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
+					cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as i64),
 				},
 				output_tokens_details: responsest::OutputTokenDetails {
 					reasoning_tokens: 0,

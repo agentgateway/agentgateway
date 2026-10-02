@@ -1825,6 +1825,7 @@ message BackendPolicySpec {
     // the concrete model from which the provider was lowered.
     TrafficPolicySpec.RBAC authorization = 19;
     SessionAffinity session_affinity = 20;
+    UrlRewrite url_rewrite = 21;
   }
 }
 
@@ -1960,6 +1961,7 @@ message AIBackend {
     PROVIDER_PRESET_TOGETHERAI = 11;
     PROVIDER_PRESET_XAI = 12;
     PROVIDER_PRESET_FIREWORKS = 13;
+    PROVIDER_PRESET_META = 14;
   }
 
   message Provider {

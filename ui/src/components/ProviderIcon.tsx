@@ -12,6 +12,7 @@ import fireworksIcon from '@/assets/providers/fireworks.svg';
 import geminiIcon from '@/assets/providers/gemini.svg';
 import groqIcon from '@/assets/providers/groq.svg';
 import huggingfaceIcon from '@/assets/providers/huggingface.svg';
+import metaIcon from '@/assets/providers/meta.svg';
 import mistralIcon from '@/assets/providers/mistral.svg';
 import ollamaIcon from '@/assets/providers/ollama.svg';
 import openAiIcon from '@/assets/providers/openai.svg';
@@ -42,8 +43,9 @@ const providerIcons: Record<string, string> = {
 	mistral: mistralIcon,
 	openrouter: openrouterIcon,
 	togetherai: togetheraiIcon,
-	xAI: xaiIcon,
+	xai: xaiIcon,
 	fireworks: fireworksIcon,
+	meta: metaIcon,
 	custom: agwIcon
 };
 
@@ -56,7 +58,7 @@ const monochromeProviders = new Set<string>([
 	'ollama',
 	'openrouter',
 	'togetherai',
-	'xAI'
+	'xai'
 ]);
 
 export function ProviderIcon(props: { provider: ProviderName | string }) {
@@ -84,7 +86,6 @@ export function ProviderIcon(props: { provider: ProviderName | string }) {
 function providerInitials(provider: ProviderName | string) {
 	const display = providerDisplayName(provider);
 	const words = display.split(/\s+/).filter(Boolean);
-	if (display === 'xAI') return 'xA';
 	if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
 	return words
 		.slice(0, 2)

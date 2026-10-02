@@ -1,0 +1,212 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/system_message_mid_conversation.json
+info:
+  model: claude-sonnet-4-5
+  max_tokens: 1024
+  system:
+    - type: text
+      text: Top-level system prompt
+      cache_control:
+        type: ephemeral
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: Leading system message
+    - role: user
+      content:
+        - type: text
+          text: Look something up
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_1
+          name: lookup
+          input: {}
+    - role: system
+      content:
+        - type: text
+          text: Reminder between tool use and result
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_1
+          content: lookup result
+    - role: assistant
+      content:
+        - type: text
+          text: Here is what I found
+    - role: system
+      content:
+        - type: text
+          text: Mid-conversation reminder
+          cache_control:
+            type: ephemeral
+    - role: user
+      content:
+        - type: text
+          text: "Thanks, continue"
+          cache_control:
+            type: ephemeral
+  tools:
+    - name: lookup
+      description: Look up information
+      input_schema:
+        type: object
+        properties: {}
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Look something up"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_1",
+              "name": "lookup",
+              "input": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_1",
+              "content": [
+                {
+                  "text": "lookup result"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "text": "<system-reminder>\nReminder between tool use and result\n</system-reminder>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "text": "Here is what I found"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "<system-reminder>\nMid-conversation reminder\n</system-reminder>"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          },
+          {
+            "text": "Thanks, continue"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      }
+    ],
+    "system": [
+      {
+        "text": "Top-level system prompt"
+      },
+      {
+        "cachePoint": {
+          "type": "default"
+        }
+      },
+      {
+        "text": "Leading system message"
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "lookup",
+            "description": "Look up information",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Top-level system prompt"
+      },
+      {
+        "role": "system",
+        "content": "Leading system message"
+      },
+      {
+        "role": "user",
+        "content": "Look something up"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "system",
+        "content": "Reminder between tool use and result"
+      },
+      {
+        "role": "user",
+        "content": ""
+      },
+      {
+        "role": "assistant",
+        "content": "Here is what I found"
+      },
+      {
+        "role": "system",
+        "content": "Mid-conversation reminder"
+      },
+      {
+        "role": "user",
+        "content": "Thanks, continue"
+      }
+    ]
+  }
+}

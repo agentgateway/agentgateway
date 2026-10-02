@@ -32,13 +32,11 @@ info:
             "cachePoint": {
               "type": "default"
             }
+          },
+          {
+            "text": "<system-reminder>\nThe following skills are available for use.\n</system-reminder>"
           }
         ]
-      }
-    ],
-    "system": [
-      {
-        "text": "The following skills are available for use."
       }
     ],
     "inferenceConfig": {

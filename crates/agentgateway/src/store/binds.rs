@@ -286,6 +286,7 @@ pub struct BackendPolicies {
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: BackendPolicy<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
+	pub url_rewrite: Option<filters::UrlRewrite>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
@@ -341,6 +342,7 @@ impl BackendPolicies {
 				.response_header_modifier
 				.or(self.response_header_modifier),
 			request_redirect: other.request_redirect.or(self.request_redirect),
+			url_rewrite: other.url_rewrite.or(self.url_rewrite),
 			request_mirror: if other.request_mirror.is_empty() {
 				self.request_mirror
 			} else {
@@ -1409,6 +1411,9 @@ impl Store {
 				},
 				BackendTrafficPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
+				},
+				BackendTrafficPolicy::UrlRewrite(p) => {
+					pol.url_rewrite.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);

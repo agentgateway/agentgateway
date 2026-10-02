@@ -117,6 +117,7 @@ fn provider_preset_from_proto(
 		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
 		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
 		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
+		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),
@@ -2513,6 +2514,7 @@ fn backend_policy_from_proto(
 					.transpose()?,
 			})
 		},
+		Some(bps::Kind::UrlRewrite(ur)) => BackendTrafficPolicy::UrlRewrite(ur.into()),
 		Some(bps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -2988,24 +2990,7 @@ fn traffic_policy_from_proto(
 					.transpose()?,
 			}))
 		},
-		Some(tps::Kind::UrlRewrite(ur)) => {
-			let authority = if ur.host.is_empty() {
-				None
-			} else {
-				Some(HostRedirect::Host(strng::new(&ur.host)))
-			};
-			let path = match &ur.path {
-				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
-				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
-					Some(PathRedirect::Prefix(strng::new(p)))
-				},
-				None => None,
-			};
-			TrafficPolicy::UrlRewrite(RequestPolicy::single(http::filters::UrlRewrite {
-				authority,
-				path,
-			}))
-		},
+		Some(tps::Kind::UrlRewrite(ur)) => TrafficPolicy::UrlRewrite(RequestPolicy::single(ur.into())),
 		Some(tps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -3772,6 +3757,21 @@ impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
 			retries: k
 				.retries
 				.unwrap_or_else(types::agent::defaults::keepalive_retries),
+		}
+	}
+}
+
+impl From<&proto::agent::UrlRewrite> for http::filters::UrlRewrite {
+	fn from(ur: &proto::agent::UrlRewrite) -> Self {
+		http::filters::UrlRewrite {
+			authority: default_as_none(ur.host.as_str()).map(|h| HostRedirect::Host(strng::new(h))),
+			path: match &ur.path {
+				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
+				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
+					Some(PathRedirect::Prefix(strng::new(p)))
+				},
+				None => None,
+			},
 		}
 	}
 }

@@ -332,7 +332,12 @@ fn visit_output_tool_item(item: &mut OutputItem, f: &mut dyn FnMut(ContentScope,
 		},
 		OutputItem::WebSearchCall(call) => match &mut call.action {
 			Some(sdk::WebSearchToolCallAction::Search(action)) => {
+				// `query` is deprecated in favor of `queries`, but providers may still send it
+				#[allow(deprecated)]
 				if let Some(query) = &mut action.query {
+					f(ToolInput, query);
+				}
+				for query in action.queries.iter_mut().flatten() {
 					f(ToolInput, query);
 				}
 				for source in action.sources.iter_mut().flatten() {
@@ -429,13 +434,10 @@ fn visit_output_tool_item(item: &mut OutputItem, f: &mut dyn FnMut(ContentScope,
 				f(ToolOutput, output);
 			}
 			match &mut call.error {
-				Some(sdk::MCPToolCallError::Message(text)) => f(ToolOutput, text),
-				Some(sdk::MCPToolCallError::Structured(error)) => match error {
-					sdk::MCPToolCallErrorDetails::McpProtocolError { message, .. }
-					| sdk::MCPToolCallErrorDetails::HttpError { message, .. } => f(ToolOutput, message),
-					sdk::MCPToolCallErrorDetails::McpToolExecutionError { content } => {
-						visit_tool_output_text(content, f)
-					},
+				Some(sdk::MCPToolCallError::McpProtocolError(error)) => f(ToolOutput, &mut error.message),
+				Some(sdk::MCPToolCallError::HttpError(error)) => f(ToolOutput, &mut error.message),
+				Some(sdk::MCPToolCallError::McpToolExecutionError(error)) => {
+					visit_tool_output_text(&mut error.content, f)
 				},
 				None => {},
 			}
@@ -713,11 +715,12 @@ impl ResponseBuilder {
 		}
 	}
 
+	#[allow(deprecated)]
 	pub fn response(
 		&self,
 		status: typed::Status,
 		usage: Option<typed::ResponseUsage>,
-		error: Option<typed::ErrorObject>,
+		error: Option<typed::ResponseError>,
 		incomplete_details: Option<typed::IncompleteDetails>,
 	) -> typed::Response {
 		typed::Response {
@@ -797,7 +800,7 @@ impl ResponseBuilder {
 		&self,
 		sequence_number: u64,
 		usage: Option<typed::ResponseUsage>,
-		error: typed::ErrorObject,
+		error: typed::ResponseError,
 	) -> typed::ResponseStreamEvent {
 		typed::ResponseStreamEvent::ResponseFailed(typed::ResponseFailedEvent {
 			sequence_number,
@@ -1355,18 +1358,19 @@ pub mod typed {
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
 		Annotation, AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
-		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
-		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
-		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		EasyInputContent, EasyInputMessage, FunctionCallOutput, FunctionToolCall, IncompleteDetails,
+		InputContent, InputItem, InputMessage, InputParam, InputRole, InputTextContent,
+		InputTokenDetails, Item, MessageItem, OutputContent, OutputItem, OutputMessage,
+		OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
+		PromptCacheBreakpointConfig, Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent,
+		ReasoningTextContent, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseError, ResponseErrorCode,
+		ResponseErrorEvent, ResponseFailedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
+		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent,
+		ResponseRefusalDoneEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam,
+		ResponseUsage, Role, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

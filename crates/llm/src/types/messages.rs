@@ -979,7 +979,7 @@ pub mod typed {
 	impl From<CacheControlEphemeral> for super::super::completions::typed::PromptCacheBreakpointParam {
 		fn from(_: CacheControlEphemeral) -> Self {
 			PromptCacheBreakpointParam {
-				mode: super::super::completions::typed::PromptCacheBreakpointMode::Explicit,
+				mode: super::super::completions::typed::PromptCacheBreakpointParamMode::Explicit,
 			}
 		}
 	}

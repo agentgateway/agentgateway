@@ -877,19 +877,20 @@ pub mod from_messages {
 			Some(messages::ThinkingInput::Adaptive {}) => true,
 			_ => output_effort.is_some(),
 		};
-		let reasoning_effort = if reasoning_requested {
-			Some(match output_effort {
-				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
-				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
-				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
-				// Anthropic adaptive thinking defaults to high effort when omitted.
-				None => completions::ReasoningEffort::High,
-			})
-		} else {
-			None
-		};
+		let reasoning_effort =
+			if reasoning_requested && crate::conversion::supports_reasoning_effort(&model) {
+				Some(match output_effort {
+					Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+					Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+					Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+					Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
+					Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
+					// Anthropic adaptive thinking defaults to high effort when omitted.
+					None => completions::ReasoningEffort::High,
+				})
+			} else {
+				None
+			};
 		let response_format = output_config
 			.as_ref()
 			.and_then(|cfg| cfg.format.as_ref())

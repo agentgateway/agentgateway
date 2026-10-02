@@ -81,6 +81,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<(EndpointMatch, Option<llm::RouteType>, &
 			("/v1/audio/transcriptions", None),
 			("/v1/ocr", Some(Detect)),
 			("/v1/systemone", Some(Detect)),
+			("/v1/decisions", Some(Detect)),
 			("/v1/embeddings", Some(Embeddings)),
 			("/v1/rerank", Some(Rerank)),
 			("/v2/rerank", Some(Rerank)),

@@ -3016,6 +3016,67 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 }
 
 #[test]
+fn setup_request_drops_inbound_query_only_when_translated() {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	for (provider, route_type, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			RouteType::Completions,
+			None,
+		),
+		(
+			AIProvider::Anthropic(anthropic::Provider {
+				model_override: None,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+		(
+			AIProvider::bedrock(bedrock::Provider {
+				model_override: None,
+				region: strng::new("us-east-1"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+	] {
+		let mut req = crate::http::tests_common::request(
+			"https://example.com/v1/messages?beta=true",
+			http::Method::POST,
+			&[],
+		);
+		provider
+			.setup_request(
+				&mut req,
+				route_type,
+				Some(&llm_request),
+				None,
+				None,
+				false,
+				None,
+				None,
+			)
+			.expect("setup_request should succeed");
+		assert_eq!(req.uri().query(), expected_query, "{route_type:?}");
+	}
+}
+
+#[test]
 fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 	// A static configured path cannot carry the model or the streaming method, so the
 	// default for the native Gemini chat format is the canonical Gemini API shape.
@@ -3220,7 +3281,7 @@ fn setup_request_gemini_native_streaming_adds_alt_sse_and_strips_client_api_keys
 	provider
 		.setup_request(
 			&mut req,
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			Some(&llm_request),
 			None,
 			None,
@@ -3289,6 +3350,7 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 		model_override: None,
 	});
 	let llm_request = LLMRequest {
+		input_format: InputFormat::Completions,
 		provider_state: None,
 		..native_gemini_llm_request("gemini-2.5-flash", false)
 	};
@@ -3353,7 +3415,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		Some("trace=repro"),
+		None,
 	);
 }
 

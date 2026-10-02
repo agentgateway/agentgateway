@@ -65,6 +65,7 @@ pub enum ProviderPreset {
 	#[serde(rename = "xai")]
 	XAI,
 	Fireworks,
+	Meta,
 }
 
 impl ProviderPreset {
@@ -83,6 +84,7 @@ impl ProviderPreset {
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
+			Self::Meta => "https://api.meta.ai/v1",
 		}
 	}
 
@@ -176,6 +178,14 @@ impl ProviderPreset {
 					format(Responses, None),
 					format(Embeddings, None),
 					format(Rerank, None),
+				],
+			),
+			Self::Meta => (
+				"meta",
+				vec![
+					format(Completions, None),
+					format(Messages, None),
+					format(Responses, None),
 				],
 			),
 		};

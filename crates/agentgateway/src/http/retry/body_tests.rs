@@ -65,6 +65,25 @@ fn with_trailers(b: http::Body, t: HeaderMap) -> http::Body {
 	http::Body::new(b.with_trailers(async move { Some(Ok(t)) }))
 }
 
+#[rstest::rstest]
+#[case(vec!["", "hello", "", " world", ""])]
+#[case(vec!["", ""])]
+#[tokio::test]
+async fn test_replay_body_with_empty_data_frames(#[case] data: Vec<&str>) {
+	let expected = data.concat();
+	let mut trailers = HeaderMap::new();
+	trailers.insert("x-test", "value".parse().unwrap());
+	let body = with_trailers(mock_body(data), trailers.clone());
+	let original = ReplayBody::try_new(body, 1024).unwrap();
+	let replay = original.clone();
+
+	for body in [original, replay] {
+		let collected = body.collect().await.unwrap();
+		assert_eq!(collected.trailers(), Some(&trailers));
+		assert_eq!(collected.to_bytes().as_ref(), expected.as_bytes());
+	}
+}
+
 #[tokio::test]
 async fn test_replay_body_with_trailers() {
 	let mut trailers = HeaderMap::new();

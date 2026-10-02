@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
 use agent_core::version::BuildInfo;
+use base64::Engine;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
@@ -13,7 +14,7 @@ use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 use regex::Regex;
-use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use rmcp::model::{CallToolResult, ClientRequest, ContentBlock, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -687,17 +688,7 @@ impl Handler {
 				let res = self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
-
-				// Serialize structured content to JSON string for backwards compatibility
-				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
-				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
-				// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
-				let serialized_content = serde_json::to_string(&res)
-					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
-
-				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
-				result.structured_content = Some(res);
-				Messages::from_result(id, result)
+				Messages::from_result(id, res)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
@@ -727,7 +718,7 @@ impl Handler {
 		name: &str,
 		args: Option<JsonObject>,
 		ctx: &IncomingRequestContext,
-	) -> Result<serde_json::Value, UpstreamError> {
+	) -> Result<CallToolResult, UpstreamError> {
 		let (_tool, info) = self
 			.tools
 			.iter()
@@ -832,7 +823,6 @@ impl Handler {
 						HeaderValue::from_static("application/octet-stream"),
 					);
 					let s = body_val.as_str().unwrap_or_default();
-					use base64::Engine;
 					base64::engine::general_purpose::STANDARD
 						.decode(s)
 						.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
@@ -917,6 +907,10 @@ impl Handler {
 		if !status.is_server_error() {
 			let lim = crate::http::response_buffer_limit(&response);
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
+			let content_type = response
+				.headers()
+				.typed_get::<headers::ContentType>()
+				.map(headers::Mime::from);
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
 				response.into_body(),
 				content_encoding.as_ref(),
@@ -925,17 +919,31 @@ impl Handler {
 			.await
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
-			match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-				Ok(Value::Object(obj)) => Ok(Value::Object(obj)),
-				Ok(Value::Null) => Ok(Value::Null),
-				Ok(data) => Ok(json!({ "data": data })),
+
+			if let Some(mime) = content_type.filter(|m| m.type_() == "image") {
+				let data = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
+				return Ok(CallToolResult::success(vec![ContentBlock::image(
+					data,
+					mime.essence_str(),
+				)]));
+			}
+
+			let res = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+				Ok(val @ (Value::Object(_) | Value::Null)) => val,
+				Ok(data) => json!({ "data": data }),
 				Err(_) => {
 					// We should probably record a metric here as this means despite requesting json we got back non-json
 					// This would be fine if it was a 5XX but its not so we help a little.
 					// There is a consideration that we could put is_error in here based on the status but dont know if that makes sense for now
-					Ok(json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) }))
+					json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) })
 				},
-			}
+			};
+
+			// Serialize structured content to JSON string for backwards compatibility
+			// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
+			//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+			// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
+			Ok(CallToolResult::structured(res))
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

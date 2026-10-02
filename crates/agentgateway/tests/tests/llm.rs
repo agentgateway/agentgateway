@@ -425,7 +425,7 @@ llm:
 	assert_eq!(requests.len(), 3);
 	assert_eq!(
 		&requests[0].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/responses?trace=1"
+		"/v1/responses"
 	);
 	assert_eq!(
 		&requests[1].url[Position::BeforePath..Position::AfterQuery],
@@ -1744,7 +1744,7 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 #[rstest::rstest]
 #[case::preserves_path(None, None, "/v1/messages?trace=repro")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
-#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses?trace=repro")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]
 async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	#[case] path_override: Option<&str>,

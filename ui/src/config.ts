@@ -65,6 +65,7 @@ export const providerNames: ProviderName[] = [
 	'togetherai',
 	'xai',
 	'fireworks',
+	'meta',
 	'custom'
 ];
 
@@ -98,7 +99,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		openAI: 'OpenAI',
 		anthropic: 'Anthropic',
 		gemini: 'Gemini',
-		vertex: 'Vertex AI',
+		vertex: 'Gemini Enterprise (GCP Vertex)',
 		bedrock: 'Amazon Bedrock',
 		azure: 'Azure',
 		copilot: 'GitHub Copilot',
@@ -113,8 +114,9 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		mistral: 'Mistral AI',
 		openrouter: 'OpenRouter',
 		togetherai: 'Together AI',
-		xai: 'xAI',
+		xai: 'xAI (Grok)',
 		fireworks: 'Fireworks AI',
+		meta: 'Meta',
 		custom: 'Custom'
 	};
 	return names[provider] ?? provider;

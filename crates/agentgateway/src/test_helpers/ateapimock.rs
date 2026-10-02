@@ -10,6 +10,9 @@ use tonic::{Request, Response, Status};
 
 #[async_trait]
 pub trait Handler {
+	/// Observes the request metadata of every call before it is handled.
+	fn metadata(&mut self, _metadata: &tonic::metadata::MetadataMap) {}
+
 	async fn get_actor(&mut self, _request: &GetActorRequest) -> Result<Actor, Status> {
 		Err(Status::unimplemented("GetActor is not implemented"))
 	}
@@ -70,6 +73,7 @@ where
 {
 	async fn get_actor(&self, request: Request<GetActorRequest>) -> Result<Response<Actor>, Status> {
 		let mut handler = (self.handler)();
+		handler.metadata(request.metadata());
 		Ok(Response::new(handler.get_actor(request.get_ref()).await?))
 	}
 
@@ -78,6 +82,7 @@ where
 		request: Request<ResumeActorRequest>,
 	) -> Result<Response<ResumeActorResponse>, Status> {
 		let mut handler = (self.handler)();
+		handler.metadata(request.metadata());
 		Ok(Response::new(
 			handler.resume_actor(request.get_ref()).await?,
 		))
@@ -88,6 +93,7 @@ where
 		request: Request<GetActorEgressPolicyRequest>,
 	) -> Result<Response<EgressPolicy>, Status> {
 		let mut handler = (self.handler)();
+		handler.metadata(request.metadata());
 		Ok(Response::new(
 			handler.get_actor_egress_policy(request.get_ref()).await?,
 		))

@@ -1,0 +1,198 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/cache_control_dropped_blocks.json
+info:
+  model: claude-sonnet-4-5
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: document
+          source:
+            type: text
+            media_type: text/plain
+            data: document body
+          cache_control:
+            type: ephemeral
+        - type: text
+          text: Summarize this document
+    - role: assistant
+      content:
+        - type: server_tool_use
+          id: srvtoolu_1
+          name: web_search
+          input:
+            query: agentgateway
+          cache_control:
+            type: ephemeral
+        - type: web_search_tool_result
+          tool_use_id: srvtoolu_1
+          content: []
+          cache_control:
+            type: ephemeral
+        - type: text
+          text: Searching the web
+    - role: user
+      content:
+        - type: text
+          text: Use this search result
+        - type: search_result
+          source: "https://example.com"
+          title: Example
+          content:
+            - type: text
+              text: search result body
+          cache_control:
+            type: ephemeral
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_search
+          name: lookup
+          input: {}
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_search
+          content:
+            - type: text
+              text: tool result text
+            - type: search_result
+              source: "https://example.com"
+              title: Example
+              content:
+                - type: text
+                  text: search result body
+              cache_control:
+                type: ephemeral
+  tools:
+    - name: lookup
+      description: Look up information
+      input_schema:
+        type: object
+        properties: {}
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Summarize this document"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "text": "Searching the web"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Use this search result"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_search",
+              "name": "lookup",
+              "input": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_search",
+              "content": [
+                {
+                  "text": "tool result text"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "lookup",
+            "description": "Look up information",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Summarize this document"
+      },
+      {
+        "role": "assistant",
+        "content": "Searching the web"
+      },
+      {
+        "role": "user",
+        "content": "Use this search result"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}

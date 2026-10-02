@@ -129,6 +129,7 @@ source: crates/llm/src/golden_tests.rs
           "action": {
             "type": "search",
             "query": "query",
+            "queries": null,
             "sources": [
               {
                 "type": "url",
@@ -327,6 +328,7 @@ source: crates/llm/src/golden_tests.rs
           "action": {
             "type": "search",
             "query": "<masked>",
+            "queries": null,
             "sources": [
               {
                 "type": "url",
@@ -525,6 +527,7 @@ source: crates/llm/src/golden_tests.rs
           "action": {
             "type": "search",
             "query": "query",
+            "queries": null,
             "sources": [
               {
                 "type": "url",

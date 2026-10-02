@@ -278,6 +278,7 @@ const (
 	ModelProviderTogetherAI  ModelProvider = "TogetherAI"
 	ModelProviderXAI         ModelProvider = "XAI"
 	ModelProviderFireworks   ModelProvider = "Fireworks"
+	ModelProviderMeta        ModelProvider = "Meta"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 

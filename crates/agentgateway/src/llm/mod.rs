@@ -1322,6 +1322,31 @@ impl AIProvider {
 			return Ok(());
 		}
 
+		// The client's query belongs to the inbound API format (e.g. Anthropic's `?beta=true`), so
+		// drop it once the request is translated to another format; strict upstreams like Google
+		// reject unknown parameters. Bedrock Runtime always speaks its own APIs (Converse, etc), even
+		// though its route type mirrors the input format; Mantle serves the native formats.
+		let translated = llm_request.is_some_and(|l| {
+			if matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Runtime)) {
+				return true;
+			}
+			let same_format = match l.input_format {
+				InputFormat::Completions => RouteType::Completions,
+				InputFormat::Messages => RouteType::Messages,
+				InputFormat::Responses => RouteType::Responses,
+				InputFormat::Gemini => RouteType::GenerateContent,
+				_ => return false,
+			};
+			route_type != same_format
+		});
+		if translated {
+			http::modify_req_uri(req, |uri| {
+				let path = uri.path_and_query.as_ref().map_or("/", |p| p.path());
+				uri.path_and_query = Some(PathAndQuery::try_from(path)?);
+				Ok(())
+			})?;
+		}
+
 		// Native Gemini paths carry their own `?alt=sse` (see `native_gemini_path`) while the
 		// client's query is preserved alongside, so a client-sent `alt` would arrive upstream
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
