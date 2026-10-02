@@ -1220,6 +1220,8 @@ test('LLM playground renders streamed responses and requests streaming', async (
 	});
 	await page.goto('/llm/playground');
 
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: /resilient/ }).click();
 	await page.getByLabel('User message').fill('ping');
 	await page.getByRole('button', { name: 'Send' }).click();
 
