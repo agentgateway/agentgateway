@@ -2058,3 +2058,390 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+fn ttl_test_provider() -> Provider {
+	Provider {
+		model_override: None,
+		region: strng::new("eu-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	}
+}
+
+fn ttl_test_request(
+	system: Option<types::messages::typed::SystemPrompt>,
+	messages: Vec<types::messages::typed::Message>,
+	tools: Option<Vec<types::messages::typed::Tool>>,
+) -> types::messages::typed::Request {
+	types::messages::typed::Request {
+		model: "anthropic.claude-haiku-4-5-20251001-v1:0".to_string(),
+		max_tokens: 1024,
+		messages,
+		system,
+		tools,
+		tool_choice: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	}
+}
+
+fn find_system_cache_point(
+	system: &[types::bedrock::SystemContentBlock],
+) -> &types::bedrock::CachePointBlock {
+	system
+		.iter()
+		.find_map(|b| match b {
+			types::bedrock::SystemContentBlock::CachePoint { cache_point } => Some(cache_point),
+			_ => None,
+		})
+		.expect("a cachePoint was inserted for the cache_control-marked system block")
+}
+
+#[test]
+fn test_messages_system_cache_control_ttl_forwarded_to_bedrock() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+	let req = ttl_test_request(
+		Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+					ttl: Some("1h".to_string()),
+				}),
+			},
+		])),
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = find_system_cache_point(&system);
+
+	assert_eq!(cache_point.r#type, types::bedrock::CachePointType::Default);
+	assert_eq!(
+		cache_point.ttl,
+		Some(types::bedrock::CachePointTtl::OneHour)
+	);
+}
+
+#[test]
+fn test_messages_system_cache_control_without_ttl_omits_ttl_field() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+	let req = ttl_test_request(
+		Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				// Client sent no ttl - matches the existing default-5m behaviour.
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral { ttl: None }),
+			},
+		])),
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = find_system_cache_point(&system);
+
+	// No ttl on the wire -> Bedrock applies its own 5-minute default.
+	assert_eq!(cache_point.ttl, None);
+}
+
+#[test]
+fn test_messages_unrecognized_cache_control_ttl_omits_ttl_field() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+	let req = ttl_test_request(
+		Some(messages::SystemPrompt::Blocks(vec![
+			messages::SystemContentBlock::Text {
+				text: "You are a helpful assistant.".to_string(),
+				// A future or malformed ttl value must not be forwarded verbatim -
+				// unrecognized values fall back to Bedrock's default instead of
+				// erroring or guessing.
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+					ttl: Some("30m".to_string()),
+				}),
+			},
+		])),
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+	let system = out.system.expect("system blocks present");
+	let cache_point = find_system_cache_point(&system);
+
+	assert_eq!(cache_point.ttl, None);
+}
+
+#[test]
+fn test_messages_content_block_cache_control_ttl_forwarded_to_bedrock() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+	let req = ttl_test_request(
+		None,
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+					ttl: Some("1h".to_string()),
+				}),
+			})],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+	let content = &out.messages[0].content;
+	assert_eq!(content.len(), 2, "a Text block followed by one CachePoint");
+	match &content[1] {
+		types::bedrock::ContentBlock::CachePoint(cache_point) => {
+			assert_eq!(
+				cache_point.ttl,
+				Some(types::bedrock::CachePointTtl::OneHour)
+			);
+		},
+		other => panic!("expected a CachePoint block, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_messages_tool_cache_control_ttl_forwarded_to_bedrock() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+	let req = ttl_test_request(
+		None,
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		Some(vec![messages::Tool::Custom(messages::CustomTool {
+			name: "get_weather".to_string(),
+			description: None,
+			input_schema: serde_json::json!({ "type": "object" }),
+			strict: None,
+			cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+				ttl: Some("1h".to_string()),
+			}),
+		})]),
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+	let tools = &out.tool_config.expect("tool_config present").tools;
+	let cache_point = tools
+		.iter()
+		.find_map(|t| match t {
+			types::bedrock::Tool::CachePoint(cache_point) => Some(cache_point),
+			_ => None,
+		})
+		.expect("a cachePoint was inserted for the cache_control-marked tool");
+
+	assert_eq!(
+		cache_point.ttl,
+		Some(types::bedrock::CachePointTtl::OneHour)
+	);
+}
+
+#[test]
+fn tool_result_array_tool_reference_part_forwards_cache_control_ttl() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+
+	// A tool_result whose only content part is a `tool_reference` carrying
+	// cache_control.ttl must still forward that ttl to the inserted
+	// CachePoint, the same as the Text/Image part arms.
+	let req = ttl_test_request(
+		None,
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::ToolResult {
+				tool_use_id: "tool_1".to_string(),
+				content: messages::ToolResultContent::Array(vec![
+					messages::ToolResultContentPart::ToolReference {
+						tool_name: "mcp__example__list_widgets".to_string(),
+						cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+							ttl: Some("1h".to_string()),
+						}),
+					},
+				]),
+				cache_control: None,
+				is_error: None,
+			}],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+
+	let content = &out.messages[0].content;
+	assert_eq!(
+		content.len(),
+		2,
+		"a ToolResult block followed by one CachePoint"
+	);
+	match &content[1] {
+		types::bedrock::ContentBlock::CachePoint(cache_point) => {
+			assert_eq!(
+				cache_point.ttl,
+				Some(types::bedrock::CachePointTtl::OneHour),
+				"the tool_reference part's ttl must be forwarded to the cache point"
+			);
+		},
+		other => panic!("expected a CachePoint block, got {other:?}"),
+	}
+}
+
+#[test]
+fn tool_result_array_content_with_mixed_ttl_first_wins() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+
+	fn ephemeral(ttl: Option<&str>) -> Option<messages::CacheControlEphemeral> {
+		Some(messages::CacheControlEphemeral::Ephemeral {
+			ttl: ttl.map(str::to_string),
+		})
+	}
+
+	// Two parts carry conflicting ttls ("1h" then "5m"). Current behavior
+	// (bedrock.rs's `cache_ttl.or_else(...)` chain) is first-wins: the
+	// first part's ttl is kept and the second is silently ignored. This
+	// pins that behavior rather than asserting a documented precedence
+	// rule, since Anthropic's Messages API doesn't specify one either.
+	let req = ttl_test_request(
+		None,
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::ToolResult {
+				tool_use_id: "tool_1".to_string(),
+				content: messages::ToolResultContent::Array(vec![
+					messages::ToolResultContentPart::Text {
+						text: "part a".to_string(),
+						citations: None,
+						cache_control: ephemeral(Some("1h")),
+					},
+					messages::ToolResultContentPart::Text {
+						text: "part b".to_string(),
+						citations: None,
+						cache_control: ephemeral(Some("5m")),
+					},
+				]),
+				cache_control: None,
+				is_error: None,
+			}],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+
+	let content = &out.messages[0].content;
+	assert_eq!(
+		content.len(),
+		2,
+		"a ToolResult block followed by one CachePoint"
+	);
+	assert!(matches!(
+		&content[0],
+		types::bedrock::ContentBlock::ToolResult(_)
+	));
+	match &content[1] {
+		types::bedrock::ContentBlock::CachePoint(cache_point) => {
+			assert_eq!(
+				cache_point.ttl,
+				Some(types::bedrock::CachePointTtl::OneHour),
+				"the first part's ttl (1h) wins over the second part's (5m)"
+			);
+		},
+		other => panic!("expected a CachePoint block, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_dropped_block_cache_control_ttl_forwarded_to_folded_cache_point() {
+	use types::messages::typed as messages;
+
+	let provider = ttl_test_provider();
+
+	// WebSearchToolResult has no Bedrock equivalent and is folded into the
+	// preceding Text block's cache point (see #3759); its ttl must survive
+	// that fold instead of being dropped along with the block.
+	let req = ttl_test_request(
+		None,
+		vec![messages::Message {
+			role: messages::Role::Assistant,
+			content: vec![
+				messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: "searching...".to_string(),
+					citations: None,
+					cache_control: None,
+				}),
+				messages::ContentBlock::WebSearchToolResult {
+					tool_use_id: "search_1".to_string(),
+					content: Some(serde_json::json!([])),
+					cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+						ttl: Some("1h".to_string()),
+					}),
+				},
+			],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+
+	let content = &out.messages[0].content;
+	assert_eq!(content.len(), 2, "a Text block followed by one CachePoint");
+	match &content[1] {
+		types::bedrock::ContentBlock::CachePoint(cache_point) => {
+			assert_eq!(
+				cache_point.ttl,
+				Some(types::bedrock::CachePointTtl::OneHour),
+				"the dropped block's ttl must be forwarded to the folded cache point"
+			);
+		},
+		other => panic!("expected a CachePoint block, got {other:?}"),
+	}
+}
