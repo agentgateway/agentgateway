@@ -45,9 +45,7 @@ func WithCustomResourceCollections(f func(cfg CustomResourceCollectionsConfig)) 
 	}
 }
 
-// WithFinalStatusCollections adds a callback for constructing extension-owned final
-// status collections after the route attachment graph exists. Multiple callbacks
-// run in registration order; WithCustomResourceCollections retains its early lifecycle.
+// WithFinalStatusCollections runs during graph construction, after route attachments exist.
 func WithFinalStatusCollections(f func(FinalStatusCollectionsConfig)) AgentgatewaySyncerOption {
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {

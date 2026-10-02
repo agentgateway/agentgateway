@@ -10,7 +10,6 @@ import (
 	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -55,14 +54,14 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 			stop := test.NewStop(t)
 			opts := krtutil.NewKrtOptions(stop, nil)
 			route := &gwv1.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "route"},
+				Namespace: "default", Name: "route",
 				Spec: gwv1.HTTPRouteSpec{CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{
-					Group: ptr.Of(gwv1.Group("test.example")), Kind: ptr.Of(gwv1.Kind(tt.kind)), Name: "parent",
+					Group: ptr.Of(gwv1.Group("test.example")), Kind: new(gwv1.Kind(tt.kind)), Name: "parent",
 				}}}},
 			}
 			inputs := RouteContextInputs{
-				Services:       krt.NewStaticCollection(nil, []*corev1.Service{{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "parent"}}}),
-				ServiceEntries: krt.NewStaticCollection(nil, []*networkingclient.ServiceEntry{{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "parent"}}}),
+				Services:       krt.NewStaticCollection(nil, []*corev1.Service{{Namespace: "default", Name: "parent"}}),
+				ServiceEntries: krt.NewStaticCollection(nil, []*networkingclient.ServiceEntry{{Namespace: "default", Name: "parent"}}),
 				RouteParents: attachmentTestResolver{parent: &ParentInfo{
 					ParentGateway: tt.gateway, ServiceKey: tt.serviceKey, ListenerKey: "listener", SectionName: "http",
 					AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},

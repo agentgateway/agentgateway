@@ -142,6 +142,18 @@ type CustomResourceCollectionsConfig struct {
 	StatusCollections *status.StatusCollections
 }
 
+type FinalStatusCollectionsConfig struct {
+	ControllerName string
+	// Includes arbitration losers.
+	GatewayListeners krt.Collection[*translator.GatewayListener]
+	// Admission rejections, not arbitration conflicts.
+	RejectedListenerSets krt.Collection[RejectedListenerSet]
+	// Logical attachments, not programmed routes.
+	RouteAttachments  krt.Collection[*plugins.RouteAttachment]
+	StatusCollections *status.StatusCollections
+	KrtOpts           krtutil.KrtOptions
+}
+
 func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	// Build core collections for irs
 	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)

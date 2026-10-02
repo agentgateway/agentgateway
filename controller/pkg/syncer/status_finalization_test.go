@@ -10,7 +10,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/test"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -101,14 +100,14 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	candidates := krt.NewMutableCollection(nil, []*translator.ListenerSet{free, loser, rejected}, opts.ToOptions("test/Candidates")...)
 	resolver := &finalizationTestResolver{}
 	extensionRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "extension-route"},
+		Namespace: "default", Name: "extension-route",
 		Spec: gwv1.HTTPRouteSpec{CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{
 			Group: ptr.Of(gwv1.Group("test.example")), Kind: ptr.Of(gwv1.Kind("TestListenerResource")), Name: "extension", SectionName: ptr.Of(gwv1.SectionName("http")),
 		}}}},
 	}
 	gatewayRoute := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "gateway-route"},
-		Spec:       gwv1.HTTPRouteSpec{CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Name: "example"}}}},
+		Namespace: "default", Name: "gateway-route",
+		Spec: gwv1.HTTPRouteSpec{CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Name: "example"}}}},
 	}
 	routes := krt.NewMutableCollection(nil, []*gwv1.HTTPRoute{extensionRoute, gatewayRoute}, opts.ToOptions("test/Routes")...)
 	ctx.Collections.HTTPRoutes = routes.AsCollection()
@@ -173,7 +172,7 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	check(finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1})
 	require.Len(t, inputs.RejectedListenerSets.List(), 1)
 	require.Equal(t, gwv1.ListenerSetReasonInvalid, inputs.RejectedListenerSets.List()[0].Reason)
-	extensionKey := status.Resource{GroupVersionKind: schema.GroupVersionKind{Group: "test.example", Version: "v1", Kind: "TestListenerResource"}, NamespacedName: free.ParentObject.NamespacedName}
+	extensionKey := status.Resource{Group: "test.example", Version: "v1", Kind: "TestListenerResource", NamespacedName: free.ParentObject.NamespacedName}
 	require.Len(t, queue.statuses(extensionKey), 1)
 	require.Equal(t, finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1}, *queue.statuses(extensionKey)[0].(*finalizationTestStatus))
 	gatewayKey := status.Resource{GroupVersionKind: wellknown.GatewayGVK, NamespacedName: exampleGateway}

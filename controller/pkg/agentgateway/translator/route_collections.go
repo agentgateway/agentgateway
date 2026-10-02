@@ -1086,25 +1086,22 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind ||
-				(e.ParentGateway.Name != "" && e.ServiceKey == nil && e.ParentKey.Kind != wellknown.GatewayGVK.Kind &&
-					e.ParentKey.Kind != wellknown.ServiceGVK.Kind && e.ParentKey.Kind != wellknown.ServiceEntryGVK.Kind) {
-				return new(&plugins.RouteAttachment{
-					From:         from,
-					To:           e.ParentKey,
-					Gateway:      e.ParentGateway,
-					ListenerName: string(e.ParentSection),
-				})
-			}
-			if e.ParentGateway.Name == "" {
+			if e.ParentGateway.Name == "" && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
 				return nil
 			}
+			parent := utils.TypedNamespacedName{Kind: wellknown.GatewayGVK.Kind, NamespacedName: e.ParentGateway}
+			switch e.ParentKey.Kind {
+			case wellknown.ListenerSetGVK.Kind:
+				parent = e.ParentKey
+			case wellknown.GatewayGVK.Kind, wellknown.ServiceGVK.Kind, wellknown.ServiceEntryGVK.Kind:
+			default:
+				if e.ServiceKey == nil {
+					parent = e.ParentKey
+				}
+			}
 			return new(&plugins.RouteAttachment{
-				From: from,
-				To: utils.TypedNamespacedName{
-					Kind:           wellknown.GatewayGVK.Kind,
-					NamespacedName: e.ParentGateway,
-				},
+				From:         from,
+				To:           parent,
 				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
 			})
