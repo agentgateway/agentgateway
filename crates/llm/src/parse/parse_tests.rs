@@ -453,3 +453,40 @@ async fn test_sse_json_transform_multi_propagates_decoder_error_after_output() {
 		.expect_err("decoder error after valid output must propagate");
 	assert!(*saw_error.lock().unwrap(), "decoder error was not observed");
 }
+
+// An unterminated final event (no blank line after `data: [DONE]`) makes the decoder
+// report `UnexpectedEof`; a passthrough must still forward the bytes unmodified.
+#[tokio::test]
+async fn test_parser_forwards_unterminated_final_event() {
+	let usage = "data: {\"id\":\"c\",\"choices\":[],\"usage\":{\"total_tokens\":1}}\n\n";
+	let done = "data: [DONE]";
+
+	for body in [
+		format!("{usage}{done}"),
+		format!("{usage}{done}\n"),
+		format!("{usage}{done}\r\n"),
+	] {
+		let expected = body.clone();
+		let body = Body::from_stream(futures_util::stream::iter(vec![Ok::<_, Infallible>(
+			Bytes::copy_from_slice(body.as_bytes()),
+		)]));
+		let decoder = SseDecoder::<Bytes>::new();
+		let events = Arc::new(Mutex::new(Vec::new()));
+		let ec = events.clone();
+		let body = passthrough::parser(body, decoder, move |o| {
+			if let Frame::Event(Event::<Bytes> { data, .. }) = o {
+				ec.lock().unwrap().push(data);
+			}
+		});
+		let got = body
+			.collect()
+			.await
+			.expect("an unterminated final event must not fail the body")
+			.to_bytes();
+		assert_eq!(
+			got,
+			Bytes::copy_from_slice(expected.as_bytes()),
+			"bytes must be forwarded unmodified"
+		);
+	}
+}
