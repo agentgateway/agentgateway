@@ -21,6 +21,8 @@ serviceAccount:
 
 # -- Configure the RBAC permissions created for the controller.
 rbac:
+  # -- Create RBAC roles and bindings for the controller. Set to false when these resources are managed separately.
+  create: true
   # -- Restrict namespaced write permissions to these namespaces. The namespaces must already exist. An empty list preserves the default cluster-wide write access. Cluster-wide read permissions and writes to cluster-scoped resources are unaffected.
   # Restricting this list means only Gateways in these namespaces can be used.
   gatewayNamespaces: []

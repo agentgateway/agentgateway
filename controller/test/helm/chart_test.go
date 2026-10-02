@@ -131,6 +131,72 @@ func extractImageLines(output string) string {
 	return strings.Join(lines, "\n")
 }
 
+func TestRBACCreate(t *testing.T) {
+	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name                string
+		setArgs             []string
+		serviceAccounts     int
+		clusterRoles        int
+		roles               int
+		clusterRoleBindings int
+		roleBindings        int
+	}{
+		{
+			name:                "default",
+			serviceAccounts:     1,
+			clusterRoles:        2,
+			roles:               1,
+			clusterRoleBindings: 2,
+			roleBindings:        1,
+		},
+		{
+			name:            "rbac disabled",
+			setArgs:         []string{"--set", "rbac.create=false"},
+			serviceAccounts: 1,
+		},
+		{
+			name:         "existing service account",
+			setArgs:      []string{"--set", "serviceAccount.create=false", "--set", "serviceAccount.name=external"},
+			clusterRoles: 2,
+			roles:        1,
+		},
+		{
+			name:    "service account and rbac disabled",
+			setArgs: []string{"--set", "serviceAccount.create=false", "--set", "rbac.create=false"},
+		},
+		{
+			name:            "namespaced rbac disabled",
+			setArgs:         []string{"--set", "rbac.create=false", "--set", "rbac.gatewayNamespaces[0]=team-a", "--set", "rbac.gatewayNamespaces[1]=team-b"},
+			serviceAccounts: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append([]string{"template", "test-release", chartPath, "--namespace", "default"}, tc.setArgs...)
+			cmd := helmCommand(t, args...)
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "helm template failed: %s", output)
+
+			kindCounts := make(map[string]int)
+			for line := range strings.SplitSeq(string(output), "\n") {
+				if kind, found := strings.CutPrefix(line, "kind: "); found {
+					kindCounts[strings.TrimSpace(kind)]++
+				}
+			}
+
+			require.Equal(t, tc.serviceAccounts, kindCounts["ServiceAccount"])
+			require.Equal(t, tc.clusterRoles, kindCounts["ClusterRole"])
+			require.Equal(t, tc.roles, kindCounts["Role"])
+			require.Equal(t, tc.clusterRoleBindings, kindCounts["ClusterRoleBinding"])
+			require.Equal(t, tc.roleBindings, kindCounts["RoleBinding"])
+		})
+	}
+}
+
 // TestHelmChartTemplate tests helm template output for agentgateway charts
 // with different values configurations.
 // NOTE: The test cases contain YAML blocks that are indented with 2 spaces, do not use tabs.
@@ -573,6 +639,7 @@ controllerName: example.com/custom-agentgateway
 				want, err := os.ReadFile(absGoldenFile)
 				require.NoError(t, err, "failed to read golden file %s; run with REFRESH_GOLDEN=true to generate", absGoldenFile)
 
+				want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 				diff := cmp.Diff(string(want), string(got))
 				if diff != "" {
 					t.Errorf("helm template output differs from golden file (-want +got):\n%s\n\nTo refresh: REFRESH_GOLDEN=true go test ./test/helm", diff)
@@ -583,6 +650,7 @@ controllerName: example.com/custom-agentgateway
 }
 
 func filterHelmObjects(output []byte, kinds []string) []byte {
+	output = bytes.ReplaceAll(output, []byte("\r\n"), []byte("\n"))
 	if len(kinds) == 0 {
 		return output
 	}
