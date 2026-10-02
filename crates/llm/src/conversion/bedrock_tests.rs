@@ -2985,6 +2985,54 @@ fn tool_result_array_content_with_mixed_ttl_first_wins() {
 }
 
 #[test]
+fn tool_result_array_tool_reference_part_forwards_cache_control_ttl() {
+	use types::messages::typed as messages;
+
+	let provider = mid_system_test_provider();
+
+	// A tool_result whose only content part is a `tool_reference` carrying
+	// cache_control.ttl must still forward that ttl to the inserted
+	// CachePoint, the same as the Text/Image part arms. Previously
+	// `ToolReference` only set `has_cache_control` and left `cache_ttl`
+	// unset, so the cache point landed with no ttl and silently fell back
+	// to Bedrock's 5-minute default.
+	let req = mid_system_base_request(
+		vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::ToolResult {
+				tool_use_id: "tool_1".to_string(),
+				content: messages::ToolResultContent::Array(vec![
+					messages::ToolResultContentPart::ToolReference {
+						tool_name: "mcp__example__list_widgets".to_string(),
+						cache_control: Some(messages::CacheControlEphemeral::Ephemeral {
+							ttl: Some("1h".to_string()),
+						}),
+					},
+				]),
+				cache_control: None,
+				is_error: None,
+			}],
+		}],
+		None,
+	);
+
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+
+	let content = &out.messages[0].content;
+	assert_eq!(content.len(), 2, "a ToolResult block followed by one CachePoint");
+	match &content[1] {
+		types::bedrock::ContentBlock::CachePoint(cache_point) => {
+			assert_eq!(
+				cache_point.ttl,
+				Some(types::bedrock::CachePointTtl::OneHour),
+				"the tool_reference part's ttl must be forwarded to the cache point"
+			);
+		},
+		other => panic!("expected a CachePoint block, got {other:?}"),
+	}
+}
+
+#[test]
 fn empty_text_mid_conversation_system_message_with_cache_control_still_inserts_cache_point() {
 	use types::messages::typed as messages;
 

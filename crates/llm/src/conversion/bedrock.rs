@@ -1835,6 +1835,9 @@ pub mod from_messages {
 										cache_control,
 									} => {
 										has_cache_control |= cache_control.is_some();
+										cache_ttl = cache_ttl.or_else(|| {
+											helpers::parse_cache_point_ttl(cache_control.as_ref().and_then(|c| c.ttl()))
+										});
 										Some(bedrock::ToolResultContentBlock::Text(tool_name))
 									},
 									messages::ToolResultContentPart::Document { .. }
