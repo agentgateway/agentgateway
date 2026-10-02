@@ -90,12 +90,12 @@ function rememberGeneration(response: { generation?: number | null }) {
 }
 
 async function writeConfig<T>(path: string, init: RequestInit): Promise<T> {
-	const pin: Record<string, string> =
-		observedGeneration === null ? {} : { 'If-Match': String(observedGeneration) };
+	const headers = new Headers(init.headers);
+	if (observedGeneration !== null) headers.set('If-Match', String(observedGeneration));
 	try {
 		const response = await requestJson<T>(path, {
 			...init,
-			headers: { ...((init.headers as Record<string, string>) ?? {}), ...pin }
+			headers
 		});
 		rememberGeneration(response as { generation?: number | null });
 		return response;

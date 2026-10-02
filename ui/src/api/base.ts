@@ -45,10 +45,11 @@ export class ApiError extends Error {
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-	// `headers` last: spreading `init` after it drops Content-Type for callers that pass headers.
+	const headers = new Headers(init?.headers);
+	if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 	const response = await requestApi(path, {
 		...init,
-		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) }
+		headers
 	});
 	if (!response.ok) {
 		let message = `${response.status} ${response.statusText}`;
