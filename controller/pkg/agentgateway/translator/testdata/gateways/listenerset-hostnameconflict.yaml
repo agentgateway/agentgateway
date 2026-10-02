@@ -177,22 +177,6 @@ output:
   resource:
     listener:
       bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
-      hostname: hostname-conflict-with-gateway-listener.com
-      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-1.hostname-conflict-with-gateway-listener
-      name:
-        gatewayName: gateway-with-listenerset-hostname-conflict
-        gatewayNamespace: gateway-conformance-infra
-        listenerName: hostname-conflict-with-gateway-listener
-        listenerSet:
-          name: listenerset-with-hostname-conflict-with-gateway-1
-          namespace: gateway-conformance-infra
-      protocol: HTTP
-- gateway:
-    Name: gateway-with-listenerset-hostname-conflict
-    Namespace: gateway-conformance-infra
-  resource:
-    listener:
-      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
       hostname: hostname-conflict-with-listener-set-listener.com
       key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-1.hostname-conflict-with-listener-set-listener
       name:
@@ -225,38 +209,6 @@ output:
   resource:
     listener:
       bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
-      hostname: hostname-conflict-with-gateway-listener.com
-      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-gateway-2.hostname-conflict-with-gateway-listener
-      name:
-        gatewayName: gateway-with-listenerset-hostname-conflict
-        gatewayNamespace: gateway-conformance-infra
-        listenerName: hostname-conflict-with-gateway-listener
-        listenerSet:
-          name: listenerset-with-hostname-conflict-with-gateway-2
-          namespace: gateway-conformance-infra
-      protocol: HTTP
-- gateway:
-    Name: gateway-with-listenerset-hostname-conflict
-    Namespace: gateway-conformance-infra
-  resource:
-    listener:
-      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
-      hostname: hostname-conflict-with-listener-set-listener.com
-      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-1.hostname-conflict-with-listener-set-listener
-      name:
-        gatewayName: gateway-with-listenerset-hostname-conflict
-        gatewayNamespace: gateway-conformance-infra
-        listenerName: hostname-conflict-with-listener-set-listener
-        listenerSet:
-          name: listenerset-with-hostname-conflict-with-listener-set-1
-          namespace: gateway-conformance-infra
-      protocol: HTTP
-- gateway:
-    Name: gateway-with-listenerset-hostname-conflict
-    Namespace: gateway-conformance-infra
-  resource:
-    listener:
-      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
       hostname: listener-set-2-listener.com
       key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-1.listener-set-2-listener
       name:
@@ -265,22 +217,6 @@ output:
         listenerName: listener-set-2-listener
         listenerSet:
           name: listenerset-with-hostname-conflict-with-listener-set-1
-          namespace: gateway-conformance-infra
-      protocol: HTTP
-- gateway:
-    Name: gateway-with-listenerset-hostname-conflict
-    Namespace: gateway-conformance-infra
-  resource:
-    listener:
-      bindKey: 80/gateway-conformance-infra/gateway-with-listenerset-hostname-conflict
-      hostname: hostname-conflict-with-listener-set-listener.com
-      key: gateway-conformance-infra/listenerset-with-hostname-conflict-with-listener-set-2.hostname-conflict-with-listener-set-listener
-      name:
-        gatewayName: gateway-with-listenerset-hostname-conflict
-        gatewayNamespace: gateway-conformance-infra
-        listenerName: hostname-conflict-with-listener-set-listener
-        listenerSet:
-          name: listenerset-with-hostname-conflict-with-listener-set-2
           namespace: gateway-conformance-infra
       protocol: HTTP
 status:

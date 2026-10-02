@@ -79,6 +79,7 @@ type Syncer struct {
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	extraListenerSets           ExtraListenerSetsBuilderFunc
 	allowedListenersResolver    AllowedListenersResolver
+	listenerParentResolver      ListenerParentResolverBuilderFunc
 }
 
 func NewAgwSyncer(
@@ -108,6 +109,7 @@ func NewAgwSyncer(
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 		extraListenerSets:           cfg.ExtraListenerSets,
 		allowedListenersResolver:    cfg.AllowedListenersResolver,
+		listenerParentResolver:      cfg.ListenerParentResolver,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -570,13 +572,17 @@ func (s *Syncer) buildAgwResources(
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
-	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+	routeGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if _, isAdditionalClass := s.additionalGatewayClasses[gw.ParentInfo.ParentGatewayClassName]; isAdditionalClass {
 			return nil
 		}
-		if gw.Conflict == translator.ListenerConflictBindMode {
-			// Bind mode is selected by listener precedence. Keep the losing listener
-			// available to status reporting, but do not program it or attach routes.
+		return &gw
+	}, krtopts.ToOptions("translator/RouteGateways")...)
+
+	// Conflicted listeners retain logical route attachments, but must not receive
+	// traffic. Invalid TLS winners still program rejecting certificates, not fallback.
+	filteredGateways := krt.NewCollection(routeGateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+		if gw.Conflict != "" {
 			return nil
 		}
 		return &gw
@@ -607,7 +613,13 @@ func (s *Syncer) buildAgwResources(
 	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
-	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways)
+	if s.listenerParentResolver != nil {
+		if resolver := s.listenerParentResolver(routeGateways, krtopts); resolver != nil {
+			resolver = translator.ArbitratedParentResolver{Resolver: resolver, Listeners: routeGateways}
+			routeParents = &translator.CompositeParentResolver{Resolvers: []translator.ParentResolver{routeParents, resolver}}
+		}
+	}
 
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
