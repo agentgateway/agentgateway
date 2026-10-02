@@ -373,9 +373,33 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 		})
 	}
 
+	var activeProto *api.BackendPolicySpec_ActiveHealthCheck
+	if healthPolicy.Active != nil {
+		active := healthPolicy.Active
+		interval := durationToProto(active.Interval)
+		if interval == nil {
+			interval = durationpb.New(10 * time.Second)
+		}
+		timeout := durationToProto(active.Timeout)
+		if timeout == nil {
+			timeout = durationpb.New(3 * time.Second)
+		}
+		activeProto = &api.BackendPolicySpec_ActiveHealthCheck{
+			Path:               ptr.OrDefault(active.Path, "/health"),
+			Interval:           interval,
+			Timeout:            timeout,
+			HealthyThreshold:   uint32(ptr.OrDefault(active.HealthyThreshold, 1)),   //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+			UnhealthyThreshold: uint32(ptr.OrDefault(active.UnhealthyThreshold, 3)), //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		}
+		for _, status := range active.ExpectedStatuses {
+			activeProto.ExpectedStatuses = append(activeProto.ExpectedStatuses, uint32(status)) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		}
+	}
+
 	p := &api.BackendPolicySpec_Health{
 		UnhealthyCondition: unhealthyCondition,
 		Eviction:           evictionProto,
+		Active:             activeProto,
 	}
 	evictPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + healthPolicySuffix,

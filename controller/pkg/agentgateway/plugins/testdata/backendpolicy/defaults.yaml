@@ -11,6 +11,7 @@ spec:
   backend:
     health:
       eviction: {}
+      active: {}
     ai:
       promptCaching: {}
       promptGuard:
@@ -73,6 +74,12 @@ output:
     policy:
       backend:
         health:
+          active:
+            healthyThreshold: 1
+            interval: 10s
+            path: /health
+            timeout: 3s
+            unhealthyThreshold: 3
           eviction:
             duration: 3s
       key: default/defaults:health:default/test
