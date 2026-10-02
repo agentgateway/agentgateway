@@ -2675,47 +2675,18 @@ fn traffic_policy_from_proto(
 				.iter()
 				.enumerate()
 				.map(|(i, rule)| {
-					let mut cel = |field: &str, value: Option<&str>| {
-						value.filter(|k| !k.trim().is_empty()).map(|k| {
+					let key = rule
+						.key
+						.as_deref()
+						.filter(|k| !k.trim().is_empty())
+						.map(|k| {
 							permissive_cel_expression_arc(
 								diagnostics,
-								format!("concurrencyLimit.rules[{i}].{field}"),
+								format!("concurrencyLimit.rules[{i}].key"),
 								k,
 							)
-						})
-					};
-					let shared = rule.shared.as_ref().map(|shared| {
-						use crate::http::concurrencylimit as concurrency;
-						concurrency::SharedCounters {
-							redis: concurrency::RedisStore {
-								url: shared.redis_url.clone(),
-							},
-							lease: shared
-								.lease
-								.map(convert_duration)
-								.unwrap_or_else(concurrency::default_lease),
-							timeout: shared
-								.timeout
-								.map(convert_duration)
-								.unwrap_or_else(concurrency::default_timeout),
-							key_prefix: shared
-								.key_prefix
-								.clone()
-								.unwrap_or_else(concurrency::default_key_prefix),
-							failure_mode: match shared.failure_mode() {
-								tps::concurrency_limit::shared::FailureMode::Deny => concurrency::FailureMode::Deny,
-								tps::concurrency_limit::shared::FailureMode::Allow => {
-									concurrency::FailureMode::Allow
-								},
-							},
-						}
-					});
-					http::concurrencylimit::ConcurrencyLimit::new(
-						rule.max_concurrent,
-						cel("key", rule.key.as_deref()),
-						cel("limitOverride", rule.limit_override.as_deref()),
-					)
-					.with_shared(shared)
+						});
+					http::concurrencylimit::ConcurrencyLimit::new(rule.max_concurrent, key)
 				})
 				.collect::<Vec<_>>();
 			TrafficPolicy::ConcurrencyLimit(RequestPolicy::single(rules))

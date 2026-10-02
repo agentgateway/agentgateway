@@ -10060,13 +10060,6 @@ spec:
                               maxLength: 16384
                               minLength: 1
                               type: string
-                            limitOverride:
-                              description: |-
-                                CEL expression computing the limit for this request instead of `maxConcurrent`.
-                                It must evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.
-                              maxLength: 16384
-                              minLength: 1
-                              type: string
                             maxConcurrent:
                               description: |-
                                 Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
@@ -10074,56 +10067,6 @@ spec:
                               format: int32
                               minimum: 0
                               type: integer
-                            shared:
-                              description: |-
-                                Keeps the rule's slots in a store every proxy instance shares, so the limit holds across
-                                instances instead of once per instance.
-                              properties:
-                                failureMode:
-                                  description: |-
-                                    What happens to a request when the store cannot be reached. "FailOpen" (default) lets it
-                                    through without taking a slot. "FailClosed" rejects it with a 503.
-                                  enum:
-                                  - FailClosed
-                                  - FailOpen
-                                  type: string
-                                keyPrefix:
-                                  description: |-
-                                    Prefix of the store keys. Rules with the same settings and prefix count together, so give
-                                    gateways that must not share their slots different prefixes. Defaults to
-                                    `agentgateway:concurrency`.
-                                  maxLength: 253
-                                  minLength: 1
-                                  type: string
-                                lease:
-                                  description: |-
-                                    How long a slot stays counted without renewal. Slots are renewed while their request runs
-                                    and dropped when it ends, so this only bounds how long a slot taken by an instance that went
-                                    away is counted. Defaults to 60s.
-                                  maxLength: 32
-                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
-                                  type: string
-                                redis:
-                                  description: The Redis store that keeps the counters.
-                                  properties:
-                                    url:
-                                      description: Connection URL, such as `redis://redis.default.svc:6379/0`,
-                                        or `rediss://` for TLS.
-                                      maxLength: 2048
-                                      minLength: 1
-                                      type: string
-                                  required:
-                                  - url
-                                  type: object
-                                timeout:
-                                  description: How long a store call may take before
-                                    `failureMode` applies. Defaults to 1s.
-                                  maxLength: 32
-                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
-                                  type: string
-                              required:
-                              - redis
-                              type: object
                           required:
                           - maxConcurrent
                           type: object
@@ -10165,13 +10108,6 @@ spec:
                                         maxLength: 16384
                                         minLength: 1
                                         type: string
-                                      limitOverride:
-                                        description: |-
-                                          CEL expression computing the limit for this request instead of `maxConcurrent`.
-                                          It must evaluate to a non-negative integer; when it does not, `maxConcurrent` applies.
-                                        maxLength: 16384
-                                        minLength: 1
-                                        type: string
                                       maxConcurrent:
                                         description: |-
                                           Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
@@ -10179,59 +10115,6 @@ spec:
                                         format: int32
                                         minimum: 0
                                         type: integer
-                                      shared:
-                                        description: |-
-                                          Keeps the rule's slots in a store every proxy instance shares, so the limit holds across
-                                          instances instead of once per instance.
-                                        properties:
-                                          failureMode:
-                                            description: |-
-                                              What happens to a request when the store cannot be reached. "FailOpen" (default) lets it
-                                              through without taking a slot. "FailClosed" rejects it with a 503.
-                                            enum:
-                                            - FailClosed
-                                            - FailOpen
-                                            type: string
-                                          keyPrefix:
-                                            description: |-
-                                              Prefix of the store keys. Rules with the same settings and prefix count together, so give
-                                              gateways that must not share their slots different prefixes. Defaults to
-                                              `agentgateway:concurrency`.
-                                            maxLength: 253
-                                            minLength: 1
-                                            type: string
-                                          lease:
-                                            description: |-
-                                              How long a slot stays counted without renewal. Slots are renewed while their request runs
-                                              and dropped when it ends, so this only bounds how long a slot taken by an instance that went
-                                              away is counted. Defaults to 60s.
-                                            maxLength: 32
-                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
-                                            type: string
-                                          redis:
-                                            description: The Redis store that keeps
-                                              the counters.
-                                            properties:
-                                              url:
-                                                description: Connection URL, such
-                                                  as `redis://redis.default.svc:6379/0`,
-                                                  or `rediss://` for TLS.
-                                                maxLength: 2048
-                                                minLength: 1
-                                                type: string
-                                            required:
-                                            - url
-                                            type: object
-                                          timeout:
-                                            description: How long a store call may
-                                              take before `failureMode` applies. Defaults
-                                              to 1s.
-                                            maxLength: 32
-                                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
-                                            type: string
-                                        required:
-                                        - redis
-                                        type: object
                                     required:
                                     - maxConcurrent
                                     type: object

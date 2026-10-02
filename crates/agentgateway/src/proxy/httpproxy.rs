@@ -638,14 +638,8 @@ async fn apply_llm_request_policies(
 		);
 		let mut exec = cel::Executor::new_request(req);
 		exec.llm = cel::ExtensionOrDirect::Direct(Some(&llm_ctx));
-		let wanted: Vec<_> = limits
-			.iter()
-			.filter(|l| l.needs_llm())
-			.map(|l| (l, l.evaluate(&exec)))
-			.collect();
-		drop(exec);
-		for (limit, (key, max)) in wanted {
-			guard.hold(limit.take(key, max).await?);
+		for limit in limits.iter().filter(|l| l.needs_llm()) {
+			guard.hold(limit.take(&exec)?);
 		}
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {

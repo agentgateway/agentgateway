@@ -1780,18 +1780,6 @@ func processConcurrencyLimitTraffic(_ PolicyCtx, limits *[]agentgateway.Concurre
 		rule.Key = castCELPtr(limit.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("concurrency limit key is not a valid CEL expression: %s", expr))
 		})
-		rule.LimitOverride = castCELPtr(limit.LimitOverride, func(expr agentgateway.CELExpression) {
-			errs = append(errs, fmt.Errorf("concurrency limit limitOverride is not a valid CEL expression: %s", expr))
-		})
-		if limit.Shared != nil {
-			rule.Shared = &api.TrafficPolicySpec_ConcurrencyLimit_Shared{
-				RedisUrl:    limit.Shared.Redis.URL,
-				Lease:       durationToProto(limit.Shared.Lease),
-				Timeout:     durationToProto(limit.Shared.Timeout),
-				KeyPrefix:   limit.Shared.KeyPrefix,
-				FailureMode: sharedConcurrencyFailureMode(limit.Shared.FailureMode),
-			}
-		}
 		rules = append(rules, rule)
 	}
 	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
@@ -1799,13 +1787,6 @@ func processConcurrencyLimitTraffic(_ PolicyCtx, limits *[]agentgateway.Concurre
 			ConcurrencyLimit: &api.TrafficPolicySpec_ConcurrencyLimit{Rules: rules},
 		},
 	}}, errors.Join(errs...)
-}
-
-func sharedConcurrencyFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_ConcurrencyLimit_Shared_FailureMode {
-	if mode == agentgateway.FailClosed {
-		return api.TrafficPolicySpec_ConcurrencyLimit_Shared_DENY
-	}
-	return api.TrafficPolicySpec_ConcurrencyLimit_Shared_ALLOW
 }
 
 // processLocalRateLimitPolicy processes local rate limiting configuration

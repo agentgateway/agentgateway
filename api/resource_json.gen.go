@@ -1040,17 +1040,6 @@ func (this *TrafficPolicySpec_ConcurrencyLimit_Rule) UnmarshalJSON(b []byte) err
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for TrafficPolicySpec_ConcurrencyLimit_Shared
-func (this *TrafficPolicySpec_ConcurrencyLimit_Shared) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_ConcurrencyLimit_Shared
-func (this *TrafficPolicySpec_ConcurrencyLimit_Shared) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_LocalRateLimit
 func (this *TrafficPolicySpec_LocalRateLimit) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
