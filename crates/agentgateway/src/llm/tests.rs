@@ -166,6 +166,74 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	);
 }
 
+#[tokio::test]
+async fn bedrock_chat_cache_convention_follows_upstream_format() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	for (model, input, expected) in [
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Completions,
+			CacheTokenConvention::InputIncludesCache,
+		),
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Responses,
+			CacheTokenConvention::InputIncludesCache,
+		),
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Messages,
+			CacheTokenConvention::InputIncludesCache,
+		),
+	] {
+		let provider = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model_override: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		}));
+		let body = if input == InputFormat::Responses {
+			json!({"model": model, "input": "hello"})
+		} else {
+			json!({"model": model, "max_tokens": 64, "messages": [{"role": "user", "content": "hello"}]})
+		};
+		let req = ::http::Request::builder()
+			.body(Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap();
+		let result = match input {
+			InputFormat::Completions => {
+				provider
+					.process_completions_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			InputFormat::Responses => {
+				provider
+					.process_responses_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			InputFormat::Messages => {
+				provider
+					.process_messages_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			_ => unreachable!(),
+		};
+		let RequestResult::Success { llm_request, .. } = result.unwrap() else {
+			panic!("expected forwarded request");
+		};
+		assert_eq!(llm_request.cache_convention, expected, "{model} {input:?}");
+	}
+}
+
 // A Claude model only speaks the Anthropic Messages API on Mantle, so an inbound Chat Completions
 // request must be translated to Messages, never sent to Mantle as OpenAI Chat Completions.
 #[test]
@@ -2948,6 +3016,67 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 }
 
 #[test]
+fn setup_request_drops_inbound_query_only_when_translated() {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	for (provider, route_type, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			RouteType::Completions,
+			None,
+		),
+		(
+			AIProvider::Anthropic(anthropic::Provider {
+				model_override: None,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+		(
+			AIProvider::bedrock(bedrock::Provider {
+				model_override: None,
+				region: strng::new("us-east-1"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+	] {
+		let mut req = crate::http::tests_common::request(
+			"https://example.com/v1/messages?beta=true",
+			http::Method::POST,
+			&[],
+		);
+		provider
+			.setup_request(
+				&mut req,
+				route_type,
+				Some(&llm_request),
+				None,
+				None,
+				false,
+				None,
+				None,
+			)
+			.expect("setup_request should succeed");
+		assert_eq!(req.uri().query(), expected_query, "{route_type:?}");
+	}
+}
+
+#[test]
 fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 	// A static configured path cannot carry the model or the streaming method, so the
 	// default for the native Gemini chat format is the canonical Gemini API shape.
@@ -3152,7 +3281,7 @@ fn setup_request_gemini_native_streaming_adds_alt_sse_and_strips_client_api_keys
 	provider
 		.setup_request(
 			&mut req,
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			Some(&llm_request),
 			None,
 			None,
@@ -3221,6 +3350,7 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 		model_override: None,
 	});
 	let llm_request = LLMRequest {
+		input_format: InputFormat::Completions,
 		provider_state: None,
 		..native_gemini_llm_request("gemini-2.5-flash", false)
 	};
@@ -3285,7 +3415,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		Some("trace=repro"),
+		None,
 	);
 }
 
@@ -3996,7 +4126,7 @@ fn custom_provider_override_drives_provider_name() {
 fn vertex_anthropic_model_uses_exclusive_convention() {
 	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
 	assert_eq!(
-		cache_convention_for(&provider, None, "anthropic/claude-sonnet-4-5"),
+		cache_convention_for(&provider, None, None, "anthropic/claude-sonnet-4-5", ""),
 		CacheTokenConvention::InputExcludesCache,
 	);
 }
@@ -4005,7 +4135,7 @@ fn vertex_anthropic_model_uses_exclusive_convention() {
 fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	assert_eq!(
-		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		cache_convention_for(&provider, None, None, "gemini-2.0-flash", ""),
 		CacheTokenConvention::InputIncludesCache,
 	);
 }
@@ -4017,7 +4147,9 @@ fn custom_messages_backend_uses_exclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Messages),
-			"some-model"
+			None,
+			"some-model",
+			""
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4030,7 +4162,9 @@ fn custom_completions_backend_uses_inclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Completions),
-			"some-model"
+			None,
+			"some-model",
+			""
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -4044,7 +4178,9 @@ fn fixed_providers_classify_by_family() {
 				model_override: None
 			}),
 			None,
-			"claude-sonnet-4-5"
+			None,
+			"claude-sonnet-4-5",
+			""
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4055,10 +4191,40 @@ fn fixed_providers_classify_by_family() {
 				moderation: None,
 			}),
 			Some(custom::ProviderFormat::Completions),
-			"gpt-4o"
+			None,
+			"gpt-4o",
+			""
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
+	let bedrock = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+	}));
+	for (path, expected) in [
+		(
+			"/v1/chat/completions",
+			CacheTokenConvention::InputIncludesCache,
+		),
+		("/v1/responses", CacheTokenConvention::InputIncludesCache),
+		(
+			"/anthropic/v1/messages",
+			CacheTokenConvention::InputExcludesCache,
+		),
+		(
+			"/model/m/converse",
+			CacheTokenConvention::InputExcludesCache,
+		),
+	] {
+		assert_eq!(
+			cache_convention_for(&bedrock, None, None, "m", path),
+			expected,
+			"{path}"
+		);
+	}
 }
 
 #[test]

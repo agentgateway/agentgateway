@@ -5326,6 +5326,53 @@ spec:
                         be set
                       rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.passthrough)?1:0)+(has(self.aws)?1:0)+(has(self.azure)?1:0)+(has(self.gcp)?1:0)+(has(self.oauthTokenExchange)?1:0)+(has(self.crossAppAccess)?1:0)+(has(self.jwtSign)?1:0)
                         <= 1
+                  authorization:
+                    description: |-
+                      Authorization rules that clients must satisfy after this backend is selected.
+                      Unlike traffic authorization, this policy is evaluated against the request
+                      associated with the selected destination backend.
+                    properties:
+                      action:
+                        description: |-
+                          The effect of this rule when it matches.
+                          If unspecified, defaults to `Allow`.
+                          `Require` rules are cumulative: all require rules must match.
+                        enum:
+                        - Allow
+                        - Deny
+                        - Require
+                        type: string
+                      policy:
+                        description: |-
+                          The authorization rule to evaluate.
+
+                          * `Allow`: any matching allow rule allows the request.
+                          * `Require`: every require rule must match for the request to be allowed.
+                          * `Deny`: any matching deny rule denies the request.
+
+                          `Deny` is not recommended because expression failures fail to deny; prefer
+                          `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
+
+                          If at least one `Allow` rule is configured, requests are denied unless at
+                          least one allow rule matches.
+                        properties:
+                          matchExpressions:
+                            description: CEL expressions that must all evaluate to
+                              true for the rule to match.
+                            items:
+                              description: A Common Expression Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 256
+                            minItems: 1
+                            type: array
+                        required:
+                        - matchExpressions
+                        type: object
+                    required:
+                    - policy
+                    type: object
                   extAuth:
                     description: |-
                       External authentication configuration for requests
@@ -6691,9 +6738,10 @@ spec:
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [ai auth extAuth health http
-                    mcp sessionAffinity tcp tls transformation tunnel] must be set
-                  rule: '[has(self.ai),has(self.auth),has(self.extAuth),has(self.health),has(self.http),has(self.mcp),has(self.sessionAffinity),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [ai auth authorization extAuth
+                    health http mcp sessionAffinity tcp tls transformation tunnel]
+                    must be set
+                  rule: '[has(self.ai),has(self.auth),has(self.authorization),has(self.extAuth),has(self.health),has(self.http),has(self.mcp),has(self.sessionAffinity),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               frontend:
                 description: |-

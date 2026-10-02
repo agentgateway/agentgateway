@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { Dropdown, FieldGroup, Panel, StatusBanner } from '@/components/Primitives';
+import { ConfirmDialog, Dropdown, FieldGroup, Panel, StatusBanner } from '@/components/Primitives';
 import type { LocalUIConfig } from '@/gateway-config';
 import { useEffectiveGatewayConfig, useUpdateConfig } from '@/hooks';
 import { PolicyCatalogPage } from '@/pages/Policies';
@@ -62,10 +62,18 @@ function UiGatewayPanel() {
 	const gatewayOptions = useMemo(() => gatewayReferenceOptions(config.data), [config.data]);
 	const selectedGateway = uiGateway(config.data);
 	const [draftGateway, setDraftGateway] = useState(selectedGateway ?? noneGateway);
+	const [confirming, setConfirming] = useState(false);
 
 	useEffect(() => {
 		setDraftGateway(selectedGateway ?? noneGateway);
 	}, [selectedGateway]);
+
+	function save() {
+		setConfirming(false);
+		update.mutate(next => {
+			applyUiGateway(next);
+		});
+	}
 
 	function applyUiGateway(next: GatewayConfig) {
 		if (draftGateway === noneGateway) {
@@ -107,11 +115,7 @@ function UiGatewayPanel() {
 					saveLabel="Save UI gateway"
 					saving={update.isPending}
 					saveDisabled={!config.data || draftGateway === (selectedGateway ?? noneGateway)}
-					onSave={() =>
-						update.mutate(next => {
-							applyUiGateway(next);
-						})
-					}
+					onSave={() => (selectedGateway ? setConfirming(true) : save())}
 					applyDiff={applyUiGateway}
 				/>
 			</div>
@@ -126,6 +130,30 @@ function UiGatewayPanel() {
 				</StatusBanner>
 			) : null}
 			{update.isSuccess ? <StatusBanner state="ok" title="Gateway saved" /> : null}
+			{confirming ? (
+				<ConfirmDialog
+					title="Change UI gateway?"
+					destructive
+					confirmLabel="Save UI gateway"
+					onCancel={() => setConfirming(false)}
+					onConfirm={save}
+				>
+					<p>
+						The UI will no longer be served on <strong>{selectedGateway}</strong>. If you are
+						accessing the UI through that gateway, you will lose access to this page.
+					</p>
+					{draftGateway === noneGateway ? (
+						<p>
+							The UI will only be reachable on the admin interface, which listens on localhost by
+							default and may not be reachable when running in a container.
+						</p>
+					) : (
+						<p>
+							The UI will be served on <strong>{draftGateway}</strong> instead.
+						</p>
+					)}
+				</ConfirmDialog>
+			) : null}
 		</Panel>
 	);
 }

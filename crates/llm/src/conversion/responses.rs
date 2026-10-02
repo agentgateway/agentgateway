@@ -169,7 +169,8 @@ pub mod from_messages {
 		req: &types::messages::Request,
 	) -> Result<types::responses::Request, AIError> {
 		validate_raw_request(req)?;
-		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json_util::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let messages::Request {
 			messages,
 			system,
@@ -199,7 +200,9 @@ pub mod from_messages {
 		}
 
 		let output_config = output_config.unwrap_or_default();
-		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort) {
+		if crate::conversion::supports_reasoning_effort(&model)
+			&& let Some(reasoning) = translate_reasoning(thinking, output_config.effort)
+		{
 			rest.insert(
 				"reasoning".to_string(),
 				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
@@ -730,8 +733,16 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.input_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	fn translate_response_internal(
@@ -775,10 +786,11 @@ pub mod from_messages {
 										};
 										// Responses provides a source link, not the source excerpt or
 										// Anthropic's opaque replay index. Do not fabricate either.
+										let citation = serde_json::to_value(citation).ok()?;
 										Some(json!({
 											"type": "web_search_result_location",
-											"url": citation.url,
-											"title": citation.title,
+											"url": citation["url"],
+											"title": citation["title"],
 											"cited_text": "",
 											"encrypted_index": "",
 										}))
@@ -1518,8 +1530,16 @@ pub mod from_messages {
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: error_type(failed.response.error.as_ref().map(|e| e.code.as_str()))
-										.to_string(),
+									r#type: error_type(
+										failed
+											.response
+											.error
+											.as_ref()
+											.and_then(|e| serde_json::to_value(&e.code).ok())
+											.as_ref()
+											.and_then(Value::as_str),
+									)
+									.to_string(),
 									message: failed
 										.response
 										.error

@@ -166,7 +166,15 @@ fn test_path_matching() {
 		("prefix-path", PathMatch::PathPrefix("/api/".into())),
 		(
 			"regex-path",
-			PathMatch::Regex(Regex::new(r"^/api/v\d+/users$").unwrap()),
+			PathMatch::Regex(PathMatch::regex(r"/api/v\d+/users").unwrap()),
+		),
+		(
+			"regex-alternation",
+			PathMatch::Regex(PathMatch::regex(r"/alt/(Get|GetUser)").unwrap()),
+		),
+		(
+			"regex-lazy",
+			PathMatch::Regex(PathMatch::regex(r"/lazy/.*?").unwrap()),
 		),
 		("root-prefix", PathMatch::PathPrefix("/".into())),
 	];
@@ -232,6 +240,31 @@ fn test_path_matching() {
 			path: "/api/v3/users",
 			expected_route: Some("regex-path"),
 		},
+		TestCase {
+			name: "regex path must match the whole path",
+			path: "/api/v3/users/123",
+			expected_route: Some("prefix-path"),
+		},
+		TestCase {
+			name: "regex alternation matches first option",
+			path: "/alt/Get",
+			expected_route: Some("regex-alternation"),
+		},
+		TestCase {
+			name: "regex alternation matches longer option",
+			path: "/alt/GetUser",
+			expected_route: Some("regex-alternation"),
+		},
+		TestCase {
+			name: "regex alternation does not match a longer path",
+			path: "/alt/GetUserX",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "regex lazy quantifier matches the whole path",
+			path: "/lazy/abc",
+			expected_route: Some("regex-lazy"),
+		},
 		// Test root prefix fallback
 		TestCase {
 			name: "root prefix fallback",
@@ -270,6 +303,18 @@ fn test_path_matching() {
 			case.name
 		);
 	}
+}
+
+#[test]
+fn test_path_regex() {
+	// An unbalanced pattern must not be able to close the anchoring group.
+	assert!(PathMatch::regex(r"/a)|(/b").is_err());
+	// Config dumps show the pattern as configured.
+	let pm = PathMatch::Regex(PathMatch::regex(r"/alt/(Get|GetUser)").unwrap());
+	assert_eq!(
+		serde_json::to_value(&pm).unwrap(),
+		serde_json::json!({"regex": "/alt/(Get|GetUser)"})
+	);
 }
 
 #[test]

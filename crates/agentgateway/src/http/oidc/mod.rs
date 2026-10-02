@@ -18,6 +18,7 @@ mod callback;
 mod local;
 mod provider;
 mod redirect;
+mod refresh;
 mod session;
 
 #[cfg(test)]
@@ -26,8 +27,8 @@ mod tests;
 pub use local::{LocalOidcConfig, OidcLogin, OidcLogout};
 pub use redirect::RedirectUri;
 pub use session::{
-	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
-	TransactionState,
+	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, RefreshSession, SameSiteMode,
+	SessionConfig, TransactionState,
 };
 
 pub use crate::http::oauth::TokenEndpointAuth;
@@ -140,6 +141,8 @@ pub struct OidcPolicy {
 	pub redirect_uri: RedirectUri,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
+	#[serde(skip)]
+	refresh_cache: refresh::RefreshCache,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -168,7 +171,7 @@ pub enum Error {
 	InvalidSession,
 	#[error("authentication required")]
 	AuthenticationRequired,
-	#[error("encoded browser session exceeds cookie size budget")]
+	#[error("encoded oidc session exceeds cookie size budget")]
 	SessionCookieTooLarge,
 	#[error("missing transaction")]
 	MissingTransaction,
@@ -180,6 +183,8 @@ pub enum Error {
 	CsrfMismatch,
 	#[error("token exchange failed")]
 	TokenExchangeFailed(#[source] anyhow::Error),
+	#[error("token endpoint rejected credentials")]
+	TokenEndpointRejected(#[source] anyhow::Error),
 	#[error("missing id token")]
 	MissingIdToken,
 	#[error("invalid id token: {0}")]
@@ -194,6 +199,19 @@ pub enum Error {
 	Config(String),
 	#[error("{0}")]
 	Http(#[from] anyhow::Error),
+}
+
+impl Error {
+	fn is_terminal_refresh_failure(&self) -> bool {
+		matches!(
+			self,
+			Self::TokenEndpointRejected(_)
+				| Self::MissingIdToken
+				| Self::InvalidIdToken(_)
+				| Self::InvalidSession
+				| Self::SessionCookieTooLarge
+		)
+	}
 }
 
 struct CallbackQuery {
@@ -217,10 +235,13 @@ impl OidcPolicy {
 			return Ok(PolicyResponse::default());
 		}
 
+		let mut clear_refresh_cookie = false;
 		if let Some(cookie) = crate::http::read_request_cookie(req, &self.session.cookie_name) {
-			match self.session.decode_browser_session(&cookie) {
+			match self.session.decode_browser_session_for_refresh(&cookie) {
 				Ok(browser_session) => {
-					if browser_session.policy_id == self.policy_id
+					if browser_session.policy_id != self.policy_id {
+						debug!("oidc browser session rejected due to policy mismatch");
+					} else if !browser_session.is_expired()
 						&& let Ok(claims) = self
 							.provider
 							.id_token_validator
@@ -246,6 +267,37 @@ impl OidcPolicy {
 						});
 						req.extensions_mut().insert(claims);
 						return Ok(PolicyResponse::default());
+					} else {
+						match self
+							.refresh_browser_session(req, browser_session, client)
+							.await
+						{
+							Ok(Some((claims, response))) => {
+								if let Some(Value::String(sub)) = claims.inner.get("sub") {
+									log.jwt_sub = Some(sub.clone());
+								}
+								if self
+									.login
+									.as_ref()
+									.is_some_and(|login| req.uri().path() == login.path)
+								{
+									return Ok(response.with_response(build_redirect_response(
+										&self.return_target(req.uri()),
+										&[],
+									)?));
+								}
+								req.extensions_mut().insert(AuthenticatedSession {
+									can_logout: self.logout.is_some(),
+								});
+								req.extensions_mut().insert(claims);
+								return Ok(response);
+							},
+							Ok(None) => {},
+							Err(err) => {
+								clear_refresh_cookie = err.is_terminal_refresh_failure();
+								debug!(error=%err, "failed to refresh oidc browser session");
+							},
+						}
 					}
 				},
 				Err(err) => {
@@ -265,20 +317,23 @@ impl OidcPolicy {
 			.login
 			.as_ref()
 			.and_then(|login| login.redirect.as_deref());
-		if non_navigation {
-			if let Some(destination) = login_redirect {
-				let response = ::http::Response::builder()
-					.status(StatusCode::UNAUTHORIZED)
-					.header(header::LOCATION, destination)
-					.header(header::CACHE_CONTROL, "no-store")
-					.body(Body::empty())
-					.map_err(|e| Error::Config(e.to_string()))?;
-				return Ok(PolicyResponse::default().with_response(response));
+		let mut response = if non_navigation {
+			if !clear_refresh_cookie && login_redirect.is_none() {
+				return Err(Error::AuthenticationRequired);
 			}
-			return Err(Error::AuthenticationRequired);
-		}
-
-		if let Some(login) = &self.login
+			let mut response = crate::proxy::ProxyError::OidcFailure(Error::AuthenticationRequired)
+				.into_response_with_grpc(crate::http::is_grpc_request(req));
+			if let Some(destination) = login_redirect {
+				response.headers_mut().insert(
+					header::LOCATION,
+					HeaderValue::from_str(destination).map_err(|e| Error::Config(e.to_string()))?,
+				);
+				response
+					.headers_mut()
+					.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+			}
+			PolicyResponse::default().with_response(response)
+		} else if let Some(login) = &self.login
 			&& let Some(destination) = &login.redirect
 			&& req.uri().path() != login.path
 			&& let Ok(mut destination) = destination.parse::<http::Uri>()
@@ -294,14 +349,23 @@ impl OidcPolicy {
 				)],
 				std::iter::empty::<&str>(),
 			)?;
-			return Ok(
-				PolicyResponse::default()
-					.with_response(build_redirect_response(&destination.to_string(), &[])?),
+			PolicyResponse::default()
+				.with_response(build_redirect_response(&destination.to_string(), &[])?)
+		} else {
+			// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
+			callback::start_login(self, req)?
+		};
+		if clear_refresh_cookie {
+			let cookie = self
+				.session
+				.clear_cookie(&self.session.refresh_cookie_name, self.redirect_uri.https);
+			response.response_headers.get_or_insert_default().append(
+				header::SET_COOKIE,
+				HeaderValue::from_str(&cookie)
+					.map_err(|e| Error::Config(format!("invalid set-cookie header: {e}")))?,
 			);
 		}
-
-		// OIDC is an interactive browser policy: unauthenticated non-callback requests enter login.
-		callback::start_login(self, req)
+		Ok(response)
 	}
 
 	async fn maybe_handle_callback(

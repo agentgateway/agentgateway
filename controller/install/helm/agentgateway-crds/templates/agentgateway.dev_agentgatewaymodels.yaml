@@ -5196,10 +5196,12 @@ spec:
                 - Gemini
                 - Groq
                 - Huggingface
+                - Meta
                 - Mistral
                 - Ollama
                 - OpenAI
                 - Openrouter
+                - Perplexity
                 - TogetherAI
                 - VertexAI
                 - XAI

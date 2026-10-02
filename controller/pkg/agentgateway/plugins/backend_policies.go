@@ -27,19 +27,20 @@ import (
 )
 
 const (
-	aiPolicySuffix                = ":ai"
-	backendTlsPolicySuffix        = ":backend-tls"
-	backendTcpPolicySuffix        = ":backend-tcp"
-	backendTunnelPolicySuffix     = ":backend-tunnel"
-	backendauthPolicySuffix       = ":backend-auth"
-	backendTransformationSuffix   = ":backend-transformation"
-	tlsPolicySuffix               = ":tls"
-	backendHttpPolicySuffix       = ":backend-http"
-	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
-	mcpAuthenticationPolicySuffix = ":mcp-authentication"
-	mcpGuardrailsPolicySuffix     = ":mcp-guardrails"
-	healthPolicySuffix            = ":health"
-	sessionAffinityPolicySuffix   = ":session-affinity"
+	aiPolicySuffix                   = ":ai"
+	backendTlsPolicySuffix           = ":backend-tls"
+	backendTcpPolicySuffix           = ":backend-tcp"
+	backendTunnelPolicySuffix        = ":backend-tunnel"
+	backendauthPolicySuffix          = ":backend-auth"
+	backendAuthorizationPolicySuffix = ":backend-authorization"
+	backendTransformationSuffix      = ":backend-transformation"
+	tlsPolicySuffix                  = ":tls"
+	backendHttpPolicySuffix          = ":backend-http"
+	mcpAuthorizationPolicySuffix     = ":mcp-authorization"
+	mcpAuthenticationPolicySuffix    = ":mcp-authentication"
+	mcpGuardrailsPolicySuffix        = ":mcp-guardrails"
+	healthPolicySuffix               = ":health"
+	sessionAffinityPolicySuffix      = ":session-affinity"
 )
 
 func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessionTag {
@@ -188,6 +189,10 @@ func translateBackendPolicyToAgw(
 		appendPolicy("backendTransformation")(translateBackendTransformation(policy))
 	}
 
+	if backend.Authorization != nil {
+		appendPolicy("backendAuthorization")(translateBackendAuthorization(policy))
+	}
+
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
 			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy))
@@ -215,6 +220,32 @@ func translateBackendPolicyToAgw(
 	}
 
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translateBackendAuthorization(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+	backend := policy.Spec.Backend
+	if backend == nil || backend.Authorization == nil {
+		return nil, nil
+	}
+
+	authorization, err := TranslateAuthorization(backend.Authorization)
+	backendPolicy := &api.Policy{
+		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + backendAuthorizationPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Authorization{
+					Authorization: authorization,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated backend authorization policy",
+		"policy", policy.Name,
+		"agentgateway_policy", backendPolicy.Name)
+
+	return backendPolicy, err
 }
 
 func translateBackendExtAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {

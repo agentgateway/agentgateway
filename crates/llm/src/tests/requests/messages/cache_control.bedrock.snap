@@ -253,6 +253,9 @@ info:
               ],
               "status": null
             }
+          },
+          {
+            "text": "<system-reminder>\nSystem-role block\n</system-reminder>"
           }
         ]
       }
@@ -269,9 +272,6 @@ info:
           "ttl": "1h",
           "type": "default"
         }
-      },
-      {
-        "text": "System-role block"
       }
     ],
     "inferenceConfig": {

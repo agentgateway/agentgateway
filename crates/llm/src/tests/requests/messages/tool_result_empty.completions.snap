@@ -31,7 +31,7 @@ info:
           tool_use_id: toolu_01
 ---
 {
-  "error": "failed to marshal request: missing field `content`",
+  "error": "failed to parse Messages request: missing field `content`",
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",

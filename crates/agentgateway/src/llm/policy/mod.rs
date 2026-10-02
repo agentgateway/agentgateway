@@ -497,6 +497,10 @@ struct TextRequest {
 }
 
 impl crate::llm::RequestType for TextRequest {
+	fn input_format() -> crate::llm::InputFormat {
+		crate::llm::InputFormat::Realtime
+	}
+
 	// No request body is ever rendered from this.
 	fn body_is_json(&self) -> bool {
 		false
@@ -773,28 +777,29 @@ impl Policy {
 		self.defaults.is_some() || self.overrides.is_some() || self.transformations.is_some()
 	}
 
-	pub fn unmarshal_request<T: DeserializeOwned>(
+	pub fn unmarshal_request<T: RequestType + DeserializeOwned>(
 		&self,
 		bytes: &Bytes,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<T, AIError> {
 		if !self.has_request_body_mutations() {
 			// Fast path: directly bytes to typed
-			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
+			return serde_json::from_slice(bytes.as_ref())
+				.map_err(|err| AIError::RequestParsing(T::input_format(), err));
 		}
 		// Slow path: bytes --> json (transform) --> typed
-		let v: serde_json::Value =
-			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		let v: serde_json::Value = serde_json::from_slice(bytes.as_ref())
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 		self.unmarshal_request_value(v, log)
 	}
 
-	pub fn unmarshal_request_value<T: DeserializeOwned>(
+	pub fn unmarshal_request_value<T: RequestType + DeserializeOwned>(
 		&self,
 		v: serde_json::Value,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<T, AIError> {
 		let v = self.apply_request_body_mutations(v, log)?;
-		serde_json::from_value(v).map_err(AIError::RequestParsing)
+		serde_json::from_value(v).map_err(|err| AIError::RequestParsing(T::input_format(), err))
 	}
 
 	pub fn apply_request_body_mutations(
@@ -849,7 +854,7 @@ impl Policy {
 			return Ok(body);
 		}
 		let v: serde_json::Value =
-			serde_json::from_slice(body.as_slice()).map_err(AIError::RequestParsing)?;
+			serde_json::from_slice(body.as_slice()).map_err(AIError::RequestMarshal)?;
 		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_deref()), &v);
 		let to_set: Vec<_> = self
 			.final_transformations
@@ -2639,9 +2644,12 @@ fn test_unmarshal_request_with_transformation_policy() {
 	};
 
 	let input = Bytes::from_static(br#"{"model":"provider/model","max_tokens":999}"#);
-	let out: serde_json::Value = policy
+	let crate::llm::types::detect::Request::Json(out) = policy
 		.unmarshal_request(&input, &mut None)
-		.expect("request should unmarshal");
+		.expect("request should unmarshal")
+	else {
+		panic!("expected json request");
+	};
 
 	assert_eq!(out.get("model"), Some(&json!("model")));
 	assert_eq!(out.get("max_tokens"), Some(&json!(50)));

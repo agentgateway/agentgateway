@@ -170,6 +170,17 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1.TCPRouteRule,
 	return res, backendErr
 }
 
+// trimRegexAnchors strips a leading ^ and trailing $ from a field regex. The service and method regexes are
+// anchored to their own field, but are embedded in a larger path regex where the anchors would never match.
+// The path regex is already full-match, so the anchors are redundant.
+func trimRegexAnchors(re string) string {
+	re = strings.TrimPrefix(re, "^")
+	if strings.HasSuffix(re, "$") && !strings.HasSuffix(re, `\$`) {
+		re = strings.TrimSuffix(re, "$")
+	}
+	return re
+}
+
 // ConvertGRPCRouteToAgw converts a GRPCRouteRule to an agentgateway HTTPRoute
 func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 	obj *gwv1.GRPCRoute, pos int,
@@ -193,12 +204,22 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 		var path *api.PathMatch
 		if match.Method != nil {
 			// Convert GRPC method to path for routing purposes
-			if match.Method.Service != nil && match.Method.Method != nil {
+			if ptr.OrEmpty(match.Method.Type) == gwv1.GRPCMethodMatchRegularExpression {
+				// An omitted service or method matches any single path segment
+				service, method := "[^/]+", "[^/]+"
+				if match.Method.Service != nil {
+					service = "(?:" + trimRegexAnchors(*match.Method.Service) + ")"
+				}
+				if match.Method.Method != nil {
+					method = "(?:" + trimRegexAnchors(*match.Method.Method) + ")"
+				}
+				path = &api.PathMatch{Kind: &api.PathMatch_Regex{Regex: "/" + service + "/" + method}}
+			} else if match.Method.Service != nil && match.Method.Method != nil {
 				pathStr := fmt.Sprintf("/%s/%s", *match.Method.Service, *match.Method.Method)
 				path = &api.PathMatch{Kind: &api.PathMatch_Exact{Exact: pathStr}}
 			} else if match.Method.Service != nil {
 				pathStr := fmt.Sprintf("/%s/", *match.Method.Service)
-				path = &api.PathMatch{Kind: &api.PathMatch_Exact{Exact: pathStr}}
+				path = &api.PathMatch{Kind: &api.PathMatch_PathPrefix{PathPrefix: pathStr}}
 			} else if match.Method.Method != nil {
 				// Convert wildcard to regex: "/*/{method}" becomes "/[^/]+/{method}"
 				pathStr := fmt.Sprintf("/[^/]+/%s", *match.Method.Method)
@@ -399,7 +420,7 @@ func BuildAgwTrafficPolicyFilters(
 			if h == nil {
 				continue
 			}
-			policies = append(policies, h)
+			policies = append(policies, &api.TrafficPolicySpec{Kind: &api.TrafficPolicySpec_UrlRewrite{UrlRewrite: h}})
 		case gwv1.HTTPRouteFilterCORS:
 			h := createAgwCorsFilter(filter.CORS)
 			if h == nil {
@@ -499,6 +520,12 @@ func BuildAgwBackendPolicyFilters(
 			} else {
 				mergedMirror = append(mergedMirror, h)
 			}
+		case gwv1.HTTPRouteFilterURLRewrite:
+			h := CreateAgwRewriteFilter(filter.URLRewrite)
+			if h == nil {
+				continue
+			}
+			policies = append(policies, &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_UrlRewrite{UrlRewrite: h}})
 		default:
 			return nil, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionAccepted,

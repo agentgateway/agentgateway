@@ -1,0 +1,101 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-method-match-types
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - matches:
+        - method:
+            service: grpc.health.v1.Health
+        - method:
+            method: Check
+        - method:
+            type: RegularExpression
+            service: example\.v[0-9]+\.Service
+            method: Get.*
+        - method:
+            type: RegularExpression
+            service: foo\.(Bar|Baz)
+        - method:
+            type: RegularExpression
+            method: List.*
+        - method:
+            type: RegularExpression
+            service: ^grpc\.health\.v1\.Health$
+            method: ^Check$
+      backendRefs:
+        - name: grpc-service
+          port: 9090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-service
+  namespace: default
+spec:
+  ports:
+    - port: 9090
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 9090
+          service:
+            hostname: grpc-service.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/grpc-method-match-types.00.grpc.http
+      listenerKey: default/test-gateway.http
+      matches:
+      - path:
+          pathPrefix: /grpc.health.v1.Health/
+      - path:
+          regex: /[^/]+/Check
+      - path:
+          regex: /(?:example\.v[0-9]+\.Service)/(?:Get.*)
+      - path:
+          regex: /(?:foo\.(Bar|Baz))/[^/]+
+      - path:
+          regex: /[^/]+/(?:List.*)
+      - path:
+          regex: /(?:grpc\.health\.v1\.Health)/(?:Check)
+      name:
+        kind: GRPCRoute
+        name: grpc-method-match-types
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: GRPCRoute
+  metadata:
+    name: grpc-method-match-types
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

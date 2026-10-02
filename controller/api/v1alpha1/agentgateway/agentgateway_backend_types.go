@@ -675,6 +675,9 @@ type McpTargetSelector struct {
 	Name gwv1.SectionName `json:"name"`
 
 	// Label selector used to select `Service` resources.
+	// Selected `Service` ports must set `appProtocol: agentgateway.dev/mcp` for
+	// streamable HTTP or `appProtocol: agentgateway.dev/mcp-sse` for SSE. Ports
+	// without a recognized MCP `appProtocol` value are ignored.
 	// If policies are needed on a per-service basis, `AgentgatewayPolicy` can
 	// target the desired `Service`.
 	// +optional

@@ -18,6 +18,10 @@ spec:
       - name: openai-gpt4
         openai: {}
         policies:
+          authorization:
+            policy:
+              matchExpressions:
+              - 'request.headers["x-tenant"] == "acme"'
           ai:
             modelAliases:
               fast: gpt-5-nano
@@ -101,6 +105,10 @@ spec:
   policies:
     http:
       version: HTTP2
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-tenant"] == "acme"'
   static:
     host: example.com
     port: 443

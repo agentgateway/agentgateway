@@ -471,6 +471,7 @@ func translateAIBackendPolicies(
 	}
 	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
 		BackendSimple:  policies.BackendSimple,
+		Authorization:  policies.Authorization,
 		AI:             policies.AI,
 		Transformation: policies.Transformation,
 		Health:         policies.Health,

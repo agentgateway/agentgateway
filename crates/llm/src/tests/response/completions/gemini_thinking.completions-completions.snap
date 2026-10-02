@@ -1,0 +1,58 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_thinking.json
+info:
+  choices:
+    - finish_reason: stop
+      index: 0
+      logprobs: ~
+      message:
+        content: Neptune was found by mathematics.
+        role: assistant
+  created: 1775595257
+  id: 9W7VaabzK7KPjMcPnYGiuAU
+  model: google/gemini-3.8-flash
+  object: chat.completion
+  system_fingerprint: ""
+  usage:
+    completion_tokens: 30
+    completion_tokens_details:
+      reasoning_tokens: 20
+    prompt_tokens: 19
+    total_tokens: 69
+---
+{
+  "response": {
+    "model": "google/gemini-3.8-flash",
+    "usage": {
+      "prompt_tokens": 19,
+      "completion_tokens": 30,
+      "total_tokens": 69,
+      "completion_tokens_details": {
+        "reasoning_tokens": 20
+      }
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "Neptune was found by mathematics.",
+          "role": "assistant"
+        },
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null
+      }
+    ],
+    "created": "[date]",
+    "id": "[id]",
+    "object": "chat.completion",
+    "system_fingerprint": ""
+  },
+  "parsed": {
+    "input_tokens": 19,
+    "output_tokens": 50,
+    "total_tokens": 69,
+    "reasoning_tokens": 20,
+    "provider_model": "google/gemini-3.8-flash"
+  }
+}

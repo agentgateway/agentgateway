@@ -557,8 +557,8 @@ pub enum AIError {
 	ResponseTooLarge,
 	#[error("prompt guard failed")]
 	PromptWebhookError,
-	#[error("failed to parse request: {0}")]
-	RequestParsing(serde_json::Error),
+	#[error("failed to parse {0:?} request: {1}")]
+	RequestParsing(InputFormat, serde_json::Error),
 	#[error("failed to marshal request: {0}")]
 	RequestMarshal(serde_json::Error),
 	#[error("failed to parse response: {0}")]

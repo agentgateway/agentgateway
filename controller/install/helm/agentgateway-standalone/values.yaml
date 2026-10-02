@@ -184,6 +184,7 @@ extraVolumeMounts: []
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
+  # -- Takes precedence over minAvailable when set to a non-zero number or non-empty string.
   maxUnavailable: ""
   # -- UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction
   unhealthyPodEvictionPolicy: ""

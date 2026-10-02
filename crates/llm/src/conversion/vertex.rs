@@ -117,7 +117,7 @@ pub mod from_embeddings {
 		provider: &crate::vertex::Provider,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
-			.map_err(AIError::RequestMarshal)?;
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Embeddings, err))?;
 		let params = Params::extract(req, &typed);
 
 		if provider.uses_embed_content(&typed.model) {
@@ -176,9 +176,12 @@ pub mod from_embeddings {
 		// variant, and extra parts would silently collapse into a single vector.
 		let mut inputs = typed.input.as_strings();
 		if inputs.len() != 1 {
-			return Err(AIError::RequestParsing(serde::de::Error::custom(
-				"Vertex embedContent does not support batching; `input` must contain exactly one string",
-			)));
+			return Err(AIError::RequestParsing(
+				crate::InputFormat::Embeddings,
+				serde::de::Error::custom(
+					"Vertex embedContent does not support batching; `input` must contain exactly one string",
+				),
+			));
 		}
 
 		let Params {

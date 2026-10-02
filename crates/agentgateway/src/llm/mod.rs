@@ -253,14 +253,33 @@ impl AIProvider {
 /// Classify how the upstream reports cached tokens, from the source wire format the
 /// gateway is about to parse — not the provider name, which can carry another
 /// provider's native semantics (e.g. Vertex serving Anthropic models).
+///
+/// For chat, `chat_output` decides: `provider_format` echoes the client format for Bedrock
+/// Converse, so it can't distinguish Converse from Mantle's OpenAI APIs.
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
+	chat_output: Option<ChatFormat>,
 	request_model: &str,
+	path: &str,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	if let Some(output) = chat_output {
+		return match output {
+			ChatFormat::AnthropicMessages | ChatFormat::BedrockConverse => InputExcludesCache,
+			ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses | ChatFormat::VertexGemini => {
+				InputIncludesCache
+			},
+		};
+	}
 	match provider {
+		// Detect passthrough to Mantle's OpenAI APIs.
+		AIProvider::Bedrock(_)
+			if path.ends_with("/chat/completions") || path.ends_with("/responses") =>
+		{
+			InputIncludesCache
+		},
 		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
 		AIProvider::Copilot(_) if copilot::Provider::is_anthropic_model(request_model) => {
 			InputExcludesCache
@@ -536,7 +555,7 @@ impl ChatTranslation {
 			ChatFormat::AnthropicMessages => custom::ProviderFormat::Messages,
 			ChatFormat::BedrockConverse => match self.input {
 				// Bedrock chat always renders to Converse. This format is only used for
-				// shared bookkeeping (route type, cache convention, custom-style labels);
+				// shared bookkeeping (route type, custom-style labels);
 				// Bedrock path setup ignores these chat distinctions for Converse.
 				InputFormat::Completions => custom::ProviderFormat::Completions,
 				InputFormat::Messages => custom::ProviderFormat::Messages,
@@ -1303,6 +1322,31 @@ impl AIProvider {
 			return Ok(());
 		}
 
+		// The client's query belongs to the inbound API format (e.g. Anthropic's `?beta=true`), so
+		// drop it once the request is translated to another format; strict upstreams like Google
+		// reject unknown parameters. Bedrock Runtime always speaks its own APIs (Converse, etc), even
+		// though its route type mirrors the input format; Mantle serves the native formats.
+		let translated = llm_request.is_some_and(|l| {
+			if matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Runtime)) {
+				return true;
+			}
+			let same_format = match l.input_format {
+				InputFormat::Completions => RouteType::Completions,
+				InputFormat::Messages => RouteType::Messages,
+				InputFormat::Responses => RouteType::Responses,
+				InputFormat::Gemini => RouteType::GenerateContent,
+				_ => return false,
+			};
+			route_type != same_format
+		});
+		if translated {
+			http::modify_req_uri(req, |uri| {
+				let path = uri.path_and_query.as_ref().map_or("/", |p| p.path());
+				uri.path_and_query = Some(PathAndQuery::try_from(path)?);
+				Ok(())
+			})?;
+		}
+
 		// Native Gemini paths carry their own `?alt=sse` (see `native_gemini_path`) while the
 		// client's query is preserved alongside, so a client-sent `alt` would arrive upstream
 		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
@@ -1998,7 +2042,8 @@ impl AIProvider {
 			{
 				p.unmarshal_request(&bytes, log)
 			} else {
-				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
+				serde_json::from_slice(bytes.as_ref())
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
 			}
 			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else {
@@ -2137,6 +2182,7 @@ impl AIProvider {
 		req: &mut impl RequestType,
 		parts: &mut Parts,
 		provider_format: Option<custom::ProviderFormat>,
+		chat_output: Option<ChatFormat>,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<PreparedRequest, AIError> {
@@ -2175,8 +2221,13 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		llm_info.cache_convention = cache_convention_for(
+			self,
+			provider_format,
+			chat_output,
+			&llm_info.request_model,
+			parts.uri.path(),
+		);
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()
 		{
@@ -2234,6 +2285,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				Some(provider_format),
+				Some(chat_translation.output),
 				tokenize,
 				log,
 			)
@@ -2321,6 +2373,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				provider_format,
+				None,
 				tokenize,
 				log,
 			)
@@ -3068,7 +3121,7 @@ impl AIProvider {
 				Some(json::ParsedJson(value)) => serde_json::from_value(value),
 				None => serde_json::from_slice(&bytes),
 			}
-			.map_err(AIError::RequestParsing)?;
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 			let model = req.model();
 			if model.as_deref().is_none() {
 				return Err(AIError::MissingField("model not specified".into()));
@@ -3078,7 +3131,8 @@ impl AIProvider {
 
 		let mut request = match cached {
 			Some(json::ParsedJson(value)) => value,
-			None => serde_json::from_slice(&bytes).map_err(AIError::RequestParsing)?,
+			None => serde_json::from_slice(&bytes)
+				.map_err(|err| AIError::RequestParsing(T::input_format(), err))?,
 		};
 		self.set_provider_request_model(&parts, &mut request, path_model_wins)?;
 		let mut request = if let Some(p) = policies {
@@ -3087,7 +3141,8 @@ impl AIProvider {
 			request
 		};
 		self.finalize_request_model(&mut request)?;
-		let req: T = serde_json::from_value(request).map_err(AIError::RequestParsing)?;
+		let req: T = serde_json::from_value(request)
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 
 		Ok((parts, managed_body, req))
 	}

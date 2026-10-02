@@ -283,7 +283,7 @@ function step_preload_images() {(
 
 function step_warm_test() {
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec="${REPO_ROOT}/tools/go-compile-without-link" -vet=off ./controller/test/e2e
+    CGO_ENABLED=0 go test -trimpath -tags=e2e,agent,disable_pgv -exec=true -toolexec="${REPO_ROOT}/tools/go-compile-without-link" -vet=off ./controller/test/e2e
   elif [[ "${TEST_MODE}" == "conformance" ]]; then
     # TODO
     :
@@ -321,6 +321,7 @@ function main() {
   run_step "create-kind-cluster" step_create_kind_cluster & PID_KIND=$!
   run_step "build-go-controller-binary" step_build_go_controller_binary & PID_BUILD_CONTROLLER=$!
   run_step "build-proxy-binary" step_build_proxy_binary & PID_BUILD_PROXY=$!
+  run_step "warm-helm" helm version & PID_HELM=$!
 
   (await $PID_BUILD_CONTROLLER && run_step "warm-test" step_warm_test) &
 
@@ -332,7 +333,7 @@ function main() {
 
   (await $PID_REGISTRY && run_step "preload-images" step_preload_images) &
   (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
-  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER && run_step "deploy-helm" step_deploy_helm "$@") &
+  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER $PID_HELM && run_step "deploy-helm" step_deploy_helm "$@") &
 
   # Wait each one, not just a raw `wait`, to ensure we fail on errors
   for pid in $(jobs -p); do

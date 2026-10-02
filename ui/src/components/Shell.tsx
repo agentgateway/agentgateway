@@ -135,6 +135,9 @@ export function Shell() {
 				<Link to="/" className="brand" aria-label="agentgateway home">
 					<img className="brand-logo brand-logo-light" src={logoLight} alt="agentgateway" />
 					<img className="brand-logo brand-logo-dark" src={logoDark} alt="agentgateway" />
+					{runtime.data?.build.version && (
+						<small title={runtime.data.build.gitRevision}>{runtime.data.build.version}</small>
+					)}
 				</Link>
 				<nav className="nav-list" aria-label="Primary">
 					{navGroups.map(group => (

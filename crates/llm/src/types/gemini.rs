@@ -188,6 +188,9 @@ fn visit_tool_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mu
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Gemini
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -367,6 +370,9 @@ pub struct CountTokensRequest {
 }
 
 impl RequestType for CountTokensRequest {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::GeminiCountTokens
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}

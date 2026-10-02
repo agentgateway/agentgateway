@@ -41,3 +41,5 @@ cfg.yaml
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+/tools/.bin/

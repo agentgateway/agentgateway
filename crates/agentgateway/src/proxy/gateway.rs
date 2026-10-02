@@ -24,6 +24,7 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
+use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
@@ -682,7 +683,7 @@ impl Gateway {
 				} else {
 					raw_stream
 				};
-				let err = Self::terminate_connect_tunnel(inputs, stream, policies, drain).await;
+				let err = Self::terminate_connect_tunnel(bind_name, inputs, stream, policies, drain).await;
 				if let Err(e) = err {
 					warn!(src.addr = %peer_addr, "connect tunnel error: {e}");
 				}
@@ -706,6 +707,7 @@ impl Gateway {
 	}
 
 	async fn terminate_connect_tunnel(
+		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		raw_stream: Socket,
 		policies: FrontendPolices,
@@ -715,7 +717,6 @@ impl Gateway {
 		let connection = Arc::new(raw_stream.get_ext());
 		let buffer = policies.http.as_ref().and_then(|h| h.max_buffer_size);
 		let server = auto_server(policies.http.as_ref());
-		let substrate_egress_actor_resolution = policies.substrate_egress_actor_resolution.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(raw_stream),
@@ -723,7 +724,8 @@ impl Gateway {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
 				let drain = drain.clone();
-				let substrate_egress_actor_resolution = substrate_egress_actor_resolution.clone();
+				let substrate_egress_actor_resolution =
+					Self::frontend_policies_for_bind(&bind_name, &inputs).substrate_egress_actor_resolution;
 				async move {
 					let mut req = req.map(crate::http::Body::new);
 					if let Some(buffer) = buffer {
@@ -785,7 +787,7 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
-					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution {
+					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution.as_ref() {
 						match policy
 							.authorize_connect(&inputs, connection.as_ref(), &mut req)
 							.await
@@ -825,6 +827,9 @@ impl Gateway {
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
 						if let Some(identity) = actor_identity {
 							downstream.ext_mut().insert(identity);
+						}
+						if let Some(policy) = substrate_egress_actor_resolution {
+							downstream.ext_mut().insert(policy);
 						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						if let Some(buffer) = buffer {
@@ -906,12 +911,15 @@ impl Gateway {
 		if let Some(ch) = stream.ext_mut().remove::<ConnectHeaders>() {
 			src.connect_headers = ch.0;
 		}
-		if let Some(network_authorization) = policies.network_authorization.as_ref()
+		// A denied TLS destination only serves an HTTP denial; it must not call auth services.
+		let egress_denied = stream.ext::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied);
+		if !egress_denied
+			&& let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
 		{
 			anyhow::bail!("network authorization denied: {e}");
 		}
-		if let Some(authz) = policies.network_ext_authz.as_ref() {
+		if !egress_denied && let Some(authz) = policies.network_ext_authz.as_ref() {
 			authz
 				.check_network(
 					super::httpproxy::PolicyClient::new(inputs.clone()),
@@ -946,7 +954,8 @@ impl Gateway {
 		let max_connection_duration = policies
 			.http
 			.as_ref()
-			.and_then(|h| h.max_connection_duration);
+			.and_then(|h| h.max_connection_duration)
+			.map(crate::client::jittered);
 		let max_requests = policies
 			.http
 			.as_ref()
@@ -1071,6 +1080,12 @@ impl Gateway {
 		mut stream: Socket,
 		_drain: DrainWatcher,
 	) {
+		if stream.ext::<ActorIdentity>().is_some()
+			&& stream.ext::<EgressTlsMode>() != Some(&EgressTlsMode::Passthrough)
+		{
+			debug!(bind=%bind_name, "actor egress denied unsupported protocol");
+			return;
+		}
 		let selected_listener = match selected_listener {
 			Some(l) => l,
 			None => {
@@ -1207,9 +1222,27 @@ impl Gateway {
 			};
 			let ch = start.client_hello();
 			let sni = ch.server_name().unwrap_or_default();
+			let egress_mode = substrate::authorize_tls(
+				&super::httpproxy::PolicyClient::new(inp.clone()),
+				&mut ext,
+				sni,
+			)
+			.await?;
 			let best = listeners
-				.best_match_tls(sni)
+				.best_match_filtered(sni, |protocol| match egress_mode {
+					Some(EgressTlsMode::Intercept | EgressTlsMode::InterceptDenied) => {
+						matches!(protocol, ListenerProtocol::HTTPS(_))
+					},
+					Some(EgressTlsMode::Passthrough) => matches!(protocol, ListenerProtocol::TLS(None)),
+					None => matches!(
+						protocol,
+						ListenerProtocol::HTTPS(_) | ListenerProtocol::TLS(_)
+					),
+				})
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
+			if let Some(mode) = egress_mode {
+				ext.insert(mode);
+			}
 			match best
 				.protocol
 				.tls(tls_pol, inp.ca.as_ref(), inp.spiffe.as_ref())

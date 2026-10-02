@@ -381,6 +381,9 @@ impl<T: Debug> Debug for AsyncLog<T> {
 /// Per-request accumulator of prompt-guard guardrail evaluations.
 pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
+/// Per-request accumulator of mcpGuardrails dynamic metadata.
+pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
+
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: MetricFields,
@@ -776,7 +779,7 @@ impl CelLogging {
 			database_fields,
 			metric_fields,
 		} = self;
-		let executor = if inputs.req.is_none() && inputs.source_context.is_some() {
+		let mut executor = if inputs.req.is_none() && inputs.source_context.is_some() {
 			// TCP case: use new_tcp_logger
 			cel::Executor::new_tcp_logger(inputs.source_context, inputs.end_time)
 		} else {
@@ -791,6 +794,9 @@ impl CelLogging {
 				inputs.proxy,
 			)
 		};
+		if let Some(md) = inputs.mcp_guardrails {
+			executor.mcp_guardrails = cel::ExtensionOrDirect::Direct(Some(md));
+		}
 		CelLoggingExecutor {
 			executor,
 			filter,
@@ -809,6 +815,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub llm_response: Option<&'a LLMContext>,
 	pub mcp: Option<&'a MCPInfo>,
 	pub guardrails: Option<&'a Vec<cel::GuardrailInfo>>,
+	pub mcp_guardrails: Option<&'a mcp::guardrails::McpGuardrailsDynamicMetadata>,
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
@@ -1156,6 +1163,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			guardrails: Default::default(),
+			mcp_guardrails: Default::default(),
 			budgets: None,
 			a2a_method: None,
 			a2a_response: None,
@@ -1251,6 +1259,7 @@ impl RequestLog {
 			llm_response,
 			mcp: mcp.filter(|m| !m.is_empty()),
 			guardrails: None,
+			mcp_guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
 			proxy: Some(&proxy_timing),
@@ -1334,6 +1343,7 @@ pub struct RequestLog {
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 	pub guardrails: GuardrailLog,
+	pub mcp_guardrails: McpGuardrailsLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
@@ -1457,6 +1467,7 @@ impl Drop for DropOnLog {
 
 			let mcp = log.mcp_status.take();
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
+			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
@@ -1477,6 +1488,7 @@ impl Drop for DropOnLog {
 				llm_response: llm_response.as_ref(),
 				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
 				guardrails: guardrails.as_ref(),
+				mcp_guardrails: mcp_guardrails.as_ref(),
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),

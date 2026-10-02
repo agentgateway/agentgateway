@@ -1822,6 +1822,7 @@ message BackendPolicySpec {
     // the concrete model from which the provider was lowered.
     TrafficPolicySpec.RBAC authorization = 19;
     SessionAffinity session_affinity = 20;
+    UrlRewrite url_rewrite = 21;
   }
 }
 
@@ -1957,6 +1958,8 @@ message AIBackend {
     PROVIDER_PRESET_TOGETHERAI = 11;
     PROVIDER_PRESET_XAI = 12;
     PROVIDER_PRESET_FIREWORKS = 13;
+    PROVIDER_PRESET_META = 14;
+    PROVIDER_PRESET_PERPLEXITY = 15;
   }
 
   message Provider {
@@ -2325,6 +2328,8 @@ message ModelRoute {
     ModelVisibility model_visibility = 1;
     BackendReference backend = 2;
     repeated BackendPolicySpec backend_policies = 3;
+    // Catalog provider identity for wildcard discovery.
+    optional string discovery_provider = 4;
   }
   // Unique resource key for this model route. This is used for xDS resource
   // identity/update/delete, not for virtual model target selection.

@@ -160,6 +160,16 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Usage {
+	/// Output tokens, including reasoning. Gemini's OpenAI-compatible endpoint leaves reasoning
+	/// out of `completion_tokens` but counts it in `total_tokens`.
+	pub fn output_tokens(&self) -> u32 {
+		self
+			.completion_tokens
+			.max(self.total_tokens.saturating_sub(self.prompt_tokens))
+	}
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
 		let output_messages = if log_content.tool_calls {
@@ -178,7 +188,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.audio_tokens)
 			}),
 
-			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
+			output_tokens: self.usage.as_ref().map(|u| u.output_tokens() as u64),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.usage.as_ref().and_then(|u| {
@@ -331,6 +341,9 @@ const PRESERVED_REST_KEYS: &[&str] = &[
 ];
 
 impl super::RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Completions
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -616,11 +629,10 @@ pub mod typed {
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
 		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
-		ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
+		PromptCacheBreakpointParamMode, ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
 		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
 		ToolChoiceOptions, WebSearchOptions,
 	};
-	pub use async_openai::types::responses::PromptCacheBreakpointMode;
 	use serde::{Deserialize, Serialize};
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
@@ -740,6 +752,16 @@ pub mod typed {
 		/// Tokens written to cache (costs)
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_creation_input_tokens: Option<u64>,
+	}
+
+	impl Usage {
+		/// Output tokens, including reasoning. Gemini's OpenAI-compatible endpoint leaves reasoning
+		/// out of `completion_tokens` but counts it in `total_tokens`.
+		pub fn output_tokens(&self) -> u32 {
+			self
+				.completion_tokens
+				.max(self.total_tokens.saturating_sub(self.prompt_tokens))
+		}
 	}
 
 	#[derive(Debug, Deserialize, Clone, Serialize)]

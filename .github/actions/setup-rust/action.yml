@@ -1,0 +1,28 @@
+name: Set up Rust
+description: Install the Rust toolchain pinned in rust-toolchain.toml
+
+inputs:
+  targets:
+    description: Additional compilation targets
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+  - name: Read pinned Rust toolchain
+    id: toolchain
+    shell: bash
+    run: |
+      python3 - <<'PYTHON' >> "$GITHUB_OUTPUT"
+      import tomllib
+      with open("rust-toolchain.toml", "rb") as f:
+          toolchain = tomllib.load(f)["toolchain"]
+      print(f"channel={toolchain['channel']}")
+      PYTHON
+
+  - name: Install Rust
+    uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+    with:
+      toolchain: ${{ steps.toolchain.outputs.channel }}
+      targets: ${{ inputs.targets }}

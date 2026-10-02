@@ -2,9 +2,6 @@ name: Rust build cache
 description: Set up Rust and restore source-aware workspace build artifacts
 
 inputs:
-  rust-version:
-    description: Rust toolchain version
-    required: true
   cache-key:
     description: Cache namespace shared by equivalent jobs
     required: true
@@ -17,9 +14,7 @@ runs:
   using: composite
   steps:
   - name: Install Rust
-    uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-    with:
-      toolchain: ${{ inputs.rust-version }}
+    uses: ./.github/actions/setup-rust
 
   # Cargo primarily uses mtimes for change detection. Stable source mtimes let
   # restored target artifacts remain valid across fresh CI checkouts.

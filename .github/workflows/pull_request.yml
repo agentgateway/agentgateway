@@ -20,7 +20,6 @@ env:
   GOCACHEPROG: ""
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.98.0"
   CARGO_BUILD_WARNINGS: deny
   GO_VERSION: "1.27.1"
 
@@ -55,7 +54,6 @@ jobs:
     - name: Set up Rust build cache
       uses: ./.github/actions/rust-build-cache
       with:
-        rust-version: "${{ env.RUST_VERSION }}"
         cache-key: proxy-test
         # PRs restore the default branch cache; only postsubmit rolls it forward.
         save: ${{ github.ref == 'refs/heads/main' }}
@@ -85,9 +83,7 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: "${{ env.RUST_VERSION }}"
+      uses: ./.github/actions/setup-rust
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
         # Github cache will restore from 'main' OR the current branch.
@@ -181,7 +177,7 @@ jobs:
     - name: Set up controller build caches
       uses: ./.github/actions/controller-build-cache
       with:
-        rust-version: "${{ env.RUST_VERSION }}"
+        rust: "true"
         go-version: "${{ env.GO_VERSION }}"
         # PRs can restore the default branch caches, but only postsubmit rolls them forward.
         save: ${{ github.ref == 'refs/heads/main' }}
@@ -189,7 +185,7 @@ jobs:
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
       run: |
-        CGO_ENABLED=0 PERSIST_INSTALL=true go test -tags=e2e -v ./controller/test/e2e
+        CGO_ENABLED=0 PERSIST_INSTALL=true go test -trimpath -tags=e2e,agent,disable_pgv -v ./controller/test/e2e
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -219,7 +215,7 @@ jobs:
     - name: Set up controller build caches
       uses: ./.github/actions/controller-build-cache
       with:
-        rust-version: "${{ env.RUST_VERSION }}"
+        rust: "true"
         go-version: "${{ env.GO_VERSION }}"
     - name: Setup
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
@@ -271,7 +267,7 @@ jobs:
     - name: Set up controller build caches
       uses: ./.github/actions/controller-build-cache
       with:
-        rust-version: "${{ env.RUST_VERSION }}"
+        rust: "true"
         go-version: "${{ env.GO_VERSION }}"
     - name: Setup
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh

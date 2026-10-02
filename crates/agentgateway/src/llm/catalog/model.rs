@@ -6,6 +6,8 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::llm::{Provider as _, vertex};
+
 // Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
 // loaded leniently. `validate` rejects them for catalogs written for this version.
 pub type Unknown = BTreeMap<String, serde_json::Value>;
@@ -105,13 +107,10 @@ impl Catalog {
 	pub fn resolve(&self, provider: &str, model: &str) -> Option<&Model> {
 		let models = &self.providers.get(provider)?.models;
 		models.get(model).or_else(|| {
-			// Vertex's OpenAI-compatible endpoint requires `google/<id>`, but the catalog keys Gemini by bare id.
-			let bare = model
-				.strip_prefix("google/")
-				.or_else(|| model.strip_prefix("models/"))
-				.or_else(|| model.strip_prefix("publishers/google/models/"))
-				.filter(|_| provider == "gcp.vertex_ai")?;
-			models.get(bare)
+			if provider != vertex::Provider::NAME.as_str() {
+				return None;
+			}
+			models.get(vertex::Provider::canonical_model(model).as_str())
 		})
 	}
 }
@@ -504,40 +503,31 @@ mod tests {
 	}
 
 	#[test]
-	fn resolve_strips_google_publisher_on_vertex() {
+	fn resolve_vertex_aliases() {
 		let catalog = from_json(
 			r#"{"providers":{
-				"gcp.vertex_ai":{"models":{"gemini-3.7-flash":{"rates":{"input":"1"}},"google/pinned":{"rates":{"input":"2"}},"models/pinned":{"rates":{"input":"2"}},"publishers/google/models/pinned":{"rates":{"input":"2"}},"pinned":{"rates":{"input":"3"}}}},
-				"openai":{"models":{"gemini-3.7-flash":{"rates":{"input":"1"}}}}
+				"gcp.vertex_ai":{"models":{
+					"gemini-x":{"rates":{"input":"1"}},
+					"claude-x@20250929":{"rates":{"input":"2"}},
+					"google/pinned":{"rates":{"input":"3"}},
+					"pinned":{"rates":{"input":"4"}}
+				}},
+				"openai":{"models":{"gemini-x":{"rates":{"input":"1"}}}}
 			}}"#,
 		)
 		.unwrap();
-		for prefix in ["google/", "models/", "publishers/google/models/"] {
-			assert_eq!(
-				catalog
-					.resolve("gcp.vertex_ai", &format!("{prefix}gemini-3.7-flash"))
-					.unwrap()
-					.rates
-					.input,
-				Some(m("1")),
-				"{prefix}"
-			);
-			assert_eq!(
-				catalog
-					.resolve("gcp.vertex_ai", &format!("{prefix}pinned"))
-					.unwrap()
-					.rates
-					.input,
-				Some(m("2")),
-				"an exact entry wins over the stripped name"
-			);
-			assert!(
-				catalog
-					.resolve("openai", &format!("{prefix}gemini-3.7-flash"))
-					.is_none(),
-				"only vertex strips the publisher"
-			);
-		}
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("gcp.vertex_ai", "google/gemini-x"), Some(m("1")));
+		assert_eq!(
+			input("gcp.vertex_ai", "publishers/google/models/gemini-x"),
+			Some(m("1"))
+		);
+		assert_eq!(
+			input("gcp.vertex_ai", "anthropic/claude-x-20250929"),
+			Some(m("2"))
+		);
+		assert_eq!(input("gcp.vertex_ai", "google/pinned"), Some(m("3")));
+		assert_eq!(input("openai", "google/gemini-x"), None);
 	}
 
 	#[test]

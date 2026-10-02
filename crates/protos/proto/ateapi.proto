@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package ateapi;
 
-import "google/protobuf/empty.proto";
-
 // Minimal wire-compatible subset of the Substrate control API used by
 // agentgateway's actor policies.
 service Control {
@@ -65,32 +63,51 @@ message GetActorRequest {
   ObjectRef actor = 1;
 }
 
-// EgressPolicy is the actor-owned source policy.
+// EgressPolicy is the actor-owned source policy. Rules are unordered allows;
+// the most specific matching hostname, then port, selects the deciding rule.
 message EgressPolicy {
   ResourceMetadata metadata = 1;
   repeated EgressRule rules = 2;
 }
 
 message EgressRule {
-  HostnameRule hostnames = 1;
-  IPBlockRule ip_blocks = 2;
-  google.protobuf.Empty all = 3;
+  HTTPRule http = 1;
+  HTTPSRule https = 2;
+  TLSPassthroughRule tls_passthrough = 3;
 }
 
-message HostnameRule {
-  repeated string patterns = 1;
-  EgressRuleEffects effects = 2;
+message HTTPRule {
+  repeated string hostnames = 1;
+  // Defaults to port 80 when absent. Matches the port the actor connected to.
+  Ports ports = 2;
+  HttpRuleEffects effects = 3;
 }
 
-message IPBlockRule {
-  repeated string cidrs = 1;
+message HTTPSRule {
+  repeated string hostnames = 1;
+  // Defaults to port 443 when absent.
+  Ports ports = 2;
+  HttpRuleEffects effects = 3;
 }
 
-message EgressRuleEffects {
-  repeated CredentialHeaderInjection inject_static_headers = 1;
+message TLSPassthroughRule {
+  repeated string hostnames = 1;
+  Ports ports = 2;
 }
 
-message CredentialHeaderInjection {
+message Ports {
+  AllPorts all = 1;
+  repeated int32 numbers = 2;
+}
+
+message AllPorts {}
+
+message HttpRuleEffects {
+  // Replace only headers already present in the actor's request.
+  repeated CredentialHeader replace_headers = 1;
+}
+
+message CredentialHeader {
   string header = 1;
   string prefix = 2;
   string credential_uri = 3;

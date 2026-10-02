@@ -28,6 +28,7 @@ const (
 
 func TestDaemonSetWorkload(tt *testing.T) {
 	t := New(tt)
+	t.Parallel() // Uses its own Gateway, not shared with other tests.
 	gatewayManifest := manifest("daemonset", "gateway.yaml")
 	daemonSetManifest := manifest("daemonset", "daemonset.yaml")
 	deploymentManifest := manifest("daemonset", "deployment.yaml")

@@ -118,6 +118,8 @@ fn provider_preset_from_proto(
 		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
 		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
 		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
+		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
+		ProviderPreset::Perplexity => Ok(llm::custom::ProviderPreset::Perplexity),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),
@@ -1696,7 +1698,32 @@ impl ModelRoute {
 						.collect::<Result<Vec<_>, _>>()?,
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
-					discovery: None,
+					discovery: concrete.discovery_provider.as_ref().and_then(|provider| {
+						if !name.contains('*')
+							|| llm_policy
+								.overrides
+								.as_ref()
+								.is_some_and(|p| p.contains_key("model"))
+							|| llm_policy
+								.final_transformations
+								.as_ref()
+								.is_some_and(|p| p.contains_key("model"))
+						{
+							return None;
+						}
+						let transformation = match llm_policy
+							.transformations
+							.as_ref()
+							.and_then(|p| p.get("model"))
+						{
+							Some(expression) => llm::model_transform::reverse_model_transformation(expression)?,
+							None => llm::model_transform::ModelTransformation::Identity,
+						};
+						Some(llm::discovery::ModelDiscovery {
+							provider: strng::new(provider),
+							transformation,
+						})
+					}),
 					id: None,
 					name: model_match.model.clone(),
 					created: s.created,
@@ -2172,7 +2199,12 @@ fn route_match_from_proto(
 		}) => PathMatch::Exact(strng::new(prefix)),
 		Some(proto::agent::PathMatch {
 			kind: Some(Kind::Regex(r)),
-		}) => regex_or_warn_invalid(diagnostics, "route.path", r)
+		}) => PathMatch::regex(r)
+			.inspect_err(|err| {
+				diagnostics.add_warning(format!(
+					"invalid regex for route.path: {err}; replacing {r:?} with a matcher that never matches",
+				));
+			})
 			.map(PathMatch::Regex)
 			.unwrap_or(PathMatch::Invalid),
 		Some(proto::agent::PathMatch { kind: None }) => {
@@ -2477,6 +2509,7 @@ fn backend_policy_from_proto(
 					.transpose()?,
 			})
 		},
+		Some(bps::Kind::UrlRewrite(ur)) => BackendTrafficPolicy::UrlRewrite(ur.into()),
 		Some(bps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -2952,24 +2985,7 @@ fn traffic_policy_from_proto(
 					.transpose()?,
 			}))
 		},
-		Some(tps::Kind::UrlRewrite(ur)) => {
-			let authority = if ur.host.is_empty() {
-				None
-			} else {
-				Some(HostRedirect::Host(strng::new(&ur.host)))
-			};
-			let path = match &ur.path {
-				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
-				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
-					Some(PathRedirect::Prefix(strng::new(p)))
-				},
-				None => None,
-			};
-			TrafficPolicy::UrlRewrite(RequestPolicy::single(http::filters::UrlRewrite {
-				authority,
-				path,
-			}))
-		},
+		Some(tps::Kind::UrlRewrite(ur)) => TrafficPolicy::UrlRewrite(RequestPolicy::single(ur.into())),
 		Some(tps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -3736,6 +3752,21 @@ impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
 			retries: k
 				.retries
 				.unwrap_or_else(types::agent::defaults::keepalive_retries),
+		}
+	}
+}
+
+impl From<&proto::agent::UrlRewrite> for http::filters::UrlRewrite {
+	fn from(ur: &proto::agent::UrlRewrite) -> Self {
+		http::filters::UrlRewrite {
+			authority: default_as_none(ur.host.as_str()).map(|h| HostRedirect::Host(strng::new(h))),
+			path: match &ur.path {
+				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
+				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
+					Some(PathRedirect::Prefix(strng::new(p)))
+				},
+				None => None,
+			},
 		}
 	}
 }
@@ -5422,7 +5453,7 @@ mod tests {
 		use proto::agent::model_route::concrete_model::ModelVisibility;
 		use proto::agent::model_route::{ConcreteModel, Kind};
 
-		let proto_route = proto::agent::ModelRoute {
+		let mut proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
 			router_key: String::new(),
@@ -5439,6 +5470,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: Some(proto::agent::backend_policy_spec::Ai {
 				transformations: [("model".to_string(), "\"gpt-5-mini\"".to_string())].into(),
@@ -5478,6 +5510,26 @@ mod tests {
 			},
 			other => panic!("expected backend target, got {other:?}"),
 		}
+		proto_route.r#match.as_mut().unwrap().model = "openai/*".to_string();
+		let Some(Kind::ConcreteModel(concrete)) = proto_route.kind.as_mut() else {
+			unreachable!();
+		};
+		concrete.discovery_provider = Some("openai".to_string());
+		proto_route.ai_policy.as_mut().unwrap().transformations = [(
+			"model".to_string(),
+			"llmRequest.model.stripPrefix(\"openai/\")".to_string(),
+		)]
+		.into();
+		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		let ModelRouteKind::Concrete(model) = route.kind else {
+			panic!("expected concrete model route");
+		};
+		let discovery = model.discovery.unwrap();
+		assert_eq!(discovery.provider, "openai");
+		assert_eq!(
+			discovery.transformation.apply("gpt-5-mini").unwrap(),
+			"openai/gpt-5-mini"
+		);
 		Ok(())
 	}
 

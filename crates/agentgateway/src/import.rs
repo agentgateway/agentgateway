@@ -1102,6 +1102,7 @@ fn map_provider(provider: &str) -> Option<&'static str> {
 		"deepinfra" => Some("deepinfra"),
 		"deepseek" => Some("deepseek"),
 		"fireworks_ai" | "fireworks" => Some("fireworks"),
+		"perplexity" => Some("perplexity"),
 		_ => None,
 	}
 }
