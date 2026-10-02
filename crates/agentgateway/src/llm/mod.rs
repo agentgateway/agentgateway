@@ -934,6 +934,9 @@ impl AIProvider {
 			AIProvider::OpenAI(_) | AIProvider::Copilot(_) => Some(openai::DEFAULT_BASE_PATH),
 			AIProvider::CodexSubscription(_) => Some(agent_llm::codex_subscription::DEFAULT_BASE_PATH),
 			AIProvider::Anthropic(_) => Some(anthropic::DEFAULT_BASE_PATH),
+			AIProvider::Custom(provider) if provider.supports(custom::ProviderFormat::Completions) => {
+				Some(openai::DEFAULT_BASE_PATH)
+			},
 			_ => None,
 		}
 	}

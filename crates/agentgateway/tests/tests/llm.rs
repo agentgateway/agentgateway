@@ -942,6 +942,7 @@ async fn llm_custom_provider_models_forwards_to_openai_compatible_catalog() {
 		}),
 		false,
 	);
+	provider.path_prefix = Some("/v1".into());
 	provider.policies = Some(
 		serde_json::from_value(json!({"ai": {"routes": {"/v1/models": "models"}}}))
 			.expect("model-list route policy"),
