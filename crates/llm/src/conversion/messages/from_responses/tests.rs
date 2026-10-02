@@ -709,6 +709,10 @@ fn sse_event(name: &str, data: serde_json::Value) -> String {
 }
 
 fn message_start(input_tokens: u64) -> String {
+	message_start_with_usage(json!({"input_tokens": input_tokens, "output_tokens": 0}))
+}
+
+fn message_start_with_usage(usage: serde_json::Value) -> String {
 	sse_event(
 		"message_start",
 		json!({
@@ -721,7 +725,7 @@ fn message_start(input_tokens: u64) -> String {
 				"model": "upstream-model",
 				"stop_reason": null,
 				"stop_sequence": null,
-				"usage": {"input_tokens": input_tokens, "output_tokens": 0}
+				"usage": usage
 			}
 		}),
 	)
@@ -877,6 +881,139 @@ fn assert_one_safe_error(events: &[serde_json::Value]) {
 		event["type"].as_str(),
 		Some("response.completed" | "response.incomplete")
 	)));
+}
+
+#[test]
+fn unsigned_thinking_is_discarded_from_buffered_responses() {
+	let body = Bytes::from(
+		json!({
+			"id": "msg_unsigned", "type": "message", "role": "assistant",
+			"model": "claude", "stop_reason": "end_turn", "stop_sequence": null,
+			"content": [
+				{"type": "thinking", "thinking": "PRIVATE_THINKING"},
+				{"type": "text", "text": "Visible answer"}
+			],
+			"usage": {"input_tokens": 1, "output_tokens": 2}
+		})
+		.to_string(),
+	);
+	let response = translate_response(&body, &State::default(), 1024 * 1024)
+		.expect("unsigned thinking can be discarded");
+	let value = serde_json::to_value(response).unwrap();
+	assert_eq!(value["output"][0]["content"][0]["text"], "Visible answer");
+	assert_eq!(value["output"].as_array().unwrap().len(), 1);
+	assert!(!value.to_string().contains("PRIVATE_THINKING"));
+	let completions = crate::conversion::messages::from_completions::translate_response(&body)
+		.expect("shared Messages parser accepts unsigned thinking");
+	let completions: serde_json::Value =
+		serde_json::from_slice(&completions.serialize().unwrap()).unwrap();
+	let assistant = &completions["choices"][0]["message"];
+	assert!(assistant.get("reasoning_signature").is_none());
+	let history =
+		serde_json::from_value(json!({"model": "claude", "messages": [assistant]})).unwrap();
+	let replay = crate::conversion::messages::from_completions::translate(&history, None).unwrap();
+	let replay: serde_json::Value = serde_json::from_slice(&replay).unwrap();
+	assert_eq!(
+		replay["messages"][0]["content"],
+		json!([{"type": "text", "text": "Visible answer"}])
+	);
+}
+
+fn thinking_frames() -> Vec<String> {
+	vec![
+		message_start(1),
+		sse_event(
+			"content_block_start",
+			json!({
+				"type": "content_block_start", "index": 0,
+				"content_block": {"type": "thinking", "thinking": ""}
+			}),
+		),
+		sse_event(
+			"content_block_delta",
+			json!({
+				"type": "content_block_delta", "index": 0,
+				"delta": {"type": "thinking_delta", "thinking": "PRIVATE_THINKING"}
+			}),
+		),
+	]
+}
+
+#[tokio::test]
+async fn unsigned_thinking_stream_completes_without_disclosing_reasoning() {
+	let mut frames = thinking_frames();
+	frames.push(sse_event(
+		"content_block_stop",
+		json!({"type": "content_block_stop", "index": 0}),
+	));
+	frames.push(sse_event(
+		"content_block_start",
+		json!({
+			"type": "content_block_start", "index": 1,
+			"content_block": {"type": "text", "text": ""}
+		}),
+	));
+	frames.push(sse_event(
+		"content_block_delta",
+		json!({
+			"type": "content_block_delta", "index": 1,
+			"delta": {"type": "text_delta", "text": "Visible answer"}
+		}),
+	));
+	frames.push(sse_event(
+		"content_block_stop",
+		json!({"type": "content_block_stop", "index": 1}),
+	));
+	frames.extend(terminal("end_turn", 2));
+	let events = collect_stream(frames, 1024 * 1024, State::default()).await;
+	let response = &events.last().unwrap()["response"];
+	assert_eq!(response["status"], "completed");
+	assert_eq!(
+		response["output"][0]["content"][0]["text"],
+		"Visible answer"
+	);
+	assert!(
+		!serde_json::to_string(&events)
+			.unwrap()
+			.contains("PRIVATE_THINKING")
+	);
+}
+
+#[tokio::test]
+async fn discarded_thinking_retains_signature_and_index_guards() {
+	let signature = |value: &str| {
+		sse_event(
+			"content_block_delta",
+			json!({
+				"type": "content_block_delta", "index": 0,
+				"delta": {"type": "signature_delta", "signature": value}
+			}),
+		)
+	};
+	let cases = [
+		vec![signature("")],
+		vec![signature("signed"), signature("again")],
+		vec![
+			signature("signed"),
+			sse_event(
+				"content_block_delta",
+				json!({
+					"type": "content_block_delta", "index": 0,
+					"delta": {"type": "thinking_delta", "thinking": "late"}
+				}),
+			),
+		],
+		vec![sse_event(
+			"content_block_stop",
+			json!({"type": "content_block_stop", "index": 1}),
+		)],
+	];
+	for invalid in cases {
+		let mut frames = thinking_frames();
+		frames.extend(invalid);
+		frames.extend(terminal("end_turn", 2));
+		assert_one_safe_error(&collect_stream(frames, 1024 * 1024, State::default()).await);
+	}
 }
 
 #[rstest::rstest]
@@ -1212,6 +1349,142 @@ async fn sse_decoder_error_emits_one_safe_error() {
 	let body = agent_http::Body::from("data: {\"type\":\"message_start\"}\n\n");
 	let events = collect_stream_body(body, 8, State::default(), StreamingUsageGuard::default()).await;
 
+	assert_one_safe_error(&events);
+}
+
+#[tokio::test]
+async fn stream_terminal_input_replaces_initial_before_cache_is_added() {
+	let frames = vec![
+		message_start_with_usage(json!({
+			"input_tokens": 12,
+			"output_tokens": 9,
+			"output_tokens_details": {"thinking_tokens": 5}
+		})),
+		sse_event(
+			"message_delta",
+			json!({
+				"type": "message_delta",
+				"delta": {"stop_reason": "end_turn", "stop_sequence": null},
+				"usage": {
+					"input_tokens": 1,
+					"cache_read_input_tokens": 25,
+					"output_tokens": 2,
+					"output_tokens_details": {"thinking_tokens": 1}
+				}
+			}),
+		),
+		sse_event("message_stop", json!({"type": "message_stop"})),
+	];
+	let (guard, info) = tracking_stream();
+	let events = collect_stream_with_guard(frames, 1024 * 1024, State::default(), guard).await;
+	let completed = events
+		.iter()
+		.find(|event| event["type"] == "response.completed")
+		.expect("lower terminal input with cache reads should complete");
+
+	assert_eq!(completed["response"]["usage"]["input_tokens"], 26);
+	assert_eq!(
+		completed["response"]["usage"]["input_tokens_details"]["cached_tokens"],
+		25
+	);
+	assert_eq!(completed["response"]["usage"]["output_tokens"], 2);
+	assert_eq!(
+		completed["response"]["usage"]["output_tokens_details"]["reasoning_tokens"],
+		1
+	);
+	assert_eq!(completed["response"]["usage"]["total_tokens"], 28);
+	let response = &info.lock().expect("reporter lock").response;
+	assert_eq!(response.input_tokens, Some(1));
+	assert_eq!(response.output_tokens, Some(2));
+	assert_eq!(response.total_tokens, Some(3));
+	assert_eq!(response.reasoning_tokens, Some(1));
+	assert_eq!(response.cached_input_tokens, Some(25));
+}
+
+#[tokio::test]
+async fn terminal_usage_omissions_fall_back_to_initial_counts() {
+	let frames = vec![
+		message_start_with_usage(json!({
+			"input_tokens": 12,
+			"output_tokens": 4,
+			"cache_read_input_tokens": 3,
+			"cache_creation_input_tokens": 5,
+			"output_tokens_details": {"thinking_tokens": 2}
+		})),
+		sse_event(
+			"message_delta",
+			json!({
+				"type": "message_delta",
+				"delta": {"stop_reason": "end_turn", "stop_sequence": null},
+				"usage": {}
+			}),
+		),
+		sse_event("message_stop", json!({"type": "message_stop"})),
+	];
+	let (guard, info) = tracking_stream();
+	let events = collect_stream_with_guard(frames, 1024 * 1024, State::default(), guard).await;
+	let completed = events
+		.iter()
+		.find(|event| event["type"] == "response.completed")
+		.expect("omitted terminal counters should use initial usage");
+
+	assert_eq!(completed["response"]["usage"]["input_tokens"], 20);
+	assert_eq!(completed["response"]["usage"]["output_tokens"], 4);
+	assert_eq!(completed["response"]["usage"]["total_tokens"], 24);
+	assert_eq!(
+		completed["response"]["usage"]["input_tokens_details"]["cached_tokens"],
+		3
+	);
+	assert_eq!(
+		completed["response"]["usage"]["input_tokens_details"]["cache_write_tokens"],
+		5
+	);
+	assert_eq!(
+		completed["response"]["usage"]["output_tokens_details"]["reasoning_tokens"],
+		2
+	);
+	let response = &info.lock().expect("reporter lock").response;
+	assert_eq!(response.input_tokens, Some(12));
+	assert_eq!(response.output_tokens, Some(4));
+	assert_eq!(response.total_tokens, Some(16));
+	assert_eq!(response.cached_input_tokens, Some(3));
+	assert_eq!(response.cache_creation_input_tokens, Some(5));
+	assert_eq!(response.reasoning_tokens, Some(2));
+}
+
+#[tokio::test]
+async fn stream_combined_usage_overflow_emits_one_safe_error() {
+	let frames = vec![
+		message_start(usize::MAX as u64),
+		sse_event(
+			"message_delta",
+			json!({
+				"type": "message_delta",
+				"delta": {"stop_reason": "end_turn", "stop_sequence": null},
+				"usage": {"input_tokens": usize::MAX, "cache_read_input_tokens": 1, "output_tokens": 1}
+			}),
+		),
+		sse_event("message_stop", json!({"type": "message_stop"})),
+	];
+	let events = collect_stream(frames, 1024 * 1024, State::default()).await;
+	assert_one_safe_error(&events);
+}
+
+#[tokio::test]
+async fn reasoning_usage_above_output_emits_one_safe_error() {
+	let frames = vec![
+		message_start(1),
+		sse_event(
+			"message_delta",
+			json!({
+				"type": "message_delta",
+				"delta": {"stop_reason": "end_turn", "stop_sequence": null},
+				"usage": {"output_tokens": 1, "output_tokens_details": {"thinking_tokens": 2}}
+			}),
+		),
+		sse_event("message_stop", json!({"type": "message_stop"})),
+	];
+	let events = collect_stream(frames, 1024 * 1024, State::default()).await;
 	assert_one_safe_error(&events);
 }
 

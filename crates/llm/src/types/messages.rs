@@ -819,6 +819,7 @@ pub mod typed {
 		SearchResult(ContentSearchResultBlock),
 		Thinking {
 			thinking: String,
+			#[serde(default)]
 			signature: String,
 		},
 		RedactedThinking {

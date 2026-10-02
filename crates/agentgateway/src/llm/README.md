@@ -30,7 +30,10 @@ including a safe error event for streams.
 
 Buffered and streaming translations return the standard Responses types. They report the upstream
 Messages model and include cache, cache-write, and reasoning token usage when the provider sends
-those fields. Conversion state is carried per request through `ProviderState`.
+those fields. Terminal stream counters replace initial counters when supplied. Missing terminal
+counters retain their initial values, and cached input is added once. Thinking blocks, including
+unsigned blocks, are discarded from Responses output. An unsigned block does not acquire a
+signature for replay to Anthropic. Conversion state is carried per request through `ProviderState`.
 
 Copilot Claude requests use `/v1/messages`. Copilot's provider policy sets the Anthropic version,
 filters beta features known to be unsupported, and preserves native Messages `context_management`.
