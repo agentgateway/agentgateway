@@ -1174,9 +1174,7 @@ mod tests {
 			.config_reload_status
 			.record_success(accepted.to_string());
 
-		let Json(value) = get_effective_config(State(app)).await.unwrap() else {
-			unreachable!("effective config should serialize");
-		};
+		let Json(value) = get_effective_config(State(app)).await.unwrap();
 		assert_eq!(value, yaml::from_str::<Value>(accepted).unwrap());
 	}
 
@@ -1189,9 +1187,7 @@ mod tests {
 		let mut app = test_app(false);
 		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path));
 
-		let Json(value) = get_effective_config(State(app)).await.unwrap() else {
-			unreachable!("effective config should serialize");
-		};
+		let Json(value) = get_effective_config(State(app)).await.unwrap();
 		assert_eq!(value, yaml::from_str::<Value>(on_disk).unwrap());
 	}
 
