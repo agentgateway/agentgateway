@@ -400,7 +400,7 @@ func resolveXBackend(
 type RouteAttachment struct {
 	// Route
 	From utils.TypedNamespacedName
-	// Immediate parent (Gateway or ListenerSet)
+	// Listener-bearing parent (Gateway, ListenerSet, or an extension resource).
 	To           utils.TypedNamespacedName
 	ListenerName string
 	// Eventual parent (always Gateway)

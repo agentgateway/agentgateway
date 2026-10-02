@@ -75,6 +75,7 @@ type Syncer struct {
 	gatewayCollectionOptions []translator.GatewayCollectionConfigOption
 
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
+	finalStatusCollections      []func(FinalStatusCollectionsConfig)
 	buildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	extraListenerSets           ExtraListenerSetsBuilderFunc
@@ -104,6 +105,7 @@ func NewAgwSyncer(
 			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
 		},
 		customResourceCollections:   cfg.CustomResourceCollections,
+		finalStatusCollections:      cfg.FinalStatusCollections,
 		buildAddressCollectionsFunc: cfg.BuildAddressCollectionsFunc,
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 		extraListenerSets:           cfg.ExtraListenerSets,
@@ -189,6 +191,16 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 
 	listenerSetFinalStatus := s.buildFinalListenerSetStatus(gateways, listenerSetInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
+	for _, finalize := range s.finalStatusCollections {
+		finalize(FinalStatusCollectionsConfig{
+			ControllerName:       s.controllerName,
+			GatewayListeners:     gateways,
+			RejectedListenerSets: rejectedListenerSets,
+			RouteAttachments:     routeAttachments,
+			StatusCollections:    s.statusCollections,
+			KrtOpts:              krtopts,
+		})
+	}
 
 	// Build address collections
 	addressBuilder := s.buildAddressCollectionsFunc

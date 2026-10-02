@@ -1086,7 +1086,9 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind {
+			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind ||
+				(e.ParentGateway.Name != "" && e.ServiceKey == nil && e.ParentKey.Kind != wellknown.GatewayGVK.Kind &&
+					e.ParentKey.Kind != wellknown.ServiceGVK.Kind && e.ParentKey.Kind != wellknown.ServiceEntryGVK.Kind) {
 				return new(&plugins.RouteAttachment{
 					From:         from,
 					To:           e.ParentKey,

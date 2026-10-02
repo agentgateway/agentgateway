@@ -12,6 +12,7 @@ import (
 type agentgatewaySyncerConfig struct {
 	GatewayTransformationFunc   translator.GatewayTransformationFunction
 	CustomResourceCollections   func(cfg CustomResourceCollectionsConfig)
+	FinalStatusCollections      []func(FinalStatusCollectionsConfig)
 	BuildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 	BuildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	ExtraListenerSets           ExtraListenerSetsBuilderFunc
@@ -40,6 +41,17 @@ func WithCustomResourceCollections(f func(cfg CustomResourceCollectionsConfig)) 
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {
 			o.CustomResourceCollections = f
+		}
+	}
+}
+
+// WithFinalStatusCollections adds a callback for constructing extension-owned final
+// status collections after the route attachment graph exists. Multiple callbacks
+// run in registration order; WithCustomResourceCollections retains its early lifecycle.
+func WithFinalStatusCollections(f func(FinalStatusCollectionsConfig)) AgentgatewaySyncerOption {
+	return func(o *agentgatewaySyncerConfig) {
+		if f != nil {
+			o.FinalStatusCollections = append(o.FinalStatusCollections, f)
 		}
 	}
 }
