@@ -183,6 +183,12 @@ pub mod from_messages {
 		validate_raw_request(req)?;
 		let typed = json_util::convert::<_, messages::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
+		translate_internal(typed)
+	}
+
+	pub(crate) fn translate_internal(
+		typed: messages::Request,
+	) -> Result<types::responses::Request, AIError> {
 		let messages::Request {
 			messages,
 			system,
@@ -766,7 +772,7 @@ pub mod from_messages {
 		}))
 	}
 
-	fn translate_response_internal(
+	pub(crate) fn translate_response_internal(
 		resp: responses::Response,
 	) -> Result<messages::MessagesResponse, AIError> {
 		if resp.error.is_some() || matches!(resp.status, responses::Status::Failed) {
@@ -1721,5 +1727,97 @@ pub mod from_messages {
 
 	fn unsupported<T>(reason: &'static str) -> Result<T, AIError> {
 		Err(AIError::UnsupportedConversion(strng::new(reason)))
+	}
+}
+
+/// A Chat Completions client on a Responses provider, by way of the Messages converters: the
+/// request goes Chat Completions to Messages to Responses, and the response and stream come back
+/// the same way. The output limit, reasoning effort and response format are taken from the Chat
+/// Completions request, because the Messages step fills in or approximates them.
+pub mod from_completions {
+	use agent_http::Body;
+	use bytes::Bytes;
+	use serde_json::{Map, Value};
+
+	use crate::types::ResponseType;
+	use crate::types::completions::typed as completions;
+	use crate::types::responses::typed as responses;
+	use crate::{
+		AIError, LogContentFields, StreamingUsageGuard, conversion, json, logged_response_parsing,
+		types,
+	};
+
+	pub fn translate(
+		req: &types::completions::Request,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let typed = json::convert::<_, completions::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
+		#[allow(deprecated)]
+		let max_output_tokens = typed.max_completion_tokens.or(typed.max_tokens);
+		let reasoning = typed
+			.reasoning_effort
+			.clone()
+			.map(|effort| responses::Reasoning {
+				effort: Some(effort),
+				..Default::default()
+			});
+		let format = typed.response_format.clone().map(|format| match format {
+			completions::ResponseFormat::Text => responses::TextResponseFormatConfiguration::Text,
+			completions::ResponseFormat::JsonObject => {
+				responses::TextResponseFormatConfiguration::JsonObject
+			},
+			completions::ResponseFormat::JsonSchema { json_schema } => {
+				responses::TextResponseFormatConfiguration::JsonSchema(json_schema)
+			},
+		});
+
+		let request = conversion::messages::from_completions::translate_typed(typed, catalog)?;
+		let mut request = super::from_messages::translate_internal(request)?;
+		request.max_output_tokens = max_output_tokens;
+		if let Some(rest) = request.rest.as_object_mut() {
+			rest.remove("reasoning");
+			if let Some(reasoning) = reasoning {
+				rest.insert(
+					"reasoning".to_string(),
+					serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
+				);
+			}
+			if let Some(format) = format {
+				let format = serde_json::to_value(format).map_err(AIError::RequestMarshal)?;
+				rest.insert(
+					"text".to_string(),
+					Value::Object(Map::from_iter([("format".to_string(), format)])),
+				);
+			}
+		}
+		serde_json::to_vec(&request).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp = serde_json::from_slice::<responses::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
+		let resp = super::from_messages::translate_response_internal(resp)?;
+		let resp = conversion::messages::from_completions::translate_response_internal(resp);
+		let passthrough =
+			json::convert::<_, types::completions::Response>(&resp).map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(passthrough))
+	}
+
+	/// The Responses stage reads the provider's events, so it takes the usage guard and the content
+	/// flags; the Chat Completions stage only re-frames them.
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let events = super::from_messages::translate_stream(b, buffer_limit, log, log_content);
+		conversion::messages::from_completions::translate_stream(
+			events,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
 	}
 }

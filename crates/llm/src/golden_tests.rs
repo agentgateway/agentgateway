@@ -148,13 +148,13 @@ mod requests {
 	}
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
 		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
-		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
-		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI, RESPONSES]),
 		("reasoning-adaptive", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
 		("reasoning_replay", &[ANTHROPIC, BEDROCK]),
@@ -164,10 +164,10 @@ mod requests {
 		("image-file", &[VERTEX_GEMINI]),
 		("file-inline", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("file-uri", &[VERTEX_GEMINI]),
-		("structured-output", &[VERTEX_GEMINI]),
+		("structured-output", &[VERTEX_GEMINI, RESPONSES]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
-		("generation-config", &[VERTEX_GEMINI]),
+		("generation-config", &[VERTEX_GEMINI, RESPONSES]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		(
@@ -331,6 +331,9 @@ mod requests {
 							conversion::vertex_gemini::from_completions::translate(&resolved, true)
 						},
 					),
+					RESPONSES => test_request(RESPONSES, &path, |i| {
+						conversion::responses::from_completions::translate(i, Some(&catalog))
+					}),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}
 			}
@@ -954,6 +957,7 @@ mod responses {
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
+	const RESPONSES_TO_COMPLETIONS: &str = "responses-completions";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 
 	const ALL_BEDROCK: &[&str] = &[
@@ -1037,6 +1041,7 @@ mod responses {
 				RESPONSES_TO_RESPONSES,
 				RESPONSES_TO_DETECT,
 				RESPONSES_TO_MESSAGES,
+				RESPONSES_TO_COMPLETIONS,
 			],
 		),
 		(
@@ -1045,9 +1050,13 @@ mod responses {
 				RESPONSES_TO_MESSAGES,
 				RESPONSES_TO_RESPONSES,
 				RESPONSES_TO_DETECT,
+				RESPONSES_TO_COMPLETIONS,
 			],
 		),
-		("reasoning", &[RESPONSES_TO_MESSAGES]),
+		(
+			"reasoning",
+			&[RESPONSES_TO_MESSAGES, RESPONSES_TO_COMPLETIONS],
+		),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
 			"truncated_tool_call",
@@ -1152,6 +1161,7 @@ mod responses {
 				RESPONSES_TO_RESPONSES,
 				RESPONSES_TO_DETECT,
 				RESPONSES_TO_MESSAGES,
+				RESPONSES_TO_COMPLETIONS,
 			],
 		),
 		("stream-custom-tool", &[RESPONSES_TO_RESPONSES]),
@@ -1363,6 +1373,9 @@ mod responses {
 					}),
 					RESPONSES_TO_MESSAGES => test_response(provider, &path, |i| {
 						conversion::responses::from_messages::translate_response(&i)
+					}),
+					RESPONSES_TO_COMPLETIONS => test_response(provider, &path, |i| {
+						conversion::responses::from_completions::translate_response(&i)
 					}),
 					other => panic!("unsupported provider in RESPONSES_RESPONSES: {other}"),
 				}
@@ -1691,6 +1704,14 @@ mod responses {
 				test_streaming(provider, &path, |response, reporter| match *provider {
 					RESPONSES_TO_RESPONSES => response.map(|body| {
 						conversion::responses::passthrough_stream(body, BUFFER_LIMIT, reporter, LOG_CONTENT)
+					}),
+					RESPONSES_TO_COMPLETIONS => response.map(|body| {
+						conversion::responses::from_completions::translate_stream(
+							body,
+							BUFFER_LIMIT,
+							reporter,
+							LOG_CONTENT,
+						)
 					}),
 					RESPONSES_TO_DETECT => types::detect::passthrough_stream(reporter, response),
 					RESPONSES_TO_MESSAGES => response.map(|body| {

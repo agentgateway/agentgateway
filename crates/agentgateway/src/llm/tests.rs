@@ -688,6 +688,44 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 }
 
 #[test]
+fn completions_routing_falls_back_to_responses() {
+	let copilot = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let providers = [
+		(
+			"Copilot gpt-5",
+			&copilot,
+			"gpt-5",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"Copilot gpt-5.4",
+			&copilot,
+			"gpt-5.4",
+			ChatFormat::OpenAICompletions,
+		),
+		(
+			"custom Responses",
+			&custom_provider(custom::ProviderFormat::Responses),
+			"custom-model",
+			ChatFormat::OpenAIResponses,
+		),
+	];
+
+	for (name, provider, model, expected) in providers {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Completions, model, None)
+				.expect("Completions routing should be available")
+				.output,
+			expected,
+			"{name}"
+		);
+	}
+}
+
+#[test]
 fn response_prompt_guard_headers_copies_request_traceparent() {
 	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 		.parse()
