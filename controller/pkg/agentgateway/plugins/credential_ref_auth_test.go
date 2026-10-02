@@ -352,14 +352,15 @@ func TestCopilotSecretAuthPreservesExplicitKey(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "missing secret", absent: true, wantErr: true},
-		{name: "missing key", data: map[string][]byte{"other": []byte("unused")}, wantErr: true},
-		{name: "empty", data: map[string][]byte{"Authorization": nil}, wantErr: true},
-		{name: "whitespace", data: map[string][]byte{"Authorization": []byte(" \n\t ")}, wantErr: true},
-		{name: "invalid utf8", data: map[string][]byte{"Authorization": {0xff}}, wantErr: true},
 		{name: "bare", data: map[string][]byte{"Authorization": []byte(" copilot-token \n")}, want: "copilot-token"},
 		{name: "bearer", data: map[string][]byte{"Authorization": []byte(" Bearer copilot-token \n")}, want: "copilot-token"},
-		{name: "bearer only", data: map[string][]byte{"Authorization": []byte(" Bearer \n")}, want: "Bearer"},
+		{name: "bearer alone", data: map[string][]byte{"Authorization": []byte("Bearer")}, wantErr: true},
+		{name: "bearer only", data: map[string][]byte{"Authorization": []byte(" Bearer \n")}, wantErr: true},
+		{name: "empty", data: map[string][]byte{"Authorization": nil}, wantErr: true},
+		{name: "invalid utf8", data: map[string][]byte{"Authorization": {0xff}}, wantErr: true},
+		{name: "missing key", data: map[string][]byte{"other": []byte("unused")}, wantErr: true},
+		{name: "missing secret", absent: true, wantErr: true},
+		{name: "whitespace", data: map[string][]byte{"Authorization": []byte(" \n\t ")}, wantErr: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var inputs []*corev1.Secret
