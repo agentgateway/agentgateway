@@ -1553,10 +1553,8 @@ async fn list_postgres(
 	pool: &PgPool,
 	kind: Option<ConfigResourceKind>,
 ) -> anyhow::Result<Snapshot> {
-	let mut tx = pool.begin().await?;
-	// READ COMMITTED takes a new snapshot per statement; both reads must see the same commit.
-	sqlx::query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
-		.execute(&mut *tx)
+	let mut tx = pool
+		.begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")
 		.await?;
 	let generation: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
 		.fetch_one(&mut *tx)
@@ -1592,8 +1590,7 @@ async fn list_postgres(
 	})
 }
 
-/// sqlx issues a deferred `BEGIN`, and SQLite fails a deferred transaction's lock upgrade with
-/// `SQLITE_BUSY` without consulting `busy_timeout`. Take the write lock up front instead.
+// A deferred SQLite lock upgrade can fail without waiting for busy_timeout.
 const SQLITE_BEGIN_IMMEDIATE: &str = "BEGIN IMMEDIATE";
 
 async fn bump_generation_sqlite(
@@ -1611,26 +1608,18 @@ async fn bump_generation_sqlite(
 	.await?;
 	match bumped {
 		Some(generation) => Ok(generation),
-		None => Err(generation_conflict_sqlite(tx, expected).await),
-	}
-}
-
-async fn generation_conflict_sqlite(
-	tx: &mut Transaction<'_, Sqlite>,
-	expected: Option<i64>,
-) -> anyhow::Error {
-	let found: anyhow::Result<i64> =
-		sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
-			.fetch_one(&mut **tx)
-			.await
-			.map_err(Into::into);
-	match found {
-		Ok(found) => ConfigResourceError::GenerationConflict {
-			expected: expected.unwrap_or(found),
-			found,
-		}
-		.into(),
-		Err(err) => err,
+		None => {
+			let found: i64 = sqlx::query_scalar("SELECT generation FROM agw_config_meta WHERE id = 1")
+				.fetch_one(&mut **tx)
+				.await?;
+			Err(
+				ConfigResourceError::GenerationConflict {
+					expected: expected.unwrap_or(found),
+					found,
+				}
+				.into(),
+			)
+		},
 	}
 }
 
@@ -2089,8 +2078,6 @@ mod tests {
 		}
 	}
 
-	/// `sqlite::memory:` gives each pooled connection its own database, so a second writer would not
-	/// see the first one's rows.
 	async fn file_backed_store(dir: &tempfile::TempDir) -> ConfigResourceStore {
 		let url = format!("sqlite://{}", dir.path().join("config.db").display());
 		ConfigResourceStore::connect(&url, None)
@@ -2141,22 +2128,11 @@ mod tests {
 		let store = file_backed_store(&dir).await;
 		let generation = store.snapshot(None).await.expect("snapshot").generation;
 
-		let (first, second) = {
-			let (one, two) = (store.clone(), store.clone());
-			tokio::join!(
-				tokio::spawn(async move {
-					one
-						.upsert_prepared(vec![test_provider("a")], Some(generation))
-						.await
-				}),
-				tokio::spawn(async move {
-					two
-						.upsert_prepared(vec![test_provider("b")], Some(generation))
-						.await
-				}),
-			)
-		};
-		let results = [first.expect("join"), second.expect("join")];
+		let (first, second) = tokio::join!(
+			store.upsert_prepared(vec![test_provider("a")], Some(generation)),
+			store.upsert_prepared(vec![test_provider("b")], Some(generation)),
+		);
+		let results = [first, second];
 
 		assert_eq!(
 			results.iter().filter(|result| result.is_ok()).count(),

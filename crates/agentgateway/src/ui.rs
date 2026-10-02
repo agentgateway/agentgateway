@@ -655,12 +655,11 @@ async fn update_config_resource(
 	with_generation_retry(expected, || async {
 		let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
 		ensure_expected_generation(expected, snapshot.generation)?;
-		let mut prepared =
-			prepare_stored_update(&snapshot.resources, kind, &id, resource.value.clone())?;
 		let old = snapshot
 			.resources
 			.iter()
 			.find(|old| old.kind == kind && old.id == id);
+		let mut prepared = prepare_stored_update(old, kind, &id, resource.value.clone())?;
 		auth.authorize_write(&mut prepared, &id, old.map(|old| &old.value))?;
 
 		if old.is_none() && !is_policy {
@@ -733,21 +732,18 @@ async fn update_file_config_resource(
 }
 
 fn prepare_stored_update(
-	resources: &[ConfigResource],
+	existing: Option<&ConfigResource>,
 	kind: ConfigResourceKind,
 	id: &str,
 	value: Value,
 ) -> Result<PreparedResource, ErrorResponse> {
 	match kind {
 		ConfigResourceKind::LlmApiKey => {
-			let existing = resources
-				.iter()
-				.find(|resource| resource.kind == kind && resource.id == id)
-				.ok_or_else(|| {
-					resource_api_error(ConfigResourceError::NotFound(format!(
-						"config resource not found: {kind}/{id}"
-					)))
-				})?;
+			let existing = existing.ok_or_else(|| {
+				resource_api_error(ConfigResourceError::NotFound(format!(
+					"config resource not found: {kind}/{id}"
+				)))
+			})?;
 			let created_at = crate::config_store::api_key_created_at(&existing.value)
 				.or_else(|| Some(existing.created_at.timestamp()));
 			crate::config_store::prepare_api_key_update(id.to_string(), value, created_at)
@@ -889,7 +885,7 @@ fn resource_api_error(err: impl Into<anyhow::Error>) -> ErrorResponse {
 	ErrorResponse::Status(status, message)
 }
 
-const MAX_GENERATION_RETRIES: usize = 3;
+const MAX_GENERATION_ATTEMPTS: usize = 3;
 
 fn if_match_generation(headers: &HeaderMap) -> Result<Option<i64>, ErrorResponse> {
 	let Some(value) = headers.get(http::header::IF_MATCH) else {
@@ -899,7 +895,6 @@ fn if_match_generation(headers: &HeaderMap) -> Result<Option<i64>, ErrorResponse
 		.to_str()
 		.map_err(|_| ErrorResponse::Status(StatusCode::BAD_REQUEST, "invalid If-Match".to_string()))?
 		.trim();
-	// RFC 7232: `*` matches any current representation, so it pins nothing.
 	if value == "*" {
 		return Ok(None);
 	}
@@ -924,20 +919,20 @@ where
 	F: FnMut() -> Fut,
 	Fut: Future<Output = Result<T, ErrorResponse>>,
 {
-	let attempts = if expected.is_some() {
-		1
+	let mut remaining = if expected.is_some() {
+		0
 	} else {
-		MAX_GENERATION_RETRIES
+		MAX_GENERATION_ATTEMPTS - 1
 	};
-	for remaining in (0..attempts).rev() {
+	loop {
 		match attempt().await {
 			Err(ErrorResponse::GenerationConflict(message)) if remaining > 0 => {
+				remaining -= 1;
 				debug!("{message}; retrying config write against a fresh snapshot");
 			},
 			other => return other,
 		}
 	}
-	unreachable!("retry loop runs at least once")
 }
 
 async fn refresh_base_costs(
@@ -955,8 +950,7 @@ async fn refresh_base_costs(
 	if configured_file.is_none() && app.state.storage.mode == ConfigStoreMode::Hybrid {
 		let refreshed = crate::llm::catalog::refresh::fetch_base_catalog().await?;
 		let store = app.config_resource_store()?;
-		// The read stays inside the retry: this merges into the current value, so retrying with one
-		// merged from a superseded read would restore the edit that displaced it.
+		// Re-read and merge on every retry so concurrent custom-cost edits are preserved.
 		with_generation_retry(None, || async {
 			let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
 			let mut value = snapshot
@@ -1283,6 +1277,18 @@ mod tests {
 		.await;
 		assert_eq!(result.expect("eventually succeeds"), 3);
 		assert_eq!(attempts.get(), 3);
+	}
+
+	#[tokio::test]
+	async fn generation_retries_are_bounded() {
+		let attempts = std::cell::Cell::new(0);
+		let result: Result<(), _> = with_generation_retry(None, || async {
+			attempts.set(attempts.get() + 1);
+			Err(ErrorResponse::GenerationConflict("stale".to_string()))
+		})
+		.await;
+		assert!(result.is_err());
+		assert_eq!(attempts.get(), MAX_GENERATION_ATTEMPTS);
 	}
 
 	#[tokio::test]
