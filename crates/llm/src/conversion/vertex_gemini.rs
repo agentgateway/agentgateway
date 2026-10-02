@@ -1175,8 +1175,8 @@ pub mod from_messages {
 		req: &types::messages::Request,
 		configured_model: Option<&str>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed: types::messages::typed::Request =
-			crate::json::convert(req).map_err(AIError::RequestParsing)?;
+		let typed: types::messages::typed::Request = crate::json::convert(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let out = build_request(&typed, configured_model, &req.rest)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
@@ -1445,6 +1445,7 @@ pub mod from_messages {
 					description: t.description.clone(),
 					parameters: Some(super::from_completions::normalize_gemini_schema(
 						&t.input_schema,
+						false,
 					)),
 					rest: Default::default(),
 				}),
@@ -1496,7 +1497,9 @@ pub mod from_messages {
 			.map(|fmt| match fmt {
 				mt::OutputFormat::JsonSchema { schema } => (
 					Some("application/json".to_string()),
-					Some(super::from_completions::normalize_gemini_schema(schema)),
+					Some(super::from_completions::normalize_gemini_schema(
+						schema, false,
+					)),
 				),
 			})
 			.unwrap_or((None, None));

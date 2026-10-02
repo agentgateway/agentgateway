@@ -253,19 +253,36 @@ impl AIProvider {
 /// Classify how the upstream reports cached tokens, from the source wire format the
 /// gateway is about to parse — not the provider name, which can carry another
 /// provider's native semantics (e.g. Vertex serving Anthropic models).
-/// The convention the upstream itself reports on, before any conversion of ours.
 ///
-/// This is a property of the provider and model alone. When one of our conversions re-renders
-/// the usage and changes the convention, that belongs on
-/// [`ChatTranslation::cache_convention`], which takes precedence over this.
+/// For chat, `chat_output` decides: `provider_format` echoes the client format for Bedrock
+/// Converse, so it can't distinguish Converse from Mantle's OpenAI APIs.
+///
+/// When one of our conversions re-renders the usage and changes the convention, that belongs
+/// on [`ChatTranslation::cache_convention`], which takes precedence over this.
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
+	chat_output: Option<ChatFormat>,
 	request_model: &str,
+	path: &str,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	if let Some(output) = chat_output {
+		return match output {
+			ChatFormat::AnthropicMessages | ChatFormat::BedrockConverse => InputExcludesCache,
+			ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses | ChatFormat::VertexGemini => {
+				InputIncludesCache
+			},
+		};
+	}
 	match provider {
+		// Detect passthrough to Mantle's OpenAI APIs.
+		AIProvider::Bedrock(_)
+			if path.ends_with("/chat/completions") || path.ends_with("/responses") =>
+		{
+			InputIncludesCache
+		},
 		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
 		AIProvider::Copilot(_) if copilot::Provider::is_anthropic_model(request_model) => {
 			InputExcludesCache
@@ -2178,7 +2195,7 @@ impl AIProvider {
 		req: &mut impl RequestType,
 		parts: &mut Parts,
 		provider_format: Option<custom::ProviderFormat>,
-		cache_convention: Option<CacheTokenConvention>,
+		chat_translation: Option<&ChatTranslation>,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<PreparedRequest, AIError> {
@@ -2218,8 +2235,17 @@ impl AIProvider {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
 		// A conversion that re-renders usage overrides the upstream's own convention.
-		llm_info.cache_convention = cache_convention
-			.unwrap_or_else(|| cache_convention_for(self, provider_format, &llm_info.request_model));
+		llm_info.cache_convention = chat_translation
+			.and_then(ChatTranslation::cache_convention)
+			.unwrap_or_else(|| {
+				cache_convention_for(
+					self,
+					provider_format,
+					chat_translation.map(|t| t.output),
+					&llm_info.request_model,
+					parts.uri.path(),
+				)
+			});
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()
 		{
@@ -2277,7 +2303,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				Some(provider_format),
-				chat_translation.cache_convention(),
+				Some(chat_translation),
 				tokenize,
 				log,
 			)
