@@ -414,6 +414,12 @@ impl Session {
 				}
 				.into(),
 			),
+			// The upstream answered with a JSON-RPC error of its own; keep the
+			// original code, message, and data instead of flattening it into a
+			// generic internal error (#3748).
+			Err(UpstreamError::ServiceError(rmcp::ServiceError::McpError(rej))) if req_id.is_some() => {
+				Err(mcp::Error::UpstreamJsonRpc(req_id.unwrap(), rej).into())
+			},
 			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
 				Err(mcp::Error::InvalidParams(req_id, message).into())
 			},
