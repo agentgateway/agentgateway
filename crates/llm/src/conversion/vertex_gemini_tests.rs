@@ -695,6 +695,64 @@ fn response_format_inlines_real_dialog_question_schema() {
 	);
 }
 
+/// Translate a Messages request declaring one tool with `input_schema`; return its egress parameters.
+fn msg_tool_parameters(input_schema: Value) -> Value {
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-flash",
+		"max_tokens": 64,
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{ "name": "t", "input_schema": input_schema }]
+	}));
+	g["tools"][0]["functionDeclarations"][0]["parameters"].clone()
+}
+
+// Gemini's Schema has no exclusive bounds and rejects the keywords with a 400. Claude Code's
+// built-in tools carry them deep inside array items, so no level may leak them.
+#[test]
+fn tool_schema_drops_exclusive_bounds_at_every_level() {
+	let params = msg_tool_parameters(json!({
+		"type": "object",
+		"properties": {
+			"edits": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"count": { "type": "integer", "exclusiveMinimum": 0 },
+						"ratio": { "type": "number", "exclusiveMaximum": 1 }
+					}
+				}
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&params).unwrap();
+	assert!(!txt.contains("exclusiveMinimum"), "{txt}");
+	assert!(!txt.contains("exclusiveMaximum"), "{txt}");
+}
+
+// The bound survives as an inclusive one rather than being dropped, unless the schema already
+// sets the inclusive bound itself, which then wins.
+#[test]
+fn tool_schema_keeps_exclusive_bound_as_inclusive_unless_already_bounded() {
+	let params = msg_tool_parameters(json!({
+		"type": "object",
+		"properties": {
+			"count": { "type": "integer", "exclusiveMinimum": 0 },
+			"ratio": { "type": "number", "exclusiveMaximum": 1, "maximum": 0.5 }
+		}
+	}));
+	assert_eq!(
+		params["properties"]["count"]["minimum"],
+		json!(0),
+		"{params}"
+	);
+	assert_eq!(
+		params["properties"]["ratio"]["maximum"],
+		json!(0.5),
+		"{params}"
+	);
+}
+
 /// Translate a request whose `response_format` wraps `schema`; return the egress `responseSchema`.
 fn response_schema(schema: Value) -> Value {
 	let g = to_gemini(json!({
