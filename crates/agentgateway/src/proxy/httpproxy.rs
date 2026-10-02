@@ -2491,7 +2491,7 @@ async fn make_backend_call(
 					.llm
 					.as_ref()
 					.map(|policy| policy.resolve_route(req.uri().path()))
-					.unwrap_or(llm::RouteType::Completions);
+					.unwrap_or_else(|| llm::model_router::default_route_type(req.uri().path()));
 				let target = match &provider.host_override {
 					Some(target) => target.clone(),
 					None => provider
@@ -2673,7 +2673,7 @@ async fn make_backend_call(
 				.llm
 				.as_ref()
 				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or(llm::RouteType::Completions);
+				.unwrap_or_else(|| llm::model_router::default_route_type(req.uri().path()));
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			dtrace::trace(|trace| {
 				trace.llm_route_resolved(

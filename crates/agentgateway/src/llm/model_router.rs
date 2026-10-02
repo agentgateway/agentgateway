@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use agent_core::strng;
 use bytes::Bytes;
@@ -54,7 +54,7 @@ impl ModelVisibility {
 	}
 }
 
-pub fn default_route_types() -> Arc<llm::Policy> {
+static DEFAULT_ROUTE_TYPES: LazyLock<Arc<llm::Policy>> = LazyLock::new(|| {
 	Arc::new(llm::Policy {
 		routes: [
 			(strng::new("/v1/models"), llm::RouteType::Models),
@@ -95,6 +95,14 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 		.collect(),
 		..Default::default()
 	})
+});
+
+pub fn default_route_types() -> Arc<llm::Policy> {
+	Arc::clone(&DEFAULT_ROUTE_TYPES)
+}
+
+pub fn default_route_type(path: &str) -> llm::RouteType {
+	DEFAULT_ROUTE_TYPES.resolve_route(path)
 }
 
 #[apply(schema_ser_schema!)]
@@ -1879,6 +1887,22 @@ mod tests {
 				"{uri}"
 			);
 		}
+	}
+
+	#[test]
+	fn default_route_type_dispatches_openai_compatible_endpoints() {
+		assert_eq!(
+			default_route_type("/v1/chat/completions"),
+			llm::RouteType::Completions
+		);
+		assert_eq!(
+			default_route_type("/v1/responses"),
+			llm::RouteType::Responses
+		);
+		assert_eq!(
+			default_route_type("/v1/embeddings"),
+			llm::RouteType::Embeddings
+		);
 	}
 
 	#[test]
