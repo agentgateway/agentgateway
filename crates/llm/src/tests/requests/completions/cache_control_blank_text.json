@@ -1,0 +1,92 @@
+{
+  "model": "anthropic.claude-sonnet-4-5",
+  "messages": [
+    {
+      "role": "system",
+      "content": [
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        },
+        {
+          "type": "text",
+          "text": "system"
+        }
+      ]
+    },
+    {
+      "role": "developer",
+      "content": [
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        },
+        {
+          "type": "text",
+          "text": "retained"
+        },
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        },
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        },
+        {
+          "type": "text",
+          "text": "suffix"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "reasoning_content": "reasoning",
+      "reasoning_signature": "signature",
+      "content": [
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        },
+        {
+          "type": "text",
+          "text": "retained"
+        },
+        {
+          "type": "text",
+          "text": " \n",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    }
+  ]
+}
