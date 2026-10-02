@@ -105,6 +105,29 @@ pub fn default_route_type(path: &str) -> llm::RouteType {
 	DEFAULT_ROUTE_TYPES.resolve_route(path)
 }
 
+/// Resolve an explicit route before the built-in API defaults, while treating a
+/// provider's wildcard route as a fallback for paths AgentGateway does not know.
+pub fn resolve_route(policy: Option<&llm::Policy>, path: &str) -> llm::RouteType {
+	if let Some(policy) = policy {
+		let has_explicit_match = policy
+			.routes
+			.iter()
+			.any(|(suffix, _)| suffix.as_str() != "*" && path.ends_with(suffix.as_str()));
+		if has_explicit_match {
+			return policy.resolve_route(path);
+		}
+	}
+
+	let default = default_route_type(path);
+	if default != llm::RouteType::Passthrough {
+		return default;
+	}
+
+	policy
+		.map(|policy| policy.resolve_route(path))
+		.unwrap_or(default)
+}
+
 #[apply(schema_ser_schema!)]
 pub struct VirtualModelRoute {
 	pub name: String,
@@ -1902,6 +1925,38 @@ mod tests {
 		assert_eq!(
 			default_route_type("/v1/embeddings"),
 			llm::RouteType::Embeddings
+		);
+	}
+
+	#[test]
+	fn known_api_routes_take_precedence_over_provider_wildcards() {
+		let wildcard_completions = llm::Policy {
+			routes: [(strng::new("*"), llm::RouteType::Completions)]
+				.into_iter()
+				.collect(),
+			..Default::default()
+		};
+		assert_eq!(
+			resolve_route(Some(&wildcard_completions), "/v1/responses"),
+			llm::RouteType::Responses
+		);
+		assert_eq!(
+			resolve_route(Some(&wildcard_completions), "/unknown"),
+			llm::RouteType::Completions
+		);
+
+		let explicit_responses_override = llm::Policy {
+			routes: [
+				(strng::new("/v1/responses"), llm::RouteType::Completions),
+				(strng::new("*"), llm::RouteType::Passthrough),
+			]
+			.into_iter()
+			.collect(),
+			..Default::default()
+		};
+		assert_eq!(
+			resolve_route(Some(&explicit_responses_override), "/v1/responses"),
+			llm::RouteType::Completions
 		);
 	}
 

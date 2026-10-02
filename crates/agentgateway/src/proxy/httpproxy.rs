@@ -2485,13 +2485,11 @@ async fn make_backend_call(
 				);
 				// Resolve the LLM route before picking the connection target: some providers serve
 				// routes from different hosts (e.g. Bedrock rerank uses bedrock-agent-runtime).
-				let route_type = route_policies
+				let effective_route_policy = route_policies
 					.clone()
-					.merge_backend_policies(effective_policies.llm.clone())
-					.llm
-					.as_ref()
-					.map(|policy| policy.resolve_route(req.uri().path()))
-					.unwrap_or_else(|| llm::model_router::default_route_type(req.uri().path()));
+					.merge_backend_policies(effective_policies.llm.clone());
+				let route_type =
+					llm::model_router::resolve_route(effective_route_policy.llm.as_deref(), req.uri().path());
 				let target = match &provider.host_override {
 					Some(target) => target.clone(),
 					None => provider
@@ -2669,11 +2667,8 @@ async fn make_backend_call(
 					.await
 					.map_err(ProxyResponse::DirectResponse)?;
 			}
-			let route_type = llm_request_policies
-				.llm
-				.as_ref()
-				.map(|policy| policy.resolve_route(req.uri().path()))
-				.unwrap_or_else(|| llm::model_router::default_route_type(req.uri().path()));
+			let route_type =
+				llm::model_router::resolve_route(llm_request_policies.llm.as_deref(), req.uri().path());
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			dtrace::trace(|trace| {
 				trace.llm_route_resolved(
