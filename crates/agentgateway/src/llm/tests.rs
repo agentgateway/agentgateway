@@ -4661,3 +4661,53 @@ fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
 		req.uri().path()
 	);
 }
+
+/// The client's query belongs to the client's API, not Google's: Claude Code sends
+/// `/v1/messages?beta=true`, and generateContent rejects unknown parameters with a 400. Once a
+/// Messages request is translated to native Gemini, only the gateway's own `alt=sse` may remain.
+#[test]
+fn setup_request_drops_client_query_when_messages_translate_to_native_gemini() {
+	for streaming in [false, true] {
+		for provider in [
+			AIProvider::Vertex(vertex::Provider {
+				model_override: None,
+				region: Some(strng::new("us-central1")),
+				project_id: strng::new("test-project"),
+			}),
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			custom_provider(custom::ProviderFormat::GenerateContent),
+		] {
+			let llm_request = LLMRequest {
+				input_format: InputFormat::Messages,
+				..native_gemini_llm_request("gemini-2.5-flash", streaming)
+			};
+			let mut req = crate::http::tests_common::request(
+				"https://gateway.example.com/v1/messages?beta=true",
+				http::Method::POST,
+				&[],
+			);
+
+			provider
+				.setup_request(
+					&mut req,
+					RouteType::GenerateContent,
+					Some(&llm_request),
+					None,
+					None,
+					false,
+					None,
+					None,
+				)
+				.expect("setup_request should succeed");
+
+			assert_eq!(
+				req.uri().query(),
+				streaming.then_some("alt=sse"),
+				"provider {} (streaming: {streaming})",
+				provider.provider(),
+			);
+		}
+	}
+}

@@ -1366,7 +1366,16 @@ impl AIProvider {
 		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
 		// rather than at parse time keeps `alt` intact on the paths above.
-		if route_type == RouteType::GeminiCountTokens
+		//
+		// A request we translated into native Gemini carries the query of the client's own API
+		// (Claude Code sends `/v1/messages?beta=true`), which generateContent rejects as unknown
+		// fields, so it is dropped whole. A native Gemini client's parameters are Google's and stay.
+		if llm_request.is_some_and(|l| {
+			matches!(l.provider_state, Some(ProviderState::VertexGemini))
+				&& l.input_format != InputFormat::Gemini
+		}) {
+			strip_query(req);
+		} else if route_type == RouteType::GeminiCountTokens
 			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
 		{
 			strip_alt_query(req);
@@ -3296,6 +3305,16 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 fn strip_alt_query(req: &mut Request) {
 	// Removing a parameter from an already-valid URI cannot fail.
 	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
+}
+
+fn strip_query(req: &mut Request) {
+	// Rebuilding from the path of an already-valid URI cannot fail.
+	let _ = http::modify_req_uri(req, |uri| {
+		if let Some(pq) = &uri.path_and_query {
+			uri.path_and_query = Some(PathAndQuery::try_from(pq.path())?);
+		}
+		Ok(())
+	});
 }
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {
