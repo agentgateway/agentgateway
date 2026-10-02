@@ -1086,14 +1086,15 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentGateway.Name == "" && e.ParentKey.Kind != wellknown.ListenerSetGVK.Kind {
+			parentKind := NormalizeReference(e.OriginalReference.Group, e.OriginalReference.Kind, wellknown.GatewayGVK.GroupKind())
+			if e.ParentGateway.Name == "" && parentKind != wellknown.ListenerSetGVK.GroupKind() {
 				return nil
 			}
 			parent := utils.TypedNamespacedName{Kind: wellknown.GatewayGVK.Kind, NamespacedName: e.ParentGateway}
-			switch e.ParentKey.Kind {
-			case wellknown.ListenerSetGVK.Kind:
+			switch parentKind {
+			case wellknown.ListenerSetGVK.GroupKind():
 				parent = e.ParentKey
-			case wellknown.GatewayGVK.Kind, wellknown.ServiceGVK.Kind, wellknown.ServiceEntryGVK.Kind:
+			case wellknown.GatewayGVK.GroupKind(), wellknown.ServiceGVK.GroupKind(), wellknown.ServiceEntryGVK.GroupKind():
 			default:
 				if e.ServiceKey == nil {
 					parent = e.ParentKey
