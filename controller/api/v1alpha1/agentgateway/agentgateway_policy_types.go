@@ -3181,6 +3181,13 @@ type RateLimits struct {
 	// Global rate limiting policy using an external service.
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
+
+	// Limits on in-flight requests, counted per key on each proxy instance.
+	// Every rule must admit the request.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Concurrency []ConcurrencyLimit `json:"concurrency,omitempty"`
 }
 
 type RateLimitsConditional struct {
@@ -3205,6 +3212,13 @@ type RateLimitsOrConditional struct {
 	// +optional
 	Global *GlobalRateLimit `json:"global,omitempty"`
 
+	// Limits on in-flight requests, counted per key on each proxy instance.
+	// Every rule must admit the request.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Concurrency []ConcurrencyLimit `json:"concurrency,omitempty"`
+
 	// Conditional policy execution. Set this or the top-level rateLimit fields.
 	// The first matching policy will be executed.
 	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
@@ -3226,7 +3240,7 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 	if len(r.Conditional) > 0 {
 		return nil, seq
 	}
-	return &RateLimits{Local: r.Local, Global: r.Global}, seq
+	return &RateLimits{Local: r.Local, Global: r.Global, Concurrency: r.Concurrency}, seq
 }
 
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
@@ -3322,6 +3336,23 @@ const (
 	LocalRateLimitUnitMinutes LocalRateLimitUnit = "Minutes"
 	LocalRateLimitUnitHours   LocalRateLimitUnit = "Hours"
 )
+
+// Limits how many requests may be in flight at once for a key. A slot is taken when a request is
+// admitted and released when its response has been fully sent. Counts are kept on each proxy
+// instance, without coordination between instances.
+type ConcurrencyLimit struct {
+	// Maximum number of in-flight requests allowed per key. Requests over the limit fail with a
+	// `429` error. `0` rejects every request the rule applies to.
+	// +kubebuilder:validation:Minimum=0
+	// +required
+	MaxConcurrent int32 `json:"maxConcurrent"`
+
+	// CEL expression selecting the counter, for example `jwt.sub` or
+	// `jwt.sub + "/" + llm.requestModel`. Requests without a key share one counter.
+	// Keys that use `llm` are evaluated once the LLM request has been parsed.
+	// +optional
+	Key *CELExpression `json:"key,omitempty"`
+}
 
 // Local rate limiting policy. Local rate limits are handled on a per-proxy basis, without coordination
 // between instances of the proxy.

@@ -1957,7 +1957,18 @@
           "description": "Local rate limits for incoming requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalRateLimitPolicy"
+              "$ref": "#/$defs/LocalPolicyList_RateLimitSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrencyLimit": {
+          "description": "Limits on in-flight requests, counted per key on this proxy instance.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalPolicyList_ConcurrencyLimit"
             },
             {
               "type": "null"
@@ -5905,7 +5916,8 @@
         }
       ]
     },
-    "LocalRateLimitPolicy": {
+    "LocalPolicyList_RateLimitSpec": {
+      "description": "A list of rules, given either as the list itself or as conditional entries that each carry\none rule.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalConditionalPolicies_RateLimitSpec"
@@ -6043,6 +6055,101 @@
       "additionalProperties": false,
       "required": [
         "fillInterval"
+      ]
+    },
+    "LocalPolicyList_ConcurrencyLimit": {
+      "description": "A list of rules, given either as the list itself or as conditional entries that each carry\none rule.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalConditionalPolicies_ConcurrencyLimit"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConcurrencyLimit"
+          }
+        }
+      ]
+    },
+    "LocalConditionalPolicies_ConcurrencyLimit": {
+      "type": "object",
+      "properties": {
+        "conditional": {
+          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalConditionalPolicy_ConcurrencyLimit"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "conditional"
+      ]
+    },
+    "LocalConditionalPolicy_ConcurrencyLimit": {
+      "description": "Limits how many requests may be in flight at once for a key.",
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "maxConcurrent": {
+          "description": "Maximum number of in-flight requests allowed per key. Requests over the limit are rejected\nwith a 429.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "key": {
+          "description": "CEL expression selecting the counter, for example `jwt.sub` or\n`jwt.sub + \"/\" + llm.requestModel`. Requests without a key, or whose key cannot be\nevaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has\nbeen parsed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "maxConcurrent"
+      ]
+    },
+    "ConcurrencyLimit": {
+      "description": "Limits how many requests may be in flight at once for a key.",
+      "type": "object",
+      "properties": {
+        "maxConcurrent": {
+          "description": "Maximum number of in-flight requests allowed per key. Requests over the limit are rejected\nwith a 429.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "key": {
+          "description": "CEL expression selecting the counter, for example `jwt.sub` or\n`jwt.sub + \"/\" + llm.requestModel`. Requests without a key, or whose key cannot be\nevaluated, share one counter. Keys that use `llm` are evaluated once the LLM request has\nbeen parsed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "maxConcurrent"
       ]
     },
     "LocalExplicitOrConditional_RemoteRateLimit": {
@@ -12855,6 +12962,14 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/RateLimitSpec"
+          },
+          "default": []
+        },
+        "concurrencyLimit": {
+          "description": "Limits on in-flight requests, counted per key on this proxy instance.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConcurrencyLimit"
           },
           "default": []
         },
