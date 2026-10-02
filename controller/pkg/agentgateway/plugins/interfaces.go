@@ -78,8 +78,7 @@ type AddResourcesPlugin struct {
 	AncestorBackends krt.Collection[*utils.AncestorBackend]
 	GatewayStatuses  krt.StatusCollection[*gwv1.Gateway, gwv1.GatewayStatus]
 	// ParentResolvers contribute additional parent resolution logic to the
-	// main route pipeline. Contributed listener parents should instead use
-	// syncer.WithListenerParentResolver to consume final arbitration results.
+	// main route pipeline.
 	ParentResolvers []ParentResolver
 }
 

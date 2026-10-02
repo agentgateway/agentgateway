@@ -431,7 +431,6 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 				// Preserve the winning bind mode and reject only the later listener.
 				conflict = ListenerConflictBindMode
 			} else if p.protocol == listener.ParentInfo.Protocol {
-				// Route namespace permissions do not distinguish served hostnames.
 				if p.hostnames.Contains(listener.ParentInfo.OriginalHostname) {
 					conflict = ListenerConflictHostname
 				} else {
@@ -613,8 +612,6 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 
 type ParentResolver = plugins.ParentResolver
 
-// ArbitratedParentResolver validates extension listener keys against final
-// arbitration results. Extensions select identities, not listener permissions.
 type ArbitratedParentResolver struct {
 	Resolver  ParentResolver
 	Listeners krt.Collection[*GatewayListener]

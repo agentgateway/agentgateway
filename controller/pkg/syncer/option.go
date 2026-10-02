@@ -19,18 +19,9 @@ type agentgatewaySyncerConfig struct {
 	ListenerParentResolver      ListenerParentResolverBuilderFunc
 }
 
-// ListenerParentResolverBuilderFunc builds extension parent resolution from final
-// arbitration results. Conflicted listeners remain available for logical route
-// attachment; only non-conflicting listeners are programmed by the syncer.
-type ListenerParentResolverBuilderFunc func(krt.Collection[*translator.GatewayListener], krtutil.KrtOptions) translator.ParentResolver
+type ListenerParentResolverBuilderFunc func(listeners krt.Collection[*translator.GatewayListener], opts krtutil.KrtOptions) translator.ParentResolver
 
-// WithListenerParentResolver adds explicit extension parent resolution after
-// listener arbitration and before route translation. Use the supplied listeners,
-// not pre-arbitration candidates, and preserve their listener keys and permissions.
-// Mapping extension kinds to contributed ListenerSet identities is the caller's responsibility.
-// Returned listener keys are validated against this collection; permissions are
-// taken from the authoritative listener, and unknown keys are ignored. This seam
-// does not support Service parents or standalone plugin-programmed listeners.
+// WithListenerParentResolver builds extension resolvers after listener arbitration.
 func WithListenerParentResolver(f ListenerParentResolverBuilderFunc) AgentgatewaySyncerOption {
 	return func(o *agentgatewaySyncerConfig) {
 		if f != nil {

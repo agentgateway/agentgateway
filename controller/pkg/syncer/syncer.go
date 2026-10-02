@@ -579,8 +579,7 @@ func (s *Syncer) buildAgwResources(
 		return &gw
 	}, krtopts.ToOptions("translator/RouteGateways")...)
 
-	// Conflicted listeners retain logical route attachments, but must not receive
-	// traffic. Invalid TLS winners still program rejecting certificates, not fallback.
+	// Keep conflicted parents for attachment status, but do not program them.
 	filteredGateways := krt.NewCollection(routeGateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if gw.Conflict != "" {
 			return nil
@@ -614,21 +613,22 @@ func (s *Syncer) buildAgwResources(
 
 	// Build routes
 	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways)
+	resolvers := []translator.ParentResolver{routeParents}
 	if s.listenerParentResolver != nil {
 		if resolver := s.listenerParentResolver(routeGateways, krtopts); resolver != nil {
-			resolver = translator.ArbitratedParentResolver{Resolver: resolver, Listeners: routeGateways}
-			routeParents = &translator.CompositeParentResolver{Resolvers: []translator.ParentResolver{routeParents, resolver}}
+			resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: resolver, Listeners: routeGateways})
 		}
 	}
 
 	// Compose with plugin-provided parent resolvers.
-	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
-		resolvers := []translator.ParentResolver{routeParents}
+	if ext := s.agwPlugins.AddResourceExtension; ext != nil {
 		for _, r := range ext.ParentResolvers {
 			if r != nil {
 				resolvers = append(resolvers, r)
 			}
 		}
+	}
+	if len(resolvers) > 1 {
 		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
 	}
 

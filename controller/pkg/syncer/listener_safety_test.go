@@ -2,6 +2,7 @@ package syncer_test
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -24,7 +26,7 @@ import (
 
 func safetyGateway(hostname string) *gwv1.Gateway {
 	gw := &gwv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "default", CreationTimestamp: metav1.NewTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))},
+		Name: "example", Namespace: "default", CreationTimestamp: metav1.NewTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)),
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: "agentgateway",
 			AllowedListeners: &gwv1.AllowedListeners{Namespaces: &gwv1.ListenerNamespaces{From: new(gwv1.NamespacesFromAll)}},
@@ -40,7 +42,7 @@ func safetyGateway(hostname string) *gwv1.Gateway {
 
 func safetyListenerSet(namespace, name, hostname string) *gwv1.ListenerSet {
 	ls := &gwv1.ListenerSet{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))},
+		Name: name, Namespace: namespace, CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 		Spec: gwv1.ListenerSetSpec{
 			ParentRef: gwv1.ParentGatewayReference{Name: "example", Namespace: new(gwv1.Namespace("default"))},
 			Listeners: []gwv1.ListenerEntry{{Name: "http", Port: 8080, Protocol: gwv1.HTTPProtocolType}},
@@ -54,8 +56,8 @@ func safetyListenerSet(namespace, name, hostname string) *gwv1.ListenerSet {
 
 func safetyInputs(gw *gwv1.Gateway, sets ...*gwv1.ListenerSet) []any {
 	inputs := []any{gatewayClassYAML, gw,
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant"}},
+		&corev1.Namespace{Name: "default"},
+		&corev1.Namespace{Name: "tenant"},
 	}
 	for _, ls := range sets {
 		inputs = append(inputs, ls)
@@ -154,7 +156,7 @@ func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
 	ls.ParentInfo.Hostnames = []string{"default/*"}
 	ls.ParentInfo.AllowedKinds = []gwv1.RouteGroupKind{{Group: new(gwv1.Group("gateway.networking.k8s.io")), Kind: "HTTPRoute"}}
 	route := &gwv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{Name: "dormant", Namespace: "default"},
+		Name: "dormant", Namespace: "default",
 		Spec: gwv1.HTTPRouteSpec{
 			CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Group: new(gwv1.Group("test.example.com")), Kind: new(gwv1.Kind("TestListenerSet")), Name: "extension", SectionName: new(gwv1.SectionName("http"))}}},
 			Rules:           []gwv1.HTTPRouteRule{{}},
@@ -198,8 +200,10 @@ func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
 	require.Len(t, statuses, 1)
 	require.Len(t, statuses[0].Status.Parents, 1)
 	assert.Equal(t, "TestListenerSet", string(*statuses[0].Status.Parents[0].ParentRef.Kind))
-	assert.Equal(t, metav1.ConditionTrue, statuses[0].Status.Parents[0].Conditions[0].Status)
-	assert.Equal(t, "Accepted", statuses[0].Status.Parents[0].Conditions[0].Reason)
+	accepted := meta.FindStatusCondition(statuses[0].Status.Parents[0].Conditions, "Accepted")
+	require.NotNil(t, accepted)
+	assert.Equal(t, metav1.ConditionTrue, accepted.Status)
+	assert.Equal(t, "Accepted", accepted.Reason)
 }
 
 func TestListenerSafetyRecovery(t *testing.T) {
@@ -239,12 +243,7 @@ func TestListenerSafetySetWinnerRemoval(t *testing.T) {
 	sets.DeleteObject("tenant/a")
 	require.Eventually(t, func() bool {
 		keys := listenerKeys(s)
-		for _, key := range keys {
-			if key == "tenant/a.http" {
-				return false
-			}
-		}
-		return len(keys) == 2
+		return len(keys) == 2 && slices.Contains(keys, "default/example.http") && slices.Contains(keys, "tenant/b.http")
 	}, time.Second*5, time.Millisecond*10)
 	assert.ElementsMatch(t, []string{"default/example.http", "tenant/b.http"}, listenerKeys(s))
 }
@@ -270,7 +269,7 @@ func TestListenerSafetyNativeDormantRouteStatus(t *testing.T) {
 				ls.Annotations = map[string]string{annotations.InternalPorts: "8080"}
 			}
 			route := &gwv1.HTTPRoute{
-				ObjectMeta: metav1.ObjectMeta{Name: "dormant", Namespace: "tenant"},
+				Name: "dormant", Namespace: "tenant",
 				Spec: gwv1.HTTPRouteSpec{
 					CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Kind: new(gwv1.Kind("ListenerSet")), Name: "delegate"}}},
 					Rules:           []gwv1.HTTPRouteRule{{}},
@@ -294,20 +293,17 @@ func TestListenerSafetyNativeDormantRouteStatus(t *testing.T) {
 					require.NoError(t, json.Unmarshal(status.Status, &st))
 					require.Len(t, st.Listeners, 1)
 					assert.EqualValues(t, 1, st.Listeners[0].AttachedRoutes)
-					foundProgrammed := false
-					for _, condition := range st.Listeners[0].Conditions {
-						if condition.Type == "Programmed" {
-							foundProgrammed = true
-							assert.Equal(t, metav1.ConditionFalse, condition.Status)
-						}
-					}
-					assert.True(t, foundProgrammed)
+					programmed := meta.FindStatusCondition(st.Listeners[0].Conditions, "Programmed")
+					require.NotNil(t, programmed)
+					assert.Equal(t, metav1.ConditionFalse, programmed.Status)
 				case "HTTPRoute":
 					var st gwv1.HTTPRouteStatus
 					require.NoError(t, json.Unmarshal(status.Status, &st))
 					require.Len(t, st.Parents, 1)
-					assert.Equal(t, "Accepted", st.Parents[0].Conditions[0].Reason)
-					assert.Equal(t, metav1.ConditionTrue, st.Parents[0].Conditions[0].Status)
+					accepted := meta.FindStatusCondition(st.Parents[0].Conditions, "Accepted")
+					require.NotNil(t, accepted)
+					assert.Equal(t, "Accepted", accepted.Reason)
+					assert.Equal(t, metav1.ConditionTrue, accepted.Status)
 				}
 			}
 		})
