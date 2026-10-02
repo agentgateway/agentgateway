@@ -11,6 +11,8 @@ use tokio::sync::Notify;
 use crate::common::prelude::*;
 
 const ACTOR_UID: &str = "6f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
+// Port 1 is privileged and outside the ephemeral range: nothing in the test process listens there.
+const UNREACHABLE_ADDR: &str = "127.0.0.1:1";
 
 async fn send_request(io: MemoryClient, method: Method, url: &str) -> Response {
 	let authority = url
@@ -533,6 +535,50 @@ async fn resume_disposition_gateway(
 		}))
 		.await;
 	gateway
+}
+
+async fn unreachable_actor_service_ingress_status(request_parking: Value) -> StatusCode {
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": UNREACHABLE_ADDR,
+				"connectTargetPort": 80,
+				"requestParking": request_parking,
+			}
+		}))
+		.await;
+	send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", "/"),
+	)
+	.await
+	.status()
+}
+
+#[tokio::test]
+async fn actor_ingress_reports_an_unreachable_actor_service_as_unavailable() {
+	assert_eq!(
+		unreachable_actor_service_ingress_status(json!({ "max": 0 })).await,
+		StatusCode::SERVICE_UNAVAILABLE,
+	);
+	// While parking, an unavailable service is retried until the budget runs out.
+	assert_eq!(
+		unreachable_actor_service_ingress_status(json!({
+			"budget": "100ms",
+			"max": 1,
+			"retryInterval": "10ms",
+			"retryFactor": 1.0,
+		}))
+		.await,
+		StatusCode::GATEWAY_TIMEOUT,
+	);
 }
 
 #[tokio::test]
@@ -1310,10 +1356,18 @@ async fn substrate_egress_connect_status(
 	certificate_uri: &str,
 	payload: &[u8],
 ) -> StatusCode {
-	let upstream = simple_mock().await;
 	let api = ateapimock::AteApiMock::new(move || handler.clone())
 		.spawn()
 		.await;
+	substrate_egress_connect_status_at(api.address, certificate_uri, payload).await
+}
+
+async fn substrate_egress_connect_status_at(
+	api_address: std::net::SocketAddr,
+	certificate_uri: &str,
+	payload: &[u8],
+) -> StatusCode {
+	let upstream = simple_mock().await;
 
 	let mut outer = simple_bind();
 	outer.key = strng::literal!("outer");
@@ -1331,7 +1385,7 @@ async fn substrate_egress_connect_status(
 	gateway
 		.attach_frontend_policy(json!({
 			"substrateEgressActorResolution": {
-				"host": api.address.to_string(),
+				"host": api_address.to_string(),
 			}
 		}))
 		.await;
@@ -2756,6 +2810,20 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::Unavailable)
 			},
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::SERVICE_UNAVAILABLE,
+	);
+}
+
+#[tokio::test]
+async fn substrate_egress_reports_an_unreachable_actor_service_as_unavailable() {
+	let closed = UNREACHABLE_ADDR.parse().unwrap();
+	assert_eq!(
+		substrate_egress_connect_status_at(
+			closed,
 			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			b"",
 		)
