@@ -1,0 +1,119 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ai-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: ai-be
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: ai-be
+  namespace: default
+spec:
+  ai:
+    groups:
+      - providers:
+          - name: primary
+            openai:
+              model: gpt-4o
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: searxng
+  namespace: default
+spec:
+  mcp:
+    targets:
+      - name: search
+        static:
+          host: searxng-mcp.default.svc.cluster.local
+          port: 8080
+          path: /mcp
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: ai-be
+      group: agentgateway.dev
+  backend:
+    ai:
+      serverTools:
+        tools:
+          - type: web_search_*
+            mcp:
+              backendRef:
+                group: agentgateway.dev
+                kind: AgentgatewayBackend
+                name: searxng
+              target: search
+              tool: search
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          serverTools:
+            keepaliveInterval: 15s
+            maxIterations: 3
+            maxResultBytes: 65536
+            tools:
+            - backend:
+                backend: default/searxng
+              target: search
+              tool: search
+              type: web_search_*
+      key: backend/default/agw:ai:default/ai-be
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        backend:
+          name: ai-be
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

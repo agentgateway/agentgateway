@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 127.0.0.1:19001
+  statsAddr: 127.0.0.1:19002
+
+backends:
+# An MCP server that exposes a `search` tool, for example a SearXNG MCP server.
+- name: search
+  mcp:
+    targets:
+    - name: searxng
+      mcp:
+        host: searxng-mcp.internal
+        port: 8080
+        path: /mcp
+
+llm:
+  port: 4000
+  models:
+  # A model served by vLLM. It cannot execute Anthropic server tools such as a coding agent's
+  # `web_search`, so the gateway fulfils them through the MCP `search` tool and continues the turn.
+  - name: qwen3
+    provider: openAI
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+    serverTools:
+      maxIterations: 3
+      keepaliveInterval: 15s
+      failureMode: failClosed
+      # Tool types the client runs itself are never taken over. This is the default list; set
+      # `clientExecuted: []` to let every mapping apply, or add types to guard more.
+      # clientExecuted: [bash_*, text_editor_*, computer_*, memory_*, local_shell, shell, apply_patch, computer_use_preview, computer]
+      tools:
+      # Anthropic Messages clients declare `{"type": "web_search_20250305", ...}`, OpenAI Responses
+      # clients declare `{"type": "web_search"}`, and Chat Completions clients send a
+      # `web_search_options` field. All three are fulfilled by the MCP `search` tool.
+      - type: web_search*
+        mcp:
+          backend: search
+          tool: search
+          # Options the client declared on the tool reach the MCP tool through argument
+          # templates. `serverTool.input` is what the model asked for, `serverTool.declaration`
+          # is the client's tool entry as sent.
+          arguments:
+            allowed_domains: serverTool.declaration.allowed_domains
+            blocked_domains: serverTool.declaration.blocked_domains
+      # A Responses client may also declare the server itself as
+      # `{"type": "mcp", "server_label": "search", "require_approval": "never"}`; every tool the
+      # backend serves is then offered to the model by name.
+      mcpServers:
+      - label: search
+        backend: search
