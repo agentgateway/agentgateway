@@ -853,6 +853,7 @@ async fn apply_does_not_load_store_without_browser_cookie() {
 	assert_eq!(response.status(), ::http::StatusCode::FOUND);
 }
 
+#[tokio::test]
 async fn apply_redirects_unauthenticated_requests_to_login() {
 	let cases = [
 		(
