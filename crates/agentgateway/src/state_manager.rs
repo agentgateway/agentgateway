@@ -287,10 +287,7 @@ impl LocalClient {
 			.config
 			.budget_policy
 			.apply_registration(config.budget_registration)?;
-		self
-			.config
-			.config_reload_status
-			.record_success(config_content);
+		self.config.config_reload_status.record_success();
 
 		Ok(PreviousState {
 			binds: next_binds,
@@ -698,7 +695,7 @@ frontendPolicies:
 	}
 
 	#[tokio::test]
-	async fn rejected_reload_keeps_last_accepted_config_and_records_error() {
+	async fn rejected_reload_records_error_and_recovery_clears_it() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("config.yaml");
 		fs_err::tokio::write(&path, local_config("first"))
@@ -725,26 +722,17 @@ frontendPolicies:
 			metrics,
 		};
 
-		// The initial load records the accepted config.
+		// The initial successful load starts with no recorded error.
 		let prev = local_client
 			.reload_config(PreviousState::default())
 			.await
 			.unwrap();
-		assert_eq!(
-			config.config_reload_status.accepted().as_deref(),
-			Some(local_config("first").as_str())
-		);
 		assert!(config.config_reload_status.last_error().is_none());
 
-		// A rejected reload keeps the last accepted config and records the error.
+		// A rejected reload records its error alongside the config_synchronized metric.
 		let invalid = local_config("invalid").replace("'\"invalid\"'", "'('");
 		fs_err::tokio::write(&path, invalid).await.unwrap();
 		let _ = local_client.reload_config_after_change(prev.clone()).await;
-		let accepted = config
-			.config_reload_status
-			.accepted()
-			.expect("accepted config");
-		assert_eq!(accepted, local_config("first"));
 		assert!(
 			config
 				.config_reload_status
@@ -753,15 +741,11 @@ frontendPolicies:
 			"rejected reload should record its error"
 		);
 
-		// A subsequent successful reload replaces the accepted config and clears the error.
+		// A subsequent successful reload clears the error.
 		fs_err::tokio::write(&path, local_config("second"))
 			.await
 			.unwrap();
 		let _ = local_client.reload_config_after_change(prev).await;
-		assert_eq!(
-			config.config_reload_status.accepted().as_deref(),
-			Some(local_config("second").as_str())
-		);
 		assert!(config.config_reload_status.last_error().is_none());
 	}
 }
