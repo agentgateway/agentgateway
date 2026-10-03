@@ -547,15 +547,22 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve_direct(&self, field: &OptimizedExpr) -> Option<Option<Value<'a>>> {
 		match field {
 			// To avoid a conversion from a string key into a HeaderName, we have a hot path
-			OptimizedExpr::HeaderLookup { request, header } if *request => Some(
-				self
-					.executor
-					.request
-					.as_ref()
-					.and_then(|r| r.headers.get(header))
-					.and_then(|h| h.to_str().ok())
-					.map(|s| Value::String(s.into())),
-			),
+			OptimizedExpr::HeaderLookup { request, header } if *request => {
+				let Some(r) = self.executor.request.as_ref() else {
+					return Some(None);
+				};
+				let mut values = r.headers.as_ref().get_all(header).iter();
+				let first = values.next();
+				// Repeated headers are returned as a list; defer to the generic path for those.
+				if values.next().is_some() {
+					return None;
+				}
+				Some(
+					first
+						.and_then(|h| std::str::from_utf8(h.as_bytes()).ok())
+						.map(Value::from),
+				)
+			},
 			// OptimizedExpr::HeaderLookup { request, header } if !*request => Some(
 			// 	self
 			// 		.executor
@@ -1827,13 +1834,6 @@ impl<'a> Headers<'a> {
 
 	fn as_ref(&self) -> &http::HeaderMap {
 		self.headers
-	}
-
-	fn get<K>(&self, name: K) -> Option<&http::HeaderValue>
-	where
-		K: http::header::AsHeaderName,
-	{
-		self.as_ref().get(name)
 	}
 
 	fn redacted(mut self) -> Self {

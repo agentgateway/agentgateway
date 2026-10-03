@@ -484,6 +484,44 @@ mod headers {
 	}
 
 	#[test]
+	fn optimized_lookup_matches_unoptimized() {
+		let req = || {
+			let mut req = request_with_header_modes();
+			let h = req.headers_mut();
+			h.insert("utf8", http::HeaderValue::from_bytes("café".as_bytes()).unwrap());
+			h.insert("invalid", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.append("mixed", http::HeaderValue::from_static("ok"));
+			h.append("mixed", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.insert("empty", http::HeaderValue::from_static(""));
+			req
+		};
+		for name in [
+			"single", "SINGLE", "multi", "authorization", "utf8", "invalid", "mixed", "empty", "missing",
+		] {
+			let expr = format!(r#"request.headers["{name}"]"#);
+			let optimized = crate::cel::Expression::new_strict(&expr).unwrap();
+			assert!(
+				matches!(optimized.ast().expr, cel::common::ast::Expr::Optimized { .. }),
+				"{expr} was not optimized"
+			);
+			let unoptimized = crate::cel::Expression {
+				expression: cel::Program::compile_unoptimized(&expr).unwrap(),
+				attributes: optimized.attributes,
+				original_expression: expr.clone(),
+			};
+			let r1 = req();
+			let r2 = req();
+			let a = crate::cel::Executor::new_request(&r1)
+				.eval(&optimized)
+				.map(|v| v.as_static());
+			let b = crate::cel::Executor::new_request(&r2)
+				.eval(&unoptimized)
+				.map(|v| v.as_static());
+			assert_eq!(a.ok(), b.ok(), "optimizations changed behavior ({expr})");
+		}
+	}
+
+	#[test]
 	fn cookie_missing() {
 		let req = ::http::Request::builder()
 			.method(http::Method::GET)
