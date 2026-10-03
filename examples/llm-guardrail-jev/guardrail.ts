@@ -66,7 +66,7 @@ Bun.serve({
       keys: (carrier) => Object.keys(carrier),
       get: (carrier, key) => carrier[key],
     });
-    const span = tracer.startSpan(`JEV guardrail ${path}`, { kind: SpanKind.SERVER }, parent);
+    const span = tracer.startSpan(`Jev guardrail ${path}`, { kind: SpanKind.SERVER }, parent);
     propagator.inject(trace.setSpan(parent, span), headers, {
       set: (carrier, key, value) => { carrier[key] = value; },
     });
@@ -113,10 +113,10 @@ Bun.serve({
         action: rejected.length
           ? {
               status_code: 403,
-              body: `Rejected by JEV: ${rejected.join(", ")}`,
+              body: `Rejected by Jev: ${rejected.join(", ")}`,
               reason: `Score >= ${threshold}`,
             }
-          : { reason: "JEV scores below threshold" },
+          : { reason: "Jev scores below threshold" },
       };
       // The webhook itself returns 200; status_code tells agentgateway to reject.
       return Response.json(response);
@@ -126,4 +126,4 @@ Bun.serve({
   },
 });
 
-console.log("JEV guardrail listening on http://127.0.0.1:8000");
+console.log("Jev guardrail listening on http://127.0.0.1:8000");

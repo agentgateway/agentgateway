@@ -64,6 +64,9 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
+	/// Response from a virtual model callout, with `headers` and the decoded JSON `body`.
+	pub callout: Option<&'a serde_json::Value>,
+
 	pub mcp: Option<&'a MCPInfo>,
 
 	pub backend: ExtensionOrDirect<'a, BackendContext>,

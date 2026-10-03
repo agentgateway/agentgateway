@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+gateways:
+  default:
+    port: 4000
+ui: {}
+llm:
+  models:
+  - name: gpt-5.6-*
+    provider: openai
+    params:
+      apiKey: $OPENAI_API_KEY
+  - name: jev-latest
+    provider:
+      custom:
+        providerOverride: typesafe
+    params:
+      baseUrl: https://api.typesafe.ai
+      apiKey: $TYPESAFE_API_KEY
+  virtualModels:
+  - name: auto
+    routing:
+      callout:
+        host: http://127.0.0.1:8000/route
+        body: '{"messages": llmRequest.messages}'
+        transformation:
+          model: callout.body.model
+          reasoning_effort: callout.body.reasoning_effort
+        failureMode:
+          fallback: gpt-5.6-luna
+        # Requests with the same session ID reuse the first routing decision.
+        cache:
+          key:
+          - request.headers["x-session-id"]
+          ttl: 10m

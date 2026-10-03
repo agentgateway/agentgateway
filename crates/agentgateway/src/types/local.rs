@@ -21,6 +21,7 @@ use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{Transformation, TransformerConfig};
 use crate::http::{filters, health, retry, timeout};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
+use crate::llm::router_callout::VirtualModelCalloutFailureMode;
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::{LocalWorkload, RequestPolicy};
@@ -540,6 +541,9 @@ pub struct LocalLLMVirtualModelRouting {
 	/// in order until the best match is found.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	conditional: Option<LocalLLMConditionalRouting>,
+	/// callout selects the target model by calling an external HTTP service.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	callout: Option<llm::router_callout::VirtualModelCallout>,
 }
 
 #[apply(schema_de!)]
@@ -4160,6 +4164,7 @@ enum LocalLLMVirtualRoutingStrategy<'a> {
 	Weighted(&'a LocalLLMWeightedRouting),
 	Failover(&'a LocalLLMFailoverRouting),
 	Conditional(&'a LocalLLMConditionalRouting),
+	Callout(&'a llm::router_callout::VirtualModelCallout),
 }
 
 fn llm_model_matches(pattern: &str, model: &str) -> anyhow::Result<bool> {
@@ -4191,6 +4196,13 @@ impl<'a> LocalLLMVirtualRoutingStrategy<'a> {
 					.iter()
 					.map(|target| target.model.as_str()),
 			),
+			Self::Callout(callout) => Box::new(
+				match &callout.failure_mode {
+					VirtualModelCalloutFailureMode::Fallback(model) => Some(model.as_str()),
+					VirtualModelCalloutFailureMode::FailClosed => None,
+				}
+				.into_iter(),
+			),
 		}
 	}
 }
@@ -4199,7 +4211,8 @@ impl LocalLLMVirtualModel {
 	fn routing_strategy(&self) -> anyhow::Result<LocalLLMVirtualRoutingStrategy<'_>> {
 		let strategy_count = usize::from(self.routing.weighted.is_some())
 			+ usize::from(self.routing.failover.is_some())
-			+ usize::from(self.routing.conditional.is_some());
+			+ usize::from(self.routing.conditional.is_some())
+			+ usize::from(self.routing.callout.is_some());
 		if strategy_count != 1 {
 			bail!(
 				"virtual model {} must specify exactly one routing strategy",
@@ -4225,6 +4238,15 @@ impl LocalLLMVirtualModel {
 				);
 			}
 			return Ok(LocalLLMVirtualRoutingStrategy::Conditional(conditional));
+		}
+		if let Some(callout) = self.routing.callout.as_ref() {
+			if !callout.transformation.contains_key("model") {
+				bail!(
+					"virtual model {} callout transformation must set model",
+					self.name
+				);
+			}
+			return Ok(LocalLLMVirtualRoutingStrategy::Callout(callout));
 		}
 		if let Some(weighted) = self.routing.weighted.as_ref() {
 			if weighted.targets.is_empty() {
@@ -4742,6 +4764,14 @@ async fn convert_llm_config(
 						})
 						.collect(),
 				)
+			},
+			LocalLLMVirtualRoutingStrategy::Callout(callout) => {
+				if let VirtualModelCalloutFailureMode::Fallback(model) = &callout.failure_mode {
+					resolved_models.resolve(model)?;
+				}
+				llm::model_router::VirtualModelRouting::Callout(Arc::new(
+					callout.clone().with_configured_cache_store(),
+				))
 			},
 			LocalLLMVirtualRoutingStrategy::Failover(failover) => {
 				let provider_groups = failover

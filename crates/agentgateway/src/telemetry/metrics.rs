@@ -245,6 +245,7 @@ pub enum OutboundCallSubtype {
 	Guardrail,
 	RateLimit,
 	Oidc,
+	Callout,
 }
 
 impl OutboundCallSubtype {
@@ -259,6 +260,7 @@ impl OutboundCallSubtype {
 			Self::Guardrail => "Guardrail",
 			Self::RateLimit => "RateLimit",
 			Self::Oidc => "Oidc",
+			Self::Callout => "Callout",
 		}
 	}
 }

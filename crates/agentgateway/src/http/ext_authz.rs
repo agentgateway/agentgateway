@@ -168,6 +168,22 @@ pub struct CacheConfig {
 	pub max_entries: usize,
 }
 
+impl CacheConfig {
+	pub(crate) fn evaluate_ttl(&self, exec: &cel::Executor<'_>) -> Option<Duration> {
+		match exec.eval(&self.ttl).ok()? {
+			Value::Duration(ttl) => ttl.to_std().ok(),
+			Value::Timestamp(expires_at) => expires_at
+				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
+				.to_std()
+				.ok(),
+			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
+			_ => None,
+		}
+	}
+}
+
 #[apply(schema!)]
 pub struct ExtAuthz {
 	/// Backend that receives authorization checks and policies used when connecting to it.
@@ -236,19 +252,8 @@ impl ExtAuthz {
 		if cache.key.is_empty() {
 			return Err(CacheMissReason::EmptyKey);
 		}
-		let exec = cel::Executor::new_request(req);
-		let values = cache
-			.key
-			.iter()
-			.enumerate()
-			.map(|(index, expr)| {
-				exec
-					.eval(expr)
-					.and_then(CacheKeyValue::try_from_cel)
-					.map_err(|_| CacheMissReason::KeyEvaluationFailed { index })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(CacheKey(values))
+		CacheKey::evaluate(&cel::Executor::new_request(req), &cache.key)
+			.map_err(|index| CacheMissReason::KeyEvaluationFailed { index })
 	}
 
 	fn lookup_cache(
@@ -722,19 +727,7 @@ impl ExtAuthz {
 	}
 
 	fn cache_ttl(&self, req: &Request, cache: &CacheConfig) -> Option<Duration> {
-		let exec = cel::Executor::new_request(req);
-		let value = exec.eval(&cache.ttl).ok()?;
-		match value {
-			Value::Duration(ttl) => ttl.to_std().ok(),
-			Value::Timestamp(expires_at) => expires_at
-				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
-				.to_std()
-				.ok(),
-			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
-			_ => None,
-		}
+		cache.evaluate_ttl(&cel::Executor::new_request(req))
 	}
 
 	pub async fn check_http(
@@ -1120,6 +1113,26 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct CacheKey(Vec<CacheKeyValue>);
+
+impl CacheKey {
+	/// Evaluates each key expression, returning the index of the first expression that fails.
+	pub(crate) fn evaluate(
+		exec: &cel::Executor<'_>,
+		keys: &[Arc<cel::Expression>],
+	) -> Result<Self, usize> {
+		keys
+			.iter()
+			.enumerate()
+			.map(|(index, expr)| {
+				exec
+					.eval(expr)
+					.and_then(CacheKeyValue::try_from_cel)
+					.map_err(|_| index)
+			})
+			.collect::<Result<Vec<_>, _>>()
+			.map(CacheKey)
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CacheLookup {

@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+gateways:
+  default:
+    port: 4000
+ui: {}
+llm:
+  models:
+  - name: gpt-5.6-*
+    provider: openai
+    params:
+      apiKey: $OPENAI_API_KEY
+  virtualModels:
+  - name: auto
+    routing:
+      callout:
+        host: http://127.0.0.1:4123/v1/decision
+        headers:
+          # Switchyard tracks routing state, such as capable holds, per session.
+          x-switchyard-session-id: request.headers["x-session-id"]
+        # The request model, `auto`, selects the Switchyard route.
+        body: '{"input_format": "openai_chat", "request": llmRequest}'
+        transformation:
+          model: callout.body.selected.model
+        failureMode:
+          fallback: gpt-5.6-luna

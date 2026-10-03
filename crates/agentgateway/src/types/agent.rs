@@ -1576,110 +1576,160 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReferenceWithPolicies {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		#[derive(Debug, Clone, serde::Deserialize)]
-		#[serde(rename_all = "camelCase", deny_unknown_fields)]
-		pub struct Input {
-			// Keep these wire fields explicit instead of flattening
-			// SimpleLocalBackendWithSchema. Outer structs may use
-			// deny_unknown_fields with #[serde(flatten)] target; if this helper
-			// hides `host` behind another flattened enum, serde can report `host`
-			// as unknown before this type gets to consume it.
-			#[serde(default)]
-			pub name: Option<NamespacedHostname>,
-			#[serde(default)]
-			pub port: Option<u16>,
-			#[serde(default)]
-			pub host: Option<TargetOrUri>,
-			#[serde(default)]
-			pub backend: Option<BackendKey>,
-
-			#[serde(default, skip_serializing_if = "Vec::is_empty")]
-			#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-			/// Backend policies used when connecting to the service.
-			pub policies: Vec<BackendTrafficPolicy>,
-		}
-
-		let Input {
-			name,
-			port,
-			host,
-			backend,
-			mut policies,
-		} = Input::deserialize(deserializer)?;
-
-		let service = match (name, port) {
-			(Some(name), Some(port)) => Some((name, port)),
-			(None, None) => None,
-			_ => {
-				return Err(serde::de::Error::custom(
-					"service backend requires both name and port",
-				));
-			},
-		};
-
-		let (target, tls) = match (service, host, backend) {
-			(Some((name, port)), None, None) => (SimpleBackendReference::Service { name, port }, false),
-			(None, Some(TargetOrUri::Target(t)), None) => {
-				(SimpleBackendReference::InlineBackend(t), false)
-			},
-			(None, Some(TargetOrUri::Uri(uri)), None) => {
-				let Some(uri_host) = uri.host() else {
-					return Err(serde::de::Error::custom(anyhow::anyhow!(
-						"backend URL must include a host"
-					)));
-				};
-				let path = uri.path();
-				if !path.is_empty() && path != "/" {
-					return Err(serde::de::Error::custom(anyhow::anyhow!(
-						"backend URL paths are not supported"
-					)));
-				}
-				let Some(scheme) = uri.scheme_str() else {
-					return Err(serde::de::Error::custom(anyhow::anyhow!(
-						"backend URL must include a scheme"
-					)));
-				};
-				let default_port = match scheme {
-					"http" => 80,
-					"https" => 443,
-					_ => {
-						return Err(serde::de::Error::custom(anyhow::anyhow!(
-							"backend URL scheme must be http or https"
-						)));
-					},
-				};
-				let port = uri.port_u16().unwrap_or(default_port);
-				(
-					SimpleBackendReference::InlineBackend(Target::from((uri_host, port))),
-					scheme == "https",
-				)
-			},
-			(None, None, Some(b)) => (SimpleBackendReference::Backend(b), false),
-			(None, None, None) => (SimpleBackendReference::Invalid, false),
-			_ => {
-				return Err(serde::de::Error::custom(
-					"backend must be exactly one of service, host, or backend",
-				));
-			},
-		};
-
-		if tls
-			&& !policies
-				.iter()
-				.any(|policy| matches!(policy, BackendTrafficPolicy::BackendTLS(_)))
-		{
-			policies.push(BackendTrafficPolicy::BackendTLS(
-				ResolvedBackendTLS::default()
-					.try_into()
-					.map_err(serde::de::Error::custom)?,
+		let (target, path) = deserialize_backend_reference(deserializer)?;
+		if path.is_some() {
+			return Err(serde::de::Error::custom(
+				"backend URL paths are not supported",
 			));
 		}
+		Ok(target)
+	}
+}
 
-		Ok(Self {
+/// A backend reference whose `host` URL may include a request path, such as `https://example.com/v1/route`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct SimpleBackendReferenceWithPoliciesAndPath {
+	#[serde(flatten)]
+	pub target: SimpleBackendReferenceWithPolicies,
+	/// Request path and query from the `host` URL.
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::serdes::ser_display_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub path: Option<::http::uri::PathAndQuery>,
+}
+
+impl<'de> serde::Deserialize<'de> for SimpleBackendReferenceWithPoliciesAndPath {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let (target, path) = deserialize_backend_reference(deserializer)?;
+		Ok(Self { target, path })
+	}
+}
+
+fn deserialize_backend_reference<'de, D>(
+	deserializer: D,
+) -> Result<
+	(
+		SimpleBackendReferenceWithPolicies,
+		Option<::http::uri::PathAndQuery>,
+	),
+	D::Error,
+>
+where
+	D: serde::Deserializer<'de>,
+{
+	#[derive(Debug, Clone, serde::Deserialize)]
+	#[serde(rename_all = "camelCase", deny_unknown_fields)]
+	pub struct Input {
+		// Keep these wire fields explicit instead of flattening
+		// SimpleLocalBackendWithSchema. Outer structs may use
+		// deny_unknown_fields with #[serde(flatten)] target; if this helper
+		// hides `host` behind another flattened enum, serde can report `host`
+		// as unknown before this type gets to consume it.
+		#[serde(default)]
+		pub name: Option<NamespacedHostname>,
+		#[serde(default)]
+		pub port: Option<u16>,
+		#[serde(default)]
+		pub host: Option<TargetOrUri>,
+		#[serde(default)]
+		pub backend: Option<BackendKey>,
+
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+		/// Backend policies used when connecting to the service.
+		pub policies: Vec<BackendTrafficPolicy>,
+	}
+
+	let Input {
+		name,
+		port,
+		host,
+		backend,
+		mut policies,
+	} = Input::deserialize(deserializer)?;
+
+	let service = match (name, port) {
+		(Some(name), Some(port)) => Some((name, port)),
+		(None, None) => None,
+		_ => {
+			return Err(serde::de::Error::custom(
+				"service backend requires both name and port",
+			));
+		},
+	};
+
+	let (target, tls, path) = match (service, host, backend) {
+		(Some((name, port)), None, None) => {
+			(SimpleBackendReference::Service { name, port }, false, None)
+		},
+		(None, Some(TargetOrUri::Target(t)), None) => {
+			(SimpleBackendReference::InlineBackend(t), false, None)
+		},
+		(None, Some(TargetOrUri::Uri(uri)), None) => {
+			let Some(uri_host) = uri.host() else {
+				return Err(serde::de::Error::custom(anyhow::anyhow!(
+					"backend URL must include a host"
+				)));
+			};
+			let Some(scheme) = uri.scheme_str() else {
+				return Err(serde::de::Error::custom(anyhow::anyhow!(
+					"backend URL must include a scheme"
+				)));
+			};
+			let default_port = match scheme {
+				"http" => 80,
+				"https" => 443,
+				_ => {
+					return Err(serde::de::Error::custom(anyhow::anyhow!(
+						"backend URL scheme must be http or https"
+					)));
+				},
+			};
+			let port = uri.port_u16().unwrap_or(default_port);
+			(
+				SimpleBackendReference::InlineBackend(Target::from((uri_host, port))),
+				scheme == "https",
+				uri
+					.path_and_query()
+					.filter(|pq| pq.as_str() != "/")
+					.cloned(),
+			)
+		},
+		(None, None, Some(b)) => (SimpleBackendReference::Backend(b), false, None),
+		(None, None, None) => (SimpleBackendReference::Invalid, false, None),
+		_ => {
+			return Err(serde::de::Error::custom(
+				"backend must be exactly one of service, host, or backend",
+			));
+		},
+	};
+
+	if tls
+		&& !policies
+			.iter()
+			.any(|policy| matches!(policy, BackendTrafficPolicy::BackendTLS(_)))
+	{
+		policies.push(BackendTrafficPolicy::BackendTLS(
+			ResolvedBackendTLS::default()
+				.try_into()
+				.map_err(serde::de::Error::custom)?,
+		));
+	}
+
+	Ok((
+		SimpleBackendReferenceWithPolicies {
 			target: Arc::new(target),
 			policies,
-		})
-	}
+		},
+		path,
+	))
 }
 
 impl SimpleBackendReferenceWithPolicies {
@@ -4169,5 +4219,29 @@ jwtValidationOptions:
 		assert_eq!(m.key.as_str(), "http-spec");
 		let m = set.best_match_tls("a.sub.example.com").expect("match");
 		assert_eq!(m.key.as_str(), "tls-spec");
+	}
+
+	#[test]
+	fn backend_url_path() {
+		let backend: SimpleBackendReferenceWithPoliciesAndPath =
+			serde_json::from_value(serde_json::json!({
+				"host": "https://example.com/v1/route?x=1",
+			}))
+			.expect("deserialize backend with path");
+		assert!(matches!(
+			backend.target.target.as_ref(),
+			SimpleBackendReference::InlineBackend(Target::Hostname(host, 443)) if host.as_str() == "example.com"
+		));
+		assert_eq!(backend.path.unwrap().as_str(), "/v1/route?x=1");
+
+		let err = serde_json::from_value::<SimpleBackendReferenceWithPolicies>(serde_json::json!({
+			"host": "https://example.com/v1/route",
+		}))
+		.expect_err("path should be rejected");
+		assert!(
+			err
+				.to_string()
+				.contains("backend URL paths are not supported")
+		);
 	}
 }

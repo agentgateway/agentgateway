@@ -2437,7 +2437,11 @@ async fn make_backend_call(
 		if let Some(path_match) = router.trace_path(&req) {
 			log.add(|log| log.path_match = Some(path_match));
 		}
-		let resolved = match router.resolve(&mut req, &inputs.model_catalog).await {
+		let client = PolicyClient::new(inputs.clone()).with_parent(&req);
+		let resolved = match router
+			.resolve(&mut req, &inputs.model_catalog, &client)
+			.await
+		{
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
@@ -5062,6 +5066,7 @@ impl PolicyClient {
 				OutboundCallSubtype::Guardrail => "guardrail",
 				OutboundCallSubtype::RateLimit => "rate_limit",
 				OutboundCallSubtype::Oidc => "oidc",
+				OutboundCallSubtype::Callout => "callout",
 				_ => labels.subtype.as_str(),
 			},
 		})

@@ -1,0 +1,20 @@
+schema_version = 1
+
+# Auto routing makes no model calls; the client is part of the decision response.
+[llm_clients.agentgateway]
+format = "openai_chat"
+base_url = "http://127.0.0.1:4000/v1"
+
+[targets.capable]
+id = "gpt-5.6-sol"
+llm_client = "agentgateway"
+
+[targets.efficient]
+id = "gpt-5.6-luna"
+llm_client = "agentgateway"
+
+[routes.auto]
+id = "auto"
+type = "auto"
+capable_target = "capable"
+efficient_target = "efficient"

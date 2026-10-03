@@ -1,11 +1,11 @@
-# JEV guardrail
+# Jev guardrail
 
-A Bun webhook uses [JEV](https://docs.typesafe.ai/introduction) to check requests
+A Bun webhook uses [Jev](https://docs.typesafe.ai/introduction) to check requests
 and responses for `gpt-5.6-luna`. It scores jailbreaks, harmful content, and secret
 disclosure from 0–3, rejecting scores ≥2 with HTTP 403.
 
 [guardrail.ts](guardrail.ts) checks the last request message and each response
-choice. It calls JEV through agentgateway using the AI SDK. JEV is configured with
+choice. It calls Jev through agentgateway using the AI SDK. Jev is configured with
 `passthrough: detect` for its native `/v1/systemone` API, giving visibility into requests.
 
 ## Run

@@ -12619,6 +12619,17 @@
               "type": "null"
             }
           ]
+        },
+        "callout": {
+          "description": "callout selects the target model by calling an external HTTP service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VirtualModelCallout"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -12734,6 +12745,147 @@
       "additionalProperties": false,
       "required": [
         "model"
+      ]
+    },
+    "VirtualModelCallout": {
+      "description": "Selects a virtual model's target by calling an external HTTP service.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "description": "Headers to set on the callout request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "body": {
+          "description": "CEL expression that computes the callout request body.\nStrings and bytes are used directly; other values are JSON-encoded.\nIf unset, the original request body is forwarded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transformation": {
+          "description": "CEL expressions that compute request payload fields from the callout response, overriding existing values.\n`callout.headers` holds the response headers and `callout.body` the decoded JSON response body.\n`model` is required and selects the target from `llm.models`.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the callout fails, returns a non-2xx or non-JSON response, or selects an unknown model.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/VirtualModelCalloutFailureMode",
+          "default": "failClosed"
+        },
+        "cache": {
+          "description": "Reuse callout responses using CEL expressions as the cache key.\nOn a cache hit, `transformation` is evaluated against the cached response.\nKeying on a session identifier makes routing sticky for that session.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "transformation"
+      ]
+    },
+    "VirtualModelCalloutFailureMode": {
+      "oneOf": [
+        {
+          "description": "Reject the request.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Route to this model, which is resolved against llm.models, without applying `transformation`.",
+          "type": "object",
+          "properties": {
+            "fallback": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fallback"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "LocalLLMPolicy": {
