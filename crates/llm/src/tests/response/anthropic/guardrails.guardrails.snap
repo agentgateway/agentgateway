@@ -1,0 +1,518 @@
+---
+source: crates/llm/src/golden_tests.rs
+---
+{
+  "scanned": [
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "answer"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "unsigned reasoning"
+    },
+    {
+      "scope": "messages",
+      "signed": true,
+      "text": "signed reasoning"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "print(1)"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "value"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "argument"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "description"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "document"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "error"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "https://example.com"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "https://example.com"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "result"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "title"
+    }
+  ],
+  "masked": {
+    "messages": {
+      "id": "message",
+      "type": "message",
+      "role": "assistant",
+      "model": "model",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      },
+      "content": [
+        {
+          "text": "<masked>",
+          "type": "text"
+        },
+        {
+          "type": "thinking",
+          "thinking": "<masked>"
+        },
+        {
+          "type": "thinking",
+          "thinking": "signed reasoning",
+          "signature": "signature"
+        },
+        {
+          "type": "redacted_thinking",
+          "data": "encrypted"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "server",
+          "name": "code_execution",
+          "input": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "type": "code_execution_tool_result",
+          "tool_use_id": "server",
+          "content": {
+            "type": "encrypted_code_execution_result",
+            "encrypted_stdout": "encrypted",
+            "stderr": "error",
+            "return_code": 1,
+            "content": [
+              {
+                "type": "code_execution_output",
+                "file_id": "file"
+              }
+            ]
+          }
+        },
+        {
+          "type": "advisor_tool_result",
+          "tool_use_id": "advisor",
+          "content": {
+            "type": "advisor_redacted_result",
+            "encrypted_content": "encrypted",
+            "stop_reason": "end_turn"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "search",
+          "content": [
+            {
+              "type": "web_search_result",
+              "title": "title",
+              "url": "https://example.com",
+              "encrypted_content": "encrypted"
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_listing",
+          "mcp_server_name": "server",
+          "tools": [
+            {
+              "name": "tool",
+              "description": "description",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "argument"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "default": {
+                  "description": "literal value"
+                },
+                "enum": [
+                  {
+                    "description": "literal value"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_use",
+          "id": "mcp",
+          "name": "tool",
+          "server_name": "server",
+          "input": {
+            "name": "value"
+          }
+        },
+        {
+          "type": "mcp_tool_result",
+          "tool_use_id": "mcp",
+          "content": [
+            {
+              "type": "text",
+              "text": "result"
+            }
+          ]
+        },
+        {
+          "type": "web_fetch_tool_result",
+          "tool_use_id": "fetch",
+          "content": {
+            "type": "web_fetch_result",
+            "url": "https://example.com",
+            "content": {
+              "type": "document",
+              "title": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "content": "signed summary",
+          "signature": "signature",
+          "encrypted_content": "encrypted"
+        }
+      ]
+    },
+    "toolInput": {
+      "id": "message",
+      "type": "message",
+      "role": "assistant",
+      "model": "model",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      },
+      "content": [
+        {
+          "text": "answer",
+          "type": "text"
+        },
+        {
+          "type": "thinking",
+          "thinking": "unsigned reasoning"
+        },
+        {
+          "type": "thinking",
+          "thinking": "signed reasoning",
+          "signature": "signature"
+        },
+        {
+          "type": "redacted_thinking",
+          "data": "encrypted"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "server",
+          "name": "code_execution",
+          "input": {
+            "code": "<masked>"
+          }
+        },
+        {
+          "type": "code_execution_tool_result",
+          "tool_use_id": "server",
+          "content": {
+            "type": "encrypted_code_execution_result",
+            "encrypted_stdout": "encrypted",
+            "stderr": "error",
+            "return_code": 1,
+            "content": [
+              {
+                "type": "code_execution_output",
+                "file_id": "file"
+              }
+            ]
+          }
+        },
+        {
+          "type": "advisor_tool_result",
+          "tool_use_id": "advisor",
+          "content": {
+            "type": "advisor_redacted_result",
+            "encrypted_content": "encrypted",
+            "stop_reason": "end_turn"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "search",
+          "content": [
+            {
+              "type": "web_search_result",
+              "title": "title",
+              "url": "https://example.com",
+              "encrypted_content": "encrypted"
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_listing",
+          "mcp_server_name": "server",
+          "tools": [
+            {
+              "name": "tool",
+              "description": "description",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "argument"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "default": {
+                  "description": "literal value"
+                },
+                "enum": [
+                  {
+                    "description": "literal value"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_use",
+          "id": "mcp",
+          "name": "tool",
+          "server_name": "server",
+          "input": {
+            "name": "<masked>"
+          }
+        },
+        {
+          "type": "mcp_tool_result",
+          "tool_use_id": "mcp",
+          "content": [
+            {
+              "type": "text",
+              "text": "result"
+            }
+          ]
+        },
+        {
+          "type": "web_fetch_tool_result",
+          "tool_use_id": "fetch",
+          "content": {
+            "type": "web_fetch_result",
+            "url": "https://example.com",
+            "content": {
+              "type": "document",
+              "title": "document",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "content": "signed summary",
+          "signature": "signature",
+          "encrypted_content": "encrypted"
+        }
+      ]
+    },
+    "toolOutput": {
+      "id": "message",
+      "type": "message",
+      "role": "assistant",
+      "model": "model",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "usage": {
+        "input_tokens": 1,
+        "output_tokens": 1
+      },
+      "content": [
+        {
+          "text": "answer",
+          "type": "text"
+        },
+        {
+          "type": "thinking",
+          "thinking": "unsigned reasoning"
+        },
+        {
+          "type": "thinking",
+          "thinking": "signed reasoning",
+          "signature": "signature"
+        },
+        {
+          "type": "redacted_thinking",
+          "data": "encrypted"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "server",
+          "name": "code_execution",
+          "input": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "type": "code_execution_tool_result",
+          "tool_use_id": "server",
+          "content": {
+            "type": "encrypted_code_execution_result",
+            "encrypted_stdout": "encrypted",
+            "stderr": "<masked>",
+            "return_code": 1,
+            "content": [
+              {
+                "type": "code_execution_output",
+                "file_id": "file"
+              }
+            ]
+          }
+        },
+        {
+          "type": "advisor_tool_result",
+          "tool_use_id": "advisor",
+          "content": {
+            "type": "advisor_redacted_result",
+            "encrypted_content": "encrypted",
+            "stop_reason": "end_turn"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "search",
+          "content": [
+            {
+              "type": "web_search_result",
+              "title": "<masked>",
+              "url": "<masked>",
+              "encrypted_content": "encrypted"
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_listing",
+          "mcp_server_name": "server",
+          "tools": [
+            {
+              "name": "tool",
+              "description": "<masked>",
+              "input_schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "<masked>"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "default": {
+                  "description": "literal value"
+                },
+                "enum": [
+                  {
+                    "description": "literal value"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "type": "mcp_tool_use",
+          "id": "mcp",
+          "name": "tool",
+          "server_name": "server",
+          "input": {
+            "name": "value"
+          }
+        },
+        {
+          "type": "mcp_tool_result",
+          "tool_use_id": "mcp",
+          "content": [
+            {
+              "type": "text",
+              "text": "<masked>"
+            }
+          ]
+        },
+        {
+          "type": "web_fetch_tool_result",
+          "tool_use_id": "fetch",
+          "content": {
+            "type": "web_fetch_result",
+            "url": "<masked>",
+            "content": {
+              "type": "document",
+              "title": "<masked>",
+              "source": {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "type": "compaction",
+          "content": "signed summary",
+          "signature": "signature",
+          "encrypted_content": "encrypted"
+        }
+      ]
+    }
+  }
+}

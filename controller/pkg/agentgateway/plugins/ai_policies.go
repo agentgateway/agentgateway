@@ -76,37 +76,40 @@ func processContentScope(scope agentgateway.ContentScope) api.BackendPolicySpec_
 func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.PromptguardResponse) ([]*api.BackendPolicySpec_Ai_ResponseGuard, error) {
 	var res []*api.BackendPolicySpec_Ai_ResponseGuard
 	var errs []error
-	for _, req := range resps {
-		pgReq := &api.BackendPolicySpec_Ai_ResponseGuard{}
-		if req.Webhook != nil {
-			wh, err := processWebhook(ctx, namespace, req.Webhook)
+	for _, resp := range resps {
+		pgResp := &api.BackendPolicySpec_Ai_ResponseGuard{}
+		if resp.Webhook != nil {
+			wh, err := processWebhook(ctx, namespace, resp.Webhook)
 			if err != nil {
 				errs = append(errs, err)
 			}
-			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Webhook{
+			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Webhook{
 				Webhook: wh,
 			}
-		} else if req.Regex != nil {
-			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Regex{
-				Regex: processRegex(req.Regex),
+		} else if resp.Regex != nil {
+			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_Regex{
+				Regex: processRegex(resp.Regex),
 			}
-		} else if req.BedrockGuardrails != nil {
-			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails{
-				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+		} else if resp.BedrockGuardrails != nil {
+			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails{
+				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, resp.BedrockGuardrails),
 			}
-		} else if req.GoogleModelArmor != nil {
-			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
-				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
+		} else if resp.GoogleModelArmor != nil {
+			pgResp.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
+				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, resp.GoogleModelArmor),
 			}
 		}
 
-		if req.CustomResponse != nil {
-			pgReq.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
-				Body:   []byte(ptr.OrDefault(req.CustomResponse.Message, "The request was rejected due to inappropriate content")),
-				Status: uint32(ptr.NonEmptyOrDefault(req.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		if resp.CustomResponse != nil {
+			pgResp.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
+				Body:   []byte(ptr.OrDefault(resp.CustomResponse.Message, "The request was rejected due to inappropriate content")),
+				Status: uint32(ptr.NonEmptyOrDefault(resp.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 			}
 		}
-		res = append(res, pgReq)
+		for _, scope := range resp.Scope {
+			pgResp.Scope = append(pgResp.Scope, processContentScope(scope))
+		}
+		res = append(res, pgResp)
 	}
 
 	return res, errors.Join(errs...)

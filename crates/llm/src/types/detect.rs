@@ -650,7 +650,7 @@ impl ResponseType for Response {
 		}
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }

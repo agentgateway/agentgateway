@@ -14,6 +14,26 @@ use crate::types::agent::{
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
+#[test]
+fn merged_prompt_guards_validate_streaming_scopes() {
+	let streaming: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"streaming": "Enabled", "response": [{"regex": {"rules": []}}]
+	}))
+	.unwrap();
+	let tools: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"response": [{"regex": {"rules": []}, "scope": ["toolInput"]}]
+	}))
+	.unwrap();
+	for (shared, model) in [(streaming.clone(), tools.clone()), (tools, streaming)] {
+		let err = super::merge_prompt_guards(Some(shared), Some(model)).unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("streaming response guards only support the messages scope")
+		);
+	}
+}
+
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {

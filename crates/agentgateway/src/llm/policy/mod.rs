@@ -294,27 +294,31 @@ pub struct PromptGuard {
 	#[serde(default, skip_serializing_if = "PromptGuardStreamingMode::is_disabled")]
 	pub streaming: PromptGuardStreamingMode,
 	/// Guards applied to client requests before they reach the LLM.
-	#[serde(
-		default,
-		deserialize_with = "de_request_guards",
-		skip_serializing_if = "Vec::is_empty"
-	)]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub request: Vec<RequestGuard>,
 	/// Guards applied to LLM responses before they reach the client.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub response: Vec<ResponseGuard>,
 }
 
-/// TODO not all guard types properly scan all scopes
-/// avoids silently ignoring configured scopes
-fn de_request_guards<'de, D: serde::Deserializer<'de>>(
-	deserializer: D,
-) -> Result<Vec<RequestGuard>, D::Error> {
-	let guards = <Vec<RequestGuard> as serde::Deserialize>::deserialize(deserializer)?;
-	for guard in &guards {
-		guard.validate_scope().map_err(serde::de::Error::custom)?;
+impl PromptGuard {
+	pub(crate) fn validate(&self) -> Result<(), String> {
+		for guard in &self.request {
+			guard.validate_scope()?;
+		}
+		for guard in &self.response {
+			guard.validate_scope()?;
+			if self.streaming.is_enabled()
+				&& guard
+					.scope
+					.iter()
+					.any(|scope| *scope != ContentScope::Messages)
+			{
+				return Err("streaming response guards only support the messages scope".into());
+			}
+		}
+		Ok(())
 	}
-	Ok(guards)
 }
 
 #[apply(schema!)]
@@ -398,14 +402,26 @@ impl TextReplacements {
 		)
 	}
 
-	fn apply(self, visit_text: impl FnOnce(&mut dyn FnMut(&mut String))) {
+	fn apply<K: Copy>(
+		self,
+		visit_text: impl FnOnce(&mut dyn FnMut(K, &mut String)),
+		can_mask: impl Fn(K) -> bool,
+	) -> bool {
 		let mut replacements = self.0.into_iter();
-		visit_text(&mut |text| {
-			if let Some(Some(replacement)) = replacements.next() {
-				*text = replacement;
+		let mut refused = false;
+		visit_text(&mut |kind, text| {
+			if let Some(Some(replacement)) = replacements.next()
+				&& replacement != *text
+			{
+				if can_mask(kind) {
+					*text = replacement;
+				} else {
+					refused = true;
+				}
 			}
 		});
 		debug_assert!(replacements.next().is_none());
+		refused
 	}
 }
 
@@ -480,8 +496,8 @@ impl crate::llm::ResponseType for TextResponse {
 		serde_json::to_vec(&self.to_webhook_choices())
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
-		f(&mut self.content);
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::llm::ResponseText, &mut String)) {
+		f(ContentScope::Messages.into(), &mut self.content);
 	}
 }
 
@@ -890,14 +906,14 @@ impl Policy {
 
 	fn apply_guardrail_outcome<Mask>(
 		outcome: GuardrailOutcome<Mask>,
-		apply_mask: impl FnOnce(Mask) -> anyhow::Result<()>,
+		apply_mask: impl FnOnce(Mask) -> anyhow::Result<Option<Response>>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let action = (&outcome).into();
 		let rejection = match outcome {
 			GuardrailOutcome::None | GuardrailOutcome::Audit | GuardrailOutcome::FailOpen => None,
-			GuardrailOutcome::Masked(mutation) => {
-				apply_mask(mutation)?;
-				None
+			GuardrailOutcome::Masked(mutation) => match apply_mask(mutation)? {
+				Some(rejection) => return Ok((GuardrailAction::Reject, Some(rejection))),
+				None => None,
 			},
 			GuardrailOutcome::Rejected(response) => Some(response),
 		};
@@ -911,26 +927,32 @@ impl Policy {
 		Self::apply_guardrail_outcome(outcome, |mutation| {
 			match mutation {
 				RequestGuardMutation::Texts(replacements) => {
-					replacements.apply(|visitor| req.visit_text_mut(&mut |_, text| visitor(text)));
+					replacements.apply(|visitor| req.visit_text_mut(visitor), |_| true);
 				},
 				RequestGuardMutation::Messages(messages) => req.set_messages(messages),
 			}
-			Ok(())
+			Ok(None)
 		})
 	}
 
 	fn apply_response_guard_outcome(
 		outcome: GuardrailOutcome<ResponseGuardMutation>,
+		rejection: &RequestRejection,
 		resp: &mut dyn ResponseType,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		Self::apply_guardrail_outcome(outcome, |mutation| {
 			match mutation {
 				ResponseGuardMutation::Texts(replacements) => {
-					replacements.apply(|visitor| resp.visit_text_mut(visitor));
+					let refused =
+						replacements.apply(|visitor| resp.visit_text_mut(visitor), |kind| !kind.signed);
+					if refused {
+						// text was masked on a field we cannot mutate so we reject instead
+						return Ok(Some(rejection.as_response()));
+					}
 				},
 				ResponseGuardMutation::Choices(choices) => resp.set_webhook_choices(choices)?,
 			}
-			Ok(())
+			Ok(None)
 		})
 	}
 
@@ -1085,7 +1107,7 @@ impl Policy {
 						_ => None,
 					})
 					.unwrap_or_default();
-				serde_json::json!({"flaggedCategories": flagged})
+				serde_json::json!({ "flaggedCategories": flagged })
 			})
 			.collect();
 		(
@@ -1136,8 +1158,9 @@ impl Policy {
 		client: &PolicyClient,
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
-		let content = Self::response_texts(resp);
+		let (content, in_scope) = Self::scoped_response_texts(resp, guard_scope);
 
 		if content.is_empty() {
 			return Ok((GuardrailOutcome::None, None));
@@ -1157,7 +1180,10 @@ impl Policy {
 		}
 		let (outcome, detail) =
 			Self::bedrock_guardrail_outcome(guardrail_resp, sent_count, rejection, guardrails);
-		Ok((outcome.map_mask(ResponseGuardMutation::Texts), detail))
+		Ok((
+			outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+			detail,
+		))
 	}
 
 	/// Mask only when anonymized with one output per block sent; any other
@@ -1234,7 +1260,7 @@ impl Policy {
 			reject_or_audit(model_armor.action == RejectAuditAction::Audit, rejection),
 			Some(GuardDetail {
 				guardrail_id: Some(model_armor.template_id.clone()),
-				assessments: vec![serde_json::json!({"matchedFilters": matched})],
+				assessments: vec![serde_json::json!({ "matchedFilters": matched })],
 				..Default::default()
 			}),
 		)
@@ -1379,7 +1405,7 @@ impl Policy {
 		(GuardrailOutcome::Audit, Some(detail))
 	}
 
-	/// One flattened text per choice; masking guards must use `response_texts`
+	/// One flattened text per choice; masking guards must use `scoped_response_texts`
 	/// instead so counts align with `visit_text_mut` order.
 	fn webhook_choice_texts(resp: &dyn ResponseType) -> Vec<String> {
 		resp
@@ -1389,6 +1415,7 @@ impl Policy {
 			.collect()
 	}
 
+	#[cfg(test)]
 	fn collect_texts(visit: impl FnOnce(&mut dyn FnMut(&mut String))) -> Vec<String> {
 		let mut texts = Vec::new();
 		visit(&mut |text| texts.push(text.clone()));
@@ -1416,8 +1443,20 @@ impl Policy {
 		(texts, in_scope)
 	}
 
-	fn response_texts(resp: &mut dyn ResponseType) -> Vec<String> {
-		Self::collect_texts(|f| resp.visit_text_mut(f))
+	fn scoped_response_texts(
+		resp: &mut dyn ResponseType,
+		guard_scope: &[ContentScope],
+	) -> (Vec<String>, Vec<bool>) {
+		let mut texts = Vec::new();
+		let mut in_scope = Vec::new();
+		resp.visit_text_mut(&mut |content, text| {
+			let keep = guard_scope.contains(&content.scope);
+			in_scope.push(keep);
+			if keep {
+				texts.push(text.clone());
+			}
+		});
+		(texts, in_scope)
 	}
 
 	#[cfg(test)]
@@ -1481,9 +1520,10 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		rgx: &RegexRules,
 		rej: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<GuardrailAction> {
-		let outcome = Self::evaluate_regex_response(resp, rgx, rej);
-		let (action, _) = Self::apply_response_guard_outcome(outcome, resp)?;
+		let outcome = Self::evaluate_regex_response(resp, rgx, rej, guard_scope);
+		let (action, _) = Self::apply_response_guard_outcome(outcome, rej, resp)?;
 		Ok(action)
 	}
 
@@ -1491,12 +1531,18 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		rgx: &RegexRules,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> GuardrailOutcome<ResponseGuardMutation> {
 		let mut replacements = Vec::new();
 		let mut rejected = false;
 		let mut audited = false;
-		resp.visit_text_mut(&mut |text| {
+		resp.visit_text_mut(&mut |content, text| {
 			if rejected || audited {
+				return;
+			}
+			// out-of-scope texts still occupy a slot so the mask replay stays aligned
+			if !guard_scope.contains(&content.scope) {
+				replacements.push(None);
 				return;
 			}
 			match Self::apply_prompt_guard_regex(text, rgx, GuardrailPhase::Response) {
@@ -1552,7 +1598,7 @@ impl Policy {
 				GuardrailOutcome::Audit,
 				Some(GuardDetail {
 					action_reason: reason,
-					assessments: vec![serde_json::json!({"wouldAction": would_action})],
+					assessments: vec![serde_json::json!({ "wouldAction": would_action })],
 					..Default::default()
 				}),
 			));
@@ -1636,7 +1682,7 @@ impl Policy {
 				GuardrailOutcome::Audit,
 				Some(GuardDetail {
 					action_reason: reason,
-					assessments: vec![serde_json::json!({"wouldAction": would_action})],
+					assessments: vec![serde_json::json!({ "wouldAction": would_action })],
 					..Default::default()
 				}),
 			));
@@ -1900,7 +1946,7 @@ impl Policy {
 			return Ok((GuardrailAction::Allow, None));
 		}
 
-		let (action, rejection) = Self::apply_response_guard_outcome(outcome, resp)?;
+		let (action, rejection) = Self::apply_response_guard_outcome(outcome, &guard.rejection, resp)?;
 		let record = match streaming_allow_recorded {
 			Some(recorded) if action == GuardrailAction::Allow => !std::mem::replace(recorded, true),
 			_ => true,
@@ -1926,14 +1972,22 @@ impl Policy {
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
 		match &guard.kind {
 			ResponseGuardKind::Regex(rg) => Ok((
-				Self::evaluate_regex_response(resp, rg, &guard.rejection),
+				Self::evaluate_regex_response(resp, rg, &guard.rejection, &guard.scope),
 				None,
 			)),
 			ResponseGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
-				Self::evaluate_bedrock_guardrails_response(resp, None, client, bg, &guard.rejection).await
+				Self::evaluate_bedrock_guardrails_response(
+					resp,
+					None,
+					client,
+					bg,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			ResponseGuardKind::GoogleModelArmor(gma) => {
 				Self::evaluate_google_model_armor_response(resp, None, client, gma, &guard.rejection).await
@@ -2393,12 +2447,51 @@ pub struct ResponseGuard {
 	/// Response returned when the LLM response is rejected.
 	#[serde(default)]
 	pub rejection: RequestRejection,
+	/// Which parts of the response this guard inspects.
+	#[serde(
+		default = "default_response_scope",
+		deserialize_with = "de_response_scope"
+	)]
+	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
+	pub scope: Vec<ContentScope>,
 	/// Guardrail provider or rule set to apply.
 	#[serde(flatten)]
 	pub kind: ResponseGuardKind,
 }
 
+pub fn default_response_scope() -> Vec<ContentScope> {
+	vec![ContentScope::Messages]
+}
+
+// disallow explicitly empty scope (effectively disables the guard)
+fn de_response_scope<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<ContentScope>, D::Error> {
+	let scope = <Vec<ContentScope> as serde::Deserialize>::deserialize(deserializer)?;
+	if scope.is_empty() {
+		return Err(serde::de::Error::custom(
+			"scope must not be empty; omit it to use the default (messages)",
+		));
+	}
+	Ok(scope)
+}
+
 impl ResponseGuard {
+	/// Only regex and bedrockGuardrails walk scoped response text; others always inspect messages.
+	pub(crate) fn validate_scope(&self) -> Result<(), String> {
+		if matches!(
+			self.kind,
+			ResponseGuardKind::Regex(_) | ResponseGuardKind::BedrockGuardrails(_)
+		) || self.scope == default_response_scope()
+		{
+			return Ok(());
+		}
+		Err(format!(
+			"scope: only regex and bedrockGuardrails response guards support a non-default scope; {} guards always inspect messages",
+			self.kind.name(),
+		))
+	}
+
 	fn failure_mode(&self) -> FailureMode {
 		match &self.kind {
 			ResponseGuardKind::Webhook(wh) => wh.failure_mode,
@@ -2507,9 +2600,7 @@ fn test_prompt_caching_explicit_disable() {
 	use serde_json::json;
 
 	// Explicitly disable caching
-	let json = json!({
-		"promptCaching": null
-	});
+	let json = json!({ "promptCaching": null });
 
 	let policy: Policy = serde_json::from_value(json).unwrap();
 

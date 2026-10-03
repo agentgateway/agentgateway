@@ -93,15 +93,32 @@ pub trait ResponseType: Send + Sync {
 		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ResponseText, &mut String));
 }
 
-/// A category of request content that a prompt guard can inspect.
+#[derive(Clone, Copy, Debug)]
+pub struct ResponseText {
+	pub scope: ContentScope,
+	pub signed: bool,
+}
+
+impl From<ContentScope> for ResponseText {
+	fn from(scope: ContentScope) -> Self {
+		Self {
+			scope,
+			signed: false,
+		}
+	}
+}
+
+/// Which category of request or response content a prompt guard inspects.
+/// Encrypted payloads are excluded. Signed response payloads are scanned but
+/// a mask that would change them rejects the response instead.
 #[apply(schema_enum!)]
 pub enum ContentScope {
 	/// The system/developer prompt.
 	SystemPrompt,
-	/// Regular user/assistant message text.
+	/// Regular user/assistant message text and plaintext reasoning blocks.
 	Messages,
 	/// Tool call results.
 	ToolOutput,
@@ -142,6 +159,68 @@ pub(crate) fn visit_json_at(
 ) {
 	if let Some(target) = path.iter().try_fold(value, |v, k| v.get_mut(*k)) {
 		visit_json_strings(target, &mut |text| f(scope, text));
+	}
+}
+
+pub(crate) fn has_signature(value: &serde_json::Value) -> bool {
+	[
+		"signature",
+		"thoughtSignature",
+		"thought_signature",
+		"reasoning_signature",
+		"fingerprint",
+	]
+	.iter()
+	.any(|key| {
+		value
+			.get(key)
+			.is_some_and(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()))
+	})
+}
+
+/// Scan schema documentation without rewriting property names or validation rules.
+pub(crate) fn visit_json_schema_text(
+	value: &mut serde_json::Value,
+	f: &mut dyn FnMut(&mut String),
+) {
+	let Some(schema) = value.as_object_mut() else {
+		return;
+	};
+	for (key, value) in schema {
+		match key.as_str() {
+			"title" | "description" | "$comment" => {
+				if let serde_json::Value::String(text) = value {
+					f(text);
+				}
+			},
+			"properties" | "patternProperties" | "$defs" | "definitions" | "dependentSchemas" => {
+				if let Some(schemas) = value.as_object_mut() {
+					for schema in schemas.values_mut() {
+						visit_json_schema_text(schema, f);
+					}
+				}
+			},
+			"allOf" | "anyOf" | "oneOf" | "prefixItems" | "items" => {
+				if let Some(schemas) = value.as_array_mut() {
+					for schema in schemas {
+						visit_json_schema_text(schema, f);
+					}
+				} else {
+					visit_json_schema_text(value, f);
+				}
+			},
+			"additionalProperties"
+			| "additionalItems"
+			| "unevaluatedProperties"
+			| "unevaluatedItems"
+			| "contains"
+			| "propertyNames"
+			| "not"
+			| "if"
+			| "then"
+			| "else" => visit_json_schema_text(value, f),
+			_ => {},
+		}
 	}
 }
 

@@ -5196,7 +5196,7 @@
       "additionalProperties": false
     },
     "ContentScope": {
-      "description": "A category of request content that a prompt guard can inspect.",
+      "description": "Which category of request or response content a prompt guard inspects.\nEncrypted payloads are excluded. Signed response payloads are scanned but\na mask that would change them rejects the response instead.",
       "oneOf": [
         {
           "description": "The system/developer prompt.",
@@ -5204,7 +5204,7 @@
           "const": "systemPrompt"
         },
         {
-          "description": "Regular user/assistant message text.",
+          "description": "Regular user/assistant message text and plaintext reasoning blocks.",
           "type": "string",
           "const": "messages"
         },
@@ -5697,6 +5697,17 @@
             "body": "The request was rejected due to inappropriate content",
             "status": 403
           }
+        },
+        "scope": {
+          "description": "Which parts of the response this guard inspects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentScope"
+          },
+          "minItems": 1,
+          "default": [
+            "messages"
+          ]
         }
       },
       "unevaluatedProperties": false,

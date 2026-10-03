@@ -85,6 +85,19 @@ pub async fn evaluate_window(
 	None
 }
 
+/// Evaluate windows until one blocks
+async fn evaluate_windows(
+	mut evaluators: Vec<Box<dyn StreamingEvaluator>>,
+	windows: Vec<String>,
+) -> (Vec<Box<dyn StreamingEvaluator>>, Option<Bytes>) {
+	for window in windows {
+		if let Some(blocked) = evaluate_window(&mut evaluators, &window).await {
+			return (evaluators, Some(blocked));
+		}
+	}
+	(evaluators, None)
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -227,6 +240,43 @@ enum GuardedBodyState {
 	Done,
 }
 
+#[derive(Default)]
+struct ResponseDelta {
+	text: String,
+	reasoning: String,
+}
+
+impl ResponseDelta {
+	fn len(&self) -> usize {
+		self.text.len() + self.reasoning.len()
+	}
+
+	fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
+	fn append(&mut self, delta: Self) {
+		self.text.push_str(&delta.text);
+		self.reasoning.push_str(&delta.reasoning);
+	}
+
+	fn take_windows(&mut self, overlap: &mut Self) -> Vec<String> {
+		let mut windows = Vec::new();
+		for (pending, tail) in [
+			(&mut self.reasoning, &mut overlap.reasoning),
+			(&mut self.text, &mut overlap.text),
+		] {
+			if pending.is_empty() {
+				continue;
+			}
+			let window = format!("{tail}{}", std::mem::take(pending));
+			*tail = tail_chars(&window, OVERLAP_BYTES).to_string();
+			windows.push(window);
+		}
+		windows
+	}
+}
+
 pin_project! {
 	// An `http_body::Body` wrapper that implements windowed guardrail evaluation.
 	pub struct GuardedSseBody {
@@ -237,8 +287,8 @@ pin_project! {
 		buffer_limit: usize,
 		held_frames: Vec<Bytes>,
 		held_bytes: usize,
-		pending_text: String,
-		overlap_tail: String,
+		pending_text: ResponseDelta,
+		overlap_tail: ResponseDelta,
 		sse_decoder: SseDecoder<Bytes>,
 		decode_buffer: bytes::BytesMut,
 		state: GuardedBodyState,
@@ -287,8 +337,8 @@ impl GuardedSseBody {
 			buffer_limit,
 			held_frames: Vec::new(),
 			held_bytes: 0,
-			pending_text: String::new(),
-			overlap_tail: String::new(),
+			pending_text: ResponseDelta::default(),
+			overlap_tail: ResponseDelta::default(),
 			sse_decoder: SseDecoder::with_max_size(buffer_limit),
 			decode_buffer: bytes::BytesMut::new(),
 			state: GuardedBodyState::Buffering,
@@ -296,61 +346,79 @@ impl GuardedSseBody {
 		})
 	}
 
-	/// Extract text delta from a parsed SSE frame if present.
-	fn extract_text_delta(frame: SseFrame<Bytes>) -> Option<String> {
+	/// Extract text and reasoning deltas from a parsed SSE frame if present.
+	fn extract_text_delta(frame: SseFrame<Bytes>) -> Option<ResponseDelta> {
 		let SseFrame::Event(Event { data, .. }) = frame else {
 			return None;
 		};
 		if data.as_ref() == b"[DONE]" {
 			return None;
 		}
-		if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&data) {
-			// OpenAI responses: response.output_text.delta
-			if v.get("type").and_then(|t| t.as_str()) == Some("response.output_text.delta")
-				&& let Some(text) = v.get("delta").and_then(|s| s.as_str())
+		let v = serde_json::from_slice::<serde_json::Value>(&data).ok()?;
+		let str_at = |v: &serde_json::Value, key: &str| v.get(key)?.as_str().map(str::to_string);
+		let mut out = ResponseDelta::default();
+		// OpenAI Responses
+		match v.get("type").and_then(|t| t.as_str()) {
+			Some("response.output_text.delta") => {
+				out.text = str_at(&v, "delta")?;
+				return Some(out);
+			},
+			Some("response.reasoning_text.delta" | "response.reasoning_summary_text.delta") => {
+				out.reasoning = str_at(&v, "delta")?;
+				return Some(out);
+			},
+			_ => {},
+		}
+		// OpenAI completions.
+		if let Some(choices) = v.get("choices").and_then(|c| c.as_array()) {
+			for delta in choices.iter().filter_map(|c| c.get("delta")) {
+				out.text.extend(str_at(delta, "content"));
+				out.reasoning.extend(str_at(delta, "reasoning"));
+				out.reasoning.extend(str_at(delta, "reasoning_content"));
+				for detail in delta
+					.get("reasoning_details")
+					.and_then(|d| d.as_array())
+					.into_iter()
+					.flatten()
+				{
+					let field = match detail.get("type").and_then(|t| t.as_str()) {
+						Some("reasoning.text") => "text",
+						Some("reasoning.summary") => "summary",
+						_ => continue,
+					};
+					out.reasoning.extend(str_at(detail, field));
+				}
+			}
+			return Some(out);
+		}
+		// Anthropic messages
+		if let Some(delta) = v.get("delta").or_else(|| v.get("content_block")) {
+			if let Some(text) = str_at(delta, "text") {
+				out.text = text;
+				return Some(out);
+			}
+			if let Some(thinking) = str_at(delta, "thinking") {
+				out.reasoning = thinking;
+				return Some(out);
+			}
+		}
+		// Gemini
+		if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
+			for part in candidates
+				.iter()
+				.filter_map(|c| c.get("content")?.get("parts")?.as_array())
+				.flatten()
 			{
-				return Some(text.to_string());
+				let Some(text) = part.get("text").and_then(|t| t.as_str()) else {
+					continue;
+				};
+				if part.get("thought").and_then(|t| t.as_bool()) == Some(true) {
+					out.reasoning.push_str(text);
+				} else {
+					out.text.push_str(text);
+				}
 			}
-			// OpenAI completions: choices[0].delta.content
-			if let Some(text) = v
-				.get("choices")
-				.and_then(|c| c.get(0))
-				.and_then(|c| c.get("delta"))
-				.and_then(|d| d.get("content"))
-				.and_then(|s| s.as_str())
-			{
-				return Some(text.to_string());
-			}
-			// Anthropic messages: delta.text
-			if let Some(text) = v
-				.get("delta")
-				.and_then(|d| d.get("text"))
-				.and_then(|s| s.as_str())
-			{
-				return Some(text.to_string());
-			}
-			// Native Gemini: candidates[].content.parts[].text. `candidateCount` is client
-			// controlled, so reading only candidates[0] would let the client hide text from the
-			// guard in a second candidate. Concatenating every candidate is the conservative
-			// choice: the guard evaluates one text stream, and a window that contains all
-			// candidates can only match more than one that contains a subset — every substring of
-			// a single candidate is still contiguous in the concatenation. Thought parts are
-			// excluded, as they are on the non-streaming path (types::gemini::candidate_text).
-			if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
-				return Some(
-					candidates
-						.iter()
-						.filter_map(|c| {
-							c.get("content")
-								.and_then(|c| c.get("parts"))
-								.and_then(|p| p.as_array())
-						})
-						.flatten()
-						.filter(|p| p.get("thought").and_then(serde_json::Value::as_bool) != Some(true))
-						.filter_map(|p| p.get("text").and_then(|t| t.as_str()))
-						.collect(),
-				);
-			}
+			return Some(out);
 		}
 		None
 	}
@@ -434,7 +502,7 @@ impl http_body::Body for GuardedSseBody {
 								match this.sse_decoder.decode(this.decode_buffer) {
 									Ok(Some(sse_frame)) => {
 										if let Some(delta) = GuardedSseBody::extract_text_delta(sse_frame) {
-											this.pending_text.push_str(&delta);
+											this.pending_text.append(delta);
 										}
 									},
 									Ok(None) => break,
@@ -460,14 +528,9 @@ impl http_body::Body for GuardedSseBody {
 									*this.state = GuardedBodyState::Flushing { queue, eof: false };
 									continue;
 								}
-								let batch = std::mem::take(this.pending_text);
-								let window = format!("{}{}", this.overlap_tail, batch);
-								*this.overlap_tail = tail_chars(&window, OVERLAP_BYTES).to_string();
-								let mut evaluators = std::mem::take(this.evaluators);
-								let fut: EvalFuture = Box::pin(async move {
-									let blocked_body = evaluate_window(&mut evaluators, &window).await;
-									(evaluators, blocked_body)
-								});
+								let windows = this.pending_text.take_windows(this.overlap_tail);
+								let evaluators = std::mem::take(this.evaluators);
+								let fut: EvalFuture = Box::pin(evaluate_windows(evaluators, windows));
 								*this.state = GuardedBodyState::Evaluating { fut, eof: false };
 							}
 						},
@@ -476,7 +539,7 @@ impl http_body::Body for GuardedSseBody {
 								match this.sse_decoder.decode_eof(this.decode_buffer) {
 									Ok(Some(sse_frame)) => {
 										if let Some(delta) = GuardedSseBody::extract_text_delta(sse_frame) {
-											this.pending_text.push_str(&delta);
+											this.pending_text.append(delta);
 										}
 									},
 									Ok(None) => break,
@@ -495,14 +558,9 @@ impl http_body::Body for GuardedSseBody {
 								continue;
 							}
 
-							let batch = std::mem::take(this.pending_text);
-							let window = format!("{}{}", this.overlap_tail, batch);
-							this.overlap_tail.clear();
-							let mut evaluators = std::mem::take(this.evaluators);
-							let fut: EvalFuture = Box::pin(async move {
-								let blocked_body = evaluate_window(&mut evaluators, &window).await;
-								(evaluators, blocked_body)
-							});
+							let windows = this.pending_text.take_windows(this.overlap_tail);
+							let evaluators = std::mem::take(this.evaluators);
+							let fut: EvalFuture = Box::pin(evaluate_windows(evaluators, windows));
 							*this.state = GuardedBodyState::Evaluating { fut, eof: true };
 						},
 					}
@@ -725,27 +783,28 @@ mod tests {
 		assert!(!contains(&bytes, b"forbidden"));
 	}
 
-	fn text_delta(chunk: serde_json::Value) -> Option<String> {
+	fn text_delta(chunk: serde_json::Value) -> Option<Vec<String>> {
 		GuardedSseBody::extract_text_delta(SseFrame::Event(Event {
 			id: None,
 			name: "message".into(),
 			data: Bytes::from(chunk.to_string()),
 		}))
+		.map(|mut delta| delta.take_windows(&mut ResponseDelta::default()))
 	}
 
 	#[test]
 	fn test_extract_text_delta_matches_one_arm_per_chunk_shape() {
 		assert_eq!(
 			text_delta(serde_json::json!({ "type": "response.output_text.delta", "delta": "a" })),
-			Some("a".to_string())
+			Some(vec!["a".to_string()])
 		);
 		assert_eq!(
 			text_delta(serde_json::json!({ "choices": [{ "delta": { "content": "b" } }] })),
-			Some("b".to_string())
+			Some(vec!["b".to_string()])
 		);
 		assert_eq!(
 			text_delta(serde_json::json!({ "type": "content_block_delta", "delta": { "text": "c" } })),
-			Some("c".to_string())
+			Some(vec!["c".to_string()])
 		);
 		assert_eq!(
 			text_delta(serde_json::json!({
@@ -754,13 +813,13 @@ mod tests {
 					{ "content": { "parts": [{ "text": "e" }, { "text": "skip", "thought": true }] } }
 				]
 			})),
-			Some("de".to_string())
+			Some(vec!["skip".to_string(), "de".to_string()])
 		);
 		assert_eq!(text_delta(serde_json::json!({ "usageMetadata": {} })), None);
 	}
 
 	#[tokio::test]
-	async fn test_gemini_sse_ignores_thought_parts() {
+	async fn test_gemini_sse_evaluates_thought_parts() {
 		let chunk = gemini_delta_bytes("all good", "forbidden");
 		let body = make_body(vec![chunk.clone()]);
 
@@ -772,8 +831,103 @@ mod tests {
 		);
 
 		let bytes = guarded.collect().await.unwrap().to_bytes();
-		assert!(bytes.starts_with(&chunk));
+		assert!(!contains(&bytes, b"forbidden"));
+		assert!(contains(&bytes, b"guardrail_blocked"));
+	}
+
+	#[rstest::rstest]
+	#[case::responses(serde_json::json!({"type": "response.reasoning_text.delta", "delta": "forbidden"}))]
+	#[case::responses_summary(serde_json::json!({"type": "response.reasoning_summary_text.delta", "delta": "forbidden"}))]
+	#[case::completions(serde_json::json!({"choices": [{"delta": {"reasoning": "forbidden", "content": "fine"}}]}))]
+	#[case::completions_reasoning_content(serde_json::json!({"choices": [{"delta": {"reasoning_content": "forbidden", "content": null}}]}))]
+	#[case::completions_details(serde_json::json!({"choices": [{"delta": {"reasoning_details": [{"type": "reasoning.text", "text": "forbidden"}]}}]}))]
+	#[case::completions_summary(serde_json::json!({"choices": [{"delta": {"reasoning_details": [{"type": "reasoning.summary", "summary": "forbidden"}]}}]}))]
+	#[case::second_choice(serde_json::json!({"choices": [{"delta": {"content": "fine"}}, {"delta": {"reasoning_content": "forbidden"}}]}))]
+	#[case::anthropic(serde_json::json!({"type": "content_block_delta", "delta": {"type": "thinking_delta", "thinking": "forbidden"}}))]
+	#[case::anthropic_start(serde_json::json!({"type": "content_block_start", "content_block": {"type": "thinking", "thinking": "forbidden", "signature": "opaque"}}))]
+	#[tokio::test]
+	async fn reasoning_delta_is_blocked_before_forwarding(#[case] chunk: serde_json::Value) {
+		let chunk = sse_bytes(&chunk.to_string());
+		// Exercise partial SSE frames as well as reasoning-only responses at EOF.
+		let split = chunk.len() / 2;
+		let body = make_body(vec![chunk.slice(..split), chunk.slice(split..)]);
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("forbidden"))],
+			1024 * 1024,
+			None,
+		);
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"forbidden"));
+	}
+
+	#[rstest::rstest]
+	#[case::reasoning(false)]
+	#[case::answer(true)]
+	#[tokio::test]
+	async fn interleaved_reasoning_preserves_overlap(#[case] match_answer: bool) {
+		let chunks: Vec<_> = [("credit", "fine"), (" card", "also fine")]
+			.into_iter()
+			.map(|(a, r)| {
+				if match_answer {
+					gemini_delta_bytes(a, r)
+				} else {
+					gemini_delta_bytes(r, a)
+				}
+			})
+			.collect();
+		// Check both a single window at EOF and a match spanning evaluation windows.
+		for threshold in [4, DEFAULT_EVAL_THRESHOLD] {
+			let guarded = GuardedSseBody::with_threshold(
+				make_body(chunks.clone()),
+				vec![Box::new(pattern_evaluator("credit card"))],
+				1024 * 1024,
+				None,
+				threshold,
+			);
+			let bytes = guarded.collect().await.unwrap().to_bytes();
+			assert!(contains(&bytes, b"guardrail_blocked"));
+			assert!(!contains(&bytes, b" card"));
+		}
+	}
+
+	#[tokio::test]
+	async fn reasoning_and_answer_do_not_match_across_streams() {
+		let guarded = GuardedSseBody::new(
+			make_body(vec![gemini_delta_bytes("card", "credit")]),
+			vec![Box::new(pattern_evaluator(r"credit\s*card"))],
+			1024 * 1024,
+			None,
+		);
+		let bytes = guarded.collect().await.unwrap().to_bytes();
 		assert!(!contains(&bytes, b"guardrail_blocked"));
+	}
+
+	#[tokio::test]
+	async fn opaque_reasoning_is_not_scanned() {
+		let chunks = vec![
+			sse_bytes(
+				r#"{"type":"content_block_delta","delta":{"type":"signature_delta","signature":"forbidden"}}"#,
+			),
+			sse_bytes(
+				r#"{"type":"content_block_start","content_block":{"type":"redacted_thinking","data":"forbidden"}}"#,
+			),
+			sse_bytes(
+				r#"{"choices":[{"delta":{"reasoning_details":[{"type":"reasoning.encrypted","data":"forbidden"}]}}]}"#,
+			),
+		];
+		let expected: Vec<u8> = chunks.iter().flat_map(|c| c.iter().copied()).collect();
+		let guarded = GuardedSseBody::new(
+			make_body(chunks),
+			vec![Box::new(pattern_evaluator("forbidden"))],
+			1024 * 1024,
+			None,
+		);
+		assert_eq!(
+			guarded.collect().await.unwrap().to_bytes().as_ref(),
+			expected
+		);
 	}
 
 	#[tokio::test]

@@ -1456,9 +1456,12 @@ message BackendPolicySpec {
         BedrockGuardrails bedrock_guardrails = 5;
         AzureContentSafety azure_content_safety = 6;
       }
+      // Which parts of the response this guard inspects. When empty, defaults to the
+      // regular message text; tool inputs/outputs are opt-in.
+      repeated ContentScope scope = 7;
     }
 
-    // Which category of request text a guard inspects.
+    // Which category of request or response text a guard inspects.
     enum ContentScope {
       CONTENT_SCOPE_UNSPECIFIED = 0;
       // The system/developer prompt.

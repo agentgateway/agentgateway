@@ -3969,6 +3969,7 @@ mod tests {
 	fn response_regex_guard() -> ResponseGuard {
 		ResponseGuard {
 			rejection: RequestRejection::default(),
+			scope: crate::llm::policy::default_response_scope(),
 			kind: ResponseGuardKind::Regex(RegexRules {
 				action: Default::default(),
 				rules: vec![RegexRule::Regex {

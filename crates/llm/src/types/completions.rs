@@ -267,11 +267,75 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.choices {
+			visit_reasoning_text(&mut c.message.rest, f);
+			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
+			let f = &mut plain;
 			if let Some(text) = &mut c.message.content {
-				f(text);
+				f(ContentScope::Messages, text);
 			}
+			super::visit_json_at(&mut c.message.rest, &["refusal"], ContentScope::Messages, f);
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["audio", "transcript"],
+				ContentScope::Messages,
+				f,
+			);
+			// tool call args are json-in-json, same as the request side
+			if let Some(serde_json::Value::Array(calls)) = c.message.rest.get_mut("tool_calls") {
+				for call in calls {
+					super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+					super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				}
+			}
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
+		}
+	}
+}
+
+fn visit_reasoning_text(
+	rest: &mut serde_json::Value,
+	f: &mut dyn FnMut(crate::types::ResponseText, &mut String),
+) {
+	let signed = super::has_signature(rest);
+	for field in ["reasoning", "reasoning_content"] {
+		super::visit_json_at(
+			rest,
+			&[field],
+			ContentScope::Messages,
+			&mut |scope, text| {
+				f(
+					crate::types::ResponseText {
+						scope,
+						signed: signed && field == "reasoning_content",
+					},
+					text,
+				);
+			},
+		);
+	}
+	if let Some(serde_json::Value::Array(details)) = rest.get_mut("reasoning_details") {
+		for detail in details {
+			let field = match detail.get("type").and_then(serde_json::Value::as_str) {
+				Some("reasoning.text") => "text",
+				Some("reasoning.summary") => "summary",
+				_ => continue,
+			};
+			let signed = super::has_signature(detail);
+			super::visit_json_at(
+				detail,
+				&[field],
+				ContentScope::Messages,
+				&mut |scope, text| {
+					f(crate::types::ResponseText { scope, signed }, text);
+				},
+			);
 		}
 	}
 }

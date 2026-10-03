@@ -103,96 +103,475 @@ impl RawInputItem {
 	}
 }
 
-// visit every documented item type
-// known-ignored items should be listed
-// unknown items should be logged for future review
-// https://github.com/openai/openai-openapi may give us a way to keep an eye on changes
+// Keep this in sync with the typed output visitor below.
 fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
-	match value.get("type").and_then(|t| t.as_str()) {
-		// `output` is either a plain string or a content-part array.
-		Some(
-			"function_call_output"
-			| "custom_tool_call_output"
-			| "local_shell_call_output"
-			| "shell_call_output"
-			| "apply_patch_call_output",
-		) => {
-			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
+	use ContentScope::{ToolInput, ToolOutput};
+	if has_signature(value) {
+		return;
+	}
+	match value.get("type").and_then(Value::as_str) {
+		Some("function_call_output" | "custom_tool_call_output") => {
+			if let Some(output) = value.get_mut("output") {
+				visit_tool_output_text(output, f);
+			}
 		},
-		Some("program_output") => {
-			visit_json_at(value, &["result"], ContentScope::ToolOutput, f);
+		Some("local_shell_call_output" | "apply_patch_call_output") => {
+			visit_json_at(value, &["output"], ToolOutput, f)
 		},
-		// `mcp_call` carries the model's arguments plus the server's output/error on one item.
-		Some("function_call" | "mcp_call" | "mcp_approval_request") => {
-			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
-			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
-			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+		Some("shell_call_output") => {
+			if let Some(Value::Array(outputs)) = value.get_mut("output") {
+				for output in outputs {
+					visit_json_at(output, &["stdout"], ToolOutput, f);
+					visit_json_at(output, &["stderr"], ToolOutput, f);
+				}
+			}
 		},
-		Some("custom_tool_call") => {
-			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
+		Some("program_output") => visit_json_at(value, &["result"], ToolOutput, f),
+		Some("function_call" | "mcp_approval_request") => {
+			visit_json_at(value, &["arguments"], ToolInput, f)
 		},
-		// Model-written JavaScript for programmatic tool calling; the item's `fingerprint`
-		// must round-trip intact and is not visited.
-		Some("program") => {
-			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
+		Some("mcp_call") => {
+			visit_json_at(value, &["arguments"], ToolInput, f);
+			visit_json_at(value, &["output"], ToolOutput, f);
+			if let Some(error) = value.get_mut("error") {
+				match error {
+					Value::String(text) => f(ToolOutput, text),
+					_ => {
+						visit_json_at(error, &["message"], ToolOutput, f);
+						if let Some(content) = error.get_mut("content") {
+							visit_tool_output_text(content, f);
+						}
+					},
+				}
+			}
 		},
-		// Model-directed actions; `actions` is computer_call's batched form, and the
-		// safety-check prose rides along with the call.
-		Some("local_shell_call" | "shell_call" | "computer_call" | "web_search_call") => {
-			visit_json_at(value, &["action"], ContentScope::ToolInput, f);
-			visit_json_at(value, &["actions"], ContentScope::ToolInput, f);
-			visit_json_at(
-				value,
-				&["pending_safety_checks"],
-				ContentScope::ToolInput,
-				f,
-			);
+		Some("custom_tool_call") => visit_json_at(value, &["input"], ToolInput, f),
+		Some("local_shell_call") => {
+			for field in ["command", "env", "user", "working_directory"] {
+				visit_json_at(value, &["action", field], ToolInput, f);
+			}
+		},
+		Some("shell_call") => visit_json_at(value, &["action", "commands"], ToolInput, f),
+		Some("computer_call") => {
+			if let Some(action) = value.get_mut("action") {
+				visit_computer_action_value(action, f);
+			}
+			if let Some(Value::Array(actions)) = value.get_mut("actions") {
+				for action in actions {
+					visit_computer_action_value(action, f);
+				}
+			}
+			visit_safety_check_text(value, "pending_safety_checks", ToolInput, f);
+		},
+		Some("web_search_call") => {
+			for field in ["query", "url", "pattern"] {
+				visit_json_at(value, &["action", field], ToolInput, f);
+			}
+			if let Some(Value::Array(sources)) =
+				value.get_mut("action").and_then(|a| a.get_mut("sources"))
+			{
+				for source in sources {
+					visit_json_at(source, &["url"], ToolOutput, f);
+				}
+			}
 		},
 		Some("apply_patch_call") => {
-			visit_json_at(value, &["operation"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["operation", "path"], ToolInput, f);
+			visit_json_at(value, &["operation", "diff"], ToolInput, f);
 		},
-		// `output` is a screenshot; only the safety-check prose is readable.
 		Some("computer_call_output") => {
-			visit_json_at(
-				value,
-				&["acknowledged_safety_checks"],
-				ContentScope::ToolOutput,
-				f,
-			);
+			visit_safety_check_text(value, "acknowledged_safety_checks", ToolOutput, f)
 		},
 		Some("file_search_call") => {
-			visit_json_at(value, &["queries"], ContentScope::ToolInput, f);
-			visit_json_at(value, &["results"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["queries"], ToolInput, f);
+			if let Some(Value::Array(results)) = value.get_mut("results") {
+				for result in results {
+					for field in ["text", "filename", "attributes"] {
+						visit_json_at(result, &[field], ToolOutput, f);
+					}
+				}
+			}
 		},
 		Some("code_interpreter_call") => {
-			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
-			visit_json_at(value, &["outputs"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["code"], ToolInput, f);
+			if let Some(Value::Array(outputs)) = value.get_mut("outputs") {
+				for output in outputs {
+					if output.get("type").and_then(Value::as_str) == Some("logs") {
+						visit_json_at(output, &["logs"], ToolOutput, f);
+					}
+				}
+			}
 		},
-		// Empty object today; the documented growth point for tool-search arguments.
-		Some("tool_search_call") => {
-			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
-		},
-		// Server-controlled tool listings: descriptions are a prompt-injection vector.
+		Some("tool_search_call") => visit_json_at(value, &["arguments"], ToolInput, f),
 		Some("mcp_list_tools" | "tool_search_output") => {
-			visit_json_at(value, &["tools"], ContentScope::ToolOutput, f);
-			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+			if let Some(Value::Array(tools)) = value.get_mut("tools") {
+				for tool in tools {
+					visit_tool_definition_value(tool, f);
+				}
+			}
+			visit_json_at(value, &["error"], ToolOutput, f);
 		},
-		Some("mcp_approval_response") => {
-			visit_json_at(value, &["reason"], ContentScope::ToolInput, f);
+		Some("mcp_approval_response") => visit_json_at(value, &["reason"], ToolInput, f),
+		Some("reasoning") => {
+			if value.get("encrypted_content").is_none_or(Value::is_null) {
+				for field in ["summary", "content"] {
+					if let Some(Value::Array(parts)) = value.get_mut(field) {
+						for part in parts {
+							visit_json_at(part, &["text"], ContentScope::Messages, f);
+						}
+					}
+				}
+			}
 		},
-		// Client-authored tool definitions, unscanned like the request's `tools` field.
-		Some("additional_tools") => {},
-		// No readable text: references, triggers, base64 image results.
-		Some("item_reference" | "compaction_trigger" | "image_generation_call") => {},
-		// `encrypted_content`/fingerprint the API verifies on replay; a mask would break the
-		// request, and reasoning text is bound to its encrypted blob.
-		Some("reasoning" | "compaction") => {},
-		other => {
-			tracing::debug!(
-				item_type = other.unwrap_or("<none>"),
-				"unrecognized input item; not scanned by prompt guards"
-			);
+		// Tool configuration, opaque media, and signed content are not scanned.
+		Some(
+			"additional_tools"
+			| "item_reference"
+			| "compaction_trigger"
+			| "image_generation_call"
+			| "compaction"
+			| "program",
+		) => {},
+		other => tracing::debug!(
+			item_type = other.unwrap_or("<none>"),
+			"unrecognized input item; not scanned by prompt guards"
+		),
+	}
+}
+
+fn visit_tool_output_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	match value {
+		Value::String(text) => f(ContentScope::ToolOutput, text),
+		Value::Array(parts) => {
+			for part in parts {
+				visit_tool_output_text(part, f);
+			}
 		},
+		Value::Object(_) => match value.get("type").and_then(Value::as_str) {
+			Some("input_text" | "text") => visit_json_at(value, &["text"], ContentScope::ToolOutput, f),
+			Some("resource") => visit_json_at(value, &["resource", "text"], ContentScope::ToolOutput, f),
+			Some("resource_link") => {
+				for field in ["title", "description"] {
+					visit_json_at(value, &[field], ContentScope::ToolOutput, f);
+				}
+			},
+			_ => {},
+		},
+		_ => {},
+	}
+}
+
+fn visit_safety_check_text(
+	value: &mut Value,
+	field: &str,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	if let Some(Value::Array(checks)) = value.get_mut(field) {
+		for check in checks {
+			visit_json_at(check, &["message"], scope, f);
+		}
+	}
+}
+
+fn visit_computer_action_value(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	match value.get("type").and_then(Value::as_str) {
+		Some("type") => visit_json_at(value, &["text"], ContentScope::ToolInput, f),
+		Some("keypress") => visit_json_at(value, &["keys"], ContentScope::ToolInput, f),
+		_ => {},
+	}
+}
+
+fn visit_tool_definition_value(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	for field in ["description", "server_description"] {
+		visit_json_at(value, &[field], ContentScope::ToolOutput, f);
+	}
+	visit_json_at(
+		value,
+		&["annotations", "title"],
+		ContentScope::ToolOutput,
+		f,
+	);
+	for field in ["parameters", "input_schema", "output_schema"] {
+		if let Some(schema) = value.get_mut(field) {
+			visit_json_schema_text(schema, &mut |text| f(ContentScope::ToolOutput, text));
+		}
+	}
+	if let Some(Value::Array(tools)) = value.get_mut("tools") {
+		for tool in tools {
+			visit_tool_definition_value(tool, f);
+		}
+	}
+}
+
+fn visit_output_tool_item(item: &mut OutputItem, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	use ContentScope::{ToolInput, ToolOutput};
+	use async_openai::types::responses as sdk;
+	match item {
+		OutputItem::FunctionCall(call) => f(ToolInput, &mut call.arguments),
+		OutputItem::CustomToolCall(call) => f(ToolInput, &mut call.input),
+		OutputItem::FunctionCallOutput(call) => match &mut call.output {
+			sdk::FunctionCallOutput::Text(text) => f(ToolOutput, text),
+			sdk::FunctionCallOutput::Content(parts) => visit_output_content(parts, f),
+		},
+		OutputItem::CustomToolCallOutput(call) => match &mut call.output {
+			sdk::CustomToolCallOutputOutput::Text(text) => f(ToolOutput, text),
+			sdk::CustomToolCallOutputOutput::List(parts) => visit_output_content(parts, f),
+		},
+		OutputItem::FileSearchCall(call) => {
+			for query in &mut call.queries {
+				f(ToolInput, query);
+			}
+			for result in call.results.iter_mut().flatten() {
+				f(ToolOutput, &mut result.text);
+				f(ToolOutput, &mut result.filename);
+				for value in result.attributes.values_mut() {
+					visit_json_strings(value, &mut |text| f(ToolOutput, text));
+				}
+			}
+		},
+		OutputItem::WebSearchCall(call) => match &mut call.action {
+			Some(sdk::WebSearchToolCallAction::Search(action)) => {
+				// `query` is deprecated in favor of `queries`, but providers may still send it
+				#[allow(deprecated)]
+				if let Some(query) = &mut action.query {
+					f(ToolInput, query);
+				}
+				for query in action.queries.iter_mut().flatten() {
+					f(ToolInput, query);
+				}
+				for source in action.sources.iter_mut().flatten() {
+					f(ToolOutput, &mut source.url);
+				}
+			},
+			Some(sdk::WebSearchToolCallAction::OpenPage(action)) => {
+				if let Some(url) = &mut action.url {
+					f(ToolInput, url);
+				}
+			},
+			Some(
+				sdk::WebSearchToolCallAction::Find(action)
+				| sdk::WebSearchToolCallAction::FindInPage(action),
+			) => {
+				f(ToolInput, &mut action.url);
+				f(ToolInput, &mut action.pattern);
+			},
+			None => {},
+		},
+		OutputItem::ComputerCall(call) => {
+			for action in call
+				.action
+				.iter_mut()
+				.chain(call.actions.iter_mut().flatten())
+			{
+				visit_computer_action_text(action, &mut |text| f(ToolInput, text));
+			}
+			for check in &mut call.pending_safety_checks {
+				if let Some(message) = &mut check.message {
+					f(ToolInput, message);
+				}
+			}
+		},
+		OutputItem::ComputerCallOutput(call) => {
+			for check in call.acknowledged_safety_checks.iter_mut().flatten() {
+				if let Some(message) = &mut check.message {
+					f(ToolOutput, message);
+				}
+			}
+		},
+		OutputItem::CodeInterpreterCall(call) => {
+			if let Some(code) = &mut call.code {
+				f(ToolInput, code);
+			}
+			for output in call.outputs.iter_mut().flatten() {
+				if let sdk::CodeInterpreterToolCallOutput::Logs(logs) = output {
+					f(ToolOutput, &mut logs.logs);
+				}
+			}
+		},
+		OutputItem::LocalShellCall(call) => {
+			for text in call
+				.action
+				.command
+				.iter_mut()
+				.chain(call.action.env.values_mut())
+				.chain(call.action.user.iter_mut())
+				.chain(call.action.working_directory.iter_mut())
+			{
+				f(ToolInput, text);
+			}
+		},
+		OutputItem::ShellCall(call) => {
+			for command in &mut call.action.commands {
+				f(ToolInput, command);
+			}
+		},
+		OutputItem::ShellCallOutput(call) => {
+			for output in &mut call.output {
+				f(ToolOutput, &mut output.stdout);
+				f(ToolOutput, &mut output.stderr);
+			}
+		},
+		OutputItem::ApplyPatchCall(call) => match &mut call.operation {
+			sdk::ApplyPatchOperation::CreateFile(op) => {
+				f(ToolInput, &mut op.path);
+				f(ToolInput, &mut op.diff);
+			},
+			sdk::ApplyPatchOperation::UpdateFile(op) => {
+				f(ToolInput, &mut op.path);
+				f(ToolInput, &mut op.diff);
+			},
+			sdk::ApplyPatchOperation::DeleteFile(op) => f(ToolInput, &mut op.path),
+		},
+		OutputItem::ApplyPatchCallOutput(call) => {
+			if let Some(output) = &mut call.output {
+				f(ToolOutput, output);
+			}
+		},
+		OutputItem::McpCall(call) => {
+			f(ToolInput, &mut call.arguments);
+			if let Some(output) = &mut call.output {
+				f(ToolOutput, output);
+			}
+			match &mut call.error {
+				Some(sdk::MCPToolCallError::McpProtocolError(error)) => f(ToolOutput, &mut error.message),
+				Some(sdk::MCPToolCallError::HttpError(error)) => f(ToolOutput, &mut error.message),
+				Some(sdk::MCPToolCallError::McpToolExecutionError(error)) => {
+					visit_tool_output_text(&mut error.content, f)
+				},
+				None => {},
+			}
+		},
+		OutputItem::McpApprovalRequest(call) => f(ToolInput, &mut call.arguments),
+		OutputItem::McpListTools(list) => {
+			for tool in &mut list.tools {
+				if let Some(description) = &mut tool.description {
+					f(ToolOutput, description);
+				}
+				visit_json_schema_text(&mut tool.input_schema, &mut |text| f(ToolOutput, text));
+				if let Some(annotations) = &mut tool.annotations {
+					visit_json_at(annotations, &["title"], ToolOutput, f);
+				}
+			}
+			if let Some(error) = &mut list.error {
+				f(ToolOutput, error);
+			}
+		},
+		OutputItem::ToolSearchCall(call) => {
+			visit_json_strings(&mut call.arguments, &mut |text| f(ToolInput, text))
+		},
+		OutputItem::ToolSearchOutput(output) => {
+			for tool in &mut output.tools {
+				visit_tool_definition_text(tool, &mut |text| f(ToolOutput, text));
+			}
+		},
+		OutputItem::Program(_) => {},
+		OutputItem::ProgramOutput(output) => f(ToolOutput, &mut output.result),
+		OutputItem::Reasoning(reasoning) => {
+			for sdk::SummaryPart::SummaryText(summary) in &mut reasoning.summary {
+				f(ContentScope::Messages, &mut summary.text);
+			}
+			for sdk::ReasoningItemContent::ReasoningText(content) in
+				reasoning.content.iter_mut().flatten()
+			{
+				f(ContentScope::Messages, &mut content.text);
+			}
+		},
+		// Messages are visited separately; opaque results and tool configuration are preserved.
+		OutputItem::Message(_)
+		| OutputItem::Compaction(_)
+		| OutputItem::ImageGenerationCall(_)
+		| OutputItem::AdditionalTools(_) => {},
+	}
+}
+
+fn visit_output_content(parts: &mut [InputContent], f: &mut dyn FnMut(ContentScope, &mut String)) {
+	for part in parts {
+		if let InputContent::InputText(text) = part {
+			f(ContentScope::ToolOutput, &mut text.text);
+		}
+	}
+}
+
+fn visit_computer_action_text(
+	action: &mut async_openai::types::responses::ComputerAction,
+	f: &mut dyn FnMut(&mut String),
+) {
+	use async_openai::types::responses::ComputerAction;
+	match action {
+		ComputerAction::Type(action) => f(&mut action.text),
+		ComputerAction::Keypress(action) => action.keys.iter_mut().for_each(f),
+		ComputerAction::Click(_)
+		| ComputerAction::DoubleClick(_)
+		| ComputerAction::Drag(_)
+		| ComputerAction::Move(_)
+		| ComputerAction::Screenshot
+		| ComputerAction::Scroll(_)
+		| ComputerAction::Wait => {},
+	}
+}
+
+fn visit_tool_definition_text(
+	tool: &mut async_openai::types::responses::Tool,
+	f: &mut dyn FnMut(&mut String),
+) {
+	use async_openai::types::responses::{NamespaceToolParamTool, Tool};
+	match tool {
+		Tool::Function(tool) => {
+			if let Some(description) = &mut tool.description {
+				f(description);
+			}
+			for schema in tool
+				.parameters
+				.iter_mut()
+				.chain(tool.output_schema.iter_mut())
+			{
+				visit_json_schema_text(schema, f);
+			}
+		},
+		Tool::Custom(tool) => {
+			if let Some(description) = &mut tool.description {
+				f(description);
+			}
+		},
+		Tool::Namespace(tool) => {
+			f(&mut tool.description);
+			for tool in &mut tool.tools {
+				match tool {
+					NamespaceToolParamTool::Function(tool) => {
+						if let Some(description) = &mut tool.description {
+							f(description);
+						}
+						for schema in tool
+							.parameters
+							.iter_mut()
+							.chain(tool.output_schema.iter_mut())
+						{
+							visit_json_schema_text(schema, f);
+						}
+					},
+					NamespaceToolParamTool::Custom(tool) => {
+						if let Some(description) = &mut tool.description {
+							f(description);
+						}
+					},
+				}
+			}
+		},
+		Tool::Mcp(tool) => {
+			if let Some(description) = &mut tool.server_description {
+				f(description);
+			}
+		},
+		Tool::ToolSearch(tool) => {
+			if let Some(description) = &mut tool.description {
+				f(description);
+			}
+			if let Some(schema) = &mut tool.parameters {
+				visit_json_schema_text(schema, f);
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -934,22 +1313,39 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for o in &mut self.output {
-			if let OutputItem::Message(msg) = o {
-				for c in &mut msg.content {
-					if let Content::OutputText(t) = c {
-						if t.annotations.is_empty() && t.logprobs.is_none() {
-							f(&mut t.text);
-							continue;
-						}
-						// offset-based metadata cannot survive a text rewrite
-						let original = t.text.clone();
-						f(&mut t.text);
-						if t.text != original {
-							t.annotations.clear();
-							t.logprobs = None;
-						}
+			if let OutputItem::Program(program) = o {
+				f(
+					crate::types::ResponseText {
+						scope: ContentScope::ToolInput,
+						signed: true,
+					},
+					&mut program.code,
+				);
+				continue;
+			}
+			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
+			let f = &mut plain;
+			let OutputItem::Message(msg) = o else {
+				visit_output_tool_item(o, f);
+				continue;
+			};
+			for c in &mut msg.content {
+				if let Content::Refusal(refusal) = c {
+					f(ContentScope::Messages, &mut refusal.refusal);
+				}
+				if let Content::OutputText(t) = c {
+					if t.annotations.is_empty() && t.logprobs.is_none() {
+						f(ContentScope::Messages, &mut t.text);
+						continue;
+					}
+					// offset-based metadata cannot survive a text rewrite
+					let original = t.text.clone();
+					f(ContentScope::Messages, &mut t.text);
+					if t.text != original {
+						t.annotations.clear();
+						t.logprobs = None;
 					}
 				}
 			}

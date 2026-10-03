@@ -47,7 +47,7 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 		self.response.serialize()
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		self.response.visit_text_mut(f)
 	}
 }
