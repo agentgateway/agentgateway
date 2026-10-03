@@ -29,72 +29,6 @@ pub trait Provider {
 	const NAME: Strng;
 }
 
-/// A model id is interpolated into a single-segment slot of an upstream path
-/// (`.../models/{model}:generateContent`), so a `/` in one is either a resource-style name
-/// (`models/x`, `tunedModels/x`, a Bedrock inference-profile ARN) or an attempt to choose the
-/// upstream path. Deciding that here keeps extraction and every path builder on the same answer.
-pub mod model_path {
-	/// One path segment: not a separator, not a dot segment, and nothing that changes meaning when
-	/// the URL we build is parsed again upstream.
-	pub fn is_safe_segment(segment: &str) -> bool {
-		!segment.is_empty()
-			&& segment != "."
-			&& segment != ".."
-			&& !segment.contains([
-				'/', '\\', '%', '?', '#', '<', '>', '"', '`', '{', '}', '|', '^',
-			]) && !segment.chars().any(|c| c.is_control() || c.is_whitespace())
-	}
-
-	pub fn is_safe_resource_name(model: &str) -> bool {
-		!model.is_empty() && model.split('/').all(is_safe_segment)
-	}
-
-	#[cfg(test)]
-	mod tests {
-		use super::*;
-
-		#[test]
-		fn safe_names_are_accepted() {
-			for model in [
-				"gemini-2.5-flash",
-				"gemini@001",
-				"claude-3-5-sonnet-20241022-v2:0",
-				"models/gemini-2.5-flash",
-				"tunedModels/abc",
-				"publishers/google/models/gemini-2.5-flash",
-				"arn:aws:bedrock:us-east-1:1234:application-inference-profile/my-profile",
-			] {
-				assert!(is_safe_resource_name(model), "{model}");
-			}
-		}
-
-		#[test]
-		fn unsafe_names_are_rejected() {
-			for model in [
-				"",
-				" ",
-				"..",
-				".",
-				"gemini-2.5-flash/../../locations/global/endpoints/openapi/chat/completions",
-				"gemini-2.5-flash/..",
-				"/gemini-2.5-flash",
-				"gemini-2.5-flash/",
-				"gemini//flash",
-				"gemini-2.5-flash%2F..",
-				"gemini\\..\\..",
-				"gemini 2.5 flash",
-				"gemini\n",
-				// A query or fragment would re-shape the path we build, dropping the `:method` suffix.
-				"gemini-2.5-flash?alt=sse",
-				"gemini-2.5-flash#frag",
-				"gemini-2.5-flash<x",
-			] {
-				assert!(!is_safe_resource_name(model), "{model}");
-			}
-		}
-	}
-}
-
 pub mod json {
 	use serde::Serialize;
 	use serde::de::DeserializeOwned;
@@ -547,6 +481,8 @@ pub enum AIError {
 	StreamingUnsupported,
 	#[error("unsupported model")]
 	UnsupportedModel,
+	#[error("model cannot be used in provider path")]
+	InvalidModelPath,
 	#[error("unsupported content")]
 	UnsupportedContent,
 	#[error("unsupported conversion: {0}")]

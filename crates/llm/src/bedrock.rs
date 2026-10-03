@@ -154,6 +154,16 @@ impl Provider {
 		}
 	}
 
+	pub fn model_is_safe_for_path(
+		route_type: super::RouteType,
+		model: &str,
+		endpoint: BedrockEndpoint,
+	) -> bool {
+		matches!(endpoint, BedrockEndpoint::Mantle)
+			|| route_type == super::RouteType::Rerank
+			|| agent_http::path::is_safe_resource_name(model)
+	}
+
 	pub fn get_path_for_route(
 		&self,
 		route_type: super::RouteType,
@@ -557,5 +567,36 @@ mod tests {
 				.as_str(),
 			"/anthropic/v1/messages/count_tokens"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::dot(".")]
+	#[case::dot_dot("..")]
+	#[case::parent_escape("../../foo")]
+	#[case::backslash("foo\\..\\bar")]
+	#[case::query("model?x=1")]
+	#[case::fragment("model#fragment")]
+	fn rejects_unsafe_path_models(#[case] model: &str) {
+		assert!(!Provider::model_is_safe_for_path(
+			RouteType::Messages,
+			model,
+			BedrockEndpoint::Runtime
+		));
+	}
+
+	#[rstest::rstest]
+	#[case::resource_name(
+		RouteType::Messages,
+		"arn:aws:bedrock:us-east-1:1234:application-inference-profile/my-profile",
+		BedrockEndpoint::Runtime
+	)]
+	#[case::rerank_body(RouteType::Rerank, "../../foo", BedrockEndpoint::Runtime)]
+	#[case::mantle_body(RouteType::Messages, "../../foo", BedrockEndpoint::Mantle)]
+	fn accepts_resource_name_and_models_not_used_in_paths(
+		#[case] route: RouteType,
+		#[case] model: &str,
+		#[case] endpoint: BedrockEndpoint,
+	) {
+		assert!(Provider::model_is_safe_for_path(route, model, endpoint));
 	}
 }

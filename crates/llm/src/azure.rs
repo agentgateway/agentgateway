@@ -39,6 +39,17 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
+	pub fn model_is_safe_for_path(&self, route: RouteType, request_model: &str) -> bool {
+		if !matches!(self.resource_type, AzureResourceType::OpenAI)
+			|| matches!(self.api_version(), "v1" | "preview")
+			|| route == RouteType::Responses
+		{
+			return true;
+		}
+
+		agent_http::path::is_safe_segment(request_model)
+	}
+
 	/// Returns true if the resolved `model` is a Claude model.
 	/// Used to select between Foundry's Anthropic-native and OpenAI-compatible endpoints.
 	pub fn is_anthropic_model(&self, model: &str) -> bool {
@@ -261,5 +272,24 @@ mod tests {
 		p.api_version = Some(strng::new(api_version));
 		p.model_override = Some(strng::new("configured-model-before-transformation"));
 		assert_eq!(p.get_path_for_model(route, model).as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::deployment(None, "2024-02-15-preview", "../../foo", false)]
+	#[case::configured_model(Some("configured-model"), "2024-02-15-preview", "../../foo", false)]
+	#[case::body_only(None, "v1", "/mnt/models/model", true)]
+	fn validates_only_deployment_path_models(
+		#[case] model_override: Option<&str>,
+		#[case] api_version: &str,
+		#[case] request_model: &str,
+		#[case] expected: bool,
+	) {
+		let mut provider = make_provider("my-resource", AzureResourceType::OpenAI);
+		provider.api_version = Some(strng::new(api_version));
+		provider.model_override = model_override.map(strng::new);
+		assert_eq!(
+			provider.model_is_safe_for_path(RouteType::Completions, request_model),
+			expected
+		);
 	}
 }
