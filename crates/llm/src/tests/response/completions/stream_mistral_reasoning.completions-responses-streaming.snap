@@ -1,0 +1,58 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream_mistral_reasoning.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"zai-glm-5-3","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"zai-glm-5-3","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":""}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":6,"item_id":"","output_index":0,"content_index":0,"delta":""}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":7,"item_id":"","output_index":0,"content_index":0,"delta":"Hi there!"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":8,"item_id":"","output_index":0,"content_index":0,"delta":" How can I"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":9,"item_id":"","output_index":0,"content_index":0,"delta":" help you?"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":10,"item_id":"","output_index":0,"content_index":0,"delta":""}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":11,"item_id":"","output_index":0,"content_index":0,"text":"Hi there! How can I help you?","logprobs":null}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":12,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"Hi there! How can I help you?"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Hi there! How can I help you?"}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":14,"response":{"created_at":123,"id":"","model":"zai-glm-5-3","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Hi there! How can I help you?"}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":13,"input_tokens_details":{"cached_tokens":0},"output_tokens":233,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":246}}}
+
+
+
+{
+  "input_tokens": 13,
+  "output_tokens": 233,
+  "total_tokens": 246,
+  "cached_input_tokens": 0,
+  "provider_model": "zai-glm-5-3",
+  "completion": [
+    "Hi there! How can I help you?"
+  ]
+}
