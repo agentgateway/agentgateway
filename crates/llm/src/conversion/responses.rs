@@ -186,6 +186,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
+			..
 		} = typed;
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are

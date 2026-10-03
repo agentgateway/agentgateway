@@ -849,6 +849,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
+			..
 		} = req;
 
 		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
