@@ -188,6 +188,8 @@ dependencies = [
  "hyper",
  "parking_lot",
  "pin-project-lite",
+ "schemars 1.2.1",
+ "serde",
  "tokio",
  "tower-service",
  "tracing",

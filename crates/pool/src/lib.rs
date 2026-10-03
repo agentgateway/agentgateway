@@ -12,4 +12,4 @@ pub mod rt;
 mod blackbox_tests;
 mod client;
 pub mod service;
-pub use client::{Builder, Client, Error, ResponseFuture};
+pub use client::{Builder, Client, Error, FailurePhase, ResponseFuture};

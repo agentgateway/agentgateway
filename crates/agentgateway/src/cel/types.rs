@@ -80,21 +80,68 @@ pub struct Executor<'a> {
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
+pub use agent_pool::FailurePhase;
+
+fn failure_phase_to_value(phase: FailurePhase) -> Value<'static> {
+	Value::from(match phase {
+		FailurePhase::Unclassified => "unclassified",
+		FailurePhase::Connect => "connect",
+		FailurePhase::Request => "request",
+	})
+}
+
 #[apply(schema!)]
-#[derive(cel::DynamicType)]
-#[dynamic(rename_all = "camelCase")]
 pub struct ErrorContext {
 	/// Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.
 	pub reason: String,
 	/// Human-readable failure detail. Exact message is subject to change.
 	pub message: String,
+	/// Failure phase: `connect` during connection establishment, or `request` when
+	/// the application request may have been sent. `unclassified` means no upstream
+	/// phase has been established for this failure.
+	#[serde(default)]
+	pub phase: FailurePhase,
+}
+
+impl ErrorContext {
+	pub fn is_safe_to_retry(&self) -> bool {
+		self.phase.is_safe_to_retry()
+	}
+}
+
+impl DynamicType for ErrorContext {
+	fn field(&self, name: &str) -> Option<Value<'_>> {
+		match name {
+			"reason" => Some(Value::from(self.reason.as_str())),
+			"message" => Some(Value::from(self.message.as_str())),
+			"phase" => Some(failure_phase_to_value(self.phase)),
+			"safeToRetry" => Some(Value::from(self.is_safe_to_retry())),
+			_ => None,
+		}
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		let mut map = vector_map::VecMap::new();
+		for name in ["reason", "message", "phase", "safeToRetry"] {
+			map.insert(
+				cel::objects::KeyRef::from(name),
+				self.field(name).expect("known error field"),
+			);
+		}
+		Value::Map(MapValue::Borrow(map))
+	}
 }
 
 #[apply(schema!)]
 #[derive(Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct ProxyContext {
-	/// The final gateway error when the response was synthesized from a failed request.
+	/// The current attempt's gateway error during retry evaluation, or the final gateway error
+	/// when the response was synthesized from a failed request.
+	/// CEL additionally exposes the read-only boolean `proxy.error.safeToRetry`, computed from
+	/// `phase`. It is true for connection-establishment and DNS failures; false includes unknown
+	/// outcomes. Body replayability and retry limits are enforced separately. This computed
+	/// property is not included in serialized snapshots.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub error: Option<ErrorContext>,
 	/// The bind that accepted the request.
@@ -2127,7 +2174,9 @@ where
 /// `ExecutorSerde` is a fully-owned representation that can be deserialized from JSON,
 /// stored, and later converted to an `Executor<'_>` for use with CEL expressions.
 ///
-/// JSON -> ExecutorSerde -> Executor<'_> -> CEL -> JSON should be consistent.
+/// Serialized snapshots contain stored state; CEL also exposes computed properties.
+/// Snapshot round trips should preserve CEL behavior, not necessarily the JSON shape
+/// of a materialized CEL object.
 #[apply(schema!)]
 #[derive(Default)]
 pub struct ExecutorSerde {
@@ -2362,6 +2411,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			error: Some(ErrorContext {
 				reason: "UpstreamFailure".to_string(),
 				message: "upstream call failed: connection refused".to_string(),
+				phase: FailurePhase::Connect,
 			}),
 			bind: Some("bind".into()),
 			gateway: Some(ProxyGatewayContext {

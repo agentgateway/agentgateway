@@ -3448,9 +3448,13 @@ type Retry struct {
 	// +optional
 	Precondition *CELExpression `json:"precondition,omitempty"`
 
-	// `condition` is a CEL expression evaluated against each response to decide
+	// `condition` is a CEL expression evaluated against each response or gateway error to decide
 	// whether to retry. A response is retried when its status code is in `codes` or
 	// this expression evaluates to `true`.
+	// For gateway errors, the expression replaces the default retry classification;
+	// `response` is absent and `proxy.error` describes the failure. Use
+	// `proxy.error.safeToRetry` with empty `codes` to avoid duplicating upstream processing.
+	// Without a condition, upstream call failures, upstream timeouts, and DNS failures are retried.
 	// +optional
 	Condition *CELExpression `json:"condition,omitempty"`
 }

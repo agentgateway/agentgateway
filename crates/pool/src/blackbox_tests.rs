@@ -529,6 +529,11 @@ async fn connection_timeout_releases_pool_capacity() {
 	.expect("connection timeout did not fire")
 	.expect_err("stalled handshake unexpectedly succeeded");
 	assert!(err.is_connect_timeout(), "unexpected error: {err:?}");
+	assert!(err.is_safe_to_retry());
+	assert!(
+		err.is_connect(),
+		"connect timeout must remain a pre-send failure"
+	);
 
 	let response = tokio::time::timeout(
 		Duration::from_secs(1),

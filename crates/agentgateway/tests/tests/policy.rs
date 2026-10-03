@@ -510,6 +510,7 @@ async fn response_transformation_can_read_gateway_error() {
 						"set": {
 							"x-error-reason": "proxy.error.reason",
 							"x-error-message": "proxy.error.message",
+							"x-error-safe-to-retry": "string(proxy.error.safeToRetry)",
 						},
 					},
 				},
@@ -522,6 +523,7 @@ async fn response_transformation_can_read_gateway_error() {
 	let res = send_request(io, Method::GET, "http://lo/p").await;
 	assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
 	assert_eq!(res.hdr("x-error-reason"), "UpstreamFailure");
+	assert_eq!(res.hdr("x-error-safe-to-retry"), "true");
 	assert!(
 		res
 			.hdr("x-error-message")

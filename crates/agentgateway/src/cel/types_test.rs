@@ -447,9 +447,9 @@ fn test_executor_round_trip() {
 		"$",
 	);
 
-	// Deserialize into ExecutorSerde
-	let exec_snapshot: ExecutorSerde =
-		serde_json::from_value(json.clone()).expect("failed to deserialize ExecutorSerde");
+	// Restore stored state; computed CEL properties are rebuilt from that state.
+	let exec_snapshot: ExecutorSerde = serde_json::from_value(serde_json::to_value(&exec).unwrap())
+		.expect("failed to deserialize ExecutorSerde");
 
 	// Build executor from ExecutorSerde
 	let executor2 = exec_snapshot.as_executor();
@@ -487,7 +487,11 @@ fn test_executor_serde_complete() {
 	let executor2 = exec.as_executor();
 
 	let json3 = exec_to_json(&executor2);
-	assert_eq!(json1, json3, "Round-trip serialization mismatch");
+	assert_json_field_coverage(&json1, &json3, "$");
+	assert!(json1["proxy"]["error"].get("safeToRetry").is_none());
+	assert_eq!(json3["proxy"]["error"]["safeToRetry"], true);
+	let restored: ExecutorSerde = serde_json::from_value(json1).unwrap();
+	assert_eq!(exec_to_json(&restored.as_executor()), json3);
 }
 
 #[test]
@@ -745,5 +749,51 @@ fn test_source_connect_headers_sensitive_redacted_in_debug() {
 	assert!(
 		debug.contains("custom-value"),
 		"non-sensitive header should still be visible in Debug: {debug}"
+	);
+}
+#[test]
+fn failure_phase_serialization_and_safety() {
+	for (phase, name, safe) in [
+		(FailurePhase::Unclassified, "unclassified", false),
+		(FailurePhase::Connect, "connect", true),
+		(FailurePhase::Request, "request", false),
+	] {
+		assert_eq!(serde_json::to_value(phase).unwrap(), name);
+		assert_eq!(failure_phase_to_value(phase).json().unwrap(), name);
+		assert_eq!(
+			serde_json::from_value::<FailurePhase>(serde_json::json!(name)).unwrap(),
+			phase
+		);
+		assert_eq!(phase.is_safe_to_retry(), safe);
+	}
+	assert!(serde_json::from_value::<FailurePhase>(serde_json::json!("typo")).is_err());
+}
+
+#[test]
+fn missing_error_phase_defaults_to_unclassified() {
+	let error: ErrorContext = serde_json::from_value(json!({
+		"reason": "Internal",
+		"message": "local failure",
+	}))
+	.unwrap();
+	assert_eq!(error.phase, FailurePhase::Unclassified);
+	assert!(!error.phase.is_safe_to_retry());
+	assert_eq!(
+		serde_json::to_value(&error).unwrap()["phase"],
+		"unclassified"
+	);
+	let proxy = ProxyContext {
+		error: Some(error),
+		..Default::default()
+	};
+	let executor = Executor {
+		proxy: ExtensionOrDirect::Direct(Some(&proxy)),
+		..Default::default()
+	};
+	assert!(
+		executor.eval_bool(
+			&Expression::new_strict("proxy.error.phase == 'unclassified' && !proxy.error.safeToRetry")
+				.unwrap()
+		)
 	);
 }

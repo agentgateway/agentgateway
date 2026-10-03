@@ -1083,6 +1083,11 @@ impl HTTPProxy {
 				.extensions()
 				.get::<http::substrate::SubstrateRequestState>()
 				.is_some();
+		// Retry only failures known to be safe to replay for waypoint service traffic.
+		// An explicit policy (even if its precondition is false) takes precedence.
+		let waypoint_default_retry = !explicit_route_retry
+			&& !substrate_default_retry
+			&& req.extensions().get::<WaypointService>().is_some();
 
 		// No policy terminated the request, so forwarding now requires a valid backend.
 		let selected_backend = selected_backend
@@ -1172,7 +1177,7 @@ impl HTTPProxy {
 		let llm_request_policies = Arc::new(llm_request_policies);
 
 		// attempts is the total number of attempts, not the retries
-		let attempts = if substrate_default_retry {
+		let attempts = if substrate_default_retry || waypoint_default_retry {
 			3
 		} else {
 			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
@@ -1284,6 +1289,9 @@ impl HTTPProxy {
 			let retryable = !last
 				&& if substrate_default_retry {
 					stale_assignment
+				} else if waypoint_default_retry {
+					matches!(&res, Err(SnapshottedProxyResponse(ProxyResponse::Error(error)))
+						if error.is_safe_to_retry())
 				} else {
 					should_retry(
 						&res,
@@ -3749,21 +3757,24 @@ pub(crate) fn resolve_response(
 		Err(failure) => failure.as_reason(),
 	};
 	let error = match &result {
-		Err(ProxyResponse::Error(error)) => Some(cel::ErrorContext {
-			reason: reason.to_string(),
-			message: match log.error.as_ref() {
-				Some(original) => {
-					format!("response policy failed: {error}; original request failed: {original}")
-				},
-				None => error.to_string(),
-			},
-		}),
+		Err(ProxyResponse::Error(error)) => {
+			let mut context = cel::ErrorContext::from(error);
+			if let Some(original) = log.error.as_ref() {
+				context.message =
+					format!("response policy failed: {error}; original request failed: {original}");
+			}
+			Some(context)
+		},
 		_ => log.error.as_ref().map(|message| cel::ErrorContext {
 			reason: log.reason.unwrap_or(reason).to_string(),
 			message: message.clone(),
+			phase: log.error_phase,
 		}),
 	};
 	log.reason = Some(reason);
+	if let Err(ProxyResponse::Error(error)) = &result {
+		log.error_phase = error.phase();
+	}
 	log.error = error.as_ref().map(|error| error.message.clone());
 	let mut response = result.unwrap_or_else(|failure| match failure {
 		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
@@ -3843,9 +3854,30 @@ fn should_retry(
 			}
 			false
 		},
-		Err(SnapshottedProxyResponse(ProxyResponse::Error(e))) => e.is_retryable(),
+		Err(SnapshottedProxyResponse(ProxyResponse::Error(error))) => match pol.condition.as_deref() {
+			Some(condition) => evaluate_error_retry_condition(req_snapshot, error, condition),
+			None => error.is_retryable(),
+		},
 		Err(SnapshottedProxyResponse(ProxyResponse::DirectResponse(_))) => false,
 	}
+}
+
+fn evaluate_error_retry_condition(
+	req_snapshot: Option<&cel::RequestSnapshot>,
+	error: &ProxyError,
+	condition: &cel::Expression,
+) -> bool {
+	// Overlay this attempt's error while preserving the request's proxy metadata.
+	// Keep the overlay local so evaluation cannot change the saved request context.
+	let proxy = cel::ProxyContext {
+		error: Some(error.into()),
+		..req_snapshot
+			.and_then(|req| req.proxy.clone())
+			.unwrap_or_default()
+	};
+	let mut exec = cel::Executor::new_request_snapshot(req_snapshot);
+	exec.proxy = cel::ExtensionOrDirect::Direct(Some(&proxy));
+	exec.eval_bool(condition)
 }
 
 fn is_stale_assignment(res: &Result<Response, SnapshottedProxyResponse>) -> bool {
@@ -4056,6 +4088,79 @@ mod tests {
 			.body(http::Body::empty())
 			.unwrap();
 		assert!(!super::should_retry(&Ok(resp), &pol, None));
+	}
+
+	#[test]
+	fn should_retry_error_conditions() {
+		use crate::proxy::ProxyError;
+
+		for (error, safe) in [
+			(ProxyError::UpstreamConnectTimeout, true),
+			(ProxyError::DnsResolution, true),
+			(ProxyError::UpstreamCallTimeout, false),
+		] {
+			let result = Err(super::SnapshottedProxyResponse(error.into()));
+			assert_eq!(
+				super::should_retry(
+					&result,
+					&retry_policy(&[], Some("proxy.error.safeToRetry")),
+					None
+				),
+				safe,
+			);
+			assert!(super::should_retry(&result, &retry_policy(&[], None), None));
+			assert!(!super::should_retry(
+				&result,
+				&retry_policy(&[504], Some("false")),
+				None
+			));
+			// A response-only expression cannot match an error, even when codes includes 504.
+			assert!(!super::should_retry(
+				&result,
+				&retry_policy(&[504], Some("response.code == 504")),
+				None
+			));
+		}
+		let result = Err(super::SnapshottedProxyResponse(
+			ProxyError::AuthorizationFailed.into(),
+		));
+		assert!(!super::should_retry(
+			&result,
+			&retry_policy(&[], Some("proxy.error.safeToRetry")),
+			None
+		));
+		let result = Err(super::SnapshottedProxyResponse(
+			super::ProxyResponse::DirectResponse(Box::new(::http::Response::new(http::Body::empty()))),
+		));
+		assert!(!super::should_retry(
+			&result,
+			&retry_policy(&[], Some("true")),
+			None
+		));
+	}
+
+	#[test]
+	fn should_retry_error_condition_preserves_request_context() {
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.body(http::Body::empty())
+			.unwrap();
+		req.extensions_mut().insert(crate::cel::ProxyContext {
+			bind: Some("waypoint".into()),
+			..Default::default()
+		});
+		let snapshot = crate::cel::snapshot_request(&mut req, false);
+		let pol = retry_policy(
+			&[],
+			Some(
+				r#"request.method == "POST" && proxy.bind == "waypoint" && proxy.error.reason == "Timeout" && proxy.error.phase == "connect" && proxy.error.safeToRetry"#,
+			),
+		);
+		let result = Err(super::SnapshottedProxyResponse(
+			crate::proxy::ProxyError::UpstreamConnectTimeout.into(),
+		));
+		assert!(super::should_retry(&result, &pol, Some(&snapshot)));
+		assert!(snapshot.proxy.unwrap().error.is_none());
 	}
 
 	#[test]
