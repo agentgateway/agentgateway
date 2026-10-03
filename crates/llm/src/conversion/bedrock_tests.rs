@@ -10,6 +10,225 @@ use super::*;
 use crate::bedrock::Provider;
 use crate::types;
 
+async fn messages_stream_events(
+	events: Vec<(&'static str, serde_json::Value)>,
+	buffer_limit: usize,
+) -> Vec<serde_json::Value> {
+	use aws_smithy_eventstream::frame::write_message_to;
+	use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
+
+	let mut input = bytes::BytesMut::new();
+	for (name, data) in events {
+		let message = Message::new(Bytes::from(data.to_string()))
+			.add_header(Header::new(
+				":message-type",
+				HeaderValue::String("event".into()),
+			))
+			.add_header(Header::new(":event-type", HeaderValue::String(name.into())));
+		write_message_to(&message, &mut input).unwrap();
+	}
+	let body = super::from_messages::translate_stream(
+		agent_http::Body::from(input.freeze()),
+		buffer_limit,
+		crate::StreamingUsageGuard::default(),
+		"model",
+		"message",
+		crate::LogContentFields::default(),
+		None,
+	);
+	let bytes = body.collect().await.unwrap().to_bytes();
+	String::from_utf8(bytes.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.map(|data| serde_json::from_str(data).unwrap())
+		.collect()
+}
+
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+#[tokio::test]
+async fn messages_stream_replays_fragmented_redacted_reasoning(#[case] explicit_start: bool) {
+	let mut input = vec![("messageStart", json!({"role":"assistant"}))];
+	if explicit_start {
+		input.push((
+			"contentBlockStart",
+			json!({"contentBlockIndex":0,"start":"reasoningContent"}),
+		));
+	}
+	input.extend([
+		(
+			"contentBlockDelta",
+			json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"redactedContent":"bw=="}}}),
+		),
+		(
+			"contentBlockDelta",
+			json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"redactedContent":"cGFxdWU="}}}),
+		),
+		("contentBlockStop", json!({"contentBlockIndex":0})),
+		(
+			"contentBlockStart",
+			json!({"contentBlockIndex":1,"start":{"toolUse":{"toolUseId":"call_1","name":"lookup"}}}),
+		),
+		(
+			"contentBlockDelta",
+			json!({"contentBlockIndex":1,"delta":{"toolUse":{"input":"{}"}}}),
+		),
+		("contentBlockStop", json!({"contentBlockIndex":1})),
+		("messageStop", json!({"stopReason":"tool_use"})),
+		(
+			"metadata",
+			json!({"usage":{"inputTokens":2,"outputTokens":3,"totalTokens":5}}),
+		),
+	]);
+	let events = messages_stream_events(input, 1024 * 1024).await;
+	assert_eq!(
+		events[1..6],
+		[
+			json!({"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"b3BhcXVl"}}),
+			json!({"type":"content_block_stop","index":0}),
+			json!({"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"lookup","input":{}}}),
+			json!({"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{}"}}),
+			json!({"type":"content_block_stop","index":1}),
+		]
+	);
+	assert_eq!(events.len(), 8);
+	assert_eq!(events[6]["delta"]["stop_reason"], "tool_use");
+	assert_eq!(events[6]["usage"]["output_tokens"], 3);
+	assert_eq!(events[7], json!({"type":"message_stop"}));
+	let request = serde_json::from_value(json!({
+		"model":"model","max_tokens":64,
+		"messages":[
+			{"role":"user","content":"Look it up."},
+			{"role":"assistant","content":[events[1]["content_block"], events[3]["content_block"]]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"42"}]}
+		]
+	}))
+	.unwrap();
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let translated = super::from_messages::translate(&request, &provider, None, None).unwrap();
+	let body: serde_json::Value = serde_json::from_slice(&translated.body).unwrap();
+	assert_eq!(
+		body["messages"][1]["content"][0],
+		json!({"reasoningContent":{"redactedContent":"b3BhcXVl"}})
+	);
+}
+
+#[tokio::test]
+async fn messages_stream_rejects_invalid_redacted_reasoning() {
+	let events = messages_stream_events(
+		vec![
+			(
+				"contentBlockDelta",
+				json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"redactedContent":"bw=="}}}),
+			),
+			(
+				"contentBlockDelta",
+				json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"redactedContent":"invalid!"}}}),
+			),
+			("contentBlockStop", json!({"contentBlockIndex":0})),
+			("messageStop", json!({"stopReason":"end_turn"})),
+			(
+				"metadata",
+				json!({"usage":{"inputTokens":1,"outputTokens":1,"totalTokens":2}}),
+			),
+		],
+		1024 * 1024,
+	)
+	.await;
+	assert_eq!(
+		events,
+		[
+			json!({"type":"error","error":{"type":"api_error","message":"Invalid Bedrock redacted content"}})
+		]
+	);
+}
+
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
+#[tokio::test]
+async fn messages_stream_preserves_visible_reasoning(#[case] explicit_start: bool) {
+	let mut input = vec![];
+	if explicit_start {
+		input.push((
+			"contentBlockStart",
+			json!({"contentBlockIndex":0,"start":"reasoningContent"}),
+		));
+	}
+	input.extend([
+		(
+			"contentBlockDelta",
+			json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"text":"Let me think."}}}),
+		),
+		(
+			"contentBlockDelta",
+			json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"signature":"signature"}}}),
+		),
+		("contentBlockStop", json!({"contentBlockIndex":0})),
+	]);
+	let events = messages_stream_events(input, 1024 * 1024).await;
+	assert_eq!(
+		events,
+		[
+			json!({"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}),
+			json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me think."}}),
+			json!({"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"signature"}}),
+			json!({"type":"content_block_stop","index":0}),
+		]
+	);
+}
+
+#[tokio::test]
+async fn messages_stream_bounds_accumulated_redacted_reasoning() {
+	use base64::Engine;
+	let chunk = base64::prelude::BASE64_STANDARD.encode([0; 192]);
+	let mut input = vec![];
+	for _ in 0..3 {
+		input.push((
+			"contentBlockDelta",
+			json!({"contentBlockIndex":0,"delta":{"reasoningContent":{"redactedContent":chunk}}}),
+		));
+	}
+	input.push(("contentBlockStop", json!({"contentBlockIndex":0})));
+	let events = messages_stream_events(input, 512).await;
+	assert_eq!(
+		events,
+		[
+			json!({"type":"error","error":{"type":"api_error","message":"Bedrock redacted content exceeds buffer limit"}})
+		]
+	);
+}
+
+#[tokio::test]
+async fn messages_stream_preserves_empty_explicit_reasoning() {
+	let events = messages_stream_events(
+		vec![
+			(
+				"contentBlockStart",
+				json!({"contentBlockIndex":0,"start":"reasoningContent"}),
+			),
+			("contentBlockStop", json!({"contentBlockIndex":0})),
+		],
+		1024 * 1024,
+	)
+	.await;
+	assert_eq!(
+		events,
+		[
+			json!({"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}),
+			json!({"type":"content_block_stop","index":0}),
+		]
+	);
+}
+
 #[tokio::test]
 async fn test_append_done_on_success_omits_done_after_error() {
 	let mut body = crate::parse::sse::append_done_on_success(agent_http::Body::from_stream(
