@@ -14,6 +14,7 @@ import (
 // TestImageTagVPrefix verifies that image tags always have a 'v' prefix,
 // regardless of whether AppVersion or explicit image.tag values include one.
 func TestImageTagVPrefix(t *testing.T) {
+	t.Parallel()
 	charts := []struct {
 		name             string
 		path             string
@@ -77,6 +78,7 @@ func TestImageTagVPrefix(t *testing.T) {
 		for _, tc := range testCases {
 			testName := chart.name + "/" + tc.name
 			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
 				absHelmChartPath, err := filepath.Abs(chart.path)
 				require.NoError(t, err, "failed to get absolute path for helm chart")
 
@@ -132,6 +134,8 @@ func extractImageLines(output string) string {
 }
 
 func TestRBACCreate(t *testing.T) {
+
+	t.Parallel()
 	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
 	require.NoError(t, err)
 
@@ -176,6 +180,7 @@ func TestRBACCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			args := append([]string{"template", "test-release", chartPath, "--namespace", "default"}, tc.setArgs...)
 			cmd := helmCommand(t, args...)
 			output, err := cmd.CombinedOutput()
@@ -201,6 +206,7 @@ func TestRBACCreate(t *testing.T) {
 // with different values configurations.
 // NOTE: The test cases contain YAML blocks that are indented with 2 spaces, do not use tabs.
 func TestHelmChartTemplate(t *testing.T) {
+	t.Parallel()
 	charts := []string{"agentgateway"}
 
 	valuesCases := []struct {
@@ -576,6 +582,7 @@ controllerName: example.com/custom-agentgateway
 		for _, vc := range valuesCases {
 			testName := chart + "/" + vc.name
 			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
 				helmChartPath := filepath.Join("..", "..", "install", "helm", chart)
 				absHelmChartPath, err := filepath.Abs(helmChartPath)
 				require.NoError(t, err, "failed to get absolute path for helm chart")

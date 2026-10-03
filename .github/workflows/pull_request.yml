@@ -135,6 +135,12 @@ jobs:
       with:
         go-version: "${{ env.GO_VERSION }}"
     - name: Test
+      env:
+        # The race detector otherwise sleeps 1s when each test binary exits.
+        GORACE: atexit_sleep_ms=0
+        # Skip symbols and DWARF; linking the large race-enabled test binaries dominates this job.
+        # -s implies -w, and GOFLAGS splits on spaces so "-s -w" would pass a stray -w to `go env`.
+        GOFLAGS: -ldflags=-s
       run: go test -race ./...
 
   controller-lint:

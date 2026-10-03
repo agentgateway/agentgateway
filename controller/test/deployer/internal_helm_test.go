@@ -632,6 +632,7 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
+			t.Parallel()
 			objs := tester.GetObjects(t, tt, scheme, dir)
 			fakeClient := fake.NewClient(t, objs...)
 			tester.RunHelmChartTest(t, tt, scheme, dir, fakeClient, objs)
