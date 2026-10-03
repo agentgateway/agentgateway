@@ -575,6 +575,17 @@
             "$ref": "#/$defs/Tier"
           }
         },
+        "limits": {
+          "description": "Advertised model limits used to enrich discovered model-list entries.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelLimits"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tags": {
           "description": "Freeform capability/routing tags for this model.",
           "type": "array",
@@ -691,6 +702,30 @@
         "contextOver",
         "rates"
       ]
+    },
+    "ModelLimits": {
+      "type": "object",
+      "properties": {
+        "contextWindow": {
+          "description": "Maximum input context length in tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "maxOutputTokens": {
+          "description": "Maximum output length in tokens.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     },
     "Config": {
       "type": "object",

@@ -46,6 +46,12 @@ impl Catalog {
 						if !om.tiers.is_empty() {
 							bm.tiers = om.tiers;
 						}
+						if let Some(limits) = om.limits {
+							bm.limits = Some(match bm.limits {
+								Some(base) => base.overlay(limits),
+								None => limits,
+							});
+						}
 						bm.tags.extend(om.tags);
 						bm
 					},
@@ -86,9 +92,32 @@ pub struct Model {
 	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
+	/// Advertised model limits used to enrich discovered model-list entries.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub limits: Option<ModelLimits>,
 	/// Freeform capability/routing tags for this model.
 	#[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
 	pub tags: BTreeSet<String>,
+}
+
+#[apply(schema!)]
+#[derive(PartialEq, Eq, Default)]
+pub struct ModelLimits {
+	/// Maximum input context length in tokens.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub context_window: Option<u64>,
+	/// Maximum output length in tokens.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_output_tokens: Option<u64>,
+}
+
+impl ModelLimits {
+	fn overlay(self, delta: Self) -> Self {
+		Self {
+			context_window: delta.context_window.or(self.context_window),
+			max_output_tokens: delta.max_output_tokens.or(self.max_output_tokens),
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -363,12 +392,23 @@ mod tests {
 	}
 
 	#[test]
-	fn limits_are_rejected() {
-		let err = from_json(
-			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"limits":{"contextWindow":128000}}}}}}"#,
+	fn limits_are_parsed_and_serialize_as_camel_case() {
+		let catalog = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"limits":{"contextWindow":1048576,"maxOutputTokens":128000}}}}}}"#,
 		)
-		.unwrap_err();
-		assert!(err.to_string().contains("unknown field"), "{err}");
+		.unwrap();
+		let model = catalog.resolve("openai", "m").unwrap();
+		assert_eq!(
+			model.limits.as_ref().unwrap().context_window,
+			Some(1_048_576)
+		);
+		assert_eq!(
+			model.limits.as_ref().unwrap().max_output_tokens,
+			Some(128_000)
+		);
+		let value = serde_json::to_value(model).unwrap();
+		assert_eq!(value["limits"]["contextWindow"], 1_048_576);
+		assert_eq!(value["limits"]["maxOutputTokens"], 128_000);
 	}
 
 	#[test]
@@ -385,6 +425,27 @@ mod tests {
 		assert_eq!(model.rates.input, Some(m("3")), "base cost preserved");
 		assert_eq!(model.rates.output, Some(m("6")));
 		assert!(model.tags.contains("preview"), "overlay tag applied");
+	}
+
+	#[test]
+	fn override_with_merges_limits_by_field() {
+		let base = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"limits":{"contextWindow":1048576,"maxOutputTokens":32000}}}}}}"#,
+		)
+		.unwrap();
+		let overlay = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"limits":{"maxOutputTokens":128000}}}}}}"#,
+		)
+		.unwrap();
+		let merged = base.override_with(overlay);
+		let limits = merged
+			.resolve("openai", "m")
+			.unwrap()
+			.limits
+			.as_ref()
+			.unwrap();
+		assert_eq!(limits.context_window, Some(1_048_576));
+		assert_eq!(limits.max_output_tokens, Some(128_000));
 	}
 
 	#[test]

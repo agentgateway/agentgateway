@@ -32,6 +32,9 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits`|object|Advertised model limits used to enrich discovered model-list entries.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.contextWindow`|integer|Maximum input context length in tokens.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.maxOutputTokens`|integer|Maximum output length in tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tags`|[]string|Freeform capability/routing tags for this model.|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|

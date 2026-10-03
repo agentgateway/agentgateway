@@ -1,0 +1,14 @@
+{
+  "providers": {
+    "openai": {
+      "models": {
+        "gpt-6-astra": {
+          "limits": {
+            "contextWindow": 1050000,
+            "maxOutputTokens": 128000
+          }
+        }
+      }
+    }
+  }
+}

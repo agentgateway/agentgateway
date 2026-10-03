@@ -2301,6 +2301,7 @@ async fn make_backend_call(
 						};
 						let selected_backend =
 							resolve_backend(dynamic_backend.resolved.backend, inputs.as_ref())?;
+						let catalog_provider = model_catalog_provider(&selected_backend.backend.backend);
 						let concrete_policies = get_backend_policies(
 							inputs.as_ref(),
 							&selected_backend.backend,
@@ -2324,14 +2325,24 @@ async fn make_backend_call(
 						))
 						.await;
 						match result {
-							Ok(response) => responses.push((response, dynamic_backend.required)),
+							Ok(response) => {
+								responses.push((response, dynamic_backend.required, catalog_provider))
+							},
 							Err(error) if dynamic_backend.required => return Err(error),
 							Err(error) => {
 								debug!(%error, "skipping unavailable optional model catalog source");
 							},
 						}
 					}
-					Ok(merge_model_lists(list.static_models, responses, model_access.as_ref()).await)
+					Ok(
+						merge_model_lists(
+							list.static_models,
+							responses,
+							model_access.as_ref(),
+							&inputs.model_catalog,
+						)
+						.await,
+					)
 				})
 				.await;
 			},
@@ -3236,8 +3247,9 @@ fn clone_model_list_request(req: &Request) -> Request {
 
 async fn merge_model_lists(
 	mut static_models: Vec<serde_json::Value>,
-	responses: Vec<(Response, bool)>,
+	responses: Vec<(Response, bool, Option<String>)>,
 	model_access: Option<&crate::http::apikey::ModelAccessPolicy>,
+	model_catalog: &crate::llm::catalog::ModelCatalog,
 ) -> Response {
 	let mut ids = static_models
 		.iter()
@@ -3246,7 +3258,7 @@ async fn merge_model_lists(
 		.collect::<std::collections::HashSet<_>>();
 	let mut response_body = serde_json::json!({"object": "list"});
 	let mut has_upstream_body = false;
-	for (response, required) in responses {
+	for (response, required, provider) in responses {
 		if !response.status().is_success() {
 			if required {
 				return codex_catalog_unavailable();
@@ -3281,7 +3293,18 @@ async fn merge_model_lists(
 			if !ids.insert(id.to_owned()) || model_access.is_some_and(|policy| !policy.allows(id)) {
 				return None;
 			}
-			Some(entry.clone())
+			let mut entry = entry.clone();
+			if let Some(provider) = provider.as_deref()
+				&& let Some(limits) = model_catalog.model_limits(provider, id)
+			{
+				if let Some(context_window) = limits.context_window {
+					entry["context_window"] = serde_json::json!(context_window);
+				}
+				if let Some(max_output_tokens) = limits.max_output_tokens {
+					entry["max_output_tokens"] = serde_json::json!(max_output_tokens);
+				}
+			}
+			Some(entry)
 		}));
 	}
 	response_body["data"] = serde_json::Value::Array(static_models);
@@ -3291,6 +3314,19 @@ async fn merge_model_lists(
 		.header(::http::header::CACHE_CONTROL, "private, no-cache")
 		.body(http::Body::from(response_body.to_string()))
 		.expect("merged model-list response is valid")
+}
+
+fn model_catalog_provider(backend: &Backend) -> Option<String> {
+	let Backend::AI(_, ai) = backend else {
+		return None;
+	};
+	let provider_set = ai.providers.iter();
+	let providers = provider_set.index();
+	let mut names = providers
+		.values()
+		.map(|entry| entry.endpoint.provider.provider().to_string());
+	let provider = names.next()?;
+	names.all(|name| name == provider).then_some(provider)
 }
 
 async fn codex_models_response(
@@ -4575,7 +4611,13 @@ mod tests {
 			.body(http::Body::from("<html>Cloudflare challenge</html>"))
 			.expect("response is valid");
 
-		let response = merge_model_lists(vec![], vec![(response, true)], None).await;
+		let response = merge_model_lists(
+			vec![],
+			vec![(response, true, None)],
+			None,
+			&llm::catalog::ModelCatalog::empty(),
+		)
+		.await;
 		assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 		assert_eq!(
 			response.headers()[::http::header::CONTENT_TYPE],
@@ -4607,6 +4649,7 @@ mod tests {
 					]
 				})),
 				false,
+				None,
 			),
 			(
 				response(serde_json::json!({
@@ -4614,6 +4657,7 @@ mod tests {
 					"data": [{"id": "Qwen/Qwen3.6-35B-A3B"}]
 				})),
 				false,
+				None,
 			),
 			(
 				::http::Response::builder()
@@ -4621,10 +4665,17 @@ mod tests {
 					.body(http::Body::empty())
 					.expect("unavailable catalog response is valid"),
 				false,
+				None,
 			),
 		];
 
-		let response = merge_model_lists(static_models, responses, None).await;
+		let response = merge_model_lists(
+			static_models,
+			responses,
+			None,
+			&llm::catalog::ModelCatalog::empty(),
+		)
+		.await;
 		assert_eq!(response.status(), ::http::StatusCode::OK);
 		let body: serde_json::Value =
 			serde_json::from_slice(&proxymock::read_body_raw(response.into_body()).await).unwrap();
@@ -4639,6 +4690,38 @@ mod tests {
 			ids,
 			["static-model", "moonshotai/Kimi-K3", "Qwen/Qwen3.6-35B-A3B"]
 		);
+	}
+
+	#[tokio::test]
+	async fn model_list_applies_configured_limits_to_discovered_models() {
+		let catalog = llm::catalog::ModelCatalog::new(vec![crate::ModelCatalogSource::Inline {
+			inline: r#"{"providers":{"openai":{"models":{"gpt-6-astra":{"limits":{"contextWindow":1050000,"maxOutputTokens":128000}}}}}}"#.to_owned(),
+		}])
+		.await
+		.unwrap();
+		let response = ::http::Response::builder()
+			.status(::http::StatusCode::OK)
+			.body(http::Body::from(
+				serde_json::json!({"object":"list","data":[
+					{"id":"gpt-6-astra","context_window":272000,"upstream":"kept"},
+					{"id":"gpt-6-sol"}
+				]})
+				.to_string(),
+			))
+			.unwrap();
+		let response = merge_model_lists(
+			vec![],
+			vec![(response, true, Some("openai".to_owned()))],
+			None,
+			&catalog,
+		)
+		.await;
+		let body: serde_json::Value =
+			serde_json::from_slice(&proxymock::read_body_raw(response.into_body()).await).unwrap();
+		assert_eq!(body["data"][0]["context_window"], 1_050_000);
+		assert_eq!(body["data"][0]["max_output_tokens"], 128_000);
+		assert_eq!(body["data"][0]["upstream"], "kept");
+		assert!(body["data"][1].get("context_window").is_none());
 	}
 
 	#[test]

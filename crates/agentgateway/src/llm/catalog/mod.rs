@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
-pub use model::{Breakdown, Catalog};
+pub use model::{Breakdown, Catalog, ModelLimits};
 use model::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
@@ -79,6 +79,11 @@ impl ModelCatalog {
 
 	pub fn list_models(&self) -> ModelCatalogModels {
 		self.state.load().snapshot.list_models()
+	}
+
+	/// Return configured advertised limits for a provider/model pair.
+	pub fn model_limits(&self, provider: &str, model: &str) -> Option<ModelLimits> {
+		self.state.load().snapshot.model_limits(provider, model)
 	}
 
 	pub async fn replace_sources(
@@ -211,6 +216,18 @@ impl CatalogSnapshot {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.model_tags.get(model_id).cloned()
+	}
+
+	fn model_limits(&self, provider: &str, model: &str) -> Option<ModelLimits> {
+		self
+			.catalog
+			.as_ref()?
+			.providers
+			.get(provider)?
+			.models
+			.get(model)?
+			.limits
+			.clone()
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
