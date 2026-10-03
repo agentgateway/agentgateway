@@ -117,6 +117,7 @@ func TestContributedListenerSetsAreArbitrated(t *testing.T) {
 	// The contested listener lost, so it does not pick the bind protocol.
 	require.Contains(t, b, "8080/default/example")
 	assert.Equal(t, api.Bind_HTTP, b["8080/default/example"].GetProtocol())
+	assert.NotContains(t, listenerKeys(s), contested.Name)
 }
 
 const newerListenerSetYAML = `

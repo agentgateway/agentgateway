@@ -16,6 +16,18 @@ type agentgatewaySyncerConfig struct {
 	BuildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	ExtraListenerSets           ExtraListenerSetsBuilderFunc
 	AllowedListenersResolver    AllowedListenersResolver
+	ListenerParentResolver      ListenerParentResolverBuilderFunc
+}
+
+type ListenerParentResolverBuilderFunc func(listeners krt.Collection[*translator.GatewayListener], opts krtutil.KrtOptions) translator.ParentResolver
+
+// WithListenerParentResolver builds extension resolvers after listener arbitration.
+func WithListenerParentResolver(f ListenerParentResolverBuilderFunc) AgentgatewaySyncerOption {
+	return func(o *agentgatewaySyncerConfig) {
+		if f != nil {
+			o.ListenerParentResolver = f
+		}
+	}
 }
 
 type AgentgatewaySyncerOption func(*agentgatewaySyncerConfig)
