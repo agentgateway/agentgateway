@@ -1183,6 +1183,33 @@ test('warns that API key budgets require the primary database', async ({ page })
 	await expect(warning).toContainText('API key budgets require config.database to be configured.');
 });
 
+test('shows a banner when the last configuration reload failed', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/api/runtime', route =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				build: {
+					version: 'test',
+					gitRevision: 'test',
+					rustVersion: 'test',
+					buildProfile: 'test',
+					buildTarget: 'test'
+				},
+				ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+				configReload: { synchronized: false, lastError: "invalid CEL expression '('" }
+			})
+		})
+	);
+	await page.goto('/');
+
+	const banner = page
+		.locator('.status-banner.warn')
+		.filter({ hasText: 'Configuration reload failed' });
+	await expect(banner).toBeVisible();
+	await expect(banner).toContainText('still running the previous configuration');
+});
+
 test('LLM playground sends selected virtual model name', async ({ page }) => {
 	const gateway = await mockGateway(page);
 	await page.goto('/llm/playground');

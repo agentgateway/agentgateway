@@ -222,6 +222,12 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
+					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
+						<StatusBanner state="warn" title="Configuration reload failed">
+							The last configuration reload was rejected, so the gateway is still running the
+							previous configuration. Fix the configuration and save it to retry.
+						</StatusBanner>
+					)}
 					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.

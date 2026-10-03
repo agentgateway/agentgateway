@@ -696,6 +696,11 @@ pub struct Config {
 	/// Process-wide budget policy used by standalone configuration.
 	#[serde(skip)]
 	pub budget_policy: Arc<http::budget::BudgetPolicy>,
+	/// Tracks standalone config reload outcomes so the admin API can report the
+	/// configuration the runtime is actually running, even when a newer config
+	/// was rejected.
+	#[serde(skip)]
+	pub config_reload_status: Arc<ConfigReloadStatus>,
 
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
@@ -713,6 +718,30 @@ pub struct ModelCatalogConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StorageConfig {
 	pub mode: ConfigStoreMode,
+}
+
+/// Outcome of standalone configuration reloads. `Config` carries this so the
+/// admin API (`/api/runtime`) can report whether the on-disk configuration
+/// was rejected during a reload, mirroring the `config_synchronized` metric.
+#[derive(Debug, Default)]
+pub struct ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	last_error: std::sync::RwLock<Option<String>>,
+}
+
+impl ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	pub fn last_error(&self) -> Option<String> {
+		self.last_error.read().unwrap().clone()
+	}
+
+	fn record_success(&self) {
+		*self.last_error.write().unwrap() = None;
+	}
+
+	fn record_failure(&self, error: String) {
+		*self.last_error.write().unwrap() = Some(error);
+	}
 }
 
 /// A source of model cost catalog data.
