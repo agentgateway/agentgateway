@@ -1,13 +1,21 @@
 use cel::extractors::Argument;
 use cel::objects::{KeyRef, ListValue, MapValue};
-use cel::{Context, FunctionContext, ResolveResult, Value};
+use cel::{Context, FunctionContext, FunctionMeta, ResolveResult, Value};
 use vector_map::VecMap;
 
 pub fn insert_all(ctx: &mut Context) {
-	ctx.add_function("flatten", flatten);
+	ctx.add_function_with_meta("flatten", FunctionMeta::global(1), flatten);
 	// Keep old and new name for compatibility
-	ctx.add_function("flatten_recursive", flatten_recursive);
-	ctx.add_function("flattenRecursive", flatten_recursive);
+	ctx.add_function_with_meta(
+		"flatten_recursive",
+		FunctionMeta::global(1),
+		flatten_recursive,
+	);
+	ctx.add_function_with_meta(
+		"flattenRecursive",
+		FunctionMeta::global(1),
+		flatten_recursive,
+	);
 }
 
 pub static FLATTEN_LIST: &str = "$_meta_flatten_list";

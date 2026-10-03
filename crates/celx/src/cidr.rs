@@ -4,15 +4,15 @@ use std::str::FromStr;
 
 use cel::extractors::Argument;
 use cel::objects::{OpaqueValue, StringValue};
-use cel::{Context, ExecutionError, FunctionContext, Value};
+use cel::{Context, ExecutionError, FunctionContext, FunctionMeta, Value};
 use serde::Serialize;
 
 use crate::helpers::{FResult, FVResult, cast, wrapnew};
 
 pub fn insert_all(ctx: &mut Context) {
-	ctx.add_function_direct("cidr", wrapnew(Cidr::parse));
-	ctx.add_function_direct("ip", wrapnew(IP::parse));
-	ctx.add_function("isIP", is_ip);
+	ctx.add_function_direct_with_meta("cidr", FunctionMeta::global(1), wrapnew(Cidr::parse));
+	ctx.add_function_direct_with_meta("ip", FunctionMeta::global(1), wrapnew(IP::parse));
+	ctx.add_function_with_meta("isIP", FunctionMeta::global(1), is_ip);
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize)]
