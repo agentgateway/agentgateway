@@ -509,8 +509,6 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::McpGuardrails { .. }) => StatusCode::OK,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => StatusCode::OK,
-			// The upstream answered; carry its JSON-RPC error over a successful transport.
-			ProxyError::MCP(mcp::Error::UpstreamJsonRpc(_, _)) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);

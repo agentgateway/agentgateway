@@ -158,12 +158,6 @@ pub enum Error {
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
 	UpstreamError(Box<SendDirectResponse>),
-	/// An error response returned by the upstream itself. Propagated with the
-	/// upstream code, message, and data so clients can tell upstream failures
-	/// (e.g. `-32601` method not found, `-32602` invalid params) apart from
-	/// gateway faults.
-	#[error("upstream JSON-RPC error: {}", .1.message)]
-	UpstreamJsonRpc(RequestId, rmcp::ErrorData),
 	#[error("failed to send message: {1}")]
 	SendError(Option<RequestId>, String),
 	/// Server-side availability/capability condition (no upstreams reachable, method unsupported by
@@ -253,8 +247,6 @@ impl Error {
 			_ => {},
 		}
 		let (id, error) = match self {
-			// Upstream JSON-RPC errors keep their own code, message, and data.
-			Error::UpstreamJsonRpc(id, err) => (id.clone(), err.clone()),
 			Error::McpGuardrails {
 				request_id, rej, ..
 			} => (request_id.clone(), rej.clone()),
