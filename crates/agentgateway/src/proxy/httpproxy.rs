@@ -3351,7 +3351,12 @@ async fn codex_models_response(
 	)
 	.await
 	{
-		Ok(snapshot) => Ok(codex_models_list(snapshot, provider, model_access)),
+		Ok(snapshot) => Ok(codex_models_list(
+			snapshot,
+			provider,
+			model_access,
+			&inputs.model_catalog,
+		)),
 		Err(response) => Ok(response),
 	}
 }
@@ -3542,17 +3547,53 @@ fn codex_models_list(
 	snapshot: llm::codex_catalog::Snapshot,
 	provider: &agent_llm::codex_subscription::Provider,
 	model_access: Option<&crate::http::apikey::ModelAccessPolicy>,
+	model_catalog: &llm::catalog::ModelCatalog,
 ) -> Response {
+	let mut body = snapshot.catalog.openai_response_for(
+		&provider.allow_models,
+		&provider.deny_models,
+		model_access,
+	);
+	if let Ok(mut catalog) = serde_json::from_slice::<serde_json::Value>(&body)
+		&& let Some(models) = catalog
+			.get_mut("data")
+			.and_then(serde_json::Value::as_array_mut)
+	{
+		apply_codex_model_limits(models, model_catalog);
+		if let Ok(serialized) = serde_json::to_vec(&catalog) {
+			body = serialized;
+		}
+	}
 	::http::Response::builder()
 		.status(StatusCode::OK)
 		.header(header::CONTENT_TYPE, "application/json")
 		.header(header::CACHE_CONTROL, "private, no-cache")
-		.body(http::Body::from(snapshot.catalog.openai_response_for(
-			&provider.allow_models,
-			&provider.deny_models,
-			model_access,
-		)))
+		.body(http::Body::from(body))
 		.expect("Codex model response is valid")
+}
+
+fn apply_codex_model_limits(
+	models: &mut [serde_json::Value],
+	model_catalog: &llm::catalog::ModelCatalog,
+) {
+	for model in models {
+		let Some(id) = model.get("id").and_then(serde_json::Value::as_str) else {
+			continue;
+		};
+		let limits = model_catalog.model_limits("openai", id).or_else(|| {
+			id.strip_prefix(agent_llm::codex_subscription::MODEL_PREFIX)
+				.and_then(|slug| model_catalog.model_limits("openai", slug))
+		});
+		let Some(limits) = limits else {
+			continue;
+		};
+		if let Some(context_window) = limits.context_window {
+			model["context_window"] = serde_json::json!(context_window);
+		}
+		if let Some(max_output_tokens) = limits.max_output_tokens {
+			model["max_output_tokens"] = serde_json::json!(max_output_tokens);
+		}
+	}
 }
 
 fn codex_catalog_unavailable() -> Response {
@@ -4415,7 +4456,7 @@ mod tests {
 
 	use super::{
 		CODEX_CATALOG_CLIENT_VERSION, CODEX_CATALOG_USER_AGENT, SpiffeBackendTLS, apply_auto_hostname,
-		apply_llm_request_policies, hop_by_hop_headers, merge_model_lists,
+		apply_codex_model_limits, apply_llm_request_policies, hop_by_hop_headers, merge_model_lists,
 		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
 	};
 
@@ -4426,6 +4467,24 @@ mod tests {
 			CODEX_CATALOG_USER_AGENT,
 			format!("codex_cli_rs/{CODEX_CATALOG_CLIENT_VERSION}")
 		);
+	}
+
+	#[tokio::test]
+	async fn codex_model_catalog_overrides_discovered_limits() {
+		let catalog = crate::llm::catalog::ModelCatalog::new(vec![crate::ModelCatalogSource::Inline {
+			inline: r#"{"providers":{"openai":{"models":{"openai/gpt-6-astra":{"limits":{"contextWindow":1050000,"maxOutputTokens":128000}}}}}}"#.into(),
+		}])
+	.await
+	.unwrap();
+		let mut models = vec![json!({
+			"id": "openai/gpt-6-astra",
+			"context_window": 272000
+		})];
+
+		apply_codex_model_limits(&mut models, &catalog);
+
+		assert_eq!(models[0]["context_window"], 1_050_000);
+		assert_eq!(models[0]["max_output_tokens"], 128_000);
 	}
 
 	#[test]
