@@ -4768,7 +4768,14 @@
           ]
         },
         "clientSecret": {
-          "description": "OAuth client secret injected into proxied token requests for confidential clients.\nCurrently used by the `entra` provider, whose Web-platform app registrations require a\nclient secret at the token endpoint.",
+          "description": "OAuth client secret injected into proxied token requests for confidential clients (`entra`, or a confidential `keycloak` client).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relaySigningKey": {
+          "description": "Hex-encoded 32-byte AES key encrypting the `keycloak` provider's relay-state token; required whenever `clientId` is set for `keycloak`.",
           "type": [
             "string",
             "null"
@@ -8808,7 +8815,7 @@
       "type": "object",
       "properties": {
         "name": {
-          "description": "Overrides `serverInfo.name`. Must be set together with `version` — setting only one\nwould otherwise mix an overridden name with agentgateway's own version, or vice versa.\nDefaults to `agentgateway` when unset.",
+          "description": "Overrides `serverInfo.name`. Must be set together with `version`, setting only one\nwould otherwise mix an overridden name with agentgateway's own version, or vice versa.\nDefaults to `agentgateway` when unset.",
           "type": [
             "string",
             "null"

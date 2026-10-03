@@ -5,6 +5,7 @@ pub(crate) mod guardrails;
 mod handler;
 mod mergestream;
 mod rbac;
+mod relay_state;
 mod router;
 mod session;
 mod sse;
@@ -52,6 +53,11 @@ pub enum FailureMode {
 }
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
+
+fn is_localhost_host(host: &str) -> bool {
+	let host = host.trim_matches(['[', ']']);
+	host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+}
 
 #[derive(Clone)]
 pub(crate) struct CachedRequest(pub rmcp::model::ClientJsonRpcMessage);
