@@ -3022,6 +3022,44 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 }
 
+/// An upstream JSON-RPC error response must keep its own code, message, and
+/// data instead of being flattened into a generic internal error. The
+/// hand-written mock answers `tools/call` (its catch-all branch) with
+/// `-32601`, which the gateway must propagate verbatim (#3748).
+#[tokio::test]
+async fn upstream_jsonrpc_error_code_is_propagated() {
+	let mock = mock_streamable_http_server_without_discover().await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![]).await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	let mcp_error = match result.expect_err("tool call should fail") {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32601,
+		"the upstream METHOD_NOT_FOUND code must be propagated, got: {} ({})",
+		mcp_error.code.0, mcp_error.message
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"tools/call",
+		"the upstream error message must be propagated"
+	);
+}
+
 /// Test that a policy keyed on mcp.methodName sees the right method for each
 /// call site: tools/list is allowed, tools/call for the exact same tool is
 /// denied.
