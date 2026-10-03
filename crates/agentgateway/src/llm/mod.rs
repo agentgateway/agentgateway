@@ -2458,17 +2458,19 @@ impl AIProvider {
 				self.process_rerank_buffered_response(req, buffered, model_catalog, &logging.response)
 			},
 			_ => {
-				self
-					.process_chat_or_detect_buffered_response(
-						client,
-						req,
-						rate_limit,
-						req_snapshot,
-						logging,
-						model_catalog,
-						buffered,
-					)
-					.await
+				// The buffered chat path carries `LLMResponse`-sized usage
+				// evidence across its internal awaits; keep it off
+				// `process_response`'s statically asserted future size.
+				Box::pin(self.process_chat_or_detect_buffered_response(
+					client,
+					req,
+					rate_limit,
+					req_snapshot,
+					logging,
+					model_catalog,
+					buffered,
+				))
+				.await
 			},
 		}
 	}
@@ -2504,7 +2506,7 @@ impl AIProvider {
 			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(
+			let (mut resp, upstream_usage) = self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
@@ -2533,9 +2535,7 @@ impl AIProvider {
 				}));
 			}
 
-			let llm_resp = resp.to_llm_response(log_content);
-			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
-			(llm_resp, Bytes::copy_from_slice(&body))
+			Self::buffered_llm_info(resp, upstream_usage, log_content)?
 		};
 
 		parts.headers.remove(header::CONTENT_LENGTH);
@@ -2882,28 +2882,127 @@ impl AIProvider {
 		))
 	}
 
+	/// Parse a buffered upstream response in its NATIVE wire format and
+	/// extract the usage evidence for telemetry. `None` when the native
+	/// parse fails (best-effort; the translated client-format response
+	/// remains the evidence source) or for formats without an importable
+	/// native output type (Bedrock Converse).
+	// Kept outside the async fn: LLMResponse-sized locals inside an async body
+	// inflate the future past the crate's static size assertions.
+	fn buffered_llm_info(
+		resp: Box<dyn ResponseType>,
+		upstream_usage: Option<LLMResponse>,
+		log_content: LogContentFields,
+	) -> Result<(LLMResponse, Bytes), AIError> {
+		let mut llm_resp = resp.to_llm_response(log_content);
+		// Usage comes from the upstream-native wire evidence when the
+		// response was translated across chat formats: protocol-mandated
+		// placeholders in the translated response must never become
+		// zero-token "complete" attempts.
+		if let Some(native) = upstream_usage {
+			Self::overlay_upstream_usage(&mut llm_resp, native);
+		}
+		let body = resp.serialize().map_err(AIError::ResponseParsing)?;
+		Ok((llm_resp, Bytes::copy_from_slice(&body)))
+	}
+
+	/// Parse a buffered upstream response in its NATIVE wire format and
+	/// extract ONLY the usage evidence for telemetry — content extraction is
+	/// disabled because the caller (`overlay_upstream_usage`) consumes just
+	/// the usage dimensions. `None` when the native parse fails (best-effort;
+	/// the translated client-format response remains the evidence source) or
+	/// for formats without an importable native output type (Bedrock
+	/// Converse).
+	fn native_upstream_llm_response(format: ChatFormat, bytes: &Bytes) -> Option<LLMResponse> {
+		let resp: Box<dyn ResponseType> = match format {
+			ChatFormat::OpenAICompletions => {
+				Self::parse_response::<types::completions::Response>(bytes).ok()?
+			},
+			ChatFormat::OpenAIResponses => {
+				Self::parse_response::<types::responses::Response>(bytes).ok()?
+			},
+			ChatFormat::AnthropicMessages => {
+				Self::parse_response::<types::messages::Response>(bytes).ok()?
+			},
+			ChatFormat::VertexGemini => Self::parse_response::<types::gemini::Response>(bytes).ok()?,
+			ChatFormat::BedrockConverse => return None,
+		};
+		Some(resp.to_llm_response(LogContentFields::USAGE_ONLY))
+	}
+
+	/// Overlay the usage dimensions from the upstream-native evidence onto a
+	/// translated client-format response. Only usage fields move: content,
+	/// tool calls, and the client-facing model stay with the translated
+	/// response. A `None` dimension clears a protocol-mandated placeholder
+	/// (missing upstream usage is unknown, never zero).
+	fn overlay_upstream_usage(llm_resp: &mut LLMResponse, native: LLMResponse) {
+		llm_resp.input_tokens = native.input_tokens;
+		llm_resp.output_tokens = native.output_tokens;
+		llm_resp.total_tokens = native.total_tokens;
+		llm_resp.cached_input_tokens = native.cached_input_tokens;
+		llm_resp.cache_creation_input_tokens = native.cache_creation_input_tokens;
+		llm_resp.reasoning_tokens = native.reasoning_tokens;
+		llm_resp.input_audio_tokens = native.input_audio_tokens;
+		llm_resp.output_audio_tokens = native.output_audio_tokens;
+		llm_resp.service_tier = native.service_tier;
+	}
+
+	/// True when the client-facing chat shape differs from the upstream wire
+	/// format, i.e. the buffered response the proxy sees has been TRANSLATED
+	/// and its usage fields may be protocol placeholders rather than provider
+	/// evidence.
+	fn crosses_chat_formats(input: InputFormat, output: ChatFormat) -> bool {
+		!matches!(
+			(input, output),
+			(InputFormat::Completions, ChatFormat::OpenAICompletions)
+				| (InputFormat::Responses, ChatFormat::OpenAIResponses)
+				| (InputFormat::Messages, ChatFormat::AnthropicMessages)
+				| (InputFormat::Gemini, ChatFormat::VertexGemini)
+		)
+	}
+
 	fn translate_chat_or_detect_response(
 		&self,
 		req: &LLMRequest,
 		bytes: &Bytes,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
-	) -> Result<Box<dyn ResponseType>, AIError> {
+	) -> Result<(Box<dyn ResponseType>, Option<LLMResponse>), AIError> {
 		if req.input_format == InputFormat::Detect {
-			return Ok(Box::new(
-				serde_json::from_slice::<types::detect::Response>(bytes)
-					.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
+			return Ok((
+				Box::new(
+					serde_json::from_slice::<types::detect::Response>(bytes)
+						.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
+				),
+				None,
 			));
 		}
 
 		let translation = self.chat_translation(req.input_format, &req.request_model, catalog)?;
-		translation.render_response(
+		let resp = translation.render_response(
 			bytes,
 			&ChatResponseContext {
 				model: &req.request_model,
 				tool_name_map: bedrock_tool_name_map(req),
 				namespaces: namespace_tool_map(req).map(Arc::as_ref),
 			},
-		)
+		)?;
+		// Cross-format buffered translation: the client-format response
+		// materializes protocol-mandated usage placeholders (e.g. Anthropic
+		// `usage.input_tokens` is non-optional, so a missing OpenAI usage
+		// becomes `unwrap_or(0)`), which would fabricate complete
+		// zero-token attempts once logged. Streaming already extracts usage
+		// from the upstream chunks; mirror that here by parsing the
+		// UPSTREAM-native wire format for the telemetry usage. `None`
+		// (native-format response, Bedrock output, or unparseable body)
+		// keeps the previous behavior. The overlay itself is applied by the
+		// caller, which also fills response content from the translated
+		// type.
+		let upstream_usage = if Self::crosses_chat_formats(req.input_format, translation.output) {
+			Self::native_upstream_llm_response(translation.output, bytes)
+		} else {
+			None
+		};
+		Ok((resp, upstream_usage))
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -3421,3 +3520,6 @@ impl Drop for AmendOnDrop {
 		self.report_usage();
 	}
 }
+
+#[cfg(test)]
+mod usage_extraction_tests;
