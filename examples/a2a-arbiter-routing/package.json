@@ -1,0 +1,14 @@
+{
+  "name": "agentgateway-a2a-arbiter-routing-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "route": "node route.mjs"
+  },
+  "dependencies": {
+    "@x402/core": "2.25.0",
+    "@x402/evm": "2.25.0",
+    "@x402/fetch": "2.25.0",
+    "viem": "latest"
+  }
+}
