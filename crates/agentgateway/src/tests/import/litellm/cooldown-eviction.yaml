@@ -1,0 +1,7 @@
+model_list:
+- model_name: gpt-4o
+  litellm_params:
+    model: openai/gpt-4o
+router_settings:
+  allowed_fails: 3
+  cooldown_time: 60
