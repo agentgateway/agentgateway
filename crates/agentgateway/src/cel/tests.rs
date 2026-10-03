@@ -6,6 +6,7 @@ use serde_json::json;
 
 use super::*;
 use crate::http::Body;
+use crate::mcp::MCPView;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
@@ -699,4 +700,33 @@ fn log_guardrails_binding() {
 	)
 	.unwrap();
 	assert!(exec.eval_bool(&exp));
+}
+
+#[test]
+fn mcp_view() {
+	let exec_serde = full_example_executor();
+	let info = exec_serde.mcp.as_ref().unwrap();
+	assert_eq!(
+		MCPView::new(info).materialize().json().unwrap(),
+		info.materialize().json().unwrap()
+	);
+
+	let payload = json!({"name": "get_weather", "arguments": {"city": "SF"}});
+	let mut exec = exec_serde.as_executor();
+	exec.mcp = Some(MCPView {
+		info,
+		params: Some(&payload),
+		result: None,
+	});
+	let mut expected = info.materialize().json().unwrap();
+	expected["params"] = payload.clone();
+	assert_eq!(
+		exec.mcp.as_ref().unwrap().materialize().json().unwrap(),
+		expected
+	);
+	let exp = Expression::new_strict(r#"[mcp.tool.name, mcp.params.arguments.city]"#).unwrap();
+	assert_eq!(
+		exec.eval(&exp).unwrap().json().unwrap(),
+		json!(["get_weather", "SF"])
+	);
 }

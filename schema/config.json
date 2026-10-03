@@ -1861,7 +1861,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"
@@ -2780,8 +2780,59 @@
               ]
             }
           ]
+        },
+        {
+          "description": "In-process CEL guardrail.",
+          "type": "object",
+          "properties": {
+            "when": {
+              "description": "Condition gating the action; absent means always.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expression"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "cel"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "oneOf": [
+            {
+              "description": "Reject with this message. Exactly one of `reject` or `transform` is required.",
+              "type": "object",
+              "properties": {
+                "reject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reject"
+              ]
+            },
+            {
+              "description": "Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).\nUse `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.",
+              "type": "object",
+              "properties": {
+                "transform": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "required": [
+                "transform"
+              ]
+            }
+          ]
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "Phase": {
       "type": "string",
@@ -9500,7 +9551,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"

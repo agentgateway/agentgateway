@@ -388,6 +388,11 @@ impl BackendPolicies {
 		if let Some(session_affinity) = self.session_affinity.as_ref() {
 			session_affinity.register_expressions(ctx);
 		}
+		if let Some(guardrails) = self.mcp_guardrails.as_ref() {
+			for expr in guardrails.expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 	}
 }
 

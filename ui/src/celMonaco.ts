@@ -72,6 +72,11 @@ const celMethods: readonly CelCompletionEntry[] = [
 		detail: 'agentgateway regex replace'
 	},
 	{
+		label: 'regexReplaceAll',
+		insertText: 'regexReplaceAll($1, $2)',
+		detail: 'agentgateway regex replace all matches'
+	},
+	{
 		label: 'stripPrefix',
 		insertText: 'stripPrefix($1)',
 		detail: 'CEL string stripPrefix'

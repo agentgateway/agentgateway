@@ -278,18 +278,24 @@ impl Session {
 		backend: &str,
 		method: &Strng,
 		params: &mut P,
+		extensions: &mut rmcp::model::Extensions,
 		ctx: &mut IncomingRequestContext,
 		res: rbac::ResourceType,
 		resource_type: &str,
 		resource_name: &str,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize + serde::de::DeserializeOwned,
+		P: serde::Serialize
+			+ serde::de::DeserializeOwned
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ rmcp::model::RequestParamsMeta,
 	{
 		// run guardrails before other policies, as it may add context to CEL
 		self
 			.relay
-			.maybe_run_guardrails_call_request(backend, method, params, ctx)
+			.maybe_run_guardrails_call_request(backend, method, params, extensions, ctx)
 			.await?;
 		let cel = rbac::CelExecWrapper::from(ctx.clone());
 		if self.relay.policies.validate(&res, method, &cel) {
@@ -621,6 +627,7 @@ impl Session {
 							&service_name,
 							&mcp::guardrails::methods::TOOLS_CALL,
 							&mut ctr.params,
+							&mut ctr.extensions,
 							&mut ctx,
 							rbac::ResourceType::Tool(rbac::ResourceId::new(
 								service_name.to_string(),
@@ -660,6 +667,7 @@ impl Session {
 							&service_name,
 							&mcp::guardrails::methods::PROMPTS_GET,
 							&mut gpr.params,
+							&mut gpr.extensions,
 							&mut ctx,
 							rbac::ResourceType::Prompt(rbac::ResourceId::new(
 								service_name.to_string(),
@@ -682,6 +690,7 @@ impl Session {
 							service_name,
 							&mcp::guardrails::methods::RESOURCES_READ,
 							&mut rrr.params,
+							&mut rrr.extensions,
 							&mut ctx,
 							rbac::ResourceType::Resource(rbac::ResourceId::new(
 								service_name.to_string(),

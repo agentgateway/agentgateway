@@ -160,6 +160,8 @@
 |`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
 |`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
 |`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
+|`mcp.params`|any|Current request parameters, with the same structure as the `params` object in an MCP request.<br>Available only during request-phase CEL guardrails.|
+|`mcp.result`|any|Current response result, with the same structure as the `result` object in an MCP response.<br>Available only during response-phase CEL guardrails.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
