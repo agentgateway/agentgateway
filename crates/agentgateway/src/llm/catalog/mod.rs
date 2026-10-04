@@ -86,6 +86,13 @@ impl ModelCatalog {
 		self.state.load().snapshot.model_limits(provider, model)
 	}
 
+	/// Return limits for a model ID when every configured provider agrees on them.
+	/// Static model routes do not retain their provider identity in the public model
+	/// list, so ambiguous IDs must not be assigned a provider-specific limit.
+	pub fn model_limits_for_model(&self, model: &str) -> Option<ModelLimits> {
+		self.state.load().snapshot.model_limits_for_model(model)
+	}
+
 	pub async fn replace_sources(
 		self: &Arc<Self>,
 		sources: Vec<ModelCatalogSource>,
@@ -228,6 +235,17 @@ impl CatalogSnapshot {
 			.get(model)?
 			.limits
 			.clone()
+	}
+
+	fn model_limits_for_model(&self, model: &str) -> Option<ModelLimits> {
+		let mut limits = self
+			.catalog
+			.as_ref()?
+			.providers
+			.values()
+			.filter_map(|provider| provider.models.get(model)?.limits.clone());
+		let first = limits.next()?;
+		limits.all(|other| other == first).then_some(first)
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {

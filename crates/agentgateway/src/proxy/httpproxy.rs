@@ -3251,6 +3251,14 @@ async fn merge_model_lists(
 	model_access: Option<&crate::http::apikey::ModelAccessPolicy>,
 	model_catalog: &crate::llm::catalog::ModelCatalog,
 ) -> Response {
+	for entry in &mut static_models {
+		let Some(id) = entry.get("id").and_then(serde_json::Value::as_str) else {
+			continue;
+		};
+		if let Some(limits) = model_catalog.model_limits_for_model(id) {
+			apply_model_limits(entry, limits);
+		}
+	}
 	let mut ids = static_models
 		.iter()
 		.filter_map(|entry| entry.get("id").and_then(serde_json::Value::as_str))
@@ -3297,12 +3305,7 @@ async fn merge_model_lists(
 			if let Some(provider) = provider.as_deref()
 				&& let Some(limits) = model_catalog.model_limits(provider, id)
 			{
-				if let Some(context_window) = limits.context_window {
-					entry["context_window"] = serde_json::json!(context_window);
-				}
-				if let Some(max_output_tokens) = limits.max_output_tokens {
-					entry["max_output_tokens"] = serde_json::json!(max_output_tokens);
-				}
+				apply_model_limits(&mut entry, limits);
 			}
 			Some(entry)
 		}));
@@ -3314,6 +3317,15 @@ async fn merge_model_lists(
 		.header(::http::header::CACHE_CONTROL, "private, no-cache")
 		.body(http::Body::from(response_body.to_string()))
 		.expect("merged model-list response is valid")
+}
+
+fn apply_model_limits(entry: &mut serde_json::Value, limits: crate::llm::catalog::ModelLimits) {
+	if let Some(context_window) = limits.context_window {
+		entry["context_window"] = serde_json::json!(context_window);
+	}
+	if let Some(max_output_tokens) = limits.max_output_tokens {
+		entry["max_output_tokens"] = serde_json::json!(max_output_tokens);
+	}
 }
 
 fn model_catalog_provider(backend: &Backend) -> Option<String> {
@@ -4781,6 +4793,36 @@ mod tests {
 		assert_eq!(body["data"][0]["max_output_tokens"], 128_000);
 		assert_eq!(body["data"][0]["upstream"], "kept");
 		assert!(body["data"][1].get("context_window").is_none());
+	}
+
+	#[tokio::test]
+	async fn model_list_applies_configured_limits_to_static_models() {
+		let catalog = llm::catalog::ModelCatalog::new(vec![crate::ModelCatalogSource::Inline {
+			inline: r#"{"providers":{"openai":{"models":{"qwen/qwen3-embedding-8b":{"limits":{"contextWindow":32768}},"ambiguous-model":{"limits":{"contextWindow":128000}}}},"custom":{"models":{"moonshotai/Kimi-K3":{"limits":{"contextWindow":1048576}},"qwen/qwen3.6-35b-a3b":{"limits":{"contextWindow":262144}},"ambiguous-model":{"limits":{"contextWindow":262144}}}}}}"#.to_owned(),
+		}])
+		.await
+		.unwrap();
+		let response = merge_model_lists(
+			vec![
+				serde_json::json!({"id":"moonshotai/Kimi-K3","owned_by":"openai"}),
+				serde_json::json!({"id":"qwen/qwen3.6-35b-a3b","owned_by":"openai"}),
+				serde_json::json!({"id":"qwen/qwen3-embedding-8b","owned_by":"openai"}),
+				serde_json::json!({"id":"unconfigured-static-model","owned_by":"openai"}),
+				serde_json::json!({"id":"ambiguous-model","owned_by":"openai"}),
+			],
+			vec![],
+			None,
+			&catalog,
+		)
+		.await;
+		let body: serde_json::Value =
+			serde_json::from_slice(&proxymock::read_body_raw(response.into_body()).await).unwrap();
+		let models = body["data"].as_array().unwrap();
+		assert_eq!(models[0]["context_window"], 1_048_576);
+		assert_eq!(models[1]["context_window"], 262_144);
+		assert_eq!(models[2]["context_window"], 32_768);
+		assert!(models[3].get("context_window").is_none());
+		assert!(models[4].get("context_window").is_none());
 	}
 
 	#[test]
