@@ -1,0 +1,49 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: other-class
+spec:
+  controllerName: example.com/other-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: other-gw
+  namespace: default
+spec:
+  gatewayClassName: other-class
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: other-grpc
+  namespace: default
+spec:
+  parentRefs:
+    - name: other-gw
+  rules:
+    - backendRefs:
+        - name: reviews
+          port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: GRPCRoute
+    name: other-grpc
+    group: gateway.networking.k8s.io
+  traffic:
+    timeouts:
+      request: 5s
+---
+# Output
+output: []
+status: []
