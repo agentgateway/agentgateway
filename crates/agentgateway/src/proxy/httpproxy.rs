@@ -271,11 +271,7 @@ impl DeferredSessionCheck {
 	/// Must run right after the phase's sibling token policies, with their combined result. A
 	/// rejection stands; a pass or a direct response (such as one served by `mcpAuthentication`
 	/// before later siblings run) requires a listed sibling to have authenticated the request.
-	fn finish(
-		self,
-		req: &Request,
-		siblings: Result<(), ProxyResponse>,
-	) -> Result<(), ProxyResponse> {
+	fn finish(self, req: &Request, siblings: Result<(), ProxyResponse>) -> Result<(), ProxyResponse> {
 		if let Err(ProxyResponse::Error(_)) = siblings {
 			return siblings;
 		}
