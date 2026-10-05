@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-02T19:32:58Z"
+    "generatedAt": "2026-10-05T08:49:19Z"
   },
   "providers": {
     "anthropic": {
@@ -909,6 +909,17 @@
             "runtime"
           ]
         },
+        "eu.anthropic.claude-sonnet-5-5": {
+          "rates": {
+            "input": "2.2",
+            "output": "11",
+            "cacheRead": "0.22",
+            "cacheWrite": "2.75"
+          },
+          "tags": [
+            "adaptive_thinking"
+          ]
+        },
         "eu.mistral.pixtral-large-2502-v1:0": {
           "rates": {
             "input": "2",
@@ -1567,6 +1578,11 @@
             "adaptive_thinking",
             "anthropic_messages",
             "mantle",
+            "runtime"
+          ]
+        },
+        "luma.ray-v2:0": {
+          "tags": [
             "runtime"
           ]
         },
@@ -2525,6 +2541,17 @@
             "anthropic_messages",
             "mantle",
             "runtime"
+          ]
+        },
+        "us.anthropic.claude-sonnet-5-5": {
+          "rates": {
+            "input": "2.2",
+            "output": "11",
+            "cacheRead": "0.22",
+            "cacheWrite": "2.75"
+          },
+          "tags": [
+            "adaptive_thinking"
           ]
         },
         "us.deepseek.r1-v1:0": {
@@ -4578,7 +4605,7 @@
         },
         "google/gemma-4-31B-it": {
           "rates": {
-            "input": "0.15",
+            "input": "0.2",
             "output": "0.4"
           }
         },
