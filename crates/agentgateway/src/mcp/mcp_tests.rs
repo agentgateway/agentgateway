@@ -1937,6 +1937,41 @@ fn mcp_initialize_body() -> serde_json::Value {
 }
 
 #[tokio::test]
+async fn streamable_http_post_accepts_comma_separated_accept_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let response = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_separate_accept_header_lines() {
+	use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let body = mcp_initialize_body().to_string();
+	let request = format!(
+		"POST /mcp HTTP/1.1\r\nHost: {io}\r\nContent-Type: application/json\r\nAccept: application/json\r\nAccept: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	stream.write_all(request.as_bytes()).await.unwrap();
+	let mut reader = tokio::io::BufReader::new(stream);
+	let mut status_line = String::new();
+	reader.read_line(&mut status_line).await.unwrap();
+	assert!(
+		status_line.starts_with("HTTP/1.1 200"),
+		"unexpected response: {status_line}"
+	);
+}
+
+#[tokio::test]
 async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;

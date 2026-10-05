@@ -80,14 +80,14 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Install Rust
-      uses: ./.github/actions/setup-rust
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        # The Rust build cache restores source mtimes from each path's history.
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
       with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-key: proxy-lint
+        # PRs restore the default branch cache; only postsubmit rolls it forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Generation
       run: make generate-schema check-clean-repo check-default-members
     - name: Lint
@@ -135,6 +135,11 @@ jobs:
       with:
         go-version: "${{ env.GO_VERSION }}"
     - name: Test
+      env:
+        # The race detector otherwise sleeps 1s when each test binary exits.
+        GORACE: atexit_sleep_ms=0
+        # Linking is heavy, make it smaller
+        GOFLAGS: -ldflags=-s
       run: go test -race ./...
 
   controller-lint:

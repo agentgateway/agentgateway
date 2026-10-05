@@ -75,7 +75,6 @@ futures.workspace = true
 google-cloud-auth.workspace = true
 hashbrown.workspace = true
 headers.workspace = true
-headers-accept = "0.3.0"
 heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true

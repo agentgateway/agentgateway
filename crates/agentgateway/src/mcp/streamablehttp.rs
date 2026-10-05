@@ -106,13 +106,16 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		// check accept header
-		if !request
-			.headers()
-			.get(http::header::ACCEPT)
-			.and_then(|header| header.to_str().ok())
-			.is_some_and(|header| {
-				header.contains(JSON_MIME_TYPE) && header.contains(EVENT_STREAM_MIME_TYPE)
-			}) {
+		let mut accepts_json = false;
+		let mut accepts_event_stream = false;
+		for header in request.headers().get_all(http::header::ACCEPT).iter() {
+			let Ok(header) = header.to_str() else {
+				return mcp::Error::InvalidAccept.into();
+			};
+			accepts_json |= header.contains(JSON_MIME_TYPE);
+			accepts_event_stream |= header.contains(EVENT_STREAM_MIME_TYPE);
+		}
+		if !accepts_json || !accepts_event_stream {
 			return mcp::Error::InvalidAccept.into();
 		}
 

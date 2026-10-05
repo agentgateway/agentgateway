@@ -5,13 +5,22 @@ use agentgateway::cel;
 use anyhow::{Result, bail};
 use schemars::JsonSchema;
 
+/// Types that appear in many places in the configuration. Their fields are documented once,
+/// in their own section, rather than under every field that uses them.
+/// Each entry is the schema definition name and the name shown in the docs.
+const SHARED_CONFIG_TYPES: &[(&str, &str)] = &[
+	("SimpleLocalBackendPolicies", "BackendPolicies"),
+	("BackendAuthCompat", "BackendAuth"),
+	("PromptGuard", "Guardrails"),
+];
+
 pub fn generate_schema() -> Result<()> {
 	struct SchemaDoc {
 		name: &'static str,
 		mdfile: Option<&'static str>,
 		file: &'static str,
 		schema_json: String,
-		schema_inline_json: Option<String>,
+		shared: &'static [(&'static str, &'static str)],
 	}
 
 	let xtask_path = std::env::var("CARGO_MANIFEST_DIR")?;
@@ -21,7 +30,7 @@ pub fn generate_schema() -> Result<()> {
 			mdfile: Some("config.md"),
 			file: "config.json",
 			schema_json: make::<agentgateway::types::local::LocalConfig>(false)?,
-			schema_inline_json: Some(make::<agentgateway::types::local::LocalConfig>(true)?),
+			shared: SHARED_CONFIG_TYPES,
 		},
 		SchemaDoc {
 			name: "CEL context",
@@ -29,7 +38,7 @@ pub fn generate_schema() -> Result<()> {
 			file: "cel.json",
 			// CEL is simpler so we just always inline
 			schema_json: make::<cel::ExecutorSerde>(true)?,
-			schema_inline_json: Some(make::<cel::ExecutorSerde>(true)?),
+			shared: &[],
 		},
 		SchemaDoc {
 			name: "Admin Configuration Dump",
@@ -39,7 +48,7 @@ pub fn generate_schema() -> Result<()> {
 				false,
 				schemars::generate::Contract::Serialize,
 			)?,
-			schema_inline_json: None,
+			shared: &[],
 		},
 	];
 	for schema in &schemas {
@@ -52,40 +61,43 @@ pub fn generate_schema() -> Result<()> {
 		let Some(mdfile) = schema.mdfile else {
 			continue;
 		};
-		let mut readme = format!("# {} Schema\n\n", schema.name);
 		let rule_path = format!("{xtask_path}/../../schema/{}", schema.file);
-		let o = if cfg!(target_os = "windows") {
-			let cmd_path: String = format!("{xtask_path}/../../tools/schema-to-md.ps1");
-			std::process::Command::new("powershell")
-				.arg("-Command")
-				.arg(cmd_path)
+		let shared = format!(
+			"{{{}}}",
+			schema
+				.shared
+				.iter()
+				.map(|(def, name)| format!("\"{def}\":\"{name}\""))
+				.collect::<Vec<_>>()
+				.join(",")
+		);
+		let table = |root: &str| -> Result<String> {
+			let o = std::process::Command::new(format!("{xtask_path}/../../tools/schema-to-md.sh"))
 				.arg(&rule_path)
-				.output()?
-		} else {
-			let inline_rule_path = format!("{xtask_path}/../../schema/.inline-{}", schema.file);
-			let mut file = fs_err::File::create(&inline_rule_path)?;
-			file.write_all(
-				schema
-					.schema_inline_json
-					.as_ref()
-					.expect("markdown schemas must have inline JSON")
-					.as_bytes(),
-			)?;
-
-			let cmd_path: String = format!("{xtask_path}/../../tools/schema-to-md.sh");
-			let output = std::process::Command::new(cmd_path)
-				.arg(&inline_rule_path)
-				.output();
-			let _ = fs_err::remove_file(&inline_rule_path);
-			output?
+				.args(["--argjson", "shared", &shared, "--arg", "root", root])
+				.output()?;
+			if !o.stderr.is_empty() {
+				bail!(
+					"schema documentation generation failed: {}",
+					String::from_utf8_lossy(&o.stderr)
+				);
+			}
+			Ok(dedupe_lines(&String::from_utf8_lossy(&o.stdout)))
 		};
-		if !o.stderr.is_empty() {
-			bail!(
-				"schema documentation generation failed: {}",
-				String::from_utf8_lossy(&o.stderr)
+
+		let mut readme = format!("# {} Schema\n\n", schema.name);
+		readme.push_str(&table("")?);
+		if !schema.shared.is_empty() {
+			readme.push_str(
+				"\n## Shared types\n\nThese types are used by many fields. Fields of these types link here \
+				instead of listing every nested field, and their fields are prefixed with the type, such as \
+				`<BackendPolicies>.backendTLS`.\n",
 			);
+			for (def, name) in schema.shared {
+				readme.push_str(&format!("\n### `<{name}>`\n\n"));
+				readme.push_str(&table(def)?);
+			}
 		}
-		readme.push_str(&dedupe_lines(&String::from_utf8_lossy(&o.stdout)));
 
 		let mut file = fs_err::File::create(format!("{xtask_path}/../../schema/{mdfile}"))?;
 		file.write_all(readme.as_bytes())?;

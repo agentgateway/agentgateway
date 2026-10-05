@@ -2,6 +2,8 @@
 .claude
 .codex
 /target
+/.github/rust-cache/
+/.github/rust-cache-state/
 .vscode
 .idea
 .run
