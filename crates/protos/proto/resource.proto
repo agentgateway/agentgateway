@@ -1443,6 +1443,7 @@ message BackendPolicySpec {
     message RequestRejection {
       bytes body = 1;
       uint32 status = 2;
+      HeaderModifier headers = 3;
     }
 
     // Configuration for guarding/processing LLM responses

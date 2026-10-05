@@ -19,6 +19,15 @@ spec:
             matches: [blocked]
           response:
             statusCode: 400
+            headers:
+              add:
+              - name: x-guardrail
+                value: regex
+              set:
+              - name: content-type
+                value: application/json
+              remove:
+              - server
         response:
         - regex:
             matches: [blocked]
@@ -48,6 +57,15 @@ output:
               rejection:
                 body: VGhlIHJlcXVlc3Qgd2FzIHJlamVjdGVkIGR1ZSB0byBpbmFwcHJvcHJpYXRlIGNvbnRlbnQ=
                 status: 400
+                headers:
+                  add:
+                  - name: x-guardrail
+                    value: regex
+                  set:
+                  - name: content-type
+                    value: application/json
+                  remove:
+                  - server
             response:
             - regex:
                 action: MASK

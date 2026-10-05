@@ -213,6 +213,10 @@ type CustomResponse struct {
 	// +kubebuilder:validation:Maximum=599
 	// +optional
 	StatusCode int32 `json:"statusCode,omitempty"`
+
+	// Headers to add, set, or remove on the rejection response.
+	// +optional
+	Headers *gwv1.HTTPHeaderFilter `json:"headers,omitempty"`
 }
 
 type OpenAIModeration struct {

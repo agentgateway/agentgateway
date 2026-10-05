@@ -45,8 +45,9 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 
 		if req.CustomResponse != nil {
 			pgReq.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
-				Body:   []byte(ptr.OrDefault(req.CustomResponse.Message, "The request was rejected due to inappropriate content")),
-				Status: uint32(ptr.NonEmptyOrDefault(req.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Body:    []byte(ptr.OrDefault(req.CustomResponse.Message, "The request was rejected due to inappropriate content")),
+				Status:  uint32(ptr.NonEmptyOrDefault(req.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Headers: processRejectionHeaders(req.CustomResponse.Headers),
 			}
 		}
 		for _, scope := range req.Scope {
@@ -102,8 +103,9 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 
 		if resp.CustomResponse != nil {
 			pgResp.Rejection = &api.BackendPolicySpec_Ai_RequestRejection{
-				Body:   []byte(ptr.OrDefault(resp.CustomResponse.Message, "The request was rejected due to inappropriate content")),
-				Status: uint32(ptr.NonEmptyOrDefault(resp.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Body:    []byte(ptr.OrDefault(resp.CustomResponse.Message, "The request was rejected due to inappropriate content")),
+				Status:  uint32(ptr.NonEmptyOrDefault(resp.CustomResponse.StatusCode, 403)), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+				Headers: processRejectionHeaders(resp.CustomResponse.Headers),
 			}
 		}
 		for _, scope := range resp.Scope {
@@ -113,6 +115,17 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 	}
 
 	return res, errors.Join(errs...)
+}
+
+func processRejectionHeaders(headers *gwv1.HTTPHeaderFilter) *api.HeaderModifier {
+	if headers == nil {
+		return nil
+	}
+	return &api.HeaderModifier{
+		Add:    headerListToAgw(headers.Add),
+		Set:    headerListToAgw(headers.Set),
+		Remove: headers.Remove,
+	}
 }
 
 func processPromptEnrichment(enrichment *agentgateway.AIPromptEnrichment) *api.BackendPolicySpec_Ai_PromptEnrichment {

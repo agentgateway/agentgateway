@@ -925,6 +925,24 @@ fn convert_content_scopes(
 		.collect()
 }
 
+fn header_modifier_from_proto(
+	headers: &proto::agent::HeaderModifier,
+) -> http::filters::HeaderModifier {
+	http::filters::HeaderModifier {
+		add: headers
+			.add
+			.iter()
+			.map(|h| (strng::new(&h.name), strng::new(&h.value)))
+			.collect(),
+		set: headers
+			.set
+			.iter()
+			.map(|h| (strng::new(&h.name), strng::new(&h.value)))
+			.collect(),
+		remove: headers.remove.iter().map(strng::new).collect(),
+	}
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -942,7 +960,7 @@ fn convert_backend_ai_policy(
 					llm::policy::RequestRejection {
 						body: Bytes::from(resp.body.clone()),
 						status,
-						headers: None, // TODO: map from proto if headers are added there
+						headers: resp.headers.as_ref().map(header_modifier_from_proto),
 					}
 				} else {
 					//  use default response, since the response field is not optional on RequestGuard
@@ -1047,7 +1065,7 @@ fn convert_backend_ai_policy(
 				llm::policy::RequestRejection {
 					body: Bytes::from(resp.body.clone()),
 					status,
-					headers: None, // TODO: map from proto if headers are added there
+					headers: resp.headers.as_ref().map(header_modifier_from_proto),
 				}
 			} else {
 				//  use default response, since the response field is not optional on RequestGuard
@@ -4479,6 +4497,50 @@ mod tests {
 		)
 		.unwrap_err();
 		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
+
+	#[test]
+	fn response_guard_rejection_headers_from_proto_are_applied() {
+		use proto::agent::backend_policy_spec::ai::{PromptGuard, RequestRejection, ResponseGuard};
+
+		let ai = Ai {
+			prompt_guard: Some(PromptGuard {
+				response: vec![ResponseGuard {
+					rejection: Some(RequestRejection {
+						body: br#"{"error":"blocked"}"#.to_vec(),
+						status: 400,
+						headers: Some(proto::agent::HeaderModifier {
+							set: vec![proto::agent::Header {
+								name: "content-type".to_string(),
+								value: "application/json".to_string(),
+							}],
+							add: vec![proto::agent::Header {
+								name: "x-guardrail".to_string(),
+								value: "regex".to_string(),
+							}],
+							remove: vec!["server".to_string()],
+						}),
+					}),
+					kind: Some(response_guard::Kind::Regex(Default::default())),
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+
+		let policy = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap();
+		let rejection = &policy.prompt_guard.unwrap().response[0].rejection;
+		let headers = rejection.headers.as_ref().unwrap();
+		assert_eq!(headers.set[0].0.as_str(), "content-type");
+		assert_eq!(headers.set[0].1.as_str(), "application/json");
+		assert_eq!(headers.add[0].0.as_str(), "x-guardrail");
+		assert_eq!(headers.add[0].1.as_str(), "regex");
+		assert_eq!(headers.remove[0].as_str(), "server");
+
+		let response = rejection.as_response();
+		assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+		assert_eq!(response.headers()["content-type"], "application/json");
+		assert_eq!(response.headers()["x-guardrail"], "regex");
 	}
 
 	#[test]
