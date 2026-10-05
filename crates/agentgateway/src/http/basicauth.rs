@@ -167,6 +167,25 @@ impl BasicAuthentication {
 	}
 }
 
+impl BasicAuthentication {
+	/// Whether this policy is an acceptable alternative to browser OIDC for this request: the
+	/// mode is `optional`, so credentials are not required but are rejected when invalid, and the
+	/// location is a fixed one (not a CEL expression) that holds some. `strict` means they are
+	/// required alongside OIDC. Matched exhaustively so a future mode must decide explicitly.
+	pub fn has_optional_credential(&self, req: &Request) -> bool {
+		self.qualifies_as_session_alternative() && self.authorization_location.extract(req).is_some()
+	}
+
+	/// The request-independent half of [`Self::has_optional_credential`]: `optional` mode with a
+	/// fixed credential location. Also used to warn about ineffective `allowWithoutSession` entries.
+	pub fn qualifies_as_session_alternative(&self) -> bool {
+		match self.mode {
+			Mode::Optional => self.authorization_location.is_direct(),
+			Mode::Strict => false,
+		}
+	}
+}
+
 impl crate::store::RequestPolicyTrait for BasicAuthentication {
 	async fn apply(
 		&self,
@@ -182,6 +201,10 @@ impl crate::store::RequestPolicyTrait for BasicAuthentication {
 				.map_err(ProxyResponse::from)?;
 			// Insert the claims into extensions so we can reference it later
 			req.extensions_mut().insert(claims);
+			crate::http::oidc::TokenAuthenticated::record(
+				req,
+				crate::http::oidc::SessionAlternative::BasicAuth,
+			);
 		}
 		Ok(crate::http::PolicyResponse::default())
 	}

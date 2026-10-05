@@ -3003,6 +3003,23 @@ pub struct JwtAuthentication {
 	pub mcp: Option<McpAuthentication>,
 }
 
+impl JwtAuthentication {
+	/// See [`crate::http::jwt::Jwt::has_optional_credential`]. An MCP-enabled policy skips token
+	/// validation on the OAuth well-known endpoints, which are intentionally public, so a
+	/// credential there would never be validated and must not let browser OIDC step aside.
+	pub fn has_optional_credential(&self, req: &crate::http::Request) -> bool {
+		if self.mcp.is_some() && crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
+			return false;
+		}
+		self.jwt.has_optional_credential(req)
+	}
+
+	/// See [`crate::http::jwt::Jwt::qualifies_as_session_alternative`].
+	pub fn qualifies_as_session_alternative(&self) -> bool {
+		self.jwt.qualifies_as_session_alternative()
+	}
+}
+
 impl store::RequestPolicyTrait for JwtAuthentication {
 	async fn apply(
 		&self,

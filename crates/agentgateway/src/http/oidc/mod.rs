@@ -24,7 +24,7 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use local::{LocalOidcConfig, OidcLogin, OidcLogout};
+pub use local::{LocalOidcConfig, OidcLogin, OidcLogout, SessionAlternative};
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, RefreshSession, SameSiteMode,
@@ -130,6 +130,58 @@ pub struct AuthenticatedSession {
 	pub can_logout: bool,
 }
 
+/// Request extension set by the proxy when a sibling token policy (`jwtAuth`, `basicAuth`, or
+/// `apiKey`) listed in this policy's `allowWithoutSession` is configured in `optional` mode and
+/// the request carries that policy's credential.
+///
+/// OIDC still authenticates a valid browser session first. Only when there is no usable session
+/// does this marker make the policy pass the request through, instead of starting a login flow
+/// the caller cannot complete, so the sibling policy can validate the credential. This lets CLIs
+/// and automation share a route with browsers. The sibling policies always run afterwards, so a
+/// present credential is validated by its own policy as usual, and stripped unless that policy
+/// preserves it.
+#[derive(Debug, Clone, Copy)]
+pub struct TokenFallthrough;
+
+/// Request extension set by the OIDC policy when [`TokenFallthrough`] made it pass a request
+/// without a session through. The proxy then requires a sibling listed in `allowWithoutSession`
+/// to authenticate the request in the same phase, so a sibling that is not listed but reads the
+/// same credential location cannot stand in for the session.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionDeferred;
+
+/// Request extension recording which token policies authenticated the request, set by `jwtAuth`,
+/// `basicAuth`, and `apiKey` when they validate a credential. Only in a phase where OIDC deferred,
+/// the proxy clears it before that phase's siblings run and reads it right after, to check that an
+/// eligible listed policy authenticated the request; otherwise it accumulates across phases and is
+/// not phase-scoped. Nothing else reads it, so unlike the claims themselves it can be reset without
+/// changing what policy conditions see.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TokenAuthenticated {
+	jwt_auth: bool,
+	basic_auth: bool,
+	api_key: bool,
+}
+
+impl TokenAuthenticated {
+	pub fn record(req: &mut crate::http::Request, policy: SessionAlternative) {
+		let marker = req.extensions_mut().get_or_insert_default::<Self>();
+		match policy {
+			SessionAlternative::JwtAuth => marker.jwt_auth = true,
+			SessionAlternative::BasicAuth => marker.basic_auth = true,
+			SessionAlternative::ApiKey => marker.api_key = true,
+		}
+	}
+
+	pub fn contains(&self, policy: SessionAlternative) -> bool {
+		match policy {
+			SessionAlternative::JwtAuth => self.jwt_auth,
+			SessionAlternative::BasicAuth => self.basic_auth,
+			SessionAlternative::ApiKey => self.api_key,
+		}
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OidcPolicy {
@@ -141,6 +193,10 @@ pub struct OidcPolicy {
 	pub redirect_uri: RedirectUri,
 	pub session: SessionConfig,
 	pub scopes: Vec<String>,
+	/// Sibling policies that may authenticate a request in place of a session. See
+	/// `LocalOidcConfig::allow_without_session`.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub allow_without_session: Vec<SessionAlternative>,
 	#[serde(skip)]
 	refresh_cache: refresh::RefreshCache,
 }
@@ -171,6 +227,8 @@ pub enum Error {
 	InvalidSession,
 	#[error("authentication required")]
 	AuthenticationRequired,
+	#[error("no session, and no allowWithoutSession policy authenticated the request")]
+	SessionAlternativeNotAuthenticated,
 	#[error("encoded oidc session exceeds cookie size budget")]
 	SessionCookieTooLarge,
 	#[error("missing transaction")]
@@ -317,7 +375,18 @@ impl OidcPolicy {
 			.login
 			.as_ref()
 			.and_then(|login| login.redirect.as_deref());
-		let mut response = if non_navigation {
+		let token_fallthrough = req.extensions().get::<TokenFallthrough>().is_some()
+			&& !self
+				.login
+				.as_ref()
+				.is_some_and(|login| req.uri().path() == login.path);
+		let mut response = if token_fallthrough {
+			// A sibling token policy will authenticate this request; let it, instead of starting
+			// a browser login the caller cannot complete. The login endpoint itself still logs in.
+			debug!("no oidc session; deferring to sibling token policy");
+			req.extensions_mut().insert(SessionDeferred);
+			PolicyResponse::default()
+		} else if non_navigation {
 			if !clear_refresh_cookie && login_redirect.is_none() {
 				return Err(Error::AuthenticationRequired);
 			}

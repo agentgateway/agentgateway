@@ -107,6 +107,25 @@ impl serde::Serialize for Jwt {
 	}
 }
 
+impl Jwt {
+	/// Whether this policy is an acceptable alternative to browser OIDC for this request: the
+	/// mode is `optional`, so the token is not required but is rejected when invalid, and the
+	/// location is a fixed one (not a CEL expression) that holds a value. `strict` means the token
+	/// is required alongside OIDC, and `permissive` never rejects, so neither lets OIDC step aside.
+	pub fn has_optional_credential(&self, req: &Request) -> bool {
+		self.qualifies_as_session_alternative() && self.location.extract(req).is_some()
+	}
+
+	/// The request-independent half of [`Self::has_optional_credential`]: `optional` mode with a
+	/// fixed credential location. Also used to warn about ineffective `allowWithoutSession` entries.
+	pub fn qualifies_as_session_alternative(&self) -> bool {
+		match self.mode {
+			Mode::Optional => self.location.is_direct(),
+			Mode::Strict | Mode::Permissive => false,
+		}
+	}
+}
+
 impl serde::Serialize for Provider {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -635,6 +654,10 @@ impl Jwt {
 			serde_json::to_string(&claims).unwrap_or_else(|_| "invalid claims".to_string())
 		);
 		req.extensions_mut().insert(claims);
+		crate::http::oidc::TokenAuthenticated::record(
+			req,
+			crate::http::oidc::SessionAlternative::JwtAuth,
+		);
 		Ok(())
 	}
 

@@ -405,7 +405,8 @@ impl ProxyError {
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
-				http::oidc::Error::AuthenticationRequired => StatusCode::UNAUTHORIZED,
+				http::oidc::Error::AuthenticationRequired
+				| http::oidc::Error::SessionAlternativeNotAuthenticated => StatusCode::UNAUTHORIZED,
 				http::oidc::Error::MissingSession
 				| http::oidc::Error::InvalidSession
 				| http::oidc::Error::MissingTransaction

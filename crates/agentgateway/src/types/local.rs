@@ -5535,11 +5535,11 @@ pub(crate) async fn split_policies_for_target(
 				"OIDC_COOKIE_SECRET is required when oidc is configured",
 			));
 		};
-		Some(TrafficPolicy::Oidc(RequestPolicy::single(
+		Some(
 			oidc
 				.compile(resources, oidc_policy_id, oidc_cookie_encoder)
 				.await?,
-		)))
+		)
 	} else {
 		None
 	};
@@ -5624,9 +5624,61 @@ pub(crate) async fn split_policies_for_target(
 		route_policies.push(TrafficPolicy::Delay(p));
 	}
 	if let Some(oidc) = compiled_oidc {
-		route_policies.push(oidc);
+		warn_ineffective_session_alternatives(&oidc, route_policies);
+		route_policies.push(TrafficPolicy::Oidc(RequestPolicy::single(oidc)));
 	}
 	Ok(resolved)
+}
+
+/// Warns about `oidc.allowWithoutSession` entries that cannot take effect given the sibling
+/// policies in the same `policies` block. A sibling attached elsewhere in the same phase is still
+/// honored at runtime, so this is a warning rather than an error.
+fn warn_ineffective_session_alternatives(
+	oidc: &crate::http::oidc::OidcPolicy,
+	route_policies: &[TrafficPolicy],
+) {
+	use crate::http::oidc::SessionAlternative;
+	for alt in &oidc.allow_without_session {
+		// `mcpAuthentication` and `jwtAuth` both compile to `JwtAuth`, and which one wins depends on
+		// the phase (route: last, gateway: first), so a block whose entries disagree gets its own
+		// warning rather than a definite one.
+		let qualifies: Vec<bool> = route_policies
+			.iter()
+			.filter_map(|policy| match (alt, policy) {
+				(SessionAlternative::JwtAuth, TrafficPolicy::JwtAuth(p)) => Some(
+					p.unconditional()
+						.is_some_and(|p| p.qualifies_as_session_alternative()),
+				),
+				(SessionAlternative::BasicAuth, TrafficPolicy::BasicAuth(p)) => Some(
+					p.unconditional()
+						.is_some_and(|p| p.qualifies_as_session_alternative()),
+				),
+				(SessionAlternative::ApiKey, TrafficPolicy::APIKey(p)) => Some(
+					p.unconditional()
+						.is_some_and(|p| p.qualifies_as_session_alternative()),
+				),
+				_ => None,
+			})
+			.collect();
+		let alt = alt.as_str();
+		match (qualifies.iter().any(|q| *q), qualifies.iter().any(|q| !*q)) {
+			(true, false) => {},
+			(true, true) => tracing::warn!(
+				"oidc.allowWithoutSession lists {alt}, but this policy block has several {alt} \
+				 policies (jwtAuth and mcpAuthentication) and only some are in `optional` mode with a \
+				 header, query parameter, or cookie location; it may have no effect, depending on which \
+				 one applies (route policies: the later one; gateway policies: the earlier one)"
+			),
+			(false, true) => tracing::warn!(
+				"oidc.allowWithoutSession lists {alt}, but it has no effect: {alt} must be in \
+				 `optional` mode with a header, query parameter, or cookie location"
+			),
+			(false, false) => tracing::warn!(
+				"oidc.allowWithoutSession lists {alt}, but this policy block has no {alt} policy; it \
+				 takes effect only if an `optional` {alt} policy is attached to the same phase elsewhere"
+			),
+		}
+	}
 }
 
 async fn convert_tcp_route(

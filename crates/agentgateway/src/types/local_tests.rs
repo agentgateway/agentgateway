@@ -113,6 +113,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			scopes: vec![],
 			login: None,
 			logout: None,
+			allow_without_session: vec![],
 		}),
 		..Default::default()
 	}
@@ -2728,4 +2729,64 @@ binds:
 		.await
 		.expect("a change to the key file should notify the resource manager")
 		.expect("resource change channel should stay open");
+}
+
+#[tokio::test]
+async fn ui_oidc_keeps_allow_without_session() {
+	// The UI rewrites its OIDC policy to inject the managed login and logout endpoints. That must
+	// keep `allowWithoutSession` and the sibling policy on the same route, so a token-bearing
+	// client can reach `/api/config` when the operator opts in.
+	let yaml = format!(
+		r#"
+gateways:
+  default:
+    port: 3000
+ui:
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+      allowWithoutSession: [apiKey]
+    apiKey:
+      mode: optional
+      keys:
+      - key: sk-123
+"#
+	);
+	let normalized = normalize_test_config(&yaml)
+		.await
+		.expect("UI config with allowWithoutSession should normalize");
+	let ui_route = normalized
+		.listener_routes
+		.iter()
+		.flat_map(|(_, routes)| routes)
+		.find(|route| route.key.as_str().ends_with("/ui"))
+		.expect("UI route");
+	let oidc = ui_route
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			TrafficPolicy::Oidc(oidc) => oidc.unconditional(),
+			_ => None,
+		})
+		.expect("UI OIDC policy");
+	assert_eq!(
+		oidc.allow_without_session,
+		vec![crate::http::oidc::SessionAlternative::ApiKey]
+	);
+	assert_eq!(
+		oidc.login.as_ref().map(|login| login.path.as_str()),
+		Some("/api/auth/login")
+	);
+	assert!(
+		ui_route
+			.inline_policies
+			.iter()
+			.any(|policy| matches!(policy, TrafficPolicy::APIKey(_)))
+	);
 }

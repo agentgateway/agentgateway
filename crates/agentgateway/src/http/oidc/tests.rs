@@ -124,6 +124,7 @@ fn test_policy() -> OidcPolicy {
 		redirect_uri: test_redirect_uri(),
 		session,
 		scopes: vec!["openid".into(), "profile".into()],
+		allow_without_session: vec![],
 	}
 }
 
@@ -237,6 +238,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		scopes: vec!["profile".into(), "email".into()],
 		login: None,
 		logout: None,
+		allow_without_session: vec![],
 	}
 }
 
@@ -822,6 +824,152 @@ async fn apply_returns_unauthorized_for_fetch_requests() {
 }
 
 #[tokio::test]
+async fn apply_defers_to_sibling_token_policy_without_session() {
+	let policy = test_policy();
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+	req.extensions_mut().insert(TokenFallthrough);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("request should pass through to the sibling policy");
+
+	assert!(response.direct_response.is_none());
+	assert!(response.response_headers.is_none());
+	assert!(req.extensions().get::<jwt::Claims>().is_none());
+	assert!(req.extensions().get::<AuthenticatedSession>().is_none());
+	assert!(
+		req.extensions().get::<SessionDeferred>().is_some(),
+		"the proxy must learn that OIDC deferred, so it can require a listed sibling"
+	);
+}
+
+#[tokio::test]
+async fn apply_defers_after_failed_refresh_and_still_clears_refresh_cookie() {
+	// An expired session whose refresh is rejected falls through to the sibling policy, and the
+	// dead refresh cookie is still cleared on the response.
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(400).set_body_json(json!({"error": "invalid_grant"})))
+		.mount(&mock)
+		.await;
+	let policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
+	let encoded_session = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			expires_at_unix: Some(now_unix().saturating_sub(1)),
+		})
+		.expect("encode expired session");
+	let encoded_refresh = policy
+		.session
+		.encode_refresh_session(&RefreshSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			refresh_token: SecretString::new("refresh-token".into()),
+			expires_at_unix: now_unix() + 300,
+		})
+		.expect("encode refresh session");
+	let mut req = request(Method::GET, "https://app.example.com/protected", None);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_session}", policy.session.cookie_name),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_refresh}", policy.session.refresh_cookie_name),
+	);
+	req.extensions_mut().insert(TokenFallthrough);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("request should pass through to the sibling policy");
+
+	assert!(response.direct_response.is_none());
+	assert!(req.extensions().get::<SessionDeferred>().is_some());
+	let cleared = response
+		.response_headers
+		.as_ref()
+		.expect("response headers")
+		.get_all(header::SET_COOKIE)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.any(|value| value.starts_with(&format!("{}=", policy.session.refresh_cookie_name)));
+	assert!(cleared, "the rejected refresh cookie must still be cleared");
+}
+
+#[tokio::test]
+async fn apply_prefers_valid_session_over_token_fallthrough() {
+	let policy = test_policy();
+	let id_token = signed_id_token(TEST_NONCE);
+	let encoded = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			raw_id_token: SecretString::new(id_token.clone().into()),
+			expires_at_unix: Some(now_unix() + 300),
+		})
+		.expect("encode session");
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded}", policy.session.cookie_name),
+	);
+	req.extensions_mut().insert(TokenFallthrough);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("session apply");
+
+	assert!(response.direct_response.is_none());
+	let claims = req
+		.extensions()
+		.get::<jwt::Claims>()
+		.expect("session claims are still derived");
+	assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")));
+	assert!(
+		req.extensions().get::<SessionDeferred>().is_none(),
+		"a session authenticated the request, so nothing was deferred"
+	);
+}
+
+#[tokio::test]
+async fn apply_login_path_starts_login_despite_token_fallthrough() {
+	let mut policy = test_policy();
+	policy.login = Some(OidcLogin {
+		path: "/auth/start".into(),
+		redirect: None,
+	});
+	let mut req = request(
+		Method::GET,
+		"https://app.example.com/auth/start",
+		Some("text/html"),
+	);
+	req.extensions_mut().insert(TokenFallthrough);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("login endpoint apply");
+	let response = response.direct_response.expect("login redirect");
+	assert_eq!(response.status(), ::http::StatusCode::FOUND);
+	assert!(
+		response
+			.headers()
+			.get(header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location utf8")
+			.starts_with("https://issuer.example.com/authorize?")
+	);
+}
+
+#[tokio::test]
 async fn apply_bypasses_cors_preflight_requests() {
 	let policy = test_policy();
 	let mut req = request(Method::OPTIONS, "https://app.example.com/private", None);
@@ -1347,6 +1495,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				allow_without_session: vec![],
 			},
 			provider_endpoint(format!("{}/authorize", mock.uri())),
 			provider_endpoint(format!("{}/token", mock.uri())),
@@ -1426,6 +1575,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		scopes: vec![],
 		login: None,
 		logout: None,
+		allow_without_session: vec![],
 	};
 	let err = compile_local_policy(policy, translated_policy_id("discovery-relative-endpoints"))
 		.await
@@ -1493,6 +1643,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				allow_without_session: vec![],
 			},
 			"authorizationEndpoint, tokenEndpoint, and jwks must either all be set or all be omitted",
 		),
@@ -1523,6 +1674,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				scopes: vec![],
 				login: None,
 				logout: None,
+				allow_without_session: vec![],
 			},
 			"tokenEndpointAuth must be omitted unless authorizationEndpoint, tokenEndpoint, and jwks are configured explicitly",
 		),

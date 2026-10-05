@@ -232,6 +232,21 @@ impl<T> RequestPolicy<T> {
 		matches!(self.inner, RequestPolicyInner::Empty)
 	}
 
+	/// The policy when it is the only entry and has no condition, so that selecting it cannot
+	/// depend on the request. A conditional entry or a multi-entry set returns `None`, even when
+	/// one of the entries is unconditional.
+	pub fn unconditional(&self) -> Option<Arc<T>> {
+		match &self.inner {
+			RequestPolicyInner::Single(entry) if entry.condition.is_none() => Some(entry.pol.clone()),
+			RequestPolicyInner::Multiple(entries)
+				if entries.len() == 1 && entries[0].condition.is_none() =>
+			{
+				Some(entries[0].pol.clone())
+			},
+			_ => None,
+		}
+	}
+
 	/// Selects the first matching policy without applying it.
 	///
 	/// This is for policies whose selected config must be turned into separate per-request state
@@ -485,5 +500,53 @@ impl<T: BackendPolicyTrait> BackendPolicy<T> {
 				ctx.register_expression(expr)
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+
+	use super::RequestPolicy;
+
+	fn condition() -> Option<Arc<crate::cel::Expression>> {
+		Some(Arc::new(
+			crate::cel::Expression::new_strict("true").expect("condition"),
+		))
+	}
+
+	#[test]
+	fn unconditional_requires_a_single_entry_without_condition() {
+		assert_eq!(
+			RequestPolicy::single(1).unconditional().as_deref(),
+			Some(&1)
+		);
+		assert_eq!(
+			RequestPolicy::from_policies([(1, None)])
+				.unconditional()
+				.as_deref(),
+			Some(&1)
+		);
+		assert!(
+			RequestPolicy::<i32>::from_policies([])
+				.unconditional()
+				.is_none()
+		);
+		assert!(
+			RequestPolicy::from_policies([(1, condition())])
+				.unconditional()
+				.is_none()
+		);
+		// An unconditional fallback behind a conditional entry still depends on the request.
+		assert!(
+			RequestPolicy::from_policies([(1, condition()), (2, None)])
+				.unconditional()
+				.is_none()
+		);
+		assert!(
+			RequestPolicy::from_policies([(1, None), (2, None)])
+				.unconditional()
+				.is_none()
+		);
 	}
 }

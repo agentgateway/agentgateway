@@ -11,7 +11,7 @@ use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
 use crate::serdes::FileInlineOrRemote;
-use crate::{apply, schema, schema_de};
+use crate::{apply, schema, schema_de, schema_enum};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {
@@ -39,6 +39,27 @@ struct PreparedOidcPolicy {
 	scopes: Vec<String>,
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
+	allow_without_session: Vec<SessionAlternative>,
+}
+
+/// A sibling authentication policy in the same policy set that may authenticate a request in
+/// place of a browser session. See `LocalOidcConfig::allow_without_session`.
+#[apply(schema_enum!)]
+pub enum SessionAlternative {
+	JwtAuth,
+	BasicAuth,
+	ApiKey,
+}
+
+impl SessionAlternative {
+	/// The policy's configuration key, as written in `allowWithoutSession`.
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			SessionAlternative::JwtAuth => "jwtAuth",
+			SessionAlternative::BasicAuth => "basicAuth",
+			SessionAlternative::ApiKey => "apiKey",
+		}
+	}
 }
 
 /// Optional browser login entry point and unauthenticated redirect destination.
@@ -93,6 +114,9 @@ pub struct OidcLogout {
 ///
 /// Session refresh requires the provider to return a new `id_token` in each refresh response.
 /// Providers that omit it require the user to sign in again when the stored ID token expires.
+///
+/// A browser session is always required unless `allowWithoutSession` names a sibling policy that
+/// may authenticate the request instead; see that field.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -150,6 +174,34 @@ pub struct LocalOidcConfig {
 	/// Optional logout endpoint. Independent of login; omit to disable the logout endpoint.
 	#[serde(default)]
 	pub logout: Option<OidcLogout>,
+
+	/// Sibling authentication policies in the same policy set (`jwtAuth`, `basicAuth`, `apiKey`)
+	/// that may authenticate a request in place of a browser session, so CLIs and automation can
+	/// share this route with browsers. Empty by default, which keeps the session required.
+	///
+	/// A listed policy takes effect only when its `mode` is `optional`: a request without a valid
+	/// session that carries that policy's credential is passed through to it, and it validates the
+	/// credential and rejects it when invalid, instead of entering login. A `strict` sibling is an
+	/// additional requirement alongside the session, as always, and a `permissive` sibling never
+	/// lets OIDC step aside because it does not reject invalid credentials. A request with a
+	/// session is authenticated by it, and any credential it also carries is still validated by its
+	/// own policy. A request with neither still enters login. A request passed through must be
+	/// authenticated by a listed policy: when an unlisted policy reads the same location and
+	/// consumes the credential first, the request is rejected with 401.
+	///
+	/// `jwtAuth` also covers `mcpAuthentication`, which compiles to the same policy.
+	///
+	/// To keep the decision deterministic, only a sibling with a single unconditional entry whose
+	/// credential location is a header, query parameter, or cookie takes effect; conditional
+	/// entries, CEL `expression` locations, credentials in reserved `agw_oidc_` cookies, and MCP
+	/// well-known endpoints keep the session required. The same applies to this OIDC policy: a
+	/// conditional OIDC policy ignores this list. This applies within one phase only, so
+	/// gateway-level OIDC does not step aside for a route-level policy. A listed policy that is
+	/// missing from, or cannot take effect in, the same `policies` block is reported as a warning
+	/// at load time; it is not an error, because a sibling attached elsewhere in the same phase is
+	/// still honored.
+	#[serde(default)]
+	pub allow_without_session: Vec<SessionAlternative>,
 }
 
 struct DiscoveredProviderMetadata {
@@ -189,6 +241,7 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			allow_without_session,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
@@ -299,6 +352,7 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			allow_without_session,
 		})
 	}
 }
@@ -437,6 +491,7 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			allow_without_session,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
@@ -465,6 +520,7 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			allow_without_session,
 		})
 	}
 }

@@ -396,6 +396,12 @@ impl AuthorizationLocation {
 		matches!(self, AuthorizationLocation::Header { name, .. } if name == http::header::PROXY_AUTHORIZATION)
 	}
 
+	/// Whether the credential is read from a fixed request location (header, query parameter, or
+	/// cookie), so that its presence is deterministic. A CEL `expression` is not.
+	pub fn is_direct(&self) -> bool {
+		!matches!(self, AuthorizationLocation::Expression(_))
+	}
+
 	pub fn extract<'a>(&self, req: &'a Request) -> Option<Cow<'a, str>> {
 		match self {
 			AuthorizationLocation::Header { name, prefix } => {
