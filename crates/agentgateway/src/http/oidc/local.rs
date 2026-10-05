@@ -170,9 +170,10 @@ pub struct LocalOidcConfig {
 	/// Applies only when this policy and the sibling are each a single unconditional entry in the
 	/// same phase (gateway-level OIDC ignores route-level siblings), and the sibling reads a header,
 	/// query parameter, or cookie (not a CEL `expression`, the `Cookie` header, or a reserved
-	/// `agw_oidc_` cookie). Never applies on MCP well-known endpoints. If an unlisted policy consumes
-	/// the credential first, the request is rejected with 401. Listed policies that are missing
-	/// from, or ineffective in, the same `policies` block are reported as load-time warnings.
+	/// `agw_oidc_` cookie). Never applies on the paths `mcpAuthentication` answers itself (its
+	/// well-known and client-registration endpoints). If an unlisted policy consumes the credential
+	/// first, the request is rejected with 401. Listed policies that are missing from, or
+	/// ineffective in, the same `policies` block are reported as load-time warnings.
 	#[serde(default)]
 	pub allow_without_session: Vec<SessionAlternative>,
 }

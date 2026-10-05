@@ -3010,13 +3010,6 @@ impl SessionAlternativePolicy for JwtAuthentication {
 	fn optional_location(&self) -> Option<&AuthorizationLocation> {
 		self.jwt.optional_location()
 	}
-
-	/// MCP OAuth well-known endpoints are public and skip token validation, so a credential there
-	/// must not stand in for a session.
-	fn has_optional_credential(&self, req: &crate::http::Request) -> bool {
-		!(self.mcp.is_some() && crate::mcp::auth::is_well_known_endpoint(req.uri().path()))
-			&& self.jwt.has_optional_credential(req)
-	}
 }
 
 impl store::RequestPolicyTrait for JwtAuthentication {

@@ -903,6 +903,52 @@ async fn route_oidc_ignores_mcp_well_known_credential() {
 }
 
 #[tokio::test]
+async fn route_oidc_mcp_direct_response_cannot_bypass_listed_sibling() {
+	// mcpAuthentication runs before apiKey and answers some paths itself, before the API key is
+	// validated. An API key there must not let OIDC step aside, so an unvalidated key can reach
+	// neither the well-known endpoints nor the client-registration proxy.
+	let mcp_authentication = json!({
+		"issuer": TEST_ISSUER,
+		"audiences": [TEST_CLIENT_ID],
+		"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+		"mode": "optional",
+		"resourceMetadata": {"mcpResourceUri": "mcp://test"},
+	});
+	let api_key = json!({
+		"keys": [{"key": "sk-123"}],
+		"mode": "optional",
+		"location": {"header": {"name": "x-api-key"}},
+	});
+	let (mock, _token_response, mut bind) = oidc_test_bind("/").await;
+	bind
+		.attach_route_policy(oidc_policy_for(
+			&mock,
+			&["apiKey"],
+			json!({"mcpAuthentication": mcp_authentication, "apiKey": api_key}),
+		))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/.well-known/oauth-protected-resource/upstream",
+		&[("x-api-key", "sk-999"), ("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&res);
+
+	let res = send_request_headers(
+		io,
+		Method::POST,
+		"http://lo/client-registration",
+		&[("x-api-key", "sk-999"), ("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&res);
+}
+
+#[tokio::test]
 async fn route_oidc_ignores_permissive_jwt() {
 	let (_mock, _bind, io) = oidc_route_setup(
 		&["jwtAuth"],

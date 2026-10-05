@@ -25,6 +25,12 @@ pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
 		|| path.starts_with("/.well-known/oauth-authorization-server/")
 }
 
+/// Whether [`handle_mcp_request`] may answer `path` itself rather than forward it: the well-known
+/// endpoints (including the Entra proxies under them) and client registration.
+pub(crate) fn is_direct_response_endpoint(path: &str) -> bool {
+	is_well_known_endpoint(path) || path.ends_with("client-registration")
+}
+
 pub(super) async fn apply_token_validation(
 	req: &mut Request,
 	auth: &McpAuthentication,

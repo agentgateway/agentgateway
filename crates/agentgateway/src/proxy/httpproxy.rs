@@ -214,6 +214,13 @@ fn mark_oidc_token_fallthrough(
 	req: &mut Request,
 ) -> Option<Vec<SessionAlternative>> {
 	let oidc = oidc.unconditional()?;
+	// mcpAuthentication answers these paths itself, before later siblings validate their
+	// credential, so no credential there may stand in for a session.
+	if jwt.iter().any(|p| p.pol.mcp.is_some())
+		&& crate::mcp::auth::is_direct_response_endpoint(req.uri().path())
+	{
+		return None;
+	}
 	let candidates: Vec<SessionAlternative> = oidc
 		.allow_without_session
 		.iter()
@@ -261,17 +268,26 @@ impl DeferredSessionCheck {
 		Some(Self { candidates })
 	}
 
-	/// Must run right after the phase's sibling token policies.
-	fn finish(self, req: &Request) -> Result<(), ProxyResponse> {
+	/// Must run right after the phase's sibling token policies, with their combined result. A
+	/// rejection stands; a pass or a direct response (such as one served by `mcpAuthentication`
+	/// before later siblings run) requires a listed sibling to have authenticated the request.
+	fn finish(
+		self,
+		req: &Request,
+		siblings: Result<(), ProxyResponse>,
+	) -> Result<(), ProxyResponse> {
+		if let Err(ProxyResponse::Error(_)) = siblings {
+			return siblings;
+		}
 		let authenticated = req
 			.extensions()
 			.get::<TokenAuthenticated>()
 			.is_some_and(|marker| self.candidates.iter().any(|alt| marker.contains(*alt)));
-		if authenticated {
-			return Ok(());
+		if !authenticated {
+			debug!("oidc deferred, but no allowWithoutSession policy authenticated the request");
+			return Err(ProxyError::OidcFailure(http::oidc::Error::AuthenticationRequired).into());
 		}
-		debug!("oidc deferred, but no allowWithoutSession policy authenticated the request");
-		Err(ProxyError::OidcFailure(http::oidc::Error::AuthenticationRequired).into())
+		siblings
 	}
 }
 
@@ -309,20 +325,24 @@ async fn apply_request_policies(
 	let deferred = DeferredSessionCheck::begin(fallthrough, req);
 	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
-	pol
-		.jwt
-		.apply_without_response("jwt auth", c, l, req, rp.headers())
-		.await?;
-	pol
-		.basic_auth
-		.apply_without_response("basic auth", c, l, req, rp.headers())
-		.await?;
-	pol
-		.api_key
-		.apply_without_response("api key", c, l, req, rp.headers())
-		.await?;
-	if let Some(deferred) = deferred {
-		deferred.finish(req)?;
+	let siblings = async {
+		pol
+			.jwt
+			.apply_without_response("jwt auth", c, l, req, rp.headers())
+			.await?;
+		pol
+			.basic_auth
+			.apply_without_response("basic auth", c, l, req, rp.headers())
+			.await?;
+		pol
+			.api_key
+			.apply_without_response("api key", c, l, req, rp.headers())
+			.await
+	}
+	.await;
+	match deferred {
+		Some(deferred) => deferred.finish(req, siblings)?,
+		None => siblings?,
 	}
 	pol
 		.budget
@@ -588,21 +608,24 @@ async fn apply_gateway_policies(
 		.await?;
 	let deferred = DeferredSessionCheck::begin(fallthrough, req);
 
-	policies
-		.jwt
-		.apply_without_response("gateway jwt", c, l, req, response_policies.headers())
-		.await?;
-
-	policies
-		.basic_auth
-		.apply_without_response("gateway basic auth", c, l, req, response_policies.headers())
-		.await?;
-	policies
-		.api_key
-		.apply_without_response("gateway api key", c, l, req, response_policies.headers())
-		.await?;
-	if let Some(deferred) = deferred {
-		deferred.finish(req)?;
+	let siblings = async {
+		policies
+			.jwt
+			.apply_without_response("gateway jwt", c, l, req, response_policies.headers())
+			.await?;
+		policies
+			.basic_auth
+			.apply_without_response("gateway basic auth", c, l, req, response_policies.headers())
+			.await?;
+		policies
+			.api_key
+			.apply_without_response("gateway api key", c, l, req, response_policies.headers())
+			.await
+	}
+	.await;
+	match deferred {
+		Some(deferred) => deferred.finish(req, siblings)?,
+		None => siblings?,
 	}
 	policies
 		.budget
@@ -5627,5 +5650,64 @@ mod route_chain_tests {
 
 	fn listener_address() -> SocketAddr {
 		"127.0.0.1:80".parse().unwrap()
+	}
+}
+
+#[cfg(test)]
+mod deferred_session_tests {
+	use super::*;
+
+	fn finish(
+		authenticated: Option<SessionAlternative>,
+		siblings: Result<(), ProxyResponse>,
+	) -> Result<(), ProxyResponse> {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/")
+			.body(http::Body::empty())
+			.unwrap();
+		if let Some(alt) = authenticated {
+			TokenAuthenticated::record(&mut req, alt);
+		}
+		DeferredSessionCheck {
+			candidates: vec![SessionAlternative::ApiKey],
+		}
+		.finish(&req, siblings)
+	}
+
+	fn direct_response() -> Result<(), ProxyResponse> {
+		Err(ProxyResponse::DirectResponse(Box::new(
+			::http::Response::new(http::Body::empty()),
+		)))
+	}
+
+	fn is_auth_required(res: Result<(), ProxyResponse>) -> bool {
+		matches!(
+			res,
+			Err(ProxyResponse::Error(ProxyError::OidcFailure(
+				http::oidc::Error::AuthenticationRequired
+			)))
+		)
+	}
+
+	#[test]
+	fn finish_requires_a_listed_sibling_even_for_direct_responses() {
+		assert!(finish(Some(SessionAlternative::ApiKey), Ok(())).is_ok());
+		assert!(is_auth_required(finish(None, Ok(()))));
+		// An unlisted sibling authenticating does not count.
+		assert!(is_auth_required(finish(
+			Some(SessionAlternative::JwtAuth),
+			Ok(())
+		)));
+		// A sibling answering directly before the listed one ran must not bypass the check.
+		assert!(is_auth_required(finish(None, direct_response())));
+		assert!(matches!(
+			finish(Some(SessionAlternative::ApiKey), direct_response()),
+			Err(ProxyResponse::DirectResponse(_))
+		));
+		// A sibling's own rejection stands.
+		assert!(matches!(
+			finish(None, Err(ProxyError::MethodNotAllowed.into())),
+			Err(ProxyResponse::Error(ProxyError::MethodNotAllowed))
+		));
 	}
 }
