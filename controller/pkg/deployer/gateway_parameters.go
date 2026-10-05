@@ -46,6 +46,8 @@ type InMemoryGatewayParametersConfig struct {
 var (
 	// ErrNoValidPorts is returned when no valid ports are found for the Gateway
 	ErrNoValidPorts = errors.New("no valid ports")
+	// ErrSessionKey is returned when the Gateway's managed session key Secret cannot be read or created
+	ErrSessionKey = errors.New("session key unavailable")
 )
 
 const sessionKeyChecksumAnnotation = "checksum/session-key"
@@ -180,7 +182,7 @@ func (s *SessionKeys) Apply(ctx context.Context, gw *gwv1.Gateway, rendered []cl
 
 	key, err := s.Get(ctx, gw)
 	if err != nil {
-		return fmt.Errorf("failed to get session key for Gateway %s/%s: %w", gw.Namespace, gw.Name, err)
+		return fmt.Errorf("%w for Gateway %s/%s: %w", ErrSessionKey, gw.Namespace, gw.Name, err)
 	}
 	AddSessionKeyChecksum(rendered, key)
 	return nil
