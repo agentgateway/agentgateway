@@ -299,6 +299,16 @@ monitoring:
     interval: 15s
     # -- Additional labels to add to the controller ServiceMonitor and the proxy PodMonitor (e.g. release: prometheus).
     extraLabels: {}
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+    scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+    scrapeClassicHistograms: true
+    # -- Relabeling rules applied to the scrape target before metrics are ingested
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    relabelings: []
+    # -- Relabeling rules applied to scraped metrics before ingestion
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    metricRelabelings: []
 
   proxy:
     podMonitor:
@@ -310,6 +320,16 @@ monitoring:
       #    by the bundled Grafana dashboard for gateway discovery and filtering.
       podTargetLabels:
         - gateway.networking.k8s.io/gateway-name
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+      scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+      scrapeClassicHistograms: true
+      # -- Relabeling rules applied to the scrape target before metrics are ingested
+      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+      relabelings: []
+      # -- Relabeling rules applied to scraped metrics before ingestion
+      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+      metricRelabelings: []
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:
       - agentgateway
