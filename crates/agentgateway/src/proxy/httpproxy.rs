@@ -22,6 +22,7 @@ use types::discovery::*;
 
 use crate::cel::{BackendContext, RequestTime};
 use crate::client::{ApplicationTransport, HboneHeaders, HboneSourceRole, Transport};
+use crate::http::auth::{SessionAlternative, SessionAlternativePolicy, TokenAuthenticated};
 use crate::http::backendtls::{
 	BackendTLS, BackendTLSSource, SpiffeBackendTLS, VersionedBackendTLS,
 };
@@ -198,79 +199,31 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	}
 }
 
-/// Marks the request so OIDC passes it through, instead of starting login, when a sibling token
-/// policy named in the OIDC policy's `allowWithoutSession` is configured in `optional` mode and
-/// the request carries that policy's credential. The sibling then validates it, and rejects it
-/// when invalid, exactly as it would without OIDC. See [`http::oidc::TokenFallthrough`].
+/// Marks the request with [`http::oidc::TokenFallthrough`] when a sibling listed in the OIDC
+/// policy's `allowWithoutSession` qualifies and the request carries its credential. Returns those
+/// siblings for [`DeferredSessionCheck`].
 ///
-/// Returns the alternatives that qualified and carried a credential when the marker was set, for
-/// [`DeferredSessionCheck`].
-///
-/// Invariant: fall-through always ends with a listed sibling validating the credential. This
-/// probe is kept precise so it rarely starts a fall-through that then fails, by only considering
-/// policies with a single unconditional entry and a fixed credential location (no CEL conditions,
-/// no CEL `expression` locations), evaluated on the request as the siblings will see it. The route
-/// phase strips the reserved OIDC cookies before the siblings run, so the probe uses that stripped
-/// view; the gateway phase does not strip them, where the only effect is that a credential in a
-/// reserved cookie keeps the browser login flow. The probe alone cannot guarantee the invariant:
-/// an unlisted sibling that reads the same location runs first and can consume the credential.
-/// [`DeferredSessionCheck`] enforces it after the siblings run.
+/// Only single unconditional policies are considered, so the outcome rarely differs from what the
+/// siblings then do. It still can (an unlisted sibling may consume the credential first), which
+/// [`DeferredSessionCheck`] catches.
 fn mark_oidc_token_fallthrough(
 	oidc: &store::RequestPolicy<http::oidc::OidcPolicy>,
 	jwt: &store::RequestPolicy<crate::types::agent::JwtAuthentication>,
 	basic_auth: &store::RequestPolicy<http::basicauth::BasicAuthentication>,
 	api_key: &store::RequestPolicy<http::apikey::APIKeyAuthentication>,
 	req: &mut Request,
-) -> Option<Vec<http::oidc::SessionAlternative>> {
-	use crate::http::oidc::SessionAlternative;
-	// A conditional OIDC policy keeps today's behavior; the marker is cleared after OIDC runs, so
-	// an unselected OIDC entry is harmless either way.
+) -> Option<Vec<SessionAlternative>> {
 	let oidc = oidc.unconditional()?;
-	let allowed = &oidc.allow_without_session;
-	if allowed.is_empty() {
-		return None;
-	}
-	// Stripping rewrites the whole Cookie header set, so snapshot every value, not only the ones
-	// carrying reserved cookies, or a credential in a separate Cookie header would be lost.
-	let has_reserved_cookies = http::iter_request_cookies(req).any(|cookie| {
-		cookie
-			.name()
-			.starts_with(http::oidc::RESERVED_COOKIE_PREFIX)
-	});
-	let original_cookies: Vec<HeaderValue> = if has_reserved_cookies {
-		let cookies = req
-			.headers()
-			.get_all(header::COOKIE)
-			.iter()
-			.cloned()
-			.collect();
-		http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
-		cookies
-	} else {
-		Vec::new()
-	};
-	let candidates: Vec<SessionAlternative> = allowed
+	let candidates: Vec<SessionAlternative> = oidc
+		.allow_without_session
 		.iter()
 		.copied()
 		.filter(|alt| match alt {
-			SessionAlternative::JwtAuth => jwt
-				.unconditional()
-				.is_some_and(|policy| policy.has_optional_credential(req)),
-			SessionAlternative::BasicAuth => basic_auth
-				.unconditional()
-				.is_some_and(|policy| policy.has_optional_credential(req)),
-			SessionAlternative::ApiKey => api_key
-				.unconditional()
-				.is_some_and(|policy| policy.has_optional_credential(req)),
+			SessionAlternative::JwtAuth => has_optional_credential(jwt, req),
+			SessionAlternative::BasicAuth => has_optional_credential(basic_auth, req),
+			SessionAlternative::ApiKey => has_optional_credential(api_key, req),
 		})
 		.collect();
-	if has_reserved_cookies {
-		// OIDC still needs its own cookies; the route phase strips them again after it runs.
-		req.headers_mut().remove(header::COOKIE);
-		for value in original_cookies {
-			req.headers_mut().append(header::COOKIE, value);
-		}
-	}
 	if candidates.is_empty() {
 		return None;
 	}
@@ -278,43 +231,47 @@ fn mark_oidc_token_fallthrough(
 	Some(candidates)
 }
 
-/// Enforces that a request the OIDC policy passed through without a session is authenticated, in
-/// the same phase, by one of the alternatives that started the fall-through: listed in
-/// `allowWithoutSession`, eligible, and carrying a credential. A listed policy that was not
-/// eligible, such as a `strict` one that shares the credential location, cannot satisfy it.
+fn has_optional_credential<T: SessionAlternativePolicy>(
+	policy: &store::RequestPolicy<T>,
+	req: &Request,
+) -> bool {
+	policy
+		.unconditional()
+		.is_some_and(|p| p.has_optional_credential(req))
+}
+
+/// Requires a request that OIDC passed through without a session to be authenticated, in the same
+/// phase, by one of the siblings that started the fall-through.
 ///
-/// It reads [`http::oidc::TokenAuthenticated`], reset at the start of the phase's siblings, rather
-/// than the claims themselves: claims from an earlier phase must stay visible, because policy
-/// conditions in this phase may depend on them.
+/// Reads [`TokenAuthenticated`] rather than claims: it is reset for this phase, while claims from
+/// an earlier phase must stay visible to this phase's policy conditions.
 struct DeferredSessionCheck {
-	candidates: Vec<http::oidc::SessionAlternative>,
+	candidates: Vec<SessionAlternative>,
 }
 
 impl DeferredSessionCheck {
-	/// Clears this phase's OIDC markers and, when the OIDC policy deferred to its siblings, starts
-	/// the check. Must run right after the phase's OIDC policy.
-	fn begin(
-		candidates: Option<Vec<http::oidc::SessionAlternative>>,
-		req: &mut Request,
-	) -> Option<Self> {
+	/// Must run right after the phase's OIDC policy. Clears the OIDC markers and starts the check
+	/// if OIDC deferred.
+	fn begin(candidates: Option<Vec<SessionAlternative>>, req: &mut Request) -> Option<Self> {
 		let ext = req.extensions_mut();
 		ext.remove::<http::oidc::TokenFallthrough>();
 		let deferred = ext.remove::<http::oidc::SessionDeferred>().is_some();
 		let candidates = candidates.filter(|_| deferred)?;
-		ext.remove::<http::oidc::TokenAuthenticated>();
+		ext.remove::<TokenAuthenticated>();
 		Some(Self { candidates })
 	}
 
 	/// Must run right after the phase's sibling token policies.
-	fn finish(self, req: &mut Request) -> Result<(), ProxyResponse> {
+	fn finish(self, req: &Request) -> Result<(), ProxyResponse> {
 		let authenticated = req
 			.extensions()
-			.get::<http::oidc::TokenAuthenticated>()
+			.get::<TokenAuthenticated>()
 			.is_some_and(|marker| self.candidates.iter().any(|alt| marker.contains(*alt)));
 		if authenticated {
 			return Ok(());
 		}
-		Err(ProxyError::OidcFailure(http::oidc::Error::SessionAlternativeNotAuthenticated).into())
+		debug!("oidc deferred, but no allowWithoutSession policy authenticated the request");
+		Err(ProxyError::OidcFailure(http::oidc::Error::AuthenticationRequired).into())
 	}
 }
 

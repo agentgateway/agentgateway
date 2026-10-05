@@ -8,7 +8,9 @@ use serde::{Deserialize, Deserializer, Serializer};
 use subtle::ConstantTimeEq;
 
 use crate::http::Request;
-use crate::http::auth::AuthorizationLocation;
+use crate::http::auth::{
+	AuthorizationLocation, SessionAlternative, SessionAlternativePolicy, TokenAuthenticated,
+};
 use crate::http::budget::{Budget, BudgetLimitUnit, MatchedBudgets, NANODOLLARS_PER_USD};
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::{ProxyError, ProxyResponse};
@@ -412,21 +414,11 @@ impl APIKeyAuthentication {
 	}
 }
 
-impl APIKeyAuthentication {
-	/// Whether this policy is an acceptable alternative to browser OIDC for this request: the
-	/// mode is `optional`, so the key is not required but is rejected when invalid, and the
-	/// location is a fixed one (not a CEL expression) that holds a value. `strict` means the key
-	/// is required alongside OIDC, and `permissive` never rejects, so neither lets OIDC step aside.
-	pub fn has_optional_credential(&self, req: &Request) -> bool {
-		self.qualifies_as_session_alternative() && self.location.extract(req).is_some()
-	}
-
-	/// The request-independent half of [`Self::has_optional_credential`]: `optional` mode with a
-	/// fixed credential location. Also used to warn about ineffective `allowWithoutSession` entries.
-	pub fn qualifies_as_session_alternative(&self) -> bool {
+impl SessionAlternativePolicy for APIKeyAuthentication {
+	fn optional_location(&self) -> Option<&AuthorizationLocation> {
 		match self.mode {
-			Mode::Optional => self.location.is_direct(),
-			Mode::Strict | Mode::Permissive => false,
+			Mode::Optional => Some(&self.location),
+			Mode::Strict | Mode::Permissive => None,
 		}
 	}
 }
@@ -447,10 +439,7 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 			if let Some(budgets) = authenticated.budgets {
 				req.extensions_mut().insert(budgets);
 			}
-			crate::http::oidc::TokenAuthenticated::record(
-				req,
-				crate::http::oidc::SessionAlternative::ApiKey,
-			);
+			TokenAuthenticated::record(req, SessionAlternative::ApiKey);
 		}
 		Ok(crate::http::PolicyResponse::default())
 	}

@@ -747,8 +747,8 @@ async fn route_oidc_with_strict_jwt_requires_both() {
 
 #[tokio::test]
 async fn route_oidc_without_opt_in_keeps_requiring_session() {
-	// Default-mode jwtAuth is `optional`, so this is the most common existing config. Without
-	// `allowWithoutSession`, a bearer alone must still enter login, as before.
+	// Default-mode jwtAuth is `optional`. Without `allowWithoutSession`, a bearer alone still
+	// enters login, as before.
 	let mut jwt_auth = jwt_auth_policy("optional");
 	jwt_auth.as_object_mut().unwrap().remove("mode");
 	let (_mock, _bind, io, session_cookie) =
@@ -813,8 +813,7 @@ async fn route_oidc_opt_in_is_per_sibling() {
 
 #[tokio::test]
 async fn route_oidc_ignores_conditional_sibling() {
-	// A sibling whose selection depends on the request cannot be probed deterministically, so
-	// it keeps the session required even when listed and optional.
+	// A conditional sibling cannot be probed deterministically, so the session stays required.
 	let (mock, _token_response, mut bind) = oidc_test_bind("/upstream").await;
 	bind
 		.attach_route_policy(oidc_policy_for(
@@ -842,8 +841,7 @@ async fn route_oidc_ignores_conditional_sibling() {
 
 #[tokio::test]
 async fn route_oidc_ignores_expression_location() {
-	// A CEL credential location is re-evaluated by the sibling, so its presence cannot be probed
-	// deterministically. It keeps the session required.
+	// A CEL credential location cannot be probed deterministically, so the session stays required.
 	let mut jwt_auth = jwt_auth_policy("optional");
 	jwt_auth["location"] = json!({"expression": "request.headers[\"x-token\"]"});
 	let (_mock, _bind, io) = oidc_route_setup(&["jwtAuth"], json!({"jwtAuth": jwt_auth})).await;
@@ -861,9 +859,8 @@ async fn route_oidc_ignores_expression_location() {
 
 #[tokio::test]
 async fn route_oidc_ignores_mcp_well_known_credential() {
-	// MCP-enabled jwtAuth skips validation on the OAuth well-known endpoints, so a credential
-	// there is never validated and must not let OIDC step aside. Elsewhere it is validated as
-	// usual.
+	// MCP-enabled jwtAuth skips validation on the OAuth well-known endpoints, so a credential there
+	// must not let OIDC step aside. Elsewhere it is validated as usual.
 	let mcp_authentication = json!({
 		"issuer": TEST_ISSUER,
 		"audiences": [TEST_CLIENT_ID],
@@ -947,8 +944,8 @@ async fn route_oidc_without_sibling_policy_ignores_bearer() {
 
 #[tokio::test]
 async fn route_oidc_fallthrough_ignores_reserved_cookie_credential() {
-	// A sibling reading a reserved `agw_oidc_` cookie never sees it, because those cookies are
-	// stripped before it runs. Such a credential must not make OIDC pass the request through.
+	// Reserved `agw_oidc_` cookies are stripped before the route siblings run, so a sibling reading
+	// one never qualifies.
 	let mut jwt_auth = jwt_auth_policy("optional");
 	jwt_auth["location"] = json!({"cookie": {"name": "agw_oidc_s_bogus"}});
 	let (_mock, _bind, io) = oidc_route_setup(&["jwtAuth"], json!({"jwtAuth": jwt_auth})).await;
@@ -968,8 +965,7 @@ async fn route_oidc_fallthrough_ignores_reserved_cookie_credential() {
 
 #[tokio::test]
 async fn route_oidc_fallthrough_keeps_credentials_in_other_cookie_headers() {
-	// A bogus reserved cookie and a cookie-based credential can arrive in separate Cookie
-	// headers. The sibling must still see its credential after OIDC passes the request through.
+	// A reserved cookie in a separate Cookie header does not hide the credential from the sibling.
 	let mut jwt_auth = jwt_auth_policy("optional");
 	jwt_auth["location"] = json!({"cookie": {"name": "token"}});
 	let (_mock, _bind, io) = oidc_route_setup(&["jwtAuth"], json!({"jwtAuth": jwt_auth})).await;
@@ -1037,8 +1033,8 @@ async fn gateway_phase_oidc_with_strict_jwt_keeps_requiring_session() {
 
 #[tokio::test]
 async fn gateway_phase_oidc_ignores_reserved_cookie_credential() {
-	// The gateway phase does not strip reserved cookies before its siblings run, unlike the route
-	// phase. A credential stored in one must still keep the browser login flow, not fall through.
+	// A sibling reading a reserved cookie never qualifies, in the gateway phase too, even though
+	// that phase does not strip them.
 	let mut jwt_auth = jwt_auth_policy("optional");
 	jwt_auth["location"] = json!({"cookie": {"name": "agw_oidc_s_bogus"}});
 	let (_mock, _bind, io) = oidc_gateway_setup(&["jwtAuth"], json!({"jwtAuth": jwt_auth})).await;
@@ -1116,9 +1112,8 @@ async fn oidc_fallthrough_does_not_cross_phases() {
 
 #[tokio::test]
 async fn route_oidc_rejects_unlisted_sibling_consuming_credential() {
-	// jwtAuth and apiKey both default to `Authorization: Bearer`. The bearer makes the listed
-	// apiKey look present, but the unlisted jwtAuth runs first, validates it, and strips it. The
-	// request must not be authenticated by a policy the operator did not allow.
+	// jwtAuth and apiKey both read `Authorization: Bearer`. The listed apiKey starts the
+	// fall-through, but the unlisted jwtAuth runs first and consumes the bearer, so reject.
 	let api_key = json!({"keys": [{"key": "sk-123"}], "mode": "optional"});
 	let (_mock, _bind, io) = oidc_route_setup(
 		&["apiKey"],
@@ -1135,18 +1130,16 @@ async fn route_oidc_rejects_unlisted_sibling_consuming_credential() {
 	)
 	.await;
 	assert_rejected_without_login(&res);
-	// The rejection names the cause, so it is distinguishable from a plain missing session.
 	assert!(
-		String::from_utf8_lossy(&read_body!(res)).contains("allowWithoutSession"),
-		"expected the deferred-check rejection message"
+		!String::from_utf8_lossy(&read_body!(res)).contains("allowWithoutSession"),
+		"the rejection must not expose configuration details"
 	);
 }
 
 #[tokio::test]
 async fn route_oidc_rejects_listed_but_ineligible_sibling() {
-	// Listing a `strict` jwtAuth does not make it a session alternative. Here the optional apiKey
-	// starts the fall-through because the bearer is in its location too, but the strict jwtAuth
-	// is the one that validates and strips it. A valid JWT alone must not replace the session.
+	// A listed `strict` jwtAuth is not a session alternative. The optional apiKey starts the
+	// fall-through, but the strict jwtAuth consumes the bearer, so a valid JWT alone is rejected.
 	let api_key = json!({"keys": [{"key": "sk-123"}], "mode": "optional"});
 	let (_mock, _bind, io) = oidc_route_setup(
 		&["jwtAuth", "apiKey"],
@@ -1167,9 +1160,8 @@ async fn route_oidc_rejects_listed_but_ineligible_sibling() {
 
 #[tokio::test]
 async fn route_oidc_deferred_check_ignores_claims_from_earlier_phase() {
-	// A gateway-phase apiKey authenticates the request first. The route-phase check must only
-	// count claims its own siblings produce, or the gateway's apiKey claims would satisfy a route
-	// that allowed only apiKey while the unlisted route jwtAuth consumed the bearer.
+	// The route-phase check must ignore the gateway-phase apiKey's success; otherwise it would
+	// pass while the unlisted route jwtAuth consumed the bearer.
 	let (mock, _token_response, mut bind) = oidc_test_bind("/upstream").await;
 	bind
 		.attach_gateway_policy(json!({"apiKey": {
@@ -1206,9 +1198,8 @@ async fn route_oidc_deferred_check_ignores_claims_from_earlier_phase() {
 
 #[tokio::test]
 async fn route_oidc_deferral_keeps_earlier_claims_visible_to_conditions() {
-	// Route-phase policy conditions can depend on claims from the gateway phase. Deferring to a
-	// listed apiKey must not hide them, or a step-up jwtAuth that applies only to requests the
-	// gateway already identified would be skipped.
+	// Deferring must not hide gateway-phase claims from route-phase conditions, or a step-up
+	// jwtAuth conditioned on them would be skipped.
 	let (mock, _token_response, mut bind) = oidc_test_bind("/upstream").await;
 	let mut gateway_jwt = jwt_auth_policy("optional");
 	gateway_jwt["location"] = json!({"header": {"name": "x-gateway-token"}});
@@ -1261,8 +1252,8 @@ async fn route_oidc_deferral_keeps_earlier_claims_visible_to_conditions() {
 
 #[tokio::test]
 async fn route_oidc_with_multiple_listed_siblings_accepts_any() {
-	// Each listed sibling can stand in for the session on its own, and a present credential is
-	// still validated even when another one is valid. The apiKey reads a query parameter.
+	// Each listed sibling can stand in alone, and every present credential is still validated.
+	// The apiKey reads a query parameter.
 	let api_key = json!({
 		"keys": [{"key": "sk-123"}],
 		"mode": "optional",

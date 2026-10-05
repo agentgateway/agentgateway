@@ -25,7 +25,10 @@ use serde_json::Value;
 
 use crate::control::caclient::CaClient;
 use crate::control::spiffe::SpiffeClient;
-use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
+use crate::http::auth::{
+	AuthorizationLocation, BackendAuth, BackendAuthCredential, BackendAuthKind,
+	SessionAlternativePolicy,
+};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -3003,20 +3006,16 @@ pub struct JwtAuthentication {
 	pub mcp: Option<McpAuthentication>,
 }
 
-impl JwtAuthentication {
-	/// See [`crate::http::jwt::Jwt::has_optional_credential`]. An MCP-enabled policy skips token
-	/// validation on the OAuth well-known endpoints, which are intentionally public, so a
-	/// credential there would never be validated and must not let browser OIDC step aside.
-	pub fn has_optional_credential(&self, req: &crate::http::Request) -> bool {
-		if self.mcp.is_some() && crate::mcp::auth::is_well_known_endpoint(req.uri().path()) {
-			return false;
-		}
-		self.jwt.has_optional_credential(req)
+impl SessionAlternativePolicy for JwtAuthentication {
+	fn optional_location(&self) -> Option<&AuthorizationLocation> {
+		self.jwt.optional_location()
 	}
 
-	/// See [`crate::http::jwt::Jwt::qualifies_as_session_alternative`].
-	pub fn qualifies_as_session_alternative(&self) -> bool {
-		self.jwt.qualifies_as_session_alternative()
+	/// MCP OAuth well-known endpoints are public and skip token validation, so a credential there
+	/// must not stand in for a session.
+	fn has_optional_credential(&self, req: &crate::http::Request) -> bool {
+		!(self.mcp.is_some() && crate::mcp::auth::is_well_known_endpoint(req.uri().path()))
+			&& self.jwt.has_optional_credential(req)
 	}
 }
 

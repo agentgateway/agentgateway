@@ -2733,9 +2733,8 @@ binds:
 
 #[tokio::test]
 async fn ui_oidc_keeps_allow_without_session() {
-	// The UI rewrites its OIDC policy to inject the managed login and logout endpoints. That must
-	// keep `allowWithoutSession` and the sibling policy on the same route, so a token-bearing
-	// client can reach `/api/config` when the operator opts in.
+	// Injecting the UI's managed login and logout endpoints must keep `allowWithoutSession` and the
+	// sibling on the same route.
 	let yaml = format!(
 		r#"
 gateways:
@@ -2777,7 +2776,7 @@ ui:
 		.expect("UI OIDC policy");
 	assert_eq!(
 		oidc.allow_without_session,
-		vec![crate::http::oidc::SessionAlternative::ApiKey]
+		vec![crate::http::auth::SessionAlternative::ApiKey]
 	);
 	assert_eq!(
 		oidc.login.as_ref().map(|login| login.path.as_str()),

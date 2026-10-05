@@ -5630,52 +5630,44 @@ pub(crate) async fn split_policies_for_target(
 	Ok(resolved)
 }
 
-/// Warns about `oidc.allowWithoutSession` entries that cannot take effect given the sibling
-/// policies in the same `policies` block. A sibling attached elsewhere in the same phase is still
-/// honored at runtime, so this is a warning rather than an error.
+/// Warns about `oidc.allowWithoutSession` entries that cannot take effect given the siblings in the
+/// same `policies` block. Not an error: a sibling attached elsewhere in the same phase still counts.
 fn warn_ineffective_session_alternatives(
 	oidc: &crate::http::oidc::OidcPolicy,
 	route_policies: &[TrafficPolicy],
 ) {
-	use crate::http::oidc::SessionAlternative;
+	use crate::http::auth::{SessionAlternative, SessionAlternativePolicy};
+	fn qualifies<T: SessionAlternativePolicy>(p: &RequestPolicy<T>) -> bool {
+		p.unconditional()
+			.is_some_and(|p| p.qualifies_as_session_alternative())
+	}
 	for alt in &oidc.allow_without_session {
-		// `mcpAuthentication` and `jwtAuth` both compile to `JwtAuth`, and which one wins depends on
-		// the phase (route: last, gateway: first), so a block whose entries disagree gets its own
-		// warning rather than a definite one.
+		// `jwtAuth` and `mcpAuthentication` both compile to `JwtAuth`, so a block may have two.
 		let qualifies: Vec<bool> = route_policies
 			.iter()
 			.filter_map(|policy| match (alt, policy) {
-				(SessionAlternative::JwtAuth, TrafficPolicy::JwtAuth(p)) => Some(
-					p.unconditional()
-						.is_some_and(|p| p.qualifies_as_session_alternative()),
-				),
-				(SessionAlternative::BasicAuth, TrafficPolicy::BasicAuth(p)) => Some(
-					p.unconditional()
-						.is_some_and(|p| p.qualifies_as_session_alternative()),
-				),
-				(SessionAlternative::ApiKey, TrafficPolicy::APIKey(p)) => Some(
-					p.unconditional()
-						.is_some_and(|p| p.qualifies_as_session_alternative()),
-				),
+				(SessionAlternative::JwtAuth, TrafficPolicy::JwtAuth(p)) => Some(qualifies(p)),
+				(SessionAlternative::BasicAuth, TrafficPolicy::BasicAuth(p)) => Some(qualifies(p)),
+				(SessionAlternative::ApiKey, TrafficPolicy::APIKey(p)) => Some(qualifies(p)),
 				_ => None,
 			})
 			.collect();
 		let alt = alt.as_str();
+		const REQUIREMENT: &str = "a single unconditional entry in `optional` mode reading a header, \
+		                           query parameter, or non-reserved cookie";
 		match (qualifies.iter().any(|q| *q), qualifies.iter().any(|q| !*q)) {
 			(true, false) => {},
 			(true, true) => tracing::warn!(
-				"oidc.allowWithoutSession lists {alt}, but this policy block has several {alt} \
-				 policies (jwtAuth and mcpAuthentication) and only some are in `optional` mode with a \
-				 header, query parameter, or cookie location; it may have no effect, depending on which \
-				 one applies (route policies: the later one; gateway policies: the earlier one)"
+				"oidc.allowWithoutSession lists {alt}, but only one of this block's jwtAuth and \
+				 mcpAuthentication policies is {REQUIREMENT}; it has no effect if the other one applies \
+				 (route policies: the later one; gateway policies: the earlier one)"
 			),
 			(false, true) => tracing::warn!(
-				"oidc.allowWithoutSession lists {alt}, but it has no effect: {alt} must be in \
-				 `optional` mode with a header, query parameter, or cookie location"
+				"oidc.allowWithoutSession lists {alt}, but it has no effect: {alt} must be {REQUIREMENT}"
 			),
 			(false, false) => tracing::warn!(
-				"oidc.allowWithoutSession lists {alt}, but this policy block has no {alt} policy; it \
-				 takes effect only if an `optional` {alt} policy is attached to the same phase elsewhere"
+				"oidc.allowWithoutSession lists {alt}, but this block has no {alt} policy; it takes \
+				 effect only if a qualifying one is attached to the same phase elsewhere"
 			),
 		}
 	}

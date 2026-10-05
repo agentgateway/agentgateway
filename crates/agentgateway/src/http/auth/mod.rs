@@ -5,6 +5,7 @@ pub mod gcp;
 pub(crate) mod jws;
 pub mod jwt_sign;
 pub mod oauth;
+mod session_alternative;
 
 use std::borrow::Cow;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -23,6 +24,7 @@ pub use oauth::{
 	OAuthTokenExchangeAuth, PrivateKeyJwt,
 };
 use secrecy::{ExposeSecret, SecretString};
+pub use session_alternative::{SessionAlternative, SessionAlternativePolicy, TokenAuthenticated};
 
 use crate::http::Request;
 use crate::http::jwt::Claims;
@@ -394,12 +396,6 @@ impl AuthorizationLocation {
 	/// `401` + `WWW-Authenticate`.
 	pub fn is_proxy_header(&self) -> bool {
 		matches!(self, AuthorizationLocation::Header { name, .. } if name == http::header::PROXY_AUTHORIZATION)
-	}
-
-	/// Whether the credential is read from a fixed request location (header, query parameter, or
-	/// cookie), so that its presence is deterministic. A CEL `expression` is not.
-	pub fn is_direct(&self) -> bool {
-		!matches!(self, AuthorizationLocation::Expression(_))
 	}
 
 	pub fn extract<'a>(&self, req: &'a Request) -> Option<Cow<'a, str>> {

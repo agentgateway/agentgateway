@@ -7,11 +7,12 @@ use super::{
 	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider, ProviderEndpoint,
 	RedirectUri, SameSiteMode, SessionConfig, dedupe_scopes, session,
 };
+use crate::http::auth::SessionAlternative;
 use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
 use crate::serdes::FileInlineOrRemote;
-use crate::{apply, schema, schema_de, schema_enum};
+use crate::{apply, schema, schema_de};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {
@@ -40,26 +41,6 @@ struct PreparedOidcPolicy {
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
 	allow_without_session: Vec<SessionAlternative>,
-}
-
-/// A sibling authentication policy in the same policy set that may authenticate a request in
-/// place of a browser session. See `LocalOidcConfig::allow_without_session`.
-#[apply(schema_enum!)]
-pub enum SessionAlternative {
-	JwtAuth,
-	BasicAuth,
-	ApiKey,
-}
-
-impl SessionAlternative {
-	/// The policy's configuration key, as written in `allowWithoutSession`.
-	pub fn as_str(&self) -> &'static str {
-		match self {
-			SessionAlternative::JwtAuth => "jwtAuth",
-			SessionAlternative::BasicAuth => "basicAuth",
-			SessionAlternative::ApiKey => "apiKey",
-		}
-	}
 }
 
 /// Optional browser login entry point and unauthenticated redirect destination.
@@ -115,8 +96,8 @@ pub struct OidcLogout {
 /// Session refresh requires the provider to return a new `id_token` in each refresh response.
 /// Providers that omit it require the user to sign in again when the stored ID token expires.
 ///
-/// A browser session is always required unless `allowWithoutSession` names a sibling policy that
-/// may authenticate the request instead; see that field.
+/// A browser session is required unless `allowWithoutSession` lets a sibling policy authenticate
+/// the request instead.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -175,31 +156,23 @@ pub struct LocalOidcConfig {
 	#[serde(default)]
 	pub logout: Option<OidcLogout>,
 
-	/// Sibling authentication policies in the same policy set (`jwtAuth`, `basicAuth`, `apiKey`)
-	/// that may authenticate a request in place of a browser session, so CLIs and automation can
-	/// share this route with browsers. Empty by default, which keeps the session required.
+	/// Sibling policies (`jwtAuth`, `basicAuth`, `apiKey`) that may authenticate a request in place
+	/// of a browser session, so CLIs and automation can share this route with browsers. Empty by
+	/// default: the session is required.
 	///
-	/// A listed policy takes effect only when its `mode` is `optional`: a request without a valid
-	/// session that carries that policy's credential is passed through to it, and it validates the
-	/// credential and rejects it when invalid, instead of entering login. A `strict` sibling is an
-	/// additional requirement alongside the session, as always, and a `permissive` sibling never
-	/// lets OIDC step aside because it does not reject invalid credentials. A request with a
-	/// session is authenticated by it, and any credential it also carries is still validated by its
-	/// own policy. A request with neither still enters login. A request passed through must be
-	/// authenticated by a listed policy: when an unlisted policy reads the same location and
-	/// consumes the credential first, the request is rejected with 401.
+	/// A listed policy takes effect only in `optional` mode. Then a request without a valid session
+	/// that carries its credential skips login, and that policy validates the credential, rejecting
+	/// it with 401 when invalid. A valid session still takes precedence, and a request with neither
+	/// still enters login. A `strict` sibling stays required alongside the session, and a
+	/// `permissive` one never takes effect because it does not reject invalid credentials. `jwtAuth`
+	/// also covers `mcpAuthentication`.
 	///
-	/// `jwtAuth` also covers `mcpAuthentication`, which compiles to the same policy.
-	///
-	/// To keep the decision deterministic, only a sibling with a single unconditional entry whose
-	/// credential location is a header, query parameter, or cookie takes effect; conditional
-	/// entries, CEL `expression` locations, credentials in reserved `agw_oidc_` cookies, and MCP
-	/// well-known endpoints keep the session required. The same applies to this OIDC policy: a
-	/// conditional OIDC policy ignores this list. This applies within one phase only, so
-	/// gateway-level OIDC does not step aside for a route-level policy. A listed policy that is
-	/// missing from, or cannot take effect in, the same `policies` block is reported as a warning
-	/// at load time; it is not an error, because a sibling attached elsewhere in the same phase is
-	/// still honored.
+	/// Applies only when this policy and the sibling are each a single unconditional entry in the
+	/// same phase (gateway-level OIDC ignores route-level siblings), and the sibling reads a header,
+	/// query parameter, or cookie (not a CEL `expression`, the `Cookie` header, or a reserved
+	/// `agw_oidc_` cookie). Never applies on MCP well-known endpoints. If an unlisted policy consumes
+	/// the credential first, the request is rejected with 401. Listed policies that are missing
+	/// from, or ineffective in, the same `policies` block are reported as load-time warnings.
 	#[serde(default)]
 	pub allow_without_session: Vec<SessionAlternative>,
 }
