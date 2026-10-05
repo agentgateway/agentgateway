@@ -634,13 +634,13 @@ func (s *SessionKeys) SetGenerator(generate func() (string, error)) {
 
 // Get returns the Gateway's session key, creating its Secret if needed.
 //
-// The Secret is created but never updated. The cache can miss a Secret created by an
-// earlier reconcile, so on a miss the API server decides which key wins rather than
-// this reconcile overwriting it.
+// The Secret's key is created but never updated. The cache can miss a Secret created
+// by an earlier reconcile, so on a miss the API server decides which key wins rather
+// than this reconcile overwriting it.
 func (s *SessionKeys) Get(ctx context.Context, gw *gwv1.Gateway) (string, error) {
 	name := SessionKeySecretName(gw.Name)
 	if secret := s.secrets.Get(name, gw.Namespace); secret != nil {
-		return sessionKeyFromSecret(secret)
+		return s.sessionKeyFromOwnedSecret(ctx, gw, secret)
 	}
 
 	key, err := s.generate()
@@ -663,7 +663,7 @@ func (s *SessionKeys) Get(ctx context.Context, gw *gwv1.Gateway) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("failed to get session key secret %s/%s: %w", gw.Namespace, name, err)
 	}
-	return sessionKeyFromSecret(existing)
+	return s.sessionKeyFromOwnedSecret(ctx, gw, existing)
 }
 
 func newSessionKeySecret(gw *gwv1.Gateway, name, key string) *corev1.Secret {
@@ -676,17 +676,61 @@ func newSessionKeySecret(gw *gwv1.Gateway, name, key string) *corev1.Secret {
 			wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
 			wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
 		},
-		OwnerReferences: []metav1.OwnerReference{{
-			APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
-			Kind:       wellknown.GatewayGVK.Kind,
-			Name:       gw.Name,
-			UID:        gw.UID,
-			Controller: new(true),
-		}},
-		Type: corev1.SecretTypeOpaque,
+		OwnerReferences: []metav1.OwnerReference{sessionKeyOwnerReference(gw)},
+		Type:            corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"key": []byte(key),
 		},
+	}
+}
+
+func (s *SessionKeys) sessionKeyFromOwnedSecret(
+	ctx context.Context,
+	gw *gwv1.Gateway,
+	secret *corev1.Secret,
+) (string, error) {
+	key, err := sessionKeyFromSecret(secret)
+	if err != nil {
+		return "", err
+	}
+
+	controller := metav1.GetControllerOf(secret)
+	if controller == nil {
+		return "", fmt.Errorf("session key secret %s/%s has no controller owner", secret.Namespace, secret.Name)
+	}
+	if controller.UID == gw.UID {
+		return key, nil
+	}
+
+	desired := sessionKeyOwnerReference(gw)
+	if controller.APIVersion != desired.APIVersion || controller.Kind != desired.Kind || controller.Name != desired.Name {
+		return "", fmt.Errorf(
+			"session key secret %s/%s is controlled by %s %s/%s",
+			secret.Namespace, secret.Name, controller.Kind, secret.Namespace, controller.Name,
+		)
+	}
+
+	updated := secret.DeepCopy()
+	for i := range updated.OwnerReferences {
+		if ref := &updated.OwnerReferences[i]; ref.Controller != nil && *ref.Controller {
+			*ref = desired
+			break
+		}
+	}
+	updated, err = s.kube.CoreV1().Secrets(secret.Namespace).Update(ctx, updated, metav1.UpdateOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to update session key secret %s/%s owner: %w", secret.Namespace, secret.Name, err)
+	}
+	return sessionKeyFromSecret(updated)
+}
+
+func sessionKeyOwnerReference(gw *gwv1.Gateway) metav1.OwnerReference {
+	return metav1.OwnerReference{
+		APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
+		Kind:       wellknown.GatewayGVK.Kind,
+		Name:       gw.Name,
+		UID:        gw.UID,
+		Controller: new(true),
 	}
 }
 
