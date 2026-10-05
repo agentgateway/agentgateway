@@ -10,7 +10,7 @@ license = "MIT"
 categories = ["compilers"]
 
 [dependencies]
-antlr4rust = "0.5.2"
+antlr4rust = "0.6.0"
 lazy_static = "1.5.0"
 nom = "7.1.3"
 chrono = { version = "0.4", default-features = false, features = ["alloc", "serde", "std"] }
