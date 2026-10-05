@@ -1,0 +1,17 @@
+services:
+  # The TAG verify sidecar — a tiny, stdlib-only service that verifies an
+  # agent's AgentCert (chain + revocation) and looks up its live TrustScore,
+  # exposing a native ext_authz endpoint at /ext_authz. Shadow by default.
+  tag-sidecar:
+    image: ghcr.io/pdxlab/agentcert-tag/sidecar:latest
+    container_name: tag-sidecar
+    restart: unless-stopped
+    ports:
+    - "8080:8080"
+    environment:
+      # shadow = verify + log, block nothing (flip to enforce when ready)
+      TAG_MODE: shadow
+      # trust-anchor bundle the verifier validates cert chains against
+      TAG_ANCHORS_PEM: /anchors/roots.pem
+    volumes:
+    - ./anchors:/anchors:ro

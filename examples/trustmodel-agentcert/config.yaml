@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Verify a calling agent's TrustModel AgentCert + TrustScore on every request —
+# no code in agentgateway, via extAuthz to the TAG verify sidecar. The sidecar
+# does the crypto (chain + revocation + score) and returns 200 (allow) / 403
+# (deny) plus x-agentcert-* verdict headers. Shadow by default: the sidecar
+# answers 200 on everything until you set TAG_MODE=enforce, so this blocks
+# nothing until you're ready. See README.md.
+frontendPolicies:
+  accessLog:
+    add:
+      # surface the verdict + score in the access log (set in extAuthz metadata below)
+      agent.verdict: 'extauthz.verdict'
+      agent.trustscore: 'extauthz.trustscore'
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: mcp
+      backends:
+      # your MCP / agent upstream
+      - host: localhost:9000
+      policies:
+        extAuthz:
+          host: localhost:8080
+          # forward the AgentCert headers to the verifier
+          # (by default only the Authorization header is included)
+          includeRequestHeaders:
+          - x-agent-cert
+          - x-agent-cert-proof
+          - x-agent-cert-carriage
+          - x-agent-id
+          protocol:
+            http:
+              # the TAG sidecar's ext_authz endpoint (fixed path; CEL expression)
+              path: '"/ext_authz"'
+              metadata:
+                # pull the verdict out of the sidecar response for the access log
+                verdict: response.headers["x-agentcert-verdict"]
+                trustscore: response.headers["x-agentcert-trustscore"]
+              # pass the verdict to the upstream so your own policy/logs can act on it
+              includeResponseHeaders:
+              - x-agentcert-verdict
+              - x-agentcert-agent-id
+              - x-agentcert-trustscore
+              - x-agentcert-tier
+              - x-agentcert-decision
+          # verifier unreachable -> deny (enforce). In shadow the sidecar answers
+          # 200 regardless, so nothing is blocked.
+          failureMode:
+            denyWithStatus: 503

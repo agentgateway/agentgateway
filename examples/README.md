@@ -8,6 +8,10 @@ span more than one agentgateway traffic type.
 
 ### Integrations
 
+* [trustmodel-agentcert](trustmodel-agentcert/README.md): verify a calling
+  agent's TrustModel AgentCert + TrustScore on every request via `extAuthz`
+  (no code in agentgateway), using the TAG verify sidecar. Shadow-mode by
+  default.
 * [netbird-agent-network](netbird-agent-network/README.md): authenticate and
   authorize OpenAI and Anthropic traffic with NetBird Agent Network before
   routing it through a private agentgateway listener. Includes Kubernetes and
