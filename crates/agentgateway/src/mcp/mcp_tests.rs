@@ -19,7 +19,8 @@ use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test,
+	setup_proxy_test_with_config, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
@@ -1073,6 +1074,44 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 			"rejected no-session message must not create a session"
 		);
 	}
+}
+
+// MCP requires clients to start a new session after a 404
+// https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management
+#[tokio::test]
+async fn stale_session_key_returns_not_found() {
+	const OLD_KEY: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+	const CURRENT_KEY: &str = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	config.session_encoder = http::sessionpersistence::Encoder::aes(CURRENT_KEY).unwrap();
+	let bind = setup_proxy_test_with_config(config)
+		.with_mcp_backend_policies(mock.addr, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = bind.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let old_encoder = http::sessionpersistence::Encoder::aes(OLD_KEY).unwrap();
+	let session_id = http::sessionpersistence::SessionState::MCP(
+		http::sessionpersistence::MCPSessionState::new(vec![]),
+	)
+	.encode(&old_encoder)
+	.unwrap();
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", session_id)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

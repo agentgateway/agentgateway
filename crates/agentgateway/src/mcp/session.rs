@@ -903,7 +903,7 @@ impl SessionManager {
 		let idle_ttl = builder.backend.session_idle_ttl;
 		let backend_id = builder.backend_id.clone();
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
-			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
+			.map_err(|_| mcp::Error::UnknownSession)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
 			return Ok(None);
 		};
