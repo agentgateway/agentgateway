@@ -156,24 +156,24 @@ pub struct LocalOidcConfig {
 	#[serde(default)]
 	pub logout: Option<OidcLogout>,
 
-	/// Sibling policies (`jwtAuth`, `basicAuth`, `apiKey`) that may authenticate a request in place
-	/// of a browser session, so CLIs and automation can share this route with browsers. Empty by
-	/// default: the session is required.
+	/// Sibling policies (`jwtAuth`, `basicAuth`, `apiKey`) that may authenticate a request instead of
+	/// a browser session, so CLIs and automation can share the route. Empty by default.
 	///
-	/// A listed policy takes effect only in `optional` mode. Then a request without a valid session
-	/// that carries its credential skips login, and that policy validates the credential, rejecting
-	/// it with 401 when invalid. A valid session still takes precedence, and a request with neither
-	/// still enters login. A `strict` sibling stays required alongside the session, and a
-	/// `permissive` one never takes effect because it does not reject invalid credentials. `jwtAuth`
-	/// also covers `mcpAuthentication`.
+	/// A request without a valid session that carries a listed policy's credential skips login, and
+	/// is rejected with 401 unless that policy accepts the credential. A valid session still takes
+	/// precedence, and a request with neither still goes to login. `jwtAuth` also covers
+	/// `mcpAuthentication`, except on the endpoints it answers itself.
 	///
-	/// Applies only when this policy and the sibling are each a single unconditional entry in the
-	/// same phase (gateway-level OIDC ignores route-level siblings), and the sibling reads a header,
-	/// query parameter, or cookie (not a CEL `expression`, the `Cookie` header, or a reserved
-	/// `agw_oidc_` cookie). Never applies on the paths `mcpAuthentication` answers itself (its
-	/// well-known and client-registration endpoints). If an unlisted policy consumes the credential
-	/// first, the request is rejected with 401. Listed policies that are missing from, or
-	/// ineffective in, the same `policies` block are reported as load-time warnings.
+	/// A listed policy takes effect only if it:
+	/// - is in `optional` mode (`strict` stays required alongside the session; `permissive` never
+	///   takes effect);
+	/// - is, like this policy, a single unconditional entry in the same phase (gateway-level OIDC
+	///   ignores route-level siblings);
+	/// - reads a header, query parameter, or cookie (not a CEL `expression`, the `Cookie` header, or
+	///   an `agw_oidc_` cookie).
+	///
+	/// Listed policies missing from, or ineffective in, the same `policies` block are logged as
+	/// warnings at load time.
 	#[serde(default)]
 	pub allow_without_session: Vec<SessionAlternative>,
 }
