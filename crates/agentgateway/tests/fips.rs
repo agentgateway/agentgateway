@@ -16,23 +16,23 @@ fn fips_policy_applies_to_public_api() {
 	agentgateway::crypto::jwt::init();
 	let claims = json!({"sub": "test-user", "exp": 4102444800u64});
 
-	let secret = [7u8; 32];
+	let short_secret = [7u8; 13];
 	let err = jsonwebtoken::encode(
 		&Header::new(Algorithm::HS256),
 		&claims,
-		&EncodingKey::from_secret(&secret),
+		&EncodingKey::from_secret(&short_secret),
 	)
 	.unwrap_err();
-	assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm);
+	assert!(matches!(err.kind(), ErrorKind::Provider(_)), "{err:?}");
 
 	// header {"alg":"HS256"}, payload {}, arbitrary signature
 	let err = jsonwebtoken::decode::<Value>(
 		"eyJhbGciOiJIUzI1NiJ9.e30.c2ln",
-		&DecodingKey::from_secret(&secret),
+		&DecodingKey::from_secret(&short_secret),
 		&Validation::new(Algorithm::HS256),
 	)
 	.unwrap_err();
-	assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm);
+	assert!(matches!(err.kind(), ErrorKind::Provider(_)), "{err:?}");
 
 	let err = jsonwebtoken::encode(
 		&Header::new(Algorithm::RS256),

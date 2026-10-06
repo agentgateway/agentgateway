@@ -35,7 +35,7 @@ mod fips {
 	use jsonwebtoken::errors::{ErrorKind, Result};
 	use jsonwebtoken::{Algorithm, AlgorithmFamily, DecodingKey, DecodingKeyKind, EncodingKey};
 
-	const MIN_RSA_BITS: usize = 2048;
+	const MIN_HMAC_KEY_BYTES: usize = 14;
 
 	pub(super) static PROVIDER: LazyLock<CryptoProvider> = LazyLock::new(|| CryptoProvider {
 		signer_factory,
@@ -54,64 +54,43 @@ mod fips {
 		});
 	}
 
-	/// Permits only approved asymmetric signatures: RSA PKCS#1 v1.5, RSA-PSS and
-	/// ECDSA. EdDSA is excluded until the linked module's certificate is confirmed
-	/// to cover Ed25519. The backend itself limits RSA to 2048-8192 bits and ECDSA
-	/// to P-256 and P-384.
-	fn algorithm_allowed(alg: Algorithm) -> bool {
-		matches!(
-			alg,
-			Algorithm::RS256
-				| Algorithm::RS384
-				| Algorithm::RS512
-				| Algorithm::PS256
-				| Algorithm::PS384
-				| Algorithm::PS512
-				| Algorithm::ES256
-				| Algorithm::ES384
-		)
-	}
-
 	fn signer_factory(alg: &Algorithm, key: &EncodingKey) -> Result<Box<dyn JwtSigner>> {
-		if !algorithm_allowed(*alg) {
-			return Err(ErrorKind::InvalidAlgorithm.into());
-		}
-		if key.family() == AlgorithmFamily::Rsa {
-			let (n, e) = (DEFAULT_PROVIDER
-				.key_utils
-				.rsa_pub_components_from_private_key)(key.as_bytes())?;
-			check_rsa(&n, &e)?;
+		match key.family() {
+			AlgorithmFamily::Rsa => {
+				let (n, e) = (DEFAULT_PROVIDER
+					.key_utils
+					.rsa_pub_components_from_private_key)(key.as_bytes())?;
+				check_rsa(&n, &e)?;
+			},
+			AlgorithmFamily::Hmac => check_hmac(key.as_bytes())?,
+			_ => {},
 		}
 		(DEFAULT_PROVIDER.signer_factory)(alg, key)
 	}
 
 	fn verifier_factory(alg: &Algorithm, key: &DecodingKey) -> Result<Box<dyn JwtVerifier>> {
-		if !algorithm_allowed(*alg) {
-			return Err(ErrorKind::InvalidAlgorithm.into());
-		}
-		if key.family() == AlgorithmFamily::Rsa {
-			match key.kind() {
-				DecodingKeyKind::RsaModulusExponent { n, e } => check_rsa(n, e)?,
-				DecodingKeyKind::SecretOrDer(der) => {
-					let (n, e) = (DEFAULT_PROVIDER
-						.key_utils
-						.rsa_pub_components_from_public_key)(der)?;
-					check_rsa(&n, &e)?;
-				},
-			}
+		match (key.family(), key.kind()) {
+			(AlgorithmFamily::Rsa, DecodingKeyKind::RsaModulusExponent { n, e }) => check_rsa(n, e)?,
+			(AlgorithmFamily::Rsa, DecodingKeyKind::SecretOrDer(der)) => {
+				let (n, e) = (DEFAULT_PROVIDER
+					.key_utils
+					.rsa_pub_components_from_public_key)(der)?;
+				check_rsa(&n, &e)?;
+			},
+			(AlgorithmFamily::Hmac, DecodingKeyKind::SecretOrDer(secret)) => check_hmac(secret)?,
+			_ => {},
 		}
 		(DEFAULT_PROVIDER.verifier_factory)(alg, key)
 	}
 
-	/// Checks the FIPS 186-5 RSA conditions: an even modulus size of at least
-	/// 2048 bits and a public exponent greater than 2^16. `n` and `e` are
-	/// big-endian.
+	/// Checks the FIPS 186-5 RSA rules the backend doesn't: an even modulus size
+	/// and a public exponent above 2^16. `n` and `e` are big-endian.
 	fn check_rsa(n: &[u8], e: &[u8]) -> Result<()> {
 		let bits = bit_len(n);
-		if bits < MIN_RSA_BITS || !bits.is_multiple_of(2) {
+		if !bits.is_multiple_of(2) {
 			return Err(
 				ErrorKind::InvalidRsaKey(format!(
-					"{bits}-bit modulus is not permitted in FIPS mode (even size of at least {MIN_RSA_BITS} bits required)"
+					"{bits}-bit modulus is not permitted in FIPS mode (even size required)"
 				))
 				.into(),
 			);
@@ -133,6 +112,21 @@ mod fips {
 		Ok(())
 	}
 
+	/// Rejects HMAC keys shorter than 112 bits (SP 800-131A).
+	fn check_hmac(secret: &[u8]) -> Result<()> {
+		if secret.len() < MIN_HMAC_KEY_BYTES {
+			return Err(
+				ErrorKind::Provider(format!(
+					"{}-bit HMAC key is not permitted in FIPS mode (at least {} bits required)",
+					secret.len() * 8,
+					MIN_HMAC_KEY_BYTES * 8
+				))
+				.into(),
+			);
+		}
+		Ok(())
+	}
+
 	fn bit_len(be: &[u8]) -> usize {
 		match be.iter().position(|b| *b != 0) {
 			Some(i) => (be.len() - i) * 8 - be[i].leading_zeros() as usize,
@@ -147,12 +141,11 @@ mod fips {
 		use super::*;
 
 		#[rstest]
-		#[case::too_small(1024, false)]
-		#[case::below_minimum(2047, false)]
-		#[case::minimum(2048, true)]
-		#[case::odd_size(2049, false)]
-		#[case::even_size(2050, true)]
-		fn rsa_modulus_size_policy(#[case] bits: usize, #[case] allowed: bool) {
+		#[case::odd_below(2047, false)]
+		#[case::even(2048, true)]
+		#[case::odd_above(2049, false)]
+		#[case::even_above(2050, true)]
+		fn rsa_modulus_parity(#[case] bits: usize, #[case] allowed: bool) {
 			let result = check_rsa(&modulus(bits), &[1, 0, 1]);
 			assert_eq!(result.is_ok(), allowed);
 		}
@@ -199,38 +192,39 @@ mod fips {
 			assert_signs_and_verifies(algorithm, &signing_key, &verification_key);
 		}
 
-		#[rstest]
-		#[case::rs256(Algorithm::RS256, true)]
-		#[case::rs384(Algorithm::RS384, true)]
-		#[case::rs512(Algorithm::RS512, true)]
-		#[case::ps256(Algorithm::PS256, true)]
-		#[case::ps384(Algorithm::PS384, true)]
-		#[case::ps512(Algorithm::PS512, true)]
-		#[case::es256(Algorithm::ES256, true)]
-		#[case::es384(Algorithm::ES384, true)]
-		#[case::eddsa(Algorithm::EdDSA, false)]
-		#[case::hs256(Algorithm::HS256, false)]
-		#[case::hs384(Algorithm::HS384, false)]
-		#[case::hs512(Algorithm::HS512, false)]
-		fn algorithm_policy(#[case] algorithm: Algorithm, #[case] allowed: bool) {
-			assert_eq!(algorithm_allowed(algorithm), allowed);
+		#[test]
+		fn eddsa_provider_signs_and_verifies() {
+			let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
+			let signing_key = EncodingKey::from_ed_pem(key_pair.serialize_pem().as_bytes()).unwrap();
+			let verification_key =
+				DecodingKey::from_ed_pem(key_pair.public_key_pem().as_bytes()).unwrap();
+			assert_signs_and_verifies(Algorithm::EdDSA, &signing_key, &verification_key);
 		}
 
-		#[test]
-		fn provider_rejects_non_approved_algorithms() {
+		#[rstest]
+		#[case::hs256(Algorithm::HS256)]
+		#[case::hs384(Algorithm::HS384)]
+		#[case::hs512(Algorithm::HS512)]
+		fn hmac_provider_signs_and_verifies(#[case] algorithm: Algorithm) {
 			let secret = [7u8; 32];
-			let ed_public = [0u8; 32];
-			for (alg, key) in [
-				(Algorithm::HS256, DecodingKey::from_secret(&secret)),
-				(Algorithm::EdDSA, DecodingKey::from_ed_der(&ed_public)),
-			] {
-				let err = (PROVIDER.verifier_factory)(&alg, &key).err().unwrap();
-				assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm, "{alg:?}");
-			}
-			let err = (PROVIDER.signer_factory)(&Algorithm::HS256, &EncodingKey::from_secret(&secret))
-				.err()
-				.unwrap();
-			assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm);
+			assert_signs_and_verifies(
+				algorithm,
+				&EncodingKey::from_secret(&secret),
+				&DecodingKey::from_secret(&secret),
+			);
+		}
+
+		#[rstest]
+		#[case::empty(0, false)]
+		#[case::below_minimum(13, false)]
+		#[case::minimum(14, true)]
+		fn hmac_key_length_policy(#[case] len: usize, #[case] allowed: bool) {
+			let secret = vec![7u8; len];
+			let signer = (PROVIDER.signer_factory)(&Algorithm::HS256, &EncodingKey::from_secret(&secret));
+			let verifier =
+				(PROVIDER.verifier_factory)(&Algorithm::HS256, &DecodingKey::from_secret(&secret));
+			assert_eq!(signer.is_ok(), allowed);
+			assert_eq!(verifier.is_ok(), allowed);
 		}
 
 		#[test]
