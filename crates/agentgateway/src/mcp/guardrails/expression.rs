@@ -66,12 +66,12 @@ fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug 
 				.then_some(body as &dyn ::cel::types::dynamic::DynamicType),
 		)
 	};
-	if let Some(when) = &c.when {
-		match exec.eval(when).map(|v| v.as_bool()) {
+	if let Some(condition) = &c.condition {
+		match exec.eval(condition).map(|v| v.as_bool()) {
 			Ok(Ok(true)) => {},
 			Ok(Ok(false)) => return Eval::Pass,
-			Ok(Err(e)) => return Eval::Reject(internal(method, format!("when: {e}"))),
-			Err(e) => return Eval::Reject(internal(method, format!("when: {e}"))),
+			Ok(Err(e)) => return Eval::Reject(internal(method, format!("condition: {e}"))),
+			Err(e) => return Eval::Reject(internal(method, format!("condition: {e}"))),
 		}
 	}
 	let transform = match &c.action {
@@ -129,16 +129,16 @@ mod tests {
 		Arc::new(cel::Expression::new_strict(s).unwrap())
 	}
 
-	fn reject(when: &str, message: &str) -> ExpressionProcessor {
+	fn reject(condition: &str, message: &str) -> ExpressionProcessor {
 		ExpressionProcessor {
-			when: Some(expr(when)),
+			condition: Some(expr(condition)),
 			action: ExpressionAction::Reject(message.to_string()),
 		}
 	}
 
 	fn transform(t: &str) -> ExpressionProcessor {
 		ExpressionProcessor {
-			when: None,
+			condition: None,
 			action: ExpressionAction::Transform(expr(t)),
 		}
 	}
@@ -278,7 +278,7 @@ mod tests {
 	#[test]
 	fn request_meta_is_nested_and_transformable() {
 		let c = ExpressionProcessor {
-			when: Some(expr(
+			condition: Some(expr(
 				"mcp.params._meta.tenant == 'acme' && !has(mcp.result)",
 			)),
 			action: ExpressionAction::Transform(expr(
@@ -357,7 +357,7 @@ mod tests {
 			conversions: Default::default(),
 		};
 		let c = ExpressionProcessor {
-			when: Some(expr(
+			condition: Some(expr(
 				"mcp.params.name == mcp.params.name && mcp.params.arguments.city == 'SF' && mcp.params.newProtocolField",
 			)),
 			action: ExpressionAction::Transform(expr("mcp.params")),

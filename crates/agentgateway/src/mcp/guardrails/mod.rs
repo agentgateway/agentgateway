@@ -91,7 +91,7 @@ pub enum ProcessorKind {
 pub struct ExpressionProcessor {
 	/// Condition gating the action; absent means always.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub when: Option<Arc<cel::Expression>>,
+	pub condition: Option<Arc<cel::Expression>>,
 	#[serde(flatten)]
 	pub action: ExpressionAction,
 }
@@ -130,7 +130,7 @@ impl McpGuardrails {
 							ExpressionAction::Transform(t) => Some(t),
 							ExpressionAction::Reject(_) => None,
 						};
-						Box::new(c.when.iter().chain(transform).map(|e| e.as_ref()))
+						Box::new(c.condition.iter().chain(transform).map(|e| e.as_ref()))
 					},
 				}
 			})
@@ -447,7 +447,7 @@ processors:
     backend: my-backend
   - kind: expression
     methods: { "tools/call": request }
-    when: 'mcp.tool.name == "drop_table"'
+    condition: 'mcp.tool.name == "drop_table"'
     reject: drop_table requires admin
 "#;
 		let ext: McpGuardrails = serde_norway::from_str(cfg).expect("deser McpGuardrails");
@@ -485,7 +485,7 @@ processors:
 		let ProcessorKind::Expression(c2) = &ext.processors[2].kind else {
 			panic!("expected expression")
 		};
-		assert!(c2.when.is_some());
+		assert!(c2.condition.is_some());
 		assert!(matches!(&c2.action, ExpressionAction::Reject(m) if m == "drop_table requires admin"));
 	}
 

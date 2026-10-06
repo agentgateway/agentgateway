@@ -2785,7 +2785,7 @@
           "description": "In-process guardrail driven by CEL expressions.",
           "type": "object",
           "properties": {
-            "when": {
+            "condition": {
               "description": "Condition gating the action; absent means always.",
               "anyOf": [
                 {

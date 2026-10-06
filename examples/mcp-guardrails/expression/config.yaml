@@ -11,7 +11,7 @@ mcp:
       # Deny before masking, so this rule sees the original message.
       - kind: expression
         methods: {"tools/call": request}
-        when: >-
+        condition: >-
           mcp.params.name == 'echo' &&
           has(mcp.params.arguments) &&
           has(mcp.params.arguments.message) &&
@@ -21,7 +21,7 @@ mcp:
       # Mask every email-like match in echo's message before sending it upstream.
       - kind: expression
         methods: {"tools/call": request}
-        when: >-
+        condition: >-
           mcp.params.name == 'echo' &&
           has(mcp.params.arguments) &&
           has(mcp.params.arguments.message)
@@ -38,7 +38,7 @@ mcp:
       # Mask demo secrets in all text blocks returned by tools.
       - kind: expression
         methods: {"tools/call": response}
-        when: has(mcp.result.content)
+        condition: has(mcp.result.content)
         transform: >-
           mcp.result.with(r, r.merge({
             'content': r.content.map(item,
