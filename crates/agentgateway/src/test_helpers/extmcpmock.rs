@@ -96,6 +96,41 @@ fn build_header_mutation(
 	}
 }
 
+/// Pass with `metadata.allowed_targets` set to `targets`.
+///
+/// The gateway reads `McpRequestResult.metadata` (field 5, `google.protobuf.Struct`) and,
+/// when it finds a non-empty `allowed_targets` list, retains only those backends in the
+/// fanout (`Outcome::PassFiltered`).  An empty slice produces a plain `Pass` (all backends).
+pub fn pass_request_with_allowed_targets(targets: &[&str]) -> Result<McpRequestResult, Status> {
+	use prost_wkt_types::value::Kind;
+	use prost_wkt_types::{ListValue, Struct, Value};
+	let metadata = if targets.is_empty() {
+		None
+	} else {
+		Some(Struct {
+			fields: [(
+				"allowed_targets".to_string(),
+				Value {
+					kind: Some(Kind::ListValue(ListValue {
+						values: targets
+							.iter()
+							.map(|t| Value {
+								kind: Some(Kind::StringValue(t.to_string())),
+							})
+							.collect(),
+					})),
+				},
+			)]
+			.into(),
+		})
+	};
+	Ok(McpRequestResult {
+		result: Some(mcp_request_result::Result::Pass(Pass {})),
+		header_mutation: None,
+		metadata,
+	})
+}
+
 pub fn mutated_request_json(body: serde_json::Value) -> Result<McpRequestResult, Status> {
 	mutated_request(serde_json::to_vec(&body).expect("serialize body").into())
 }

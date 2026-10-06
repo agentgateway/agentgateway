@@ -708,10 +708,11 @@ impl Relay {
 			return Ok(None);
 		};
 		let method = ext_ctx.method;
-		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
-			.await
-		{
-			Outcome::Pass => Ok(None),
+		let (outcome, _allowed_targets) =
+			crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
+				.await;
+		match outcome {
+			Outcome::Pass | Outcome::PassFiltered(_) => Ok(None),
 			Outcome::Mutated(p) => {
 				tracing::debug!(method, "mcpGuardrails: request mutated");
 				Ok(Some(p))
@@ -1092,7 +1093,7 @@ impl Relay {
 		// A discovery rejection means "legacy protocol", not "upstream unavailable".
 		// Surface it even in FailOpen so probe clients can fall back to initialize.
 		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
-		let selected_upstreams = self
+		let mut selected_upstreams = self
 			.upstreams
 			.iter_named()
 			.filter(|(name, _)| {
@@ -1117,7 +1118,7 @@ impl Relay {
 
 		// params is None because fanout has no single request body to rewrite.
 		if let Some(ext) = self.mcp_guardrails.as_ref() {
-			let outcome = Box::pin(
+			let (outcome, allowed_targets) = Box::pin(
 				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
 					ext,
 					&mut crate::mcp::guardrails::CallRequestCtx {
@@ -1137,6 +1138,14 @@ impl Relay {
 					was_tool_call: r.request.method() == CallToolRequestMethod::VALUE,
 					downstream_modern: ctx_downstream_modern(ctx),
 				});
+			}
+			if let Some(allowed) = allowed_targets {
+				selected_upstreams.retain(|(name, _)| allowed.iter().any(|a| a == name.as_str()));
+				if selected_upstreams.is_empty() {
+					return Err(UpstreamError::Unavailable(
+						"all targets filtered by mcpGuardrails allowed_targets".to_string(),
+					));
+				}
 			}
 		}
 
@@ -2106,7 +2115,7 @@ async fn apply_guardrails_response_intercept(
 	)
 	.await
 	{
-		Outcome::Pass => None,
+		Outcome::Pass | Outcome::PassFiltered(_) => None,
 		Outcome::Mutated(new_result) => {
 			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
