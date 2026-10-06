@@ -2152,7 +2152,7 @@ pub(crate) fn backend_with_policies_from_proto(
 
 fn mcp_target_from_proto(
 	s: &proto::agent::McpTarget,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<McpTarget, ProtoError> {
 	let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
 	let backend = resolve_simple_reference(s.backend.as_ref());
@@ -2160,7 +2160,11 @@ fn mcp_target_from_proto(
 
 	Ok(McpTarget {
 		name: strng::new(&s.name),
-		condition: None,
+		condition: s
+			.condition
+			.as_ref()
+			.filter(|c| !c.is_empty())
+			.map(|c| permissive_cel_expression_arc(diagnostics, format!("mcp target {}", s.name), c)),
 		spec: match proto {
 			Protocol::Sse => McpTargetSpec::Sse(SseTargetSpec {
 				backend,

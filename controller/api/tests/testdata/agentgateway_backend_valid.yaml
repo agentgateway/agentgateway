@@ -267,3 +267,34 @@ spec:
           guardrail:
             identifier: test-guardrail
             version: "1"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-single-selector-target-condition
+spec:
+  mcp:
+    targets:
+    - name: internal
+      selector:
+        services:
+          matchLabels:
+            app: mcp
+      condition: 'jwt.sub == "admin"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-multi-static-target-condition
+spec:
+  mcp:
+    targets:
+    - name: admin
+      static:
+        host: admin.example.com
+        port: 80
+      condition: 'jwt.sub == "admin"'
+    - name: public
+      static:
+        host: public.example.com
+        port: 80

@@ -7724,6 +7724,14 @@ spec:
                     items:
                       description: MCP target selection for this backend.
                       properties:
+                        condition:
+                          description: |-
+                            CEL expression evaluated per request; when it evaluates to false, the
+                            target is excluded from the virtual MCP. `mcp.target.name` is available.
+                            With `selector`, the condition applies to each selected target.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
                         name:
                           description: Name of the MCP target.
                           maxLength: 253
@@ -10177,6 +10185,10 @@ spec:
                     x-kubernetes-list-map-keys:
                     - name
                     x-kubernetes-list-type: map
+                    x-kubernetes-validations:
+                    - message: mcp target condition requires at least two targets
+                        unless the target uses selector
+                      rule: self.size() > 1 || self.all(t, !has(t.condition) || has(t.selector))
                 required:
                 - targets
                 type: object

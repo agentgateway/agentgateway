@@ -279,12 +279,22 @@ func TranslateAgwBackend(
 	}, results
 }
 
+func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) {
+	if condition == nil {
+		return
+	}
+	for _, t := range targets {
+		t.Condition = new(string(*condition))
+	}
+}
+
 func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
 	mcp := be.Spec.MCP
 	var mcpTargets []*api.MCPTarget
 	var backends []*api.Backend
 	var errs []error
 	for _, target := range mcp.Targets {
+		start := len(mcpTargets)
 		if s := target.Static; s != nil {
 			if s.BackendRef != nil {
 				serviceHostname, err := ResolveMCPBackendRefHost(ctx, be.Namespace, s.BackendRef)
@@ -313,6 +323,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				}
 
 				mcpTargets = append(mcpTargets, mcpTarget)
+				applyMCPTargetCondition(mcpTargets[start:], target.Condition)
 				continue
 			}
 
@@ -366,6 +377,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 			mcpTargets = append(mcpTargets, targets...)
 		}
+		applyMCPTargetCondition(mcpTargets[start:], target.Condition)
 	}
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL

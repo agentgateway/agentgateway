@@ -9053,11 +9053,13 @@ func (x *MCPBackend) GetSseKeepAlive() *durationpb.Duration {
 }
 
 type MCPTarget struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Backend       *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
-	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
-	Protocol      MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Backend  *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
+	Path     string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Protocol MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
+	// CEL expression; when it evaluates to false, the target is excluded from the request.
+	Condition     *string `protobuf:"bytes,5,opt,name=condition,proto3,oneof" json:"condition,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9118,6 +9120,13 @@ func (x *MCPTarget) GetProtocol() MCPTarget_Protocol {
 		return x.Protocol
 	}
 	return MCPTarget_UNDEFINED
+}
+
+func (x *MCPTarget) GetCondition() string {
+	if x != nil && x.Condition != nil {
+		return *x.Condition
+	}
+	return ""
 }
 
 type BackendReference struct {
@@ -19518,16 +19527,19 @@ const file_resource_proto_rawDesc = "" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
 	"\tFAIL_OPEN\x10\x01B\x11\n" +
-	"\x0f_sse_keep_alive\"\xfe\x01\n" +
+	"\x0f_sse_keep_alive\"\xaf\x02\n" +
 	"\tMCPTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12E\n" +
 	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12I\n" +
-	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\"7\n" +
+	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\x12!\n" +
+	"\tcondition\x18\x05 \x01(\tH\x00R\tcondition\x88\x01\x01\"7\n" +
 	"\bProtocol\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\a\n" +
 	"\x03SSE\x10\x01\x12\x13\n" +
-	"\x0fSTREAMABLE_HTTP\x10\x02\"\xe8\x02\n" +
+	"\x0fSTREAMABLE_HTTP\x10\x02B\f\n" +
+	"\n" +
+	"_condition\"\xe8\x02\n" +
 	"\x10BackendReference\x12O\n" +
 	"\aservice\x18\x01 \x01(\v23.agentgateway.dev.resource.BackendReference.ServiceH\x00R\aservice\x12\x1a\n" +
 	"\abackend\x18\x02 \x01(\tH\x00R\abackend\x12L\n" +
@@ -20585,6 +20597,7 @@ func file_resource_proto_init() {
 	}
 	file_resource_proto_msgTypes[62].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[64].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[65].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[66].OneofWrappers = []any{
 		(*BackendReference_Service_)(nil),
 		(*BackendReference_Backend)(nil),
