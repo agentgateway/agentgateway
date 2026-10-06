@@ -1740,8 +1740,9 @@ message BackendPolicySpec {
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
-  // policy processors. Today only the `remote` processor is defined — a custom
-  // gRPC policy server (the ExtMcp service) modeled on Envoy ext_authz.
+  // policy processors. A `remote` processor calls a custom gRPC policy server (the
+  // ExtMcp service) modeled on Envoy ext_authz; an `expression` processor runs
+  // in-process CEL.
   message McpGuardrails {
     // Phase controls whether the request side, response side, or both of a
     // method are run through the guardrails pipeline.
@@ -1779,10 +1780,24 @@ message BackendPolicySpec {
       repeated BackendPolicySpec inline_policies = 6;
     }
 
-    // Processor is a single policy processor. Today only `remote` is defined.
+    // In-process guardrail driven by CEL expressions.
+    message Expression {
+      // Condition gating the action; absent means always.
+      optional string condition = 1;
+      oneof action {
+        // Reject with this message. Exactly one of `reject` or `transform` is required.
+        string reject = 2;
+        // Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).
+        // Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.
+        string transform = 3;
+      }
+    }
+
+    // Processor is a single policy processor.
     message Processor {
       oneof kind {
         Remote remote = 1;
+        Expression expression = 3;
       }
 
       // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run

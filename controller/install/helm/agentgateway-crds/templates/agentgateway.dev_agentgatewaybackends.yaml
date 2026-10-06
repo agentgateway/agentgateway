@@ -16193,8 +16193,8 @@ spec:
                         - policy
                         type: object
                       guardrails:
-                        description: '`guardrails` routes selected JSON-RPC methods
-                          through a remote policy server.'
+                        description: Remote and in-process CEL policy processors for
+                          MCP requests and responses.
                         properties:
                           processors:
                             description: |-
@@ -16205,6 +16205,35 @@ spec:
                               description: MCPGuardrailsProcessor selects a single
                                 policy processor. Exactly one variant must be set.
                               properties:
+                                expression:
+                                  description: In-process guardrail driven by CEL
+                                    expressions.
+                                  properties:
+                                    condition:
+                                      description: Condition gating the action; absent
+                                        means always.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    reject:
+                                      description: Reject with this message. Exactly
+                                        one of `reject` or `transform` is required.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                    transform:
+                                      description: |-
+                                        Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).
+                                        Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of the fields in [reject
+                                      transform] must be set
+                                    rule: (has(self.reject)?1:0)+(has(self.transform)?1:0)
+                                      == 1
                                 methods:
                                   additionalProperties:
                                     description: MCPMethodPhase controls when an MCP
@@ -16370,9 +16399,10 @@ spec:
                               - methods
                               type: object
                               x-kubernetes-validations:
-                              - message: exactly one of the fields in [remote] must
-                                  be set
-                                rule: (has(self.remote)?1:0) == 1
+                              - message: exactly one of the fields in [remote expression]
+                                  must be set
+                                rule: (has(self.remote)?1:0)+(has(self.expression)?1:0)
+                                  == 1
                             maxItems: 16
                             minItems: 1
                             type: array

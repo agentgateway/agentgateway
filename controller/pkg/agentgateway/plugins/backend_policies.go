@@ -270,35 +270,60 @@ func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.Agentgate
 	processors := make([]*api.BackendPolicySpec_McpGuardrails_Processor, 0, len(em.Processors))
 	for i := range em.Processors {
 		p := &em.Processors[i]
-		if p.Remote == nil {
-			// ExactlyOneOf guards this at admission; skip defensively.
-			continue
-		}
-		be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, p.Remote.PolicyBackendEndpoint, policy.Namespace)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
-		}
-		metadata := castCELMap(p.Remote.Metadata, func(key string, expr agentgateway.CELExpression) {
-			errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
-		})
 		methods := make(map[string]api.BackendPolicySpec_McpGuardrails_Phase, len(p.Methods))
 		for name, phase := range p.Methods {
 			methods[name] = mcpMethodPhase(phase)
 		}
-		headerName := func(h agentgateway.HeaderName) string { return string(h) }
-		processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
-			Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
-				Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
-					Target:                   be,
-					InlinePolicies:           inlinePolicies,
-					FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
-					Metadata:                 metadata,
-					AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
-					DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
+		switch {
+		case p.Remote != nil:
+			be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, p.Remote.PolicyBackendEndpoint, policy.Namespace)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
+			}
+			metadata := castCELMap(p.Remote.Metadata, func(key string, expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
+			})
+			headerName := func(h agentgateway.HeaderName) string { return string(h) }
+			processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
+				Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
+					Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
+						Target:                   be,
+						InlinePolicies:           inlinePolicies,
+						FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
+						Metadata:                 metadata,
+						AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
+						DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
+					},
 				},
-			},
-			Methods: methods,
-		})
+				Methods: methods,
+			})
+		case p.Expression != nil:
+			e := p.Expression
+			expr := &api.BackendPolicySpec_McpGuardrails_Expression{
+				Condition: castCELPtr(e.Condition, func(expr agentgateway.CELExpression) {
+					errs = append(errs, fmt.Errorf("mcpGuardrails condition is not a valid CEL expression: %s", expr))
+				}),
+			}
+			switch {
+			case e.Reject != nil:
+				expr.Action = &api.BackendPolicySpec_McpGuardrails_Expression_Reject{Reject: *e.Reject}
+			case e.Transform != nil:
+				expr.Action = &api.BackendPolicySpec_McpGuardrails_Expression_Transform{
+					Transform: castCEL(*e.Transform, func(expr agentgateway.CELExpression) {
+						errs = append(errs, fmt.Errorf("mcpGuardrails transform is not a valid CEL expression: %s", expr))
+					}),
+				}
+			default:
+				// ExactlyOneOf guards this at admission; skip defensively.
+				continue
+			}
+			processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
+				Kind:    &api.BackendPolicySpec_McpGuardrails_Processor_Expression{Expression: expr},
+				Methods: methods,
+			})
+		default:
+			// ExactlyOneOf guards this at admission; skip defensively.
+		}
 	}
 
 	spec := &api.BackendPolicySpec_McpGuardrails{Processors: processors}

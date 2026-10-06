@@ -719,9 +719,11 @@ fn convert_mcp_guardrails(
 	em: &proto::agent::backend_policy_spec::McpGuardrails,
 	diagnostics: &mut Diagnostics,
 ) -> Result<crate::mcp::guardrails::McpGuardrails, ProtoError> {
+	use proto::agent::backend_policy_spec::mcp_guardrails::expression::Action as ProtoExpressionAction;
 	use proto::agent::backend_policy_spec::mcp_guardrails::processor::Kind as ProtoProcessorKind;
 	use proto::agent::backend_policy_spec::mcp_guardrails::{
-		FailureMode as ProtoFailureMode, Phase as ProtoPhase, Remote as ProtoRemote,
+		Expression as ProtoExpression, FailureMode as ProtoFailureMode, Phase as ProtoPhase,
+		Remote as ProtoRemote,
 	};
 
 	fn convert_methods(
@@ -790,11 +792,41 @@ fn convert_mcp_guardrails(
 		})
 	}
 
+	fn convert_expression(
+		e: &ProtoExpression,
+		diagnostics: &mut Diagnostics,
+	) -> Option<crate::mcp::guardrails::ExpressionProcessor> {
+		let action = match e.action.as_ref() {
+			Some(ProtoExpressionAction::Reject(m)) => {
+				crate::mcp::guardrails::ExpressionAction::Reject(m.clone())
+			},
+			Some(ProtoExpressionAction::Transform(t)) => {
+				crate::mcp::guardrails::ExpressionAction::Transform(permissive_cel_expression_arc(
+					diagnostics,
+					"backend.mcpGuardrails.expression.transform",
+					t,
+				))
+			},
+			None => {
+				diagnostics.add_warning("mcpGuardrails expression processor has no action set; ignoring");
+				return None;
+			},
+		};
+		let condition = e.condition.as_ref().map(|c| {
+			permissive_cel_expression_arc(diagnostics, "backend.mcpGuardrails.expression.condition", c)
+		});
+		Some(crate::mcp::guardrails::ExpressionProcessor { condition, action })
+	}
+
 	let mut processors = Vec::with_capacity(em.processors.len());
 	for processor in &em.processors {
 		let kind = match processor.kind.as_ref() {
 			Some(ProtoProcessorKind::Remote(r)) => {
 				crate::mcp::guardrails::ProcessorKind::Remote(convert_remote(r, diagnostics)?)
+			},
+			Some(ProtoProcessorKind::Expression(e)) => match convert_expression(e, diagnostics) {
+				Some(e) => crate::mcp::guardrails::ProcessorKind::Expression(e),
+				None => continue,
 			},
 			None => {
 				diagnostics.add_warning("mcpGuardrails processor has no kind set; ignoring");
@@ -4315,6 +4347,53 @@ mod tests {
 	use super::*;
 	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	#[test]
+	fn mcp_guardrails_expression_from_proto() {
+		use proto::agent::backend_policy_spec::McpGuardrails as ProtoGuardrails;
+		use proto::agent::backend_policy_spec::mcp_guardrails::expression::Action;
+		use proto::agent::backend_policy_spec::mcp_guardrails::processor::Kind as ProtoKind;
+		use proto::agent::backend_policy_spec::mcp_guardrails::{
+			Expression as ProtoExpression, Phase as ProtoPhase, Processor as ProtoProcessor,
+		};
+
+		use crate::mcp::guardrails::{ExpressionAction, ProcessorKind};
+
+		let processor = |condition: Option<&str>, action: Option<Action>| ProtoProcessor {
+			kind: Some(ProtoKind::Expression(ProtoExpression {
+				condition: condition.map(str::to_string),
+				action,
+			})),
+			methods: HashMap::from([("tools/call".to_string(), ProtoPhase::Request as i32)]),
+		};
+		let em = ProtoGuardrails {
+			processors: vec![
+				processor(
+					Some("mcp.params.name == 'restricted_tool'"),
+					Some(Action::Reject("This tool is unavailable".into())),
+				),
+				processor(None, Some(Action::Transform("mcp.params".into()))),
+				// A processor without an action is dropped rather than failing the policy.
+				processor(None, None),
+			],
+		};
+		let mut diagnostics = Diagnostics::default();
+		let ext = convert_mcp_guardrails(&em, &mut diagnostics).unwrap();
+		assert_eq!(diagnostics.into_warnings().len(), 1);
+		assert_eq!(ext.processors.len(), 2);
+
+		let ProcessorKind::Expression(reject) = &ext.processors[0].kind else {
+			panic!("expected expression")
+		};
+		assert!(reject.condition.is_some());
+		assert_matches::assert_matches!(&reject.action, ExpressionAction::Reject(m) if m == "This tool is unavailable");
+
+		let ProcessorKind::Expression(transform) = &ext.processors[1].kind else {
+			panic!("expected expression")
+		};
+		assert!(transform.condition.is_none());
+		assert_matches::assert_matches!(&transform.action, ExpressionAction::Transform(_));
+	}
 
 	#[test]
 	fn prompt_guard_scope_from_proto() {
