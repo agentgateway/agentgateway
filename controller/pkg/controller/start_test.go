@@ -4,11 +4,13 @@ import (
 	"context"
 	"testing"
 
+	istiolog "istio.io/istio/pkg/log"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
+	"github.com/agentgateway/agentgateway/controller/pkg/setup"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -22,6 +24,21 @@ func TestNewControllerBuilderErrorsWhenJWKSLookupIsNil(t *testing.T) {
 	}
 	if err.Error() != "jwks lookup is not configured" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestNewControllerBuilderPreservesIstioLogLevel(t *testing.T) {
+	if err := setup.SetupLogging("warn"); err != nil {
+		t.Fatalf("setup logging: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = setup.SetupLogging("info")
+	})
+
+	_, _ = controller.NewControllerBuilder(context.Background(), controller.StartConfig{})
+
+	if got := istiolog.FindScope(istiolog.DefaultScopeName).GetOutputLevel(); got != istiolog.WarnLevel {
+		t.Fatalf("expected istio default scope level %v, got %v", istiolog.WarnLevel, got)
 	}
 }
 
