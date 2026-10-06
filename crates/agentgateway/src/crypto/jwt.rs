@@ -26,14 +26,11 @@ pub fn init() {
 	fips::install();
 }
 
-/// Reports whether `alg` may be used for JWT signing or verification.
-///
 /// A FIPS build permits only approved asymmetric signatures: RSA PKCS#1 v1.5,
 /// RSA-PSS and ECDSA. EdDSA is excluded until the linked module's certificate
-/// is confirmed to cover Ed25519, and HMAC is conservatively excluded until a
-/// FIPS-compliant secret-length policy is implemented. RSA key parameters are
-/// checked by the FIPS provider; the backend itself limits RSA to 2048-8192 bits
-/// and ECDSA to P-256 and P-384.
+/// is confirmed to cover Ed25519.
+/// RSA key parameters are checked by the FIPS provider;
+/// the backend itself limits RSA to 2048-8192 bits and ECDSA to P-256 and P-384.
 #[cfg(any(feature = "fips", test))]
 fn algorithm_allowed(alg: jsonwebtoken::Algorithm) -> bool {
 	#[cfg(feature = "fips")]
@@ -58,9 +55,6 @@ fn algorithm_allowed(alg: jsonwebtoken::Algorithm) -> bool {
 	}
 }
 
-/// The aws-lc-rs provider restricted to [`algorithm_allowed`] and FIPS 186-5 RSA
-/// key parameters, so every `jsonwebtoken` sign and verify call is subject to the
-/// FIPS policy.
 #[cfg(feature = "fips")]
 mod fips {
 	use std::sync::{LazyLock, Once};
@@ -80,7 +74,6 @@ mod fips {
 		key_utils: DEFAULT_PROVIDER.key_utils.clone(),
 	});
 
-	/// Installs [`PROVIDER`] once, panicking if another provider is already active.
 	pub(super) fn install() {
 		static INSTALL: Once = Once::new();
 		INSTALL.call_once(|| {
@@ -278,7 +271,6 @@ mod tests {
 		}
 	}
 
-	/// A big-endian modulus of exactly `bits` bits.
 	#[cfg(feature = "fips")]
 	fn modulus(bits: usize) -> Vec<u8> {
 		let mut n = vec![0xffu8; bits.div_ceil(8)];

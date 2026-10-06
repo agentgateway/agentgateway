@@ -224,7 +224,6 @@ pub fn test_ed25519_jwks() {
 	);
 }
 
-// FIPS builds reject EdDSA; see crypto::jwt.
 #[cfg(not(feature = "fips"))]
 #[test]
 pub fn test_ed25519_jwt_validation() {
@@ -288,7 +287,6 @@ pub fn test_ed25519_jwt_validation() {
 	);
 }
 
-// RSA keys below 2048 bits are rejected by the crypto backend at verification time.
 #[test]
 pub fn test_rsa_1024_signature_rejected() {
 	const TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InJzYTEwMjQifQ.eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoidGVzdC11c2VyIiwiZXhwIjo0MTAyNDQ0ODAwfQ.eV3t3npxnzI_eLLkiIadDiGgsj1CcBokvmWaHzzrj9UTIEbtr4weuX4IkZNZV_tUkI_dJE0ZSBZS2J4LReStjmLhCiJGXxNDiCkRYaKcB_zF6sctmM-KZz70jF6aDSmkH78qG6WFD-Wa25eDZnWHYtMfAkybsi1XOeCIe-RAhzE";
