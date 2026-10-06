@@ -54,6 +54,29 @@ pub struct Error {
 	connect_info: Option<Connected>,
 }
 
+/// What is known about application-request delivery when a call fails.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum FailurePhase {
+	/// No upstream phase has been established for this failure.
+	#[default]
+	Unclassified,
+	/// Connection establishment, including TLS, CONNECT, and HTTP readiness.
+	Connect,
+	/// The application request may have been processed; replay safety is unknown.
+	Request,
+}
+
+impl FailurePhase {
+	pub fn is_safe_to_retry(self) -> bool {
+		match self {
+			Self::Connect => true,
+			Self::Request | Self::Unclassified => false,
+		}
+	}
+}
+
 #[derive(Debug)]
 enum ErrorKind {
 	Canceled,
@@ -185,8 +208,7 @@ where
 					connection_reused,
 				}) => {
 					if !connection_reused {
-						// if client disabled, don't retry
-						// a fresh connection means we definitely can't retry
+						// Let the caller's bounded retry policy handle a fresh connection failure.
 						return Err(error);
 					}
 
@@ -1324,6 +1346,26 @@ impl StdError for Error {
 }
 
 impl Error {
+	/// True only with positive evidence that replay cannot duplicate upstream
+	/// processing. Currently this covers connection-establishment failures only.
+	pub fn is_safe_to_retry(&self) -> bool {
+		self.phase().is_safe_to_retry()
+	}
+
+	pub fn phase(&self) -> FailurePhase {
+		match self.kind {
+			ErrorKind::Connect | ErrorKind::ConnectTimeout => FailurePhase::Connect,
+			ErrorKind::Canceled | ErrorKind::SendRequest => FailurePhase::Request,
+			ErrorKind::NoPoolKey | ErrorKind::WaitCanceled => FailurePhase::Unclassified,
+		}
+	}
+
+	/// Returns true if the failure occurred while establishing the connection, before
+	/// sending the application request. This includes tunnel establishment and timeouts.
+	pub fn is_connect(&self) -> bool {
+		matches!(self.kind, ErrorKind::Connect | ErrorKind::ConnectTimeout)
+	}
+
 	/// Returns true if establishing the connection exceeded its configured timeout.
 	pub fn is_connect_timeout(&self) -> bool {
 		matches!(self.kind, ErrorKind::ConnectTimeout)
@@ -1342,6 +1384,28 @@ impl Error {
 	}
 
 	fn tx(src: hyper::Error) -> Self {
-		e!(SendRequest, src)
+		// This helper is only used during HTTP handshake/readiness, before dispatch.
+		e!(Connect, src)
+	}
+}
+
+#[cfg(test)]
+mod error_tests {
+	use super::*;
+
+	#[test]
+	fn connect_classification_excludes_request_failures() {
+		assert!(e!(Connect).is_connect());
+		assert!(e!(ConnectTimeout).is_connect());
+		assert!(e!(Connect).is_safe_to_retry());
+		assert!(e!(ConnectTimeout).is_safe_to_retry());
+		assert!(!e!(Canceled).is_safe_to_retry());
+		assert!(!e!(SendRequest).is_safe_to_retry());
+		assert!(!e!(NoPoolKey).is_safe_to_retry());
+		assert!(!e!(WaitCanceled).is_safe_to_retry());
+		assert!(!e!(SendRequest).is_connect());
+		assert!(!e!(Canceled).is_connect());
+		assert!(!e!(NoPoolKey).is_connect());
+		assert!(!e!(WaitCanceled).is_connect());
 	}
 }

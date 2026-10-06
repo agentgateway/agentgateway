@@ -1061,6 +1061,7 @@ fn proxy_context(log: &RequestLog) -> cel::ProxyContext {
 			.map(|(message, reason)| cel::ErrorContext {
 				reason: reason.to_string(),
 				message: message.clone(),
+				phase: log.error_phase,
 			}),
 		bind: log.bind_name.clone(),
 		gateway: log
@@ -1141,6 +1142,7 @@ impl RequestLog {
 			jwt_sub: None,
 			retry_attempt: None,
 			error: None,
+			error_phase: cel::FailurePhase::Unclassified,
 			grpc_status: Default::default(),
 			mcp_status: Default::default(),
 			incoming_span: None,
@@ -1319,6 +1321,7 @@ pub struct RequestLog {
 
 	pub retry_attempt: Option<u8>,
 	pub error: Option<String>,
+	pub error_phase: cel::FailurePhase,
 
 	pub grpc_status: AsyncLog<u8>,
 	pub mcp_status: AsyncLog<mcp::MCPInfo>,
@@ -3081,6 +3084,66 @@ mod tests {
 				),
 			}
 		}
+	}
+
+	#[test]
+	fn response_replacement_preserves_original_error_phase() {
+		use crate::cel::FailurePhase;
+		use crate::proxy::httpproxy::resolve_response;
+		use crate::proxy::{ProxyError, ProxyResponse};
+
+		fn response_error_phase(response: &crate::http::Response) -> FailurePhase {
+			response
+				.extensions()
+				.get::<cel::ProxyContext>()
+				.expect("response has proxy metadata")
+				.error
+				.as_ref()
+				.expect("original error is retained")
+				.phase
+		}
+
+		let (mut log, _) = test_request_log_with_registry();
+		let (response, _) = resolve_response(
+			Err(ProxyError::UpstreamConnectTimeout.into()),
+			&mut log,
+			false,
+		);
+		assert_eq!(response.status(), http::StatusCode::GATEWAY_TIMEOUT);
+		assert_eq!(response_error_phase(&response), FailurePhase::Connect);
+		assert_eq!(
+			proxy_context(&log).error.unwrap().phase,
+			FailurePhase::Connect
+		);
+
+		// A direct response replaces the outgoing response, but retains the original
+		// failure metadata for policies and logging.
+		let (response, reason) = resolve_response(
+			Err(ProxyResponse::DirectResponse(Box::new(
+				::http::Response::new(crate::http::Body::empty()),
+			))),
+			&mut log,
+			false,
+		);
+		assert_eq!(response.status(), http::StatusCode::OK);
+		assert_eq!(reason, ProxyResponseReason::DirectResponse);
+		assert_eq!(response_error_phase(&response), FailurePhase::Connect);
+		assert_eq!(
+			proxy_context(&log).error.unwrap().phase,
+			FailurePhase::Connect
+		);
+
+		// A new response-policy error replaces the earlier failure's phase.
+		let (response, _) = resolve_response(
+			Err(ProxyError::ProcessingString("policy failed".into()).into()),
+			&mut log,
+			false,
+		);
+		assert_eq!(response_error_phase(&response), FailurePhase::Unclassified);
+		assert_eq!(
+			proxy_context(&log).error.unwrap().phase,
+			FailurePhase::Unclassified
+		);
 	}
 
 	#[test]

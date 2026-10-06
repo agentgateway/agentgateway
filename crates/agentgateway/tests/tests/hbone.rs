@@ -5,6 +5,92 @@ use crate::common::hbone_server::{HboneTestServer, Mode};
 use crate::common::mock_ca_server::start_mock_ca_server;
 
 #[tokio::test]
+async fn hbone_connect_refusal_retries_post() -> anyhow::Result<()> {
+	use crate::common::prelude::*;
+	let ca_addr = start_mock_ca_server().await?;
+	let upstream = simple_mock().await;
+	let attempts = Arc::new(AtomicUsize::new(0));
+	let server = HboneTestServer::new(
+		Mode::RefuseThenForward {
+			upstream: *upstream.address(),
+			refusals: 2,
+			attempts: attempts.clone(),
+		},
+		"test-server",
+		vec![],
+		0,
+	)
+	.await;
+	let hbone_port = server.port();
+	let server = tokio::spawn(server.run());
+	let gw = AgentGateway::new(format!(
+		r#"
+config:
+  namespace: default
+  serviceAccount: default
+  trustDomain: cluster.local
+  caAddress: "http://{ca_addr}"
+workloads:
+- uid: test-workload
+  name: test-server
+  namespace: default
+  serviceAccount: test-server
+  trustDomain: cluster.local
+  workloadIps: ["127.0.0.1"]
+  protocol: HBONE
+  hboneMtlsPort: {hbone_port}
+  services:
+    default/test-service.default.svc.cluster.local:
+      8080: 8080
+services:
+- name: test-service
+  namespace: default
+  hostname: test-service.default.svc.cluster.local
+  vips: []
+  ports:
+    8080: 8080
+binds:
+- port: $PORT
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - policies:
+        retry:
+          attempts: 2
+          codes: []
+          condition: 'request.method == "POST" && proxy.error.safeToRetry'
+      backends:
+      - service:
+          name: default/test-service.default.svc.cluster.local
+          port: 8080
+"#
+	))
+	.await?;
+	let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new()).build_http();
+	let response = tokio::time::timeout(
+		Duration::from_secs(10),
+		RequestBuilder::new(
+			Method::POST,
+			&format!("http://127.0.0.1:{}/hbone-retry", gw.port()),
+		)
+		.body(Body::from("side-effect"))
+		.send(client),
+	)
+	.await??;
+	assert_eq!(response.status(), 200);
+	assert_eq!(attempts.load(Ordering::SeqCst), 3);
+	let request = read_body(response.into_body()).await;
+	assert_eq!(request.method, Method::POST);
+	assert_eq!(request.body.as_ref(), b"side-effect");
+	assert_eq!(request.headers["x-retry-attempt"], "2");
+	assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+	gw.shutdown().await;
+	server.abort();
+	Ok(())
+}
+
+#[tokio::test]
 async fn test_hbone() -> anyhow::Result<()> {
 	agent_core::telemetry::testing::setup_test_logging();
 

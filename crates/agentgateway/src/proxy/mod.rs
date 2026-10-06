@@ -100,7 +100,9 @@ impl ProxyError {
 				http::auth::BackendAuthError::CredentialProvider(_),
 			)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
-			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
+			ProxyError::RequestTimeout
+			| ProxyError::UpstreamCallTimeout
+			| ProxyError::UpstreamConnectTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
 			ProxyError::RateLimitFailed
 			| ProxyError::RateLimitExceeded { .. }
@@ -228,6 +230,8 @@ pub enum ProxyError {
 	UpstreamCallFailed(HyperError),
 	#[error("upstream call timeout")]
 	UpstreamCallTimeout,
+	#[error("upstream call timeout")]
+	UpstreamConnectTimeout,
 	#[error("upstream tcp call failed: {0}")]
 	UpstreamTCPCallFailed(http::Error),
 	#[error("upstream tcp proxy failed: {0}")]
@@ -365,12 +369,37 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 	}
 }
 
+impl From<&ProxyError> for crate::cel::ErrorContext {
+	fn from(error: &ProxyError) -> Self {
+		Self {
+			reason: error.as_reason().to_string(),
+			message: error.to_string(),
+			phase: error.phase(),
+		}
+	}
+}
+
 impl ProxyError {
+	/// Whether replay is known not to duplicate upstream processing.
+	pub fn is_safe_to_retry(&self) -> bool {
+		self.phase().is_safe_to_retry()
+	}
+
+	pub fn phase(&self) -> agent_pool::FailurePhase {
+		match self {
+			Self::UpstreamCallFailed(error) => error.phase(),
+			Self::UpstreamConnectTimeout | Self::DnsResolution => agent_pool::FailurePhase::Connect,
+			Self::UpstreamCallTimeout => agent_pool::FailurePhase::Request,
+			_ => agent_pool::FailurePhase::Unclassified,
+		}
+	}
+
 	#[allow(clippy::match_like_matches_macro)]
 	pub fn is_retryable(&self) -> bool {
 		match self {
 			ProxyError::UpstreamCallFailed(_) => true,
 			ProxyError::UpstreamCallTimeout => true,
+			ProxyError::UpstreamConnectTimeout => true,
 			ProxyError::DnsResolution => true,
 			_ => false,
 		}
@@ -440,7 +469,9 @@ impl ProxyError {
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::UpstreamCallTimeout => StatusCode::GATEWAY_TIMEOUT,
+			ProxyError::UpstreamCallTimeout | ProxyError::UpstreamConnectTimeout => {
+				StatusCode::GATEWAY_TIMEOUT
+			},
 
 			ProxyError::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
 			ProxyError::Processing(_) => StatusCode::SERVICE_UNAVAILABLE,

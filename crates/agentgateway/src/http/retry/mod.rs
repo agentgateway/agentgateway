@@ -34,8 +34,12 @@ pub struct Policy {
 	/// that cost when the request is known to be non-retriable (e.g. streaming or websockets).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub precondition: Option<Arc<Expression>>,
-	/// CEL expression evaluated against each response to decide whether to retry. A response
+	/// CEL expression evaluated against each response or gateway error to decide whether to retry. A response
 	/// is retried when its status code is in `codes` *or* this expression evaluates to `true`.
+	/// For gateway errors, this expression replaces the default retry classification; `response`
+	/// is absent and `proxy.error` describes the failure. Use `proxy.error.safeToRetry`
+	/// with empty `codes` to retry only failures known not to duplicate upstream processing.
+	/// Without a condition, upstream call failures, upstream timeouts, and DNS failures are retried.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub condition: Option<Arc<Expression>>,
 }

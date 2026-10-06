@@ -755,7 +755,7 @@ impl Client {
 
 			let map_error = |err: agent_pool::Error| {
 				if err.is_connect_timeout() {
-					ProxyError::UpstreamCallTimeout
+					ProxyError::UpstreamConnectTimeout
 				} else if connect_tunnel::is_stale_assignment(&err) {
 					ProxyError::StaleAssignment
 				} else {

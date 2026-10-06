@@ -25,6 +25,11 @@ pub enum Mode {
 	ReadDoubleWrite,
 	ReadWrite,
 	Forward(SocketAddr), // Forward connections to another HBONE server
+	RefuseThenForward {
+		upstream: SocketAddr,
+		refusals: usize,
+		attempts: Arc<std::sync::atomic::AtomicUsize>,
+	},
 }
 
 static BUFFER_SIZE: usize = 2 * 1024 * 1024;
@@ -128,6 +133,18 @@ impl HboneTestServer {
 								if let Some(tx) = header_tx.as_ref() {
 									let _ = tx.send(req.headers().clone());
 								}
+								if let Mode::RefuseThenForward {
+									refusals, attempts, ..
+								} = &mode && attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+									< *refusals
+								{
+									return Ok::<_, Infallible>(
+										Response::builder()
+											.status(503)
+											.body(Full::<Bytes>::default())
+											.unwrap(),
+									);
+								}
 								tokio::task::spawn(async move {
 									match hyper::upgrade::on(req).await {
 										Ok(upgraded) => {
@@ -179,7 +196,11 @@ where
 				}
 			}
 		},
-		Mode::Forward(forward_addr) => {
+		Mode::Forward(forward_addr)
+		| Mode::RefuseThenForward {
+			upstream: forward_addr,
+			..
+		} => {
 			// Connect to the target HBONE server
 			let mut target_stream = tokio::net::TcpStream::connect(forward_addr)
 				.await

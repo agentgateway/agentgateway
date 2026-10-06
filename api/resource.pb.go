@@ -4869,8 +4869,10 @@ type Retry struct {
 	// to false, retries are disabled (only the initial attempt is made). This avoids
 	// buffering request bodies for replay when the request is known to be non-retriable.
 	Precondition string `protobuf:"bytes,4,opt,name=precondition,proto3" json:"precondition,omitempty"`
-	// CEL expression evaluated against each response. A response is retried when its status
+	// CEL expression evaluated against each response or gateway error. A response is retried when its status
 	// code is in retry_status_codes or this expression evaluates to true.
+	// For gateway errors, this replaces the default retry classification. The response is absent;
+	// proxy.error.safeToRetry indicates whether replay is known not to duplicate upstream processing.
 	Condition     string `protobuf:"bytes,5,opt,name=condition,proto3" json:"condition,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

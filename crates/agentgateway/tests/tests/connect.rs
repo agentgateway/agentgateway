@@ -177,6 +177,123 @@ async fn incoming_connect_dynamic_forward_proxy() {
 	upstream.await.unwrap();
 }
 
+// A CONNECT refusal is safe to retry even for a POST. Once the tunnel has
+// accepted the application request, resetting it must not duplicate the POST.
+#[rstest::rstest]
+#[case::explicit_connect_refusal(false, false, None, 3, 200)]
+#[case::explicit_request_reset(false, true, None, 1, 503)]
+#[case::waypoint_connect_refusal(true, false, None, 3, 200)]
+#[case::waypoint_request_reset(true, true, None, 1, 503)]
+#[case::waypoint_disabled(true, false, Some("false"), 1, 503)]
+#[tokio::test]
+async fn safe_tunnel_retry(
+	#[case] waypoint: bool,
+	#[case] reset_request: bool,
+	#[case] precondition: Option<&str>,
+	#[case] expected_attempts: usize,
+	#[case] expected_status: u16,
+) {
+	let mock = simple_mock().await;
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let tunnel_addr = listener.local_addr().unwrap();
+	let upstream_addr = *mock.address();
+	let attempts = Arc::new(AtomicUsize::new(0));
+	let observed = attempts.clone();
+	let tunnel = tokio::spawn(async move {
+		loop {
+			let (mut downstream, _) = listener.accept().await.unwrap();
+			let mut headers = Vec::new();
+			loop {
+				let byte = downstream.read_u8().await.unwrap();
+				headers.push(byte);
+				if headers.ends_with(b"\r\n\r\n") {
+					break;
+				}
+			}
+			assert!(headers.starts_with(b"CONNECT "));
+			let attempt = observed.fetch_add(1, Ordering::SeqCst);
+			if !reset_request && attempt < 2 {
+				downstream
+					.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n")
+					.await
+					.unwrap();
+				continue;
+			}
+			downstream
+				.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+				.await
+				.unwrap();
+			if reset_request {
+				// Read the full application request before closing without a response.
+				let mut request = Vec::new();
+				while !request.ends_with(b"side-effect") {
+					request.push(downstream.read_u8().await.unwrap());
+				}
+				assert!(request.starts_with(b"POST "));
+			} else {
+				let mut upstream = TcpStream::connect(upstream_addr).await.unwrap();
+				tokio::spawn(async move {
+					let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+				});
+			}
+		}
+	});
+	let mut bind = if waypoint {
+		setup_proxy_test("{}")
+			.unwrap()
+			.with_bind(waypoint_bind(ListenerProtocol::HBONE))
+			.with_waypoint_service(upstream_addr)
+			.with_backend(upstream_addr)
+			.with_route(basic_route(upstream_addr))
+	} else {
+		base_gateway(&mock)
+	}
+	.with_backend(tunnel_addr);
+	bind
+		.attached_backend_policy(
+			&upstream_addr,
+			json!({
+				"backendTunnel": {"proxy": {"host": tunnel_addr}, "mode": "connect"}
+			}),
+		)
+		.await;
+	if !waypoint || precondition.is_some() {
+		bind
+			.attach_route_policy(json!({"retry": {
+				"attempts": 2,
+				"codes": [],
+				"condition": "proxy.error.safeToRetry",
+				"precondition": precondition,
+			}}))
+			.await;
+	}
+	let io = if waypoint {
+		bind.serve_waypoint_http(BIND_KEY)
+	} else {
+		bind.serve_http(BIND_KEY)
+	};
+	let response = tokio::time::timeout(
+		Duration::from_secs(5),
+		send_request_body(
+			io,
+			Method::POST,
+			"http://my-svc.default.svc.cluster.local/phase-aware",
+			b"side-effect",
+		),
+	)
+	.await
+	.unwrap();
+	assert_eq!(response.status(), expected_status);
+	assert_eq!(attempts.load(Ordering::SeqCst), expected_attempts);
+	if expected_status == 200 {
+		let request = read_body(response.into_body()).await;
+		assert_eq!(request.method, Method::POST);
+		assert_eq!(request.body.as_ref(), b"side-effect");
+		assert_eq!(request.headers["x-retry-attempt"], "2");
+	}
+	tunnel.abort();
+}
+
 #[tokio::test]
 async fn incoming_connect_requires_frontend_connect_policy() {
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
