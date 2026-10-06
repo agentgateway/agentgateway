@@ -279,6 +279,9 @@ pub enum Tool {
 pub struct CachePointBlock {
 	/// Specifies the type of cache point within the CachePointBlock.
 	pub r#type: CachePointType,
+	/// How long the cache point should remain valid for.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub ttl: Option<CachePointTtl>,
 }
 
 #[derive(
@@ -295,6 +298,25 @@ pub struct CachePointBlock {
 #[serde(rename_all = "camelCase")]
 pub enum CachePointType {
 	Default,
+}
+
+#[derive(
+	Clone,
+	Copy,
+	Eq,
+	Ord,
+	PartialEq,
+	PartialOrd,
+	std::fmt::Debug,
+	std::hash::Hash,
+	::serde::Serialize,
+	::serde::Deserialize,
+)]
+pub enum CachePointTtl {
+	#[serde(rename = "5m")]
+	FiveMinutes,
+	#[serde(rename = "1h")]
+	OneHour,
 }
 
 #[derive(Clone, Serialize, Debug, PartialEq)]
