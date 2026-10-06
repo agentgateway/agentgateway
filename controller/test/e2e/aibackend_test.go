@@ -111,7 +111,7 @@ func testAIBackendFailover(t base.Test) {
 	expectedResponse := "The name of this project is agentgateway"
 
 	// The failover backend has two groups:
-	//   Priority 0 (primary): mock-llm-primary Service with replicas=0 (no endpoints → connection error)
+	//   Priority 0 (primary): mock-llm-primary Service with no endpoints (connection error)
 	//   Priority 1 (fallback): shared testbox LLM server
 	//
 	// The health policy evicts the primary after 3 consecutive unhealthy responses (threshold: 3).

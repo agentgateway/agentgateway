@@ -9,6 +9,9 @@ use tonic::{Request, Response, Status};
 
 #[async_trait]
 pub trait Handler {
+	/// Observes the request metadata of every call before it is handled.
+	fn metadata(&mut self, _metadata: &tonic::metadata::MetadataMap) {}
+
 	async fn fetch_secret(
 		&mut self,
 		_request: &FetchSecretRequest,
@@ -55,6 +58,7 @@ where
 		request: Request<FetchSecretRequest>,
 	) -> Result<Response<FetchSecretResponse>, Status> {
 		let mut handler = (self.handler)();
+		handler.metadata(request.metadata());
 		Ok(Response::new(
 			handler.fetch_secret(request.get_ref()).await?,
 		))

@@ -502,6 +502,11 @@ struct Jwk {
 	validation: Validation,
 }
 
+#[derive(serde::Deserialize)]
+struct UnverifiedIssuer {
+	iss: Option<String>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Claims {
 	pub inner: Map<String, Value>,
@@ -645,7 +650,45 @@ impl Jwt {
 			TokenError::MissingKeyId
 		})?;
 
-		// Search for the key across all providers
+		let decode_with = |key: &Jwk| {
+			decode::<Map<String, Value>>(token, &key.decoding, &key.validation).map(|decoded_token| {
+				Claims {
+					inner: decoded_token.claims,
+					jwt: SecretString::new(token.into()),
+				}
+			})
+		};
+
+		// A kid is only unique within one issuer's JWKS, so different issuers can share a kid (Entra tenants share keys; unrelated IdPs can collide)
+		// Only the provider(s) whose configured issuer has the same iss claim as the token and whose JWKS has the same kid are tried.
+		// iss is read before verification to choose which providers to try. Once chosen, the iss, aud, exp, and signature are checked.
+		let iss = jsonwebtoken::dangerous::insecure_decode_claims::<UnverifiedIssuer>(token)
+			.ok()
+			.and_then(|claims| claims.iss);
+
+		let mut first_error = None;
+		for provider in &self.providers {
+			if iss.as_deref() != Some(provider.issuer.as_str()) {
+				continue;
+			}
+			let Some(key) = provider.keys.get(kid) else {
+				continue;
+			};
+			match decode_with(key) {
+				Ok(claims) => return Ok(claims),
+				Err(error) => {
+					debug!(?error, issuer = %provider.issuer, "Token is malformed or does not pass validation.");
+					first_error.get_or_insert(error);
+				},
+			}
+		}
+		if let Some(error) = first_error {
+			return Err(TokenError::Invalid(error));
+		}
+
+		// No provider has both the token's iss and kid.
+		// Covers: unknown issuer, iss missing or not a string, and iss matches but kid doesn't.
+		// Falls back to the original, first provider that has the kid so that the same errors are produced.
 		let key = self
 			.providers
 			.iter()
@@ -656,17 +699,10 @@ impl Jwt {
 				TokenError::UnknownKeyId(kid.to_owned())
 			})?;
 
-		let decoded_token = decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
-			.map_err(|error| {
-				debug!(?error, "Token is malformed or does not pass validation.");
+		decode_with(key).map_err(|error| {
+			debug!(?error, "Token is malformed or does not pass validation.");
 
-				TokenError::Invalid(error)
-			})?;
-
-		let claims = Claims {
-			inner: decoded_token.claims,
-			jwt: SecretString::new(token.into()),
-		};
-		Ok(claims)
+			TokenError::Invalid(error)
+		})
 	}
 }

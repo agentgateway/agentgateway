@@ -167,6 +167,7 @@ output:
           targets:
           - invalid: true
             model: wildcard-model
+            weight: 1
 - gateway:
     Name: virtual-model-errors
     Namespace: default
@@ -175,6 +176,7 @@ output:
       concreteModel:
         backend:
           backend: default/wildcard-model/backend.llm
+        discoveryProvider: openai
         modelVisibility: INTERNAL
       key: default/wildcard-model.llm
       listenerKey: default/virtual-model-errors.llm

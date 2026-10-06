@@ -4,8 +4,10 @@ import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
 	mockGateway,
+	mockXdsGateway,
 	populatedConfig,
-	sameOriginGatewayConfig
+	sameOriginGatewayConfig,
+	xdsDump
 } from './fixtures';
 
 const pages = [
@@ -26,7 +28,7 @@ const pages = [
 	['/traffic/listeners', 'Traffic Listeners'],
 	['/traffic/routes', 'Traffic Routes'],
 	['/cel', 'CEL Playground'],
-	['/settings', 'UI Settings']
+	['/settings', 'UI']
 ] as const;
 
 test('core pages render with mocked gateway data', async ({ page }) => {
@@ -158,7 +160,7 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /LLM/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: /MCP/ })).toBeVisible();
-	await page.getByRole('button', { name: /APIs/ }).click();
+	await page.getByRole('button', { name: /^Enable Traffic/ }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].gateways).toMatchObject({
@@ -180,7 +182,6 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByText('3 of 3 enabled')).toBeVisible();
 	await page.getByRole('button', { name: 'Continue' }).click();
 	await expect(page.getByRole('heading', { name: 'Gateway Overview' })).toBeVisible();
 });
@@ -234,7 +235,7 @@ test('hybrid settings shows file diff without applying it', async ({ page }) => 
 			})
 		})
 	);
-	await page.goto('/settings');
+	await page.goto('/settings/ui');
 
 	await page.getByRole('combobox', { name: 'Public UI gateway' }).click();
 	await page.getByRole('option', { name: /public/ }).click();
@@ -333,7 +334,7 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	await page.goto('/');
 
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeDisabled();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeDisabled();
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -349,7 +350,7 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	});
 	expect(gateway.postedConfigs[1].mcp).not.toHaveProperty('port');
 
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeVisible();
 	await expect(page.locator('.nav-list').getByRole('link', { name: 'Gateways' })).toBeVisible();
 });
 
@@ -508,6 +509,55 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 			}
 		}
 	});
+});
+
+test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/models');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Models' })).toBeVisible();
+	await expect(nav.getByRole('link', { name: 'Providers' })).toHaveCount(0);
+	await expect(
+		page.getByText('Read-only model inventory from the active gateway dump.')
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add model' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add virtual model' })).toHaveCount(0);
+
+	const rows = page.locator('.dump-models-table tbody tr');
+	await expect(rows).toHaveCount(5);
+	const row = (key: string) => rows.filter({ has: page.getByText(key, { exact: true }) });
+
+	await expect(row('default/gpt-4o.llm')).toContainText('Concrete');
+	await expect(row('default/gpt-4o.llm')).toContainText('public');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/gpt-4o/backend.llm');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/model-gateway.llm');
+	await expect(row('default/llama.llm')).toContainText('internal');
+	await expect(row('default/llama.llm')).toContainText('default/llama/backend.llm');
+	await expect(row('default/smart.llm')).toContainText('Virtual');
+	await expect(row('default/smart.llm')).toContainText('2 weighted targets');
+	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) invalid');
+	await expect(row('default/tiered.llm')).toContainText('1 rule, fallback');
+	await expect(row('default/tiered.llm')).toContainText('gpt-4o, llama');
+	await expect(row('default/resilient.llm')).toContainText('Failover');
+	await expect(row('default/resilient.llm')).toContainText('default/resilient/backend.llm');
+
+	await page.getByRole('button', { name: 'View smart' }).click();
+	const drawer = page.getByRole('dialog', { name: 'smart' });
+	await expect(drawer).toBeVisible();
+	await expect(drawer).toContainText('does-not-exist');
+	await drawer.getByRole('button', { name: 'Close' }).click();
+	await expect(drawer).toHaveCount(0);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode shows an empty model inventory', async ({ page }) => {
+	await mockXdsGateway(page, xdsDump([]));
+	await page.goto('/llm/models');
+
+	await expect(page.getByText('No models are present in the active gateway dump.')).toBeVisible();
+	await expect(page.locator('.dump-models-table')).toHaveCount(0);
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {
@@ -1077,7 +1127,7 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 		'/mcp/policies#cors'
 	);
 
-	await page.goto('/settings');
+	await page.goto('/settings/ui');
 	await page.getByText('CORS', { exact: true }).click();
 	await page.getByRole('button', { name: 'Add current origin' }).click();
 	await page.getByRole('button', { name: 'Save policy' }).click();

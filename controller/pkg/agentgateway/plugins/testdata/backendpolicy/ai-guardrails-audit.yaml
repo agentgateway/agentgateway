@@ -21,13 +21,16 @@ spec:
               matches:
                 - 'bad.*'
           - openAIModeration:
+              failureMode: FailOpen
               action: Audit
           - bedrockGuardrails:
+              failureMode: FailOpen
               action: Audit
               identifier: bedrock-guardrail-identifier
               version: DRAFT
               region: us-west-2
           - googleModelArmor:
+              failureMode: FailOpen
               action: Audit
               templateId: model-armor-template-id
               projectId: model-armor-project-id
@@ -42,10 +45,16 @@ spec:
               failureMode: FailClosed
         response:
           - bedrockGuardrails:
+              failureMode: FailOpen
               action: Audit
               identifier: bedrock-guardrail-identifier
               version: DRAFT
               region: us-west-2
+          - googleModelArmor:
+              failureMode: FailOpen
+              action: Audit
+              templateId: model-armor-template-id
+              projectId: model-armor-project-id
 ---
 apiVersion: v1
 kind: Service
@@ -75,15 +84,19 @@ output:
                 - builtin: CREDIT_CARD
               rejection:
                 body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+                status: 403
             - openaiModeration:
                 action: REJECT_AUDIT_ACTION_AUDIT
+                failureMode: FAIL_OPEN
             - bedrockGuardrails:
                 action: REJECT_AUDIT_ACTION_AUDIT
+                failureMode: FAIL_OPEN
                 identifier: bedrock-guardrail-identifier
                 region: us-west-2
                 version: DRAFT
             - googleModelArmor:
                 action: REJECT_AUDIT_ACTION_AUDIT
+                failureMode: FAIL_OPEN
                 location: us-central1
                 projectId: model-armor-project-id
                 templateId: model-armor-template-id
@@ -97,9 +110,16 @@ output:
             response:
             - bedrockGuardrails:
                 action: REJECT_AUDIT_ACTION_AUDIT
+                failureMode: FAIL_OPEN
                 identifier: bedrock-guardrail-identifier
                 region: us-west-2
                 version: DRAFT
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                failureMode: FAIL_OPEN
+                location: us-central1
+                projectId: model-armor-project-id
+                templateId: model-armor-template-id
       key: backend/default/agw-audit:ai:default/test
       name:
         kind: AgentgatewayPolicy

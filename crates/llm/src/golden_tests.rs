@@ -196,7 +196,10 @@ mod requests {
 		),
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
+		("cache_control_dropped_blocks", &[BEDROCK]),
+		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
+		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
 		(
 			"tool_history_without_tools",
@@ -303,7 +306,7 @@ mod requests {
 						|i: &mut types::completions::Request| {
 							let mut resolved = i.clone();
 							resolved.model = Some("gemini-2.5-pro".into());
-							conversion::vertex_gemini::from_completions::translate(&resolved)
+							conversion::vertex_gemini::from_completions::translate(&resolved, true)
 						},
 					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
@@ -875,10 +878,7 @@ mod responses {
 		("reasoning", ALL_BEDROCK),
 		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		(
-			"cache_write",
-			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
-		),
+		("cache_write", ALL_BEDROCK),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -914,6 +914,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
@@ -1005,6 +1013,14 @@ mod responses {
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];

@@ -2,7 +2,9 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d8bc3bce2f7b397b5791b5caef5129e6" }
-async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "2e3e2ddf0d3f3ed4249354b3c668b076bfbef08a" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "a2a8f025bcb7b139d3e5513be2eca5ac5d1ead34" }
+# Pending https://github.com/bldr-project/yaml-serde-edit/pull/1
+yaml-serde-edit = { git = "https://github.com/howardjohn/yaml-serde-edit", rev = "683e137f6760f47bb0db3d124c211433a4819f54" }
 
 [workspace]
 resolver = "2"
@@ -62,7 +64,7 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.41", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.42", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
@@ -137,19 +139,19 @@ md-5 = "0.11"
 num_cpus = "1.17"
 once_cell = "1.21"
 openapiv3 = "2.2"
-opentelemetry = "0.32"
-opentelemetry-http = "0.32"
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
-opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
+opentelemetry = "0.33"
+opentelemetry-http = "0.33"
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
+opentelemetry-proto = { version = "0.33", features = ["gen-tonic", "logs"] }
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
 pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.8"
+pingora-pool = "0.9"
 ppp = "2.3"
-pprof-alloc = "0.5"
+pprof-alloc = "0.6"
 # NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's
 # frame-pointer unwinder only supports x86_64/aarch64/riscv64/loongarch64, and
 # its call site is not arch-gated, so enabling it breaks the build on other
@@ -195,19 +197,18 @@ schemars = { version = "=1.2.1", git = "https://github.com/howardjohn/schemars",
 ] }
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
-serde-transcode = "1.1"
 serde_json = { version = "1.0", features = ["preserve_order", "raw_value"] }
 serde-untagged = "0.1"
-serde_json_path_to_error = "0.1"
 serde_regex = "1.1"
-serde_yaml = "0.9"
+serde_norway = "0.9.42"
+yaml-serde-edit = "0.1.1"
 sha1 = "0.11"
 sha2 = "0.11"
 shellexpand = "3.1"
 socket2 = "0.6"
 spiffe = { version = "0.16", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
 split-iter = "0.1"
-sse-stream = "0.2"
+sse-stream = "0.3"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
@@ -252,6 +253,7 @@ url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
+zstd = "0.14"
 which = "8.0"
 websocket-sans-io = '0.1'
 vector-map = "1.1.0"

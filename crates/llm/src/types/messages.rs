@@ -208,6 +208,9 @@ const PRESERVED_REST_KEYS: &[&str] = &[
 ];
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Messages
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -874,7 +877,7 @@ pub mod typed {
 	impl From<CacheControlEphemeral> for super::super::completions::typed::PromptCacheBreakpointParam {
 		fn from(_: CacheControlEphemeral) -> Self {
 			PromptCacheBreakpointParam {
-				mode: super::super::completions::typed::PromptCacheBreakpointMode::Explicit,
+				mode: super::super::completions::typed::PromptCacheBreakpointParamMode::Explicit,
 			}
 		}
 	}

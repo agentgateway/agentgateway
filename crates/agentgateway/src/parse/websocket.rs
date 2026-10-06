@@ -279,9 +279,11 @@ impl WsFrameAccumulator {
 
 	fn drain_frames(&mut self) -> Vec<WsCompletedFrame> {
 		let mut result = Vec::new();
+		// The decoder unmasks payloads in place; preserve pending for raw forwarding.
+		let mut copy = self.pending.to_vec();
+		let mut remaining = copy.as_mut_slice();
 		loop {
-			let mut copy = self.pending.to_vec();
-			let ret = match self.decoder.add_data(&mut copy) {
+			let ret = match self.decoder.add_data(remaining) {
 				Ok(r) => r,
 				Err(_) => {
 					// Protocol error: forward all pending raw bytes as an opaque frame and
@@ -309,7 +311,7 @@ impl WsFrameAccumulator {
 				}) => {
 					self
 						.frame_payload
-						.extend_from_slice(&copy[..ret.consumed_bytes]);
+						.extend_from_slice(&remaining[..ret.consumed_bytes]);
 				},
 				Some(WebsocketFrameEvent::End {
 					original_opcode: Opcode::Text,
@@ -317,7 +319,7 @@ impl WsFrameAccumulator {
 				}) => {
 					self
 						.frame_payload
-						.extend_from_slice(&copy[..ret.consumed_bytes]);
+						.extend_from_slice(&remaining[..ret.consumed_bytes]);
 					let raw = self.frame_raw.split().freeze();
 					let payload = self.frame_payload.split().freeze();
 					result.push(WsCompletedFrame::Text { raw, payload });
@@ -331,6 +333,7 @@ impl WsFrameAccumulator {
 				| Some(WebsocketFrameEvent::Start { .. })
 				| None => {},
 			}
+			remaining = &mut remaining[ret.consumed_bytes..];
 		}
 		result
 	}

@@ -55,6 +55,18 @@ impl IncomingRequestContext {
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
 		self.request.headers_mut()
 	}
+	pub fn with_mcp_target(mut self, target_name: &str) -> Self {
+		let mut mcp = self
+			.extensions()
+			.get::<crate::mcp::MCPInfo>()
+			.cloned()
+			.unwrap_or_default();
+		mcp.target = Some(crate::mcp::MCPTarget {
+			name: target_name.to_string(),
+		});
+		self.extensions_mut().insert(mcp);
+		self
+	}
 	pub fn extensions(&self) -> &::http::Extensions {
 		self.request.extensions()
 	}
@@ -228,7 +240,7 @@ impl Upstream {
 		{
 			return Ok(());
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("DELETE {target_name}"), target_name, None, None);
 		let result: Result<(), UpstreamError> = async {
@@ -268,7 +280,7 @@ impl Upstream {
 				_ => unreachable!(),
 			};
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("GET {target_name}"), target_name, None, None);
 		let result: Result<Messages, UpstreamError> = async {
@@ -308,7 +320,7 @@ impl Upstream {
 			},
 			_ => (None, None),
 		};
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span = ctx.start_mcp_outbound_span(
 			match operation_target {
 				Some(operation_target) => format!("{method} {target_name}_{operation_target}"),
@@ -382,7 +394,7 @@ impl Upstream {
 			ClientNotification::CustomNotification(r) => r.method.as_str(),
 			_ => "unknown",
 		};
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span = ctx.start_mcp_outbound_span(
 			format!("{method} {target_name}"),
 			target_name,
@@ -419,7 +431,7 @@ impl Upstream {
 				"openapi upstream does not support server-to-client routing".into(),
 			));
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("response {target_name}"), target_name, None, None);
 		let result: Result<(), UpstreamError> = async {
@@ -458,6 +470,7 @@ pub(crate) struct UpstreamGroup {
 	pub default_target_name: Option<String>,
 	pub prefix_mode: McpPrefixMode,
 	pub is_multiplexing: bool,
+	all_targets_conditioned_out: bool,
 	pub failure_mode: FailureMode,
 	pub sse_keep_alive: Option<Duration>,
 }
@@ -467,11 +480,32 @@ impl UpstreamGroup {
 		self.by_name.len()
 	}
 
-	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
+	pub fn all_targets_conditioned_out(&self) -> bool {
+		self.all_targets_conditioned_out
+	}
+
+	pub(crate) fn new_for_request(
+		client: PolicyClient,
+		mut backend: McpBackendGroup,
+		ctx: &IncomingRequestContext,
+	) -> Result<Self, mcp::Error> {
 		let client = PolicyClient::new(client.inputs.clone());
 		let is_multiplexing = backend.targets.len() != 1;
 		let default_target_name = (!is_multiplexing && backend.prefix_mode != McpPrefixMode::Always)
 			.then(|| backend.targets[0].name.to_string());
+		let configured_targets = backend.targets.len();
+		let all_targets_conditioned_out = configured_targets > 0 && {
+			backend.targets.retain(|target| {
+				target.condition.as_ref().is_none_or(|condition| {
+					ctx
+						.clone()
+						.with_mcp_target(&target.name)
+						.executor()
+						.eval_bool(condition)
+				})
+			});
+			backend.targets.is_empty()
+		};
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
 			prefix_mode: backend.prefix_mode,
@@ -482,9 +516,13 @@ impl UpstreamGroup {
 			extensions: RwLock::new(HashMap::new()),
 			default_target_name,
 			is_multiplexing,
+			all_targets_conditioned_out,
 		};
 		s.setup_connections()?;
 		if s.by_name.is_empty() {
+			if all_targets_conditioned_out {
+				return Ok(s);
+			}
 			if s.backend.targets.is_empty() && s.failure_mode == FailureMode::FailOpen {
 				warn!(
 					"MCP backend configured with zero targets and failure_mode=failOpen; allowing startup to avoid downstream retry loops"

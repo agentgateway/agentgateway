@@ -169,7 +169,8 @@ pub mod from_messages {
 		req: &types::messages::Request,
 	) -> Result<types::responses::Request, AIError> {
 		validate_raw_request(req)?;
-		let typed = json_util::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json_util::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let messages::Request {
 			messages,
 			system,
@@ -199,7 +200,9 @@ pub mod from_messages {
 		}
 
 		let output_config = output_config.unwrap_or_default();
-		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort) {
+		if crate::conversion::supports_reasoning_effort(&model)
+			&& let Some(reasoning) = translate_reasoning(thinking, output_config.effort)
+		{
 			rest.insert(
 				"reasoning".to_string(),
 				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
@@ -361,6 +364,7 @@ pub mod from_messages {
 					"type": "json_schema",
 					"name": "structured_output",
 					"schema": schema,
+					"strict": false,
 				}
 			}),
 		})
@@ -729,8 +733,16 @@ pub mod from_messages {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<responses::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.input_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	fn translate_response_internal(
@@ -774,10 +786,11 @@ pub mod from_messages {
 										};
 										// Responses provides a source link, not the source excerpt or
 										// Anthropic's opaque replay index. Do not fabricate either.
+										let citation = serde_json::to_value(citation).ok()?;
 										Some(json!({
 											"type": "web_search_result_location",
-											"url": citation.url,
-											"title": citation.title,
+											"url": citation["url"],
+											"title": citation["title"],
 											"cited_text": "",
 											"encrypted_index": "",
 										}))
@@ -871,6 +884,7 @@ pub mod from_messages {
 		struct StreamState {
 			sent_message_start: bool,
 			sent_message_stop: bool,
+			failed: bool,
 			last_token_at: Option<Instant>,
 			next_block_index: usize,
 			response_id: Option<String>,
@@ -1245,6 +1259,9 @@ pub mod from_messages {
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
+			if state.failed {
+				return events;
+			}
 			match evt {
 				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {
@@ -1508,20 +1525,26 @@ pub mod from_messages {
 						tracing::warn!(
 							"Responses stream failed during messages translation; emitting error event"
 						);
-						flush_message_end(
-							&mut state,
-							&mut events,
-							&log,
-							&mut completion,
-							&mut tool_calls,
-							true,
-						);
+						state.failed = true;
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: "api_error".to_string(),
-									message: "responses stream failed".to_string(),
+									r#type: error_type(
+										failed
+											.response
+											.error
+											.as_ref()
+											.and_then(|e| serde_json::to_value(&e.code).ok())
+											.as_ref()
+											.and_then(Value::as_str),
+									)
+									.to_string(),
+									message: failed
+										.response
+										.error
+										.map(|error| error.message)
+										.unwrap_or_else(|| "responses stream failed".to_string()),
 								},
 							},
 						);
@@ -1531,22 +1554,12 @@ pub mod from_messages {
 							"Responses stream error during messages translation: {}",
 							error.message
 						);
-						flush_message_end(
-							&mut state,
-							&mut events,
-							&log,
-							&mut completion,
-							&mut tool_calls,
-							true,
-						);
+						state.failed = true;
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: error
-										.code
-										.clone()
-										.unwrap_or_else(|| "api_error".to_string()),
+									r#type: error_type(error.code.as_deref()).to_string(),
 									message: error.message,
 								},
 							},
@@ -1558,8 +1571,34 @@ pub mod from_messages {
 					responses::ResponseStreamEvent::ResponseOutputTextDone(_) => {},
 				},
 			}
+			if state.failed {
+				// Retain partial output for logging without claiming a successful finish.
+				log.update(|r| {
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
+					}
+					r.response.output_messages = super::take_output_messages(&mut tool_calls, None);
+				});
+			}
 			events
 		})
+	}
+
+	/// Map an OpenAI Responses error code to an Anthropic error type.
+	fn error_type(code: Option<&str>) -> &'static str {
+		match code {
+			Some("rate_limit_exceeded") => "rate_limit_error",
+			Some("server_is_overloaded") => "overloaded_error",
+			Some("insufficient_quota") => "billing_error",
+			Some(code)
+				if code == "context_length_exceeded"
+					|| code.starts_with("invalid_")
+					|| code.starts_with("image_") =>
+			{
+				"invalid_request_error"
+			},
+			_ => "api_error",
+		}
 	}
 
 	pub fn translate_error(bytes: &Bytes, status: ::http::StatusCode) -> Result<Bytes, AIError> {

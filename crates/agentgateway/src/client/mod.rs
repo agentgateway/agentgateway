@@ -230,6 +230,11 @@ impl From<Transport> for ConnectionConfig {
 	}
 }
 
+// Randomly shortens a duration by up to 10%.
+pub(crate) fn jittered(d: Duration) -> Duration {
+	d - rand::random_range(Duration::ZERO..=d / 10)
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct PoolKey(Target, SocketAddr, ConnectionConfig, ::http::Version);
 
@@ -459,6 +464,7 @@ impl Connector {
 		);
 
 		if let Some(max_age) = max_connection_duration {
+			let max_age = jittered(max_age);
 			socket
 				.ext_mut()
 				.insert(stream::ConnectionDeadline(connect_start + max_age));
@@ -742,6 +748,7 @@ impl Client {
 			);
 			let buffer_limit = http::buffer_limit(&req);
 			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
+			let deadline = to.map(|to| tokio::time::Instant::now() + to.0);
 
 			// We are leaving agentgateway code so no longer need our specialized body; Boxing is fine here.
 			let call = client.request(req.map(http::Body::into_boxed));
@@ -755,8 +762,8 @@ impl Client {
 					ProxyError::UpstreamCallFailed(err)
 				}
 			};
-			let resp = if let Some(to) = to {
-				match tokio::time::timeout(to.0, call).await {
+			let resp = if let Some(deadline) = deadline {
+				match tokio::time::timeout_at(deadline, call).await {
 					Err(_) => Err(ProxyError::UpstreamCallTimeout),
 					Ok(Err(err)) => Err(map_error(err)),
 					Ok(Ok(resp)) => Ok(resp),
@@ -798,7 +805,13 @@ impl Client {
 				.extensions_mut()
 				.insert(transport::BufferLimit::new(buffer_limit));
 			resp.extensions_mut().insert(ResolvedDestination(dest));
-			Ok(resp.map(http::Body::new))
+			Ok(resp.map(|body| {
+				let mut body = http::Body::new(body);
+				if let Some(deadline) = deadline {
+					body.set_deadline(deadline);
+				}
+				body
+			}))
 		}
 	}
 }
@@ -871,8 +884,18 @@ mod tests {
 		let deadline = agent_pool::connect::Connection::connected(&socket)
 			.get_valid_until()
 			.expect("deadline should be set");
-		assert!(deadline >= before + max_age);
+		assert!(deadline >= before + max_age - max_age / 10);
 		assert!(deadline <= std::time::Instant::now() + max_age);
+	}
+
+	#[test]
+	fn jittered_reduces_within_bounds() {
+		let d = Duration::from_secs(60);
+		for _ in 0..100 {
+			let j = jittered(d);
+			assert!(j >= Duration::from_secs(54) && j <= d);
+		}
+		assert_eq!(jittered(Duration::ZERO), Duration::ZERO);
 	}
 
 	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback

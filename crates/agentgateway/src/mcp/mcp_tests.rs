@@ -19,7 +19,8 @@ use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test,
+	setup_proxy_test_with_config, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
@@ -223,6 +224,76 @@ async fn stream_to_multiplex() {
 			.await
 			.is_err()
 	);
+}
+
+#[tokio::test]
+async fn multiplex_target_condition_skips_denied_upstream() {
+	let allowed = mock_streamable_http_server(true).await;
+	let denied = mock_streamable_http_server(true).await;
+	let unfiltered = mock_streamable_http_server(true).await;
+	let condition = Arc::new(cel::Expression::new_strict(r#"mcp.target.name == "allowed""#).unwrap());
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_target_conditions(
+			"mcp",
+			vec![
+				("allowed", allowed.addr, false),
+				("denied", denied.addr, false),
+				("unfiltered", unfiltered.addr, false),
+			],
+			true,
+			vec![Some(condition.clone()), Some(condition), None],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let tools = client.list_tools(None).await.unwrap();
+	let tool_names = tools
+		.tools
+		.iter()
+		.map(|tool| tool.name.to_string())
+		.collect_vec();
+
+	assert!(tool_names.iter().any(|name| name == "allowed_echo"));
+	assert!(tool_names.iter().any(|name| name == "unfiltered_echo"));
+	assert!(
+		tool_names.iter().all(|name| !name.starts_with("denied_")),
+		"denied target tools were exposed: {tool_names:?}"
+	);
+	assert!(allowed.init_count().await > 0);
+	assert!(unfiltered.init_count().await > 0);
+	assert_eq!(
+		denied.init_count().await,
+		0,
+		"a conditionally disabled target must not be initialized"
+	);
+}
+
+#[tokio::test]
+async fn multiplex_target_conditions_can_select_no_targets() {
+	let denied_a = mock_streamable_http_server(true).await;
+	let denied_b = mock_streamable_http_server(true).await;
+	let condition = Arc::new(cel::Expression::new_strict("false").unwrap());
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_target_conditions(
+			"mcp",
+			vec![
+				("denied-a", denied_a.addr, false),
+				("denied-b", denied_b.addr, false),
+			],
+			true,
+			vec![Some(condition.clone()), Some(condition)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	assert!(client.list_tools(None).await.unwrap().tools.is_empty());
+	assert_eq!(denied_a.init_count().await, 0);
+	assert_eq!(denied_b.init_count().await, 0);
 }
 
 #[tokio::test]
@@ -668,6 +739,60 @@ async fn multiplex_never_prefix_drops_ambiguous_names() {
 }
 
 #[tokio::test]
+async fn list_tools_follows_gateway_cursor() {
+	let paging = mock_paging_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	for stateful in [false, true] {
+		for multiplex in [false, true] {
+			let mut targets = vec![("paging", paging.addr, false)];
+			if multiplex {
+				targets.push(("other", other.addr, false));
+			}
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_multiplex_mcp_backend("mcp", targets, stateful)
+				.with_bind(simple_bind())
+				.with_route(basic_named_route(strng::new("/mcp")));
+			let io = t.serve_real_listener(BIND_KEY).await;
+			let client = mcp_streamable_client(io).await;
+			let prefix = if multiplex { "paging_" } else { "" };
+
+			let first = client.list_tools(None).await.unwrap();
+			assert!(
+				first
+					.tools
+					.iter()
+					.any(|t| t.name == format!("{prefix}first_page_tool"))
+			);
+			if multiplex {
+				assert!(first.tools.iter().any(|t| t.name.starts_with("other_")));
+			} else {
+				assert_eq!(first.tools.len(), 1);
+			}
+			let cursor = first.next_cursor.expect("gateway must preserve pagination");
+			if multiplex {
+				assert_ne!(cursor, "page2");
+			} else {
+				assert_eq!(cursor, "page2");
+			}
+			let second = client
+				.list_tools(Some(
+					rmcp::model::PaginatedRequestParams::default().with_cursor(Some(cursor)),
+				))
+				.await
+				.unwrap();
+			// Only the unfinished target should be queried on the next page.
+			assert_eq!(
+				second.tools.iter().map(|t| t.name.as_ref()).collect_vec(),
+				vec![format!("{prefix}paged_echo")]
+			);
+			assert!(second.next_cursor.is_none());
+			client.cancel().await.unwrap();
+		}
+	}
+}
+
+#[tokio::test]
 async fn multiplex_never_prefix_resolves_names_on_later_pages() {
 	let paging = mock_paging_streamable_http_server().await;
 	let other = mock_streamable_http_server(true).await;
@@ -844,7 +969,7 @@ fn stateless_multiplex_get_prompt_initializes_only_target() {
 async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("a", mock_a.addr),
@@ -855,6 +980,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 	let session_manager =
@@ -948,6 +1074,44 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 			"rejected no-session message must not create a session"
 		);
 	}
+}
+
+// MCP requires clients to start a new session after a 404
+// https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management
+#[tokio::test]
+async fn stale_session_key_returns_not_found() {
+	const OLD_KEY: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+	const CURRENT_KEY: &str = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	config.session_encoder = http::sessionpersistence::Encoder::aes(CURRENT_KEY).unwrap();
+	let bind = setup_proxy_test_with_config(config)
+		.with_mcp_backend_policies(mock.addr, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = bind.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let old_encoder = http::sessionpersistence::Encoder::aes(OLD_KEY).unwrap();
+	let session_id = http::sessionpersistence::SessionState::MCP(
+		http::sessionpersistence::MCPSessionState::new(vec![]),
+	)
+	.encode(&old_encoder)
+	.unwrap();
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", session_id)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -1812,6 +1976,41 @@ fn mcp_initialize_body() -> serde_json::Value {
 }
 
 #[tokio::test]
+async fn streamable_http_post_accepts_comma_separated_accept_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let response = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_separate_accept_header_lines() {
+	use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let body = mcp_initialize_body().to_string();
+	let request = format!(
+		"POST /mcp HTTP/1.1\r\nHost: {io}\r\nContent-Type: application/json\r\nAccept: application/json\r\nAccept: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	stream.write_all(request.as_bytes()).await.unwrap();
+	let mut reader = tokio::io::BufReader::new(stream);
+	let mut status_line = String::new();
+	reader.read_line(&mut status_line).await.unwrap();
+	assert!(
+		status_line.starts_with("HTTP/1.1 200"),
+		"unexpected response: {status_line}"
+	);
+}
+
+#[tokio::test]
 async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -2124,7 +2323,7 @@ async fn elicitation_roundtrip_completes_tool_call() {
 	// route back so the tool call completes instead of hanging.
 	use rmcp::ServiceExt;
 	use rmcp::model::{
-		ClientCapabilities, ClientInfo, ElicitRequestParams, ElicitResult, ElicitationAction,
+		ClientCapabilities, ClientConfig, ElicitRequestParams, ElicitResult, ElicitationAction,
 		Implementation, ProtocolVersion,
 	};
 	use rmcp::service::RequestContext;
@@ -2142,8 +2341,8 @@ async fn elicitation_roundtrip_completes_tool_call() {
 					.with_content(serde_json::json!({"confirm": "yes"})),
 			)
 		}
-		fn get_info(&self) -> ClientInfo {
-			let mut info = ClientInfo::new(
+		fn get_info(&self) -> ClientConfig {
+			let mut info = ClientConfig::new(
 				ClientCapabilities::default(),
 				Implementation::new("test client".to_string(), "0.0.1".to_string()),
 			);
@@ -2425,6 +2624,118 @@ async fn modern_malformed_known_method_params_are_not_method_not_found() {
 		),
 		"unexpected body for malformed tools/call: {json}"
 	);
+}
+
+#[tokio::test]
+async fn streamable_http_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn streamable_http_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn streamable_http_body_at_configured_limit_succeeds() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
+	let mock = mock_streamable_http_server(true).await;
+	let limit = 64usize;
+	let body = mcp_initialize_body();
+	assert!(serde_json::to_vec(&body).unwrap().len() > limit);
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains(&limit.to_string()),
+		"expected configured limit {limit} in body: {text}"
+	);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_malformed_body_within_limit_returns_400() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, 64).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = client
+		.post(&url)
+		.header(
+			http::header::ACCEPT.as_str(),
+			"application/json, text/event-stream",
+		)
+		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
+		.body("{not json")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn legacy_sse_post_body_at_configured_limit_reaches_session_lookup() {
+	let mock = mock_streamable_http_server(true).await;
+	let body = mcp_initialize_body();
+	let limit = serde_json::to_vec(&body).unwrap().len();
+	let (_t, io) = setup_proxy_with_max_buffer_size(&mock, limit).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/sse?sessionId=nonexistent");
+
+	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
+
+	assert_eq!(resp.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -2782,6 +3093,44 @@ async fn authorization_denied_returns_unknown_tool_error() {
 		"Unknown tool: echo",
 		"Expected error message 'Unknown tool: echo', got: {}",
 		mcp_error.message
+	);
+}
+
+/// An upstream JSON-RPC error response must keep its own code, message, and
+/// data instead of being flattened into a generic internal error. The
+/// hand-written mock answers `tools/call` (its catch-all branch) with
+/// `-32601`, which the gateway must propagate verbatim (#3748).
+#[tokio::test]
+async fn upstream_jsonrpc_error_code_is_propagated() {
+	let mock = mock_streamable_http_server_without_discover().await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![]).await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	let mcp_error = match result.expect_err("tool call should fail") {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32601,
+		"the upstream METHOD_NOT_FOUND code must be propagated, got: {} ({})",
+		mcp_error.code.0, mcp_error.message
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"tools/call",
+		"the upstream error message must be propagated"
 	);
 }
 
@@ -3499,7 +3848,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 
 	use ::http::{HeaderName, HeaderValue};
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 
@@ -3535,7 +3884,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{addr}/mcp"))
 			.custom_headers(headers);
 		let transport = StreamableHttpClientTransport::from_config(config);
-		let client_info = ClientInfo::new(
+		let client_info = ClientConfig::new(
 			ClientCapabilities::default(),
 			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
 		);
@@ -3760,6 +4109,40 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 			.listener_frontend_policies(&listener_name, None, None)
 			.access_log
 			.is_some()
+	);
+	(t, io)
+}
+
+async fn setup_proxy_with_max_buffer_size(
+	mock: &MockServer,
+	max_buffer_size: usize,
+) -> (TestBind, SocketAddr) {
+	let (mut t, io) = setup_proxy(mock, true, false).await;
+	t.with_policy(TargetedPolicy {
+		key: "frontend/http".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::HTTP(crate::types::frontend::HTTP {
+			max_buffer_size: Some(max_buffer_size),
+			..Default::default()
+		})
+		.into(),
+	});
+	assert_eq!(
+		t.pi
+			.stores
+			.read_binds()
+			.frontend_policies(t.pi.cfg.gateway_ref())
+			.http
+			.and_then(|h| h.max_buffer_size),
+		Some(max_buffer_size)
 	);
 	(t, io)
 }
@@ -4079,11 +4462,11 @@ pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
@@ -4722,7 +5105,7 @@ pub async fn mcp_streamable_client_with_ui(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, ExtensionCapabilities, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
@@ -4734,7 +5117,7 @@ pub async fn mcp_streamable_client_with_ui(
 			.cloned()
 			.unwrap(),
 	);
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::builder()
 			.enable_extensions_with(extensions)
 			.build(),
@@ -4793,7 +5176,7 @@ mod appsmockserver {
 			Ok(self.get_info())
 		}
 
-		fn get_info(&self) -> ServerInfo {
+		fn get_info(&self) -> ServerConfig {
 			let mut extensions = ExtensionCapabilities::new();
 			extensions.insert(
 				"io.modelcontextprotocol/ui".to_string(),
@@ -4802,7 +5185,7 @@ mod appsmockserver {
 					.cloned()
 					.unwrap(),
 			);
-			ServerInfo::new(
+			ServerConfig::new(
 				ServerCapabilities::builder()
 					.enable_tools()
 					.enable_resources()
@@ -5121,8 +5504,8 @@ mod mockserver {
 	#[tool_handler]
 	#[prompt_handler]
 	impl ServerHandler for Counter {
-		fn get_info(&self) -> ServerInfo {
-			ServerInfo::new(
+		fn get_info(&self) -> ServerConfig {
+			ServerConfig::new(
 				ServerCapabilities::builder()
 					.enable_prompts()
 					.enable_resources()
@@ -5233,8 +5616,8 @@ mod mockserver {
 	pub struct PagingServer;
 
 	impl ServerHandler for PagingServer {
-		fn get_info(&self) -> ServerInfo {
-			ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+		fn get_info(&self) -> ServerConfig {
+			ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
 		}
 
 		async fn list_tools(
@@ -5530,7 +5913,9 @@ async fn test_zero_targets_fail_closed() {
 		..Default::default()
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
-	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
+	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
+	let err =
+		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
 }
 
@@ -5542,7 +5927,8 @@ async fn test_zero_targets_fail_open() {
 		..Default::default()
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
-	crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
+	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
+	crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap();
 }
 
 #[tokio::test]
@@ -5552,6 +5938,7 @@ async fn test_setup_partial_success_fail_open() {
 		targets: vec![
 			Arc::new(McpTarget {
 				name: "bad".into(),
+				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
 					cmd: "this-binary-does-not-exist-agentgateway-test".into(),
 					args: vec![],
@@ -5563,6 +5950,7 @@ async fn test_setup_partial_success_fail_open() {
 			}),
 			Arc::new(McpTarget {
 				name: "ok".into(),
+				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
 					cmd: "cat".into(),
 					args: vec![],
@@ -5578,7 +5966,8 @@ async fn test_setup_partial_success_fail_open() {
 		..Default::default()
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
-	let group = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap();
+	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
+	let group = crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap();
 	assert_eq!(group.size(), 1);
 }
 
@@ -5588,6 +5977,7 @@ async fn test_all_targets_fail_open_still_errors() {
 		targets: vec![
 			Arc::new(McpTarget {
 				name: "bad-1".into(),
+				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
 					cmd: "this-binary-does-not-exist-agentgateway-test-1".into(),
 					args: vec![],
@@ -5599,6 +5989,7 @@ async fn test_all_targets_fail_open_still_errors() {
 			}),
 			Arc::new(McpTarget {
 				name: "bad-2".into(),
+				condition: None,
 				spec: crate::types::agent::McpTargetSpec::Stdio {
 					cmd: "this-binary-does-not-exist-agentgateway-test-2".into(),
 					args: vec![],
@@ -5614,13 +6005,16 @@ async fn test_all_targets_fail_open_still_errors() {
 		..Default::default()
 	};
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
-	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
+	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
+	let err =
+		crate::mcp::upstream::UpstreamGroup::new_for_request(client, backend, &ctx).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
 }
 
 fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
 		name: name.into(),
+		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Mcp(crate::types::agent::StreamableHTTPTargetSpec {
 			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
 				"/unused-{name}"
@@ -5638,6 +6032,7 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
 		name: name.into(),
+		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Sse(crate::types::agent::SseTargetSpec {
 			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
 				"/unused-{name}"
@@ -5665,6 +6060,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 
 	Arc::new(McpTarget {
 		name: name.into(),
+		condition: None,
 		spec: crate::types::agent::McpTargetSpec::OpenAPI(crate::types::agent::OpenAPITarget {
 			backend: crate::types::agent::SimpleBackendReference::Backend(strng::format!(
 				"/unused-{name}"
@@ -5682,6 +6078,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
 	Arc::new(McpTarget {
 		name: name.into(),
+		condition: None,
 		spec: crate::types::agent::McpTargetSpec::Stdio {
 			cmd: "cat".into(),
 			args: vec![],
@@ -5726,7 +6123,7 @@ fn persisted_stateless_session(
 
 #[test]
 fn test_openapi_targets_emit_stateless_session_state() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_openapi_target(
 				"openapi",
@@ -5736,6 +6133,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5771,7 +6169,7 @@ fn test_openapi_targets_emit_stateless_session_state() {
 
 #[test]
 fn test_sse_targets_emit_stateless_session_state() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_sse_target(
 				"sse",
@@ -5781,6 +6179,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5816,7 +6215,7 @@ fn test_sse_targets_emit_stateless_session_state() {
 
 #[tokio::test]
 async fn test_stdio_targets_remain_non_stateless() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_stdio_target("stdio")],
 			stateful: false,
@@ -5824,6 +6223,7 @@ async fn test_stdio_targets_remain_non_stateless() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5834,7 +6234,7 @@ async fn test_stdio_targets_remain_non_stateless() {
 async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 	let good = mock_streamable_http_server(true).await;
 	let bad_addr = SocketAddr::from(([127, 0, 0, 1], 31999));
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("good", good.addr),
@@ -5846,6 +6246,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5866,7 +6267,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 
 #[test]
 fn test_set_sessions_matches_by_target_name() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30001))),
@@ -5876,6 +6277,7 @@ fn test_set_sessions_matches_by_target_name() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5912,7 +6314,7 @@ fn test_set_sessions_matches_by_target_name() {
 
 #[test]
 fn test_set_sessions_rejects_mismatched_target_set() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30011))),
@@ -5922,6 +6324,7 @@ fn test_set_sessions_rejects_mismatched_target_set() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -5953,7 +6356,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30101))),
@@ -5963,6 +6366,7 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6024,7 +6428,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
 				"alpha",
@@ -6034,6 +6438,7 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6108,7 +6513,7 @@ fn test_merge_initialize_uses_title_override_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
 				"alpha",
@@ -6124,6 +6529,7 @@ fn test_merge_initialize_uses_title_override_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6169,7 +6575,7 @@ fn test_merge_initialize_uses_full_override_when_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
 				"alpha",
@@ -6185,6 +6591,7 @@ fn test_merge_initialize_uses_full_override_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6224,7 +6631,7 @@ fn test_merge_discover_uses_full_override_when_multiplexing() {
 		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30119))),
@@ -6240,6 +6647,7 @@ fn test_merge_discover_uses_full_override_when_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6297,7 +6705,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![fake_streamable_target(
 				"solo",
@@ -6307,6 +6715,7 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6351,7 +6760,7 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 		ServerResult,
 	};
 
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("legacy", SocketAddr::from(([127, 0, 0, 1], 30112))),
@@ -6361,6 +6770,7 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6421,7 +6831,7 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 
 #[test]
 fn test_parse_resource_uri_ui_scheme() {
-	let relay = Relay::new(
+	let relay = Relay::new_for_request(
 		McpBackendGroup {
 			targets: vec![
 				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30109))),
@@ -6431,6 +6841,7 @@ fn test_parse_resource_uri_ui_scheme() {
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
 	)
 	.unwrap();
 
@@ -6761,11 +7172,11 @@ async fn try_mcp_streamable_client(
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
 {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientInfo, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
-	let client_info = ClientInfo::new(
+	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
 	);
@@ -7682,6 +8093,85 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
 	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+}
+
+// mcpGuardrails request-result metadata should be visible to access-log CEL
+// (`frontendPolicies.accessLog.add`), mirroring the backend filters (authz,
+// transformation) that run after the hook and can already read it.
+#[tokio::test]
+async fn mcp_guardrails_metadata_visible_to_access_log_cel() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let trace_id = format!("mcp-guardrails-access-log-{}", uuid::Uuid::new_v4());
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"decision": "allow"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (mut t, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {
+				"mcp_trace": "mcp.tool.arguments.traceId",
+				"mcp_guardrail_decision": "mcpGuardrails != null ? string(mcpGuardrails.decision) : \"\""
+			}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/accessLog".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"traceId": trace_id, "hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_guardrail_decision"),
+		Some(&serde_json::json!("allow")),
+		"mcpGuardrails request-result metadata should be readable from access-log CEL"
+	);
 }
 
 // Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.

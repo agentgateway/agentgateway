@@ -15,7 +15,7 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use http_body_util::BodyExt as _;
 use rmcp::model::{
-	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
+	ClientConfig, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
 	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
 	RequestMetaObject, ServerJsonRpcMessage,
 };
@@ -530,7 +530,12 @@ impl Session {
 						.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
-						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_tools())).await
+						Box::pin(
+							self
+								.relay
+								.send_list(r, ctx, self.relay.merge_tools(), self.encoder.clone()),
+						)
+						.await
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
 					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
@@ -565,17 +570,29 @@ impl Session {
 						.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
-						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_prompts())).await
-					},
-					ClientRequest::ListResourcesRequest(_) => {
-						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_resources())).await
-					},
-					ClientRequest::ListResourceTemplatesRequest(_) => {
 						Box::pin(
 							self
 								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates()),
+								.send_list(r, ctx, self.relay.merge_prompts(), self.encoder.clone()),
 						)
+						.await
+					},
+					ClientRequest::ListResourcesRequest(_) => {
+						Box::pin(self.relay.send_list(
+							r,
+							ctx,
+							self.relay.merge_resources(),
+							self.encoder.clone(),
+						))
+						.await
+					},
+					ClientRequest::ListResourceTemplatesRequest(_) => {
+						Box::pin(self.relay.send_list(
+							r,
+							ctx,
+							self.relay.merge_resource_templates(),
+							self.encoder.clone(),
+						))
 						.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
@@ -874,6 +891,7 @@ impl SessionManager {
 		&self,
 		id: &str,
 		builder: RelayInputs,
+		ctx: &IncomingRequestContext,
 	) -> Result<Option<Session>, mcp::Error> {
 		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
 			if s.backend_id != builder.backend_id {
@@ -885,11 +903,11 @@ impl SessionManager {
 		let idle_ttl = builder.backend.session_idle_ttl;
 		let backend_id = builder.backend_id.clone();
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
-			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
+			.map_err(|_| mcp::Error::UnknownSession)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
 			return Ok(None);
 		};
-		let relay = builder.build_new_connections()?;
+		let relay = builder.build_new_connections(ctx)?;
 		if let Err(err) = relay.set_sessions(state.sessions) {
 			warn!("failed to resume session: {err}");
 			return Ok(None);
@@ -1114,8 +1132,8 @@ impl sse_stream::Timer for TokioSseTimer {
 	}
 }
 
-fn get_client_info() -> ClientInfo {
-	let mut client_info = ClientInfo::default();
+fn get_client_info() -> ClientConfig {
+	let mut client_info = ClientConfig::default();
 	client_info.protocol_version = ProtocolVersion::V_2025_11_25;
 	client_info.capabilities = rmcp::model::ClientCapabilities::default();
 	client_info.client_info =

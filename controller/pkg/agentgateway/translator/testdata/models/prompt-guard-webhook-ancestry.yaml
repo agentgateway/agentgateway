@@ -1,0 +1,414 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: llm-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    protocol: HTTP
+    port: 8080
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrail-webhook
+  namespace: default
+spec:
+  selector:
+    app: guardrail-webhook
+  ports:
+  - port: 8443
+    targetPort: 8443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+  namespace: default
+spec:
+  ports:
+  - port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth-token-exchange
+  namespace: default
+spec:
+  ports:
+  - port: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moderation-proxy
+  namespace: default
+spec:
+  ports:
+  - port: 8082
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: guardrail-webhook-policy
+  namespace: default
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: guardrail-webhook
+  - group: ""
+    kind: Service
+    name: egress-proxy
+  - group: ""
+    kind: Service
+    name: oauth-token-exchange
+  - group: ""
+    kind: Service
+    name: moderation-proxy
+  backend:
+    auth:
+      key: synthetic-test-token
+    http:
+      requestTimeout: 5s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: guarded-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-gateway
+    sectionName: llm
+  provider: OpenAI
+  baseURL: http://model-upstream.default.svc.cluster.local:8080/v1
+  policies:
+    tunnel:
+      backendRef:
+        name: egress-proxy
+        port: 8080
+    auth:
+      oauthTokenExchange:
+        backendRef:
+          name: oauth-token-exchange
+          port: 8081
+    promptGuard:
+      request:
+      - webhook:
+          action: Reject
+          backendRef:
+            group: ""
+            kind: Service
+            name: guardrail-webhook
+            port: 8443
+      - openAIModeration:
+          policies:
+            tunnel:
+              backendRef:
+                name: moderation-proxy
+                port: 8082
+
+---
+# Output
+output:
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - baseUrl: http://model-upstream.default.svc.cluster.local:8080/v1
+            inlinePolicies:
+            - backendTunnel:
+                proxy:
+                  port: 8080
+                  service:
+                    hostname: egress-proxy.default.svc.cluster.local
+                    namespace: default
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.default.svc.cluster.local
+                          namespace: default
+                  - openaiModeration:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      inlinePolicies:
+                      - backendTunnel:
+                          proxy:
+                            port: 8082
+                            service:
+                              hostname: moderation-proxy.default.svc.cluster.local
+                              namespace: default
+            - auth:
+                oauthTokenExchange:
+                  tokenEndpoint:
+                    port: 8081
+                    service:
+                      hostname: oauth-token-exchange.default.svc.cluster.local
+                      namespace: default
+            name: backend
+            openai: {}
+      key: default/guarded-model/backend.llm
+      name:
+        name: guarded-model
+        namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/llm-gateway
+      port: 8080
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/llm-gateway
+      key: default/llm-gateway.llm
+      name:
+        gatewayName: llm-gateway
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/guarded-model/backend.llm
+      key: default/guarded-model.llm
+      listenerKey: default/llm-gateway.llm
+      match:
+        model: guarded-model
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          key:
+            secret: synthetic-test-token
+      key: backend/default/guardrail-webhook-policy:backend-auth:default/egress-proxy.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: egress-proxy.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          key:
+            secret: synthetic-test-token
+      key: backend/default/guardrail-webhook-policy:backend-auth:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          key:
+            secret: synthetic-test-token
+      key: backend/default/guardrail-webhook-policy:backend-auth:default/moderation-proxy.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: moderation-proxy.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          key:
+            secret: synthetic-test-token
+      key: backend/default/guardrail-webhook-policy:backend-auth:default/oauth-token-exchange.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: oauth-token-exchange.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/egress-proxy.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: egress-proxy.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/guardrail-webhook.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: guardrail-webhook.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/moderation-proxy.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: moderation-proxy.default.svc.cluster.local
+          namespace: default
+- gateway:
+    Name: llm-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendHttp:
+          requestTimeout: 5s
+      key: default/guardrail-webhook-policy:backend-http:default/oauth-token-exchange.default.svc.cluster.local
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrail-webhook-policy
+        namespace: default
+      target:
+        service:
+          hostname: oauth-token-exchange.default.svc.cluster.local
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: guarded-model
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: llm-gateway
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: llm-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

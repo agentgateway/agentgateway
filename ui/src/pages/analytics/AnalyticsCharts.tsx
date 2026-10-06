@@ -49,7 +49,7 @@ export function AnalyticsTimelineChart(props: {
 						padding={{ left: 12, right: 12 }}
 						ticks={xTicks}
 						tickFormatter={value => formatTimelineAxisTick(Number(value), props.data)}
-						tick={{ fill: 'var(--muted)', fontSize: 12, fontWeight: 560 }}
+						tick={{ fill: 'var(--muted)', fontSize: 12, fontWeight: 500 }}
 						tickMargin={8}
 						tickLine={false}
 					/>
@@ -57,7 +57,7 @@ export function AnalyticsTimelineChart(props: {
 						allowDecimals={props.measure !== 'cost'}
 						axisLine={false}
 						domain={props.measure === 'cost' ? [0, costAxisMax] : undefined}
-						tick={{ fill: 'var(--muted)', fontSize: 12, fontWeight: 520 }}
+						tick={{ fill: 'var(--muted)', fontSize: 12, fontWeight: 500 }}
 						tickFormatter={value => formatAxisNumber(value, props.measure)}
 						tickLine={false}
 						width={54}
@@ -141,7 +141,7 @@ export function AnalyticsBreakdownChart(props: {
 										fill: 'var(--muted)',
 										fontFamily: 'var(--mono)',
 										fontSize: 12,
-										fontWeight: 450
+										fontWeight: 500
 									}}
 								/>
 							</Bar>

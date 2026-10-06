@@ -198,6 +198,10 @@ fn merge_metadata_into_extensions(
 		}
 	}
 	if !acc.0.is_empty() {
+		// The access-log snapshot is taken before this hook runs, so also record it in the log.
+		if let Some(log) = ext.get::<crate::telemetry::log::McpGuardrailsLog>() {
+			log.store(Some(acc.clone()));
+		}
 		ext.insert(acc);
 	}
 }

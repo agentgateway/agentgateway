@@ -51,7 +51,7 @@ event: event
 data: {"type":"response.output_item.done","sequence_number":16,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":""}],"id":"","role":"assistant","status":"completed"}}
 
 event: event
-data: {"type":"response.completed","sequence_number":17,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":""}],"id":"","role":"assistant","status":"completed"},{"type":"function_call","arguments":"{\"command\":\"pwd\"}","call_id":"call_xxx","name":"Bash","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":null},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
+data: {"type":"response.completed","sequence_number":17,"response":{"created_at":123,"id":"","model":"claude-opus-4-8","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":""}],"id":"","role":"assistant","status":"completed"},{"type":"function_call","arguments":"{\"command\":\"pwd\"}","call_id":"call_xxx","name":"Bash","id":"","status":"completed"}],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
 
 
 

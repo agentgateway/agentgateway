@@ -58,10 +58,13 @@ impl LegacySSEService {
 		};
 		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let bytes = body
-			.into_bytes(limit)
-			.await
-			.map_err(mcp::Error::Deserialize)?;
+		let bytes = body.into_bytes(limit).await.map_err(|e| {
+			if agent_http::is_length_limit_error(&e) {
+				mcp::Error::PayloadTooLarge(limit)
+			} else {
+				mcp::Error::Deserialize(e)
+			}
+		})?;
 		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
 			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
 		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
@@ -98,18 +101,20 @@ impl LegacySSEService {
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let keep_alive = inputs.backend.sse_keep_alive;
 		let backend_id = inputs.backend_id.clone();
-		let relay = inputs.build_new_connections()?;
+		let (parts, _) = request.into_parts();
+		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		let relay = inputs.build_new_connections(&ctx)?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
 		let (session, rx) = self
 			.session_manager
 			.create_legacy_session(backend_id, relay, idle_ttl);
-		let mut base_url = request
-			.extensions()
+		let mut base_url = parts
+			.extensions
 			.get::<filters::OriginalUrl>()
 			.map(|u| u.0.clone())
-			.unwrap_or_else(|| request.uri().clone());
+			.unwrap_or_else(|| parts.uri.clone());
 		if let Err(e) = http::modify_url(&mut base_url, |url| {
 			url.query_pairs_mut().append_pair("sessionId", &session.id);
 			Ok(())
@@ -130,7 +135,6 @@ impl LegacySSEService {
 				Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
 			}),
 		);
-		let (parts, _) = request.into_parts();
 		// An SSE stream that legitimately carries no traffic is indistinguishable from a dead
 		// connection to anything in the path; without a keep-alive comment it gets reaped.
 		let sse = match keep_alive {

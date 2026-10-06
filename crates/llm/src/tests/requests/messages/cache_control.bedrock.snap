@@ -246,6 +246,9 @@ info:
               ],
               "status": null
             }
+          },
+          {
+            "text": "<system-reminder>\nSystem-role block\n</system-reminder>"
           }
         ]
       }
@@ -261,9 +264,6 @@ info:
         "cachePoint": {
           "type": "default"
         }
-      },
-      {
-        "text": "System-role block"
       }
     ],
     "inferenceConfig": {

@@ -32,6 +32,9 @@ const InternalPorts = "agentgateway.dev/internal-ports"
 // rejected wholesale rather than partially applied). The membership check is passed as
 // a closure so callers can use whichever set type they already have.
 func ParseInternalPorts(value string, isListenerPort func(port int32) bool) (sets.Set[int32], []string) {
+	if value == "" {
+		return nil, nil
+	}
 	internal := sets.New[int32]()
 	var errs []string
 	for raw := range strings.SplitSeq(value, ",") {

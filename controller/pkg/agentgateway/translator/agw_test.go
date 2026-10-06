@@ -19,13 +19,12 @@ func TestCreateAgwRewriteFilterFullPath(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			spec := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
+			rewrite := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
 				Path: &gwv1.HTTPPathModifier{
 					Type:            gwv1.FullPathHTTPPathModifier,
 					ReplaceFullPath: new(tc.path),
 				},
 			})
-			rewrite := spec.GetUrlRewrite()
 			assert.NotNil(t, rewrite)
 			assert.Equal(t, tc.want, rewrite.GetFull())
 		})
@@ -33,13 +32,12 @@ func TestCreateAgwRewriteFilterFullPath(t *testing.T) {
 }
 
 func TestCreateAgwRewriteFilterPrefix(t *testing.T) {
-	spec := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
+	rewrite := CreateAgwRewriteFilter(&gwv1.HTTPURLRewriteFilter{
 		Path: &gwv1.HTTPPathModifier{
 			Type:               gwv1.PrefixMatchHTTPPathModifier,
 			ReplacePrefixMatch: new("/app/"),
 		},
 	})
-	rewrite := spec.GetUrlRewrite()
 	assert.NotNil(t, rewrite)
 	assert.Equal(t, "/app", rewrite.GetPrefix())
 }

@@ -753,6 +753,7 @@ impl TestBind {
 			McpBackend {
 				targets: vec![Arc::new(McpTarget {
 					name: "mcp".into(),
+					condition: None,
 					spec: if !legacy_sse {
 						McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 							backend: sb,
@@ -817,6 +818,7 @@ impl TestBind {
 			vec![],
 			Default::default(),
 			failure_mode,
+			vec![],
 		)
 	}
 
@@ -851,9 +853,29 @@ impl TestBind {
 			policies,
 			prefix_mode,
 			FailureMode::FailClosed,
+			vec![],
 		)
 	}
 
+	pub fn with_multiplex_mcp_backend_target_conditions(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		conditions: Vec<Option<Arc<crate::cel::Expression>>>,
+	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			vec![],
+			Default::default(),
+			FailureMode::FailClosed,
+			conditions,
+		)
+	}
+
+	#[allow(clippy::too_many_arguments)]
 	fn with_multiplex_mcp_backend_options(
 		self,
 		name: &str,
@@ -862,16 +884,19 @@ impl TestBind {
 		policies: Vec<BackendTrafficPolicy>,
 		prefix_mode: crate::types::agent::McpPrefixMode,
 		failure_mode: FailureMode,
+		conditions: Vec<Option<Arc<crate::cel::Expression>>>,
 	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
 				targets: servers
 					.iter()
-					.map(|(name, addr, legacy_sse)| {
+					.zip(conditions.into_iter().chain(std::iter::repeat(None)))
+					.map(|((name, addr, legacy_sse), condition)| {
 						let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", addr));
 						Arc::new(McpTarget {
 							name: strng::new(name),
+							condition,
 							spec: if !legacy_sse {
 								McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 									backend: sb,

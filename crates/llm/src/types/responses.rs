@@ -336,11 +336,12 @@ impl ResponseBuilder {
 		}
 	}
 
+	#[allow(deprecated)]
 	pub fn response(
 		&self,
 		status: typed::Status,
 		usage: Option<typed::ResponseUsage>,
-		error: Option<typed::ErrorObject>,
+		error: Option<typed::ResponseError>,
 		incomplete_details: Option<typed::IncompleteDetails>,
 	) -> typed::Response {
 		typed::Response {
@@ -420,7 +421,7 @@ impl ResponseBuilder {
 		&self,
 		sequence_number: u64,
 		usage: Option<typed::ResponseUsage>,
-		error: typed::ErrorObject,
+		error: typed::ResponseError,
 	) -> typed::ResponseStreamEvent {
 		typed::ResponseStreamEvent::ResponseFailed(typed::ResponseFailedEvent {
 			sequence_number,
@@ -476,6 +477,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Responses
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -958,18 +962,19 @@ pub mod typed {
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
 		Annotation, AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
-		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
-		Response, ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
-		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		EasyInputContent, EasyInputMessage, FunctionCallOutput, FunctionToolCall, IncompleteDetails,
+		InputContent, InputItem, InputMessage, InputParam, InputRole, InputTextContent,
+		InputTokenDetails, Item, MessageItem, OutputContent, OutputItem, OutputMessage,
+		OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
+		PromptCacheBreakpointConfig, Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent,
+		ReasoningTextContent, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseError, ResponseErrorCode,
+		ResponseErrorEvent, ResponseFailedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
+		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent,
+		ResponseRefusalDoneEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam,
+		ResponseUsage, Role, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

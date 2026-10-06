@@ -51,9 +51,6 @@ llm:
     provider:
       custom:
         providerOverride: typesafe
-        formats: []
-    # JEV uses its own /v1/systemone API, not a chat completion API.
-    passthrough: detect
     params:
       baseUrl: https://api.typesafe.ai
       apiKey: $TYPESAFE_API_KEY

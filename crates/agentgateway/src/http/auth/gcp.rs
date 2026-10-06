@@ -85,11 +85,21 @@ where
 
 #[derive(Clone)]
 pub struct GcpCredential {
-	access_token: Option<AccessTokenCredentials>,
-	raw: SecretString,
-	credential_type: GcpCredentialType,
-	id_tokens: Arc<Mutex<HashMap<String, Arc<credentials::idtoken::IDTokenCredentials>>>>,
-	gdch_tokens: Arc<Mutex<HashMap<String, Arc<credentials::AccessTokenCredentials>>>>,
+	state: GcpCredentialState,
+}
+
+#[derive(Clone)]
+enum GcpCredentialState {
+	Valid {
+		access_token: Option<AccessTokenCredentials>,
+		raw: SecretString,
+		credential_type: GcpCredentialType,
+		id_tokens: Arc<Mutex<HashMap<String, Arc<credentials::idtoken::IDTokenCredentials>>>>,
+		gdch_tokens: Arc<Mutex<HashMap<String, Arc<credentials::AccessTokenCredentials>>>>,
+	},
+	Invalid {
+		reason: String,
+	},
 }
 
 impl GcpCredential {
@@ -101,12 +111,66 @@ impl GcpCredential {
 			GcpCredentialType::Other => Some(build_access_token_credentials(json)?),
 		};
 		Ok(Self {
-			access_token,
-			raw,
-			credential_type,
-			id_tokens: Default::default(),
-			gdch_tokens: Default::default(),
+			state: GcpCredentialState::Valid {
+				access_token,
+				raw,
+				credential_type,
+				id_tokens: Default::default(),
+				gdch_tokens: Default::default(),
+			},
 		})
+	}
+
+	pub(crate) fn new_invalid(reason: String) -> Self {
+		Self {
+			state: GcpCredentialState::Invalid { reason },
+		}
+	}
+
+	pub(crate) fn invalid_reason(&self) -> Option<&str> {
+		match &self.state {
+			GcpCredentialState::Invalid { reason } => Some(reason),
+			GcpCredentialState::Valid { .. } => None,
+		}
+	}
+}
+
+pub(crate) fn sanitize_credential_error(error: &anyhow::Error) -> String {
+	let message = error.to_string();
+	if message.starts_with("failed to parse GCP credential JSON") {
+		return "failed to parse GCP credential JSON".to_string();
+	}
+	if message.starts_with("unsupported GCP credential type:") {
+		return "unsupported GCP credential type".to_string();
+	}
+	for cause in error.chain() {
+		if let Some(json_error) = cause.downcast_ref::<serde_json::Error>()
+			&& let Some(field) = json_error
+				.to_string()
+				.strip_prefix("missing field `")
+				.and_then(|field| field.strip_suffix('`'))
+			&& matches!(
+				field,
+				"client_email"
+					| "private_key_id"
+					| "private_key"
+					| "project_id"
+					| "client_id"
+					| "client_secret"
+					| "refresh_token"
+					| "audience"
+					| "subject_token_type"
+					| "service_account_impersonation_url"
+					| "source_credentials"
+					| "credential_source"
+			) {
+			return format!("GCP credential is missing required field `{field}`");
+		}
+	}
+	match message.as_str() {
+		"GCP credential JSON missing `type` field"
+		| "GCP credential JSON `type` field is not a string" => message,
+		_ => "GCP credential could not be loaded".to_string(),
 	}
 }
 
@@ -181,7 +245,10 @@ fn build_access_token_credentials(json: Value) -> anyhow::Result<AccessTokenCred
 }
 
 async fn explicit_access_token(credential: &GcpCredential) -> anyhow::Result<String> {
-	let access_token = credential.access_token.as_ref().ok_or_else(|| {
+	let GcpCredentialState::Valid { access_token, .. } = &credential.state else {
+		anyhow::bail!("GCP credential configuration is invalid");
+	};
+	let access_token = access_token.as_ref().ok_or_else(|| {
 		anyhow!("GCP gdch_service_account credentials require idToken auth with an audience")
 	})?;
 	let token = access_token.access_token().await?;
@@ -236,16 +303,25 @@ fn build_id_token_credentials(
 }
 
 async fn explicit_id_token(aud: &str, credential: &GcpCredential) -> anyhow::Result<String> {
-	if credential.credential_type == GcpCredentialType::GdchServiceAccount {
+	let GcpCredentialState::Valid {
+		raw,
+		credential_type,
+		id_tokens,
+		..
+	} = &credential.state
+	else {
+		anyhow::bail!("GCP credential configuration is invalid");
+	};
+	if *credential_type == GcpCredentialType::GdchServiceAccount {
 		return explicit_gdch_token(aud, credential).await;
 	}
 
 	let id_token_creds = {
-		let mut cache_guard = credential.id_tokens.lock().unwrap();
+		let mut cache_guard = id_tokens.lock().unwrap();
 		if let Some(creds) = cache_guard.get(aud) {
 			creds.clone()
 		} else {
-			let creds = Arc::new(build_id_token_credentials(aud, &credential.raw)?);
+			let creds = Arc::new(build_id_token_credentials(aud, raw)?);
 			cache_guard.insert(aud.to_string(), creds.clone());
 			creds
 		}
@@ -254,12 +330,18 @@ async fn explicit_id_token(aud: &str, credential: &GcpCredential) -> anyhow::Res
 }
 
 async fn explicit_gdch_token(aud: &str, credential: &GcpCredential) -> anyhow::Result<String> {
+	let GcpCredentialState::Valid {
+		raw, gdch_tokens, ..
+	} = &credential.state
+	else {
+		anyhow::bail!("GCP credential configuration is invalid");
+	};
 	let access_token_creds = {
-		let mut cache_guard = credential.gdch_tokens.lock().unwrap();
+		let mut cache_guard = gdch_tokens.lock().unwrap();
 		if let Some(creds) = cache_guard.get(aud) {
 			creds.clone()
 		} else {
-			let creds = Arc::new(build_gdch_access_token_credentials(aud, &credential.raw)?);
+			let creds = Arc::new(build_gdch_access_token_credentials(aud, raw)?);
 			cache_guard.insert(aud.to_string(), creds.clone());
 			creds
 		}
@@ -337,6 +419,18 @@ pub(super) async fn insert_token(
 	call_target: &Target,
 	hm: &mut HeaderMap,
 ) -> Result<(), BackendAuthError> {
+	let credential = match g {
+		GcpAuth::IdToken { credential, .. } | GcpAuth::AccessToken { credential, .. } => credential,
+	};
+	if let Some(reason) = credential
+		.as_ref()
+		.and_then(|credential| credential.invalid_reason())
+	{
+		tracing::debug!(error = %reason, "rejecting request: GCP credential configuration is invalid");
+		return Err(BackendAuthError::Local(anyhow!(
+			"GCP credential configuration is invalid"
+		)));
+	}
 	let token = match g {
 		GcpAuth::IdToken {
 			audience,
@@ -432,6 +526,104 @@ mod tests {
 			insert_provider_token("invalid\ntoken", &mut HeaderMap::new()),
 			Err(BackendAuthError::CredentialProvider(_))
 		));
+	}
+
+	#[tokio::test]
+	async fn invalid_explicit_credential_rejects_without_changing_caller_auth() {
+		for auth in [
+			GcpAuth::AccessToken {
+				r#type: Some(AccessToken),
+				credential: Some(GcpCredential::new_invalid("invalid credential".to_string())),
+			},
+			GcpAuth::IdToken {
+				r#type: IdToken,
+				audience: Some("https://aud.example".to_string()),
+				credential: Some(GcpCredential::new_invalid("invalid credential".to_string())),
+			},
+		] {
+			let mut headers = HeaderMap::new();
+			headers.insert(
+				http::header::AUTHORIZATION,
+				http::HeaderValue::from_static("Bearer caller-token"),
+			);
+
+			let err = insert_token(&auth, &Target::from(("backend.example", 443)), &mut headers)
+				.await
+				.expect_err("invalid credentials must reject requests");
+			assert!(matches!(err, BackendAuthError::Local(_)));
+			assert_eq!(
+				headers.get(http::header::AUTHORIZATION).unwrap(),
+				"Bearer caller-token"
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn invalid_gdch_credential_fails_before_token_fetch() {
+		let credential = GcpCredential::new(SecretString::from(r#"{"type":"gdch_service_account"}"#))
+			.expect("GDCH credentials are parsed lazily");
+		let auth = GcpAuth::IdToken {
+			r#type: IdToken,
+			audience: Some("https://aud.example".to_string()),
+			credential: Some(credential),
+		};
+		let mut headers = HeaderMap::new();
+		let err = insert_token(&auth, &Target::from(("backend.example", 443)), &mut headers)
+			.await
+			.expect_err("incomplete GDCH credentials must fail");
+		assert!(matches!(err, BackendAuthError::Local(_)));
+		assert!(headers.get(http::header::AUTHORIZATION).is_none());
+	}
+
+	#[test]
+	fn credential_error_sanitization_does_not_echo_json_values() {
+		let missing_type = GcpCredential::new(SecretString::from("{}"))
+			.expect_err("a credential without type must fail");
+		assert_eq!(
+			sanitize_credential_error(&missing_type),
+			"GCP credential JSON missing `type` field"
+		);
+
+		let malformed =
+			GcpCredential::new(SecretString::from("{MARKER")).expect_err("malformed JSON must fail");
+		assert_eq!(
+			sanitize_credential_error(&malformed),
+			"failed to parse GCP credential JSON"
+		);
+
+		let missing = GcpCredential::new(SecretString::from(r#"{"type":"service_account"}"#))
+			.expect_err("incomplete service account must fail");
+		assert_eq!(
+			sanitize_credential_error(&missing),
+			"GCP credential is missing required field `client_email`"
+		);
+
+		let unsupported = GcpCredential::new(SecretString::from(r#"{"type":"MARKER"}"#))
+			.expect_err("unsupported credential type must fail");
+		let sanitized = sanitize_credential_error(&unsupported);
+		assert_eq!(sanitized, "unsupported GCP credential type");
+		assert!(!sanitized.contains("MARKER"));
+
+		let invalid_type = GcpCredential::new(SecretString::from(
+			r#"{"type":"external_account","audience":"a","subject_token_type":"b","token_url":"https://token.example","credential_source":"MARKER"}"#,
+		))
+		.expect_err("invalid credential_source type must fail");
+		let sanitized = sanitize_credential_error(&invalid_type);
+		assert_eq!(sanitized, "GCP credential could not be loaded");
+		assert!(!sanitized.contains("MARKER"));
+
+		#[derive(Debug, Deserialize)]
+		#[allow(dead_code)]
+		struct RequiresNonAllowlistedField {
+			internal_only: String,
+		}
+		let non_allowlisted_missing = anyhow::Error::from(
+			serde_json::from_value::<RequiresNonAllowlistedField>(serde_json::json!({}))
+				.expect_err("the required field must be missing"),
+		);
+		let sanitized = sanitize_credential_error(&non_allowlisted_missing);
+		assert_eq!(sanitized, "GCP credential could not be loaded");
+		assert!(!sanitized.contains("internal_only"));
 	}
 }
 

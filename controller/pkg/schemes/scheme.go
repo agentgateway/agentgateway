@@ -5,11 +5,13 @@ import (
 
 	istionetworkingv1 "istio.io/client-go/pkg/apis/networking/v1"
 	istiosecurityv1 "istio.io/client-go/pkg/apis/security/v1"
+	"istio.io/istio/pkg/kube"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -17,6 +19,11 @@ import (
 
 	agwv1a1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
+
+func init() {
+	// Register our additional types before clients start reading the shared scheme.
+	utilruntime.Must(agwv1a1.Install(kube.IstioScheme))
+}
 
 // SchemeBuilder contains all the Schemes for registering the CRDs with which agentgateway interacts.
 // We share one SchemeBuilder as there's no harm in registering all I/O types internally.

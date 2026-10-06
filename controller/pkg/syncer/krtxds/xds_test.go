@@ -39,14 +39,14 @@ func NewFakeDiscoveryServer(t *testing.T, initialAddress ...syncer.Address) Fake
 func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, initialResource []agwir.AgwResource) Fake {
 	stop := test.NewStop(t)
 	opts := krtutil.NewKrtOptions(stop, new(krt.DebugHandler))
-	xdsAddress := krt.NewStaticCollection[syncer.Address](nil, initialAddress, opts.ToOptions("address")...)
-	xdsResource := krt.NewStaticCollection[agwir.AgwResource](nil, initialResource, opts.ToOptions("resource")...)
+	xdsAddress := krt.NewMutableCollection[syncer.Address](nil, initialAddress, opts.ToOptions("address")...)
+	xdsResource := krt.NewMutableCollection[agwir.AgwResource](nil, initialResource, opts.ToOptions("resource")...)
 	agwResourcesByGateway := func(resource agwir.AgwResource) types.NamespacedName {
 		return resource.Gateway
 	}
 	reg := []krtxds.Registration{
-		krtxds.Collection[syncer.Address, *workloadapi.Address](xdsAddress, opts),
-		krtxds.PerGatewayCollection[agwir.AgwResource, *api.Resource](xdsResource, agwResourcesByGateway, opts),
+		krtxds.Collection[syncer.Address, *workloadapi.Address](xdsAddress.AsCollection(), opts),
+		krtxds.PerGatewayCollection[agwir.AgwResource, *api.Resource](xdsResource.AsCollection(), agwResourcesByGateway, opts),
 	}
 	// we won't need a mock nack event publisher for this testing, so we pass nil
 	s := krtxds.NewDiscoveryServer(opts.Debugger, nil, reg...)

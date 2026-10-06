@@ -1,4 +1,5 @@
 llm:
+  pathPrefix: /foo/
   providers:
   - name: anthropic-shared
     provider: anthropic

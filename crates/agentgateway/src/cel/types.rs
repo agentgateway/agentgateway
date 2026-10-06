@@ -435,6 +435,10 @@ pub struct BackendContext {
 	/// The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.
 	#[serde(default)]
 	pub name: Strng,
+	/// The resolved target for directly addressed backends, including the port for network endpoints.
+	/// Absent for Service backends, whose workload endpoints are selected separately.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub endpoint: Option<Strng>,
 	/// The type of backend.
 	#[serde(rename = "type")]
 	#[serde(default)]
@@ -2179,7 +2183,7 @@ pub struct ExecutorSerde {
 	/// `mcp` contains attributes about the MCP request.
 	/// Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,
 	/// `task`) plus `methodName`. Post-request CEL may also include fields like
-	/// `sessionId` and tool payloads.
+	/// `sessionId`, tool payloads, and list results.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub mcp: Option<MCPInfo>,
 
@@ -2475,6 +2479,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		mcp: Some(MCPInfo {
 			method_name: Some("tools/call".into()),
 			session_id: Some("session-123".to_string()),
+			target: None,
 			tool: Some(MCPTool {
 				target: "my-mcp-server".to_string(),
 				name: "get_weather".to_string(),
@@ -2495,10 +2500,15 @@ pub fn full_example_executor() -> ExecutorSerde {
 			prompt: None,
 			resource: None,
 			task: None,
+			tools_list: None,
+			prompts_list: None,
+			resources_list: None,
+			resource_templates_list: None,
 			error: None,
 		}),
 		backend: Some(BackendContext {
 			name: "my-backend".into(),
+			endpoint: Some("example.com:443".into()),
 			backend_type: BackendType::Service,
 			protocol: BackendProtocol::http,
 		}),

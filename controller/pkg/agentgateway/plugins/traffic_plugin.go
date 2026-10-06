@@ -14,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
@@ -37,6 +39,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
+	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
@@ -70,8 +73,14 @@ var logger = logging.New("agentgateway/plugins")
 // Shared CEL environment for expression validation
 var celEnv *cel.Env
 
+var celValidationCache *lru.Cache[uint64, bool]
+
 func init() {
 	var err error
+	celValidationCache, err = lru.New[uint64, bool](1024)
+	if err != nil {
+		panic(err)
+	}
 	celEnv, err = cel.NewEnv()
 	if err != nil {
 		logger.Error("failed to create CEL environment", "error", err)
@@ -127,6 +136,8 @@ type PolicyCtx struct {
 	SourceGVK   schema.GroupVersionKind
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+	// Inline backend policies use the backend's JWKS owner.
+	JWKSOwner *jwks.RemoteJwksOwner
 
 	// CredentialResolver resolves credential refs: the built-in Secret resolver
 	// in OSS, or an injected resolver (which may itself be a chain). Access it
@@ -214,6 +225,13 @@ func TranslateAgentgatewayPolicy(
 		targetObject := utils.TypedNamespacedName{
 			Namespace: targetNamespace, Name: string(name),
 			Kind: gk.Kind,
+		}
+
+		if gk.Kind == wellknown.GatewayGVK.Kind {
+			if attachmentErr := unmanagedGatewayTarget(ctx, agw, targetObject.NamespacedName); attachmentErr != "" {
+				attachmentErrors = append(attachmentErrors, attachmentErr)
+				return
+			}
 		}
 
 		for _, policyTarget := range policyTargets {
@@ -395,6 +413,24 @@ func resolvePolicyAncestorRefs(
 		return strings.Compare(reports.ParentString(a), reports.ParentString(b))
 	})
 	return refs, ""
+}
+
+// unmanagedGatewayTarget returns an attachment error when the Gateway is not managed by this controller.
+func unmanagedGatewayTarget(ctx krt.HandlerContext, agw *AgwCollections, gateway types.NamespacedName) string {
+	gw := krtutil.FetchOneSpec(ctx, agw.Gateways, func(gw *gwv1.Gateway) gwv1.ObjectName {
+		return gw.Spec.GatewayClassName
+	}, krt.FilterKey(gateway.String()))
+	if gw == nil {
+		return ""
+	}
+	gc := ptr.Flatten(krt.FetchOne(ctx, agw.GatewayClasses, krt.FilterKey(string(gw.Spec))))
+	if gc == nil {
+		return fmt.Sprintf("Policy is not attached: Gateway %s/%s references GatewayClass %q, which was not found", gateway.Namespace, gateway.Name, gw.Spec)
+	}
+	if string(gc.Spec.ControllerName) != agw.ControllerName {
+		return fmt.Sprintf("Policy is not attached: Gateway %s/%s uses GatewayClass %q, which is managed by controller %q", gateway.Namespace, gateway.Name, gc.Name, gc.Spec.ControllerName)
+	}
+	return ""
 }
 
 // TranslatePolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
@@ -758,7 +794,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_JWT_OPTIONAL
-	case agentgateway.JWTAuthenticationModeStrict:
+	case agentgateway.JWTAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_JWT_STRICT
 	case agentgateway.JWTAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_JWT_PERMISSIVE
@@ -853,7 +889,7 @@ func processBasicAuthenticationPolicy(
 	switch ba.Mode {
 	case agentgateway.BasicAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_OPTIONAL
-	case agentgateway.BasicAuthenticationModeStrict:
+	case agentgateway.BasicAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_BasicAuthentication_STRICT
 	}
 
@@ -929,7 +965,7 @@ func processAPIKeyAuthenticationPolicy(
 	switch ak.Mode {
 	case agentgateway.APIKeyAuthenticationModeOptional:
 		p.Mode = api.TrafficPolicySpec_APIKey_OPTIONAL
-	case agentgateway.APIKeyAuthenticationModeStrict:
+	case agentgateway.APIKeyAuthenticationModeStrict, "":
 		p.Mode = api.TrafficPolicySpec_APIKey_STRICT
 	case agentgateway.APIKeyAuthenticationModePermissive:
 		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
@@ -1423,9 +1459,13 @@ func processExtProcTraffic(
 	}
 	if extProc.ProcessingOptions != nil {
 		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
-			RequestBodyMode:   api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			ResponseBodyMode:  api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
-			AllowModeOverride: extProc.ProcessingOptions.AllowModeOverride,
+			RequestBodyMode:     api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			ResponseBodyMode:    api.TrafficPolicySpec_ExtProc_FULL_DUPLEX_STREAMED,
+			RequestHeaderMode:   api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseHeaderMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			RequestTrailerMode:  api.TrafficPolicySpec_ExtProc_SEND,
+			ResponseTrailerMode: api.TrafficPolicySpec_ExtProc_SEND,
+			AllowModeOverride:   extProc.ProcessingOptions.AllowModeOverride,
 		}
 		if extProc.ProcessingOptions.RequestBodyMode != nil {
 			spec.ProcessingOptions.RequestBodyMode = toBodySendMode(*extProc.ProcessingOptions.RequestBodyMode)
@@ -2114,8 +2154,14 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 
 // Checks if the expression is a valid CEL expression
 func isCEL(expr agentgateway.CELExpression) bool {
+	key := xxhash.Sum64String(string(expr))
+	if valid, found := celValidationCache.Get(key); found {
+		return valid
+	}
 	_, iss := celEnv.Parse(string(expr))
-	return iss.Err() == nil
+	valid := iss.Err() == nil
+	celValidationCache.Add(key, valid)
+	return valid
 }
 
 func attachmentName(target *api.PolicyTarget) string {

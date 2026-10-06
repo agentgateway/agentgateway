@@ -137,7 +137,8 @@ info:
             "answer"
           ],
           "additionalProperties": false
-        }
+        },
+        "strict": false
       }
     },
     "metadata": {

@@ -299,7 +299,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::UnsupportedContent
 		| llm::AIError::UnsupportedConversion(_)
-		| llm::AIError::RequestParsing(_) => AIErrorClassification {
+		| llm::AIError::RequestParsing(..) => AIErrorClassification {
 			status: StatusCode::BAD_REQUEST,
 			reason: ProxyResponseReason::InvalidRequest,
 		},
@@ -354,7 +354,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::StreamingUnsupported
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::RequestTooLarge
-		| llm::AIError::RequestParsing(_)
+		| llm::AIError::RequestParsing(..)
 		| llm::AIError::RequestMarshal(_)
 		| llm::AIError::ResponseMarshal(_)
 		| llm::AIError::Encoding(_)
@@ -417,6 +417,7 @@ impl ProxyError {
 				| http::oidc::Error::ProviderCallback(_) => StatusCode::BAD_REQUEST,
 				http::oidc::Error::SessionCookieTooLarge
 				| http::oidc::Error::TokenExchangeFailed(_)
+				| http::oidc::Error::TokenEndpointRejected(_)
 				| http::oidc::Error::MissingIdToken
 				| http::oidc::Error::InvalidIdToken(_)
 				| http::oidc::Error::Config(_)
@@ -481,6 +482,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::PayloadTooLarge(_)) => StatusCode::PAYLOAD_TOO_LARGE,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::UnknownSession) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::BAD_REQUEST,

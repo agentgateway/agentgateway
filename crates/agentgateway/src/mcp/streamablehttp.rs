@@ -106,13 +106,16 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		// check accept header
-		if !request
-			.headers()
-			.get(http::header::ACCEPT)
-			.and_then(|header| header.to_str().ok())
-			.is_some_and(|header| {
-				header.contains(JSON_MIME_TYPE) && header.contains(EVENT_STREAM_MIME_TYPE)
-			}) {
+		let mut accepts_json = false;
+		let mut accepts_event_stream = false;
+		for header in request.headers().get_all(http::header::ACCEPT).iter() {
+			let Ok(header) = header.to_str() else {
+				return mcp::Error::InvalidAccept.into();
+			};
+			accepts_json |= header.contains(JSON_MIME_TYPE);
+			accepts_event_stream |= header.contains(EVENT_STREAM_MIME_TYPE);
+		}
+		if !accepts_json || !accepts_event_stream {
 			return mcp::Error::InvalidAccept.into();
 		}
 
@@ -131,6 +134,9 @@ impl StreamableHttpService {
 		let cached = body.remove_extension::<mcp::CachedRequest>();
 		let bytes = match http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,
+			Err(e) if agent_http::is_length_limit_error(&e) => {
+				return mcp::Error::PayloadTooLarge(limit).into();
+			},
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
 		let message = match cached
@@ -169,7 +175,7 @@ impl StreamableHttpService {
 			}
 			let Some(mut session) = self
 				.session_manager
-				.get_or_resume_session(session_id, inputs)?
+				.get_or_resume_session(session_id, inputs, &ctx)?
 			else {
 				return mcp::Error::UnknownSession.into();
 			};
@@ -194,7 +200,7 @@ impl StreamableHttpService {
 		}
 		let idle_ttl = inputs.backend.session_idle_ttl;
 		let backend_id = inputs.backend_id.clone();
-		let relay = inputs.build_new_connections()?;
+		let relay = inputs.build_new_connections(&ctx)?;
 		let mut session = self.session_manager.create_session(relay);
 		let mut resp = Box::pin(session.send(ctx, message)).await?;
 
@@ -215,7 +221,7 @@ impl StreamableHttpService {
 		message: ClientJsonRpcMessage,
 		protocol: RequestProtocol,
 	) -> Result<Response, ProxyError> {
-		let relay = inputs.build_new_connections()?;
+		let relay = inputs.build_new_connections(&part)?;
 		// Use stateless session - not registered in session manager
 		let mut session = self.session_manager.create_stateless_session(relay);
 		let initialize_upstream = protocol.uses_sessions();

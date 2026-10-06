@@ -44,6 +44,7 @@ func normalizeStandaloneHelmOutput(out string) string {
 }
 
 func TestStandaloneChartGoldenTemplate(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name       string
 		valuesYAML string
@@ -169,6 +170,7 @@ extraVolumeMounts:
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, stderr, err := renderStandaloneChart(t, tc.valuesYAML)
 			require.NoError(t, err, "helm template failed: %s", stderr)
 
@@ -195,6 +197,7 @@ extraVolumeMounts:
 }
 
 func TestStandaloneChartDefaultRender(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, "")
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.NotContains(t, out, "kind: PersistentVolumeClaim")
@@ -227,22 +230,109 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "readinessProbe:\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 10")
 	require.Contains(t, out, "startupProbe:\n          failureThreshold: 60\n          httpGet:\n            path: /healthz/ready\n            port: 15021\n          periodSeconds: 1\n          successThreshold: 1\n          timeoutSeconds: 2")
 	require.NotContains(t, out, "name: AGENTGATEWAY_ENV")
-	require.Contains(t, out, "name: OIDC_COOKIE_SECRET")
-	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: true")
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "secretKeyRef:")
 	require.NotContains(t, out, `"helm.sh/hook": test`)
 	require.NotContains(t, out, "curlimages/curl")
 }
 
-func TestStandaloneChartConfiguredOIDCCookieSecretIsRequired(t *testing.T) {
+func TestStandaloneChartPodDisruptionBudget(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		name       string
+		valuesYAML string
+		want       string
+		notWant    string
+	}{
+		{
+			name:    "default minAvailable",
+			want:    "minAvailable: 1",
+			notWant: "maxUnavailable:",
+		},
+		{
+			name:       "custom minAvailable",
+			valuesYAML: "  minAvailable: 2\n",
+			want:       "minAvailable: 2",
+			notWant:    "maxUnavailable:",
+		},
+		{
+			name:       "percentage minAvailable",
+			valuesYAML: "  minAvailable: 50%\n",
+			want:       "minAvailable: 50%",
+			notWant:    "maxUnavailable:",
+		},
+		{
+			name:       "maxUnavailable overrides default minAvailable",
+			valuesYAML: "  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "percentage maxUnavailable",
+			valuesYAML: "  maxUnavailable: 50%\n",
+			want:       "maxUnavailable: 50%",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "maxUnavailable overrides explicit minAvailable",
+			valuesYAML: "  minAvailable: 2\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "empty minAvailable workaround",
+			valuesYAML: "  minAvailable: \"\"\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+		{
+			name:       "null minAvailable workaround",
+			valuesYAML: "  minAvailable: null\n  maxUnavailable: 1\n",
+			want:       "maxUnavailable: 1",
+			notWant:    "minAvailable:",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out, stderr, err := renderStandaloneChart(t, "replicaCount: 2\npodDisruptionBudget:\n  enabled: true\n"+tc.valuesYAML)
+			require.NoError(t, err, "helm template failed: %s", stderr)
+			require.Contains(t, out, "kind: PodDisruptionBudget")
+			require.Contains(t, out, "\n  "+tc.want+"\n")
+			require.NotContains(t, out, "\n  "+tc.notWant)
+		})
+	}
+}
+
+func TestStandaloneChartOIDCCookieSecret(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `oidc:
+  enabled: true
   cookieSecretName: platform-oidc
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
-	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET\n              optional: false")
+	require.Contains(t, out, "name: platform-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
 	require.NotContains(t, out, "name: test-release-oidc")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "name: test-release-oidc\n              key: OIDC_COOKIE_SECRET")
+	require.NotContains(t, out, "optional: true")
+
+	out, stderr, err = renderStandaloneChart(t, `oidc:
+  enabled: false
+  cookieSecretName: platform-oidc
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
 }
 
 func TestStandaloneChartInlineConfig(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `config:
   gateways:
     default:
@@ -254,6 +344,7 @@ func TestStandaloneChartInlineConfig(t *testing.T) {
 }
 
 func TestStandaloneChartConfigChecksum(t *testing.T) {
+	t.Parallel()
 	render := func(t *testing.T, values string) (string, string) {
 		t.Helper()
 		out, stderr, err := renderStandaloneChart(t, values)
@@ -274,6 +365,7 @@ func TestStandaloneChartConfigChecksum(t *testing.T) {
 	baseOutput, baseChecksum := render(t, baseValues)
 
 	t.Run("dynamic config does not restart pods", func(t *testing.T) {
+		t.Parallel()
 		output, checksum := render(t, `config:
   gateways:
     default:
@@ -284,6 +376,7 @@ func TestStandaloneChartConfigChecksum(t *testing.T) {
 	})
 
 	t.Run("model catalog does not restart pods", func(t *testing.T) {
+		t.Parallel()
 		output, checksum := render(t, `config:
   config:
     modelCatalog:
@@ -298,6 +391,7 @@ func TestStandaloneChartConfigChecksum(t *testing.T) {
 	})
 
 	t.Run("startup config restarts pods", func(t *testing.T) {
+		t.Parallel()
 		_, checksum := render(t, `config:
   config:
     adminAddr: 127.0.0.1:15000
@@ -309,6 +403,7 @@ func TestStandaloneChartConfigChecksum(t *testing.T) {
 	})
 
 	t.Run("storage and database config restart pods", func(t *testing.T) {
+		t.Parallel()
 		_, databaseChecksum := render(t, `mode: database
 database:
   postgres:
@@ -334,6 +429,7 @@ config:
 }
 
 func TestStandaloneChartDatabaseModeAllowsReplicas(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `replicaCount: 3
 mode: database
 database:
@@ -350,6 +446,7 @@ database:
 }
 
 func TestStandaloneChartPerImageRegistries(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `image:
   registry: registry.one.example.com
   repository: platform/agentgateway
@@ -360,6 +457,7 @@ func TestStandaloneChartPerImageRegistries(t *testing.T) {
 }
 
 func TestStandaloneChartStringImage(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `image: localhost:5000/agentgateway:1784825828
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
@@ -368,6 +466,7 @@ func TestStandaloneChartStringImage(t *testing.T) {
 }
 
 func TestStandaloneChartRejectsUnknownMode(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `mode: other
 `)
 	require.Error(t, err)
@@ -375,6 +474,7 @@ func TestStandaloneChartRejectsUnknownMode(t *testing.T) {
 }
 
 func TestStandaloneChartRejectsDatabaseModeWithoutPostgres(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `mode: database
 `)
 	require.Error(t, err)
@@ -382,6 +482,7 @@ func TestStandaloneChartRejectsDatabaseModeWithoutPostgres(t *testing.T) {
 }
 
 func TestStandaloneChartRejectsDatabaseModeWithNonPostgresURL(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `mode: database
 database:
   postgres:
@@ -392,6 +493,7 @@ database:
 }
 
 func TestStandaloneChartRejectsPostgresOutsideDatabaseMode(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `mode: readonly
 database:
   postgres:
@@ -402,6 +504,7 @@ database:
 }
 
 func TestStandaloneChartReadonlyAllowsReplicas(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `replicaCount: 2
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
@@ -410,6 +513,7 @@ func TestStandaloneChartReadonlyAllowsReplicas(t *testing.T) {
 }
 
 func TestStandaloneChartCustomGatewayPorts(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `gateway:
   service:
     ports:
@@ -432,6 +536,7 @@ func TestStandaloneChartCustomGatewayPorts(t *testing.T) {
 }
 
 func TestStandaloneChartGatewayExtraServices(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `gateway:
   extraServices:
   - name: private-listener
@@ -478,6 +583,7 @@ func TestStandaloneChartGatewayExtraServices(t *testing.T) {
 }
 
 func TestStandaloneChartRejectsGatewayExtraServiceWithoutName(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `gateway:
   extraServices:
   - ports:
@@ -490,6 +596,7 @@ func TestStandaloneChartRejectsGatewayExtraServiceWithoutName(t *testing.T) {
 }
 
 func TestStandaloneChartRejectsGatewayExtraServiceWithoutPorts(t *testing.T) {
+	t.Parallel()
 	_, stderr, err := renderStandaloneChart(t, `gateway:
   extraServices:
   - name: listener
@@ -499,6 +606,7 @@ func TestStandaloneChartRejectsGatewayExtraServiceWithoutPorts(t *testing.T) {
 }
 
 func TestStandaloneChartServiceFullConfig(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `gateway:
   service:
     type: LoadBalancer
@@ -545,6 +653,7 @@ func TestStandaloneChartServiceFullConfig(t *testing.T) {
 }
 
 func TestStandaloneChartWorkloadOverrides(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `resources:
   requests:
     cpu: 250m
@@ -596,6 +705,7 @@ extraVolumeMounts:
 }
 
 func TestStandaloneChartExtraContainers(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `extraContainers:
 - name: httpbin
   image: kennethreitz/httpbin
@@ -610,6 +720,7 @@ func TestStandaloneChartExtraContainers(t *testing.T) {
 }
 
 func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, "")
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.NotContains(t, out, "kind: PodMonitor")
@@ -618,6 +729,7 @@ func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
 }
 
 func TestStandaloneChartMonitoringEnabled(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `monitoring:
   enabled: true
 `)
@@ -632,6 +744,7 @@ func TestStandaloneChartMonitoringEnabled(t *testing.T) {
 }
 
 func TestStandaloneChartMonitoringPodMonitorDisabled(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `monitoring:
   enabled: true
   podMonitor:
@@ -644,6 +757,7 @@ func TestStandaloneChartMonitoringPodMonitorDisabled(t *testing.T) {
 }
 
 func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `monitoring:
   enabled: true
   annotations:
@@ -663,6 +777,7 @@ func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
 }
 
 func TestStandaloneChartPodAnnotationsMergeWithMonitoringPort(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `podAnnotations:
   team: platform
 monitoring:
@@ -675,6 +790,7 @@ monitoring:
 }
 
 func TestStandaloneChartPodAnnotationsOverridesMonitoringPort(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `podAnnotations:
   prometheus.io/port: "9999"
 monitoring:
@@ -685,6 +801,7 @@ monitoring:
 }
 
 func TestStandaloneChartMonitoringRemovePrometheusAnnotations(t *testing.T) {
+	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `podAnnotations: {}
 monitoring:
   enabled: true

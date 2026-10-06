@@ -1244,11 +1244,46 @@ pub enum PathMatch {
 	Exact(Strng),
 	PathPrefix(Strng),
 	Regex(
-		#[serde(with = "serde_regex")]
+		#[serde(with = "serde_path_regex")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		regex::Regex,
 	),
 	Invalid,
+}
+
+const PATH_REGEX_PREFIX: &str = "^(?:";
+const PATH_REGEX_SUFFIX: &str = ")$";
+
+impl PathMatch {
+	/// Compiles a path regex that must match the entire path.
+	pub fn regex(pattern: &str) -> Result<regex::Regex, regex::Error> {
+		// Validate the pattern on its own so it cannot escape the anchoring group.
+		regex::Regex::new(pattern)?;
+		regex::Regex::new(&format!("{PATH_REGEX_PREFIX}{pattern}{PATH_REGEX_SUFFIX}"))
+	}
+
+	/// Returns the user provided pattern of a regex built with [`PathMatch::regex`].
+	pub fn regex_pattern(r: &regex::Regex) -> &str {
+		r.as_str()
+			.strip_prefix(PATH_REGEX_PREFIX)
+			.and_then(|p| p.strip_suffix(PATH_REGEX_SUFFIX))
+			.unwrap_or(r.as_str())
+	}
+}
+
+mod serde_path_regex {
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	use super::PathMatch;
+
+	pub fn serialize<S: Serializer>(r: &regex::Regex, s: S) -> Result<S::Ok, S::Error> {
+		s.serialize_str(PathMatch::regex_pattern(r))
+	}
+
+	pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<regex::Regex, D::Error> {
+		let pattern = String::deserialize(d)?;
+		PathMatch::regex(&pattern).map_err(serde::de::Error::custom)
+	}
 }
 
 #[apply(schema!)]
@@ -1903,6 +1938,8 @@ impl McpServerOverrides {
 #[apply(schema_ser_schema!)]
 pub struct McpTarget {
 	pub name: McpTargetName,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub condition: Option<Arc<crate::cel::Expression>>,
 	#[serde(flatten)]
 	pub spec: McpTargetSpec,
 }
@@ -2029,7 +2066,7 @@ impl ListenerSet {
 		})
 	}
 
-	fn best_match_filtered(
+	pub(crate) fn best_match_filtered(
 		&self,
 		host: &str,
 		filter: impl Fn(&ListenerProtocol) -> bool,
@@ -2461,7 +2498,7 @@ fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(s) => s.len(),
 		PathMatch::PathPrefix(s) => s.len(),
-		PathMatch::Regex(r) => r.as_str().len(),
+		PathMatch::Regex(r) => PathMatch::regex_pattern(r).len(),
 		PathMatch::Invalid => 0,
 	}
 }
@@ -2894,6 +2931,7 @@ pub enum BackendTrafficPolicy {
 	RequestHeaderModifier(filters::HeaderModifier),
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
+	UrlRewrite(filters::UrlRewrite),
 	RequestMirror(Vec<filters::RequestMirror>),
 }
 
@@ -3084,9 +3122,10 @@ pub struct LocalMcpAuthentication {
 impl LocalMcpAuthentication {
 	/// Derive the JWKS URL from the issuer and provider, for configs that do not set `jwks`.
 	fn derived_jwks_url(&self) -> anyhow::Result<::http::Uri> {
+		let issuer = self.issuer.trim_end_matches('/');
 		Ok(match &self.provider {
 			None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
-				format!("{}/.well-known/jwks.json", self.issuer).parse()?
+				format!("{issuer}/.well-known/jwks.json").parse()?
 			},
 			Some(McpIDP::Descope {}) => {
 				// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
@@ -3107,16 +3146,14 @@ impl LocalMcpAuthentication {
 					);
 					format!("{base}/.well-known/jwks.json").parse()?
 				} else {
-					format!("{}/.well-known/jwks.json", self.issuer).parse()?
+					format!("{issuer}/.well-known/jwks.json").parse()?
 				}
 			},
-			Some(McpIDP::Keycloak { .. }) => {
-				format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
-			},
+			Some(McpIDP::Keycloak { .. }) => format!("{issuer}/protocol/openid-connect/certs").parse()?,
 			Some(McpIDP::Authentik {}) => {
 				// authentik issuers look like https://<host>/application/o/<app-slug>/
 				// (note the trailing slash) and serve JWKS at {issuer}/jwks/.
-				format!("{}/jwks/", self.issuer.trim_end_matches('/')).parse()?
+				format!("{issuer}/jwks/").parse()?
 			},
 			Some(McpIDP::Entra { .. }) => http::oauth::entra_endpoints(&self.issuer)
 				.map_err(|e| anyhow!(e))?
@@ -3774,8 +3811,8 @@ clientSecret: "s3cret"
 resourceMetadata:
   mcpResourceUri: "mcp://test"
 "#;
-		// Parse via yamlviajson, matching how config files are loaded (map-style enum variants).
-		let auth: LocalMcpAuthentication = serdes::yamlviajson::from_str(yaml).unwrap();
+		// Parse via yaml, matching how config files are loaded (map-style enum variants).
+		let auth: LocalMcpAuthentication = serdes::yaml::from_str(yaml).unwrap();
 		assert!(matches!(auth.provider, Some(McpIDP::Entra {})));
 		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
 		assert!(auth.client_secret.is_some());
@@ -3789,7 +3826,7 @@ issuer: "https://example.com"
 jwks: '{"keys":[]}'
 resourceMetadata: {}
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(auth.audiences, None);
 
 		match auth.as_jwt().unwrap() {
@@ -3809,7 +3846,7 @@ jwks: '{"keys":[]}'
 resourceMetadata:
   mcpResourceUri: "mcp://test"
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned()]),
@@ -3827,7 +3864,7 @@ resourceMetadata:
   mcpResourceUri: "mcp://test"
 jwtValidationOptions: {}
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned()]),
@@ -3846,7 +3883,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: []
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert!(
 			auth.jwt_validation_options.required_claims.is_empty(),
 			"required_claims should be empty"
@@ -3864,7 +3901,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: ["exp", "nbf"]
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		assert_eq!(
 			auth.jwt_validation_options.required_claims,
 			std::collections::HashSet::from(["exp".to_owned(), "nbf".to_owned()])
@@ -3882,7 +3919,7 @@ resourceMetadata:
 jwtValidationOptions:
   requiredClaims: []
 "#;
-		let auth: LocalMcpAuthentication = serde_yaml::from_str(yaml).unwrap();
+		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		let jwt_config = auth.as_jwt().unwrap();
 
 		match jwt_config {

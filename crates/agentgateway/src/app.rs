@@ -216,7 +216,7 @@ async fn ui_url(config: &Config) -> String {
 	let Ok(contents) = local_config.read_to_string().await else {
 		return admin_url();
 	};
-	let Ok(local) = crate::serdes::yamlviajson::from_str::<serde_json::Value>(&contents) else {
+	let Ok(local) = crate::serdes::yaml::from_str::<serde_json::Value>(&contents) else {
 		return admin_url();
 	};
 	let gateway_ref = match local.pointer("/ui/gateways") {

@@ -15,6 +15,7 @@ pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub provider_override: Option<Strng>,
 	/// Supported API payload formats and optional path overrides for this provider.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub formats: Vec<ProviderFormatConfig>,
 }
 
@@ -64,6 +65,8 @@ pub enum ProviderPreset {
 	#[serde(rename = "xai")]
 	XAI,
 	Fireworks,
+	Meta,
+	Perplexity,
 }
 
 impl ProviderPreset {
@@ -82,6 +85,8 @@ impl ProviderPreset {
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
+			Self::Meta => "https://api.meta.ai/v1",
+			Self::Perplexity => "https://api.perplexity.ai/v1",
 		}
 	}
 
@@ -177,6 +182,15 @@ impl ProviderPreset {
 					format(Rerank, None),
 				],
 			),
+			Self::Meta => (
+				"meta",
+				vec![
+					format(Completions, None),
+					format(Messages, None),
+					format(Responses, None),
+				],
+			),
+			Self::Perplexity => ("perplexity", vec![format(Responses, None)]),
 		};
 		Provider {
 			model_override: model,

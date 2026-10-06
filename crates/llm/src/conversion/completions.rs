@@ -107,15 +107,27 @@ pub mod from_messages {
 	pub fn translate_request(
 		req: &types::messages::Request,
 	) -> Result<types::completions::typed::Request, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.prompt_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: u
+				.completion_tokens_details
+				.as_ref()
+				.and_then(|d| d.reasoning_tokens),
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	/// First string among the candidate extension values, in precedence order.
@@ -236,7 +248,7 @@ pub mod from_messages {
 					.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
 				output_tokens: usage
 					.as_ref()
-					.map(|u| u.completion_tokens as usize)
+					.map(|u| u.output_tokens() as usize)
 					.unwrap_or(0),
 				cache_creation_input_tokens,
 				cache_read_input_tokens,
@@ -509,7 +521,7 @@ pub mod from_messages {
 						(u.prompt_tokens as usize)
 							.saturating_sub(cache_creation_input_tokens.unwrap_or(0))
 							.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
-						u.completion_tokens as usize,
+						u.output_tokens() as usize,
 					)
 				})
 				.unwrap_or((0, 0));
@@ -535,8 +547,12 @@ pub mod from_messages {
 			if let Some(usage) = usage {
 				log.update(|r| {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
-					r.response.output_tokens = Some(usage.completion_tokens as u64);
+					r.response.output_tokens = Some(usage.output_tokens() as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.reasoning_tokens = usage
+						.completion_tokens_details
+						.as_ref()
+						.and_then(|d| d.reasoning_tokens);
 					r.response.cache_creation_input_tokens =
 						cache_creation_input_tokens.map(|tokens| tokens as u64);
 					r.response.cached_input_tokens = cache_read_input_tokens.map(|tokens| tokens as u64);
@@ -756,7 +772,36 @@ pub mod from_messages {
 	}
 
 	pub fn translate_error(bytes: &Bytes, status: ::http::StatusCode) -> Result<Bytes, AIError> {
-		let res = super::parse_chat_completion_error(bytes)?;
+		let mut res = super::parse_chat_completion_error(bytes)?;
+		// Claude Code uses this marker to compact and retry a rejected prompt.
+		// Do not override an existing capability marker or a different structured code.
+		let context_overflow = status == ::http::StatusCode::BAD_REQUEST
+			&& match res.error.code.as_ref().and_then(Value::as_str) {
+				Some(code) => code == "context_length_exceeded",
+				None => {
+					let message = res.error.message.to_ascii_lowercase();
+					[
+						"prompt is too long",
+						"input is too long for requested model",
+						"exceeds the context window",
+						"exceed context limit",
+						"maximum context length is",
+						"model's maximum context limit",
+						"is longer than the model's context length",
+						"input tokens exceed the configured limit",
+						"exceeds the available context size",
+					]
+					.iter()
+					.any(|pattern| message.contains(pattern))
+				},
+			};
+		if context_overflow {
+			res.error.r#type = Some("invalid_request_error".to_string());
+			if !res.error.message.contains("capability_rejected:") {
+				// Keep a whitespace boundary after the capability token.
+				res.error.message = format!("capability_rejected: prompt_too_long {}", res.error.message);
+			}
+		}
 		let m = messages::MessagesErrorResponse {
 			r#type: "error".to_string(),
 			error: messages::MessagesError {
@@ -832,19 +877,20 @@ pub mod from_messages {
 			Some(messages::ThinkingInput::Adaptive {}) => true,
 			_ => output_effort.is_some(),
 		};
-		let reasoning_effort = if reasoning_requested {
-			Some(match output_effort {
-				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
-				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
-				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
-				// Anthropic adaptive thinking defaults to high effort when omitted.
-				None => completions::ReasoningEffort::High,
-			})
-		} else {
-			None
-		};
+		let reasoning_effort =
+			if reasoning_requested && crate::conversion::supports_reasoning_effort(&model) {
+				Some(match output_effort {
+					Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+					Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+					Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+					Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
+					Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
+					// Anthropic adaptive thinking defaults to high effort when omitted.
+					None => completions::ReasoningEffort::High,
+				})
+			} else {
+				None
+			};
 		let response_format = output_config
 			.as_ref()
 			.and_then(|cfg| cfg.format.as_ref())
@@ -1384,7 +1430,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.audio_tokens);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_tokens = Some(u.output_tokens() as u64);
 								r.response.output_audio_tokens = u
 									.completion_tokens_details
 									.as_ref()

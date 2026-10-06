@@ -903,6 +903,17 @@
     "ModelRoute": {
       "type": "object",
       "properties": {
+        "discovery": {
+          "description": "Catalog provider and reverse transformation compiled during local config normalization.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelDiscovery"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "id": {
           "type": [
             "string",
@@ -947,6 +958,97 @@
         "backend",
         "policies",
         "backendPolicies"
+      ]
+    },
+    "ModelDiscovery": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "transformation": {
+          "$ref": "#/$defs/ModelTransformation"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "transformation"
+      ]
+    },
+    "ModelTransformation": {
+      "description": "Operations applied to a provider model to recover its public name.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "identity"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "prefix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "prefix"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "suffix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "suffix"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stripPrefix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "stripPrefix"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stripSuffix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "stripSuffix"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Operations in execution order, from the outermost CEL expression inward.",
+          "type": "object",
+          "properties": {
+            "chain": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ModelTransformation"
+              }
+            }
+          },
+          "required": [
+            "chain"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "ModelVisibility": {

@@ -289,7 +289,7 @@ fn get_path_rank(path: &PathMatch) -> u8 {
 fn get_path_length(path: &PathMatch) -> usize {
 	match path {
 		PathMatch::Exact(p) | PathMatch::PathPrefix(p) => p.len(),
-		PathMatch::Regex(r) => r.as_str().len(),
+		PathMatch::Regex(r) => PathMatch::regex_pattern(r).len(),
 		// Because this can never match, its rank is irrelevant
 		PathMatch::Invalid => 0,
 	}

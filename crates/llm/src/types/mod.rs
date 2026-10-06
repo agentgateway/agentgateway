@@ -148,6 +148,9 @@ pub(crate) fn visit_json_at(
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
 /// uniform policy enforcement and observability
 pub trait RequestType: Send + Sync {
+	fn input_format() -> crate::InputFormat
+	where
+		Self: Sized;
 	fn supports_model(&self) -> bool {
 		true
 	}

@@ -26,6 +26,16 @@ spec:
           - name: tls
             kind: Secret
             namespace: rejected
+    - name: invalid-missing
+      port: 443
+      protocol: HTTPS
+      hostname: "invalid-missing"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: nonexistent
+            kind: Secret
+            namespace: rejected
 ---
 kind: Secret
 apiVersion: v1
@@ -95,6 +105,22 @@ output:
   resource:
     listener:
       bindKey: 443/default/test-gateway
+      hostname: invalid-missing
+      key: default/test-gateway.invalid-missing
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: invalid-missing
+      protocol: HTTPS
+      tls:
+        cert: aW52YWxpZA==
+        privateKey: aW52YWxpZA==
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 443/default/test-gateway
       hostname: valid
       key: default/test-gateway.valid
       name:
@@ -116,7 +142,8 @@ status:
     attachedListenerSets: 0
     conditions:
     - lastTransitionTime: fake
-      message: 'Some listeners are not accepted: invalid: Bad TLS configuration'
+      message: 'Some listeners are not accepted: invalid: Bad TLS configuration; invalid-missing:
+        Bad TLS configuration'
       reason: ListenersNotValid
       status: "True"
       type: Accepted
@@ -178,6 +205,35 @@ status:
         status: "False"
         type: ResolvedRefs
       name: invalid
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Bad TLS configuration
+        reason: Invalid
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: certificateRef nonexistent/rejected not accessible to a Gateway in
+          namespace "default" (missing a ReferenceGrant?)
+        reason: RefNotPermitted
+        status: "False"
+        type: ResolvedRefs
+      name: invalid-missing
       supportedKinds:
       - group: gateway.networking.k8s.io
         kind: HTTPRoute

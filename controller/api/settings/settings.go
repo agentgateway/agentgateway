@@ -223,8 +223,8 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
-	// EnableAgentgatewayModels enables the experimental AgentgatewayModel API.
-	EnableAgentgatewayModels bool `split_words:"true" default:"false"`
+	// EnableAgentgatewayModels enables the AgentgatewayModel API.
+	EnableAgentgatewayModels bool `split_words:"true" default:"true"`
 	// EnableXBackend enables the experimental Gateway API XBackend resource.
 	EnableXBackend bool `split_words:"true" default:"false"`
 

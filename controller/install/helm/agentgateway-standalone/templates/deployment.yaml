@@ -74,12 +74,13 @@ spec:
         env:
         - name: RUST_BACKTRACE
           value: "1"
+        {{- if .Values.oidc.enabled }}
         - name: OIDC_COOKIE_SECRET
           valueFrom:
             secretKeyRef:
               name: {{ .Values.oidc.cookieSecretName | default (printf "%s-oidc" (include "agentgateway-standalone.fullname" .)) }}
               key: OIDC_COOKIE_SECRET
-              optional: {{ empty .Values.oidc.cookieSecretName }}
+        {{- end }}
         {{- with .Values.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

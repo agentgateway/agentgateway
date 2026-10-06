@@ -419,7 +419,7 @@ export AGENTGATEWAY_IMAGE_REPO ?= agentgateway-controller
 
 .PHONY: agentgateway-controller
 agentgateway-controller:
-	 $(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/agentgateway-linux-$(GOARCH) ./cmd/agentgateway
+	 $(GO_BUILD_FLAGS) GOOS=linux go build -trimpath -tags=disable_pgv,agent -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/agentgateway-linux-$(GOARCH) ./cmd/agentgateway
 
 #----------------------------------------------------------------------------------
 # agctl CLI

@@ -118,6 +118,8 @@ fn provider_preset_from_proto(
 		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
 		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
 		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
+		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
+		ProviderPreset::Perplexity => Ok(llm::custom::ProviderPreset::Perplexity),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),
@@ -931,6 +933,7 @@ fn convert_backend_ai_policy(
 						let md = llm::policy::Moderation {
 							model: m.model.as_deref().map(strng::new),
 							action: convert_reject_audit(m.action),
+							failure_mode: convert_guardrail_failure_mode(m.failure_mode),
 							policies: pols,
 						};
 						llm::policy::RequestGuardKind::OpenAIModeration(md)
@@ -946,6 +949,7 @@ fn convert_backend_ai_policy(
 							project_id: strng::new(&gma.project_id),
 							location: gma.location.as_ref().map(strng::new),
 							action: convert_reject_audit(gma.action),
+							failure_mode: convert_guardrail_failure_mode(gma.failure_mode),
 							policies: pols,
 						})
 					},
@@ -960,6 +964,7 @@ fn convert_backend_ai_policy(
 							guardrail_version: strng::new(&bg.version),
 							region: strng::new(&bg.region),
 							action: convert_reject_audit(bg.action),
+							failure_mode: convert_guardrail_failure_mode(bg.failure_mode),
 							policies: pols,
 						})
 					},
@@ -972,6 +977,7 @@ fn convert_backend_ai_policy(
 						llm::policy::RequestGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 							endpoint: strng::new(&acs.endpoint),
 							action: convert_reject_audit(acs.action),
+							failure_mode: Default::default(),
 							policies: pols,
 							cached_azure_auth: Default::default(),
 							analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1036,6 +1042,7 @@ fn convert_backend_ai_policy(
 						project_id: strng::new(&gma.project_id),
 						location: gma.location.as_ref().map(strng::new),
 						action: convert_reject_audit(gma.action),
+						failure_mode: convert_guardrail_failure_mode(gma.failure_mode),
 						policies: pols,
 					})
 				},
@@ -1050,6 +1057,7 @@ fn convert_backend_ai_policy(
 						guardrail_version: strng::new(&bg.version),
 						region: strng::new(&bg.region),
 						action: convert_reject_audit(bg.action),
+						failure_mode: convert_guardrail_failure_mode(bg.failure_mode),
 						policies: pols,
 					})
 				},
@@ -1062,6 +1070,7 @@ fn convert_backend_ai_policy(
 					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
 						endpoint: strng::new(&acs.endpoint),
 						action: convert_reject_audit(acs.action),
+						failure_mode: Default::default(),
 						policies: pols,
 						cached_azure_auth: Default::default(),
 						analyze_text: Some(llm::policy::AnalyzeTextConfig {
@@ -1235,11 +1244,19 @@ fn backend_auth_kind_from_proto(
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
-			let credential = g
-				.credential
-				.map(|credential| auth::gcp::GcpCredential::new(credential.into()))
-				.transpose()
-				.map_err(|e| ProtoError::Generic(e.to_string()))?;
+			let credential =
+				g.credential.map(
+					|credential| match auth::gcp::GcpCredential::new(credential.into()) {
+						Ok(credential) => credential,
+						Err(error) => {
+							let reason = auth::gcp::sanitize_credential_error(&error);
+							diagnostics.add_warning(format!(
+								"GCP credential is invalid; requests using this policy will be rejected: {reason}"
+							));
+							auth::gcp::GcpCredential::new_invalid(reason)
+						},
+					},
+				);
 			BackendAuthKind::Gcp(match g.token_type {
 				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
 					r#type: Some(auth::gcp::AccessToken),
@@ -1654,16 +1671,9 @@ impl ModelRoute {
 		let llm_policy = s
 			.ai_policy
 			.as_ref()
-			.map(|policy| {
-				let mut policy = convert_backend_ai_policy(policy, diagnostics)?;
-				// Preserve default model endpoint formats when the policy does not specify routes.
-				if policy.routes.is_empty() {
-					policy.routes = llm::model_router::default_route_types().routes.clone();
-				}
-				Ok::<_, ProtoError>(Arc::new(policy))
-			})
+			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
 			.transpose()?
-			.unwrap_or_else(llm::model_router::default_route_types);
+			.unwrap_or_default();
 		let authorization = s
 			.authorization
 			.as_ref()
@@ -1688,6 +1698,32 @@ impl ModelRoute {
 						.collect::<Result<Vec<_>, _>>()?,
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
+					discovery: concrete.discovery_provider.as_ref().and_then(|provider| {
+						if !name.contains('*')
+							|| llm_policy
+								.overrides
+								.as_ref()
+								.is_some_and(|p| p.contains_key("model"))
+							|| llm_policy
+								.final_transformations
+								.as_ref()
+								.is_some_and(|p| p.contains_key("model"))
+						{
+							return None;
+						}
+						let transformation = match llm_policy
+							.transformations
+							.as_ref()
+							.and_then(|p| p.get("model"))
+						{
+							Some(expression) => llm::model_transform::reverse_model_transformation(expression)?,
+							None => llm::model_transform::ModelTransformation::Identity,
+						};
+						Some(llm::discovery::ModelDiscovery {
+							provider: strng::new(provider),
+							transformation,
+						})
+					}),
 					id: None,
 					name: model_match.model.clone(),
 					created: s.created,
@@ -1695,6 +1731,7 @@ impl ModelRoute {
 					header_matches: vec![],
 					backend,
 					policies: llm::model_router::ModelRoutePolicies {
+						passthrough: None,
 						llm: llm_policy.clone(),
 						authorization,
 					},
@@ -2123,6 +2160,7 @@ fn mcp_target_from_proto(
 
 	Ok(McpTarget {
 		name: strng::new(&s.name),
+		condition: None,
 		spec: match proto {
 			Protocol::Sse => McpTargetSpec::Sse(SseTargetSpec {
 				backend,
@@ -2161,7 +2199,12 @@ fn route_match_from_proto(
 		}) => PathMatch::Exact(strng::new(prefix)),
 		Some(proto::agent::PathMatch {
 			kind: Some(Kind::Regex(r)),
-		}) => regex_or_warn_invalid(diagnostics, "route.path", r)
+		}) => PathMatch::regex(r)
+			.inspect_err(|err| {
+				diagnostics.add_warning(format!(
+					"invalid regex for route.path: {err}; replacing {r:?} with a matcher that never matches",
+				));
+			})
 			.map(PathMatch::Regex)
 			.unwrap_or(PathMatch::Invalid),
 		Some(proto::agent::PathMatch { kind: None }) => {
@@ -2466,6 +2509,7 @@ fn backend_policy_from_proto(
 					.transpose()?,
 			})
 		},
+		Some(bps::Kind::UrlRewrite(ur)) => BackendTrafficPolicy::UrlRewrite(ur.into()),
 		Some(bps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -2941,24 +2985,7 @@ fn traffic_policy_from_proto(
 					.transpose()?,
 			}))
 		},
-		Some(tps::Kind::UrlRewrite(ur)) => {
-			let authority = if ur.host.is_empty() {
-				None
-			} else {
-				Some(HostRedirect::Host(strng::new(&ur.host)))
-			};
-			let path = match &ur.path {
-				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
-				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
-					Some(PathRedirect::Prefix(strng::new(p)))
-				},
-				None => None,
-			};
-			TrafficPolicy::UrlRewrite(RequestPolicy::single(http::filters::UrlRewrite {
-				authority,
-				path,
-			}))
-		},
+		Some(tps::Kind::UrlRewrite(ur)) => TrafficPolicy::UrlRewrite(RequestPolicy::single(ur.into())),
 		Some(tps::Kind::RequestMirror(m)) => {
 			let mirrors = m
 				.mirrors
@@ -3729,6 +3756,21 @@ impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
 	}
 }
 
+impl From<&proto::agent::UrlRewrite> for http::filters::UrlRewrite {
+	fn from(ur: &proto::agent::UrlRewrite) -> Self {
+		http::filters::UrlRewrite {
+			authority: default_as_none(ur.host.as_str()).map(|h| HostRedirect::Host(strng::new(h))),
+			path: match &ur.path {
+				Some(proto::agent::url_rewrite::Path::Full(f)) => Some(PathRedirect::Full(strng::new(f))),
+				Some(proto::agent::url_rewrite::Path::Prefix(p)) => {
+					Some(PathRedirect::Prefix(strng::new(p)))
+				},
+				None => None,
+			},
+		}
+	}
+}
+
 fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarget, ProtoError> {
 	use crate::types::proto::agent::policy_target as tgt;
 	match t.kind.as_ref() {
@@ -4079,6 +4121,16 @@ fn convert_reject_audit(action: i32) -> llm::policy::RejectAuditAction {
 	}
 }
 
+fn convert_guardrail_failure_mode(mode: i32) -> llm::policy::FailureMode {
+	match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(mode) {
+		Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
+			llm::policy::FailureMode::FailOpen
+		},
+		// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+		_ => llm::policy::FailureMode::FailClosed,
+	}
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -4096,14 +4148,7 @@ fn convert_webhook(
 		&w.forward_header_matches,
 	)?;
 
-	let failure_mode =
-		match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(w.failure_mode) {
-			Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
-				llm::policy::FailureMode::FailOpen
-			},
-			// Default to FailClosed (proto default is FAIL_CLOSED = 0)
-			_ => llm::policy::FailureMode::FailClosed,
-		};
+	let failure_mode = convert_guardrail_failure_mode(w.failure_mode);
 
 	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
 		.headers
@@ -5309,6 +5354,77 @@ mod tests {
 	}
 
 	#[test]
+	fn invalid_gcp_credential_becomes_runtime_invalid() {
+		for token_type in [
+			None,
+			Some(proto::agent::gcp::TokenType::IdToken(
+				proto::agent::gcp::IdToken {
+					audience: Some("https://aud.example".to_string()),
+				},
+			)),
+		] {
+			let mut diagnostics = Diagnostics::default();
+			let auth = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::Gcp(
+						proto::agent::Gcp {
+							credential: Some(
+								r#"{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"PRIVATE_KEY"}"#.to_string(),
+							),
+							token_type,
+						},
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid credentials should not reject the resource");
+			let credential = match auth {
+				Some(BackendAuthKind::Gcp(
+					GcpAuth::AccessToken { credential, .. } | GcpAuth::IdToken { credential, .. },
+				)) => credential.expect("explicit credential must be retained"),
+				_ => panic!("expected GCP auth"),
+			};
+			assert_eq!(
+				credential.invalid_reason(),
+				Some("GCP credential is missing required field `client_email`")
+			);
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1);
+			assert!(warnings[0].contains("client_email"));
+			assert!(!warnings[0].contains("PRIVATE_KEY"));
+		}
+	}
+
+	#[test]
+	fn malformed_and_unsupported_gcp_credentials_warn_without_leaking_values() {
+		for (credential, expected_warning) in [
+			("{MARKER", "failed to parse GCP credential JSON"),
+			(r#"{"type":"MARKER"}"#, "unsupported GCP credential type"),
+		] {
+			let mut diagnostics = Diagnostics::default();
+			let auth = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::Gcp(
+						proto::agent::Gcp {
+							credential: Some(credential.to_string()),
+							token_type: None,
+						},
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid credentials should not reject the resource");
+			assert!(matches!(auth, Some(BackendAuthKind::Gcp(_))));
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1);
+			assert!(warnings[0].contains(expected_warning));
+			assert!(!warnings[0].contains("MARKER"));
+		}
+	}
+
+	#[test]
 	fn test_backend_auth_azure_scope_conversion() -> Result<(), ProtoError> {
 		let auth = backend_auth_kind_from_proto(
 			proto::agent::BackendAuthPolicy {
@@ -5337,7 +5453,7 @@ mod tests {
 		use proto::agent::model_route::concrete_model::ModelVisibility;
 		use proto::agent::model_route::{ConcreteModel, Kind};
 
-		let proto_route = proto::agent::ModelRoute {
+		let mut proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
 			router_key: String::new(),
@@ -5354,6 +5470,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: Some(proto::agent::backend_policy_spec::Ai {
 				transformations: [("model".to_string(), "\"gpt-5-mini\"".to_string())].into(),
@@ -5379,18 +5496,12 @@ mod tests {
 			model.visibility,
 			llm::model_router::ModelVisibility::Internal
 		);
-		assert!(
-			model
-				.policies
-				.llm
-				.routes
-				.contains_key("/v1/chat/completions")
-		);
+		assert!(model.policies.llm.routes.is_empty());
 		assert!(model.policies.authorization.is_some());
 		assert!(model.policies.llm.transformations.is_some());
 		assert_eq!(
-			model.policies.llm.resolve_route("/v1/messages"),
-			llm::RouteType::Messages
+			llm::model_router::classify_route("/v1/messages"),
+			Some(llm::RouteType::Messages)
 		);
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
@@ -5399,6 +5510,26 @@ mod tests {
 			},
 			other => panic!("expected backend target, got {other:?}"),
 		}
+		proto_route.r#match.as_mut().unwrap().model = "openai/*".to_string();
+		let Some(Kind::ConcreteModel(concrete)) = proto_route.kind.as_mut() else {
+			unreachable!();
+		};
+		concrete.discovery_provider = Some("openai".to_string());
+		proto_route.ai_policy.as_mut().unwrap().transformations = [(
+			"model".to_string(),
+			"llmRequest.model.stripPrefix(\"openai/\")".to_string(),
+		)]
+		.into();
+		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		let ModelRouteKind::Concrete(model) = route.kind else {
+			panic!("expected concrete model route");
+		};
+		let discovery = model.discovery.unwrap();
+		assert_eq!(discovery.provider, "openai");
+		assert_eq!(
+			discovery.transformation.apply("gpt-5-mini").unwrap(),
+			"openai/gpt-5-mini"
+		);
 		Ok(())
 	}
 
@@ -5465,7 +5596,7 @@ mod tests {
 		};
 		assert_eq!(model.name, "fast");
 		assert_eq!(model.created, 1_704_153_600);
-		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
+		assert!(model.llm_policy.routes.is_empty());
 		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
 			panic!("expected weighted routing");
 		};

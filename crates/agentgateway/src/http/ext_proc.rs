@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -403,8 +404,11 @@ struct ExtProcInstance {
 	span_target: Arc<SimpleBackendReference>,
 	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
 	tx_req: Option<Sender<ProcessingRequest>>,
+	// Completes on the transport's first poll, or errors if setup drops the stream first.
+	request_stream_polled: Option<tokio::sync::oneshot::Receiver<()>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
+	cleanly_closed: Arc<AtomicBool>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 	req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 	resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
@@ -438,8 +442,10 @@ impl ExtProcInstance {
 					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
 			),
 			tx_req: None,
+			request_stream_polled: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
+			cleanly_closed: Arc::new(AtomicBool::new(false)),
 			metadata_context,
 			req_attributes,
 			resp_attributes,
@@ -458,11 +464,22 @@ impl ExtProcInstance {
 			return Err(Error::RequestSend);
 		};
 		let failure_mode = self.failure_mode;
+		let cleanly_closed = self.cleanly_closed.clone();
 		let span_client = self.span_client.clone();
 		let span_target = self.span_target.clone();
-		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
+		let (tx_req, mut rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
-		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
+		// Enqueueing a ProcessingRequest does not mean we connected to the processor.
+		// Signal when the outbound path actually starts reading the gRPC request stream,
+		// so mutate_request can keep the original HTTP body untouched during setup.
+		let (tx_polled, rx_polled) = tokio::sync::oneshot::channel();
+		let mut tx_polled = Some(tx_polled);
+		let req_stream = futures::stream::poll_fn(move |cx| {
+			if let Some(tx) = tx_polled.take() {
+				let _ = tx.send(());
+			}
+			rx_req.poll_recv(cx)
+		});
 		dtrace::spawn(async move {
 			let mut request = tonic::Request::new(req_stream);
 			*request.metadata_mut() = grpc_initial_metadata;
@@ -495,6 +512,7 @@ impl ExtProcInstance {
 						if let Some(span) = span.as_deref_mut() {
 							span.record_grpc_status(tonic::Code::Ok);
 						}
+						cleanly_closed.store(true, Ordering::Relaxed);
 						return;
 					},
 					Err(error) => {
@@ -535,19 +553,25 @@ impl ExtProcInstance {
 		});
 
 		self.tx_req = Some(tx_req);
+		self.request_stream_polled = Some(rx_polled);
 		self.rx_resp_for_request = Some(rx_resp_for_request);
 		self.rx_resp_for_response = Some(rx_resp_for_response);
 		Ok(())
 	}
 
 	async fn send_request(&mut self, req: ProcessingRequest) -> Result<(), Error> {
-		self
+		let result = self
 			.tx_req
 			.as_ref()
 			.ok_or(Error::RequestSend)?
 			.send(req)
 			.await
-			.map_err(|_| Error::RequestSend)
+			.map_err(|_| Error::RequestSend);
+		if result.is_err() && self.cleanly_closed.load(Ordering::Relaxed) {
+			self.skipped = true;
+			return Ok(());
+		}
+		result
 	}
 
 	fn request_sender(&self) -> Result<Sender<ProcessingRequest>, Error> {
@@ -955,6 +979,9 @@ impl ExtProcInstance {
 				}
 				return Err(e);
 			}
+			if self.skipped {
+				return Ok((req, None));
+			}
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		}
 
@@ -967,6 +994,20 @@ impl ExtProcInstance {
 				"complete_request_phase_preserves_original_body",
 			);
 			return Ok((req, None));
+		}
+
+		// Wait before handing the original body to a producer that can consume it.
+		// A setup failure drops the unpolled stream (and its one-shot sender), letting
+		// FailOpen return the intact request. Do not wait for client.process() or an EPP
+		// response here: a full-duplex processor may need the body before responding.
+		if let Some(polled) = self.request_stream_polled.take()
+			&& polled.await.is_err()
+		{
+			if failure_mode == FailureMode::FailOpen {
+				self.skipped = true;
+				return Ok((req, None));
+			}
+			return Err(Error::RequestSend);
 		}
 
 		let tx = self.tx_req.clone();
@@ -1436,6 +1477,10 @@ impl ExtProcInstance {
 		if self.skipped {
 			return Ok((response, None));
 		}
+		if self.cleanly_closed.load(Ordering::Relaxed) {
+			self.skipped = true;
+			return Ok((response, None));
+		}
 		let response_trailers = Arc::new(Mutex::new(None));
 		let headers = resp_to_header_map(&response);
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
@@ -1504,6 +1549,9 @@ impl ExtProcInstance {
 					observability_mode: false,
 				})
 				.await?;
+			if self.skipped {
+				return Ok((http::Response::from_parts(parts, body), None));
+			}
 			self.mark_protocol_config_sent_if(sends_protocol_config);
 		}
 

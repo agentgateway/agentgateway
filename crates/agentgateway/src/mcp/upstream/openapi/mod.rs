@@ -6,14 +6,15 @@ use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
 use agent_core::version::BuildInfo;
+use base64::Engine;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
 use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
-use regex::{Captures, Regex, Replacer};
-use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use regex::Regex;
+use rmcp::model::{CallToolResult, ClientRequest, ContentBlock, JsonObject, JsonRpcRequest, Tool};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -49,6 +50,16 @@ pub enum ParseError {
 	IoError(#[from] std::io::Error),
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(#[from] url::ParseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+enum PathParamError {
+	#[error("path parameter '{0}' is missing")]
+	Missing(String),
+	#[error("path parameter '{0}' must be a string or number")]
+	UnsupportedType(String),
+	#[error("path parameter '{0}' must not be empty or contain a dot segment")]
+	UnsafeSegment(String),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -465,7 +476,10 @@ fn build_schema_property(item: &Parameter) -> Result<(String, JsonObject, bool),
 		schema.insert("description".to_string(), json!(desc));
 	}
 
-	Ok((p.name.clone(), schema, p.required))
+	// OpenAPI requires path parameters to set `required: true`; openapiv3 tolerates the field
+	// being omitted and defaults it to false, so enforce the specification here
+	let required = matches!(item, Parameter::Path { .. }) || p.required;
+	Ok((p.name.clone(), schema, required))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -486,7 +500,7 @@ impl Default for JsonSchema {
 }
 
 /// Regex to match path template parameters like `{param_name}`.
-static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
+static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{[^}]+\}").unwrap());
 
 /// Characters that are safe in path segments (RFC 3986 unreserved characters).
 /// All other characters will be percent-encoded to prevent path traversal/injection.
@@ -496,26 +510,37 @@ const PATH_SEGMENT_SAFE: &AsciiSet = &percent_encoding::NON_ALPHANUMERIC
 	.remove(b'_')
 	.remove(b'~');
 
-/// Replaces path template parameters.
-struct PathParamReplacer(serde_json::Map<String, Value>);
-
-impl Replacer for PathParamReplacer {
-	fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
-		let param = &caps[1];
-		match self.0.get(param) {
-			Some(Value::Number(n_val)) => return dst.push_str(&n_val.to_string()),
-			Some(Value::String(s_val)) => {
-				return dst.extend(utf8_percent_encode(s_val, PATH_SEGMENT_SAFE));
+fn substitute_path_params(
+	template: &str,
+	params: &serde_json::Map<String, Value>,
+) -> Result<String, PathParamError> {
+	let mut path = String::with_capacity(template.len());
+	let mut last_end = 0;
+	for placeholder in PATH_PARAM_RE.find_iter(template) {
+		path.push_str(&template[last_end..placeholder.start()]);
+		let matched = placeholder.as_str();
+		// The regex guarantees ASCII braces at both ends
+		let param = &matched[1..matched.len() - 1];
+		match params.get(param) {
+			Some(Value::Number(value)) => path.push_str(&value.to_string()),
+			// `.` is unreserved so percent-encoding leaves dot segments intact; reject them per
+			// decoded segment so upstreams that resolve `%2F` before the path still cannot traverse
+			Some(Value::String(value))
+				if value
+					.split(['/', '\\'])
+					.any(|segment| matches!(segment, "" | "." | "..")) =>
+			{
+				return Err(PathParamError::UnsafeSegment(param.to_string()));
 			},
-			Some(unexpected) => warn!(
-				"Unexpected parameter '{param}' (value: {:?}), leaving path param",
-				unexpected
-			),
-			_ => {},
-		};
-		// fallback to use path parm
-		dst.push_str(&caps[0]);
+			Some(Value::String(value)) => path.extend(utf8_percent_encode(value, PATH_SEGMENT_SAFE)),
+			Some(_) => return Err(PathParamError::UnsupportedType(param.to_string())),
+			None => return Err(PathParamError::Missing(param.to_string())),
+		}
+		last_end = placeholder.end();
 	}
+	path.push_str(&template[last_end..]);
+
+	Ok(path)
 }
 
 /// Normalizes URL path construction to avoid double slashes
@@ -588,7 +613,7 @@ impl Handler {
 		let res = match request.request {
 			ClientRequest::InitializeRequest(_) => Messages::from_result(
 				id,
-				ServerInfo::new(ServerCapabilities::builder().enable_tools().build()),
+				ServerConfig::new(ServerCapabilities::builder().enable_tools().build()),
 			),
 			ClientRequest::GetPromptRequest(_) => Messages::from_result(id, GetPromptResult::new(vec![])),
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
@@ -663,17 +688,7 @@ impl Handler {
 				let res = self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
-
-				// Serialize structured content to JSON string for backwards compatibility
-				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
-				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
-				// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
-				let serialized_content = serde_json::to_string(&res)
-					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
-
-				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
-				result.structured_content = Some(res);
-				Messages::from_result(id, result)
+				Messages::from_result(id, res)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
@@ -703,7 +718,7 @@ impl Handler {
 		name: &str,
 		args: Option<JsonObject>,
 		ctx: &IncomingRequestContext,
-	) -> Result<serde_json::Value, UpstreamError> {
+	) -> Result<CallToolResult, UpstreamError> {
 		let (_tool, info) = self
 			.tools
 			.iter()
@@ -732,7 +747,8 @@ impl Handler {
 
 		// --- URL Construction ---
 		// Substitute path parameters into the path template in a single pass
-		let path = PATH_PARAM_RE.replace_all(&info.path, PathParamReplacer(path_params));
+		let path = substitute_path_params(&info.path, &path_params)
+			.map_err(|error| UpstreamError::InvalidRequest(error.to_string()))?;
 
 		// Use normalize_url_path to avoid double slashes
 		let normalized_path = normalize_url_path(&self.prefix, &path);
@@ -807,7 +823,6 @@ impl Handler {
 						HeaderValue::from_static("application/octet-stream"),
 					);
 					let s = body_val.as_str().unwrap_or_default();
-					use base64::Engine;
 					base64::engine::general_purpose::STANDARD
 						.decode(s)
 						.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
@@ -892,6 +907,10 @@ impl Handler {
 		if !status.is_server_error() {
 			let lim = crate::http::response_buffer_limit(&response);
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
+			let content_type = response
+				.headers()
+				.typed_get::<headers::ContentType>()
+				.map(headers::Mime::from);
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
 				response.into_body(),
 				content_encoding.as_ref(),
@@ -900,17 +919,31 @@ impl Handler {
 			.await
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
-			match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-				Ok(Value::Object(obj)) => Ok(Value::Object(obj)),
-				Ok(Value::Null) => Ok(Value::Null),
-				Ok(data) => Ok(json!({ "data": data })),
+
+			if let Some(mime) = content_type.filter(|m| m.type_() == "image") {
+				let data = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
+				return Ok(CallToolResult::success(vec![ContentBlock::image(
+					data,
+					mime.essence_str(),
+				)]));
+			}
+
+			let res = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+				Ok(val @ (Value::Object(_) | Value::Null)) => val,
+				Ok(data) => json!({ "data": data }),
 				Err(_) => {
 					// We should probably record a metric here as this means despite requesting json we got back non-json
 					// This would be fine if it was a 5XX but its not so we help a little.
 					// There is a consideration that we could put is_error in here based on the status but dont know if that makes sense for now
-					Ok(json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) }))
+					json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) })
 				},
-			}
+			};
+
+			// Serialize structured content to JSON string for backwards compatibility
+			// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
+			//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+			// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
+			Ok(CallToolResult::structured(res))
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

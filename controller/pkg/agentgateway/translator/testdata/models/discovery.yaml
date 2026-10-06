@@ -1,0 +1,250 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: virtual-models
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: catalog
+  namespace: default
+spec:
+  parentRefs:
+  - name: virtual-models
+    sectionName: llm
+  match:
+    model: "*"
+  provider: Gemini
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: custom
+  namespace: default
+spec:
+  parentRefs:
+  - name: virtual-models
+    sectionName: llm
+  match:
+    model: "groq/*"
+  provider: Custom
+  custom:
+    providerOverride: groq
+    backendRef:
+      name: groq
+      kind: Service
+      port: 443
+    formats:
+    - type: Completions
+  policies:
+    transformations:
+    - field: model
+      expression: llmRequest.model.stripPrefix("groq/")
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: groq
+  namespace: default
+spec:
+  ports:
+  - port: 443
+---
+# Output
+output:
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - gemini: {}
+            name: backend
+      key: default/catalog/backend.llm
+      name:
+        name: catalog
+        namespace: default
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - custom:
+              formats:
+              - format: COMPLETIONS
+              providerOverride: groq
+            name: backend
+            providerBackend:
+              port: 443
+              service:
+                hostname: groq.default.svc.cluster.local
+                namespace: default
+      key: default/custom/backend.llm
+      name:
+        name: custom
+        namespace: default
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/virtual-models
+      port: 80
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/virtual-models
+      key: default/virtual-models.llm
+      name:
+        gatewayName: virtual-models
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/catalog/backend.llm
+        discoveryProvider: gcp.gemini
+      key: default/catalog.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: '*'
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      aiPolicy:
+        transformations:
+          model: llmRequest.model.stripPrefix("groq/")
+      concreteModel:
+        backend:
+          backend: default/custom/backend.llm
+        discoveryProvider: groq
+      key: default/custom.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: groq/*
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: catalog
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: custom
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: virtual-models
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 2
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

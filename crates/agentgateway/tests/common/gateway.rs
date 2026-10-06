@@ -5,12 +5,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use agentgateway::http::{Body, Response};
 use agentgateway::proxy::request_builder::RequestBuilder;
-use agentgateway::yamlviajson;
+use agentgateway::yaml;
 use http::Method;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
-use serde_json::Value;
+use serde_norway::Value;
 use tempfile::TempDir;
 use tracing::info;
 use url::Url;
@@ -46,25 +46,29 @@ impl AgentGateway {
 		let raw_config = raw_config.into();
 		// Use port 0 for $PORT so the OS assigns a free port at bind time
 		let config = raw_config.replace("$PORT", "0");
-		let mut js: Value =
-			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
-		let config = js.pointer_mut("/config").unwrap();
-		config.as_object_mut().unwrap().insert(
-			"adminAddr".to_string(),
+		let mut document: Value =
+			yaml::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
+		let config = document
+			.get_mut("config")
+			.unwrap()
+			.as_mapping_mut()
+			.unwrap();
+		config.insert(
+			Value::String("adminAddr".to_string()),
 			Value::String("127.0.0.1:0".to_string()),
 		);
-		config.as_object_mut().unwrap().insert(
-			"statsAddr".to_string(),
+		config.insert(
+			Value::String("statsAddr".to_string()),
 			Value::String("127.0.0.1:0".to_string()),
 		);
-		config.as_object_mut().unwrap().insert(
-			"readinessAddr".to_string(),
+		config.insert(
+			Value::String("readinessAddr".to_string()),
 			Value::String("127.0.0.1:0".to_string()),
 		);
 
-		let js = serde_json::to_string(&js).unwrap();
+		let contents = yaml::to_string(&document).unwrap();
 		let mut temp_dirs = Vec::new();
-		let (temp, config) = create_temp_config_file(&js).await?;
+		let (temp, config) = create_temp_config_file(&contents).await?;
 		temp_dirs.push(temp);
 		info!("starting agent...");
 
@@ -73,8 +77,11 @@ impl AgentGateway {
 
 		let task = tokio::task::spawn(async move {
 			let config = Arc::new(
-				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
-					.unwrap(),
+				agentgateway::config::parse_config(
+					contents,
+					Some(agentgateway::ConfigSource::File(config)),
+				)
+				.unwrap(),
 			);
 			let config_resource_store = if config.storage.mode == agentgateway::ConfigStoreMode::Hybrid {
 				Some(

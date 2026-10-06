@@ -392,7 +392,6 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						Stream
-						{stream ? <span className="stream-live-dot" /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
@@ -1196,35 +1195,17 @@ function formatCompactNumber(value: number | null | undefined) {
 	return typeof value === 'number' ? compactNumberFormat.format(value) : '—';
 }
 
-const PROVIDER_ICON_KEYS = [
-	'openai',
-	'anthropic',
-	'gemini',
-	'vertex',
-	'bedrock',
-	'azure',
-	'copilot',
-	'cohere',
-	'ollama',
-	'baseten',
-	'cerebras',
-	'deepinfra',
-	'deepseek',
-	'groq',
-	'huggingface',
-	'mistral',
-	'openrouter',
-	'togetherai',
-	'xai',
-	'fireworks'
-];
+// Telemetry reports some providers by their qualified gen_ai.provider.name.
+const PROVIDER_ICON_ALIASES: Record<string, string> = {
+	'gcp.gemini': 'gemini',
+	'gcp.vertex_ai': 'vertex',
+	'aws.bedrock': 'bedrock'
+};
 
 function providerIconName(name: string | null | undefined) {
 	if (!name) return 'custom';
 	const normalized = name.trim().toLowerCase();
-	const match = PROVIDER_ICON_KEYS.find(key => normalized === key || normalized.includes(key));
-	if (!match) return name;
-	return match === 'xai' ? 'xAI' : match;
+	return PROVIDER_ICON_ALIASES[normalized] ?? normalized;
 }
 
 function logGuardrails(entry: LogEntry): Record<string, unknown>[] {
@@ -1784,11 +1765,8 @@ function LogTrajectory(props: { events: TrajectoryEvent[]; onJump: (anchorId: st
 			</div>
 			<div className="log-trajectory-caption" aria-live="polite">
 				<span>
-					{selectedEvent
-						? `Step ${
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								selected! + 1
-							} ${selectedEvent.label}`
+					{selected != null && selectedEvent
+						? `Step ${selected + 1} ${selectedEvent.label}`
 						: 'Width shows approximate tokens'}
 				</span>
 				{selectedEvent ? (
@@ -1952,6 +1930,7 @@ function ModelRouteStep(props: { label: string; value: string; last?: boolean })
 
 function LogUsagePanel(props: { usage: LogUsageDetail }) {
 	const usage = props.usage;
+	const { inputTokens, outputTokens } = usage;
 	const inputBreakdown =
 		usage.inputTokens != null
 			? splitInputTokens(
@@ -1968,10 +1947,7 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 		usage.outputTokens != null && !outputBreakdownUnavailable
 			? splitOutputTokens(usage.outputTokens, usage.reasoningTokens, usage.outputAudioTokens)
 			: null;
-	const showBar =
-		usage.inputTokens != null &&
-		usage.outputTokens != null &&
-		usage.inputTokens + usage.outputTokens > 0;
+	const showBar = inputTokens != null && outputTokens != null && inputTokens + outputTokens > 0;
 	const showCostBar = [
 		usage.inputCost,
 		usage.cacheReadCost,
@@ -2068,10 +2044,8 @@ function LogUsagePanel(props: { usage: LogUsageDetail }) {
 						<div className="log-usage-bar-row">
 							<span className="log-usage-bar-label">Tokens</span>
 							<TokenBar
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								input={usage.inputTokens!}
-								// biome-ignore lint/style/noNonNullAssertion: Existing lint violation; remove this suppression when the underlying issue is fixed.
-								output={usage.outputTokens!}
+								input={inputTokens}
+								output={outputTokens}
 								cacheRead={usage.cacheReadTokens ?? undefined}
 								cacheWrite={usage.cacheWriteTokens ?? undefined}
 								inputAudio={usage.inputAudioTokens ?? undefined}

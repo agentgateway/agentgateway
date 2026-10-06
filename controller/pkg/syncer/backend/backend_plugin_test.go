@@ -620,8 +620,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model:  new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
-								Region: "us-east-1",
+								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 							},
 						},
 					},
@@ -668,6 +667,11 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "openai",
 										Policies: &agentgateway.BackendWithAI{
 											Auth: &agentgateway.BackendAuth{InlineKey: new("first-token")},
+											Authorization: &agentgateway.Authorization{
+												Policy: agentgateway.AuthorizationPolicy{
+													MatchExpressions: []agentgateway.CELExpression{`request.headers["x-tenant"] == "acme"`},
+												},
+											},
 										},
 										OpenAI: &agentgateway.OpenAIConfig{
 											Model: new("gpt-4"),

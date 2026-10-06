@@ -759,16 +759,19 @@ pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
+/// Read with the request's size limit and remaining body deadline.
 pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
 }
 
+/// Read with the response's size limit and remaining body deadline.
 pub async fn read_resp_body(resp: Response) -> Result<Bytes, axum_core::Error> {
 	let lim = response_buffer_limit(&resp);
 	read_body_with_limit(resp.into_body(), lim).await
 }
 
+/// Read with the response's size limit and remaining body deadline, retaining its headers.
 pub async fn read_response_body(
 	resp: Response,
 ) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
@@ -777,11 +780,13 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
+/// Inspect within the remaining body deadline.
 pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
 	req.body_mut().inspect(lim).await
 }
 
+/// Inspect within the remaining body deadline.
 pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	resp.body_mut().inspect(lim).await
@@ -835,9 +840,22 @@ impl PolicyResponse {
 
 pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
 	if let Some(rh) = additional_headers {
+		// HeaderMap::into_iter reports the name only for the first value in a repeated field.
+		let mut previous_name = None;
 		for (k, v) in rh.into_iter() {
-			let Some(k) = k else { continue };
-			dest.insert(k, v);
+			if let Some(k) = k {
+				previous_name = Some(k.clone());
+				// Most response mutations replace an existing header. Set-Cookie is not list-valued,
+				// so each policy and upstream cookie must remain a separate appended field.
+				if k == header::SET_COOKIE {
+					dest.append(k, v);
+				} else {
+					dest.insert(k, v);
+				}
+			// Preserve subsequent Set-Cookie values whose repeated field name was omitted above.
+			} else if previous_name.as_ref() == Some(&header::SET_COOKIE) {
+				dest.append(header::SET_COOKIE, v);
+			}
 		}
 	}
 }
@@ -923,6 +941,26 @@ impl Debug for DebugExtensions<'_> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn merge_headers_preserves_set_cookies() {
+		let mut dest = HeaderMap::new();
+		dest.append(header::SET_COOKIE, "upstream=1".parse().unwrap());
+		let mut additional = HeaderMap::new();
+		additional.append(header::SET_COOKIE, "oidc=1".parse().unwrap());
+		additional.append(header::SET_COOKIE, "transaction=1".parse().unwrap());
+		additional.insert(header::LOCATION, "/after-login".parse().unwrap());
+
+		merge_in_headers(Some(additional), &mut dest);
+
+		let cookies: Vec<_> = dest
+			.get_all(header::SET_COOKIE)
+			.iter()
+			.map(|value| value.to_str().unwrap())
+			.collect();
+		assert_eq!(cookies, ["upstream=1", "oidc=1", "transaction=1"]);
+		assert_eq!(dest.get(header::LOCATION).unwrap(), "/after-login");
+	}
 
 	#[test]
 	fn test_modify_query_parameters_for_relative_uri() {

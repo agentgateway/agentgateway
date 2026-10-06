@@ -50,10 +50,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				// These logs are 100s of lines. Handy when not used interactively, but for standalone usage
 				// they are just obscuring useful information.
 				info!("version: {}", build_info());
-				info!(
-					"running with config: {}",
-					serdes::yamlviajson::to_string(&config)?
-				);
+				info!("running with config: {}", serdes::yaml::to_string(&config)?);
 			} else {
 				info!("version: {}", version::BuildInfo::new().version);
 			}

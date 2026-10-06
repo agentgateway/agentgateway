@@ -130,12 +130,6 @@ spec:
         env:
         - name: RUST_BACKTRACE
           value: "1"
-        - name: OIDC_COOKIE_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: test-release-oidc
-              key: OIDC_COOKIE_SECRET
-              optional: true
         - name: LOG_FORMAT
           value: json
         - name: API_TOKEN
