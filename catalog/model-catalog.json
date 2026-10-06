@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-05T08:49:19Z"
+    "generatedAt": "2026-10-06T08:37:47Z"
   },
   "providers": {
     "anthropic": {
@@ -1237,6 +1237,10 @@
                 "cacheWrite": "0.25"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "global.openai.gpt-6-sol": {
@@ -1256,6 +1260,10 @@
                 "cacheWrite": "5"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "global.openai.gpt-6.1-sol": {
@@ -2035,6 +2043,10 @@
                 "cacheWrite": "0.275"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "openai.gpt-6-sol": {
@@ -2054,6 +2066,10 @@
                 "cacheWrite": "5.5"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "openai.gpt-6.1-sol": {
@@ -2354,11 +2370,6 @@
             "cacheRead": "0.00875",
             "cacheWrite": "0.035"
           },
-          "tags": [
-            "runtime"
-          ]
-        },
-        "us.amazon.nova-premier-v1:0": {
           "tags": [
             "runtime"
           ]
@@ -2736,6 +2747,10 @@
                 "cacheWrite": "0.275"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "us.openai.gpt-6-sol": {
@@ -2755,6 +2770,10 @@
                 "cacheWrite": "5.5"
               }
             }
+          ],
+          "tags": [
+            "mantle",
+            "runtime"
           ]
         },
         "us.openai.gpt-6.1-sol": {
@@ -2903,6 +2922,11 @@
           "tags": [
             "mantle",
             "openai_completions",
+            "runtime"
+          ]
+        },
+        "zai.glm-5.3": {
+          "tags": [
             "runtime"
           ]
         }
