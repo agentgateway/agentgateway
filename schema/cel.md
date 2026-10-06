@@ -97,6 +97,7 @@
 |`llm.cost.output`|number||
 |`llm.cost.cacheRead`|number||
 |`llm.cost.cacheWrite`|number||
+|`llm.cost.cacheWrite1h`|number||
 |`llm.cost.reasoning`|number||
 |`llm.cost.inputAudio`|number||
 |`llm.cost.outputAudio`|number||
@@ -106,6 +107,7 @@
 |`llm.costRates.output`|number||
 |`llm.costRates.cacheRead`|number||
 |`llm.costRates.cacheWrite`|number||
+|`llm.costRates.cacheWrite1h`|number||
 |`llm.costRates.reasoning`|number||
 |`llm.costRates.inputAudio`|number||
 |`llm.costRates.outputAudio`|number||

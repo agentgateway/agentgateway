@@ -682,6 +682,10 @@
               "type": "number",
               "format": "double"
             },
+            "cacheWrite1h": {
+              "type": "number",
+              "format": "double"
+            },
             "reasoning": {
               "type": "number",
               "format": "double"
@@ -706,6 +710,7 @@
             "output",
             "cacheRead",
             "cacheWrite",
+            "cacheWrite1h",
             "reasoning",
             "inputAudio",
             "outputAudio",
@@ -741,6 +746,13 @@
               "format": "double"
             },
             "cacheWrite": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "cacheWrite1h": {
               "type": [
                 "number",
                 "null"

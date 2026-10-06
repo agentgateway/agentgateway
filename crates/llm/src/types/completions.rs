@@ -179,6 +179,7 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			cache_creation_1h_input_tokens: None,
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,

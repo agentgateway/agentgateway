@@ -448,6 +448,9 @@ pub struct CostRates {
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "cacheWrite1h")]
+	pub cache_write_1h: Option<f64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[dynamic(rename = "inputAudio")]
@@ -468,6 +471,7 @@ impl From<&Rates> for CostRates {
 			output: f(&r.output),
 			cache_read: f(&r.cache_read),
 			cache_write: f(&r.cache_write),
+			cache_write_1h: f(&r.cache_write_1h),
 			reasoning: f(&r.reasoning),
 			input_audio: f(&r.input_audio),
 			output_audio: f(&r.output_audio),
@@ -482,13 +486,14 @@ fn breakdown_f64(d: Decimal) -> f64 {
 
 impl Breakdown {
 	// (CEL field name, value) pairs. `total` is computed, the rest are stored.
-	fn components(&self) -> [(&'static str, Decimal); 9] {
+	fn components(&self) -> [(&'static str, Decimal); 10] {
 		[
 			("total", self.total()),
 			("input", self.input),
 			("output", self.output),
 			("cacheRead", self.cache_read),
 			("cacheWrite", self.cache_write),
+			("cacheWrite1h", self.cache_write_1h),
 			("reasoning", self.reasoning),
 			("inputAudio", self.input_audio),
 			("outputAudio", self.output_audio),
@@ -507,6 +512,8 @@ pub struct CostBreakdown {
 	pub cache_read: f64,
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: f64,
+	#[dynamic(rename = "cacheWrite1h")]
+	pub cache_write_1h: f64,
 	pub reasoning: f64,
 	#[dynamic(rename = "inputAudio")]
 	pub input_audio: f64,
@@ -523,6 +530,7 @@ impl From<&Breakdown> for CostBreakdown {
 			output: breakdown_f64(b.output),
 			cache_read: breakdown_f64(b.cache_read),
 			cache_write: breakdown_f64(b.cache_write),
+			cache_write_1h: breakdown_f64(b.cache_write_1h),
 			reasoning: breakdown_f64(b.reasoning),
 			input_audio: breakdown_f64(b.input_audio),
 			output_audio: breakdown_f64(b.output_audio),
@@ -539,6 +547,7 @@ impl From<CostBreakdown> for Breakdown {
 			output: d(b.output),
 			cache_read: d(b.cache_read),
 			cache_write: d(b.cache_write),
+			cache_write_1h: d(b.cache_write_1h),
 			reasoning: d(b.reasoning),
 			input_audio: d(b.input_audio),
 			output_audio: d(b.output_audio),
@@ -746,11 +755,18 @@ fn usage_for(
 		.unwrap_or(0)
 		.saturating_sub(reasoning)
 		.saturating_sub(output_audio);
+	// 1h writes are a subset of cache_write; zero when writes are unpriced and folded into input.
+	let cache_write_1h = resp
+		.cache_creation_1h_input_tokens
+		.unwrap_or(0)
+		.min(cache_write);
+	let cache_write = cache_write - cache_write_1h;
 
 	Usage {
 		input,
 		cache_read,
 		cache_write,
+		cache_write_1h,
 		output,
 		reasoning,
 		input_audio,
@@ -974,6 +990,64 @@ mod tests {
 			assert_eq!(cost.cache_read.to_f64(), Some(expected_read));
 			assert_eq!(cost.cache_write.to_f64(), Some(expected_write));
 			assert_eq!(cost.total().to_f64(), Some(expected_total));
+		}
+	}
+
+	#[test]
+	fn anthropic_splits_1h_cache_writes() {
+		let resp = LLMResponse {
+			input_tokens: Some(100),
+			cache_creation_input_tokens: Some(1000),
+			cache_creation_1h_input_tokens: Some(600),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, true);
+		assert_eq!(u.input, 100);
+		assert_eq!(u.cache_write, 400);
+		assert_eq!(u.cache_write_1h, 600);
+	}
+
+	#[test]
+	fn anthropic_folds_1h_cache_writes_into_input_when_unpriced() {
+		let resp = LLMResponse {
+			input_tokens: Some(100),
+			cache_creation_input_tokens: Some(1000),
+			cache_creation_1h_input_tokens: Some(600),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, false);
+		assert_eq!(u.input, 1100);
+		assert_eq!(u.cache_write, 0);
+		assert_eq!(u.cache_write_1h, 0);
+	}
+
+	#[test]
+	fn anthropic_prices_1h_cache_writes_at_1h_rate() {
+		use agent_llm::types::ResponseType;
+		let snap = CatalogSnapshot::parse(
+			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWrite1h":"10"}}}}}}"#,
+		)
+		.unwrap();
+		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
+		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
+		let typed: agent_llm::types::messages::typed::MessagesResponse =
+			serde_json::from_str(body).unwrap();
+		for resp in [
+			passthrough.to_llm_response(agent_llm::LogContentFields::default()),
+			typed.to_llm_response(agent_llm::LogContentFields::default()),
+		] {
+			assert_eq!(resp.cache_creation_1h_input_tokens, Some(600_000));
+			let cost = snap
+				.project(
+					"anthropic",
+					"claude-opus-5",
+					&resp,
+					CacheTokenConvention::InputExcludesCache,
+				)
+				.cost
+				.expect("model is priced");
+			assert_eq!(cost.cache_write.to_f64(), Some(2.5));
+			assert_eq!(cost.cache_write_1h.to_f64(), Some(6.0));
 		}
 	}
 

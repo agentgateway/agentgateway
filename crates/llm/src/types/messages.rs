@@ -162,6 +162,16 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Usage {
+	pub fn cache_creation_1h_input_tokens(&self) -> Option<u64> {
+		self
+			.rest
+			.get("cache_creation")?
+			.get("ephemeral_1h_input_tokens")?
+			.as_u64()
+	}
+}
+
 pub fn get_messages_helper(
 	messages: &[RequestMessage],
 	system: &Option<TextBlock>,
@@ -588,6 +598,7 @@ impl ResponseType for Response {
 			count_tokens: None,
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: self.usage.cache_creation_1h_input_tokens(),
 			cached_input_tokens: self.usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
 			completion: if log_content.completion {
@@ -1122,6 +1133,24 @@ pub mod typed {
 		/// Cumulative cache read tokens
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+		/// Cache creation tokens split by TTL
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
+	}
+
+	/// Cache creation tokens split by TTL.
+	#[derive(Clone, Serialize, Deserialize, Debug, Default, Eq, PartialEq)]
+	pub struct CacheCreation {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_5m_input_tokens: Option<usize>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_1h_input_tokens: Option<usize>,
+	}
+
+	impl CacheCreation {
+		pub fn ephemeral_1h(c: &Option<CacheCreation>) -> Option<u64> {
+			c.as_ref()?.ephemeral_1h_input_tokens.map(|i| i as u64)
+		}
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1192,6 +1221,10 @@ pub mod typed {
 		/// The number of input tokens read from the cache.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+
+		/// Cache creation tokens split by TTL.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
 
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -1363,6 +1396,7 @@ pub mod typed {
 				pages: None,
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.usage.cache_creation),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
@@ -1486,6 +1520,7 @@ mod tests {
 			stop_reason: Some(typed::StopReason::ToolUse),
 			stop_sequence: None,
 			usage: typed::Usage {
+				cache_creation: None,
 				input_tokens: 100,
 				output_tokens: 50,
 				cache_creation_input_tokens: None,
@@ -1545,6 +1580,7 @@ mod tests {
 			stop_reason: Some(typed::StopReason::EndTurn),
 			stop_sequence: None,
 			usage: typed::Usage {
+				cache_creation: None,
 				input_tokens: 50,
 				output_tokens: 20,
 				cache_creation_input_tokens: None,
