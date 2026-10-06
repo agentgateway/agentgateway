@@ -718,12 +718,19 @@ impl AdsClient {
 			_ => (XdsSignal::Ack, None, false),
 		};
 
-		match response_type {
-			XdsSignal::Nack => error!(
+		match (&response_type, has_errors) {
+			(XdsSignal::Nack, true) => error!(
 				type_url=type_url,
 				nonce,
 				"type"=?response_type,
 				error=error,
+				"sending response",
+			),
+			(XdsSignal::Nack, false) => warn!(
+				type_url=type_url,
+				nonce,
+				"type"=?response_type,
+				warning=error,
 				"sending response",
 			),
 			_ => debug!(

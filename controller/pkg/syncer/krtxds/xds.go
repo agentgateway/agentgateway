@@ -557,30 +557,34 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 		message := request.ErrorDetail.GetMessage()
 		// nolint: gosec // error side is bounded
 		errCode := codes.Code(request.ErrorDetail.Code)
-		var mlog any
-		if diagnostics, ok := parseNackDiagnostics(message); ok {
-			mlog = diagnostics
+		diagnostics, structured := parseNackDiagnostics(message)
+		if structured && !diagnosticsContainErrors(diagnostics) {
+			log.Warn("ADS: CONFIG WARNING", "type", stype, "connection", con.ID(), "code", errCode.String(), "message", diagnostics)
+			request.ErrorDetail = nil
 		} else {
-			mlog = message
-		}
-		log.Warn("ADS: ACK ERROR", "type", stype, "connection", con.ID(), "code", errCode.String(), "message", mlog)
-		xdsRejectsTotal.Inc()
-		con.proxy.UpdateWatchedResource(request.TypeUrl, func(wr *model.WatchedResource) *model.WatchedResource {
-			wr.LastError = message
-			return wr
-		})
-
-		if nackPublisher != nil {
-			gateway := AgentgatewayID(con.node)
-			nackEvent := nack.NackEvent{
-				Gateway:   gateway,
-				TypeUrl:   request.TypeUrl,
-				ErrorMsg:  message,
-				Timestamp: time.Now(),
+			var mlog any = message
+			if structured {
+				mlog = diagnostics
 			}
-			nackPublisher.PublishNack(&nackEvent)
+			log.Warn("ADS: ACK ERROR", "type", stype, "connection", con.ID(), "code", errCode.String(), "message", mlog)
+			xdsRejectsTotal.Inc()
+			con.proxy.UpdateWatchedResource(request.TypeUrl, func(wr *model.WatchedResource) *model.WatchedResource {
+				wr.LastError = message
+				return wr
+			})
+
+			if nackPublisher != nil {
+				gateway := AgentgatewayID(con.node)
+				nackEvent := nack.NackEvent{
+					Gateway:   gateway,
+					TypeUrl:   request.TypeUrl,
+					ErrorMsg:  message,
+					Timestamp: time.Now(),
+				}
+				nackPublisher.PublishNack(&nackEvent)
+			}
+			return false
 		}
-		return false
 	}
 
 	log.Debug("ADS: REQUEST", "type", stype, "connection", con.ID(), "subscribe", request.ResourceNamesSubscribe, "unsubscribe", request.ResourceNamesUnsubscribe, "initial", request.InitialResourceVersions)
@@ -673,6 +677,15 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	log.Debug("ADS: RESOURCE CHANGE", "type", stype, "connection", con.ID(), "nonce", request.ResponseNonce)
 
 	return true
+}
+
+func diagnosticsContainErrors(diagnostics []nackDiagnostic) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Error != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // Push a Delta XDS resource for the given connection.

@@ -25,3 +25,34 @@ func TestParseNackDiagnosticsFallsBackForLegacyMessage(t *testing.T) {
 		t.Fatalf("expected legacy message to skip structured parsing, got %#v", diagnostics)
 	}
 }
+
+func TestDiagnosticsContainErrors(t *testing.T) {
+	tests := []struct {
+		name        string
+		diagnostics []nackDiagnostic
+		want        bool
+	}{
+		{
+			name: "warnings only",
+			diagnostics: []nackDiagnostic{
+				{Key: "bind/default", Warn: "cipher skipped"},
+			},
+		},
+		{
+			name: "contains error",
+			diagnostics: []nackDiagnostic{
+				{Key: "bind/default", Warn: "cipher skipped"},
+				{Key: "route/default", Error: "invalid backend"},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := diagnosticsContainErrors(tt.diagnostics); got != tt.want {
+				t.Fatalf("diagnosticsContainErrors() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
