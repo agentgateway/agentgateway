@@ -9,7 +9,7 @@ server. You need Node.js/npm (`npx`) and a gateway build containing CEL MCP guar
 From the repository root:
 
 ```bash
-cargo run -- -f examples/mcp-guardrails/cel/config.yaml
+cargo run -- -f examples/mcp-guardrails/expression/config.yaml
 ```
 
 In another terminal, start the MCP Inspector:

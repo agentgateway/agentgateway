@@ -9,7 +9,7 @@ mcp:
     mcpGuardrails:
       processors:
       # Deny before masking, so this rule sees the original message.
-      - kind: cel
+      - kind: expression
         methods: {"tools/call": request}
         when: >-
           mcp.params.name == 'echo' &&
@@ -19,7 +19,7 @@ mcp:
         reject: "Messages containing DO_NOT_SEND may not be sent upstream"
 
       # Mask every email-like match in echo's message before sending it upstream.
-      - kind: cel
+      - kind: expression
         methods: {"tools/call": request}
         when: >-
           mcp.params.name == 'echo' &&
@@ -36,7 +36,7 @@ mcp:
           }))
 
       # Mask demo secrets in all text blocks returned by tools.
-      - kind: cel
+      - kind: expression
         methods: {"tools/call": response}
         when: has(mcp.result.content)
         transform: >-

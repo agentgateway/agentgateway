@@ -2782,7 +2782,7 @@
           ]
         },
         {
-          "description": "In-process CEL guardrail.",
+          "description": "In-process guardrail driven by CEL expressions.",
           "type": "object",
           "properties": {
             "when": {
@@ -2798,7 +2798,7 @@
             },
             "kind": {
               "type": "string",
-              "const": "cel"
+              "const": "expression"
             }
           },
           "required": [

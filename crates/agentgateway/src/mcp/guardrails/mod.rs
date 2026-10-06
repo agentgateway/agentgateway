@@ -35,8 +35,8 @@ impl McpGuardrailsDynamicMetadata {
 	}
 }
 
-mod cel_processor;
 mod client;
+mod expression;
 pub mod methods;
 pub mod phase;
 
@@ -83,21 +83,21 @@ pub struct Processor {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum ProcessorKind {
 	Remote(Remote),
-	Cel(Cel),
+	Expression(ExpressionProcessor),
 }
 
-/// In-process CEL guardrail.
+/// In-process guardrail driven by CEL expressions.
 #[apply(schema!)]
-pub struct Cel {
+pub struct ExpressionProcessor {
 	/// Condition gating the action; absent means always.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub when: Option<Arc<cel::Expression>>,
 	#[serde(flatten)]
-	pub action: CelAction,
+	pub action: ExpressionAction,
 }
 
 #[apply(schema!)]
-pub enum CelAction {
+pub enum ExpressionAction {
 	/// Reject with this message. Exactly one of `reject` or `transform` is required.
 	// TODO: make this a CEL expression.
 	Reject(String),
@@ -125,10 +125,10 @@ impl McpGuardrails {
 			.flat_map(|p| -> Box<dyn Iterator<Item = _>> {
 				match &p.kind {
 					ProcessorKind::Remote(r) => Box::new(r.metadata.values().map(|e| e.as_ref())),
-					ProcessorKind::Cel(c) => {
+					ProcessorKind::Expression(c) => {
 						let transform = match &c.action {
-							CelAction::Transform(t) => Some(t),
-							CelAction::Reject(_) => None,
+							ExpressionAction::Transform(t) => Some(t),
+							ExpressionAction::Reject(_) => None,
 						};
 						Box::new(c.when.iter().chain(transform).map(|e| e.as_ref()))
 					},
@@ -336,7 +336,9 @@ impl Processor {
 		client: &PolicyClient,
 	) -> Outcome<P> {
 		match &self.kind {
-			ProcessorKind::Cel(c) => cel_processor::check(c, ctx.method, &mut ctx.body, req_ctx, false),
+			ProcessorKind::Expression(c) => {
+				expression::check(c, ctx.method, &mut ctx.body, req_ctx, false)
+			},
 			ProcessorKind::Remote(remote) => {
 				client::check_request(
 					remote,
@@ -360,7 +362,7 @@ impl Processor {
 		client: &PolicyClient,
 	) -> Outcome<rmcp::model::ServerResult> {
 		match &self.kind {
-			ProcessorKind::Cel(c) => cel_processor::check(c, method, body, req_ctx, true),
+			ProcessorKind::Expression(c) => expression::check(c, method, body, req_ctx, true),
 			ProcessorKind::Remote(remote) => {
 				client::check_response(remote, method, backends, body, req_ctx, client).await
 			},
@@ -443,7 +445,7 @@ processors:
   - kind: remote
     methods: { "tools/call": full }
     backend: my-backend
-  - kind: cel
+  - kind: expression
     methods: { "tools/call": request }
     when: 'mcp.tool.name == "drop_table"'
     reject: drop_table requires admin
@@ -480,15 +482,15 @@ processors:
 		));
 		assert_eq!(r1.failure_mode, FailureMode::FailClosed);
 
-		let ProcessorKind::Cel(c2) = &ext.processors[2].kind else {
-			panic!("expected cel")
+		let ProcessorKind::Expression(c2) = &ext.processors[2].kind else {
+			panic!("expected expression")
 		};
 		assert!(c2.when.is_some());
-		assert!(matches!(&c2.action, CelAction::Reject(m) if m == "drop_table requires admin"));
+		assert!(matches!(&c2.action, ExpressionAction::Reject(m) if m == "drop_table requires admin"));
 	}
 
 	#[test]
-	fn cel_requires_one_action() {
+	fn expression_requires_one_action() {
 		for (action, valid) in [
 			("", false),
 			("reject: denied", true),
@@ -501,7 +503,7 @@ processors:
 			("reject: null\n    transform: mcp.params", false),
 		] {
 			let cfg = format!(
-				"processors:\n  - kind: cel\n    methods: {{ 'tools/call': request }}\n    {action}\n"
+				"processors:\n  - kind: expression\n    methods: {{ 'tools/call': request }}\n    {action}\n"
 			);
 			let parsed = serde_norway::from_str::<McpGuardrails>(&cfg);
 			assert_eq!(parsed.is_ok(), valid, "{cfg}: {parsed:?}");

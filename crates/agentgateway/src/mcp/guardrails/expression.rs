@@ -4,7 +4,7 @@ use tracing::debug;
 
 use crate::cel;
 use crate::mcp::guardrails::client::PERMISSION_DENIED;
-use crate::mcp::guardrails::{Cel, CelAction, MCPBody, Outcome};
+use crate::mcp::guardrails::{ExpressionAction, ExpressionProcessor, MCPBody, Outcome};
 use crate::mcp::upstream::IncomingRequestContext;
 
 enum Eval {
@@ -16,7 +16,7 @@ enum Eval {
 pub(super) fn check<
 	P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync,
 >(
-	c: &Cel,
+	c: &ExpressionProcessor,
 	method: &str,
 	body: &mut MCPBody<'_, P>,
 	req_ctx: &IncomingRequestContext,
@@ -33,7 +33,7 @@ pub(super) fn check<
 			if body.parsed().is_none() {
 				debug!(
 					method,
-					"mcpGuardrails: ignoring cel transform on request without body"
+					"mcpGuardrails: ignoring expression transform on request without body"
 				);
 				return Outcome::Pass;
 			}
@@ -50,7 +50,7 @@ pub(super) fn check<
 
 // Evaluation errors fail closed as internal errors, distinct from a configured reject.
 fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync>(
-	c: &Cel,
+	c: &ExpressionProcessor,
 	method: &str,
 	body: &MCPBody<'_, P>,
 	req_ctx: &IncomingRequestContext,
@@ -75,10 +75,10 @@ fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug 
 		}
 	}
 	let transform = match &c.action {
-		CelAction::Reject(message) => {
+		ExpressionAction::Reject(message) => {
 			return Eval::Reject(ErrorData::new(PERMISSION_DENIED, message.clone(), None));
 		},
-		CelAction::Transform(t) => t,
+		ExpressionAction::Transform(t) => t,
 	};
 	match exec.eval(transform) {
 		Ok(cel::Value::Null) => Eval::Pass,
@@ -92,10 +92,10 @@ fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug 
 }
 
 fn internal(method: &str, reason: String) -> ErrorData {
-	debug!(method, %reason, "mcpGuardrails: cel processor failed");
+	debug!(method, %reason, "mcpGuardrails: expression processor failed");
 	ErrorData::new(
 		ErrorCode::INTERNAL_ERROR,
-		format!("mcpGuardrails cel: {reason}"),
+		format!("mcpGuardrails expression: {reason}"),
 		None,
 	)
 }
@@ -111,7 +111,7 @@ mod tests {
 	use super::*;
 
 	fn check<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync>(
-		c: &Cel,
+		c: &ExpressionProcessor,
 		method: &str,
 		params: Option<&P>,
 		ctx: &IncomingRequestContext,
@@ -129,21 +129,21 @@ mod tests {
 		Arc::new(cel::Expression::new_strict(s).unwrap())
 	}
 
-	fn reject(when: &str, message: &str) -> Cel {
-		Cel {
+	fn reject(when: &str, message: &str) -> ExpressionProcessor {
+		ExpressionProcessor {
 			when: Some(expr(when)),
-			action: CelAction::Reject(message.to_string()),
+			action: ExpressionAction::Reject(message.to_string()),
 		}
 	}
 
-	fn transform(t: &str) -> Cel {
-		Cel {
+	fn transform(t: &str) -> ExpressionProcessor {
+		ExpressionProcessor {
 			when: None,
-			action: CelAction::Transform(expr(t)),
+			action: ExpressionAction::Transform(expr(t)),
 		}
 	}
 
-	fn call(c: &Cel, params: Json) -> (Outcome<CallToolRequestParams>, Json) {
+	fn call(c: &ExpressionProcessor, params: Json) -> (Outcome<CallToolRequestParams>, Json) {
 		let original: CallToolRequestParams = serde_json::from_value(params).unwrap();
 		let out = check(c, "tools/call", Some(&original), &request_context());
 		let body = match &out {
@@ -156,15 +156,16 @@ mod tests {
 	#[test]
 	fn example_expressions_mask_and_reject() {
 		let config: Json = serde_norway::from_str(include_str!(
-			"../../../../../examples/mcp-guardrails/cel/config.yaml"
+			"../../../../../examples/mcp-guardrails/expression/config.yaml"
 		))
 		.unwrap();
 		let guardrails: crate::mcp::guardrails::McpGuardrails =
 			serde_json::from_value(config["mcp"]["policies"]["mcpGuardrails"].clone()).unwrap();
 		let rule = |index: usize| {
-			let crate::mcp::guardrails::ProcessorKind::Cel(rule) = &guardrails.processors[index].kind
+			let crate::mcp::guardrails::ProcessorKind::Expression(rule) =
+				&guardrails.processors[index].kind
 			else {
-				panic!("expected CEL processor")
+				panic!("expected expression processor")
 			};
 			rule
 		};
@@ -276,11 +277,11 @@ mod tests {
 
 	#[test]
 	fn request_meta_is_nested_and_transformable() {
-		let c = Cel {
+		let c = ExpressionProcessor {
 			when: Some(expr(
 				"mcp.params._meta.tenant == 'acme' && !has(mcp.result)",
 			)),
-			action: CelAction::Transform(expr(
+			action: ExpressionAction::Transform(expr(
 				"mcp.params.merge({'_meta': mcp.params._meta.merge({'checked': true})})",
 			)),
 		};
@@ -355,11 +356,11 @@ mod tests {
 			data: json!({"name": "search", "arguments": {"city": "SF"}, "newProtocolField": true}),
 			conversions: Default::default(),
 		};
-		let c = Cel {
+		let c = ExpressionProcessor {
 			when: Some(expr(
 				"mcp.params.name == mcp.params.name && mcp.params.arguments.city == 'SF' && mcp.params.newProtocolField",
 			)),
-			action: CelAction::Transform(expr("mcp.params")),
+			action: ExpressionAction::Transform(expr("mcp.params")),
 		};
 		assert_matches!(
 			check(&c, "tools/call", Some(&parsed), &request_context()),

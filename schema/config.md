@@ -503,7 +503,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -8252,7 +8252,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -12222,7 +12222,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -16154,7 +16154,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -22275,7 +22275,7 @@
 |`policies[].policy.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`policies[].policy.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`policies[].policy.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`policies[].policy.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`policies[].policy.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`policies[].policy.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`policies[].policy.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`policies[].policy.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -30024,7 +30024,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`backends[].ai.policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -33994,7 +33994,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -37924,7 +37924,7 @@
 |`backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`backends[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -40905,7 +40905,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routeGroups[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -48654,7 +48654,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -52624,7 +52624,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -56556,7 +56556,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -62206,7 +62206,7 @@
 |`routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routes[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -69955,7 +69955,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -73925,7 +73925,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -77857,7 +77857,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -89714,7 +89714,7 @@
 |`mcp.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
 |`mcp.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
 |`mcp.policies.mcpGuardrails.processors[].when`|string|Condition gating the action; absent means always.|
-|`mcp.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `cel`.|
+|`mcp.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`mcp.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`mcp.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
