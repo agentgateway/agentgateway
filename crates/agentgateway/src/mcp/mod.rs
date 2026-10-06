@@ -549,19 +549,22 @@ pub struct MCPInfo {
 }
 
 /// `mcp` in CEL; params and result are borrowed while guardrails evaluate.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, ::cel::DynamicType)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 pub struct MCPView<'a> {
+	#[dynamic(flatten)]
 	#[cfg_attr(feature = "schema", schemars(flatten))]
 	pub info: &'a MCPInfo,
 	// TODO: Expose the selected targets as a list of MCPTarget in mcp.targets for CEL guardrails.
 	/// Current request parameters, with the same structure as the `params` object in an MCP request.
 	/// Available only during request-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
 	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
 	/// Current response result, with the same structure as the `result` object in an MCP response.
 	/// Available only during response-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
 	pub result: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
 }
@@ -573,35 +576,6 @@ impl<'a> MCPView<'a> {
 			params: None,
 			result: None,
 		}
-	}
-}
-
-impl ::cel::types::dynamic::DynamicType for MCPView<'_> {
-	fn field(&self, field: &str) -> Option<::cel::Value<'_>> {
-		let body = match field {
-			"params" => self.params,
-			"result" => self.result,
-			_ => return self.info.field(field),
-		};
-		body.map(|body| ::cel::Value::Dynamic(::cel::types::dynamic::DynamicValue::from_ref(body)))
-	}
-
-	fn materialize(&self) -> ::cel::Value<'_> {
-		use ::cel::types::dynamic::DynamicFlatten;
-		if self.params.is_none() && self.result.is_none() {
-			return self.info.materialize();
-		}
-		let mut map = vector_map::VecMap::with_capacity(13);
-		self.info.materialize_into(&mut map);
-		for (name, body) in [("params", self.params), ("result", self.result)] {
-			if let Some(body) = body {
-				map.insert(
-					name.into(),
-					::cel::Value::Dynamic(::cel::types::dynamic::DynamicValue::from_ref(body)),
-				);
-			}
-		}
-		::cel::Value::Map(::cel::objects::MapValue::Borrow(map))
 	}
 }
 
