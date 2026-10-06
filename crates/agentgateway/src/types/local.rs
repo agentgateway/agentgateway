@@ -938,6 +938,9 @@ pub struct LocalLLMParams {
 	/// Which Bedrock endpoint to prefer (Runtime vs Mantle).
 	#[serde(default)]
 	bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference,
+	/// Chat API for Anthropic models on the Runtime endpoint (Converse or InvokeModel).
+	#[serde(default)]
+	bedrock_runtime_anthropic_api: crate::llm::bedrock::RuntimeAnthropicApi,
 	/// Google Cloud region to use for the Vertex AI provider.
 	vertex_region: Option<Strng>,
 	/// Google Cloud project ID to use for the Vertex AI provider.
@@ -982,6 +985,7 @@ impl LocalLLMModels {
 			api_key: None,
 			aws_region: None,
 			bedrock_endpoint_preference: crate::llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
+			bedrock_runtime_anthropic_api: crate::llm::bedrock::RuntimeAnthropicApi::Converse,
 			vertex_region: None,
 			vertex_project: None,
 			azure_resource_name: None,
@@ -4552,6 +4556,7 @@ async fn convert_llm_config(
 					guardrail_identifier: None,
 					guardrail_version: None,
 					endpoint_preference: p.bedrock_endpoint_preference,
+					runtime_anthropic_api: p.bedrock_runtime_anthropic_api,
 				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Azure) => {

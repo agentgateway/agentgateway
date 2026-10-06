@@ -964,6 +964,7 @@ async fn streaming_response_is_forwarded_byte_for_byte() {
 				log_content: Default::default(),
 				tool_name_map: None,
 				namespaces: None,
+				bedrock_runtime_invoke: false,
 			},
 		)
 		.into_body()
@@ -1031,6 +1032,7 @@ async fn gemini_inbound_requires_a_gemini_upstream() {
 				guardrail_identifier: None,
 				guardrail_version: None,
 				endpoint_preference: Default::default(),
+				runtime_anthropic_api: Default::default(),
 			})),
 			"bedrock-runtime.us-east-1.amazonaws.com",
 			"bedrock",

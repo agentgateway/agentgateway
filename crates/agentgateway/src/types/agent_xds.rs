@@ -1979,6 +1979,7 @@ pub(crate) fn backend_with_policies_from_proto(
 									},
 									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 								},
+								runtime_anthropic_api: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {

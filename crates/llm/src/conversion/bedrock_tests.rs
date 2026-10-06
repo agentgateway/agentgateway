@@ -136,6 +136,7 @@ fn test_metadata_from_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	// Simulate transformation CEL setting x-bedrock-metadata header
@@ -194,6 +195,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -248,6 +250,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -304,6 +307,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -360,6 +364,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -438,6 +443,7 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -504,6 +510,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::typed::Request {
@@ -551,6 +558,7 @@ fn test_completions_image_data_url_maps_to_converse_image_block() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::completions::Request = serde_json::from_value(json!({
@@ -595,6 +603,7 @@ fn test_completions_image_url_to_bedrock_returns_error() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 	let req: types::completions::Request = serde_json::from_value(json!({
 		"model": "gpt-4o",
@@ -620,6 +629,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = types::completions::typed::Request {
@@ -707,6 +717,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let schema = json!({
@@ -805,6 +816,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = types::completions::typed::Request {
@@ -882,6 +894,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = types::completions::typed::Request {
@@ -962,6 +975,7 @@ fn test_responses_request_metadata_only_uses_bedrock_header() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1007,6 +1021,7 @@ fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1043,6 +1058,7 @@ fn test_responses_explicit_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1082,6 +1098,7 @@ fn test_responses_vendor_extension_thinking_budget_forces_enabled_thinking() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1591,6 +1608,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::Request {
@@ -1650,6 +1668,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req = messages::Request {
@@ -1743,6 +1762,7 @@ fn test_responses_assistant_input_image_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1776,6 +1796,7 @@ fn test_responses_input_image_remote_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1809,6 +1830,7 @@ fn test_responses_input_image_non_base64_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1842,6 +1864,7 @@ fn test_responses_input_image_non_image_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1875,6 +1898,7 @@ fn test_responses_input_image_empty_media_type_data_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1908,6 +1932,7 @@ fn test_responses_input_image_file_id_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1936,6 +1961,7 @@ fn test_responses_system_input_file_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -1970,6 +1996,7 @@ fn test_responses_input_file_id_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2001,6 +2028,7 @@ fn test_responses_input_file_remote_url_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2033,6 +2061,7 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	};
 
 	let req: types::responses::Request = serde_json::from_value(json!({
@@ -2057,4 +2086,136 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 			.contains("document format could not be determined"),
 		"unexpected error: {err}"
 	);
+}
+
+// ── from_messages_invoke tests ────────────────────────────────────────────────
+
+#[test]
+fn invoke_body_removes_model_and_stream_adds_anthropic_version() {
+	let req = types::ChatRequest::Messages(
+		serde_json::from_value(json!({
+				"model": "anthropic.claude-sonnet-4-5",
+				"stream": true,
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+		}))
+		.unwrap(),
+	);
+
+	let headers = HeaderMap::new();
+	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
+	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	assert!(
+		v.get("model").is_none(),
+		"model must be removed for InvokeModel"
+	);
+	assert!(
+		v.get("stream").is_none(),
+		"stream must be removed for InvokeModel"
+	);
+	assert_eq!(
+		v["anthropic_version"].as_str().unwrap(),
+		"bedrock-2023-05-31"
+	);
+	assert_eq!(v["max_tokens"].as_u64().unwrap(), 1024);
+}
+
+#[test]
+fn invoke_body_promotes_allowlisted_beta_header_to_body_array() {
+	let req = types::ChatRequest::Messages(
+		serde_json::from_value(json!({
+				"model": "anthropic.claude-sonnet-4-5",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hi"}]
+		}))
+		.unwrap(),
+	);
+
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"anthropic-beta",
+		"tool-search-tool-2025-10-19,interleaved-thinking-2025-05-14"
+			.parse()
+			.unwrap(),
+	);
+
+	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
+	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	let betas: Vec<&str> = v["anthropic_beta"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|b| b.as_str().unwrap())
+		.collect();
+	assert!(betas.contains(&"tool-search-tool-2025-10-19"));
+	assert!(betas.contains(&"interleaved-thinking-2025-05-14"));
+}
+
+#[test]
+fn invoke_body_passes_all_betas_without_allowlist_filtering() {
+	// On the InvokeModel path, all anthropic-beta values are forwarded to Anthropic's native
+	// engine without gateway filtering. Anthropic validates and rejects unknown betas itself,
+	// so gateway-side filtering would only block legitimate new betas not yet in the list
+	// (e.g. claude-code, mid-conversation-system, dangerous-tool-use, afk-mode).
+	let req = types::ChatRequest::Messages(
+		serde_json::from_value(json!({
+				"model": "anthropic.claude-sonnet-4-5",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hi"}]
+		}))
+		.unwrap(),
+	);
+
+	let mut headers = HeaderMap::new();
+	// Mix of allowlisted and non-allowlisted betas — all should reach the body.
+	headers.insert(
+		"anthropic-beta",
+		"claude-code-20250219,dangerous-tool-use-2025-01-01,tool-search-tool-2025-10-19"
+			.parse()
+			.unwrap(),
+	);
+
+	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
+	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	let betas: Vec<&str> = v["anthropic_beta"]
+		.as_array()
+		.expect("anthropic_beta must be an array")
+		.iter()
+		.map(|b| b.as_str().unwrap())
+		.collect();
+
+	assert!(
+		betas.contains(&"claude-code-20250219"),
+		"claude-code beta must pass through"
+	);
+	assert!(
+		betas.contains(&"dangerous-tool-use-2025-01-01"),
+		"dangerous-tool-use must pass through"
+	);
+	assert!(
+		betas.contains(&"tool-search-tool-2025-10-19"),
+		"known beta must also pass through"
+	);
+}
+
+#[test]
+fn invoke_body_preserves_tools_documents_and_thinking() {
+	let req = types::ChatRequest::Messages(serde_json::from_value(json!({
+        "model": "anthropic.claude-sonnet-4-5",
+        "max_tokens": 512,
+        "thinking": {"type": "enabled", "budget_tokens": 1024},
+        "tools": [{"name": "search", "description": "search the web", "input_schema": {"type": "object"}}],
+        "messages": [{"role": "user", "content": "hi"}]
+    })).unwrap());
+
+	let headers = HeaderMap::new();
+	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
+	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	assert!(v.get("tools").is_some(), "tools must pass through");
+	assert!(v.get("thinking").is_some(), "thinking must pass through");
+	assert_eq!(v["thinking"]["type"], "enabled");
 }

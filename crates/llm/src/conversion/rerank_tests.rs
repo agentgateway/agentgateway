@@ -11,6 +11,7 @@ fn bedrock_provider(model: &str, region: &str) -> crate::bedrock::Provider {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	}
 }
 

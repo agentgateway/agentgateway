@@ -3650,6 +3650,64 @@ pub mod from_anthropic_token_count {
 	}
 }
 
+/// Request body translation for Bedrock InvokeModel / InvokeModelWithResponseStream.
+///
+/// Passes the Anthropic Messages body through with three adjustments: removes `model` and `stream`
+/// (both encoded in the URL), injects `anthropic_version`, and moves `anthropic-beta` headers into
+/// the body array. All other fields pass through unchanged.
+pub mod from_messages_invoke {
+	use crate::{AIError, types};
+
+	const BEDROCK_ANTHROPIC_VERSION: &str = "bedrock-2023-05-31";
+
+	pub fn translate_request(
+		req: types::ChatRequest,
+		headers: &http::HeaderMap,
+	) -> Result<Vec<u8>, AIError> {
+		let messages_req = match req {
+			types::ChatRequest::Messages(r) => r,
+			other => {
+				return Err(AIError::UnsupportedConversion(agent_core::strng::format!(
+					"bedrock invoke only supports Messages input, got {:?}",
+					std::mem::discriminant(&other)
+				)));
+			},
+		};
+
+		let raw = serde_json::to_vec(&messages_req).map_err(AIError::RequestMarshal)?;
+		let mut body: serde_json::Map<String, serde_json::Value> =
+			serde_json::from_slice(&raw).map_err(AIError::RequestMarshal)?;
+
+		body.remove("model");
+		body.remove("stream");
+		body
+			.entry("anthropic_version")
+			.or_insert_with(|| serde_json::Value::String(BEDROCK_ANTHROPIC_VERSION.to_string()));
+
+		// No allowlist: InvokeModel sends directly to Anthropic, which validates betas itself.
+		if let Ok(Some(betas)) = super::helpers::extract_all_beta_headers(headers) {
+			let arr = serde_json::Value::Array(betas);
+			// merge with any anthropic_beta already in the body
+			match body.get_mut("anthropic_beta") {
+				Some(serde_json::Value::Array(existing)) => {
+					existing.extend(match arr {
+						serde_json::Value::Array(v) => v,
+						_ => unreachable!(),
+					});
+				},
+				None => {
+					body.insert("anthropic_beta".to_string(), arr);
+				},
+				_ => {
+					body.insert("anthropic_beta".to_string(), arr);
+				},
+			}
+		}
+
+		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+	}
+}
+
 mod helpers {
 	use std::collections::HashMap;
 	use std::sync::LazyLock;
@@ -3883,6 +3941,34 @@ mod helpers {
 		headers: &http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
+	}
+
+	/// Extract all `anthropic-beta` header values without filtering.
+	///
+	/// Used for the native InvokeModel path, where the request goes directly to Anthropic's
+	/// Claude engine (not through Bedrock Converse). Anthropic validates beta identifiers
+	/// itself and returns a proper error for unrecognised values, so no gateway-side
+	/// allowlist is needed here.
+	pub fn extract_all_beta_headers(
+		headers: &http::HeaderMap,
+	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+		let mut beta_features: Vec<serde_json::Value> = Vec::new();
+		for value in headers.get_all("anthropic-beta") {
+			let header_str = value
+				.to_str()
+				.map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
+			for feature in header_str.split(',') {
+				let trimmed = feature.trim();
+				if !trimmed.is_empty() {
+					beta_features.push(serde_json::Value::String(trimmed.to_string()));
+				}
+			}
+		}
+		if beta_features.is_empty() {
+			Ok(None)
+		} else {
+			Ok(Some(beta_features))
+		}
 	}
 
 	pub fn extract_beta_headers_with_allowed(

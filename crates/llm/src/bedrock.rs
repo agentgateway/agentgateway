@@ -18,6 +18,17 @@ pub enum BedrockEndpointPreference {
 	RuntimeOnly,
 }
 
+/// Chat API for Anthropic models on the Bedrock Runtime endpoint.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum RuntimeAnthropicApi {
+	#[default]
+	Converse,
+	/// Use Bedrock InvokeModel with a native Anthropic Messages body.
+	/// Supports Anthropic-specific features Converse drops: documents, redacted-thinking, beta headers.
+	InvokeModel,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BedrockEndpoint {
 	Runtime,
@@ -44,6 +55,9 @@ pub struct Provider {
 	/// Which endpoint to prefer (Runtime vs Mantle).
 	#[serde(default)]
 	pub endpoint_preference: BedrockEndpointPreference,
+	/// Chat API for Anthropic models on the Runtime endpoint.
+	#[serde(default)]
+	pub runtime_anthropic_api: RuntimeAnthropicApi,
 }
 
 impl super::Provider for Provider {
@@ -55,6 +69,13 @@ impl Provider {
 		request_model
 			.to_ascii_lowercase()
 			.contains("anthropic.claude")
+	}
+
+	/// Returns true when the request routes through InvokeModel instead of Converse.
+	pub fn uses_runtime_invoke(&self, model_id: &str, endpoint: BedrockEndpoint) -> bool {
+		matches!(endpoint, BedrockEndpoint::Runtime)
+			&& matches!(self.runtime_anthropic_api, RuntimeAnthropicApi::InvokeModel)
+			&& self.is_anthropic_model(model_id)
 	}
 
 	/// Resolves which Bedrock endpoint (Runtime vs Mantle) serves the given route and model.
@@ -127,7 +148,11 @@ impl Provider {
 			ChatFormat::OpenAIResponses,
 		];
 		match self.chat_endpoint(Some(request_model), catalog) {
-			// all chat runtime models seem to support converse
+			BedrockEndpoint::Runtime
+				if self.uses_runtime_invoke(request_model, BedrockEndpoint::Runtime) =>
+			{
+				vec![ChatFormat::AnthropicMessages]
+			},
 			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
 			BedrockEndpoint::Mantle => {
 				// Short circuit tag checks as we should just use the message endpoint
@@ -173,6 +198,10 @@ impl Provider {
 			};
 		}
 
+		// computed before percent-encoding
+		let runtime_invoke =
+			matches!(route_type, super::RouteType::Messages) && self.uses_runtime_invoke(model, endpoint);
+
 		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
 			&percent_encoding::CONTROLS.add(b'/').add(b'%');
 		let model = percent_encoding::utf8_percent_encode(model, MODEL_SEGMENT);
@@ -181,6 +210,10 @@ impl Provider {
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
 			// Rerank uses the agent-runtime Rerank action (model goes in the body as an ARN).
 			super::RouteType::Rerank => strng::literal!("/rerank"),
+			super::RouteType::Messages if runtime_invoke && streaming => {
+				strng::format!("/model/{model}/invoke-with-response-stream")
+			},
+			super::RouteType::Messages if runtime_invoke => strng::format!("/model/{model}/invoke"),
 			_ if streaming => strng::format!("/model/{model}/converse-stream"),
 			_ => strng::format!("/model/{model}/converse"),
 		}
@@ -212,6 +245,7 @@ mod tests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: pref,
+			runtime_anthropic_api: RuntimeAnthropicApi::Converse,
 		}
 	}
 
@@ -556,6 +590,89 @@ mod tests {
 				.get_path_for_route(RouteType::AnthropicTokenCount, false, "m", mantle_ep)
 				.as_str(),
 			"/anthropic/v1/messages/count_tokens"
+		);
+	}
+
+	fn runtime_invoke_provider() -> Provider {
+		let mut p = provider(BedrockEndpointPreference::RuntimeOnly);
+		p.runtime_anthropic_api = RuntimeAnthropicApi::InvokeModel;
+		p
+	}
+
+	#[test]
+	fn runtime_invoke_opt_in_selects_anthropic_messages_for_claude_only() {
+		let p = runtime_invoke_provider();
+		assert_eq!(
+			p.supported_chat_formats("anthropic.claude-sonnet-4-5", None),
+			vec![ChatFormat::AnthropicMessages]
+		);
+		// non-Claude models still use Converse even with the opt-in
+		assert_eq!(
+			p.supported_chat_formats("openai.gpt-oss-120b", None),
+			vec![ChatFormat::BedrockConverse]
+		);
+		// no opt-in: Claude stays on Converse
+		let default_runtime = provider(BedrockEndpointPreference::RuntimeOnly);
+		assert_eq!(
+			default_runtime.supported_chat_formats("anthropic.claude-sonnet-4-5", None),
+			vec![ChatFormat::BedrockConverse]
+		);
+	}
+
+	#[test]
+	fn runtime_invoke_uses_invoke_model_paths() {
+		let p = runtime_invoke_provider();
+		let ep = BedrockEndpoint::Runtime;
+		let model = "anthropic.claude-sonnet-4-5";
+		assert_eq!(
+			p.get_path_for_route(RouteType::Messages, true, model, ep)
+				.as_str(),
+			"/model/anthropic.claude-sonnet-4-5/invoke-with-response-stream"
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Messages, false, model, ep)
+				.as_str(),
+			"/model/anthropic.claude-sonnet-4-5/invoke"
+		);
+	}
+
+	#[test]
+	fn runtime_invoke_does_not_affect_converse_or_mantle_paths() {
+		let p = runtime_invoke_provider();
+		// non-Claude model on Runtime uses Converse regardless of opt-in
+		assert_eq!(
+			p.get_path_for_route(
+				RouteType::Messages,
+				true,
+				"openai.gpt-oss-120b",
+				BedrockEndpoint::Runtime
+			)
+			.as_str(),
+			"/model/openai.gpt-oss-120b/converse-stream"
+		);
+		// no opt-in: Claude uses Converse
+		let default_runtime = provider(BedrockEndpointPreference::RuntimeOnly);
+		assert_eq!(
+			default_runtime
+				.get_path_for_route(
+					RouteType::Messages,
+					false,
+					"anthropic.claude-sonnet-4-5",
+					BedrockEndpoint::Runtime
+				)
+				.as_str(),
+			"/model/anthropic.claude-sonnet-4-5/converse"
+		);
+		// opt-in has no effect on Mantle
+		assert_eq!(
+			p.get_path_for_route(
+				RouteType::Messages,
+				false,
+				"anthropic.claude-sonnet-4-5",
+				BedrockEndpoint::Mantle
+			)
+			.as_str(),
+			"/anthropic/v1/messages"
 		);
 	}
 }

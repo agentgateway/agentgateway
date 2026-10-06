@@ -114,6 +114,7 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: pref,
+			runtime_anthropic_api: Default::default(),
 		}))
 	}
 
@@ -200,6 +201,7 @@ async fn bedrock_chat_cache_convention_follows_upstream_format() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			runtime_anthropic_api: Default::default(),
 		}));
 		let body = if input == InputFormat::Responses {
 			json!({"model": model, "input": "hello"})
@@ -245,6 +247,7 @@ fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			runtime_anthropic_api: Default::default(),
 		}))
 	}
 	let mantle = mantle_provider();
@@ -525,6 +528,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 				provider: &provider,
 				headers: &HeaderMap::new(),
 				prompt_caching: None,
+				request_model: "",
 			},
 		)
 		.expect("render");
@@ -1000,6 +1004,7 @@ fn openai_inline_moderation_injected_after_messages_translation() {
 					headers: &HeaderMap::new(),
 					prompt_caching: None,
 					catalog: None,
+					request_model: "",
 				},
 			)
 			.unwrap();
@@ -1667,6 +1672,7 @@ async fn anthropic_count_tokens_preserves_upstream_errors() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 	let req = LLMRequest {
 		input_tokens: None,
@@ -2012,6 +2018,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2094,6 +2101,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2574,6 +2582,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -2852,6 +2861,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 
 	let body = Body::from(
@@ -3050,6 +3060,7 @@ fn setup_request_drops_inbound_query_only_when_translated() {
 				guardrail_identifier: None,
 				guardrail_version: None,
 				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+				runtime_anthropic_api: Default::default(),
 			}),
 			RouteType::Messages,
 			Some("beta=true"),
@@ -3412,6 +3423,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: Default::default(),
+			runtime_anthropic_api: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
@@ -3427,6 +3439,7 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
+		runtime_anthropic_api: Default::default(),
 	});
 	let mut req = crate::http::tests_common::request(
 		"https://bedrock-vpce.example.com/model/example/converse",
@@ -4203,6 +4216,7 @@ fn fixed_providers_classify_by_family() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		runtime_anthropic_api: Default::default(),
 	}));
 	for (path, expected) in [
 		(

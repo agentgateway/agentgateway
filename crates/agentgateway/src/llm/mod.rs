@@ -324,6 +324,7 @@ struct ChatRequestContext<'a> {
 	headers: &'a HeaderMap,
 	prompt_caching: Option<&'a policy::PromptCachingConfig>,
 	catalog: agent_llm::model_catalog::Catalog<'a>,
+	request_model: &'a str,
 }
 
 // Context provider to each response translation
@@ -349,6 +350,8 @@ struct ChatStreamContext {
 	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 	namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
+	// Both InvokeModel and Converse streaming use the same Bedrock EventStream schema.
+	bedrock_runtime_invoke: bool,
 }
 
 /// Ordered chat conversion table.
@@ -466,13 +469,24 @@ fn apply_openai_moderation(
 	Ok(())
 }
 
+fn bedrock_provider_uses_runtime_invoke(ctx: &ChatRequestContext<'_>) -> bool {
+	if let AIProvider::Bedrock(p) = ctx.provider {
+		p.uses_runtime_invoke(
+			ctx.request_model,
+			agent_llm::bedrock::BedrockEndpoint::Runtime,
+		)
+	} else {
+		false
+	}
+}
+
 fn render_anthropic_messages(
 	req: types::ChatRequest,
-	catalog: agent_llm::model_catalog::Catalog<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+			conversion::messages::from_completions::translate(&req, ctx.catalog)
 		},
 		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
@@ -575,9 +589,15 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages
+				if matches!(ctx.provider, AIProvider::Bedrock(_))
+					&& bedrock_provider_uses_runtime_invoke(ctx) =>
+			{
+				conversion::bedrock::from_messages_invoke::translate_request(req, ctx.headers)
+			},
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -718,6 +738,21 @@ impl ChatTranslation {
 			},
 
 			ChatFormat::AnthropicMessages => match self.input {
+				InputFormat::Messages if ctx.bedrock_runtime_invoke => {
+					let msg = conversion::bedrock::message_id(&resp);
+					let tool_name_map = ctx.tool_name_map.clone();
+					resp.map(move |b| {
+						conversion::bedrock::from_messages::translate_stream(
+							b,
+							ctx.buffer_limit,
+							ctx.logger,
+							&ctx.model,
+							&msg,
+							ctx.log_content,
+							tool_name_map,
+						)
+					})
+				},
 				InputFormat::Messages => resp.map(|b| {
 					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),
@@ -2271,11 +2306,12 @@ impl AIProvider {
 		T: RequestType,
 		F: FnOnce(T) -> types::ChatRequest,
 	{
-		let request_model = req
+		let request_model: String = req
 			.model()
 			.as_deref()
-			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
-		let chat_translation = self.chat_translation(original_format, request_model, catalog)?;
+			.ok_or_else(|| AIError::MissingField("model not specified".into()))?
+			.to_string();
+		let chat_translation = self.chat_translation(original_format, &request_model, catalog)?;
 		let provider_format = chat_translation.provider_format();
 		let prepared = self
 			.prepare_request(
@@ -2309,6 +2345,7 @@ impl AIProvider {
 				headers: &parts.headers,
 				prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
 				catalog,
+				request_model: &request_model,
 			},
 		)?;
 		llm_info.provider_state = rendered.provider_state;
@@ -3008,6 +3045,12 @@ impl AIProvider {
 				stream_format.to_string(),
 			)
 		});
+		let bedrock_runtime_invoke = if let AIProvider::Bedrock(p) = self {
+			p.uses_runtime_invoke(model.as_str(), agent_llm::bedrock::BedrockEndpoint::Runtime)
+		} else {
+			false
+		};
+
 		let translated = if input_format.is_chat() {
 			let translation = chat_translation.expect("chat translation was selected for chat input");
 			translation.stream(
@@ -3019,6 +3062,7 @@ impl AIProvider {
 					log_content,
 					tool_name_map: bedrock_tool_name_map,
 					namespaces,
+					bedrock_runtime_invoke,
 				},
 			)
 		} else {
