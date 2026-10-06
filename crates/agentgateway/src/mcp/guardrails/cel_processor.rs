@@ -82,13 +82,8 @@ fn evaluate<P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug 
 	};
 	match exec.eval(transform) {
 		Ok(cel::Value::Null) => Eval::Pass,
+		Ok(v) if body.parsed().is_some() && body.value().is_ok_and(|orig| *orig == v) => Eval::Pass,
 		Ok(v) => match v.json() {
-			Ok(j)
-				if body.parsed().is_some()
-					&& body.value().ok().and_then(|v| v.json().ok()).as_ref() == Some(&j) =>
-			{
-				Eval::Pass
-			},
 			Ok(j) => Eval::Rewrite(j),
 			Err(e) => Eval::Reject(internal(method, format!("transform: {e}"))),
 		},
