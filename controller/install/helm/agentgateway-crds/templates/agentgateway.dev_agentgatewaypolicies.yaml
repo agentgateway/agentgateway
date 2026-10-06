@@ -1974,121 +1974,30 @@ spec:
                                     `The request was rejected due to inappropriate content`.
                                   properties:
                                     headers:
-                                      description: Headers to add, set, or remove
-                                        on the rejection response.
-                                      properties:
-                                        add:
-                                          description: |-
-                                            Add adds the given header(s) (name, value) to the request
-                                            before the action. It appends to any existing values associated
-                                            with the header name.
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo
-
-                                            Config:
-                                              add:
-                                              - name: "my-header"
-                                                value: "bar,baz"
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo,bar,baz
-                                          items:
-                                            description: HTTPHeader represents an
-                                              HTTP Header name and value as defined
-                                              by RFC 7230.
-                                            properties:
-                                              name:
-                                                description: Name of the HTTP header,
-                                                  case-insensitive
-                                                maxLength: 256
-                                                minLength: 1
-                                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                type: string
-                                              value:
-                                                description: Value for the HTTP header
-                                                maxLength: 4096
-                                                minLength: 1
-                                                type: string
-                                            required:
-                                            - name
-                                            - value
-                                            type: object
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-map-keys:
-                                          - name
-                                          x-kubernetes-list-type: map
-                                        remove:
-                                          description: |-
-                                            Remove the given header(s) from the HTTP request before the action. The
-                                            value of Remove is a list of HTTP header names. Note that the header
-                                            names are case-insensitive (see
-                                            https://datatracker.ietf.org/doc/html/rfc2616#section-4.2).
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header1: foo
-                                              my-header2: bar
-                                              my-header3: baz
-
-                                            Config:
-                                              remove: ["my-header1", "my-header3"]
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header2: bar
-                                          items:
+                                      description: Headers to include in the rejection
+                                        response.
+                                      items:
+                                        description: HTTPHeader represents an HTTP
+                                          Header name and value as defined by RFC
+                                          7230.
+                                        properties:
+                                          name:
+                                            description: Name of the HTTP header,
+                                              case-insensitive
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                             type: string
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-type: set
-                                        set:
-                                          description: |-
-                                            Set overwrites the request with the given header (name, value)
-                                            before the action.
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo
-
-                                            Config:
-                                              set:
-                                              - name: "my-header"
-                                                value: "bar"
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header: bar
-                                          items:
-                                            description: HTTPHeader represents an
-                                              HTTP Header name and value as defined
-                                              by RFC 7230.
-                                            properties:
-                                              name:
-                                                description: Name of the HTTP header,
-                                                  case-insensitive
-                                                maxLength: 256
-                                                minLength: 1
-                                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                type: string
-                                              value:
-                                                description: Value for the HTTP header
-                                                maxLength: 4096
-                                                minLength: 1
-                                                type: string
-                                            required:
-                                            - name
-                                            - value
-                                            type: object
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-map-keys:
-                                          - name
-                                          x-kubernetes-list-type: map
-                                      type: object
+                                          value:
+                                            description: Value for the HTTP header
+                                            maxLength: 4096
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        - value
+                                        type: object
+                                      type: array
                                     message:
                                       description: |-
                                         Custom response message to return to the client. If not specified, defaults to
@@ -3459,121 +3368,30 @@ spec:
                                     `The response was rejected due to inappropriate content`.
                                   properties:
                                     headers:
-                                      description: Headers to add, set, or remove
-                                        on the rejection response.
-                                      properties:
-                                        add:
-                                          description: |-
-                                            Add adds the given header(s) (name, value) to the request
-                                            before the action. It appends to any existing values associated
-                                            with the header name.
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo
-
-                                            Config:
-                                              add:
-                                              - name: "my-header"
-                                                value: "bar,baz"
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo,bar,baz
-                                          items:
-                                            description: HTTPHeader represents an
-                                              HTTP Header name and value as defined
-                                              by RFC 7230.
-                                            properties:
-                                              name:
-                                                description: Name of the HTTP header,
-                                                  case-insensitive
-                                                maxLength: 256
-                                                minLength: 1
-                                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                type: string
-                                              value:
-                                                description: Value for the HTTP header
-                                                maxLength: 4096
-                                                minLength: 1
-                                                type: string
-                                            required:
-                                            - name
-                                            - value
-                                            type: object
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-map-keys:
-                                          - name
-                                          x-kubernetes-list-type: map
-                                        remove:
-                                          description: |-
-                                            Remove the given header(s) from the HTTP request before the action. The
-                                            value of Remove is a list of HTTP header names. Note that the header
-                                            names are case-insensitive (see
-                                            https://datatracker.ietf.org/doc/html/rfc2616#section-4.2).
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header1: foo
-                                              my-header2: bar
-                                              my-header3: baz
-
-                                            Config:
-                                              remove: ["my-header1", "my-header3"]
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header2: bar
-                                          items:
+                                      description: Headers to include in the rejection
+                                        response.
+                                      items:
+                                        description: HTTPHeader represents an HTTP
+                                          Header name and value as defined by RFC
+                                          7230.
+                                        properties:
+                                          name:
+                                            description: Name of the HTTP header,
+                                              case-insensitive
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
                                             type: string
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-type: set
-                                        set:
-                                          description: |-
-                                            Set overwrites the request with the given header (name, value)
-                                            before the action.
-
-                                            Input:
-                                              GET /foo HTTP/1.1
-                                              my-header: foo
-
-                                            Config:
-                                              set:
-                                              - name: "my-header"
-                                                value: "bar"
-
-                                            Output:
-                                              GET /foo HTTP/1.1
-                                              my-header: bar
-                                          items:
-                                            description: HTTPHeader represents an
-                                              HTTP Header name and value as defined
-                                              by RFC 7230.
-                                            properties:
-                                              name:
-                                                description: Name of the HTTP header,
-                                                  case-insensitive
-                                                maxLength: 256
-                                                minLength: 1
-                                                pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                type: string
-                                              value:
-                                                description: Value for the HTTP header
-                                                maxLength: 4096
-                                                minLength: 1
-                                                type: string
-                                            required:
-                                            - name
-                                            - value
-                                            type: object
-                                          maxItems: 16
-                                          type: array
-                                          x-kubernetes-list-map-keys:
-                                          - name
-                                          x-kubernetes-list-type: map
-                                      type: object
+                                          value:
+                                            description: Value for the HTTP header
+                                            maxLength: 4096
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        - value
+                                        type: object
+                                      type: array
                                     message:
                                       description: |-
                                         Custom response message to return to the client. If not specified, defaults to

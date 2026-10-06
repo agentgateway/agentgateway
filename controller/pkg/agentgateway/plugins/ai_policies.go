@@ -117,14 +117,14 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 	return res, errors.Join(errs...)
 }
 
-func processRejectionHeaders(headers *gwv1.HTTPHeaderFilter) *api.HeaderModifier {
-	if headers == nil {
+func processRejectionHeaders(headers []gwv1.HTTPHeader) *api.HeaderModifier {
+	if len(headers) == 0 {
 		return nil
 	}
 	return &api.HeaderModifier{
-		Add:    headerListToAgw(headers.Add),
-		Set:    headerListToAgw(headers.Set),
-		Remove: headers.Remove,
+		// A rejection response starts with no headers. Use Add to preserve
+		// multiple values configured for the same header name.
+		Add: headerListToAgw(headers),
 	}
 }
 

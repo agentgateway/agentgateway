@@ -2353,8 +2353,8 @@ func (in *CustomResponse) DeepCopyInto(out *CustomResponse) {
 	}
 	if in.Headers != nil {
 		in, out := &in.Headers, &out.Headers
-		*out = new(apisv1.HTTPHeaderFilter)
-		(*in).DeepCopyInto(*out)
+		*out = make([]apisv1.HTTPHeader, len(*in))
+		copy(*out, *in)
 	}
 }
 

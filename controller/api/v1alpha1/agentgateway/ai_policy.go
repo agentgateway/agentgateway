@@ -214,9 +214,9 @@ type CustomResponse struct {
 	// +optional
 	StatusCode int32 `json:"statusCode,omitempty"`
 
-	// Headers to add, set, or remove on the rejection response.
+	// Headers to include in the rejection response.
 	// +optional
-	Headers *gwv1.HTTPHeaderFilter `json:"headers,omitempty"`
+	Headers []gwv1.HTTPHeader `json:"headers,omitempty"`
 }
 
 type OpenAIModeration struct {
