@@ -13,6 +13,7 @@ const RSA_2049: &[u8] = include_bytes!("../src/crypto/testdata/rsa2049.pem");
 #[test]
 fn fips_policy_applies_to_public_api() {
 	agentgateway::crypto::jwt::init();
+	agentgateway::crypto::jwt::init();
 	let claims = json!({"sub": "test-user", "exp": 4102444800u64});
 
 	let secret = [7u8; 32];

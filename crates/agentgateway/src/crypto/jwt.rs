@@ -26,16 +26,39 @@ pub fn init() {
 	fips::install();
 }
 
-/// A FIPS build permits only approved asymmetric signatures: RSA PKCS#1 v1.5,
-/// RSA-PSS and ECDSA. EdDSA is excluded until the linked module's certificate
-/// is confirmed to cover Ed25519.
-/// RSA key parameters are checked by the FIPS provider;
-/// the backend itself limits RSA to 2048-8192 bits and ECDSA to P-256 and P-384.
-#[cfg(any(feature = "fips", test))]
-fn algorithm_allowed(alg: jsonwebtoken::Algorithm) -> bool {
-	#[cfg(feature = "fips")]
-	{
-		use jsonwebtoken::Algorithm;
+#[cfg(feature = "fips")]
+mod fips {
+	use std::sync::{LazyLock, Once};
+
+	use jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER;
+	use jsonwebtoken::crypto::{CryptoProvider, JwtSigner, JwtVerifier};
+	use jsonwebtoken::errors::{ErrorKind, Result};
+	use jsonwebtoken::{Algorithm, AlgorithmFamily, DecodingKey, DecodingKeyKind, EncodingKey};
+
+	const MIN_RSA_BITS: usize = 2048;
+
+	pub(super) static PROVIDER: LazyLock<CryptoProvider> = LazyLock::new(|| CryptoProvider {
+		signer_factory,
+		verifier_factory,
+		key_utils: DEFAULT_PROVIDER.key_utils.clone(),
+	});
+
+	pub(super) fn install() {
+		// Repeated initialization must not try to install our provider again.
+		static INSTALL: Once = Once::new();
+		INSTALL.call_once(|| {
+			assert!(
+				PROVIDER.install_default().is_ok(),
+				"a JWT crypto provider was installed before crypto::init(); refusing to run without the FIPS policy"
+			);
+		});
+	}
+
+	/// Permits only approved asymmetric signatures: RSA PKCS#1 v1.5, RSA-PSS and
+	/// ECDSA. EdDSA is excluded until the linked module's certificate is confirmed
+	/// to cover Ed25519. The backend itself limits RSA to 2048-8192 bits and ECDSA
+	/// to P-256 and P-384.
+	fn algorithm_allowed(alg: Algorithm) -> bool {
 		matches!(
 			alg,
 			Algorithm::RS256
@@ -47,42 +70,6 @@ fn algorithm_allowed(alg: jsonwebtoken::Algorithm) -> bool {
 				| Algorithm::ES256
 				| Algorithm::ES384
 		)
-	}
-	#[cfg(not(feature = "fips"))]
-	{
-		let _ = alg;
-		true
-	}
-}
-
-#[cfg(feature = "fips")]
-mod fips {
-	use std::sync::{LazyLock, Once};
-
-	use jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER;
-	use jsonwebtoken::crypto::{CryptoProvider, JwtSigner, JwtVerifier};
-	use jsonwebtoken::errors::{ErrorKind, Result};
-	use jsonwebtoken::{Algorithm, AlgorithmFamily, DecodingKey, DecodingKeyKind, EncodingKey};
-
-	use super::algorithm_allowed;
-
-	const MIN_RSA_BITS: usize = 2048;
-
-	pub(super) static PROVIDER: LazyLock<CryptoProvider> = LazyLock::new(|| CryptoProvider {
-		signer_factory,
-		verifier_factory,
-		key_utils: DEFAULT_PROVIDER.key_utils.clone(),
-	});
-
-	pub(super) fn install() {
-		static INSTALL: Once = Once::new();
-		INSTALL.call_once(|| {
-			if PROVIDER.install_default().is_err() {
-				panic!(
-					"a JWT crypto provider was installed before crypto::init(); refusing to run without the FIPS policy"
-				);
-			}
-		});
 	}
 
 	fn signer_factory(alg: &Algorithm, key: &EncodingKey) -> Result<Box<dyn JwtSigner>> {
@@ -119,7 +106,7 @@ mod fips {
 	/// Checks the FIPS 186-5 RSA conditions: an even modulus size of at least
 	/// 2048 bits and a public exponent greater than 2^16. `n` and `e` are
 	/// big-endian.
-	pub(super) fn check_rsa(n: &[u8], e: &[u8]) -> Result<()> {
+	fn check_rsa(n: &[u8], e: &[u8]) -> Result<()> {
 		let bits = bit_len(n);
 		if bits < MIN_RSA_BITS || !bits.is_multiple_of(2) {
 			return Err(
@@ -129,9 +116,13 @@ mod fips {
 				.into(),
 			);
 		}
-		// e > 2^16: more than 17 bits, or 17 bits other than 2^16 itself.
-		let e_bits = bit_len(e);
-		if e_bits < 17 || (e_bits == 17 && e.iter().rev().take(2).all(|b| *b == 0)) {
+		let exponent_above_minimum = match bit_len(e) {
+			0..=16 => false,
+			// With 17 significant bits, only 0x01_00_00 is too small.
+			17 => !e.ends_with(&[0, 0]),
+			_ => true,
+		};
+		if !exponent_above_minimum {
 			return Err(
 				ErrorKind::InvalidRsaKey(
 					"public exponent is not permitted in FIPS mode (must be greater than 2^16)".to_string(),
@@ -148,140 +139,146 @@ mod fips {
 			None => 0,
 		}
 	}
-}
 
-#[cfg(test)]
-mod tests {
-	use jsonwebtoken::Algorithm;
+	#[cfg(test)]
+	mod tests {
+		use rstest::rstest;
 
-	use super::*;
+		use super::*;
 
-	#[test]
-	fn asymmetric_algorithms_allowed() {
-		for alg in [
-			Algorithm::RS256,
-			Algorithm::RS384,
-			Algorithm::RS512,
-			Algorithm::PS256,
-			Algorithm::PS384,
-			Algorithm::PS512,
-			Algorithm::ES256,
-			Algorithm::ES384,
-		] {
-			assert!(algorithm_allowed(alg), "{alg:?}");
+		#[rstest]
+		#[case::too_small(1024, false)]
+		#[case::below_minimum(2047, false)]
+		#[case::minimum(2048, true)]
+		#[case::odd_size(2049, false)]
+		#[case::even_size(2050, true)]
+		fn rsa_modulus_size_policy(#[case] bits: usize, #[case] allowed: bool) {
+			let result = check_rsa(&modulus(bits), &[1, 0, 1]);
+			assert_eq!(result.is_ok(), allowed);
 		}
-	}
 
-	#[cfg(feature = "fips")]
-	#[test]
-	fn fips_rejects_non_approved_algorithms() {
-		for alg in [
-			Algorithm::EdDSA,
-			Algorithm::HS256,
-			Algorithm::HS384,
-			Algorithm::HS512,
-		] {
-			assert!(!algorithm_allowed(alg), "{alg:?}");
+		#[rstest]
+		#[case::empty(&[], false)]
+		#[case::zero(&[0], false)]
+		#[case::three(&[3], false)]
+		#[case::below_boundary(&[0xff, 0xff], false)]
+		#[case::at_boundary(&[1, 0, 0], false)]
+		#[case::above_boundary(&[1, 0, 1], true)]
+		#[case::larger_exponent(&[4, 0, 1], true)]
+		#[case::boundary_with_leading_zero(&[0, 1, 0, 0], false)]
+		#[case::above_boundary_with_leading_zero(&[0, 1, 0, 1], true)]
+		fn rsa_exponent_lower_bound(#[case] exponent: &[u8], #[case] allowed: bool) {
+			let result = check_rsa(&modulus(2048), exponent);
+			assert_eq!(result.is_ok(), allowed);
 		}
-	}
 
-	#[cfg(feature = "fips")]
-	#[test]
-	fn fips_provider_rejects_non_approved_algorithms() {
-		use jsonwebtoken::errors::ErrorKind;
-		use jsonwebtoken::{DecodingKey, EncodingKey};
-
-		let provider = &*fips::PROVIDER;
-		let secret = [7u8; 32];
-		let ed_public = [0u8; 32];
-		for (alg, key) in [
-			(Algorithm::HS256, DecodingKey::from_secret(&secret)),
-			(Algorithm::EdDSA, DecodingKey::from_ed_der(&ed_public)),
-		] {
-			let err = (provider.verifier_factory)(&alg, &key).err().unwrap();
-			assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm, "{alg:?}");
+		#[rstest]
+		#[case::rs256(Algorithm::RS256)]
+		#[case::rs384(Algorithm::RS384)]
+		#[case::rs512(Algorithm::RS512)]
+		#[case::ps256(Algorithm::PS256)]
+		#[case::ps384(Algorithm::PS384)]
+		#[case::ps512(Algorithm::PS512)]
+		fn rsa_provider_signs_and_verifies(#[case] algorithm: Algorithm) {
+			let signing_key = EncodingKey::from_rsa_pem(include_bytes!("testdata/rsa2048.pem")).unwrap();
+			let verification_key = DecodingKey::from_rsa_der(include_bytes!("testdata/rsa2048.pub.der"));
+			assert_signs_and_verifies(algorithm, &signing_key, &verification_key);
 		}
-		let err = (provider.signer_factory)(&Algorithm::HS256, &EncodingKey::from_secret(&secret))
-			.err()
-			.unwrap();
-		assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm);
-	}
 
-	#[cfg(feature = "fips")]
-	#[test]
-	fn fips_provider_allows_approved_keys() {
-		use jsonwebtoken::{DecodingKey, EncodingKey};
+		#[rstest]
+		#[case::es256(Algorithm::ES256, &rcgen::PKCS_ECDSA_P256_SHA256)]
+		#[case::es384(Algorithm::ES384, &rcgen::PKCS_ECDSA_P384_SHA384)]
+		fn ecdsa_provider_signs_and_verifies(
+			#[case] algorithm: Algorithm,
+			#[case] key_alg: &'static rcgen::SignatureAlgorithm,
+		) {
+			let key_pair = rcgen::KeyPair::generate_for(key_alg).unwrap();
+			let signing_key = EncodingKey::from_ec_pem(key_pair.serialize_pem().as_bytes()).unwrap();
+			let verification_key =
+				DecodingKey::from_ec_pem(key_pair.public_key_pem().as_bytes()).unwrap();
+			assert_signs_and_verifies(algorithm, &signing_key, &verification_key);
+		}
 
-		let provider = &*fips::PROVIDER;
-		// x/y are the P-256 public key from the http::jwt test fixtures.
-		let ec = DecodingKey::from_ec_components(
-			"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
-			"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug",
-		)
-		.unwrap();
-		assert!((provider.verifier_factory)(&Algorithm::ES256, &ec).is_ok());
+		#[rstest]
+		#[case::rs256(Algorithm::RS256, true)]
+		#[case::rs384(Algorithm::RS384, true)]
+		#[case::rs512(Algorithm::RS512, true)]
+		#[case::ps256(Algorithm::PS256, true)]
+		#[case::ps384(Algorithm::PS384, true)]
+		#[case::ps512(Algorithm::PS512, true)]
+		#[case::es256(Algorithm::ES256, true)]
+		#[case::es384(Algorithm::ES384, true)]
+		#[case::eddsa(Algorithm::EdDSA, false)]
+		#[case::hs256(Algorithm::HS256, false)]
+		#[case::hs384(Algorithm::HS384, false)]
+		#[case::hs512(Algorithm::HS512, false)]
+		fn algorithm_policy(#[case] algorithm: Algorithm, #[case] allowed: bool) {
+			assert_eq!(algorithm_allowed(algorithm), allowed);
+		}
 
-		let rsa_der = DecodingKey::from_rsa_der(include_bytes!("testdata/rsa2048.pub.der"));
-		assert!((provider.verifier_factory)(&Algorithm::RS256, &rsa_der).is_ok());
-		let rsa_components = DecodingKey::from_rsa_raw_components(&modulus(2048), &[1, 0, 1]);
-		assert!((provider.verifier_factory)(&Algorithm::PS256, &rsa_components).is_ok());
-		let rsa_signing = EncodingKey::from_rsa_pem(include_bytes!("testdata/rsa2048.pem")).unwrap();
-		assert!((provider.signer_factory)(&Algorithm::RS256, &rsa_signing).is_ok());
-	}
-
-	#[cfg(feature = "fips")]
-	#[test]
-	fn fips_provider_rejects_non_approved_rsa_keys() {
-		use jsonwebtoken::errors::ErrorKind;
-		use jsonwebtoken::{DecodingKey, EncodingKey};
-
-		let provider = &*fips::PROVIDER;
-		let is_invalid_rsa = |kind: &ErrorKind| matches!(kind, ErrorKind::InvalidRsaKey(_));
-
-		let odd_signing = EncodingKey::from_rsa_pem(include_bytes!("testdata/rsa2049.pem")).unwrap();
-		let err = (provider.signer_factory)(&Algorithm::RS256, &odd_signing)
-			.err()
-			.unwrap();
-		assert!(is_invalid_rsa(err.kind()), "{err:?}");
-
-		let odd_der = DecodingKey::from_rsa_der(include_bytes!("testdata/rsa2049.pub.der"));
-		for (name, key) in [
-			("2049-bit der", odd_der),
-			(
-				"2049-bit components",
-				DecodingKey::from_rsa_raw_components(&modulus(2049), &[1, 0, 1]),
-			),
-			(
-				"1024-bit",
-				DecodingKey::from_rsa_raw_components(&modulus(1024), &[1, 0, 1]),
-			),
-			(
-				"exponent 3",
-				DecodingKey::from_rsa_raw_components(&modulus(2048), &[3]),
-			),
-			(
-				"exponent 2^16",
-				DecodingKey::from_rsa_raw_components(&modulus(2048), &[1, 0, 0]),
-			),
-		] {
-			let err = (provider.verifier_factory)(&Algorithm::RS256, &key)
+		#[test]
+		fn provider_rejects_non_approved_algorithms() {
+			let secret = [7u8; 32];
+			let ed_public = [0u8; 32];
+			for (alg, key) in [
+				(Algorithm::HS256, DecodingKey::from_secret(&secret)),
+				(Algorithm::EdDSA, DecodingKey::from_ed_der(&ed_public)),
+			] {
+				let err = (PROVIDER.verifier_factory)(&alg, &key).err().unwrap();
+				assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm, "{alg:?}");
+			}
+			let err = (PROVIDER.signer_factory)(&Algorithm::HS256, &EncodingKey::from_secret(&secret))
 				.err()
 				.unwrap();
-			assert!(is_invalid_rsa(err.kind()), "{name}: {err:?}");
+			assert_eq!(err.kind(), &ErrorKind::InvalidAlgorithm);
 		}
-	}
 
-	#[cfg(feature = "fips")]
-	fn modulus(bits: usize) -> Vec<u8> {
-		let mut n = vec![0xffu8; bits.div_ceil(8)];
-		n[0] = 0xff >> (n.len() * 8 - bits);
-		n
-	}
+		#[test]
+		fn provider_rejects_non_approved_rsa_keys() {
+			let is_invalid_rsa = |kind: &ErrorKind| matches!(kind, ErrorKind::InvalidRsaKey(_));
 
-	#[cfg(not(feature = "fips"))]
-	#[test]
-	fn non_fips_allows_all_algorithms() {
-		assert!(algorithm_allowed(Algorithm::EdDSA));
-		assert!(algorithm_allowed(Algorithm::HS256));
+			let signing_key = EncodingKey::from_rsa_pem(include_bytes!("testdata/rsa2049.pem")).unwrap();
+			let err = (PROVIDER.signer_factory)(&Algorithm::RS256, &signing_key)
+				.err()
+				.unwrap();
+			assert!(is_invalid_rsa(err.kind()), "{err:?}");
+
+			for (name, key) in [
+				(
+					"der",
+					DecodingKey::from_rsa_der(include_bytes!("testdata/rsa2049.pub.der")),
+				),
+				(
+					"components",
+					DecodingKey::from_rsa_raw_components(&modulus(2049), &[1, 0, 1]),
+				),
+			] {
+				let err = (PROVIDER.verifier_factory)(&Algorithm::RS256, &key)
+					.err()
+					.unwrap();
+				assert!(is_invalid_rsa(err.kind()), "{name}: {err:?}");
+			}
+		}
+
+		fn assert_signs_and_verifies(
+			algorithm: Algorithm,
+			signing_key: &EncodingKey,
+			verification_key: &DecodingKey,
+		) {
+			let signer = (PROVIDER.signer_factory)(&algorithm, signing_key).unwrap();
+			let verifier = (PROVIDER.verifier_factory)(&algorithm, verification_key).unwrap();
+
+			let signature = signer.try_sign(b"test message").unwrap();
+
+			verifier.verify(b"test message", &signature).unwrap();
+			assert!(verifier.verify(b"modified message", &signature).is_err());
+		}
+
+		fn modulus(bits: usize) -> Vec<u8> {
+			let mut n = vec![0xff; bits.div_ceil(8)];
+			let unused_bits = n.len() * 8 - bits;
+			n[0] >>= unused_bits;
+			n
+		}
 	}
 }

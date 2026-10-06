@@ -5,10 +5,13 @@
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 
 #[test]
+#[should_panic(
+	expected = "a JWT crypto provider was installed before crypto::init(); refusing to run without the FIPS policy"
+)]
 fn init_after_jwt_use_panics() {
 	let key =
 		EncodingKey::from_rsa_pem(include_bytes!("../src/crypto/testdata/rsa2048.pem")).unwrap();
 	jsonwebtoken::encode(&Header::new(Algorithm::RS256), &serde_json::json!({}), &key).unwrap();
 
-	assert!(std::panic::catch_unwind(agentgateway::crypto::jwt::init).is_err());
+	agentgateway::crypto::jwt::init();
 }
