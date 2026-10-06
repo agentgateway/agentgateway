@@ -1139,6 +1139,8 @@ pub fn passthrough_stream(
 					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
 					r.response.cache_creation_input_tokens =
 						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_1h_input_tokens =
+						messages::CacheCreation::ephemeral_1h(&message.usage.cache_creation);
 					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
@@ -1193,6 +1195,9 @@ pub fn passthrough_stream(
 					}
 					if let Some(cwt) = usage.cache_creation_input_tokens {
 						r.response.cache_creation_input_tokens = Some(cwt as u64);
+					}
+					if let Some(cw1h) = messages::CacheCreation::ephemeral_1h(&usage.cache_creation) {
+						r.response.cache_creation_1h_input_tokens = Some(cw1h);
 					}
 					if let Some(inp) = r.response.input_tokens
 						&& let Some(o) = r.response.output_tokens

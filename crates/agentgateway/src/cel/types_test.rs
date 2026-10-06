@@ -342,6 +342,7 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		output: dec("0.025"),
 		cache_read: dec("0"),
 		cache_write: dec("0"),
+		cache_write_1h: dec("0"),
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),

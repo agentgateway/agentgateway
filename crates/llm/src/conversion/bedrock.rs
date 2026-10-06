@@ -2187,6 +2187,7 @@ pub mod from_messages {
 							stop_reason: None,
 							stop_sequence: None,
 							usage: messages::Usage {
+								cache_creation: None,
 								input_tokens: 0,
 								output_tokens: 0,
 								cache_creation_input_tokens: None,
@@ -2466,6 +2467,7 @@ pub mod from_messages {
 
 	fn to_anthropic_message_delta_usage(usage: bedrock::TokenUsage) -> messages::MessageDeltaUsage {
 		messages::MessageDeltaUsage {
+			cache_creation: None,
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
@@ -4655,6 +4657,7 @@ impl ConverseResponseAdapter {
 		let usage = self
 			.usage
 			.map(|u| messagest::Usage {
+				cache_creation: None,
 				input_tokens: u.input_tokens,
 				output_tokens: u.output_tokens,
 				cache_creation_input_tokens: u.cache_write_input_tokens,
@@ -4662,6 +4665,7 @@ impl ConverseResponseAdapter {
 				service_tier: None,
 			})
 			.unwrap_or(messagest::Usage {
+				cache_creation: None,
 				input_tokens: 0,
 				output_tokens: 0,
 				cache_creation_input_tokens: None,

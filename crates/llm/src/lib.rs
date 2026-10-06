@@ -402,6 +402,9 @@ pub struct LLMResponse {
 	pub reasoning_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
+	/// Subset of cache_creation_input_tokens written with a 1h TTL (Anthropic `cache_creation.ephemeral_1h_input_tokens`).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_1h_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]

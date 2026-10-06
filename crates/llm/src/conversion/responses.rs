@@ -931,6 +931,7 @@ pub mod from_messages {
 						stop_reason: None,
 						stop_sequence: None,
 						usage: messages::Usage {
+							cache_creation: None,
 							input_tokens: 0,
 							output_tokens: 0,
 							cache_creation_input_tokens: None,
@@ -1608,6 +1609,7 @@ pub mod from_messages {
 	) -> messages::Usage {
 		let Some(usage) = usage else {
 			return messages::Usage {
+				cache_creation: None,
 				input_tokens: 0,
 				output_tokens: 0,
 				cache_creation_input_tokens: None,
@@ -1624,6 +1626,7 @@ pub mod from_messages {
 			.checked_sub(0)
 			.filter(|tokens| *tokens > 0);
 		messages::Usage {
+			cache_creation: None,
 			input_tokens: (usage.input_tokens as usize)
 				.saturating_sub(cache_creation_input_tokens.unwrap_or_default())
 				.saturating_sub(cache_read_input_tokens.unwrap_or_default()),
@@ -1639,6 +1642,7 @@ pub mod from_messages {
 	) -> messages::MessageDeltaUsage {
 		let usage = translate_usage(usage, None);
 		messages::MessageDeltaUsage {
+			cache_creation: None,
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
