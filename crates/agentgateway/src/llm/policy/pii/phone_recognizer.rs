@@ -86,7 +86,7 @@ impl Recognizer for PhoneRecognizer {
 		let mut results = Vec::new();
 
 		for caps in CANDIDATE_RE.captures_iter(text) {
-			results.extend(split_numbers(caps.get(2).unwrap(), &best_match));
+			results.extend(split_numbers(caps.get(2).unwrap(), best_match));
 		}
 
 		results.sort_by_key(|r| (r.start, r.end, r.matched.clone()));
