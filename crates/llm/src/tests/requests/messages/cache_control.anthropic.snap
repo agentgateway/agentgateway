@@ -11,6 +11,7 @@ info:
       text: Second system block
       cache_control:
         type: ephemeral
+        ttl: 1h
   messages:
     - role: assistant
       content:
@@ -20,12 +21,14 @@ info:
           text: Second assistant block
           cache_control:
             type: ephemeral
+            ttl: 1h
     - role: user
       content:
         - type: text
           text: Cached user text
           cache_control:
             type: ephemeral
+            ttl: 5m
         - type: image
           source:
             type: base64
@@ -33,6 +36,7 @@ info:
             data: aGVsbG8=
           cache_control:
             type: ephemeral
+            ttl: 5m
     - role: assistant
       content:
         - type: tool_use
@@ -120,7 +124,8 @@ info:
             "type": "text",
             "text": "Second assistant block",
             "cache_control": {
-              "type": "ephemeral"
+              "type": "ephemeral",
+              "ttl": "1h"
             }
           }
         ]
@@ -132,7 +137,8 @@ info:
             "type": "text",
             "text": "Cached user text",
             "cache_control": {
-              "type": "ephemeral"
+              "type": "ephemeral",
+              "ttl": "5m"
             }
           },
           {
@@ -143,7 +149,8 @@ info:
               "data": "aGVsbG8="
             },
             "cache_control": {
-              "type": "ephemeral"
+              "type": "ephemeral",
+              "ttl": "5m"
             }
           }
         ]
@@ -271,7 +278,8 @@ info:
         "type": "text",
         "text": "Second system block",
         "cache_control": {
-          "type": "ephemeral"
+          "type": "ephemeral",
+          "ttl": "1h"
         }
       }
     ],

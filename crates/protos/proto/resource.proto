@@ -1962,6 +1962,7 @@ message AIBackend {
     PROVIDER_PRESET_XAI = 12;
     PROVIDER_PRESET_FIREWORKS = 13;
     PROVIDER_PRESET_META = 14;
+    PROVIDER_PRESET_PERPLEXITY = 15;
   }
 
   message Provider {
@@ -2049,6 +2050,8 @@ message MCPTarget {
   BackendReference backend = 2;
   string path = 3;
   Protocol protocol = 4;
+  // CEL expression; when it evaluates to false, the target is excluded from the request.
+  optional string condition = 5;
 }
 
 message BackendReference {

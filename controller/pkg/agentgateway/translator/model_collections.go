@@ -926,6 +926,8 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 		return api.AIBackend_PROVIDER_PRESET_FIREWORKS, true
 	case agentgateway.ModelProviderMeta:
 		return api.AIBackend_PROVIDER_PRESET_META, true
+	case agentgateway.ModelProviderPerplexity:
+		return api.AIBackend_PROVIDER_PRESET_PERPLEXITY, true
 	default:
 		return api.AIBackend_PROVIDER_PRESET_UNSPECIFIED, false
 	}

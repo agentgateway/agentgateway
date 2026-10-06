@@ -226,6 +226,7 @@ pub fn test_ed25519_jwks() {
 
 #[test]
 pub fn test_ed25519_jwt_validation() {
+	crate::crypto::jwt::init();
 	// Test fixture from jsonwebtoken 10.3.0 tests/eddsa/private_ed25519_key.pk8.
 	const ED25519_PRIVATE_KEY: &[u8] = &[
 		0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
@@ -284,6 +285,41 @@ pub fn test_ed25519_jwt_validation() {
 		claims.inner.get("sub"),
 		Some(&serde_json::Value::String("test-user".to_string()))
 	);
+}
+
+#[test]
+pub fn test_rsa_1024_signature_rejected() {
+	const TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InJzYTEwMjQifQ.eyJpc3MiOiJodHRwczovL2V4YW1wbGUuY29tIiwic3ViIjoidGVzdC11c2VyIiwiZXhwIjo0MTAyNDQ0ODAwfQ.eV3t3npxnzI_eLLkiIadDiGgsj1CcBokvmWaHzzrj9UTIEbtr4weuX4IkZNZV_tUkI_dJE0ZSBZS2J4LReStjmLhCiJGXxNDiCkRYaKcB_zF6sctmM-KZz70jF6aDSmkH78qG6WFD-Wa25eDZnWHYtMfAkybsi1XOeCIe-RAhzE";
+	let jwks = json!({
+		"keys": [
+			{
+				"use": "sig",
+				"kty": "RSA",
+				"kid": "rsa1024",
+				"alg": "RS256",
+				"e": "AQAB",
+				"n": "wehkfEkAGfXNrM6yzcCdToPi6ocUKxSOidNJtZrqy6heBI_Euf3XtN_6r0zvJMHW-YN8wxS68c8jTF1r3BwZf258uOpzI2YFElSUPrYiImi1lErxh42hrw_bkzyqByyRgvNwZHz5qtGlk4lq-sqEWFJ80xZsk0yLsbNYUrBpNk8"
+			}
+		]
+	});
+	crate::crypto::jwt::init();
+	let provider = Provider::from_jwks(
+		serde_json::from_value(jwks).unwrap(),
+		"https://example.com".to_string(),
+		None,
+		JWTValidationOptions::default(),
+	)
+	.unwrap();
+	let jwt = Jwt {
+		mode: Mode::Strict,
+		providers: vec![provider],
+		location: bearer_location(),
+		preserve_token: false,
+	};
+	assert!(matches!(
+		jwt.validate_claims(TOKEN),
+		Err(TokenError::Invalid(_))
+	));
 }
 
 #[test]

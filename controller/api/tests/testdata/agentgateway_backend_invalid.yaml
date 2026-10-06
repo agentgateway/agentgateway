@@ -338,3 +338,17 @@ spec:
           guardrail:
             identifier: test-guardrail
             version: "1"
+---
+_err: mcp target condition requires at least two targets unless the target uses selector
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-single-static-target-condition
+spec:
+  mcp:
+    targets:
+    - name: admin
+      static:
+        host: mcp.example.com
+        port: 80
+      condition: 'jwt.sub == "admin"'

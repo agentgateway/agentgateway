@@ -801,6 +801,7 @@ fn private_key_jwt_debug_redacts_key_and_certificate() {
 
 #[test]
 fn private_key_jwt_sets_x5t_s256_header() {
+	crate::crypto::jwt::init();
 	let private_key = serde_json::from_value::<PrivateKeyJwt>(json!({
 		"signingKey": TEST_EC_PRIVATE_KEY_PEM,
 		"certificate": TEST_EC_CERT_PEM,
@@ -821,6 +822,7 @@ fn private_key_jwt_sets_x5t_s256_header() {
 
 #[test]
 fn private_key_jwt_signs_with_ps256() {
+	crate::crypto::jwt::init();
 	let signing_key = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
 	let public_key = signing_key.public_key_pem();
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {

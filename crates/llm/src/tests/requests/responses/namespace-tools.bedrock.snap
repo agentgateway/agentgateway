@@ -197,7 +197,9 @@ info:
           }
         }
       ],
-      "tool_choice": "auto"
+      "toolChoice": {
+        "auto": {}
+      }
     }
   },
   "parsed": {

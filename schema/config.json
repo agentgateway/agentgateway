@@ -3110,7 +3110,7 @@
               ]
             },
             {
-              "description": "Send a configured secret value to the backend.",
+              "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
               "type": "object",
               "properties": {
                 "key": {
@@ -3118,7 +3118,26 @@
                   "properties": {
                     "value": {
                       "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
-                      "$ref": "#/$defs/FileOrInline"
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/FileOrInline"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expression": {
+                      "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/Expression"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     },
                     "location": {
                       "description": "Where to place the secret in the backend request.",
@@ -3132,10 +3151,7 @@
                       ]
                     }
                   },
-                  "additionalProperties": false,
-                  "required": [
-                    "value"
-                  ]
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -4411,14 +4427,32 @@
           "$ref": "#/$defs/AuthorizationLocation"
         },
         "key": {
-          "description": "Credential value.",
-          "$ref": "#/$defs/FileOrInline"
+          "description": "Credential value. Exactly one of `key` or `expression` must be set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
-        "location",
-        "key"
+        "location"
       ]
     },
     "BackendAuth": {
@@ -4451,7 +4485,7 @@
           "additionalProperties": false
         },
         {
-          "description": "Send a configured secret value to the backend.",
+          "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
           "type": "object",
           "properties": {
             "key": {
@@ -4459,7 +4493,26 @@
               "properties": {
                 "value": {
                   "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
-                  "$ref": "#/$defs/FileOrInline"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "expression": {
+                  "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "location": {
                   "description": "Where to place the secret in the backend request.",
@@ -4473,10 +4526,7 @@
                   ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "value"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -12189,7 +12239,8 @@
         "togetherai",
         "xai",
         "fireworks",
-        "meta"
+        "meta",
+        "perplexity"
       ]
     },
     "LocalLLMProviderDefaults": {
@@ -12220,6 +12271,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
+        },
+        "requestTransformation": {
+          "description": "CEL expressions that modify the HTTP request (headers, metadata, etc) to the LLM provider.\nUnlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestHeaders": {
           "description": "Headers to add, set, or remove on requests to the LLM provider.",
@@ -12390,7 +12452,7 @@
           "additionalProperties": true
         },
         "transformation": {
-          "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.",
+          "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.\nThis operates on fields of the LLM request payload; to modify the HTTP request (headers, metadata, etc), use `requestTransformation`.",
           "type": [
             "object",
             "null"
@@ -12408,6 +12470,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
+        },
+        "requestTransformation": {
+          "description": "requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.\nUnlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestHeaders": {
           "description": "requestHeaders modifies headers in requests to the LLM provider.",

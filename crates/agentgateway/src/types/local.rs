@@ -493,6 +493,10 @@ pub struct LocalLLMProviderDefaults {
 	/// CEL expressions that compute request payload fields, overriding existing values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// CEL expressions that modify the HTTP request (headers, metadata, etc) to the LLM provider.
+	/// Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	request_transformation: Option<Arc<crate::http::transformation_cel::TransformerConfig>>,
 	/// Headers to add, set, or remove on requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
@@ -826,12 +830,17 @@ pub struct LocalLLMModels {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	overrides: Option<HashMap<String, serde_json::Value>>,
 	/// transformation allows setting values from CEL expressions for the request, overriding any existing values.
+	/// This operates on fields of the LLM request payload; to modify the HTTP request (headers, metadata, etc), use `requestTransformation`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	transformation: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// final_transformation allows setting values from CEL expressions for the request, overriding any existing values.
 	/// Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	final_transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.
+	/// Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	request_transformation: Option<Arc<crate::http::transformation_cel::TransformerConfig>>,
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
@@ -1027,6 +1036,10 @@ impl LocalLLMModels {
 			self.overrides = merge_optional_maps(defaults.overrides, self.overrides.take());
 			self.transformation =
 				merge_optional_maps(defaults.transformation, self.transformation.take());
+			self.request_transformation = self
+				.request_transformation
+				.take()
+				.or(defaults.request_transformation);
 			self.request_headers = self.request_headers.take().or(defaults.request_headers);
 			self.response_headers = self.response_headers.take().or(defaults.response_headers);
 			self.backend_tls = self.backend_tls.take().or(defaults.backend_tls);
@@ -2354,7 +2367,8 @@ where
 		.map(|auth| match auth {
 			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
 				kind: Some(LocalBackendAuthKind::Key {
-					value: key,
+					value: Some(key),
+					expression: None,
 					location: None,
 				}),
 				credentials: Vec::new(),
@@ -2409,9 +2423,14 @@ pub struct LocalBackendAuth {
 pub struct LocalBackendAuthCredential {
 	/// Where the credential is inserted on the backend request.
 	pub location: crate::http::auth::AuthorizationLocation,
-	/// Credential value.
-	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-	pub key: FileOrInline,
+	/// Credential value. Exactly one of `key` or `expression` must be set.
+	#[serde(default)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+	pub key: Option<FileOrInline>,
+	/// CEL expression evaluated against the request to produce the credential value.
+	/// If it fails or does not return a string, the credential location is cleared instead.
+	#[serde(default)]
+	pub expression: Option<Arc<crate::cel::Expression>>,
 }
 
 impl LocalBackendAuth {
@@ -2423,8 +2442,12 @@ impl LocalBackendAuth {
 			Some(LocalBackendAuthKind::Passthrough { location }) => {
 				Some(BackendAuthKind::Passthrough { location })
 			},
-			Some(LocalBackendAuthKind::Key { value, location }) => Some(BackendAuthKind::Key {
-				value: load_secret(&value, resources).await?,
+			Some(LocalBackendAuthKind::Key {
+				value,
+				expression,
+				location,
+			}) => Some(BackendAuthKind::Key {
+				value: load_backend_auth_value(value, expression, "value", resources).await?,
 				location,
 			}),
 			Some(LocalBackendAuthKind::Gcp(auth)) => Some(BackendAuthKind::Gcp(auth)),
@@ -2446,10 +2469,24 @@ impl LocalBackendAuth {
 		for credential in self.credentials {
 			credentials.push(crate::http::auth::BackendAuthCredential {
 				location: credential.location,
-				key: load_secret(&credential.key, resources).await?,
+				key: load_backend_auth_value(credential.key, credential.expression, "key", resources)
+					.await?,
 			});
 		}
 		Ok(BackendAuth { kind, credentials })
+	}
+}
+
+async fn load_backend_auth_value(
+	value: Option<FileOrInline>,
+	expression: Option<Arc<crate::cel::Expression>>,
+	value_field: &str,
+	resources: &crate::resource_manager::ResourceFetcher,
+) -> anyhow::Result<crate::http::auth::BackendAuthValue> {
+	match (value, expression) {
+		(Some(value), None) => Ok(load_secret(&value, resources).await?.into()),
+		(None, Some(expression)) => Ok(crate::http::auth::BackendAuthValue::Expression { expression }),
+		_ => anyhow::bail!("backendAuth: exactly one of '{value_field}' or 'expression' must be set"),
 	}
 }
 
@@ -2475,12 +2512,18 @@ enum LocalBackendAuthKind {
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<crate::http::auth::AuthorizationLocation>,
 	},
-	/// Send a configured secret value to the backend.
+	/// Send a configured secret value, or a value computed from the request, to the backend.
+	/// Exactly one of `value` or `expression` must be set.
 	Key {
 		/// Secret value to send to the backend. File references are watched, so
 		/// rotating the file reloads it without a restart.
-		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		value: FileOrInline,
+		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+		value: Option<FileOrInline>,
+		/// CEL expression evaluated against the request to produce the value to send.
+		/// If it fails or does not return a string, the target location is cleared instead.
+		#[serde(default)]
+		expression: Option<Arc<crate::cel::Expression>>,
 		/// Where to place the secret in the backend request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<crate::http::auth::AuthorizationLocation>,
@@ -4583,7 +4626,7 @@ async fn convert_llm_config(
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
 			let backend_auth = BackendAuthKind::Key {
-				value: key.0.clone(),
+				value: key.0.clone().into(),
 				location: None,
 			};
 			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
@@ -4647,6 +4690,14 @@ async fn convert_llm_config(
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
+		}
+		if let Some(p) = model_config.request_transformation.clone() {
+			pols.push(BackendTrafficPolicy::Transformation(Arc::new(
+				crate::http::transformation_cel::Transformation {
+					request: Some(p),
+					response: None,
+				},
+			)));
 		}
 		if let Some(rh) = model_config.request_headers.clone() {
 			pols.push(BackendTrafficPolicy::RequestHeaderModifier(rh));

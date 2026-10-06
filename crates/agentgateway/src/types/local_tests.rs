@@ -2673,6 +2673,16 @@ fn test_de_backend_auth_accepts_each_shape() {
 	));
 	assert!(full_key.credentials.is_empty());
 
+	let expression_key = parse(serde_json::json!({"key": {"expression": "jwt.sub"}}));
+	assert!(matches!(
+		expression_key.kind,
+		Some(super::LocalBackendAuthKind::Key {
+			value: None,
+			expression: Some(_),
+			..
+		})
+	));
+
 	let full_with_credentials = parse(serde_json::json!({
 		"key": {"value": "explicit-secret"},
 		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],

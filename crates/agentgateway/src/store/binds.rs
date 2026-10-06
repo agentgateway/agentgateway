@@ -13,7 +13,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::{BackendAuth, BackendAuthKind};
+use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -368,12 +368,8 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(BackendAuth {
-			kind: Some(BackendAuthKind::Aws(aws)),
-			..
-		}) = self.backend_auth.as_ref()
-		{
-			for expr in aws.cel_expressions() {
+		if let Some(backend_auth) = self.backend_auth.as_ref() {
+			for expr in backend_auth.cel_expressions() {
 				ctx.register_expression(expr);
 			}
 		}

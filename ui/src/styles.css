@@ -591,6 +591,47 @@ a {
 	gap: 18px;
 }
 
+.settings-layout {
+	display: grid;
+	grid-template-columns: 180px minmax(0, 1fr);
+	gap: 24px;
+	align-items: start;
+}
+
+.settings-nav {
+	position: sticky;
+	top: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.settings-nav .nav-section {
+	margin-top: 0;
+}
+
+@media (max-width: 680px) {
+	.settings-layout {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 12px;
+	}
+
+	.settings-nav {
+		position: static;
+		flex-direction: row;
+		overflow-x: auto;
+	}
+
+	.settings-nav .nav-section {
+		display: none;
+	}
+
+	.settings-nav .nav-item {
+		width: auto;
+		white-space: nowrap;
+	}
+}
+
 .page-header {
 	display: flex;
 	align-items: flex-start;
@@ -6353,4 +6394,41 @@ details summary {
 .login-card .button {
 	width: 100%;
 	justify-content: center;
+}
+
+.settings-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 24px;
+}
+
+.settings-row-label p {
+	margin: 2px 0 0;
+	color: var(--muted);
+	font-size: 13px;
+}
+
+.settings-row-control {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+	width: 280px;
+	flex-shrink: 0;
+}
+
+.settings-row-control > :first-child {
+	width: 100%;
+}
+
+@media (max-width: 680px) {
+	.settings-row {
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	.settings-row-control {
+		width: 100%;
+	}
 }

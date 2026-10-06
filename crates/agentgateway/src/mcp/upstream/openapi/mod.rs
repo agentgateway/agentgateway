@@ -14,7 +14,9 @@ use once_cell::sync::Lazy;
 use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 use regex::Regex;
-use rmcp::model::{CallToolResult, ClientRequest, ContentBlock, JsonObject, JsonRpcRequest, Tool};
+use rmcp::model::{
+	CallToolResult, ClientRequest, ContentBlock, JsonObject, JsonRpcRequest, ResourceContents, Tool,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -575,6 +577,23 @@ pub struct Handler {
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
 }
 
+/// Media types whose body may be JSON or human-readable text and should be parsed as such.
+fn is_text_like(m: &headers::Mime) -> bool {
+	// The suffix carries the format for types like application/ld+json, otherwise the subtype does.
+	let format = m.suffix().unwrap_or(m.subtype());
+	m.type_() == "text"
+		|| matches!(format.as_str(), "json" | "xml" | "yaml")
+		|| matches!(
+			m.subtype().as_str(),
+			"javascript" | "x-www-form-urlencoded" | "x-ndjson"
+		)
+}
+
+/// Bytes that can be shown to a model without loss: valid UTF-8 and no NUL, which text formats never contain.
+fn looks_like_text(b: &[u8]) -> bool {
+	!b.contains(&0) && std::str::from_utf8(b).is_ok()
+}
+
 impl Handler {
 	pub fn new(
 		http_client: super::McpHttpClient,
@@ -920,30 +939,39 @@ impl Handler {
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
 
-			if let Some(mime) = content_type.filter(|m| m.type_() == "image") {
-				let data = base64::engine::general_purpose::STANDARD.encode(&body_bytes);
-				return Ok(CallToolResult::success(vec![ContentBlock::image(
-					data,
-					mime.essence_str(),
-				)]));
+			if body_bytes.is_empty() {
+				return Ok(CallToolResult::success(vec![]));
+			}
+			let encode = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+			// The bytes decide for anything not declared text-like so text formats missing from is_text_like still arrive as text.
+			if !content_type.as_ref().is_some_and(is_text_like) && !looks_like_text(&body_bytes) {
+				let data = encode(&body_bytes);
+				let mime = content_type
+					.as_ref()
+					.map_or("application/octet-stream", |m| m.essence_str());
+				let block = match content_type.as_ref().map(|m| m.type_().as_str()) {
+					Some("image") => ContentBlock::image(data, mime),
+					Some("audio") => ContentBlock::audio(data, mime),
+					_ => ContentBlock::resource(
+						ResourceContents::blob(data, format!("tool://{name}")).with_mime_type(mime),
+					),
+				};
+				return Ok(CallToolResult::success(vec![block]));
 			}
 
-			let res = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-				Ok(val @ (Value::Object(_) | Value::Null)) => val,
-				Ok(data) => json!({ "data": data }),
-				Err(_) => {
-					// We should probably record a metric here as this means despite requesting json we got back non-json
-					// This would be fine if it was a 5XX but its not so we help a little.
-					// There is a consideration that we could put is_error in here based on the status but dont know if that makes sense for now
-					json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) })
-				},
-			};
-
-			// Serialize structured content to JSON string for backwards compatibility
+			// JSON is attempted first even for text types because some upstreams mislabel JSON bodies.
 			// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
 			//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
 			// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
-			Ok(CallToolResult::structured(res))
+			Ok(
+				match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+					Ok(val @ (Value::Object(_) | Value::Null)) => CallToolResult::structured(val),
+					Ok(data) => CallToolResult::structured(json!({ "data": data })),
+					Err(_) => CallToolResult::success(vec![ContentBlock::text(String::from_utf8_lossy(
+						&body_bytes,
+					))]),
+				},
+			)
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

@@ -16,6 +16,10 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -186,27 +190,6 @@ func TestApplyManagedSessionKeyDefaults_UsesUserProvidedSessionKey(t *testing.T)
 	applyManagedSessionKeyDefaults(vals, "gw")
 
 	assert.Nil(t, vals.SessionKeySecretName)
-}
-
-func TestUsesManagedSessionKeyResolvedParameters_GatewayEnvDisablesManagedSecret(t *testing.T) {
-	resolved := &resolvedParameters{
-		gatewayClassAGWP: &agentgateway.AgentgatewayParameters{
-			Spec: agentgateway.AgentgatewayParametersSpec{
-				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
-					Env: []corev1.EnvVar{{Name: "RUST_LOG", Value: "info"}},
-				},
-			},
-		},
-		gatewayAGWP: &agentgateway.AgentgatewayParameters{
-			Spec: agentgateway.AgentgatewayParametersSpec{
-				AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
-					Env: []corev1.EnvVar{{Name: "SESSION_KEY", Value: "inline-key"}},
-				},
-			},
-		},
-	}
-
-	assert.False(t, usesManagedSessionKeyResolvedParameters(resolved))
 }
 
 func TestResolvedParameters_ResolveWorkloadKind(t *testing.T) {
@@ -807,79 +790,177 @@ func TestAgentgatewayParametersApplier_ApplyToHelmValues_RawConfigWithLogging(t 
 	assert.Equal(t, vals.Agentgateway.RawConfig.Raw, rawConfigJSON)
 }
 
-func TestBuildSessionKeySecret_UsesExistingValidKey(t *testing.T) {
-	const existingKey = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	secret := &corev1.Secret{
+const (
+	testSessionKey      = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	generatedSessionKey = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+)
+
+func newTestSessionKeys(t *testing.T, cached []client.Object, kube kubernetes.Interface) *SessionKeys {
+	t.Helper()
+	sessionKeys := NewSessionKeys(newSyncedSecretClient(t, cached...), kube)
+	sessionKeys.SetGenerator(func() (string, error) {
+		return generatedSessionKey, nil
+	})
+	return sessionKeys
+}
+
+func newTestSessionKeySecret(key string, gatewayUID types.UID) *corev1.Secret {
+	return &corev1.Secret{
 		Name:      "gw-session-key",
 		Namespace: "default",
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
+			Kind:       wellknown.GatewayGVK.Kind,
+			Name:       "gw",
+			UID:        gatewayUID,
+			Controller: new(true),
+		}},
 		Data: map[string][]byte{
-			"key": []byte(existingKey),
+			"key": []byte(key),
 		},
 	}
-	generator := &agentgatewayParametersHelmValuesGenerator{
-		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
-			return "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", nil
-		},
+}
+
+func TestSessionKeysGet_CachedKey(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		cachedKey  string
+		wantKey    string
+		wantErrMsg string
+	}{
+		{name: "valid", cachedKey: testSessionKey, wantKey: testSessionKey},
+		{name: "invalid", cachedKey: "not-a-valid-key", wantErrMsg: "contains an invalid key"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			secret := newTestSessionKeySecret(test.cachedKey, "gw-uid")
+			sessionKeys := newTestSessionKeys(t, []client.Object{secret}, k8sfake.NewClientset())
+			gw := &gwv1.Gateway{Name: "gw", Namespace: "default", UID: "gw-uid"}
+
+			key, err := sessionKeys.Get(context.Background(), gw)
+			if test.wantErrMsg != "" {
+				require.ErrorContains(t, err, test.wantErrMsg)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, test.wantKey, key)
+		})
 	}
+}
+
+func TestSessionKeysGet_CreatesSecret(t *testing.T) {
+	kube := k8sfake.NewClientset()
+	sessionKeys := newTestSessionKeys(t, nil, kube)
 	gw := &gwv1.Gateway{
 		Name:      "gw",
 		Namespace: "default",
+		UID:       "gw-uid",
 		Spec: gwv1.GatewaySpec{
 			GatewayClassName: "agentgateway",
 		},
 	}
 
-	managedSecret, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
+	key, err := sessionKeys.Get(context.Background(), gw)
 	require.NoError(t, err)
-	require.NotNil(t, managedSecret)
-	assert.Equal(t, existingKey, string(managedSecret.Data["key"]))
-	assert.Equal(t, corev1.SecretTypeOpaque, managedSecret.Type)
-	assert.Equal(t, "gw-session-key", managedSecret.Name)
+	assert.Equal(t, generatedSessionKey, key)
+
+	secret, err := kube.CoreV1().Secrets("default").Get(context.Background(), "gw-session-key", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, generatedSessionKey, string(secret.Data["key"]))
+	assert.Equal(t, corev1.SecretTypeOpaque, secret.Type)
+	assert.Equal(t, "agentgateway", secret.Labels[wellknown.GatewayClassNameLabel])
+	require.Len(t, secret.OwnerReferences, 1)
+	assert.Equal(t, wellknown.GatewayGVK.Kind, secret.OwnerReferences[0].Kind)
+	assert.Equal(t, "gw", secret.OwnerReferences[0].Name)
+	assert.Equal(t, gw.UID, secret.OwnerReferences[0].UID)
 }
 
-func TestBuildSessionKeySecret_RejectsInvalidExistingKey(t *testing.T) {
-	secret := &corev1.Secret{
-		Name:      "gw-session-key",
-		Namespace: "default",
-		Data: map[string][]byte{
-			"key": []byte("not-a-valid-key"),
-		},
-	}
-	generator := &agentgatewayParametersHelmValuesGenerator{
-		secretClient: newSyncedSecretClient(t, secret),
-		sessionKeyGen: func() (string, error) {
-			return "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff", nil
-		},
-	}
-	gw := &gwv1.Gateway{
-		Name:      "gw",
-		Namespace: "default",
-	}
+// The cache can miss a Secret an earlier reconcile created. The existing key must
+// win over a newly generated one, or the proxy restarts with a different key.
+func TestSessionKeysGet_StaleCacheKeepsExistingKey(t *testing.T) {
+	kube := k8sfake.NewClientset(newTestSessionKeySecret(testSessionKey, "gw-uid"))
+	sessionKeys := newTestSessionKeys(t, nil, kube)
+	gw := &gwv1.Gateway{Name: "gw", Namespace: "default", UID: "gw-uid"}
 
-	_, err := generator.buildSessionKeySecret(context.Background(), gw, "gw-session-key")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "contains an invalid key")
+	key, err := sessionKeys.Get(context.Background(), gw)
+	require.NoError(t, err)
+	assert.Equal(t, testSessionKey, key)
+
+	secret, err := kube.CoreV1().Secrets("default").Get(context.Background(), "gw-session-key", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, testSessionKey, string(secret.Data["key"]))
 }
 
-func TestAddSessionKeyChecksumAnnotation(t *testing.T) {
+func TestSessionKeysGet_UpdatesStaleOwner(t *testing.T) {
+	secret := newTestSessionKeySecret(testSessionKey, "old-gw-uid")
+	kube := k8sfake.NewClientset(secret.DeepCopy())
+	sessionKeys := newTestSessionKeys(t, []client.Object{secret}, kube)
+	gw := &gwv1.Gateway{Name: "gw", Namespace: "default", UID: "new-gw-uid"}
+
+	key, err := sessionKeys.Get(context.Background(), gw)
+	require.NoError(t, err)
+	assert.Equal(t, testSessionKey, key)
+
+	updated, err := kube.CoreV1().Secrets("default").Get(context.Background(), "gw-session-key", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, testSessionKey, string(updated.Data["key"]))
+	controller := metav1.GetControllerOf(updated)
+	require.NotNil(t, controller)
+	assert.Equal(t, gw.UID, controller.UID)
+}
+
+func TestAddSessionKeyChecksum(t *testing.T) {
 	deployment := &appsv1.Deployment{}
 	daemonSet := &appsv1.DaemonSet{}
-	secret := &corev1.Secret{
-		Name:      "gw-session-key",
-		Namespace: "default",
-		Data: map[string][]byte{
-			"key": []byte("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"),
-		},
-	}
 
-	err := addSessionKeyChecksumAnnotation([]client.Object{deployment, daemonSet}, secret)
-	require.NoError(t, err)
+	AddSessionKeyChecksum([]client.Object{deployment, daemonSet}, testSessionKey)
 	checksum := "2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737"
 	require.NotNil(t, deployment.Spec.Template.Annotations)
 	assert.Equal(t, checksum, deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation])
 	require.NotNil(t, daemonSet.Spec.Template.Annotations)
 	assert.Equal(t, checksum, daemonSet.Spec.Template.Annotations[sessionKeyChecksumAnnotation])
+}
+
+func TestSessionKeysApply_UsesRenderedWorkload(t *testing.T) {
+	managedEnv := corev1.EnvVar{
+		Name: sessionKeyEnvVar,
+		ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+			Name: "gw-session-key",
+			Key:  "key",
+		}},
+	}
+
+	for _, test := range []struct {
+		name        string
+		env         corev1.EnvVar
+		wantManaged bool
+	}{
+		{name: "managed reference", env: managedEnv, wantManaged: true},
+		{name: "explicit key", env: corev1.EnvVar{Name: sessionKeyEnvVar, Value: "explicit"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			kube := k8sfake.NewClientset()
+			sessionKeys := newTestSessionKeys(t, nil, kube)
+			gw := &gwv1.Gateway{Name: "gw", Namespace: "default"}
+			deployment := &appsv1.Deployment{Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "agentgateway", Env: []corev1.EnvVar{test.env}}},
+				}},
+			}}
+
+			err := sessionKeys.Apply(context.Background(), gw, []client.Object{deployment})
+			require.NoError(t, err)
+			if !test.wantManaged {
+				assert.Empty(t, kube.Actions())
+				assert.Nil(t, deployment.Spec.Template.Annotations)
+				return
+			}
+
+			secret, err := kube.CoreV1().Secrets("default").Get(context.Background(), "gw-session-key", metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, generatedSessionKey, string(secret.Data["key"]))
+			assert.Equal(t, "8588cdfcd6d2b0d521bcf0bf5e7017c06a3f4a10a172d9af1436205e3af205ad", deployment.Spec.Template.Annotations[sessionKeyChecksumAnnotation])
+		})
+	}
 }
 
 func podDisruptionBudgetsFromDeployObjects(objs []client.Object) []*policyv1.PodDisruptionBudget {

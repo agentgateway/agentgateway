@@ -2645,6 +2645,7 @@ const (
 	AIBackend_PROVIDER_PRESET_XAI         AIBackend_ProviderPreset = 12
 	AIBackend_PROVIDER_PRESET_FIREWORKS   AIBackend_ProviderPreset = 13
 	AIBackend_PROVIDER_PRESET_META        AIBackend_ProviderPreset = 14
+	AIBackend_PROVIDER_PRESET_PERPLEXITY  AIBackend_ProviderPreset = 15
 )
 
 // Enum value maps for AIBackend_ProviderPreset.
@@ -2665,6 +2666,7 @@ var (
 		12: "PROVIDER_PRESET_XAI",
 		13: "PROVIDER_PRESET_FIREWORKS",
 		14: "PROVIDER_PRESET_META",
+		15: "PROVIDER_PRESET_PERPLEXITY",
 	}
 	AIBackend_ProviderPreset_value = map[string]int32{
 		"PROVIDER_PRESET_UNSPECIFIED": 0,
@@ -2682,6 +2684,7 @@ var (
 		"PROVIDER_PRESET_XAI":         12,
 		"PROVIDER_PRESET_FIREWORKS":   13,
 		"PROVIDER_PRESET_META":        14,
+		"PROVIDER_PRESET_PERPLEXITY":  15,
 	}
 )
 
@@ -9050,11 +9053,13 @@ func (x *MCPBackend) GetSseKeepAlive() *durationpb.Duration {
 }
 
 type MCPTarget struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Backend       *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
-	Path          string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
-	Protocol      MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Backend  *BackendReference      `protobuf:"bytes,2,opt,name=backend,proto3" json:"backend,omitempty"`
+	Path     string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Protocol MCPTarget_Protocol     `protobuf:"varint,4,opt,name=protocol,proto3,enum=agentgateway.dev.resource.MCPTarget_Protocol" json:"protocol,omitempty"`
+	// CEL expression; when it evaluates to false, the target is excluded from the request.
+	Condition     *string `protobuf:"bytes,5,opt,name=condition,proto3,oneof" json:"condition,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9115,6 +9120,13 @@ func (x *MCPTarget) GetProtocol() MCPTarget_Protocol {
 		return x.Protocol
 	}
 	return MCPTarget_UNDEFINED
+}
+
+func (x *MCPTarget) GetCondition() string {
+	if x != nil && x.Condition != nil {
+		return *x.Condition
+	}
+	return ""
 }
 
 type BackendReference struct {
@@ -19366,7 +19378,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\x97\"\n" +
+	"_qualifier\"\xb7\"\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -19487,7 +19499,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x05\x12\f\n" +
 	"\bREALTIME\x10\x06\x12\n" +
 	"\n" +
-	"\x06RERANK\x10\a\"\xcb\x03\n" +
+	"\x06RERANK\x10\a\"\xeb\x03\n" +
 	"\x0eProviderPreset\x12\x1f\n" +
 	"\x1bPROVIDER_PRESET_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16PROVIDER_PRESET_COHERE\x10\x01\x12\x1a\n" +
@@ -19504,7 +19516,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x1aPROVIDER_PRESET_TOGETHERAI\x10\v\x12\x17\n" +
 	"\x13PROVIDER_PRESET_XAI\x10\f\x12\x1d\n" +
 	"\x19PROVIDER_PRESET_FIREWORKS\x10\r\x12\x18\n" +
-	"\x14PROVIDER_PRESET_META\x10\x0e\"\xb9\x04\n" +
+	"\x14PROVIDER_PRESET_META\x10\x0e\x12\x1e\n" +
+	"\x1aPROVIDER_PRESET_PERPLEXITY\x10\x0f\"\xb9\x04\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +
@@ -19525,16 +19538,19 @@ const file_resource_proto_rawDesc = "" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
 	"\tFAIL_OPEN\x10\x01B\x11\n" +
-	"\x0f_sse_keep_alive\"\xfe\x01\n" +
+	"\x0f_sse_keep_alive\"\xaf\x02\n" +
 	"\tMCPTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12E\n" +
 	"\abackend\x18\x02 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\abackend\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12I\n" +
-	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\"7\n" +
+	"\bprotocol\x18\x04 \x01(\x0e2-.agentgateway.dev.resource.MCPTarget.ProtocolR\bprotocol\x12!\n" +
+	"\tcondition\x18\x05 \x01(\tH\x00R\tcondition\x88\x01\x01\"7\n" +
 	"\bProtocol\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\a\n" +
 	"\x03SSE\x10\x01\x12\x13\n" +
-	"\x0fSTREAMABLE_HTTP\x10\x02\"\xe8\x02\n" +
+	"\x0fSTREAMABLE_HTTP\x10\x02B\f\n" +
+	"\n" +
+	"_condition\"\xe8\x02\n" +
 	"\x10BackendReference\x12O\n" +
 	"\aservice\x18\x01 \x01(\v23.agentgateway.dev.resource.BackendReference.ServiceH\x00R\aservice\x12\x1a\n" +
 	"\abackend\x18\x02 \x01(\tH\x00R\abackend\x12L\n" +
@@ -20593,6 +20609,7 @@ func file_resource_proto_init() {
 	}
 	file_resource_proto_msgTypes[62].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[64].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[65].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[66].OneofWrappers = []any{
 		(*BackendReference_Service_)(nil),
 		(*BackendReference_Backend)(nil),

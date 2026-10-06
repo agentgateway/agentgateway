@@ -603,7 +603,7 @@ pub mod to_responses {
 
 		let usage = resp.usage.map(|u| responses::ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: responses::InputTokenDetails {
 				cached_tokens: u
@@ -937,13 +937,6 @@ pub mod to_responses {
 		)
 	}
 
-	fn usage_output_tokens(usage: &completions::Usage) -> u32 {
-		if usage.completion_tokens == 0 && usage.total_tokens > 0 {
-			return usage.total_tokens.saturating_sub(usage.prompt_tokens);
-		}
-		usage.completion_tokens
-	}
-
 	#[allow(clippy::too_many_arguments)]
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
@@ -1098,7 +1091,7 @@ pub mod to_responses {
 		if let Some(ref u) = usage {
 			log.update(|r| {
 				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(usage_output_tokens(u) as u64);
+				r.response.output_tokens = Some(u.output_tokens() as u64);
 				r.response.total_tokens = Some(u.total_tokens as u64);
 				r.response.cached_input_tokens = u
 					.prompt_tokens_details
@@ -1118,7 +1111,7 @@ pub mod to_responses {
 
 		let usage_obj = usage.map(|u| ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: InputTokenDetails {
 				cached_tokens: u

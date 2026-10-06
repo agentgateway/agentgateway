@@ -225,7 +225,7 @@ export function HomePage() {
 					state="warn"
 					title="UI is exposed without authentication"
 					action={
-						<Link className="button" to="/settings">
+						<Link className="button" to="/settings/ui">
 							Configure UI policies
 						</Link>
 					}

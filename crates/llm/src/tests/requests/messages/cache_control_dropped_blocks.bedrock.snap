@@ -2,8 +2,8 @@
 source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/messages/cache_control_dropped_blocks.json
 info:
-  model: claude-sonnet-4-5
-  max_tokens: 1024
+  model: gpt-5.6
+  max_tokens: 64
   messages:
     - role: user
       content:
@@ -11,66 +11,75 @@ info:
           source:
             type: text
             media_type: text/plain
-            data: document body
+            data: omitted
           cache_control:
             type: ephemeral
         - type: text
-          text: Summarize this document
+          text: No preceding content to cache
     - role: assistant
       content:
-        - type: server_tool_use
-          id: srvtoolu_1
-          name: web_search
-          input:
-            query: agentgateway
+        - type: document
+          source:
+            type: text
+            media_type: text/plain
+            data: omitted
+          cache_control:
+            type: ephemeral
+    - role: user
+      content:
+        - type: search_result
+          source: "https://example.com"
+          title: Result
+          content:
+            - type: text
+              text: omitted
+          cache_control:
+            type: ephemeral
+        - type: text
+          text: Before search result
+        - type: search_result
+          source: "https://example.com"
+          title: Result
+          content:
+            - type: text
+              text: omitted
           cache_control:
             type: ephemeral
         - type: web_search_tool_result
-          tool_use_id: srvtoolu_1
+          tool_use_id: srv_1
           content: []
           cache_control:
             type: ephemeral
         - type: text
-          text: Searching the web
-    - role: user
-      content:
-        - type: text
-          text: Use this search result
-        - type: search_result
-          source: "https://example.com"
-          title: Example
-          content:
-            - type: text
-              text: search result body
-          cache_control:
-            type: ephemeral
+          text: After search result
     - role: assistant
       content:
-        - type: tool_use
-          id: call_search
-          name: lookup
+        - type: text
+          text: Before server tool
+        - type: thinking
+          thinking: reasoning
+          signature: signature
+        - type: server_tool_use
+          id: srv_1
+          name: web_search
           input: {}
-    - role: user
-      content:
-        - type: tool_result
-          tool_use_id: call_search
-          content:
-            - type: text
-              text: tool result text
-            - type: search_result
-              source: "https://example.com"
-              title: Example
-              content:
-                - type: text
-                  text: search result body
-              cache_control:
-                type: ephemeral
+          cache_control:
+            type: ephemeral
+            ttl: 1h
   tools:
     - name: lookup
-      description: Look up information
       input_schema:
         type: object
-        properties: {}
+    - type: web_search_20250305
+      name: web_search
+      cache_control:
+        type: ephemeral
+        ttl: 1h
+    - name: over_limit
+      input_schema:
+        type: object
+      cache_control:
+        type: ephemeral
 ---
 {
   "request": {
@@ -79,12 +88,23 @@ info:
         "role": "user",
         "content": [
           {
-            "text": "Summarize this document"
+            "text": "No preceding content to cache"
           },
           {
             "cachePoint": {
               "type": "default"
             }
+          },
+          {
+            "text": "Before search result"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          },
+          {
+            "text": "After search result"
           }
         ]
       },
@@ -92,70 +112,54 @@ info:
         "role": "assistant",
         "content": [
           {
-            "text": "Searching the web"
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": [
-          {
-            "text": "Use this search result"
+            "text": "Before server tool"
           },
           {
             "cachePoint": {
+              "ttl": "1h",
               "type": "default"
-            }
-          }
-        ]
-      },
-      {
-        "role": "assistant",
-        "content": [
-          {
-            "toolUse": {
-              "toolUseId": "call_search",
-              "name": "lookup",
-              "input": {}
-            }
-          }
-        ]
-      },
-      {
-        "role": "user",
-        "content": [
-          {
-            "toolResult": {
-              "toolUseId": "call_search",
-              "content": [
-                {
-                  "text": "tool result text"
-                }
-              ],
-              "status": null
             }
           },
           {
-            "cachePoint": {
-              "type": "default"
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "reasoning",
+                "signature": "signature"
+              }
             }
           }
         ]
       }
     ],
     "inferenceConfig": {
-      "maxTokens": 1024
+      "maxTokens": 64
     },
     "toolConfig": {
       "tools": [
         {
           "toolSpec": {
             "name": "lookup",
-            "description": "Look up information",
+            "description": null,
             "inputSchema": {
               "json": {
-                "type": "object",
-                "properties": {}
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "cachePoint": {
+            "ttl": "1h",
+            "type": "default"
+          }
+        },
+        {
+          "toolSpec": {
+            "name": "over_limit",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
               }
             }
           }
@@ -166,24 +170,16 @@ info:
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
-    "request_model": "claude-sonnet-4-5",
+    "request_model": "gpt-5.6",
     "provider": "bedrock",
     "streaming": false,
     "params": {
-      "max_tokens": 1024
+      "max_tokens": 64
     },
     "prompt": [
       {
         "role": "user",
-        "content": "Summarize this document"
-      },
-      {
-        "role": "assistant",
-        "content": "Searching the web"
-      },
-      {
-        "role": "user",
-        "content": "Use this search result"
+        "content": "No preceding content to cache"
       },
       {
         "role": "assistant",
@@ -191,7 +187,11 @@ info:
       },
       {
         "role": "user",
-        "content": ""
+        "content": "Before search result After search result"
+      },
+      {
+        "role": "assistant",
+        "content": "Before server tool"
       }
     ]
   }

@@ -2312,7 +2312,7 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 		region: strng::new("us-east-1"),
 		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("bedrock-api-key".into()),
+			value: SecretString::new("bedrock-api-key".into()).into(),
 			location: None,
 		})],
 	};
@@ -2390,7 +2390,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		location: Some(strng::new("us-central1")),
 		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("user-provided-api-key".into()),
+			value: SecretString::new("user-provided-api-key".into()).into(),
 			location: None,
 		})],
 	};

@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use once_cell::sync::Lazy;
 use phonenumber::{country, parse};
 use regex::Regex;
@@ -23,7 +25,7 @@ impl PhoneRecognizer {
 impl Recognizer for PhoneRecognizer {
 	fn recognize(&self, text: &str) -> Vec<RecognizerResult> {
 		static CANDIDATE_RE: Lazy<Regex> =
-			Lazy::new(|| Regex::new(r"(?i)(^|[^0-9])([+()]?[0-9][0-9\t\p{Zs}().\-]{6,30})").unwrap());
+			Lazy::new(|| Regex::new(r"(?i)(^|[^0-9])([+()]?[0-9][0-9\t\p{Zs}().\-+]{6,})").unwrap());
 
 		// Map region strings once.
 		fn to_country(code: &str) -> Option<country::Id> {
@@ -39,11 +41,8 @@ impl Recognizer for PhoneRecognizer {
 			}
 		}
 
-		let mut results = Vec::new();
-
-		for caps in CANDIDATE_RE.captures_iter(text) {
-			let m = caps.get(2).unwrap();
-			let candidate = m.as_str().trim_end_matches(|c: char| !c.is_ascii_digit());
+		let best_match = |span: &str, start: usize| -> Option<RecognizerResult> {
+			let candidate = span.trim_end_matches(|c: char| !c.is_ascii_digit());
 			let mut best: Option<RecognizerResult> = None;
 
 			for &region in &self.regions {
@@ -62,8 +61,8 @@ impl Recognizer for PhoneRecognizer {
 					let res = RecognizerResult {
 						entity_type: "PHONE_NUMBER".to_string(),
 						matched: candidate.to_string(),
-						start: m.start(),
-						end: m.start() + candidate.len(),
+						start,
+						end: start + candidate.len(),
 						score,
 					};
 
@@ -81,9 +80,13 @@ impl Recognizer for PhoneRecognizer {
 				}
 			}
 
-			if let Some(r) = best {
-				results.push(r);
-			}
+			best
+		};
+
+		let mut results = Vec::new();
+
+		for caps in CANDIDATE_RE.captures_iter(text) {
+			results.extend(split_numbers(caps.get(2).unwrap(), best_match));
 		}
 
 		results.sort_by_key(|r| (r.start, r.end, r.matched.clone()));
@@ -94,4 +97,53 @@ impl Recognizer for PhoneRecognizer {
 	fn name(&self) -> &str {
 		"PHONE_NUMBER"
 	}
+}
+
+fn split_numbers(
+	run: regex::Match,
+	parse_span: impl Fn(&str, usize) -> Option<RecognizerResult>,
+) -> Vec<RecognizerResult> {
+	static WORD_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S+").unwrap());
+	const MAX_NUMBER_LEN: usize = 32;
+
+	let words: Vec<_> = WORD_RE.find_iter(run.as_str()).collect();
+	// maximize digits covered, prefer fewer matches (implying each match is longer)
+	let mut score_from = vec![(0, Reverse(0)); words.len() + 1];
+	let mut first_number_from: Vec<Option<(usize, RecognizerResult)>> = vec![None; words.len() + 1];
+	for first in (0..words.len()).rev() {
+		score_from[first] = score_from[first + 1];
+		for last in first..words.len() {
+			let span = &run.as_str()[words[first].start()..words[last].end()];
+			if span.len() > MAX_NUMBER_LEN {
+				break;
+			}
+			let Some(number) = parse_span(span, run.start() + words[first].start()) else {
+				continue;
+			};
+			let (rest_digits, Reverse(rest_count)) = score_from[last + 1];
+			let digits = number
+				.matched
+				.chars()
+				.filter(|c| c.is_ascii_digit())
+				.count();
+			let score = (rest_digits + digits, Reverse(rest_count + 1));
+			if score > score_from[first] {
+				score_from[first] = score;
+				first_number_from[first] = Some((last + 1, number));
+			}
+		}
+	}
+
+	let mut numbers = Vec::new();
+	let mut i = 0;
+	while i < words.len() {
+		match first_number_from[i].take() {
+			Some((next, number)) => {
+				numbers.push(number);
+				i = next;
+			},
+			None => i += 1,
+		}
+	}
+	numbers
 }

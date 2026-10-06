@@ -118,6 +118,7 @@ fn provider_preset_from_proto(
 		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
 		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
 		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
+		ProviderPreset::Perplexity => Ok(llm::custom::ProviderPreset::Perplexity),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),
@@ -1193,7 +1194,7 @@ fn backend_auth_credentials_from_proto(
 				.ok_or(ProtoError::MissingRequiredField)?;
 			Ok(crate::http::auth::BackendAuthCredential {
 				location,
-				key: c.value.into(),
+				key: secrecy::SecretString::from(c.value).into(),
 			})
 		})
 		.collect()
@@ -1245,7 +1246,7 @@ fn backend_auth_kind_from_proto(
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuthKind::Key {
-			value: k.secret.into(),
+			value: secrecy::SecretString::from(k.secret).into(),
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Gcp(g)) => {
@@ -2157,7 +2158,7 @@ pub(crate) fn backend_with_policies_from_proto(
 
 fn mcp_target_from_proto(
 	s: &proto::agent::McpTarget,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<McpTarget, ProtoError> {
 	let proto = proto::agent::mcp_target::Protocol::try_from(s.protocol)?;
 	let backend = resolve_simple_reference(s.backend.as_ref());
@@ -2165,7 +2166,11 @@ fn mcp_target_from_proto(
 
 	Ok(McpTarget {
 		name: strng::new(&s.name),
-		condition: None,
+		condition: s
+			.condition
+			.as_ref()
+			.filter(|c| !c.is_empty())
+			.map(|c| permissive_cel_expression_arc(diagnostics, format!("mcp target {}", s.name), c)),
 		spec: match proto {
 			Protocol::Sse => McpTargetSpec::Sse(SseTargetSpec {
 				backend,

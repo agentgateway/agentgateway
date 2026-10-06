@@ -3122,9 +3122,10 @@ pub struct LocalMcpAuthentication {
 impl LocalMcpAuthentication {
 	/// Derive the JWKS URL from the issuer and provider, for configs that do not set `jwks`.
 	fn derived_jwks_url(&self) -> anyhow::Result<::http::Uri> {
+		let issuer = self.issuer.trim_end_matches('/');
 		Ok(match &self.provider {
 			None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
-				format!("{}/.well-known/jwks.json", self.issuer).parse()?
+				format!("{issuer}/.well-known/jwks.json").parse()?
 			},
 			Some(McpIDP::Descope {}) => {
 				// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
@@ -3145,16 +3146,14 @@ impl LocalMcpAuthentication {
 					);
 					format!("{base}/.well-known/jwks.json").parse()?
 				} else {
-					format!("{}/.well-known/jwks.json", self.issuer).parse()?
+					format!("{issuer}/.well-known/jwks.json").parse()?
 				}
 			},
-			Some(McpIDP::Keycloak { .. }) => {
-				format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
-			},
+			Some(McpIDP::Keycloak { .. }) => format!("{issuer}/protocol/openid-connect/certs").parse()?,
 			Some(McpIDP::Authentik {}) => {
 				// authentik issuers look like https://<host>/application/o/<app-slug>/
 				// (note the trailing slash) and serve JWKS at {issuer}/jwks/.
-				format!("{}/jwks/", self.issuer.trim_end_matches('/')).parse()?
+				format!("{issuer}/jwks/").parse()?
 			},
 			Some(McpIDP::Entra { .. }) => http::oauth::entra_endpoints(&self.issuer)
 				.map_err(|e| anyhow!(e))?

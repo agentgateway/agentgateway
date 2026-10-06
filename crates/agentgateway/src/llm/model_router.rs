@@ -9,7 +9,6 @@ use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
 
-use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, RequestBodyExt, Response};
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
@@ -174,6 +173,11 @@ pub enum VirtualModelRouting {
 	Conditional(Vec<ConditionalTarget>),
 }
 
+/// The model name the client asked for, before any virtual model rewrite. The router stores it as
+/// a request extension so the proxy can attach it to the request log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OriginalModel(pub String);
+
 #[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
 	pub model: String,
@@ -337,12 +341,7 @@ impl ModelRouter {
 		}
 		req
 			.extensions_mut()
-			.get_or_insert_with(TransformationMetadata::default)
-			.0
-			.insert(
-				"agentgateway_user_model".to_string(),
-				Value::String(requested_model.model.clone()),
-			);
+			.insert(OriginalModel(requested_model.model.clone()));
 		if let Some(virtual_model) = self
 			.virtual_models
 			.iter()
@@ -1095,6 +1094,13 @@ mod tests {
 	use crate::transport::BufferLimit;
 	use crate::types::agent::RouteBackendTarget;
 
+	fn original_model(req: &Request) -> Option<&str> {
+		req
+			.extensions()
+			.get::<OriginalModel>()
+			.map(|model| model.0.as_str())
+	}
+
 	#[tokio::test]
 	async fn conditional_virtual_model_can_use_llm_request() {
 		let model = |name: &str| ModelRoute {
@@ -1152,6 +1158,7 @@ mod tests {
 				.await,
 			ResolveResult::Backend(_)
 		));
+		assert_eq!(original_model(&req), Some("smart-model"));
 		let cached = req
 			.body()
 			.extension::<crate::json::ParsedJson>()
@@ -1313,6 +1320,7 @@ mod tests {
 			panic!("invalid conditional target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+		assert_eq!(original_model(&req), Some("conditional-model"));
 		let body = http::read_body_with_limit(resp.into_body(), 1024)
 			.await
 			.expect("error body");

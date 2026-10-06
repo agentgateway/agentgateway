@@ -28,7 +28,6 @@ use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::proxy::ProxyError;
 use crate::proxy::ProxyError::ProcessingString;
-use crate::serdes::deser_key_from_file;
 use crate::types::agent::{BackendTarget, Target};
 use crate::*;
 
@@ -77,11 +76,10 @@ pub enum BackendAuthKind {
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<AuthorizationLocation>,
 	},
-	/// Send a configured secret value to the backend.
+	/// Send a configured secret value, or a value computed from the request, to the backend.
 	Key {
-		/// Secret value to send to the backend.
-		#[serde(serialize_with = "ser_redact")]
-		value: SecretString,
+		/// Value to send to the backend.
+		value: BackendAuthValue,
 		/// Where to place the secret in the backend request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		location: Option<AuthorizationLocation>,
@@ -143,20 +141,78 @@ impl BackendAuth {
 			credentials: Vec::new(),
 		}
 	}
+
+	/// CEL expressions this auth config evaluates per request, for registration
+	/// with the CEL context builder.
+	pub fn cel_expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		let kind = match self.kind.as_ref() {
+			Some(BackendAuthKind::Key { value, .. }) => value.expression(),
+			_ => None,
+		};
+		let aws = match self.kind.as_ref() {
+			Some(BackendAuthKind::Aws(aws)) => Some(aws.cel_expressions()),
+			_ => None,
+		};
+		kind
+			.into_iter()
+			.chain(aws.into_iter().flatten())
+			.chain(self.credentials.iter().filter_map(|c| c.key.expression()))
+	}
 }
 
 /// An additional credential to inject on the backend request.
-#[apply(schema!)]
+#[apply(schema_ser!)]
 pub struct BackendAuthCredential {
 	/// Where the credential is inserted on the backend request.
 	pub location: AuthorizationLocation,
 	/// Credential value.
-	#[serde(
-		serialize_with = "ser_redact",
-		deserialize_with = "deser_key_from_file"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-	pub key: SecretString,
+	pub key: BackendAuthValue,
+}
+
+/// A credential value inserted on the backend request.
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(untagged)]
+pub enum BackendAuthValue {
+	Static(#[serde(serialize_with = "ser_redact")] SecretString),
+	Expression {
+		expression: Arc<crate::cel::Expression>,
+	},
+}
+
+impl From<SecretString> for BackendAuthValue {
+	fn from(value: SecretString) -> Self {
+		Self::Static(value)
+	}
+}
+
+impl BackendAuthValue {
+	/// Resolves the value for this request. An expression that fails or does not
+	/// produce a string yields no value, and the target location is cleared instead.
+	fn resolve(&self, req: &Request) -> Option<Cow<'_, str>> {
+		match self {
+			BackendAuthValue::Static(value) => Some(Cow::Borrowed(value.expose_secret())),
+			BackendAuthValue::Expression { expression } => {
+				let value = crate::cel::Executor::new_request(req)
+					.eval(expression)
+					.ok()
+					.and_then(|v| v.as_str().ok().map(Cow::into_owned));
+				if value.is_none() {
+					debug!(
+						"backend auth expression {:?} produced no string value",
+						expression.original_expression
+					);
+				}
+				value.map(Cow::Owned)
+			},
+		}
+	}
+
+	fn expression(&self) -> Option<&crate::cel::Expression> {
+		match self {
+			BackendAuthValue::Static(_) => None,
+			BackendAuthValue::Expression { expression } => Some(expression),
+		}
+	}
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -184,7 +240,7 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 	}
 	match auth.kind.as_ref() {
 		Some(BackendAuthKind::Key {
-			value: key,
+			value: BackendAuthValue::Static(key),
 			location,
 		}) => {
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
@@ -205,6 +261,12 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 				)),
 			}
 		},
+		Some(BackendAuthKind::Key {
+			value: BackendAuthValue::Expression { .. },
+			..
+		}) => Err(ProcessingString(
+			"key expression is not supported on tunnel-bound backends".to_string(),
+		)),
 		_ => Err(ProcessingString(
 			"only key auth is supported in tunnel".to_string(),
 		)),
@@ -219,7 +281,11 @@ pub async fn apply_backend_auth(
 		apply_backend_auth_kind(backend_info, kind, req).await?;
 	}
 	for credential in &auth.credentials {
-		insert_local_auth(&credential.location, req, credential.key.expose_secret())?;
+		let Some(value) = credential.key.resolve(req) else {
+			credential.location.remove(req)?;
+			continue;
+		};
+		insert_local_auth(&credential.location, req, &value)?;
 		// Credential locations are always explicitly configured. Mark Authorization writes
 		// so providers (e.g. Anthropic) do not rewrite or relocate the header. Other
 		// locations must not touch the marker set by the primary auth kind.
@@ -263,13 +329,13 @@ async fn apply_backend_auth_kind(
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuthKind::Key {
-			value: key,
-			location,
-		} => {
+		BackendAuthKind::Key { value, location } => {
 			let explicit = location.is_some();
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			insert_local_auth(resolved, req, key.expose_secret())?;
+			match value.resolve(req) {
+				Some(value) => insert_local_auth(resolved, req, &value)?,
+				None => resolved.remove(req)?,
+			}
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });

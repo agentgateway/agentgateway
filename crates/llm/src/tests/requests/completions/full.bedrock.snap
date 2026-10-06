@@ -163,7 +163,7 @@ info:
           }
         }
       ],
-      "tool_choice": {
+      "toolChoice": {
         "tool": {
           "name": "my_function"
         }

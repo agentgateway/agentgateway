@@ -524,21 +524,6 @@ fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
 	}
 }
 
-fn original_model_from_metadata<'a>(
-	req: Option<&'a cel::RequestSnapshot>,
-	resp: Option<&'a cel::ResponseSnapshot>,
-) -> Option<&'a str> {
-	resp
-		.and_then(|snapshot| snapshot.metadata.as_ref())
-		.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		.or_else(|| {
-			req
-				.and_then(|snapshot| snapshot.metadata.as_ref())
-				.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		})
-		.and_then(Value::as_str)
-}
-
 /// The incoming trace context picks which setting applies: `random_sampling` when the request has
 /// no trace, `client_sampling` when it has one that is sampled, `parent_not_sampled` when it has
 /// one that is not.
@@ -1162,6 +1147,7 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			original_model: None,
 			guardrails: Default::default(),
 			mcp_guardrails: Default::default(),
 			budgets: None,
@@ -1342,6 +1328,7 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
 	pub mcp_guardrails: McpGuardrailsLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
@@ -1856,6 +1843,10 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.response_model.display()),
 				),
+				(
+					"agw.ai.original_model",
+					log.original_model.as_deref().map(Into::into),
+				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
 					"gen_ai.usage.cache_creation.input_tokens",
@@ -2135,22 +2126,12 @@ impl Drop for DropOnLog {
 				}
 
 				if log_store_enabled {
-					let original_model = original_model_from_metadata(
-						log.request_snapshot.as_deref(),
-						log.response_snapshot.as_ref(),
-					)
-					.map(str::to_owned);
-
 					let mut db_kv = kv.clone();
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
 							Cow::Borrowed("user_agent.name"),
 							user_agent_name(log.request_snapshot.as_deref()).map(Value::String),
-						),
-						(
-							Cow::Borrowed("agw.ai.original_model"),
-							original_model.clone().map(Value::String),
 						),
 						(
 							Cow::Borrowed("agw.api_key.name"),
@@ -3759,6 +3740,39 @@ mod tests {
 				.iter()
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
+		);
+	}
+
+	#[test]
+	fn original_model_span_attribute() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(metric_test_llm_request());
+		log.original_model = Some("smart-model".to_string());
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.to_string())
+		};
+		assert_eq!(value("gen_ai.request.model").as_deref(), Some("test-model"));
+		assert_eq!(
+			value("agw.ai.original_model").as_deref(),
+			Some("smart-model")
 		);
 	}
 

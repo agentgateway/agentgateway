@@ -16,8 +16,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Disable the Go cache program injected by Blacksmith runners.
-  GOCACHEPROG: ""
   CARGO_TERM_COLOR: always
   CI: true
   CARGO_BUILD_WARNINGS: deny
@@ -82,14 +80,14 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Install Rust
-      uses: ./.github/actions/setup-rust
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        # The Rust build cache restores source mtimes from each path's history.
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
       with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        cache-key: proxy-lint
+        # PRs restore the default branch cache; only postsubmit rolls it forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Generation
       run: make generate-schema check-clean-repo check-default-members
     - name: Lint
@@ -132,14 +130,16 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Set up controller Go build cache
+    - name: Set up controller toolchain
       uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        go-cache-name: controller-test
-        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
-        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
+      env:
+        # The race detector otherwise sleeps 1s when each test binary exits.
+        GORACE: atexit_sleep_ms=0
+        # Linking is heavy, make it smaller
+        GOFLAGS: -ldflags=-s
       run: go test -race ./...
 
   controller-lint:
@@ -148,13 +148,10 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Set up controller Go build cache
+    - name: Set up controller toolchain
       uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        go-cache-name: controller-lint
-        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
-        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Lint
       run: make -C controller analyze
     - name: go mod tidy
@@ -174,18 +171,21 @@ jobs:
         persist-credentials: false
         # git-restore-mtime needs full history to find each file's latest change.
         fetch-depth: 0
-    - name: Set up controller build caches
+    - name: Set up controller toolchains
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
         go-version: "${{ env.GO_VERSION }}"
-        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        # Only postsubmit rolls the Rust build cache forward.
         save: ${{ github.ref == 'refs/heads/main' }}
     - name: Setup
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
       run: |
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -trimpath -tags=e2e,agent,disable_pgv -v ./controller/test/e2e
+    - name: Verify Kind images
+      if: ${{ always() }}
+      run: TEST_MODE=e2e ./controller/test/setup/verify-kind-images.sh
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -212,7 +212,7 @@ jobs:
         persist-credentials: false
         # git-restore-mtime needs full history to find each file's latest change.
         fetch-depth: 0
-    - name: Set up controller build caches
+    - name: Set up controller toolchains
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
@@ -222,6 +222,9 @@ jobs:
     - name: Conformance
       run: |
         make -C controller agw-conformance
+    - name: Verify Kind images
+      if: ${{ always() }}
+      run: TEST_MODE=conformance ./controller/test/setup/verify-kind-images.sh
     - name: Debug Info
       if: ${{ failure() }}
       run: |
@@ -264,16 +267,19 @@ jobs:
         persist-credentials: false
         # git-restore-mtime needs full history to find each file's latest change.
         fetch-depth: 0
-    - name: Set up controller build caches
+    - name: Set up controller toolchains
       uses: ./.github/actions/controller-build-cache
       with:
         rust: "true"
         go-version: "${{ env.GO_VERSION }}"
     - name: Setup
-      run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
+      run: TEST_MODE=gie-conformance ./controller/test/setup/setup-kind-ci.sh
     - name: GIE Conformance
       run: |
         make -C controller gie-conformance
+    - name: Verify Kind images
+      if: ${{ always() }}
+      run: TEST_MODE=gie-conformance ./controller/test/setup/verify-kind-images.sh
     - name: Debug Info
       if: ${{ failure() }}
       run: |

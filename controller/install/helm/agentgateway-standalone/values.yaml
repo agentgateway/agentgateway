@@ -151,6 +151,16 @@ monitoring:
     enabled: true
     # -- How often Prometheus scrapes the agentgateway proxy's metrics.
     interval: 15s
+    # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+    scrapeNativeHistograms: false
+    # -- Scrape classic (legacy bucket) histograms.
+    scrapeClassicHistograms: true
+    # -- Relabeling rules applied to the scrape target before metrics are ingested
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    relabelings: []
+    # -- Relabeling rules applied to scraped metrics before ingestion
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    metricRelabelings: []
 
 # -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. Changes outside the nested 'config' section, plus 'config.modelCatalog', are applied without restarting the pods. Changes to other nested 'config' settings restart the pods because agentgateway reads them only at startup. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}

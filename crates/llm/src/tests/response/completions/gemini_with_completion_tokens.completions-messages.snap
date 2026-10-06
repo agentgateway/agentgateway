@@ -33,12 +33,12 @@ info:
     "stop_sequence": null,
     "usage": {
       "input_tokens": 7,
-      "output_tokens": 12
+      "output_tokens": 395
     }
   },
   "parsed": {
     "input_tokens": 7,
-    "output_tokens": 12,
+    "output_tokens": 395,
     "total_tokens": 402,
     "provider_model": "gemini-2.5-flash"
   }

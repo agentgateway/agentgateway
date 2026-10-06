@@ -658,7 +658,8 @@ async fn update_config_resource(
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => vec![
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => vec![
 			crate::config_store::prepare_policy_upsert(kind, id.clone(), resource.value)
 				.map_err(resource_api_error)?,
 		],
@@ -697,7 +698,10 @@ async fn update_config_resource(
 		.any(|resource| resource.kind == kind && resource.id == id);
 	let is_policy = matches!(
 		kind,
-		ConfigResourceKind::LlmPolicy | ConfigResourceKind::McpPolicy | ConfigResourceKind::UiPolicy
+		ConfigResourceKind::LlmPolicy
+			| ConfigResourceKind::McpPolicy
+			| ConfigResourceKind::UiPolicy
+			| ConfigResourceKind::FrontendPolicy
 	);
 	if !exists && !is_policy {
 		return Err(resource_api_error(ConfigResourceError::Conflict(format!(

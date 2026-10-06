@@ -17,6 +17,7 @@ import mistralIcon from '@/assets/providers/mistral.svg';
 import ollamaIcon from '@/assets/providers/ollama.svg';
 import openAiIcon from '@/assets/providers/openai.svg';
 import openrouterIcon from '@/assets/providers/openrouter.svg';
+import perplexityIcon from '@/assets/providers/perplexity.svg';
 import togetheraiIcon from '@/assets/providers/togetherai.svg';
 import vertexIcon from '@/assets/providers/vertex.svg';
 import xaiIcon from '@/assets/providers/xai.svg';
@@ -46,6 +47,7 @@ const providerIcons: Record<string, string> = {
 	xai: xaiIcon,
 	fireworks: fireworksIcon,
 	meta: metaIcon,
+	perplexity: perplexityIcon,
 	custom: agwIcon
 };
 

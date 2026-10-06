@@ -144,6 +144,7 @@ mod requests {
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
+		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
@@ -194,9 +195,11 @@ mod requests {
 			"cache_control",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
 		),
+		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_reasoning_prefix", &[BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
-		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_dropped_server_tools", &[BEDROCK]),
 		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
@@ -914,6 +917,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
@@ -982,6 +993,7 @@ mod responses {
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
@@ -1005,6 +1017,14 @@ mod responses {
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
