@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Copy, Clone, Deserialize, Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -596,10 +595,19 @@ pub struct ToolUseBlockDelta {
 	pub input: String,
 }
 
+fn deserialize_base64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+	use base64::Engine;
+	let s = String::deserialize(deserializer)?;
+	base64::prelude::BASE64_STANDARD
+		.decode(s)
+		.map_err(serde::de::Error::custom)
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub enum ReasoningContentBlockDelta {
-	#[serde(rename = "redactedContent")]
-	RedactedContent(#[allow(unused)] Bytes),
+	// Bedrock blobs are base64 encoded; fragments must be decoded before they can be joined.
+	#[serde(rename = "redactedContent", deserialize_with = "deserialize_base64")]
+	RedactedContent(Vec<u8>),
 	#[serde(rename = "signature")]
 	Signature(#[allow(unused)] String),
 	#[serde(rename = "text")]
