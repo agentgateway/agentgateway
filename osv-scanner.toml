@@ -1,18 +1,11 @@
-[[IgnoredVulns]]
-id = "RUSTSEC-2026-0189"
-reason = "rmcp 0.10.0 is a test-only dev-dependency"
-
-[[IgnoredVulns]]
-id = "GHSA-9pj6-vhgr-3mwh"
-reason = "rmcp 0.10.0 is a test-only dev-dependency"
-
-[[IgnoredVulns]]
-id = "GHSA-9g45-5xwm-f3wc"
-reason = "rmcp 0.10.0 is a test-only dev-dependency"
-
-[[IgnoredVulns]]
-id = "GHSA-33f5-2c5q-wgwj"
-reason = "rmcp 0.10.0 is a test-only dev-dependency"
+# Scope exception to the test-only pkg version so CVEs won't be flagged for the test version,
+# without affecting CVE reporting for the production version
+[[PackageOverrides]]
+name = "rmcp"
+version = "0.10.0"
+ecosystem = "crates.io"
+vulnerability.ignore = true
+reason = "test-only legacy SSE dependency; production uses a more recent version"
 
 [[IgnoredVulns]]
 id = "GHSA-7774-7vr3-cc8j"
