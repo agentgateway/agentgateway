@@ -954,10 +954,10 @@ pub mod from_completions {
 				})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
-				Some(bedrock::ToolChoice::Auto)
+				Some(bedrock::ToolChoice::Auto {})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)) => {
-				Some(bedrock::ToolChoice::Any)
+				Some(bedrock::ToolChoice::Any {})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)) => None,
 			_ => None,
@@ -1596,7 +1596,7 @@ pub mod from_messages {
 			}
 		});
 
-		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
+		// Bedrock applies strict inference constraints only to explicit extended thinking.
 		let thinking_enabled = requested_thinking
 			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
 
@@ -1625,31 +1625,15 @@ pub mod from_messages {
 			if bedrock_tools.is_empty() {
 				None
 			} else {
+				// Forward tool_choice as-is. Extended thinking only allows `auto`/`none`, so forced
+				// tool use is left for Bedrock to reject, as the Anthropic API does.
 				let tool_choice = match req.tool_choice {
-					Some(messages::ToolChoice::Auto { .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Auto)
-						}
-					},
-					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any),
-					Some(messages::ToolChoice::Tool { name, .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Tool {
-								name: tool_name_map.register(&name),
-							})
-						}
-					},
-					Some(messages::ToolChoice::None {}) | None => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							None
-						}
-					},
+					Some(messages::ToolChoice::Auto { .. }) => Some(bedrock::ToolChoice::Auto {}),
+					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any {}),
+					Some(messages::ToolChoice::Tool { name, .. }) => Some(bedrock::ToolChoice::Tool {
+						name: tool_name_map.register(&name),
+					}),
+					Some(messages::ToolChoice::None {}) | None => None,
 				};
 
 				Some((bedrock_tools, tool_choice))
@@ -2633,8 +2617,8 @@ pub mod from_responses {
 			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
 				use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
 				match tc {
-					ToolChoiceParam::Option(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
-					ToolChoiceParam::Option(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
+					ToolChoiceParam::Option(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto {}),
+					ToolChoiceParam::Option(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any {}),
 					ToolChoiceParam::Option(ToolChoiceOptions::None) => None,
 					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
 						Some(bedrock::ToolChoice::Tool {

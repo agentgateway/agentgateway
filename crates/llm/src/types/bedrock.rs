@@ -257,6 +257,7 @@ pub struct InvokeModelBody {
 }
 
 #[derive(Clone, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolConfiguration {
 	/// An array of tools that you want to pass to a model.
 	pub tools: Vec<Tool>,
@@ -420,9 +421,9 @@ pub enum StopReason {
 #[serde(rename_all = "camelCase")]
 pub enum ToolChoice {
 	/// The model must request at least one tool (no text is generated).
-	Any,
+	Any {},
 	/// (Default). The Model automatically decides if a tool should be called or whether to generate text instead.
-	Auto,
+	Auto {},
 	/// The Model must request the specified tool. Only supported by Anthropic Claude 3 models.
 	Tool { name: String },
 	/// The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.
