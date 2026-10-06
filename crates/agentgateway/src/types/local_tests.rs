@@ -2739,3 +2739,433 @@ binds:
 		.expect("a change to the key file should notify the resource manager")
 		.expect("resource change channel should stay open");
 }
+
+// One minimal `policy:` block per `FilterOrPolicy` field: (feature, yaml, on a route target,
+// on a backend target). An expectation is a space-separated list of `<tag>=<key type>`, where
+// <tag> is the serde tag of the internal policy ("traffic.cors", "backend.a2a") and the key must
+// be "default/p:<key type>"; `err:<text>` means the entry must be rejected with that text.
+// `$JWKS` is replaced with TEST_OIDC_JWKS. Every fixture is a top-level YAML map, so two of them
+// concatenated are one `policy:` block with both features.
+const POLICY_FEATURE_FIXTURES: &[(&str, &str, &str, &str)] = &[
+	(
+		"requestHeaderModifier",
+		"requestHeaderModifier:\n  add:\n    x-a: b\n",
+		"traffic.requestHeaderModifier=request-header-modifier",
+		"backend.requestHeaderModifier=request-header-modifier",
+	),
+	(
+		"responseHeaderModifier",
+		"responseHeaderModifier:\n  set:\n    x-b: c\n",
+		"traffic.responseHeaderModifier=response-header-modifier",
+		"backend.responseHeaderModifier=response-header-modifier",
+	),
+	(
+		"requestRedirect",
+		"requestRedirect:\n  scheme: https\n  status: 301\n",
+		"traffic.requestRedirect=request-redirect",
+		"backend.requestRedirect=request-redirect",
+	),
+	(
+		"urlRewrite",
+		"urlRewrite:\n  path:\n    full: /rewritten\n",
+		"traffic.urlRewrite=url-rewrite",
+		"traffic.urlRewrite=url-rewrite",
+	),
+	(
+		"requestMirror",
+		"requestMirror:\n  backend:\n    host: 127.0.0.1:8081\n  percentage: 0.5\n",
+		"traffic.requestMirror=request-mirror",
+		"backend.requestMirror=request-mirror",
+	),
+	(
+		"directResponse",
+		"directResponse:\n  body: hello\n  status: 200\n",
+		"traffic.directResponse=direct-response",
+		"traffic.directResponse=direct-response",
+	),
+	(
+		"cors",
+		"cors:\n  allowOrigins: ['*']\n",
+		"traffic.cors=cors",
+		"traffic.cors=cors",
+	),
+	(
+		"mcpAuthorization",
+		"mcpAuthorization:\n  rules:\n  - 'true'\n",
+		"backend.mcpAuthorization=mcp-authorization",
+		"backend.mcpAuthorization=mcp-authorization",
+	),
+	(
+		"mcpGuardrails",
+		"mcpGuardrails:\n  processors:\n  - kind: remote\n    methods: {'tools/call': request}\n    host: 127.0.0.1:9999\n",
+		"backend.mcpGuardrails=mcp-guardrails",
+		"backend.mcpGuardrails=mcp-guardrails",
+	),
+	(
+		"authorization",
+		"authorization:\n  rules:\n  - 'true'\n",
+		"traffic.authorization=authorization",
+		"backend.authorization=authorization",
+	),
+	(
+		"mcpAuthentication",
+		"mcpAuthentication:\n  issuer: https://issuer.example.com\n  jwks: '$JWKS'\n  resourceMetadata:\n    resource: http://localhost:3000/mcp\n",
+		"traffic.jwtAuth=jwt-auth",
+		"traffic.jwtAuth=jwt-auth",
+	),
+	("a2a", "a2a: {}\n", "backend.a2a=a2a", "backend.a2a=a2a"),
+	("ai", "ai: {}\n", "traffic.ai=ai", "backend.ai=ai"),
+	(
+		"backendTLS",
+		"backendTLS:\n  insecure: true\n",
+		"backend.backendTLS=backend-tls",
+		"backend.backendTLS=backend-tls",
+	),
+	(
+		"backendTunnel",
+		"backendTunnel:\n  proxy:\n    host: 127.0.0.1:3128\n",
+		"backend.tunnel=tunnel",
+		"backend.tunnel=tunnel",
+	),
+	(
+		"backendAuth",
+		"backendAuth:\n  passthrough: {}\n",
+		"backend.backendAuth=backend-auth",
+		"backend.backendAuth=backend-auth",
+	),
+	(
+		"localRateLimit",
+		"localRateLimit:\n- maxTokens: 10\n  tokensPerFill: 1\n  fillInterval: 1s\n",
+		"traffic.localRateLimit=local-rate-limit",
+		"traffic.localRateLimit=local-rate-limit",
+	),
+	(
+		"remoteRateLimit",
+		"remoteRateLimit:\n  domain: d\n  host: 127.0.0.1:9002\n  descriptors:\n  - entries:\n    - key: user\n      value: '\"u\"'\n",
+		"traffic.remoteRateLimit=remote-rate-limit",
+		"traffic.remoteRateLimit=remote-rate-limit",
+	),
+	(
+		"jwtAuth",
+		"jwtAuth:\n  issuer: https://issuer.example.com\n  jwks: '$JWKS'\n",
+		"traffic.jwtAuth=jwt-auth",
+		"traffic.jwtAuth=jwt-auth",
+	),
+	(
+		"oidc",
+		"oidc:\n  issuer: https://issuer.example.com\n  authorizationEndpoint: https://issuer.example.com/authorize\n  tokenEndpoint: https://issuer.example.com/token\n  jwks: '$JWKS'\n  clientId: client-id\n  clientSecret: client-secret\n  redirectURI: http://localhost:3000/oauth/callback\n",
+		"traffic.oidc=oidc",
+		"traffic.oidc=oidc",
+	),
+	(
+		"basicAuth",
+		"basicAuth:\n  htpasswd: 'admin:$apr1$Q/5qL8KZ$IZqKxM0kZQPsQqH9Lp9bL.'\n",
+		"traffic.basicAuth=basic-auth",
+		"traffic.basicAuth=basic-auth",
+	),
+	(
+		"apiKey",
+		"apiKey:\n  keys:\n  - key: sk-123\n",
+		"traffic.aPIKey=api-key traffic.budget=budget",
+		"traffic.aPIKey=api-key traffic.budget=budget",
+	),
+	(
+		"extAuthz",
+		"extAuthz:\n  host: 127.0.0.1:9000\n",
+		"traffic.extAuthz=ext-authz",
+		"backend.extAuthz=ext-authz",
+	),
+	(
+		"extProc",
+		"extProc:\n  host: 127.0.0.1:9001\n",
+		"traffic.extProc=ext-proc",
+		"traffic.extProc=ext-proc",
+	),
+	(
+		"substrateIngress",
+		"substrateIngress:\n  host: 127.0.0.1:9003\n",
+		"traffic.substrateIngress=substrate-ingress",
+		"traffic.substrateIngress=substrate-ingress",
+	),
+	(
+		"substrateEgress",
+		"substrateEgress:\n  host: 127.0.0.1:9004\n",
+		"traffic.substrateEgress=substrate-egress",
+		"traffic.substrateEgress=substrate-egress",
+	),
+	(
+		"transformations",
+		"transformations:\n  request:\n    set:\n      x-t: \"'v'\"\n",
+		"traffic.transformation=transformation",
+		"backend.transformation=transformation",
+	),
+	(
+		"csrf",
+		"csrf:\n  additionalOrigins: [https://a.example.com]\n",
+		"traffic.csrf=csrf",
+		"traffic.csrf=csrf",
+	),
+	(
+		"buffer",
+		"buffer:\n  request:\n    maxBytes: 10\n",
+		"traffic.buffer=buffer",
+		"traffic.buffer=buffer",
+	),
+	(
+		"timeout",
+		"timeout:\n  requestTimeout: 1s\n",
+		"traffic.timeout=timeout",
+		"traffic.timeout=timeout",
+	),
+	(
+		"retry",
+		"retry:\n  attempts: 2\n  codes: [429]\n",
+		"traffic.retry=retry",
+		"traffic.retry=retry",
+	),
+	(
+		"delay",
+		"delay:\n  duration: 1s\n",
+		"traffic.delay=delay",
+		"traffic.delay=delay",
+	),
+];
+
+fn policy_test_targets() -> [(&'static str, PolicyTarget); 2] {
+	[
+		(
+			"route",
+			PolicyTarget::Route(crate::types::agent::RouteName {
+				name: "r".into(),
+				namespace: "default".into(),
+				..Default::default()
+			}),
+		),
+		(
+			"backend",
+			PolicyTarget::Backend(crate::types::agent::BackendTarget::Backend {
+				name: "b".into(),
+				namespace: "default".into(),
+				section: None,
+			}),
+		),
+	]
+}
+
+/// Normalize one top-level `policies:` entry named default/p and return the policies it produced.
+async fn normalize_feature_policy(
+	yaml: &str,
+	target: &PolicyTarget,
+) -> anyhow::Result<Vec<crate::types::agent::TargetedPolicy>> {
+	let policy: super::FilterOrPolicy =
+		serdes::yaml::from_str(&yaml.replace("$JWKS", TEST_OIDC_JWKS))?;
+	let normalized = normalize_test_policies(vec![super::LocalPolicy {
+		name: ResourceName::new("p".into(), "default".into()),
+		target: target.clone(),
+		phase: PolicyPhase::Route,
+		policy,
+	}])
+	.await?;
+	Ok(
+		normalized
+			.policies
+			.into_iter()
+			.filter(|p| p.name.as_ref().is_some_and(|n| n.name.as_str() == "p"))
+			.collect(),
+	)
+}
+
+/// The serde tag of an internal policy, e.g. "traffic.cors" or "backend.a2a".
+fn policy_tag(p: &PolicyType) -> String {
+	let v = serde_json::to_value(p).expect("policy should serialize");
+	let (kind, inner) = v
+		.as_object()
+		.and_then(|m| m.iter().next())
+		.expect("tagged enum");
+	let variant = inner
+		.as_object()
+		.and_then(|m| m.keys().find(|k| *k != "phase"));
+	format!("{kind}.{}", variant.expect("variant tag"))
+}
+
+/// serde_json preserves insertion order, so sort object keys before comparing.
+fn canonical_json(v: serde_json::Value) -> serde_json::Value {
+	match v {
+		serde_json::Value::Object(m) => {
+			let mut entries: Vec<_> = m.into_iter().collect();
+			entries.sort_by(|a, b| a.0.cmp(&b.0));
+			entries
+				.into_iter()
+				.map(|(k, v)| (k, canonical_json(v)))
+				.collect()
+		},
+		serde_json::Value::Array(a) => a.into_iter().map(canonical_json).collect(),
+		v => v,
+	}
+}
+
+/// Every policy as canonical JSON, sorted, so two results compare as multisets.
+/// The policy keys in a list of serialized policies.
+fn policy_keys(serialized: &[String]) -> Vec<String> {
+	serialized
+		.iter()
+		.filter_map(|s| {
+			let v: serde_json::Value = serde_json::from_str(s).ok()?;
+			Some(v.get("key")?.as_str()?.to_string())
+		})
+		.collect()
+}
+
+fn serialized_policies(policies: &[crate::types::agent::TargetedPolicy]) -> Vec<String> {
+	let mut out: Vec<String> = policies
+		.iter()
+		.map(|p| canonical_json(serde_json::to_value(p).expect("policy should serialize")).to_string())
+		.collect();
+	out.sort();
+	out
+}
+
+#[tokio::test]
+async fn test_top_level_policies_normalize_every_feature() {
+	// Check every row on both targets and report all failures together.
+	let mut failures = Vec::new();
+	for &(feature, yaml, on_route, on_backend) in POLICY_FEATURE_FIXTURES {
+		for ((target_name, target), want) in policy_test_targets().iter().zip([on_route, on_backend]) {
+			let case = format!("case {feature} on {target_name}");
+			let res = normalize_feature_policy(yaml, target).await;
+			if let Some(want_err) = want.strip_prefix("err:") {
+				match res {
+					Err(e) if format!("{e:#}").contains(want_err) => {},
+					Err(e) => failures.push(format!("{case}: want error with {want_err:?}, got: {e:#}")),
+					Ok(ps) => failures.push(format!(
+						"{case}: want error with {want_err:?}, got {} policies",
+						ps.len()
+					)),
+				}
+				continue;
+			}
+			let policies = match res {
+				Ok(policies) => policies,
+				Err(e) => {
+					failures.push(format!("{case}: should normalize, got error: {e:#}"));
+					continue;
+				},
+			};
+			let mut got = Vec::new();
+			for p in &policies {
+				let shared_name = p
+					.name
+					.as_ref()
+					.is_some_and(|n| n.kind.as_str() == "Local" && n.namespace.as_str() == "default");
+				if !shared_name || &p.target != target {
+					failures.push(format!(
+						"{case}: wrong name {:?} or target {:?}",
+						p.name, p.target
+					));
+				}
+				got.push(format!("{}={}", policy_tag(&p.policy), p.key));
+			}
+			got.sort();
+			let mut want: Vec<String> = want
+				.split_whitespace()
+				.map(|w| {
+					let (tag, ty) = w.split_once('=').expect("<tag>=<key type>");
+					format!("{tag}=default/p:{ty}")
+				})
+				.collect();
+			want.sort();
+			if got != want {
+				failures.push(format!(
+					"{case}: unexpected (policy, key) pairs\n    got:  {got:?}\n    want: {want:?}"
+				));
+			}
+		}
+	}
+	assert!(
+		failures.is_empty(),
+		"{} failures:\n{}",
+		failures.len(),
+		failures.join("\n")
+	);
+}
+
+#[tokio::test]
+async fn test_top_level_policies_compose_pairwise() {
+	// Two features in one `policy:` block must produce exactly the policies each produces alone.
+	let mut failures = Vec::new();
+	let mut pairs = 0;
+	for (target_name, target) in &policy_test_targets() {
+		// Each fixture alone; None when it is rejected on this target (those pairs are skipped).
+		let mut singles = Vec::new();
+		for &(feature, yaml, ..) in POLICY_FEATURE_FIXTURES {
+			let alone = normalize_feature_policy(yaml, target).await.ok();
+			singles.push((feature, yaml, alone.map(|ps| serialized_policies(&ps))));
+		}
+		for (i, (fa, ya, sa)) in singles.iter().enumerate() {
+			for (fb, yb, sb) in &singles[i + 1..] {
+				let (Some(sa), Some(sb)) = (sa, sb) else {
+					continue;
+				};
+				pairs += 1;
+				let case = format!("pair {fa}+{fb} on {target_name}");
+				let combined = normalize_feature_policy(&format!("{ya}{yb}"), target).await;
+				// Two settings that become the same internal policy kind would share a key; the
+				// entry must be rejected rather than have one silently replace the other.
+				if policy_keys(sa).iter().any(|k| policy_keys(sb).contains(k)) {
+					match combined {
+						Err(e) if format!("{e:#}").contains("more than one") => {},
+						Err(e) => failures.push(format!(
+							"{case}: expected a duplicate-kind error, got: {e:#}"
+						)),
+						Ok(_) => failures.push(format!(
+							"{case}: same key from both settings, expected a duplicate-kind error"
+						)),
+					}
+					continue;
+				}
+				let mut want: Vec<String> = sa.iter().chain(sb).cloned().collect();
+				want.sort();
+				let got = match combined {
+					Ok(ps) => serialized_policies(&ps),
+					Err(e) => {
+						failures.push(format!("{case}: should normalize, got error: {e:#}"));
+						continue;
+					},
+				};
+				if got != want {
+					let short = |s: &String| s.chars().take(160).collect::<String>();
+					let extra: Vec<_> = got
+						.iter()
+						.filter(|s| !want.contains(s))
+						.map(short)
+						.collect();
+					let missing: Vec<_> = want
+						.iter()
+						.filter(|s| !got.contains(s))
+						.map(short)
+						.collect();
+					failures.push(format!(
+						"{case}: not the union of the singles\n    extra:   {extra:?}\n    missing: {missing:?}"
+					));
+				}
+			}
+		}
+	}
+	let lines: Vec<&str> = failures.iter().flat_map(|f| f.lines()).collect();
+	assert!(
+		failures.is_empty(),
+		"{} of {pairs} pairs failed:\n{}{}",
+		failures.len(),
+		lines
+			.iter()
+			.take(40)
+			.copied()
+			.collect::<Vec<_>>()
+			.join("\n"),
+		if lines.len() > 40 {
+			format!("\n... {} more lines", lines.len() - 40)
+		} else {
+			String::new()
+		}
+	);
+}

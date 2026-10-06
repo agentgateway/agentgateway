@@ -221,6 +221,7 @@ sqlx = { version = "0.9", default-features = false, features = [
     "uuid",
 ] }
 stacker = "0.1"
+strum = { version = "0.27.2", features = ["derive"] }
 subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
