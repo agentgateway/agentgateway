@@ -1710,6 +1710,7 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 
 #[tokio::test]
 async fn test_local_jwt_sign_resolves_file_key_into_runtime_auth() {
+	crate::crypto::jwt::init();
 	let dir = tempfile::tempdir().unwrap();
 	let key_path = dir.path().join("signing.pem");
 	std::fs::write(&key_path, TEST_JWT_SIGN_EC_KEY).unwrap();

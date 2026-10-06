@@ -169,6 +169,7 @@ fn encoded_callback_state(transaction_id: &str, csrf_state: &str) -> String {
 }
 
 fn signed_id_token(nonce: &str) -> String {
+	crate::crypto::jwt::init();
 	let mut header = Header::new(Algorithm::ES256);
 	header.kid = Some(TEST_KEY_ID.into());
 	jsonwebtoken::encode(
