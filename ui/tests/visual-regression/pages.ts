@@ -17,7 +17,7 @@ export const routes = [
 	['mcp-servers', '/mcp/servers', 'MCP Servers'],
 	['overview', '/', 'Gateway Overview'],
 	['raw-config', '/raw-config', 'Raw Configuration'],
-	['settings', '/settings', 'UI Settings'],
+	['settings-ui', '/settings/ui', 'UI'],
 	['traffic-gateways', '/traffic/gateways', 'Traffic Gateways'],
 	['traffic-get-started', '/traffic/get-started', 'Enable Traffic', 'unconfigured'],
 	['traffic-listeners', '/traffic/listeners', 'Traffic Listeners'],
