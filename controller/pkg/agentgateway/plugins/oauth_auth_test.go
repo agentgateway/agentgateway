@@ -299,7 +299,7 @@ func TestBuildCrossAppAccessPreservesAccessTokenScopePresence(t *testing.T) {
 	}
 }
 
-func TestBuildCrossAppAccessReturnsErrorOnlyConfigOnValidationFailure(t *testing.T) {
+func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 	path := "token"
 
@@ -331,109 +331,8 @@ func TestBuildCrossAppAccessReturnsErrorOnlyConfigOnValidationFailure(t *testing
 			t.Fatalf("BuildCrossAppAccess() error = %v, want containing %q", err, want)
 		}
 	}
-	if !strings.Contains(err.Error(), "((") {
-		t.Fatalf("BuildCrossAppAccess() error = %v, want detailed invalid expression", err)
-	}
-	want := invalidCrossAppAccess()
-	if strings.Contains(want.GetTranslationError(), "((") {
-		t.Fatalf("translationError = %q, want sanitized error", want.GetTranslationError())
-	}
-	if !proto.Equal(crossAppAccess, want) {
-		t.Fatalf("BuildCrossAppAccess() = %v, want error-only config %v", crossAppAccess, want)
-	}
-}
-
-func TestBuildCrossAppAccessMissingSecretReturnsInvalidConfig(t *testing.T) {
-	ctx := oauthTestPolicyCtx(t)
-	identityProvider := crossAppAccessEndpoint("idp")
-	identityProvider.ClientAuth = agentgateway.OAuthClientAuth{
-		ClientID: "gateway",
-		Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
-		PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-			SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "missing"},
-			AssertionAudience: "https://idp.example.com/oauth/token",
-		},
-	}
-
-	got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
-		IdentityProvider:            identityProvider,
-		ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
-		Audience:                    "https://resource.example.com",
-	}, "default")
-	if err == nil || !strings.Contains(err.Error(), "missing") {
-		t.Fatalf("BuildCrossAppAccess() error = %v, want missing Secret error", err)
-	}
-	want := invalidCrossAppAccess()
-	if !proto.Equal(got, want) {
-		t.Fatalf("BuildCrossAppAccess() = %v, want invalid config %v", got, want)
-	}
-}
-
-func TestTranslateBackendAuthPreservesInvalidCrossAppAccessPolicy(t *testing.T) {
-	ctx := oauthTestPolicyCtx(t)
-	identityProvider := crossAppAccessEndpoint("idp")
-	identityProvider.ClientAuth = agentgateway.OAuthClientAuth{
-		ClientID: "gateway",
-		Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
-		PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-			SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "idp-signing-key"},
-			AssertionAudience: "https://idp.example.com/oauth/token",
-		},
-	}
-	policy := &agentgateway.AgentgatewayPolicy{
-		Namespace: "default",
-		Name:      "cross-app",
-		Spec: agentgateway.AgentgatewayPolicySpec{
-			Backend: &agentgateway.BackendFull{
-				Auth: &agentgateway.BackendAuth{
-					CrossAppAccess: &agentgateway.CrossAppAccessAuth{
-						IdentityProvider:            identityProvider,
-						ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
-						Audience:                    "https://resource.example.com",
-					},
-				},
-			},
-		},
-	}
-
-	p, err := translateBackendAuth(ctx, policy, "default/cross-app")
-	if err == nil || !strings.Contains(err.Error(), "idp-signing-key") {
-		t.Fatalf("translateBackendAuth() error = %v, want missing idp-signing-key error", err)
-	}
-	crossAppAccess := p.GetBackend().GetAuth().GetCrossAppAccess()
-	if crossAppAccess == nil {
-		t.Fatalf("translateBackendAuth() policy = %v, want cross-app access auth", p)
-	}
-	if crossAppAccess.GetTranslationError() != translationErrorStatusHint {
-		t.Fatalf("translationError = %q, want sanitized error", crossAppAccess.GetTranslationError())
-	}
-	want := invalidCrossAppAccess()
-	if !proto.Equal(crossAppAccess, want) {
-		t.Fatalf("translated crossAppAccess policy = %v, want compatible error config %v", crossAppAccess, want)
-	}
-}
-
-func TestValidateOAuthTokenTypeReportsValue(t *testing.T) {
-	const marker = "token-type-secret-marker"
-	err := validateOAuthTokenType(agentgateway.OAuthTokenType(marker), "oauth subjectToken tokenType")
-	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken tokenType") {
-		t.Fatalf("validateOAuthTokenType() error = %v, want field-specific validation error", err)
-	}
-	if !strings.Contains(err.Error(), marker) {
-		t.Fatalf("validateOAuthTokenType() error = %v, want rejected value %q", err, marker)
-	}
-
-	oauth, err := BuildOAuthTokenExchange(oauthTestPolicyCtx(t), &agentgateway.OAuthTokenExchange{
-		PolicyBackendEndpoint: oauthTokenEndpoint(),
-		SubjectToken: &agentgateway.OAuthTokenSpec{
-			TokenType: ptr.Of(agentgateway.OAuthTokenType(marker)),
-		},
-	}, "default", nil)
-	if err == nil || !strings.Contains(err.Error(), marker) {
-		t.Fatalf("BuildOAuthTokenExchange() error = %v, want rejected value %q", err, marker)
-	}
-	if strings.Contains(oauth.GetTranslationError(), marker) {
-		t.Fatalf("translationError = %q, want sanitized error", oauth.GetTranslationError())
+	if crossAppAccess.GetIdentityProvider().GetTokenEndpoint() == nil {
+		t.Fatal("identity provider token endpoint is nil, want partial config preserved")
 	}
 }
 
@@ -445,13 +344,12 @@ func TestBuildOAuthTokenExchangeRejectsNilAuth(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("BuildOAuthTokenExchange() error = %v, want %q", err, want)
 	}
-	wantOAuth := invalidOAuthTokenExchange()
-	if !proto.Equal(oauth, wantOAuth) {
-		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want error-only config %v", oauth, wantOAuth)
+	if oauth != nil {
+		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want nil", oauth)
 	}
 }
 
-func TestBuildOAuthTokenExchangeSuppliedTokenEndpointReturnsErrorOnlyConfigOnValidationFailure(t *testing.T) {
+func TestBuildOAuthTokenExchangeSuppliedTokenEndpointPreservesValidationErrors(t *testing.T) {
 	var calls int
 	ctx := oauthTestPolicyCtxWithBackend(t, func(krt.HandlerContext, string, schema.GroupKind, gwv1.ObjectName, *gwv1.Namespace, *gwv1.PortNumber) (*api.BackendReference, error) {
 		calls++
@@ -463,46 +361,28 @@ func TestBuildOAuthTokenExchangeSuppliedTokenEndpointReturnsErrorOnlyConfigOnVal
 		},
 	}
 
-	const marker = "invalid-expression-marker"
 	oauth, err := BuildOAuthTokenExchange(ctx, &agentgateway.OAuthTokenExchange{
 		SubjectToken: &agentgateway.OAuthTokenSpec{
 			Source: &agentgateway.AuthorizationExtractionLocation{
-				Expression: ptr.Of(agentgateway.CELExpression("((" + marker)),
+				Expression: ptr.Of(agentgateway.CELExpression("((")),
 			},
 		},
 	}, "default", tokenEndpoint)
 	want := "oauth subjectToken source expression is not a valid CEL expression"
-	if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), marker) {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("BuildOAuthTokenExchange() error = %v, want containing %q", err, want)
 	}
 	if calls != 0 {
 		t.Fatalf("backend ref resolution calls = %d, want 0", calls)
 	}
-	wantOAuth := invalidOAuthTokenExchange()
-	if strings.Contains(wantOAuth.GetTranslationError(), marker) {
-		t.Fatalf("translationError = %q, want sanitized error", wantOAuth.GetTranslationError())
+	if oauth == nil {
+		t.Fatal("BuildOAuthTokenExchange() oauth = nil, want partial object")
 	}
-	if !proto.Equal(oauth, wantOAuth) {
-		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want error-only config %v", oauth, wantOAuth)
+	if oauth.TokenEndpoint != tokenEndpoint {
+		t.Fatalf("token endpoint = %p, want supplied endpoint %p", oauth.TokenEndpoint, tokenEndpoint)
 	}
-}
-
-func TestBuildOAuthTokenExchangeMissingSecretReturnsInvalidConfig(t *testing.T) {
-	ctx := oauthTestPolicyCtx(t)
-
-	got, err := BuildOAuthTokenExchange(ctx, &agentgateway.OAuthTokenExchange{
-		PolicyBackendEndpoint: oauthTokenEndpoint(),
-		ClientAuth: &agentgateway.OAuthClientAuth{
-			ClientID:  "gateway",
-			SecretRef: &agentgateway.LocalSecretKeyRef{Name: "missing"},
-		},
-	}, "default", nil)
-	if err == nil || !strings.Contains(err.Error(), "missing") {
-		t.Fatalf("BuildOAuthTokenExchange() error = %v, want missing Secret error", err)
-	}
-	want := invalidOAuthTokenExchange()
-	if !proto.Equal(got, want) {
-		t.Fatalf("BuildOAuthTokenExchange() = %v, want invalid config %v", got, want)
+	if got := oauth.GetSubjectToken().GetSource().GetExpression(); got != "((" {
+		t.Fatalf("subject token expression = %q, want invalid expression preserved", got)
 	}
 }
 
@@ -538,7 +418,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 	}
 }
 
-func TestOAuthTokenExchangeClientAuthMissingSecretKeyReturnsErrorOnlyConfig(t *testing.T) {
+func TestOAuthTokenExchangeClientAuthMissingSecretKeySetsTranslationError(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
 		Namespace: "default",
 		Name:      "oauth-client",
@@ -560,9 +440,9 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyReturnsErrorOnlyConfig(t *t
 		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want missing clientSecret error", err)
 	}
 
-	want := invalidOAuthTokenExchange()
-	if !proto.Equal(policy.GetOauthTokenExchange(), want) {
-		t.Fatalf("OAuth config = %v, want error-only config %v", policy.GetOauthTokenExchange(), want)
+	want := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	if got := policy.GetOauthTokenExchange(); !proto.Equal(got, want) {
+		t.Fatalf("OAuth config = %v, want %v", got, want)
 	}
 }
 
@@ -798,38 +678,77 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 	}
 }
 
-func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
-	ctx := oauthTestPolicyCtx(t)
-	policy := &agentgateway.AgentgatewayPolicy{
-		Namespace: "default",
-		Name:      "oauth",
-		Spec: agentgateway.AgentgatewayPolicySpec{
-			Backend: &agentgateway.BackendFull{
-				Auth: &agentgateway.BackendAuth{
-					OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-						PolicyBackendEndpoint: oauthTokenEndpoint(),
-						SubjectToken: &agentgateway.OAuthTokenSpec{
-							Source: &agentgateway.AuthorizationExtractionLocation{
-								Expression: ptr.Of(agentgateway.CELExpression("((")),
-							},
+func TestTranslateBackendAuthSetsTranslationError(t *testing.T) {
+	missingSigningKey := crossAppAccessEndpoint("idp")
+	missingSigningKey.ClientAuth = agentgateway.OAuthClientAuth{
+		ClientID: "gateway",
+		Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+		PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+			SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "idp-signing-key"},
+			AssertionAudience: "https://idp.example.com/oauth/token",
+		},
+	}
+
+	tests := []struct {
+		name    string
+		auth    agentgateway.BackendAuth
+		wantErr string
+		got     func(*api.BackendAuthPolicy) proto.Message
+		want    func(error) proto.Message
+	}{
+		{
+			name: "oauthTokenExchange",
+			auth: agentgateway.BackendAuth{
+				OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
+					PolicyBackendEndpoint: oauthTokenEndpoint(),
+					SubjectToken: &agentgateway.OAuthTokenSpec{
+						Source: &agentgateway.AuthorizationExtractionLocation{
+							Expression: ptr.Of(agentgateway.CELExpression("((")),
 						},
 					},
 				},
 			},
+			wantErr: "oauth subjectToken source expression is not a valid CEL expression",
+			got:     func(p *api.BackendAuthPolicy) proto.Message { return p.GetOauthTokenExchange() },
+			want: func(err error) proto.Message {
+				return &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+			},
+		},
+		{
+			name: "crossAppAccess",
+			auth: agentgateway.BackendAuth{
+				CrossAppAccess: &agentgateway.CrossAppAccessAuth{
+					IdentityProvider:            missingSigningKey,
+					ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+					Audience:                    "https://resource.example.com",
+				},
+			},
+			wantErr: "idp-signing-key",
+			got:     func(p *api.BackendAuthPolicy) proto.Message { return p.GetCrossAppAccess() },
+			want: func(err error) proto.Message {
+				return &api.CrossAppAccessAuth{TranslationError: new(err.Error())}
+			},
 		},
 	}
 
-	p, err := translateBackendAuth(ctx, policy, "default/oauth")
-	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken source expression is not a valid CEL expression") {
-		t.Fatalf("translateBackendAuth() error = %v, want invalid CEL error", err)
-	}
-	oauth := p.GetBackend().GetAuth().GetOauthTokenExchange()
-	if oauth == nil {
-		t.Fatalf("translateBackendAuth() policy = %v, want oauth token exchange auth", p)
-	}
-	want := invalidOAuthTokenExchange()
-	if !proto.Equal(oauth, want) {
-		t.Fatalf("translated OAuth policy = %v, want error-only policy %v", oauth, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := &agentgateway.AgentgatewayPolicy{
+				Namespace: "default",
+				Name:      tt.name,
+				Spec: agentgateway.AgentgatewayPolicySpec{
+					Backend: &agentgateway.BackendFull{Auth: &tt.auth},
+				},
+			}
+
+			p, err := translateBackendAuth(oauthTestPolicyCtx(t), policy, "default/"+tt.name)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("translateBackendAuth() error = %v, want containing %q", err, tt.wantErr)
+			}
+			if got, want := tt.got(p.GetBackend().GetAuth()), tt.want(err); !proto.Equal(got, want) {
+				t.Fatalf("translated auth = %v, want %v", got, want)
+			}
+		})
 	}
 }
 

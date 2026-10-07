@@ -56,8 +56,8 @@ fn endpoint(mock: &MockServer) -> Arc<SimpleBackendReference> {
 	)))
 }
 
-fn base_config(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeConfig {
-	OAuthTokenExchangeConfig {
+fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
+	OAuthTokenExchangeAuth {
 		target: SimpleBackendReferenceWithPolicies {
 			target: endpoint,
 			policies: vec![],
@@ -78,19 +78,11 @@ fn base_config(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeConfi
 	}
 }
 
-fn config(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeConfig {
-	OAuthTokenExchangeConfig {
-		audiences: vec!["https://upstream.example".into()],
-		..base_config(endpoint)
-	}
-}
-
 fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
-	config(endpoint).into()
-}
-
-fn ready(auth: &OAuthTokenExchangeAuth) -> &OAuthTokenExchangeConfig {
-	auth.config().expect("valid OAuth token exchange config")
+	OAuthTokenExchangeAuth {
+		audiences: vec!["https://upstream.example".into()],
+		..base_auth(endpoint)
+	}
 }
 
 fn cross_app_access_endpoint(endpoint: Arc<SimpleBackendReference>) -> CrossAppAccessEndpoint {
@@ -229,7 +221,7 @@ fn missing_subject_token_is_invalid_request() {
 		.unwrap();
 
 	assert!(matches!(
-		ready(&auth).build_exchange_request(&req),
+		auth.build_exchange_request(&req),
 		Err(ProxyError::InvalidRequest)
 	));
 }
@@ -251,7 +243,6 @@ fn assert_proto_err_contains(proto: proto::OAuthTokenExchange, expected: &str) {
 fn deserializes_minimal_config() {
 	let a: OAuthTokenExchangeAuth =
 		serde_json::from_str(r#"{"host": "localhost:8089", "path": "/oauth2/token"}"#).unwrap();
-	let a = ready(&a);
 	assert!(matches!(
 		a.target.target.as_ref(),
 		SimpleBackendReference::InlineBackend(_)
@@ -271,7 +262,6 @@ fn deserializes_local_cache_config() {
 		}"#,
 	)
 	.unwrap();
-	let a = ready(&a);
 
 	assert!(a.cache.is_some());
 
@@ -290,7 +280,6 @@ fn local_cache_config_can_disable_storage() {
 		}"#,
 	)
 	.unwrap();
-	let a = ready(&a);
 
 	assert!(a.cache.is_none());
 }
@@ -301,7 +290,6 @@ fn deserializes_custom_subject_token_type_uri() {
 		r#"{"host": "localhost:8089", "subjectToken": {"tokenType": "urn:company:domain:human"}}"#,
 	)
 	.expect("custom absolute URI token type should deserialize");
-	let auth = ready(&auth);
 	assert_eq!(
 		auth.subject_token.token_type.as_str(),
 		"urn:company:domain:human"
@@ -316,7 +304,7 @@ async fn fails_closed_on_slow_endpoint() {
 			.set_delay(Duration::from_secs(2)),
 	)
 	.await;
-	let mut a = base_config(endpoint(&mock));
+	let mut a = base_auth(endpoint(&mock));
 	a.target.policies = vec![BackendTrafficPolicy::HTTP(crate::types::backend::HTTP {
 		request_timeout: Some(Duration::from_millis(50)),
 		..Default::default()
@@ -335,7 +323,7 @@ async fn fails_closed_on_slow_endpoint() {
 #[tokio::test]
 async fn sends_form_params() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 
 	let tok = fetch_token(
 		&policy_client(),
@@ -359,7 +347,7 @@ async fn sends_form_params() {
 #[tokio::test]
 async fn sends_optional_params() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		scopes: vec!["read".into(), "write".into()],
 		resources: vec!["https://upstream.example/api".into()],
 		requested_token_type: Some(OAuthTokenType::AccessToken),
@@ -369,7 +357,7 @@ async fn sends_optional_params() {
 				client_secret: None,
 			},
 		}),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(&policy_client(), &a, exchange_req("subj", TOKEN_TYPE_JWT))
@@ -391,12 +379,12 @@ async fn sends_optional_params() {
 #[tokio::test]
 async fn sends_custom_subject_token_type() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		subject_token: TokenSpec {
 			source: AuthorizationLocation::default(),
 			token_type: token_type_from_urn("urn:company:domain:human"),
 		},
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(
@@ -418,11 +406,11 @@ async fn sends_custom_subject_token_type() {
 async fn sends_google_sts_workload_identity_form_without_authorization_header() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
 	let audience = "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/pool/providers/provider";
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		audiences: vec![audience.into()],
 		scopes: vec!["https://www.googleapis.com/auth/cloud-platform".into()],
 		requested_token_type: Some(OAuthTokenType::AccessToken),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(
@@ -464,9 +452,9 @@ async fn accepts_requested_response_type(
 		"issued_token_type": requested_token_type,
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		requested_token_type: Some(token_type_from_urn(requested_token_type)),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let tok = fetch_token(
@@ -482,14 +470,14 @@ async fn accepts_requested_response_type(
 #[tokio::test]
 async fn client_secret_basic_uses_authorization_header() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: "gw client".into(),
 			method: OAuthClientAuthMethod::ClientSecretBasic {
 				client_secret: "s3cr3t".into(),
 			},
 		}),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(
@@ -517,14 +505,14 @@ async fn client_secret_basic_uses_authorization_header() {
 #[tokio::test]
 async fn client_secret_post_uses_form_body() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::ClientSecretPost {
 				client_secret: Some("s3cr3t".into()),
 			},
 		}),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(
@@ -550,9 +538,9 @@ async fn jwt_bearer_sends_assertion() {
 		"token_type": "Bearer",
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		grant_type: OAuthGrantType::JwtBearer,
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let tok = fetch_token(
@@ -596,7 +584,7 @@ async fn id_jag_chain_exchanges_two_legs_and_caches_final_token() {
 		endpoint(&resource_as),
 		vec!["https://api.resource-as.example/chat".into()],
 	);
-	let a = ready(identity.oauth_token_exchange());
+	let a = identity.oauth_token_exchange();
 
 	for _ in 0..2 {
 		let tok = fetch_token(&policy_client(), a, exchange_req("id-token", TOKEN_TYPE_ID))
@@ -651,7 +639,7 @@ async fn id_jag_chain_omits_explicitly_empty_access_token_scopes() {
 
 	fetch_token(
 		&policy_client(),
-		ready(identity.oauth_token_exchange()),
+		identity.oauth_token_exchange(),
 		exchange_req("id-token", TOKEN_TYPE_ID),
 	)
 	.await
@@ -677,7 +665,7 @@ async fn id_jag_intermediate_rejects_bearer_token_type() {
 	let resource_as =
 		mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
 	let identity = cross_app_access(endpoint(&idp), endpoint(&resource_as));
-	let a = ready(identity.oauth_token_exchange());
+	let a = identity.oauth_token_exchange();
 
 	let err = fetch_token(&policy_client(), a, exchange_req("subj", TOKEN_TYPE_ID))
 		.await
@@ -705,7 +693,7 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 	)
 	.await;
 	let identity = cross_app_access(endpoint(&idp), endpoint(&resource_as));
-	let a = ready(identity.oauth_token_exchange());
+	let a = identity.oauth_token_exchange();
 
 	let err = fetch_token(&policy_client(), a, exchange_req("subj", TOKEN_TYPE_ID))
 		.await
@@ -742,12 +730,12 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 		assertion_audience: "https://issuer.example/token".into(),
 	})
 	.unwrap();
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::PrivateKeyJwt(private_key),
 		}),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	fetch_token(
@@ -991,8 +979,7 @@ fn client_auth_defaults_to_basic_when_method_is_omitted() {
 		}"#,
 	)
 	.unwrap();
-	let auth = ready(&auth);
-	let client_auth = auth.client_auth.as_ref().expect("client auth");
+	let client_auth = auth.client_auth.expect("client auth");
 	assert_eq!(client_auth.client_id, "gateway-client");
 	assert!(matches!(
 		client_auth.method,
@@ -1066,7 +1053,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 #[test]
 fn deserializes_cross_app_access_local_config_shape() {
 	let auth = cross_app_access_local_config();
-	let oauth = ready(auth.oauth_token_exchange());
+	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
 	assert!(matches!(
 		&oauth.subject_token.source,
@@ -1098,7 +1085,8 @@ fn cross_app_access_resolves_access_token_scopes(
 
 	let auth = CrossAppAccessAuth::from(config);
 	assert_eq!(
-		ready(auth.oauth_token_exchange())
+		auth
+			.oauth_token_exchange()
 			.chained_exchange
 			.as_ref()
 			.expect("chained exchange")
@@ -1116,7 +1104,7 @@ fn cross_app_access_subject_token_source_override() {
 
 	// Unset: the id_token is read from the Authorization Bearer header.
 	let auth = CrossAppAccessAuth::from(config.clone());
-	let subject_token = &ready(auth.oauth_token_exchange()).subject_token;
+	let subject_token = &auth.oauth_token_exchange().subject_token;
 	assert!(matches!(
 		&subject_token.source,
 		AuthorizationLocation::Header { name, .. } if name == ::http::header::AUTHORIZATION
@@ -1129,7 +1117,7 @@ fn cross_app_access_subject_token_source_override() {
 		..Default::default()
 	});
 	let auth = CrossAppAccessAuth::from(config);
-	let subject_token = &ready(auth.oauth_token_exchange()).subject_token;
+	let subject_token = &auth.oauth_token_exchange().subject_token;
 	let AuthorizationLocation::Expression(expr) = &subject_token.source else {
 		panic!(
 			"expected an expression source, got {:?}",
@@ -1158,7 +1146,8 @@ fn cross_app_access_subject_token_type_override(#[case] token_type: &str) {
 
 	let auth = CrossAppAccessAuth::from(config);
 	assert_eq!(
-		ready(auth.oauth_token_exchange())
+		auth
+			.oauth_token_exchange()
 			.subject_token
 			.token_type
 			.as_str(),
@@ -1375,7 +1364,7 @@ fn cross_app_access_from_proto_derives_oauth_chain(
 	)
 	.unwrap();
 
-	let oauth = ready(auth.oauth_token_exchange());
+	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
 	assert_eq!(oauth.subject_token.token_type, expected_token_type);
 	assert!(matches!(
@@ -1446,7 +1435,8 @@ fn cross_app_access_from_proto_resolves_access_token_scopes(
 	.unwrap();
 
 	assert_eq!(
-		ready(auth.oauth_token_exchange())
+		auth
+			.oauth_token_exchange()
 			.chained_exchange
 			.as_ref()
 			.expect("chained exchange")
@@ -1535,7 +1525,7 @@ async fn rejects_invalid_token_response(
 	#[case] expected: &str,
 ) {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(response_body)).await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 
 	let err = fetch_token(
 		&policy_client(),
@@ -1580,10 +1570,10 @@ async fn rejects_mismatched_issued_token_type(
 		"issued_token_type": issued_token_type,
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		grant_type,
 		requested_token_type: requested_token_type.map(token_type_from_urn),
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let err = fetch_token(
@@ -1604,10 +1594,10 @@ async fn unset_requested_token_type_accepts_any_issued_type() {
 		"issued_token_type": TOKEN_TYPE_JWT,
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		grant_type: OAuthGrantType::TokenExchange,
 		requested_token_type: None,
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let token = fetch_token(
@@ -1633,10 +1623,10 @@ async fn unset_requested_token_type_accepts_response_without_issued_token_type()
 		"token_type": "Bearer",
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		grant_type: OAuthGrantType::TokenExchange,
 		requested_token_type: None,
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let token = fetch_token(
@@ -1657,9 +1647,9 @@ async fn jwt_bearer_ignores_unexpected_issued_token_type() {
 		"issued_token_type": "urn:ietf:params:oauth:token-type:saml2",
 	})))
 	.await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		grant_type: OAuthGrantType::JwtBearer,
-		..base_config(endpoint(&mock))
+		..base_auth(endpoint(&mock))
 	};
 
 	let token = fetch_token(
@@ -1685,7 +1675,7 @@ async fn maps_token_endpoint_status_to_proxy_status(
 	let response = ResponseTemplate::new(status)
 		.set_body_string(r#"{"error":"invalid_grant","error_description":"provider diagnostic"}"#);
 	let mock = mock_token_endpoint(response).await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 
 	let err = fetch_token(
 		&policy_client(),
@@ -1711,7 +1701,7 @@ async fn maps_token_endpoint_status_to_proxy_status(
 
 #[tokio::test]
 async fn invalid_token_endpoint_backend_is_local_failure() {
-	let a = config(Arc::new(SimpleBackendReference::Invalid));
+	let a = auth(Arc::new(SimpleBackendReference::Invalid));
 	let err = fetch_token(
 		&policy_client(),
 		&a,
@@ -1736,7 +1726,7 @@ async fn invalid_token_endpoint_backend_is_local_failure() {
 #[tokio::test]
 async fn appends_additional_params() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 	let req = ExchangeRequest {
 		subject_token: "subj".to_string().into(),
 		subject_token_type: OAuthTokenType::AccessToken,
@@ -1759,9 +1749,9 @@ async fn appends_additional_params() {
 fn evaluates_additional_params() {
 	let (expr, err) = cel::Expression::new_permissive("\"static-value\"".to_string());
 	assert!(err.is_none(), "{err:?}");
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		additional_params: BTreeMap::from([("p".to_string(), Arc::new(expr))]),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	};
 	let req = ::http::Request::builder()
 		.method(::http::Method::GET)
@@ -1790,53 +1780,6 @@ fn rejects_reserved_additional_param() {
 }
 
 #[test]
-fn translation_error_precedes_other_proto_fields() {
-	let proto = proto::OAuthTokenExchange {
-		translation_error: Some("missing Secret default/oauth-client".to_string()),
-		token_endpoint_path: Some("invalid-path".to_string()),
-		requested_token_type: Some("invalid-token-type".to_string()),
-		..Default::default()
-	};
-	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	assert_eq!(
-		serde_json::to_value(auth).unwrap(),
-		json!({"translationError": "missing Secret default/oauth-client"})
-	);
-}
-
-#[test]
-fn empty_translation_error_uses_fixed_fallback() {
-	let proto = proto::OAuthTokenExchange {
-		translation_error: Some("  ".to_string()),
-		..Default::default()
-	};
-	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	assert_eq!(
-		serde_json::to_value(auth).unwrap(),
-		json!({"translationError": "OAuth token exchange configuration is invalid"})
-	);
-}
-
-#[test]
-fn invalid_runtime_state_serializes_only_translation_error() {
-	let auth = OAuthTokenExchangeAuth::new_invalid("missing Secret default/oauth-client".to_string());
-	assert_eq!(
-		serde_json::to_value(auth).unwrap(),
-		json!({"translationError": "missing Secret default/oauth-client"})
-	);
-}
-
-#[test]
-fn local_config_rejects_translation_error() {
-	let err = serde_json::from_value::<OAuthTokenExchangeAuth>(json!({
-		"host": "localhost:8080",
-		"translationError": "not allowed in local configuration"
-	}))
-	.unwrap_err();
-	assert!(err.to_string().contains("unknown field `translationError`"));
-}
-
-#[test]
 fn invalid_cel_additional_param_parses_permissively() {
 	let proto = proto::OAuthTokenExchange {
 		additional_params: HashMap::from([("p".to_string(), "((".to_string())]),
@@ -1847,13 +1790,13 @@ fn invalid_cel_additional_param_parses_permissively() {
 	// instead of rejecting the whole config push.
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
 	assert!(
-		ready(&auth)
+		auth
 			.evaluate_additional_params(&incoming_request())
 			.is_err()
 	);
 }
 
-fn assert_load_err(auth: OAuthTokenExchangeConfig, expected: &str) {
+fn assert_load_err(auth: OAuthTokenExchangeAuth, expected: &str) {
 	let err = auth
 		.validate_load()
 		.expect_err("invalid local config should fail validation");
@@ -1865,26 +1808,26 @@ fn assert_load_err(auth: OAuthTokenExchangeConfig, expected: &str) {
 
 #[rstest]
 #[case::token_endpoint_path(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		path: "token".into(),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"must start with /"
 )]
 #[case::jwt_bearer_actor_token(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		grant_type: OAuthGrantType::JwtBearer,
 		actor_token: Some(ActorTokenSpec {
 			source: AuthorizationLocation::default(),
 			token_type: OAuthTokenType::default(),
 			enforce_may_act: false,
 		}),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"actor_token"
 )]
 #[case::enforce_may_act_non_jwt_actor_token(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		actor_token: Some(ActorTokenSpec {
 			source: AuthorizationLocation::Header {
 				name: ::http::HeaderName::from_static("x-actor-token"),
@@ -1893,74 +1836,74 @@ fn assert_load_err(auth: OAuthTokenExchangeConfig, expected: &str) {
 			token_type: OAuthTokenType::AccessToken,
 			enforce_may_act: true,
 		}),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"requires actor_token.token_type"
 )]
 #[case::basic_without_secret(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::ClientSecretBasic {
 				client_secret: "".into(),
 			},
 		}),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"client_secret"
 )]
 #[case::empty_client_id(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: String::new(),
 			method: OAuthClientAuthMethod::ClientSecretPost {
 				client_secret: Some("secret".into()),
 			},
 		}),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"client_id"
 )]
 #[case::empty_client_secret(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		client_auth: Some(OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::ClientSecretPost {
 				client_secret: Some("".into()),
 			},
 		}),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"client_secret"
 )]
 #[case::reserved_additional_param(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		additional_params: BTreeMap::from([(
 			"scope".into(),
 			Arc::new(cel::Expression::new_strict(r#""read""#).unwrap()),
 		)]),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"reserved"
 )]
 #[case::plain_oauth_id_jag(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		requested_token_type: Some(OAuthTokenType::IdJag),
 		audiences: vec!["https://resource-as.example".into()],
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"backendAuth.crossAppAccess"
 )]
 #[case::expression_output_location(
-	OAuthTokenExchangeConfig {
+	OAuthTokenExchangeAuth {
 		authorization_location: AuthorizationLocation::Expression(Arc::new(cel::Expression::new_strict(r#""token""#).unwrap())),
-		..base_config(Arc::new(SimpleBackendReference::Invalid))
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"credential extraction"
 )]
 #[test]
 fn validate_load_rejects_invalid_local_config(
-	#[case] auth: OAuthTokenExchangeConfig,
+	#[case] auth: OAuthTokenExchangeAuth,
 	#[case] expected: &str,
 ) {
 	assert_load_err(auth, expected);
@@ -1977,7 +1920,6 @@ fn accepts_supported_requested_token_types_from_proto() {
 			&mut Diagnostics::default(),
 		)
 		.unwrap();
-		let auth = ready(&auth);
 		assert_eq!(
 			auth.requested_token_type,
 			Some(token_type_from_urn(token_type))
@@ -2229,7 +2171,6 @@ fn disabled_cache_from_proto_disables_storage() {
 		&mut Diagnostics::default(),
 	)
 	.unwrap();
-	let auth = ready(&auth);
 
 	assert!(auth.cache.is_none());
 }
@@ -2309,7 +2250,7 @@ fn oauth_token_type_from_urn_cases(#[case] token_type: &str, #[case] expected: b
 #[tokio::test]
 async fn sends_actor_token() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 	let req = ExchangeRequest {
 		subject_token: "subj".to_string().into(),
 		subject_token_type: OAuthTokenType::AccessToken,
@@ -2359,12 +2300,12 @@ fn request_with_actor_header(subject: &str, actor: &str) -> crate::http::Request
 }
 
 fn backend_auth_requiring_may_act(mock: &MockServer) -> crate::http::auth::BackendAuth {
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		actor_token: Some(actor_token_with_header(true)),
-		..config(endpoint(mock))
+		..auth(endpoint(mock))
 	};
 	crate::http::auth::BackendAuth::new(crate::http::auth::BackendAuthKind::OAuthTokenExchange(
-		Box::new(a.into()),
+		Box::new(a),
 	))
 }
 
@@ -2386,7 +2327,7 @@ fn actor_token_authorization_from_proto() {
 		..Default::default()
 	};
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	assert!(ready(&auth).actor_token.as_ref().unwrap().enforce_may_act);
+	assert!(auth.actor_token.unwrap().enforce_may_act);
 }
 
 #[rstest]
@@ -2464,7 +2405,7 @@ async fn rejects_na_token_type_as_non_bearer() {
 		"issued_token_type": TOKEN_TYPE_ACCESS,
 	})))
 	.await;
-	let a = config(endpoint(&mock));
+	let a = auth(endpoint(&mock));
 
 	let err = fetch_token(
 		&policy_client(),
@@ -2493,7 +2434,6 @@ fn subject_token_source_and_type_from_proto() {
 		..Default::default()
 	};
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	let auth = ready(&auth);
 	assert!(
 		matches!(&auth.subject_token.source, AuthorizationLocation::Header { name, .. } if name.as_str() == "x-subject")
 	);
@@ -2515,7 +2455,6 @@ fn authorization_location_from_proto() {
 		..Default::default()
 	};
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	let auth = ready(&auth);
 	assert!(matches!(
 		auth.authorization_location,
 		AuthorizationLocation::Header { ref name, .. } if name.as_str() == "x-upstream-auth"
@@ -2535,7 +2474,6 @@ fn query_parameter_authorization_location_from_proto() {
 		..Default::default()
 	};
 	let auth = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap();
-	let auth = ready(&auth);
 	assert!(matches!(
 		auth.authorization_location,
 		AuthorizationLocation::QueryParameter { ref name } if name.as_str() == "access_token"
@@ -2569,57 +2507,17 @@ async fn dispatch_inserts_default_bearer_and_marks_explicit() {
 }
 
 #[tokio::test]
-async fn invalid_runtime_policy_rejects_before_reading_or_mutating_credentials() {
-	let detailed = "missing Secret default/oauth-client";
-	let auth = OAuthTokenExchangeAuth::new_invalid(detailed.to_string());
-	let mut req = incoming_request();
-
-	let err = apply_token_exchange(&backend_info().inputs, &auth, &mut req)
-		.await
-		.unwrap_err();
-
-	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
-	let message = err.to_string();
-	assert!(message.contains("OAuth token exchange configuration is invalid"));
-	assert!(!message.contains(detailed));
-	assert_eq!(
-		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
-		"Bearer subj"
-	);
-}
-
-#[tokio::test]
-async fn invalid_cross_app_runtime_policy_rejects_before_reading_or_mutating_credentials() {
-	let detailed = "missing Secret default/cross-app-signing-key";
-	let auth = CrossAppAccessAuth::new_invalid(detailed.to_string());
-	let mut req = incoming_request();
-
-	let err = apply_identity_assertion(&backend_info().inputs, &auth, &mut req)
-		.await
-		.unwrap_err();
-
-	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
-	let message = err.to_string();
-	assert!(message.contains("crossAppAccess configuration is invalid"));
-	assert!(!message.contains(detailed));
-	assert_eq!(
-		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
-		"Bearer subj"
-	);
-}
-
-#[tokio::test]
 async fn dispatch_uses_configured_output_location_and_marks_explicit() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		authorization_location: AuthorizationLocation::Header {
 			name: ::http::HeaderName::from_static("x-upstream-auth"),
 			prefix: None,
 		},
-		..config(endpoint(&mock))
+		..auth(endpoint(&mock))
 	};
 	let backend_auth = crate::http::auth::BackendAuth::new(
-		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a.into())),
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
 	);
 	let mut req = incoming_request();
 
@@ -2665,9 +2563,9 @@ fn classifies_exchanged_token_insertion_failures() {
 	];
 
 	for (authorization_location, access_token, expect_provider, expected_status) in cases {
-		let a = OAuthTokenExchangeConfig {
+		let a = OAuthTokenExchangeAuth {
 			authorization_location,
-			..base_config(Arc::new(SimpleBackendReference::Invalid))
+			..base_auth(Arc::new(SimpleBackendReference::Invalid))
 		};
 		let mut req = incoming_request();
 		let err = a
@@ -2690,14 +2588,14 @@ fn classifies_exchanged_token_insertion_failures() {
 #[tokio::test]
 async fn dispatch_supports_query_parameter_output_location() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		authorization_location: AuthorizationLocation::QueryParameter {
 			name: "access_token".into(),
 		},
-		..config(endpoint(&mock))
+		..auth(endpoint(&mock))
 	};
 	let backend_auth = crate::http::auth::BackendAuth::new(
-		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a.into())),
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
 	);
 	let mut req = incoming_request();
 
@@ -2717,7 +2615,7 @@ async fn dispatch_supports_query_parameter_output_location() {
 #[tokio::test]
 async fn dispatch_removes_input_token_locations_before_inserting_output() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = OAuthTokenExchangeConfig {
+	let a = OAuthTokenExchangeAuth {
 		actor_token: Some(ActorTokenSpec {
 			source: AuthorizationLocation::Header {
 				name: ::http::HeaderName::from_static("x-actor-token"),
@@ -2730,10 +2628,10 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 			name: ::http::HeaderName::from_static("x-upstream-auth"),
 			prefix: None,
 		},
-		..config(endpoint(&mock))
+		..auth(endpoint(&mock))
 	};
 	let backend_auth = crate::http::auth::BackendAuth::new(
-		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a.into())),
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
 	);
 	let mut req = ::http::Request::builder()
 		.method(::http::Method::GET)

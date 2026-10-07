@@ -71,9 +71,8 @@ func TestOAuthTokenExchange(tt *testing.T) {
 		)
 	})
 
-	t.Run("InvalidTokenTypeUpdate", func(t base.Test) {
-		const policyName = "oauth-token-exchange"
-		policyKey := types.NamespacedName{Name: policyName, Namespace: base.Namespace}
+	t.Run("InvalidUpdate", func(t base.Test) {
+		policyKey := types.NamespacedName{Name: "oauth-token-exchange", Namespace: base.Namespace}
 		policy := &agentgateway.AgentgatewayPolicy{}
 		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), policyKey, policy); err != nil {
 			t.Fatalf("failed to get valid OAuth policy: %v", err)
@@ -83,77 +82,36 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
 				*auth = *validAuth.DeepCopy()
 			})
-			waitForOAuthPolicyReason(t, policyKey, metav1.ConditionTrue, agentgateway.PolicyReasonValid, "")
+			waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonValid, "")
 		})
 
-		tests := []struct {
-			name        string
-			wantMessage string
-			mutate      func(*agentgateway.OAuthTokenExchange)
-		}{
-			{
-				name:        "SubjectToken",
-				wantMessage: "oauth subjectToken tokenType",
-				mutate: func(auth *agentgateway.OAuthTokenExchange) {
-					auth.SubjectToken = &agentgateway.OAuthTokenSpec{TokenType: new(invalidOAuthTokenType)}
-				},
+		updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
+			auth.SubjectToken = &agentgateway.OAuthTokenSpec{TokenType: new(invalidOAuthTokenType)}
+		})
+		waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonPartiallyValid, "oauth subjectToken tokenType")
+		t.Send("oauth-token-exchange.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
 			},
-			{
-				name:        "ActorToken",
-				wantMessage: "oauth actorToken tokenType",
-				mutate: func(auth *agentgateway.OAuthTokenExchange) {
-					auth.ActorToken.TokenType = new(invalidOAuthTokenType)
-				},
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t base.Test) {
-				updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
-					*auth = *validAuth.DeepCopy()
-				})
-				waitForOAuthPolicyReason(t, policyKey, metav1.ConditionTrue, agentgateway.PolicyReasonValid, "")
-				t.Send("oauth-token-exchange.com",
-					&testmatchers.HttpResponse{
-						StatusCode: http.StatusOK,
-						Body: gomega.WithTransform(transforms.WithEchoHeaders(),
-							gomega.HaveKeyWithValue("Authorization", "Bearer token-exchange-access"),
-						),
-					},
-					curl.WithHeader("Authorization", "Bearer subject-token"),
-					curl.WithHeader("X-Actor-Token", "actor-token"),
-					curl.WithHeader("X-Tenant", "tenant-a"),
-				)
-
-				updateOAuthTokenExchange(t, policyKey, tt.mutate)
-				waitForOAuthPolicyReason(t, policyKey, metav1.ConditionFalse, agentgateway.PolicyReasonInvalid, tt.wantMessage)
-				t.Send("oauth-token-exchange.com",
-					&testmatchers.HttpResponse{
-						StatusCode: http.StatusInternalServerError,
-						Body:       gomega.ContainSubstring("OAuth token exchange configuration is invalid"),
-					},
-					curl.WithHeader("Authorization", "Bearer subject-token"),
-					curl.WithHeader("X-Actor-Token", "actor-token"),
-					curl.WithHeader("X-Tenant", "tenant-a"),
-				)
-			})
-		}
+			curl.WithHeader("Authorization", "Bearer subject-token"),
+			curl.WithHeader("X-Actor-Token", "actor-token"),
+			curl.WithHeader("X-Tenant", "tenant-a"),
+		)
 	})
 
 	t.Run("InvalidConfiguration", func(t base.Test) {
-		const wantMessage = "oauth subjectToken tokenType"
 		waitForOAuthPolicyReason(
 			t,
 			types.NamespacedName{Name: "invalid-oauth-token-exchange", Namespace: base.Namespace},
-			metav1.ConditionFalse,
-			agentgateway.PolicyReasonInvalid,
-			wantMessage,
+			agentgateway.PolicyReasonPartiallyValid,
+			"oauth subjectToken tokenType",
 		)
 
 		t.Send("invalid-oauth-token-exchange.com",
 			&testmatchers.HttpResponse{
 				StatusCode: http.StatusInternalServerError,
-				Body:       gomega.ContainSubstring("OAuth token exchange configuration is invalid"),
+				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
 			},
 			curl.WithHeader("Authorization", "Bearer subject-token"),
 		)
@@ -206,7 +164,6 @@ func updateOAuthTokenExchange(
 func waitForOAuthPolicyReason(
 	t base.Test,
 	policyKey types.NamespacedName,
-	status metav1.ConditionStatus,
 	reason string,
 	message string,
 ) {
@@ -219,13 +176,13 @@ func waitForOAuthPolicyReason(
 		for _, ancestor := range policy.Status.Ancestors {
 			for _, condition := range ancestor.Conditions {
 				if condition.Type == agentgateway.PolicyConditionAccepted &&
-					condition.Status == status &&
+					condition.Status == metav1.ConditionTrue &&
 					condition.Reason == reason &&
 					strings.Contains(condition.Message, message) {
 					return nil
 				}
 			}
 		}
-		return fmt.Errorf("policy status does not report Accepted=%s/%s containing %q", status, reason, message)
+		return fmt.Errorf("policy status does not report Accepted=True/%s containing %q", reason, message)
 	})
 }

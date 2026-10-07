@@ -213,7 +213,7 @@ func TranslateAgentgatewayPolicy(
 	var attachmentErrors []string
 	// TODO: add selectors
 	baseTranslatedPolicies, baseErr := TranslatePolicyToAgw(pctx, policy)
-	baseConds := policyConditionMapForPolicies(baseErr, baseTranslatedPolicies)
+	baseConds := PolicyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
 	controller := gwv1.GatewayController(agw.ControllerName)
 
 	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetErr error) {
@@ -336,24 +336,6 @@ func TranslateAgentgatewayPolicy(
 	return &status, agwPolicies
 }
 
-func policyConditionMapForPolicies(err error, translatedPolicies []*api.Policy) map[string]*Condition {
-	conds := PolicyConditionMap(err, len(translatedPolicies) > 0)
-	if err == nil || !containsFailClosedPolicy(translatedPolicies) {
-		return conds
-	}
-	conds[agentgateway.PolicyConditionAccepted] = &Condition{
-		Status:  metav1.ConditionFalse,
-		Reason:  agentgateway.PolicyReasonInvalid,
-		Message: err.Error(),
-	}
-	conds[agentgateway.PolicyConditionAttached] = &Condition{
-		Status:  metav1.ConditionTrue,
-		Reason:  agentgateway.PolicyReasonAttached,
-		Message: "Policy is attached in a fail-closed state; requests using it will be rejected: " + err.Error(),
-	}
-	return conds
-}
-
 func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condition {
 	conds := map[string]*Condition{}
 	if err != nil {
@@ -363,11 +345,6 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 				Status:  metav1.ConditionTrue,
 				Reason:  agentgateway.PolicyReasonPartiallyValid,
 				Message: err.Error(),
-			}
-			conds[agentgateway.PolicyConditionAttached] = &Condition{
-				Status:  metav1.ConditionTrue,
-				Reason:  agentgateway.PolicyReasonAttached,
-				Message: "Policy is attached; part of its configuration was rejected: " + err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
@@ -397,25 +374,6 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 		}
 	}
 	return conds
-}
-
-func containsFailClosedPolicy(policies []*api.Policy) bool {
-	for _, policy := range policies {
-		auth := policy.GetBackend().GetAuth()
-		if auth == nil {
-			continue
-		}
-		if oauth := auth.GetOauthTokenExchange(); oauth != nil && oauth.TranslationError != nil {
-			return true
-		}
-		if crossAppAccess := auth.GetCrossAppAccess(); crossAppAccess != nil && crossAppAccess.TranslationError != nil {
-			return true
-		}
-		if jwtSign := auth.GetJwtSign(); jwtSign != nil && jwtSign.TranslationError != nil {
-			return true
-		}
-	}
-	return false
 }
 
 func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {

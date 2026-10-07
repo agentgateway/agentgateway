@@ -1441,31 +1441,27 @@ fn backend_auth_kind_from_proto(
 				scopes: a.scopes,
 			})
 		},
-		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
-			let oauth = match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
-				Ok(oauth) => oauth,
-				Err(error) => {
-					let error = proto_error_detail(error);
-					diagnostics.add_warning(format!(
-						"OAuth token exchange configuration is invalid; requests using this policy will be rejected: {error}"
-					));
-					auth::oauth::OAuthTokenExchangeAuth::new_invalid(error)
-				},
-			};
-			BackendAuthKind::OAuthTokenExchange(Box::new(oauth))
+		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(mut s)) => {
+			let kind = "oauthTokenExchange";
+			if let Some(reason) = s.translation_error.take() {
+				BackendAuthKind::Invalid { kind, reason }
+			} else {
+				match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
+					Ok(oauth) => BackendAuthKind::OAuthTokenExchange(Box::new(oauth)),
+					Err(error) => invalid_backend_auth(kind, error, diagnostics),
+				}
+			}
 		},
-		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
-			let cross_app_access = match auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics) {
-				Ok(cross_app_access) => cross_app_access,
-				Err(error) => {
-					let error = proto_error_detail(error);
-					diagnostics.add_warning(format!(
-						"crossAppAccess configuration is invalid; requests using this policy will be rejected: {error}"
-					));
-					auth::oauth::CrossAppAccessAuth::new_invalid(error)
-				},
-			};
-			BackendAuthKind::CrossAppAccess(Box::new(cross_app_access))
+		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(mut s)) => {
+			let kind = "crossAppAccess";
+			if let Some(reason) = s.translation_error.take() {
+				BackendAuthKind::Invalid { kind, reason }
+			} else {
+				match auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics) {
+					Ok(auth) => BackendAuthKind::CrossAppAccess(Box::new(auth)),
+					Err(error) => invalid_backend_auth(kind, error, diagnostics),
+				}
+			}
 		},
 		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
 			let jwt_sign = match jwt_sign_from_proto(jwt_sign) {
@@ -1485,11 +1481,19 @@ fn backend_auth_kind_from_proto(
 	}))
 }
 
-fn proto_error_detail(error: ProtoError) -> String {
-	match error {
+fn invalid_backend_auth(
+	kind: &'static str,
+	error: ProtoError,
+	diagnostics: &mut Diagnostics,
+) -> BackendAuthKind {
+	let reason = match error {
 		ProtoError::Generic(detail) => detail,
 		other => other.to_string(),
-	}
+	};
+	diagnostics.add_warning(format!(
+		"{kind} configuration is invalid; requests using this policy will be rejected: {reason}"
+	));
+	BackendAuthKind::Invalid { kind, reason }
 }
 
 fn listener_protocol_from_proto(
@@ -4509,7 +4513,7 @@ mod tests {
 
 		assert_eq!(
 			serde_json::to_value(&kind).unwrap(),
-			json!({variant: {"translationError": detail}})
+			json!({"invalid": {"kind": variant, "translationError": detail}})
 		);
 		let warnings = diagnostics.into_warnings();
 		assert_eq!(warnings.len(), warning_count, "{warnings:?}");
@@ -4571,14 +4575,14 @@ mod tests {
 			)
 			.expect("invalid OAuth policy must be accepted")
 			.expect("backend auth kind must be retained");
-			let BackendAuthKind::OAuthTokenExchange(oauth) = kind else {
-				panic!("expected OAuth token exchange");
+			let BackendAuthKind::Invalid {
+				kind: "oauthTokenExchange",
+				reason,
+			} = kind
+			else {
+				panic!("expected invalid OAuth token exchange, got {kind:?}");
 			};
-			assert!(
-				serde_json::to_value(oauth).unwrap()["translationError"]
-					.as_str()
-					.is_some_and(|error| !error.is_empty())
-			);
+			assert!(!reason.is_empty());
 			assert_eq!(diagnostics.into_warnings().len(), 1);
 		}
 	}

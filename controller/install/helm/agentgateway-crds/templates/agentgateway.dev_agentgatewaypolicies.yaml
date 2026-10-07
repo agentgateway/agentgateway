@@ -3889,8 +3889,9 @@ spec:
                         type: array
                         x-kubernetes-list-type: atomic
                       crossAppAccess:
-                        description: Cross App Access (Identity Assertion / ID-JAG)
-                          authentication.
+                        description: |-
+                          Cross App Access (Identity Assertion / ID-JAG) authentication.
+                          If this configuration is invalid, requests using it are rejected.
                         properties:
                           accessTokenScopes:
                             description: |-
@@ -4755,8 +4756,9 @@ spec:
                           rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
                             == 1
                       oauthTokenExchange:
-                        description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
-                          (RFC 7523) authentication.
+                        description: |-
+                          OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+                          If this configuration is invalid, requests using it are rejected.
                         properties:
                           actorToken:
                             description: RFC 8693 delegation actor token. TokenExchange

@@ -1625,10 +1625,12 @@ type BackendAuth struct {
 	GCP *GcpAuth `json:"gcp,omitempty"`
 
 	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+	// If this configuration is invalid, requests using it are rejected.
 	// +optional
 	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
 
 	// Cross App Access (Identity Assertion / ID-JAG) authentication.
+	// If this configuration is invalid, requests using it are rejected.
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
 

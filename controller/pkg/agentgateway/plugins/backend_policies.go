@@ -1119,6 +1119,9 @@ var oauthReservedAdditionalParams = []string{
 
 func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
 	oauth, err := BuildOAuthTokenExchange(ctx, auth, namespace, nil)
+	if err != nil {
+		oauth = &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	}
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
 			OauthTokenExchange: oauth,
@@ -1126,11 +1129,9 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 	}, err
 }
 
-// BuildCrossAppAccess lowers cross-app access configuration into its xDS representation.
 func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
 	if auth == nil {
-		err := errors.New("crossAppAccess must not be nil")
-		return invalidCrossAppAccess(), err
+		return nil, errors.New("crossAppAccess must not be nil")
 	}
 
 	var errs []error
@@ -1157,7 +1158,7 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 	}
 	cache := translateOAuthTokenCache(auth.Cache)
 
-	result := &api.CrossAppAccessAuth{
+	return &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
 		ResourceAuthorizationServer: resourceAuthorizationServer,
 		Audience:                    auth.Audience,
@@ -1166,30 +1167,7 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		AccessTokenScopes:           translateCrossAppAccessScopes(auth.AccessTokenScopes),
 		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       cache,
-	}
-	if err := errors.Join(errs...); err != nil {
-		return invalidCrossAppAccess(), err
-	}
-	return result, nil
-}
-
-func invalidCrossAppAccess() *api.CrossAppAccessAuth {
-	// Keep this fallback loadable but fail-closed for older OAuth-capable proxies
-	invalidEndpoint := func() *api.CrossAppAccessAuth_Endpoint {
-		return &api.CrossAppAccessAuth_Endpoint{
-			TokenEndpoint: &api.BackendReference{},
-			ClientAuth: &api.OAuthClientAuth{
-				ClientId: "invalid",
-				Method:   api.OAuthClientAuth_CLIENT_SECRET_POST,
-			},
-		}
-	}
-	return &api.CrossAppAccessAuth{
-		IdentityProvider:            invalidEndpoint(),
-		ResourceAuthorizationServer: invalidEndpoint(),
-		Audience:                    "invalid",
-		TranslationError:            new(translationErrorStatusHint),
-	}
+	}, errors.Join(errs...)
 }
 
 func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
@@ -1214,6 +1192,9 @@ func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjec
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	crossAppAccess, err := BuildCrossAppAccess(ctx, auth, namespace)
+	if err != nil {
+		crossAppAccess = &api.CrossAppAccessAuth{TranslationError: new(err.Error())}
+	}
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_CrossAppAccess{
 			CrossAppAccess: crossAppAccess,
@@ -1253,8 +1234,7 @@ func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppA
 // BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
-		err := errors.New("oauthTokenExchange must not be nil")
-		return invalidOAuthTokenExchange(), err
+		return nil, errors.New("oauthTokenExchange must not be nil")
 	}
 
 	var errs []error
@@ -1340,19 +1320,7 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
-	if err := errors.Join(errs...); err != nil {
-		return invalidOAuthTokenExchange(), err
-	}
-	return oauth, nil
-}
-
-const translationErrorStatusHint = "see the owning resource status for details"
-
-func invalidOAuthTokenExchange() *api.OAuthTokenExchange {
-	// An omitted endpoint fails closed on older OAuth-capable proxies
-	return &api.OAuthTokenExchange{
-		TranslationError: new(translationErrorStatusHint),
-	}
+	return oauth, errors.Join(errs...)
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {

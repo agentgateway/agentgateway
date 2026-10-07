@@ -1097,6 +1097,49 @@ async fn test_backend_auth_credentials_invalid_value_is_local() {
 	);
 }
 
+#[tokio::test]
+async fn test_invalid_backend_auth_rejects_without_changing_request() {
+	let mut req = ::http::Request::builder()
+		.header(http::header::AUTHORIZATION, "Bearer subj")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs: t.inputs(),
+	};
+	let reason = "missing Secret default/oauth-client";
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::Invalid {
+			kind: "oauthTokenExchange",
+			reason: reason.to_string(),
+		}),
+		credentials: vec![credential("x-extra", "v", None)],
+	};
+
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid backend auth must reject");
+
+	assert!(matches!(
+		&err,
+		ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(_))
+	));
+	let message = err.to_string();
+	assert!(message.contains("oauthTokenExchange configuration is invalid"));
+	assert!(!message.contains(reason));
+	assert_eq!(
+		req.headers().get(http::header::AUTHORIZATION).unwrap(),
+		"Bearer subj"
+	);
+	assert!(req.headers().get("x-extra").is_none());
+}
+
 #[test]
 fn test_apply_tunnel_auth_rejects_credentials() {
 	let auth = BackendAuth {

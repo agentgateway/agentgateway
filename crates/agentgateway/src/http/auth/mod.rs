@@ -107,6 +107,13 @@ pub enum BackendAuthKind {
 	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
 	#[serde(rename = "crossAppAccess")]
 	CrossAppAccess(Box<CrossAppAccessAuth>),
+	/// Configuration that could not be loaded. Requests using it are rejected.
+	Invalid {
+		/// The configured auth kind, such as `oauthTokenExchange`.
+		kind: &'static str,
+		#[serde(rename = "translationError")]
+		reason: String,
+	},
 }
 
 /// Backend authentication configuration.
@@ -314,6 +321,11 @@ async fn apply_backend_auth_kind(
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
+		},
+		BackendAuthKind::Invalid { kind, .. } => {
+			return Err(
+				BackendAuthError::local(anyhow::anyhow!("{kind} configuration is invalid")).into(),
+			);
 		},
 	}
 	Ok(())
