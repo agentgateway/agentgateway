@@ -1592,6 +1592,144 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_local_mcp_tool_name_overrides_requires_never_prefix() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  targets:
+  - name: a
+    stdio:
+      cmd: echo
+  - name: b
+    stdio:
+      cmd: echo
+  toolNameOverrides:
+  - target: a
+    source: echo
+    name: a_echo
+"#,
+	)
+	.await
+	.expect_err("toolNameOverrides without prefixMode: never should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("tool_name_overrides requires `prefixMode: never`"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_mcp_tool_name_overrides_rejects_unknown_target() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  prefixMode: never
+  targets:
+  - name: a
+    stdio:
+      cmd: echo
+  - name: b
+    stdio:
+      cmd: echo
+  toolNameOverrides:
+  - target: missing
+    source: echo
+    name: missing_echo
+"#,
+	)
+	.await
+	expect_err("toolNameOverrides referencing an unknown target should be rejected");
+	assert!(err.to_string().contains("unknown target"), "{err:?}");
+}
+
+#[tokio::test]
+async fn test_local_mcp_tool_name_overrides_rejects_duplicate_public_name() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  prefixMode: never
+  targets:
+  - name: a
+    stdio:
+      cmd: echo
+  - name: b
+    stdio:
+      cmd: echo
+  toolNameOverrides:
+  - target: a
+    source: echo
+    name: same
+  - target: b
+    source: echo
+    name: same
+"#,
+	)
+	.await
+	expect_err("duplicate client-facing names should be rejected");
+	assert!(
+		err.to_string().contains("duplicate client-facing name"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_mcp_tool_name_overrides_rejects_duplicate_source() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  prefixMode: never
+  targets:
+  - name: a
+    stdio:
+      cmd: echo
+  - name: b
+    stdio:
+      cmd: echo
+  toolNameOverrides:
+  - target: a
+    source: echo
+    name: a_echo
+  - target: a
+    source: echo
+    name: a_echo_2
+"#,
+	)
+	.await
+	expect_err("duplicate (target, source) pairs should be rejected");
+	assert!(
+		err.to_string().contains("duplicate source"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_mcp_tool_name_overrides_accepts_valid_map() {
+	normalize_test_yaml(
+		r#"
+mcp:
+  prefixMode: never
+  targets:
+  - name: a
+    stdio:
+      cmd: echo
+  - name: b
+    stdio:
+      cmd: echo
+  toolNameOverrides:
+  - target: a
+    source: echo
+    name: a_echo
+  - target: b
+    source: echo
+    name: b_echo
+"#,
+	)
+	.await
+	.expect("a well-formed toolNameOverrides map should normalize");
+}
+
+#[tokio::test]
 async fn test_local_mcp_stdio_target_rejects_policies() {
 	let yaml = r#"
 mcp:

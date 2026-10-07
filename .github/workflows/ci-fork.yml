@@ -41,14 +41,18 @@ jobs:
       run: "cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields"
     - name: Tests (agentgateway MCP)
       run: "cargo test -p agentgateway --features schema -- mcp::"
-    - name: Regenerate JSON schema
+    - name: Regenerate JSON schema and metrics docs
       if: always()
-      run: cargo xtask schema
+      run: make generate-schema
       continue-on-error: true
-    - name: Upload generated config schema
+    - name: Upload generated schema artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: config-schema
-        path: schema/config.json
+        path: schema/
         if-no-files-found: ignore
+    - name: Show repo drift
+      if: always()
+      run: git --no-pager diff --stat
+      continue-on-error: true
