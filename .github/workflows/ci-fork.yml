@@ -58,3 +58,24 @@ jobs:
       if: always()
       run: git --no-pager diff --stat
       continue-on-error: true
+
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
+      with:
+        cache-key: macos-release
+    - name: Build release binary
+      run: cargo build --release -p agentgateway-app
+    - name: Upload macOS arm64 binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: agentgateway-macos-arm64
+        path: target/release/agentgateway
+        if-no-files-found: error
