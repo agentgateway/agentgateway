@@ -52,13 +52,13 @@ output:
                 - regex: blocked
               rejection:
                 body: VGhlIHJlcXVlc3Qgd2FzIHJlamVjdGVkIGR1ZSB0byBpbmFwcHJvcHJpYXRlIGNvbnRlbnQ=
-                status: 400
                 headers:
                   add:
                   - name: x-guardrail
                     value: regex
                   - name: content-type
                     value: application/json
+                status: 400
             response:
             - regex:
                 action: MASK
