@@ -1939,6 +1939,26 @@ pub struct McpBackend {
 	/// back to the normal defaults.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub server: Option<McpServerOverrides>,
+	/// Declarative tool renames, applied before collision handling so a name that would
+	/// otherwise be dropped as ambiguous can be mapped to a chosen client-facing name.
+	/// Only valid together with `prefixMode: never`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub tool_name_overrides: Vec<McpToolNameOverride>,
+}
+
+/// Declarative rename of a single tool served by one target.
+///
+/// Only meaningful with `prefixMode: never`, where client-facing names carry no target
+/// prefix and calls are routed by looking up the owning target. Without an override, a tool
+/// name served by more than one target is dropped as ambiguous.
+#[apply(schema!)]
+pub struct McpToolNameOverride {
+	/// Target this override applies to (same namespace as `mcp.targets[].name`).
+	pub target: McpTargetName,
+	/// Tool name as served by the upstream.
+	pub source: Strng,
+	/// Client-facing tool name.
+	pub name: Strng,
 }
 
 impl McpBackend {

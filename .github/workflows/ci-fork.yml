@@ -1,0 +1,54 @@
+# Fork-only verification workflow.
+#
+# The upstream `pull_request.yml` runs most Rust jobs on `blacksmith-*` runners,
+# which are not available on this personal fork. This workflow runs the same
+# build/lint/test surface on GitHub-hosted runners so the rename-map patch can be
+# compile-checked without a local Rust toolchain. It must be removed before any
+# upstream pull request.
+name: Fork verify
+
+on:
+  push:
+    branches:
+      - "feat/mcp-tool-name-overrides"
+  workflow_dispatch:
+
+concurrency:
+  group: fork-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
+      with:
+        cache-key: fork-check
+    - name: Format check
+      run: cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
+      continue-on-error: true
+    - name: Clippy (agentgateway, schema feature)
+      run: cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields
+    - name: Tests (agentgateway MCP)
+      run: cargo test -p agentgateway --features schema -- mcp::
+    - name: Regenerate JSON schema
+      if: always()
+      run: cargo xtask schema
+      continue-on-error: true
+    - name: Upload generated config schema
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: config-schema
+        path: schema/config.json
+        if-no-files-found: ignore
