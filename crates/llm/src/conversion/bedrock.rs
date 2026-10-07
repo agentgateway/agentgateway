@@ -3699,13 +3699,9 @@ pub mod from_messages_invoke {
 		"context_management",
 	];
 
-	/// Anthropic betas Bedrock accepts on InvokeModel for at least one Claude model (measured
-	/// 2026-10-05 on Haiku 4.5, Sonnet/Opus 4.6, Opus 4.8, Sonnet/Opus 5.5; atko-cic/router0
-	/// `acceptedBetas`). Any other value is rejected with a 400, so it is dropped. LiteLLM's
-	/// bedrock map is deliberately not used: it drops betas Claude Code sends that Bedrock accepts
-	/// (interleaved-thinking, claude-code, tool-examples, ...). An accepted name only means the
-	/// request is not rejected; it does not prove the feature works. Per-model rejections on top of
-	/// this set are applied via [`Capability::rejects_beta`] (router0 `claude46Betas`).
+	/// Betas Bedrock accepts on InvokeModel for at least one Claude model. Any other value is
+	/// rejected with a 400, so it is dropped. Per-model rejections on top apply via
+	/// [`Capability::rejects_beta`].
 	const ACCEPTED_BETAS: &[&str] = &[
 		"claude-code-20250219",
 		"interleaved-thinking-2025-05-14",
@@ -3741,12 +3737,10 @@ pub mod from_messages_invoke {
 		"mid-conversation-system-clear-at-2026-08-21",
 	];
 
-	/// Per-request cap on `cache_control` markers; Bedrock answers "A maximum of 4 blocks with
-	/// cache_control may be provided" past it (router0 `maxCachePoints`).
+	/// Per-request cap on `cache_control` markers; Bedrock rejects more than this.
 	const MAX_CACHE_POINTS: usize = 4;
 
-	// Betas gated by a specific field, so they are only added when the field that needs them is
-	// present (router0 `internal/bedrock/capabilities.go`).
+	// Betas gated by a specific field: added only when that field is present.
 	const BETA_DANGEROUS_TOOL_USE: &str = "dangerous-tool-use-2026-09-03";
 	const BETA_CONTEXT_MANAGEMENT: &str = "context-management-2025-06-27";
 	const BETA_COMPACT: &str = "compact-2026-01-12";
@@ -3754,9 +3748,8 @@ pub mod from_messages_invoke {
 	const BETA_THINKING_DISPLAY_UPDATES: &str = "thinking-display-updates-2026-08-18";
 	const BETA_THINKING_BINDING_CONTROLS: &str = "thinking-binding-controls-2026-08-01";
 
-	/// Non-custom tool type prefixes Bedrock accepts on InvokeModel. The server tools
-	/// (web_search, web_fetch, code_execution) are not supported there (router0
-	/// `passthroughToolTypes`).
+	/// Non-custom tool type prefixes Bedrock accepts; server tools (web_search, web_fetch,
+	/// code_execution) are not supported.
 	const PASSTHROUGH_TOOL_PREFIXES: &[&str] = &[
 		"bash_",
 		"text_editor_",
@@ -3765,12 +3758,11 @@ pub mod from_messages_invoke {
 		"tool_search_tool",
 	];
 
-	/// A GPT model's `redacted_thinking` decodes to data starting with "rsn_"; Claude's never
-	/// does. Each family rejects the other's with 400 "Invalid `data`" (router0 `gptReasoningPrefix`).
+	/// A GPT model's `redacted_thinking` decodes to data starting with "rsn_"; Claude's never does,
+	/// and Bedrock rejects a foreign one with 400 "Invalid `data`".
 	const GPT_REASONING_PREFIX: &[u8] = b"rsn_";
 
-	/// Betas Sonnet 4.6 and Opus 4.6 reject while the other Claude models accept them (measured on
-	/// InvokeModel 2026-10-05; router0 `claude46Betas`).
+	/// Betas Sonnet 4.6 and Opus 4.6 reject while the other Claude models accept them.
 	const CLAUDE46_BETAS: &[&str] = &[
 		BETA_DANGEROUS_TOOL_USE,
 		BETA_THINKING_DISPLAY_UPDATES,
@@ -3779,10 +3771,8 @@ pub mod from_messages_invoke {
 		"mid-conversation-system-clear-at-2026-08-21",
 	];
 
-	/// What one Bedrock Claude model accepts on InvokeModel, measured against the real API (router0
-	/// `Capability`, `make probe` 2026-10-05). It replaces a single global field list: the models
-	/// differ, and a request Bedrock rejects for one model is fine for another. GPT rows are out of
-	/// scope here; this path only serves Claude (agentgateway/agentgateway#3240).
+	/// What one Claude model accepts on InvokeModel. The models differ, so a request Bedrock
+	/// rejects for one may be fine for another.
 	#[derive(Clone, Copy)]
 	struct Capability {
 		/// Labels the row in debug logs.
@@ -3813,21 +3803,30 @@ pub mod from_messages_invoke {
 
 	const NO_REJECTED_BETAS: &[&str] = &[];
 
-	/// Capability rows, matched by substring on the model id, first match wins (router0
-	/// `capabilityRows`).
+	/// All-false baseline; each row below sets only the capabilities that model has.
+	const BASE: Capability = Capability {
+		name: "",
+		rejected_betas: NO_REJECTED_BETAS,
+		safeguards: false,
+		mid_conv_system: false,
+		strict: false,
+		format: false,
+		compact: false,
+		clear_thinking_needs_thinking: false,
+		thinking_always_on: false,
+	};
+
+	/// Capability rows, matched by substring on the model id, first match wins.
 	const CAPABILITY_ROWS: &[(&str, Capability)] = &[
 		(
 			"haiku-4-5",
 			Capability {
 				name: "Haiku 4.5",
-				rejected_betas: NO_REJECTED_BETAS,
 				safeguards: true,
-				mid_conv_system: false,
 				strict: true,
 				format: true,
-				compact: false,
 				clear_thinking_needs_thinking: true,
-				thinking_always_on: false,
+				..BASE
 			},
 		),
 		(
@@ -3835,13 +3834,11 @@ pub mod from_messages_invoke {
 			Capability {
 				name: "Sonnet 4.6",
 				rejected_betas: CLAUDE46_BETAS,
-				safeguards: false,
-				mid_conv_system: false,
 				strict: true,
 				format: true,
 				compact: true,
 				clear_thinking_needs_thinking: true,
-				thinking_always_on: false,
+				..BASE
 			},
 		),
 		(
@@ -3849,72 +3846,57 @@ pub mod from_messages_invoke {
 			Capability {
 				name: "Opus 4.6",
 				rejected_betas: CLAUDE46_BETAS,
-				safeguards: false,
-				mid_conv_system: false,
 				strict: true,
 				format: true,
 				compact: true,
 				clear_thinking_needs_thinking: true,
-				thinking_always_on: false,
+				..BASE
 			},
 		),
 		(
 			"opus-4-8",
 			Capability {
 				name: "Opus 4.8",
-				rejected_betas: NO_REJECTED_BETAS,
 				safeguards: true,
 				mid_conv_system: true,
-				strict: false,
-				format: false,
 				compact: true,
 				clear_thinking_needs_thinking: true,
-				thinking_always_on: false,
+				..BASE
 			},
 		),
 		(
 			"sonnet-5-5",
 			Capability {
 				name: "Sonnet 5.5",
-				rejected_betas: NO_REJECTED_BETAS,
 				safeguards: true,
 				mid_conv_system: true,
-				strict: false,
-				format: false,
 				compact: true,
-				clear_thinking_needs_thinking: false,
 				thinking_always_on: true,
+				..BASE
 			},
 		),
 		(
 			"opus-5-5",
 			Capability {
 				name: "Opus 5.5",
-				rejected_betas: NO_REJECTED_BETAS,
 				safeguards: true,
 				mid_conv_system: true,
-				strict: false,
-				format: false,
 				compact: true,
-				clear_thinking_needs_thinking: false,
 				thinking_always_on: true,
+				..BASE
 			},
 		),
 	];
 
-	/// Row for a Claude model not yet measured: the newest measured one (Sonnet 5.5), since a new
-	/// model is far likelier to follow it than the older rows. If it rejects something anyway,
-	/// Bedrock's own error reaches the client (router0 `claudeDefault`).
+	/// Fallback row for an unknown Claude model: the newest known behavior (Sonnet 5.5). If it
+	/// rejects something anyway, Bedrock's own error reaches the client.
 	const CLAUDE_DEFAULT: Capability = Capability {
 		name: "Claude (unmeasured model)",
-		rejected_betas: NO_REJECTED_BETAS,
 		safeguards: true,
 		mid_conv_system: true,
-		strict: false,
-		format: false,
 		compact: true,
-		clear_thinking_needs_thinking: false,
 		thinking_always_on: true,
+		..BASE
 	};
 
 	fn capability_for(target: &str) -> Capability {
@@ -3927,15 +3909,10 @@ pub mod from_messages_invoke {
 		CLAUDE_DEFAULT
 	}
 
-	/// Turn the Messages request Claude Code sent into the body InvokeModel takes: the same JSON,
-	/// minus what Bedrock rejects for this model. Fields it does not touch keep their original
-	/// shape, so signed thinking, cache markers and tool results reach Bedrock as they arrived.
-	///
-	/// It fixes only what Bedrock measurably rejects, and only when the fix does not change what
-	/// the model is asked to do. Anything else (a temperature the model no longer takes, a forced
-	/// tool_choice it refuses) is passed through, so the error the client gets is Anthropic's own
-	/// wording, which Claude Code recovers from. Ported from router0 `sanitizeClaude`
-	/// (atko-cic/router0, agentgateway/agentgateway#3240).
+	/// Turn a Messages request into the InvokeModel body: the same JSON, minus what Bedrock rejects
+	/// for this model. Untouched fields keep their bytes, so signed thinking, cache markers and
+	/// tool results reach Bedrock as they arrived. Anything Bedrock might reject but that we do not
+	/// handle is passed through, so the client gets Anthropic's own error wording.
 	pub fn translate_request(
 		req: types::ChatRequest,
 		headers: &http::HeaderMap,
@@ -4143,9 +4120,8 @@ pub mod from_messages_invoke {
 			}
 			if typ == "disabled" {
 				if self.cap.thinking_always_on {
-					// Claude Code asks for no thinking on its side requests, addressed to a bare id
-					// that resolves to a model that cannot turn thinking off and answers 400; omitting
-					// the field is the closest request it takes.
+					// This model cannot turn thinking off and 400s on `disabled`; omitting the
+					// field is the closest request it takes.
 					top.remove("thinking");
 					self.drop("thinking disabled");
 				}
@@ -4373,10 +4349,8 @@ pub mod from_messages_invoke {
 					}
 				},
 				"thinking" => {
-					// Reasoning text that is unsigned was never Claude's; Bedrock rejects it
-					// ("Invalid `signature`"). A signed block with empty text is Claude's own default
-					// shape and is kept. router0 also strips its own synthetic placeholder signature,
-					// which this Claude-only path never produces, so only the unsigned case applies.
+					// Unsigned reasoning was never Claude's; Bedrock rejects it ("Invalid
+					// `signature`"). A signed block with empty text is Claude's default shape, kept.
 					if obj
 						.get("signature")
 						.and_then(Value::as_str)
@@ -4511,7 +4485,7 @@ pub mod from_messages_invoke {
 	}
 
 	/// The system prompt as blocks (empty when absent or blank). A plain string becomes one text
-	/// block; an array passes through; anything else is treated as absent (router0 `parseSystem`).
+	/// block; an array passes through; anything else is treated as absent.
 	fn parse_system(raw: Option<&Value>) -> Vec<Value> {
 		match raw {
 			Some(Value::String(text)) => {
@@ -4573,7 +4547,7 @@ pub mod from_messages_invoke {
 			}
 		}
 
-		/// The message's text as blocks, keeping cache markers (router0 `message.textBlocks`).
+		/// The message's text as blocks, keeping cache markers.
 		fn text_blocks(&self) -> Vec<Value> {
 			if self.is_text {
 				if self.text.trim().is_empty() {
@@ -4638,12 +4612,11 @@ pub mod from_messages_invoke {
 
 	/// Translate a Bedrock `invoke-with-response-stream` body into native Anthropic SSE.
 	///
-	/// Each AWS event-stream frame carries one Anthropic SSE event base64-encoded inside a
-	/// `{"bytes": "<base64>", "p": "<padding>"}` envelope. Unlike Converse streaming, the decoded
-	/// payload is already a native Anthropic event, so it is re-emitted verbatim, taking the SSE
-	/// event name from its `type` field so event types newer than this build still pass through.
-	/// Byte-passthrough and usage accounting reuse the native Anthropic streaming path
-	/// (agentgateway/agentgateway#3240).
+	/// Each AWS event-stream frame carries one Anthropic SSE event base64-encoded in a
+	/// `{"bytes": "<base64>", "p": "<padding>"}` envelope. The decoded payload is already a native
+	/// Anthropic event, so it is re-emitted verbatim, taking the SSE event name from its `type`
+	/// field so newer event types still pass through. Usage accounting reuses the native streaming
+	/// path.
 	pub fn translate_stream(
 		b: agent_http::Body,
 		buffer_limit: usize,
