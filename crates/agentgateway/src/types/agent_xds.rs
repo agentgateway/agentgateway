@@ -4522,6 +4522,7 @@ mod tests {
 						}),
 					}),
 					kind: Some(response_guard::Kind::Regex(Default::default())),
+					scope: vec![],
 				}],
 				..Default::default()
 			}),
