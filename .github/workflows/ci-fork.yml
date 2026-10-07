@@ -38,9 +38,9 @@ jobs:
       run: cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
       continue-on-error: true
     - name: Clippy (agentgateway, schema feature)
-      run: cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields
+      run: "cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields"
     - name: Tests (agentgateway MCP)
-      run: cargo test -p agentgateway --features schema -- mcp::
+      run: "cargo test -p agentgateway --features schema -- mcp::"
     - name: Regenerate JSON schema
       if: always()
       run: cargo xtask schema
