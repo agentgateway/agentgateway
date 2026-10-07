@@ -1442,25 +1442,25 @@ fn backend_auth_kind_from_proto(
 			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(mut s)) => {
-			let kind = "oauthTokenExchange";
-			if let Some(reason) = s.translation_error.take() {
-				BackendAuthKind::Invalid { kind, reason }
-			} else {
-				match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
-					Ok(oauth) => BackendAuthKind::OAuthTokenExchange(Box::new(oauth)),
-					Err(error) => invalid_backend_auth(kind, error, diagnostics),
-				}
+			match s.translation_error.take() {
+				Some(reason) => BackendAuthKind::Invalid {
+					kind: "oauthTokenExchange",
+					reason,
+				},
+				None => BackendAuthKind::OAuthTokenExchange(Box::new(
+					auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
+				)),
 			}
 		},
 		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(mut s)) => {
-			let kind = "crossAppAccess";
-			if let Some(reason) = s.translation_error.take() {
-				BackendAuthKind::Invalid { kind, reason }
-			} else {
-				match auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics) {
-					Ok(auth) => BackendAuthKind::CrossAppAccess(Box::new(auth)),
-					Err(error) => invalid_backend_auth(kind, error, diagnostics),
-				}
+			match s.translation_error.take() {
+				Some(reason) => BackendAuthKind::Invalid {
+					kind: "crossAppAccess",
+					reason,
+				},
+				None => BackendAuthKind::CrossAppAccess(Box::new(
+					auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics)?,
+				)),
 			}
 		},
 		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
@@ -1479,21 +1479,6 @@ fn backend_auth_kind_from_proto(
 		},
 		None => return Ok(None),
 	}))
-}
-
-fn invalid_backend_auth(
-	kind: &'static str,
-	error: ProtoError,
-	diagnostics: &mut Diagnostics,
-) -> BackendAuthKind {
-	let reason = match error {
-		ProtoError::Generic(detail) => detail,
-		other => other.to_string(),
-	};
-	diagnostics.add_warning(format!(
-		"{kind} configuration is invalid; requests using this policy will be rejected: {reason}"
-	));
-	BackendAuthKind::Invalid { kind, reason }
 }
 
 fn listener_protocol_from_proto(
@@ -4467,38 +4452,27 @@ mod tests {
 	}
 
 	#[rstest::rstest]
-	#[case::oauth_error_preserved(
+	#[case::oauth_token_exchange(
 		proto::agent::backend_auth_policy::Kind::OauthTokenExchange(proto::agent::OAuthTokenExchange {
 			translation_error: Some("missing Secret default/oauth-client".to_string()),
-			token_endpoint_path: Some("/valid-looking".to_string()),
+			token_endpoint_path: Some("valid-looking-but-ignored".to_string()),
 			..Default::default()
 		}),
 		"oauthTokenExchange",
-		"missing Secret default/oauth-client",
-		0
+		"missing Secret default/oauth-client"
 	)]
-	#[case::cross_app_access_missing_field(
-		proto::agent::backend_auth_policy::Kind::CrossAppAccess(
-			proto::agent::CrossAppAccessAuth::default()
-		),
-		"crossAppAccess",
-		"missing required field",
-		1
-	)]
-	#[case::cross_app_access_error_preserved(
+	#[case::cross_app_access(
 		proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
 			translation_error: Some("secret default/idp-signing-key not found".to_string()),
 			..Default::default()
 		}),
 		"crossAppAccess",
-		"secret default/idp-signing-key not found",
-		0
+		"secret default/idp-signing-key not found"
 	)]
-	fn invalid_backend_auth_xds_configuration_is_stored(
+	fn backend_auth_translation_error_becomes_invalid(
 		#[case] kind: proto::agent::backend_auth_policy::Kind,
 		#[case] variant: &str,
 		#[case] detail: &str,
-		#[case] warning_count: usize,
 	) {
 		let mut diagnostics = Diagnostics::default();
 		let kind = backend_auth_kind_from_proto(
@@ -4508,83 +4482,37 @@ mod tests {
 			},
 			&mut diagnostics,
 		)
-		.expect("invalid policy must be accepted")
+		.expect("translation error must be accepted")
 		.expect("backend auth kind must be retained");
 
 		assert_eq!(
 			serde_json::to_value(&kind).unwrap(),
 			json!({"invalid": {"kind": variant, "translationError": detail}})
 		);
-		let warnings = diagnostics.into_warnings();
-		assert_eq!(warnings.len(), warning_count, "{warnings:?}");
-		if let Some(warning) = warnings.first() {
-			assert!(warning.contains(detail), "{warnings:?}");
-		}
+		assert!(diagnostics.is_empty());
 	}
 
-	#[test]
-	fn oauth_proto_validation_failures_become_invalid_runtime_state() {
-		let invalid_private_key = proto::agent::OAuthTokenExchange {
-			client_auth: Some(proto::agent::OAuthClientAuth {
-				client_id: "gateway-client".to_string(),
-				method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
-				private_key_jwt: Some(proto::agent::o_auth_client_auth::PrivateKeyJwt {
-					signing_key: "not a PEM key".to_string(),
-					assertion_audience: "https://issuer.example/token".to_string(),
-					..Default::default()
-				}),
-				..Default::default()
-			}),
+	#[rstest::rstest]
+	#[case::oauth_token_exchange(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+		proto::agent::OAuthTokenExchange {
+			token_endpoint_path: Some("missing-leading-slash".to_string()),
 			..Default::default()
-		};
-		let invalid_configs = [
-			invalid_private_key,
-			proto::agent::OAuthTokenExchange {
-				token_endpoint_path: Some("missing-leading-slash".to_string()),
-				..Default::default()
-			},
-			proto::agent::OAuthTokenExchange {
-				authorization_location: Some(proto::agent::AuthorizationLocation {
-					kind: Some(proto::agent::authorization_location::Kind::Expression(
-						"request.path".to_string(),
-					)),
-				}),
-				..Default::default()
-			},
-			proto::agent::OAuthTokenExchange {
-				client_auth: Some(proto::agent::OAuthClientAuth {
-					client_id: "gateway-client".to_string(),
-					client_secret: Some("secret".to_string()),
-					method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
-					..Default::default()
-				}),
-				..Default::default()
-			},
-		];
-
-		for oauth in invalid_configs {
-			let mut diagnostics = Diagnostics::default();
-			let kind = backend_auth_kind_from_proto(
-				proto::agent::BackendAuthPolicy {
-					kind: Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
-						oauth,
-					)),
-					..Default::default()
-				},
-				&mut diagnostics,
-			)
-			.expect("invalid OAuth policy must be accepted")
-			.expect("backend auth kind must be retained");
-			let BackendAuthKind::Invalid {
-				kind: "oauthTokenExchange",
-				reason,
-			} = kind
-			else {
-				panic!("expected invalid OAuth token exchange, got {kind:?}");
-			};
-			assert!(!reason.is_empty());
-			assert_eq!(diagnostics.into_warnings().len(), 1);
 		}
+	))]
+	#[case::cross_app_access(proto::agent::backend_auth_policy::Kind::CrossAppAccess(
+		proto::agent::CrossAppAccessAuth::default()
+	))]
+	fn backend_auth_proxy_validation_failure_is_rejected(
+		#[case] kind: proto::agent::backend_auth_policy::Kind,
+	) {
+		let result = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(kind),
+				..Default::default()
+			},
+			&mut Diagnostics::default(),
+		);
+		assert!(result.is_err(), "{result:?}");
 	}
 
 	fn conditional_traffic_policy(
