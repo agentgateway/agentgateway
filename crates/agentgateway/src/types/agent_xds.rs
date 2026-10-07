@@ -1979,7 +1979,12 @@ pub(crate) fn backend_with_policies_from_proto(
 									},
 									_ => llm::bedrock::BedrockEndpointPreference::RuntimePreferred,
 								},
-								runtime_anthropic_api: Default::default(),
+								runtime_anthropic_api: match bedrock.runtime_anthropic_api() {
+									proto::agent::ai_backend::RuntimeAnthropicApi::InvokeModel => {
+										llm::bedrock::RuntimeAnthropicApi::InvokeModel
+									},
+									_ => llm::bedrock::RuntimeAnthropicApi::Converse,
+								},
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {

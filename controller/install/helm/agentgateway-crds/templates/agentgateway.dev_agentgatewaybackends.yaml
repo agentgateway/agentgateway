@@ -246,6 +246,14 @@ spec:
                                     minLength: 1
                                     pattern: ^[a-z0-9-]+$
                                     type: string
+                                  runtimeAnthropicApi:
+                                    description: |-
+                                      RuntimeAnthropicApi selects the chat API for Anthropic models on the
+                                      Bedrock Runtime endpoint. Defaults to `Converse`.
+                                    enum:
+                                    - Converse
+                                    - InvokeModel
+                                    type: string
                                 type: object
                                 x-kubernetes-validations:
                                 - message: Bedrock guardrails cannot be used with
@@ -7384,6 +7392,14 @@ spec:
                             maxLength: 63
                             minLength: 1
                             pattern: ^[a-z0-9-]+$
+                            type: string
+                          runtimeAnthropicApi:
+                            description: |-
+                              RuntimeAnthropicApi selects the chat API for Anthropic models on the
+                              Bedrock Runtime endpoint. Defaults to `Converse`.
+                            enum:
+                            - Converse
+                            - InvokeModel
                             type: string
                         type: object
                         x-kubernetes-validations:

@@ -571,6 +571,11 @@ type BedrockSettings struct {
 	// `mantle` and `runtime`.
 	// +optional
 	EndpointPreference BedrockEndpointPreference `json:"endpointPreference,omitempty"`
+
+	// RuntimeAnthropicApi selects the chat API for Anthropic models on the
+	// Bedrock Runtime endpoint. Defaults to `Converse`.
+	// +optional
+	RuntimeAnthropicApi RuntimeAnthropicApi `json:"runtimeAnthropicApi,omitempty"`
 }
 
 // BedrockEndpointPreference selects the Bedrock API endpoint preference.
@@ -588,6 +593,19 @@ const (
 	BedrockEndpointPreferenceMantleOnly BedrockEndpointPreference = "MantleOnly"
 	// BedrockEndpointPreferenceRuntimeOnly always uses the Runtime endpoint, regardless of catalog tags.
 	BedrockEndpointPreferenceRuntimeOnly BedrockEndpointPreference = "RuntimeOnly"
+)
+
+// RuntimeAnthropicApi selects the chat API for Anthropic models on the Bedrock Runtime endpoint.
+// +kubebuilder:validation:Enum=Converse;InvokeModel
+type RuntimeAnthropicApi string
+
+const (
+	// RuntimeAnthropicApiConverse uses the Bedrock Converse API. This is the default.
+	RuntimeAnthropicApiConverse RuntimeAnthropicApi = "Converse"
+	// RuntimeAnthropicApiInvokeModel uses Bedrock InvokeModel with a native Anthropic
+	// Messages body, preserving Anthropic features Converse drops (documents,
+	// redacted thinking, beta headers).
+	RuntimeAnthropicApiInvokeModel RuntimeAnthropicApi = "InvokeModel"
 )
 
 type BedrockConfig struct {

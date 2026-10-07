@@ -573,6 +573,11 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY
 		}
 
+		runtimeAnthropicApi := api.AIBackend_RUNTIME_ANTHROPIC_API_CONVERSE
+		if llm.Bedrock.RuntimeAnthropicApi == agentgateway.RuntimeAnthropicApiInvokeModel {
+			runtimeAnthropicApi = api.AIBackend_RUNTIME_ANTHROPIC_API_INVOKE_MODEL
+		}
+
 		provider.Provider = &api.AIBackend_Provider_Bedrock{
 			Bedrock: &api.AIBackend_Bedrock{
 				Model:               llm.Bedrock.Model,
@@ -580,6 +585,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				GuardrailIdentifier: guardrailIdentifier,
 				GuardrailVersion:    guardrailVersion,
 				EndpointPreference:  endpointPreference,
+				RuntimeAnthropicApi: runtimeAnthropicApi,
 			},
 		}
 	} else if llm.Custom != nil {
