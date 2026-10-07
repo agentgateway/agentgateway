@@ -7,12 +7,16 @@ use crate::http::Request;
 const TOKEN_ENV_VARS: &[&str] = &["GH_COPILOT_TOKEN", "COPILOT_GITHUB_TOKEN"];
 const DOMAIN: &str = "github.com";
 
-pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
+pub(super) async fn insert_token(req: &mut Request) -> anyhow::Result<()> {
 	let token = load_token().await?;
 	let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
 	auth.set_sensitive(true);
 
 	req.headers_mut().insert(http::header::AUTHORIZATION, auth);
+	Ok(())
+}
+
+pub(crate) fn insert_protocol_headers(req: &mut Request) {
 	req.headers_mut().insert(
 		http::header::CONTENT_TYPE,
 		HeaderValue::from_static("application/json"),
@@ -36,8 +40,6 @@ pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
 		"openai-intent",
 		HeaderValue::from_static("conversation-agent"),
 	);
-
-	Ok(())
 }
 
 async fn load_token() -> anyhow::Result<String> {
