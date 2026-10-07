@@ -3652,17 +3652,294 @@ pub mod from_anthropic_token_count {
 
 /// Request body translation for Bedrock InvokeModel / InvokeModelWithResponseStream.
 ///
-/// Passes the Anthropic Messages body through with three adjustments: removes `model` and `stream`
-/// (both encoded in the URL), injects `anthropic_version`, and moves `anthropic-beta` headers into
-/// the body array. All other fields pass through unchanged.
+/// Bedrock's InvokeModel body is the native Anthropic Messages body, but with a closed
+/// top-level schema: it rejects any top-level key it does not know (400 "Extra inputs are
+/// not permitted") and validates `anthropic_beta` under Bedrock's own beta names. This keeps
+/// the request working by:
+///   - removing `model` and `stream` (both encoded in the URL),
+///   - injecting `anthropic_version`,
+///   - dropping unknown top-level keys (nested content is left untouched),
+///   - merging `anthropic-beta` headers with any body `anthropic_beta`, translating the
+///     `advanced-tool-use` umbrella beta to the `tool-search-tool` beta Bedrock accepts, and
+///     keeping only betas Bedrock accepts on InvokeModel.
+///
+/// It intentionally does NOT reuse the Converse beta allowlist: Converse and InvokeModel
+/// accept different betas (agentgateway/agentgateway#3240, #3818).
 pub mod from_messages_invoke {
+	use std::collections::BTreeSet;
+
+	use serde_json::{Map, Value};
+
 	use crate::{AIError, types};
 
 	const BEDROCK_ANTHROPIC_VERSION: &str = "bedrock-2023-05-31";
 
+	/// The umbrella beta Claude Code sends for tool search. Bedrock rejects it and takes its
+	/// tool-search part instead (measured, agentgateway/agentgateway#3240).
+	const BETA_ADVANCED_TOOL_USE: &str = "advanced-tool-use-2025-11-20";
+	const BETA_TOOL_SEARCH: &str = "tool-search-tool-2025-10-19";
+
+	/// Top-level Messages fields InvokeModel accepts. Every other top-level key is rejected
+	/// with "Extra inputs are not permitted", so it is dropped. `model`, `stream`,
+	/// `anthropic_beta` and `anthropic_version` are handled separately.
+	const ALLOWED_FIELDS: &[&str] = &[
+		"max_tokens",
+		"messages",
+		"system",
+		"stop_sequences",
+		"temperature",
+		"top_p",
+		"top_k",
+		"tools",
+		"tool_choice",
+		"thinking",
+		"metadata",
+		"output_config",
+		"safeguards",
+		"context_management",
+	];
+
+	/// Anthropic betas Bedrock accepts on InvokeModel for at least one Claude model (measured
+	/// 2026-10-05 on Haiku 4.5, Sonnet/Opus 4.6, Opus 4.8, Sonnet/Opus 5.5; atko-cic/router0
+	/// `acceptedBetas`). Any other value is rejected with a 400, so it is dropped. LiteLLM's
+	/// bedrock map is deliberately not used: it drops betas Claude Code sends that Bedrock accepts
+	/// (interleaved-thinking, claude-code, tool-examples, ...). An accepted name only means the
+	/// request is not rejected; it does not prove the feature works. Per-model rejections on top of
+	/// this set are applied via [`Capability::rejects_beta`] (router0 `claude46Betas`).
+	const ACCEPTED_BETAS: &[&str] = &[
+		"claude-code-20250219",
+		"interleaved-thinking-2025-05-14",
+		"context-1m-2025-08-07",
+		"fine-grained-tool-streaming-2025-05-14",
+		"token-efficient-tools-2025-02-19",
+		"output-128k-2025-02-19",
+		"context-management-2025-06-27",
+		"effort-2025-11-24",
+		"structured-outputs-2025-11-13",
+		"structured-outputs-2025-12-15",
+		"computer-use-2025-01-24",
+		"computer-use-2025-11-24",
+		"mid-conversation-system-2026-04-07",
+		"afk-mode-2026-01-31",
+		"auto-mode-classifier-2026-07-16",
+		"dev-full-thinking-2025-05-14",
+		"fallback-credit-2026-06-01",
+		"mid-conversation-output-config-2026-07-01",
+		"mid-conversation-tool-changes-2026-07-01",
+		"per-turn-control-2026-07-01",
+		"server-side-fallback-2026-06-01",
+		"task-budgets-2026-03-13",
+		"thinking-token-count-2026-05-13",
+		"tool-examples-2025-10-29",
+		"web-search-2025-03-05",
+		BETA_TOOL_SEARCH,
+		"compact-2026-01-12",
+		"dangerous-tool-use-2026-09-03",
+		"thinking-display-updates-2026-08-18",
+		"thinking-binding-controls-2026-08-01",
+		"inline-tools-2026-09-15",
+		"mid-conversation-system-clear-at-2026-08-21",
+	];
+
+	/// Per-request cap on `cache_control` markers; Bedrock answers "A maximum of 4 blocks with
+	/// cache_control may be provided" past it (router0 `maxCachePoints`).
+	const MAX_CACHE_POINTS: usize = 4;
+
+	// Betas gated by a specific field, so they are only added when the field that needs them is
+	// present (router0 `internal/bedrock/capabilities.go`).
+	const BETA_DANGEROUS_TOOL_USE: &str = "dangerous-tool-use-2026-09-03";
+	const BETA_CONTEXT_MANAGEMENT: &str = "context-management-2025-06-27";
+	const BETA_COMPACT: &str = "compact-2026-01-12";
+	const BETA_TOOL_EXAMPLES: &str = "tool-examples-2025-10-29";
+	const BETA_THINKING_DISPLAY_UPDATES: &str = "thinking-display-updates-2026-08-18";
+	const BETA_THINKING_BINDING_CONTROLS: &str = "thinking-binding-controls-2026-08-01";
+
+	/// Non-custom tool type prefixes Bedrock accepts on InvokeModel. The server tools
+	/// (web_search, web_fetch, code_execution) are not supported there (router0
+	/// `passthroughToolTypes`).
+	const PASSTHROUGH_TOOL_PREFIXES: &[&str] = &[
+		"bash_",
+		"text_editor_",
+		"memory_",
+		"computer_",
+		"tool_search_tool",
+	];
+
+	/// A GPT model's `redacted_thinking` decodes to data starting with "rsn_"; Claude's never
+	/// does. Each family rejects the other's with 400 "Invalid `data`" (router0 `gptReasoningPrefix`).
+	const GPT_REASONING_PREFIX: &[u8] = b"rsn_";
+
+	/// Betas Sonnet 4.6 and Opus 4.6 reject while the other Claude models accept them (measured on
+	/// InvokeModel 2026-10-05; router0 `claude46Betas`).
+	const CLAUDE46_BETAS: &[&str] = &[
+		BETA_DANGEROUS_TOOL_USE,
+		BETA_THINKING_DISPLAY_UPDATES,
+		BETA_THINKING_BINDING_CONTROLS,
+		"inline-tools-2026-09-15",
+		"mid-conversation-system-clear-at-2026-08-21",
+	];
+
+	/// What one Bedrock Claude model accepts on InvokeModel, measured against the real API (router0
+	/// `Capability`, `make probe` 2026-10-05). It replaces a single global field list: the models
+	/// differ, and a request Bedrock rejects for one model is fine for another. GPT rows are out of
+	/// scope here; this path only serves Claude (agentgateway/agentgateway#3240).
+	#[derive(Clone, Copy)]
+	struct Capability {
+		/// Labels the row in debug logs.
+		name: &'static str,
+		/// Betas this model refuses on top of the ones no Claude model accepts.
+		rejected_betas: &'static [&'static str],
+		/// The `safeguards` auto-mode-classifier field and its dangerous-tool-use beta.
+		safeguards: bool,
+		/// Native `role: "system"` messages after the first turn.
+		mid_conv_system: bool,
+		/// Tool `strict` is accepted.
+		strict: bool,
+		/// `output_config.format` (structured output) is accepted.
+		format: bool,
+		/// The `compact_20260112` context_management edit.
+		compact: bool,
+		/// `clear_thinking_20251015` is rejected while thinking is off.
+		clear_thinking_needs_thinking: bool,
+		/// Thinking cannot be switched off; `thinking: {type: "disabled"}` is rejected (Sonnet/Opus 5.5).
+		thinking_always_on: bool,
+	}
+
+	impl Capability {
+		fn rejects_beta(&self, b: &str) -> bool {
+			self.rejected_betas.contains(&b)
+		}
+	}
+
+	const NO_REJECTED_BETAS: &[&str] = &[];
+
+	/// Capability rows, matched by substring on the model id, first match wins (router0
+	/// `capabilityRows`).
+	const CAPABILITY_ROWS: &[(&str, Capability)] = &[
+		(
+			"haiku-4-5",
+			Capability {
+				name: "Haiku 4.5",
+				rejected_betas: NO_REJECTED_BETAS,
+				safeguards: true,
+				mid_conv_system: false,
+				strict: true,
+				format: true,
+				compact: false,
+				clear_thinking_needs_thinking: true,
+				thinking_always_on: false,
+			},
+		),
+		(
+			"sonnet-4-6",
+			Capability {
+				name: "Sonnet 4.6",
+				rejected_betas: CLAUDE46_BETAS,
+				safeguards: false,
+				mid_conv_system: false,
+				strict: true,
+				format: true,
+				compact: true,
+				clear_thinking_needs_thinking: true,
+				thinking_always_on: false,
+			},
+		),
+		(
+			"opus-4-6",
+			Capability {
+				name: "Opus 4.6",
+				rejected_betas: CLAUDE46_BETAS,
+				safeguards: false,
+				mid_conv_system: false,
+				strict: true,
+				format: true,
+				compact: true,
+				clear_thinking_needs_thinking: true,
+				thinking_always_on: false,
+			},
+		),
+		(
+			"opus-4-8",
+			Capability {
+				name: "Opus 4.8",
+				rejected_betas: NO_REJECTED_BETAS,
+				safeguards: true,
+				mid_conv_system: true,
+				strict: false,
+				format: false,
+				compact: true,
+				clear_thinking_needs_thinking: true,
+				thinking_always_on: false,
+			},
+		),
+		(
+			"sonnet-5-5",
+			Capability {
+				name: "Sonnet 5.5",
+				rejected_betas: NO_REJECTED_BETAS,
+				safeguards: true,
+				mid_conv_system: true,
+				strict: false,
+				format: false,
+				compact: true,
+				clear_thinking_needs_thinking: false,
+				thinking_always_on: true,
+			},
+		),
+		(
+			"opus-5-5",
+			Capability {
+				name: "Opus 5.5",
+				rejected_betas: NO_REJECTED_BETAS,
+				safeguards: true,
+				mid_conv_system: true,
+				strict: false,
+				format: false,
+				compact: true,
+				clear_thinking_needs_thinking: false,
+				thinking_always_on: true,
+			},
+		),
+	];
+
+	/// Row for a Claude model not yet measured: the newest measured one (Sonnet 5.5), since a new
+	/// model is far likelier to follow it than the older rows. If it rejects something anyway,
+	/// Bedrock's own error reaches the client (router0 `claudeDefault`).
+	const CLAUDE_DEFAULT: Capability = Capability {
+		name: "Claude (unmeasured model)",
+		rejected_betas: NO_REJECTED_BETAS,
+		safeguards: true,
+		mid_conv_system: true,
+		strict: false,
+		format: false,
+		compact: true,
+		clear_thinking_needs_thinking: false,
+		thinking_always_on: true,
+	};
+
+	fn capability_for(target: &str) -> Capability {
+		let lower = target.to_ascii_lowercase();
+		for (m, c) in CAPABILITY_ROWS {
+			if lower.contains(m) {
+				return *c;
+			}
+		}
+		CLAUDE_DEFAULT
+	}
+
+	/// Turn the Messages request Claude Code sent into the body InvokeModel takes: the same JSON,
+	/// minus what Bedrock rejects for this model. Fields it does not touch keep their original
+	/// shape, so signed thinking, cache markers and tool results reach Bedrock as they arrived.
+	///
+	/// It fixes only what Bedrock measurably rejects, and only when the fix does not change what
+	/// the model is asked to do. Anything else (a temperature the model no longer takes, a forced
+	/// tool_choice it refuses) is passed through, so the error the client gets is Anthropic's own
+	/// wording, which Claude Code recovers from. Ported from router0 `sanitizeClaude`
+	/// (atko-cic/router0, agentgateway/agentgateway#3240).
 	pub fn translate_request(
 		req: types::ChatRequest,
 		headers: &http::HeaderMap,
+		request_model: &str,
 	) -> Result<Vec<u8>, AIError> {
 		let messages_req = match req {
 			types::ChatRequest::Messages(r) => r,
@@ -3674,37 +3951,751 @@ pub mod from_messages_invoke {
 			},
 		};
 
+		// Re-serialize the typed request, then work on raw JSON: `messages`/`system` round-trip
+		// through weak enums (ContentPart::Unknown etc.), so unknown blocks keep their bytes.
 		let raw = serde_json::to_vec(&messages_req).map_err(AIError::RequestMarshal)?;
-		let mut body: serde_json::Map<String, serde_json::Value> =
+		let mut top: Map<String, Value> =
 			serde_json::from_slice(&raw).map_err(AIError::RequestMarshal)?;
 
-		body.remove("model");
-		body.remove("stream");
-		body
-			.entry("anthropic_version")
-			.or_insert_with(|| serde_json::Value::String(BEDROCK_ANTHROPIC_VERSION.to_string()));
+		let mut s = Sanitizer {
+			cap: capability_for(request_model),
+			betas: Vec::new(),
+			dropped: BTreeSet::new(),
+		};
 
-		// No allowlist: InvokeModel sends directly to Anthropic, which validates betas itself.
-		if let Ok(Some(betas)) = super::helpers::extract_all_beta_headers(headers) {
-			let arr = serde_json::Value::Array(betas);
-			// merge with any anthropic_beta already in the body
-			match body.get_mut("anthropic_beta") {
-				Some(serde_json::Value::Array(existing)) => {
-					existing.extend(match arr {
-						serde_json::Value::Array(v) => v,
-						_ => unreachable!(),
-					});
-				},
-				None => {
-					body.insert("anthropic_beta".to_string(), arr);
-				},
-				_ => {
-					body.insert("anthropic_beta".to_string(), arr);
-				},
+		// Collect betas before stripping the field: translate the umbrella beta, filter to this
+		// model's accepted set, dedupe preserving order.
+		let body_betas = top.remove("anthropic_beta");
+		s.collect_betas(headers, body_betas);
+
+		top.remove("model");
+		top.remove("stream");
+
+		// InvokeModel closes the top-level schema: drop any key it does not accept, leaving nested
+		// content untouched. anthropic_version is re-set below.
+		let unknown: Vec<String> = top
+			.keys()
+			.filter(|k| !ALLOWED_FIELDS.contains(&k.as_str()))
+			.cloned()
+			.collect();
+		for k in &unknown {
+			top.remove(k);
+			s.drop(format!("field {k}"));
+		}
+
+		if let Some(raw_meta) = top.remove("metadata") {
+			top.insert("metadata".to_string(), s.metadata(raw_meta));
+		}
+		let thinking = s.thinking(&mut top);
+
+		let mut system = parse_system(top.get("system"));
+		let mut messages = s.messages(top.remove("messages"), &mut system)?;
+
+		s.safeguards(&mut top);
+		s.context_management(&mut top, &thinking);
+		s.output_config(&mut top);
+		let mut tools = s.tools(top.remove("tools"));
+
+		s.cap_cache_markers(tools.as_mut(), &mut system, &mut messages);
+
+		if let Some(tools) = tools {
+			top.insert("tools".to_string(), Value::Array(tools));
+		}
+		if system.is_empty() {
+			top.remove("system");
+		} else {
+			top.insert("system".to_string(), Value::Array(system));
+		}
+		top.insert(
+			"messages".to_string(),
+			Value::Array(messages.into_iter().map(Message::into_value).collect()),
+		);
+		top.insert(
+			"anthropic_version".to_string(),
+			Value::String(BEDROCK_ANTHROPIC_VERSION.to_string()),
+		);
+		if !s.betas.is_empty() {
+			top.insert(
+				"anthropic_beta".to_string(),
+				Value::Array(s.betas.iter().map(|b| Value::String(b.clone())).collect()),
+			);
+		}
+
+		if !s.dropped.is_empty() {
+			let dropped: Vec<&String> = s.dropped.iter().collect();
+			tracing::debug!(model = %s.cap.name, ?dropped, "sanitized Bedrock InvokeModel request");
+		}
+
+		serde_json::to_vec(&Value::Object(top)).map_err(AIError::RequestMarshal)
+	}
+
+	struct Sanitizer {
+		cap: Capability,
+		betas: Vec<String>,
+		dropped: BTreeSet<String>,
+	}
+
+	impl Sanitizer {
+		fn drop(&mut self, what: impl Into<String>) {
+			self.dropped.insert(what.into());
+		}
+
+		fn has_beta(&self, b: &str) -> bool {
+			self.betas.iter().any(|x| x == b)
+		}
+
+		/// Add a beta a present field needs. Reports false, adding nothing, when the model rejects it.
+		fn add_beta(&mut self, b: &str) -> bool {
+			if self.has_beta(b) {
+				return true;
+			}
+			if !ACCEPTED_BETAS.contains(&b) || self.cap.rejects_beta(b) {
+				return false;
+			}
+			self.betas.push(b.to_string());
+			true
+		}
+
+		fn remove_beta(&mut self, b: &str) {
+			if let Some(i) = self.betas.iter().position(|x| x == b) {
+				self.betas.remove(i);
+				self.drop(format!("beta {b}"));
 			}
 		}
 
-		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+		/// Merge the `anthropic-beta` header values (each may be comma-separated) with any
+		/// `anthropic_beta` array from the body, keep the order, and drop what this model rejects.
+		fn collect_betas(&mut self, headers: &http::HeaderMap, body_betas: Option<Value>) {
+			let mut all: Vec<String> = Vec::new();
+			for value in headers.get_all("anthropic-beta") {
+				if let Ok(str_val) = value.to_str() {
+					all.extend(str_val.split(',').map(str::to_string));
+				}
+			}
+			if let Some(Value::Array(arr)) = body_betas {
+				for v in arr {
+					if let Value::String(str_val) = v {
+						all.push(str_val);
+					}
+				}
+			}
+			let mut seen: BTreeSet<String> = BTreeSet::new();
+			for b in all {
+				let mut b = b.trim().to_string();
+				if b == BETA_ADVANCED_TOOL_USE {
+					// Bedrock rejects the umbrella beta and takes its tool-search part.
+					b = BETA_TOOL_SEARCH.to_string();
+				}
+				if b.is_empty() || !seen.insert(b.clone()) {
+					continue;
+				}
+				if !ACCEPTED_BETAS.contains(&b.as_str()) || self.cap.rejects_beta(&b) {
+					self.drop(format!("beta {b}"));
+					continue;
+				}
+				self.betas.push(b);
+			}
+		}
+
+		/// Keep `user_id`, the only metadata key Bedrock accepts.
+		fn metadata(&mut self, raw: Value) -> Value {
+			let Value::Object(mut m) = raw else {
+				self.drop("metadata");
+				return Value::Object(Map::new());
+			};
+			let keys: Vec<String> = m.keys().cloned().collect();
+			for k in keys {
+				if k != "user_id" {
+					self.drop(format!("metadata.{k}"));
+					m.remove(&k);
+				}
+			}
+			Value::Object(m)
+		}
+
+		/// Remove the thinking sub-fields whose betas this model does not take. Returns the thinking
+		/// type ("" when thinking is off), and strips `thinking` entirely for models it cannot be
+		/// turned off on.
+		fn thinking(&mut self, top: &mut Map<String, Value>) -> String {
+			let Some(Value::Object(mut t)) = top.get("thinking").cloned() else {
+				return String::new();
+			};
+			let mut changed = false;
+			if t.get("display") == Some(&Value::String("updates".to_string()))
+				&& !self.add_beta(BETA_THINKING_DISPLAY_UPDATES)
+			{
+				t.remove("display");
+				self.drop("thinking.display");
+				changed = true;
+			}
+			if t.contains_key("block_binding") && !self.add_beta(BETA_THINKING_BINDING_CONTROLS) {
+				t.remove("block_binding");
+				self.drop("thinking.block_binding");
+				changed = true;
+			}
+			let typ = t
+				.get("type")
+				.and_then(Value::as_str)
+				.unwrap_or("")
+				.to_string();
+			if changed {
+				top.insert("thinking".to_string(), Value::Object(t));
+			}
+			if typ == "disabled" {
+				if self.cap.thinking_always_on {
+					// Claude Code asks for no thinking on its side requests, addressed to a bare id
+					// that resolves to a model that cannot turn thinking off and answers 400; omitting
+					// the field is the closest request it takes.
+					top.remove("thinking");
+					self.drop("thinking disabled");
+				}
+				return String::new();
+			}
+			typ
+		}
+
+		/// Keep the `safeguards` field only with its beta, and the beta only with the field. Sent
+		/// alone the beta makes some models answer "invalid beta flag".
+		fn safeguards(&mut self, top: &mut Map<String, Value>) {
+			if top.contains_key("safeguards") {
+				if self.cap.safeguards && self.add_beta(BETA_DANGEROUS_TOOL_USE) {
+					return;
+				}
+				top.remove("safeguards");
+				self.drop("field safeguards");
+			}
+			self.remove_beta(BETA_DANGEROUS_TOOL_USE);
+		}
+
+		/// Keep the context_management edits this model takes and the betas they need.
+		fn context_management(&mut self, top: &mut Map<String, Value>, thinking: &str) {
+			let Some(Value::Object(mut cm)) = top.get("context_management").cloned() else {
+				if top.contains_key("context_management") {
+					top.remove("context_management");
+					self.drop("field context_management");
+				}
+				return;
+			};
+			let Some(Value::Array(edits)) = cm.get("edits").cloned() else {
+				top.remove("context_management");
+				self.drop("field context_management");
+				return;
+			};
+			let mut kept: Vec<Value> = Vec::new();
+			let mut compact = false;
+			for e in &edits {
+				let typ = e.get("type").and_then(Value::as_str).unwrap_or("");
+				let clear_thinking_off = typ == "clear_thinking_20251015"
+					&& thinking.is_empty()
+					&& self.cap.clear_thinking_needs_thinking;
+				let compact_rejected = typ == "compact_20260112" && !self.cap.compact;
+				if clear_thinking_off || compact_rejected {
+					self.drop(format!("context_management edit {typ}"));
+				} else {
+					compact = compact || typ == "compact_20260112";
+					kept.push(e.clone());
+				}
+			}
+			if kept.is_empty()
+				|| !self.add_beta(BETA_CONTEXT_MANAGEMENT)
+				|| (compact && !self.add_beta(BETA_COMPACT))
+			{
+				top.remove("context_management");
+				self.drop("field context_management");
+				return;
+			}
+			if kept.len() != edits.len() {
+				cm.insert("edits".to_string(), Value::Array(kept));
+				top.insert("context_management".to_string(), Value::Object(cm));
+			}
+		}
+
+		/// Drop the structured-output format from models that reject it; they then answer in plain text.
+		fn output_config(&mut self, top: &mut Map<String, Value>) {
+			if self.cap.format {
+				return;
+			}
+			let Some(Value::Object(mut oc)) = top.get("output_config").cloned() else {
+				return;
+			};
+			if !oc.contains_key("format") {
+				return;
+			}
+			oc.remove("format");
+			self.drop("output_config.format");
+			if oc.is_empty() {
+				top.remove("output_config");
+			} else {
+				top.insert("output_config".to_string(), Value::Object(oc));
+			}
+		}
+
+		/// Apply the tool rules: drop server tools Bedrock does not support, hoist `defer_loading`
+		/// out of a `custom` wrapper, and strip `strict`/`input_examples` when unsupported.
+		fn tools(&mut self, raw: Option<Value>) -> Option<Vec<Value>> {
+			let Some(Value::Array(arr)) = raw else {
+				return None;
+			};
+			let mut out: Vec<Value> = Vec::with_capacity(arr.len());
+			for t in arr {
+				let Value::Object(mut tm) = t else {
+					out.push(t);
+					continue;
+				};
+				let typ = tm
+					.get("type")
+					.and_then(Value::as_str)
+					.unwrap_or("")
+					.to_string();
+				if !typ.is_empty() && typ != "custom" && !is_passthrough_tool(&typ) {
+					self.drop(format!("server tool {typ}"));
+					continue;
+				}
+				// A "custom" object makes Bedrock read the tool as a custom tool with an unknown
+				// "custom" field; defer_loading belongs at the top level.
+				if let Some(custom) = tm.remove("custom") {
+					if let Some(d) = custom.get("defer_loading").and_then(Value::as_bool) {
+						tm.entry("defer_loading".to_string())
+							.or_insert(Value::Bool(d));
+					}
+					self.drop("tool.custom hoisted");
+				}
+				if tm.contains_key("strict") && !self.cap.strict {
+					tm.remove("strict");
+					self.drop("tool strict");
+				}
+				if tm.contains_key("input_examples") && !self.has_beta(BETA_TOOL_EXAMPLES) {
+					tm.remove("input_examples");
+					self.drop("tool input_examples");
+				}
+				out.push(Value::Object(tm));
+			}
+			Some(out)
+		}
+
+		/// Apply the history rules and return the messages to send. Leading system-role messages
+		/// move into `system`.
+		fn messages(
+			&mut self,
+			raw: Option<Value>,
+			system: &mut Vec<Value>,
+		) -> Result<Vec<Message>, AIError> {
+			let Some(Value::Array(items)) = raw else {
+				return Err(AIError::UnsupportedContent);
+			};
+			let mut out: Vec<Message> = Vec::new();
+			let mut pending: Vec<Value> = Vec::new(); // system text waiting for the next user turn
+			let mut leading = true;
+			for it in items {
+				let mut m = parse_message(it)?;
+				if m.role == "system" || m.role == "developer" {
+					let blocks = m.text_blocks();
+					if leading {
+						// Bedrock rejects a leading system message ("use the top-level 'system'
+						// parameter"); nothing precedes it, so moving it cannot disturb a cached prefix.
+						system.extend(blocks);
+						self.drop("leading system message moved to system");
+					} else if self.cap.mid_conv_system {
+						// Native on this model. "developer" is not a role Bedrock knows.
+						m.role = "system".to_string();
+						out.push(m);
+					} else {
+						// No system role after the first turn: keep the text in place as user content,
+						// after the tool results that must directly follow a tool_use.
+						pending.extend(wrap_reminders(&blocks));
+						self.drop("mid-conversation system message rewritten as user text");
+					}
+					continue;
+				}
+				leading = false;
+				self.clean_message(&mut m);
+				if m.role == "user" {
+					if m.is_text && !pending.is_empty() {
+						m.blocks = vec![text_block(&m.text)];
+						m.is_text = false;
+						m.text = String::new();
+					}
+					m.blocks.append(&mut pending);
+				} else if !pending.is_empty() {
+					out.push(Message::user_blocks(std::mem::take(&mut pending)));
+				}
+				if m.empty() {
+					self.drop(format!("empty {} message", m.role));
+					continue;
+				}
+				out.push(m);
+			}
+			if !pending.is_empty() {
+				out.push(Message::user_blocks(pending));
+			}
+			Ok(out)
+		}
+
+		/// Remove the blocks Bedrock rejects in history and repair the ones it can.
+		fn clean_message(&mut self, m: &mut Message) {
+			if m.is_text {
+				if m.text.is_empty() {
+					m.blocks = Vec::new();
+					m.is_text = false;
+					self.drop("empty text block");
+				}
+				return;
+			}
+			let blocks = std::mem::take(&mut m.blocks);
+			let mut kept = Vec::with_capacity(blocks.len());
+			for mut b in blocks {
+				if self.keep_block(&mut b) {
+					kept.push(b);
+				}
+			}
+			m.blocks = kept;
+		}
+
+		fn keep_block(&mut self, b: &mut Value) -> bool {
+			let Some(obj) = b.as_object_mut() else {
+				return true;
+			};
+			let typ = obj
+				.get("type")
+				.and_then(Value::as_str)
+				.unwrap_or("")
+				.to_string();
+			match typ.as_str() {
+				"text" => {
+					if obj
+						.get("text")
+						.and_then(Value::as_str)
+						.unwrap_or("")
+						.is_empty()
+					{
+						self.drop("empty text block");
+						return false;
+					}
+				},
+				"thinking" => {
+					// Reasoning text that is unsigned was never Claude's; Bedrock rejects it
+					// ("Invalid `signature`"). A signed block with empty text is Claude's own default
+					// shape and is kept. router0 also strips its own synthetic placeholder signature,
+					// which this Claude-only path never produces, so only the unsigned case applies.
+					if obj
+						.get("signature")
+						.and_then(Value::as_str)
+						.unwrap_or("")
+						.is_empty()
+					{
+						self.drop("thinking that is unsigned");
+						return false;
+					}
+				},
+				"redacted_thinking" => {
+					use base64::Engine;
+					let data = obj.get("data").and_then(Value::as_str).unwrap_or("");
+					match base64::prelude::BASE64_STANDARD.decode(data) {
+						Ok(bytes) if !bytes.starts_with(GPT_REASONING_PREFIX) => {},
+						_ => {
+							self.drop("redacted_thinking from another model family");
+							return false;
+						},
+					}
+				},
+				"tool_use" => {
+					// Bedrock requires an object; a replayed history must not fail every turn.
+					if !obj.get("input").map(Value::is_object).unwrap_or(false) {
+						obj.insert("input".to_string(), Value::Object(Map::new()));
+						self.drop("tool_use input that is not an object");
+					}
+				},
+				"tool_result" => self.clean_tool_result(b),
+				_ => {},
+			}
+			true
+		}
+
+		/// Drop empty text parts, which Bedrock rejects anywhere.
+		fn clean_tool_result(&mut self, b: &mut Value) {
+			let Some(Value::Array(parts)) = b.get("content").cloned() else {
+				return;
+			};
+			let mut kept: Vec<Value> = Vec::with_capacity(parts.len());
+			for p in &parts {
+				if p.is_object()
+					&& p.get("type").and_then(Value::as_str) == Some("text")
+					&& p
+						.get("text")
+						.and_then(Value::as_str)
+						.unwrap_or("")
+						.is_empty()
+				{
+					self.drop("empty text block");
+					continue;
+				}
+				kept.push(p.clone());
+			}
+			if kept.len() == parts.len() {
+				return;
+			}
+			let obj = b.as_object_mut().expect("tool_result block is an object");
+			if kept.is_empty() {
+				obj.remove("content");
+			} else {
+				obj.insert("content".to_string(), Value::Array(kept));
+			}
+		}
+
+		/// Enforce Bedrock's cache rules in the order the API counts them (tools, system, messages):
+		/// at most 4 markers, no 1h marker after a 5m one, and no scope.
+		fn cap_cache_markers(
+			&mut self,
+			tools: Option<&mut Vec<Value>>,
+			system: &mut [Value],
+			messages: &mut [Message],
+		) {
+			let mut count = 0usize;
+			let mut seen5m = false;
+			if let Some(tools) = tools {
+				for b in tools.iter_mut() {
+					self.visit_cache(b, &mut count, &mut seen5m);
+				}
+			}
+			for b in system.iter_mut() {
+				self.visit_cache(b, &mut count, &mut seen5m);
+			}
+			for m in messages.iter_mut() {
+				for b in m.blocks.iter_mut() {
+					self.visit_cache(b, &mut count, &mut seen5m);
+				}
+			}
+		}
+
+		fn visit_cache(&mut self, b: &mut Value, count: &mut usize, seen5m: &mut bool) {
+			let Some(obj) = b.as_object_mut() else {
+				return;
+			};
+			let Some(Value::Object(mut cc)) = obj.get("cache_control").cloned() else {
+				return;
+			};
+			if *count >= MAX_CACHE_POINTS {
+				obj.remove("cache_control");
+				self.drop("cache_control beyond limit");
+				return;
+			}
+			*count += 1;
+			let mut changed = false;
+			if cc.remove("scope").is_some() {
+				self.drop("cache_control.scope");
+				changed = true;
+			}
+			if cc.get("ttl") == Some(&Value::String("1h".to_string())) {
+				if *seen5m {
+					cc.remove("ttl");
+					self.drop("cache_control ttl 1h after 5m");
+					changed = true;
+				}
+			} else {
+				*seen5m = true;
+			}
+			if changed {
+				b.as_object_mut()
+					.expect("cache_control holder is an object")
+					.insert("cache_control".to_string(), Value::Object(cc));
+			}
+		}
+	}
+
+	fn is_passthrough_tool(typ: &str) -> bool {
+		PASSTHROUGH_TOOL_PREFIXES.iter().any(|p| typ.starts_with(p))
+	}
+
+	fn text_block(text: &str) -> Value {
+		serde_json::json!({"type": "text", "text": text})
+	}
+
+	/// The system prompt as blocks (empty when absent or blank). A plain string becomes one text
+	/// block; an array passes through; anything else is treated as absent (router0 `parseSystem`).
+	fn parse_system(raw: Option<&Value>) -> Vec<Value> {
+		match raw {
+			Some(Value::String(text)) => {
+				if text.trim().is_empty() {
+					Vec::new()
+				} else {
+					vec![text_block(text)]
+				}
+			},
+			Some(Value::Array(arr)) => arr.clone(),
+			_ => Vec::new(),
+		}
+	}
+
+	/// Tag system text the way Claude Code tags system content it places inside user turns.
+	fn wrap_reminders(blocks: &[Value]) -> Vec<Value> {
+		blocks
+			.iter()
+			.map(|b| {
+				let text = b.get("text").and_then(Value::as_str).unwrap_or("");
+				let mut wrapped = text_block(&format!("<system-reminder>\n{text}\n</system-reminder>"));
+				if let Some(cc) = b.get("cache_control") {
+					wrapped
+						.as_object_mut()
+						.expect("text_block is an object")
+						.insert("cache_control".to_string(), cc.clone());
+				}
+				wrapped
+			})
+			.collect()
+	}
+
+	struct Message {
+		role: String,
+		blocks: Vec<Value>,
+		/// Set, with `blocks` empty, while the content is still a plain string.
+		text: String,
+		is_text: bool,
+		/// Every message field other than `role` and `content`.
+		rest: Map<String, Value>,
+	}
+
+	impl Message {
+		fn user_blocks(blocks: Vec<Value>) -> Self {
+			Message {
+				role: "user".to_string(),
+				blocks,
+				text: String::new(),
+				is_text: false,
+				rest: Map::new(),
+			}
+		}
+
+		fn empty(&self) -> bool {
+			if self.is_text {
+				self.text.is_empty()
+			} else {
+				self.blocks.is_empty()
+			}
+		}
+
+		/// The message's text as blocks, keeping cache markers (router0 `message.textBlocks`).
+		fn text_blocks(&self) -> Vec<Value> {
+			if self.is_text {
+				if self.text.trim().is_empty() {
+					return Vec::new();
+				}
+				return vec![text_block(&self.text)];
+			}
+			self
+				.blocks
+				.iter()
+				.filter(|b| {
+					b.get("type").and_then(Value::as_str) == Some("text")
+						&& !b
+							.get("text")
+							.and_then(Value::as_str)
+							.unwrap_or("")
+							.trim()
+							.is_empty()
+				})
+				.cloned()
+				.collect()
+		}
+
+		fn into_value(self) -> Value {
+			let mut obj = self.rest;
+			obj.insert("role".to_string(), Value::String(self.role));
+			if self.is_text {
+				obj.insert("content".to_string(), Value::String(self.text));
+			} else {
+				obj.insert("content".to_string(), Value::Array(self.blocks));
+			}
+			Value::Object(obj)
+		}
+	}
+
+	fn parse_message(raw: Value) -> Result<Message, AIError> {
+		let Value::Object(mut rest) = raw else {
+			return Err(AIError::UnsupportedContent);
+		};
+		let role = match rest.remove("role") {
+			Some(Value::String(r)) => r,
+			_ => return Err(AIError::UnsupportedContent),
+		};
+		match rest.remove("content") {
+			Some(Value::String(text)) => Ok(Message {
+				role,
+				blocks: Vec::new(),
+				text,
+				is_text: true,
+				rest,
+			}),
+			Some(Value::Array(blocks)) => Ok(Message {
+				role,
+				blocks,
+				text: String::new(),
+				is_text: false,
+				rest,
+			}),
+			_ => Err(AIError::UnsupportedContent),
+		}
+	}
+
+	/// Translate a Bedrock `invoke-with-response-stream` body into native Anthropic SSE.
+	///
+	/// Each AWS event-stream frame carries one Anthropic SSE event base64-encoded inside a
+	/// `{"bytes": "<base64>", "p": "<padding>"}` envelope. Unlike Converse streaming, the decoded
+	/// payload is already a native Anthropic event, so it is re-emitted verbatim, taking the SSE
+	/// event name from its `type` field so event types newer than this build still pass through.
+	/// Byte-passthrough and usage accounting reuse the native Anthropic streaming path
+	/// (agentgateway/agentgateway#3240).
+	pub fn translate_stream(
+		b: agent_http::Body,
+		buffer_limit: usize,
+		log: crate::StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+	) -> agent_http::Body {
+		let unwrapped = unwrap_invoke_frames(b, buffer_limit);
+		crate::conversion::messages::passthrough_stream(unwrapped, buffer_limit, log, log_content)
+	}
+
+	/// Stage one of [`translate_stream`]: AWS event-stream frames to native Anthropic SSE bytes.
+	pub(crate) fn unwrap_invoke_frames(b: agent_http::Body, buffer_limit: usize) -> agent_http::Body {
+		use base64::Engine;
+		use bytes::Bytes;
+		use tokio_util::codec::BytesCodec;
+
+		use crate::parse::aws_sse::{EventStreamCodec, Message};
+		use crate::parse::encode_sse_event;
+		use crate::parse::transform::{TransformEvent, parser};
+
+		#[derive(serde::Deserialize)]
+		struct Envelope {
+			bytes: String,
+		}
+		#[derive(serde::Deserialize)]
+		struct EventName {
+			#[serde(rename = "type")]
+			kind: String,
+		}
+
+		let decoder = EventStreamCodec::with_max_size(buffer_limit);
+		let encoder = BytesCodec::new();
+		parser(
+			b,
+			decoder,
+			encoder,
+			move |event: TransformEvent<Message>| {
+				let TransformEvent::Item(msg) = event else {
+					return Vec::new();
+				};
+				let Ok(env) = serde_json::from_slice::<Envelope>(msg.payload()) else {
+					return Vec::new();
+				};
+				let Ok(raw) = base64::prelude::BASE64_STANDARD.decode(env.bytes.as_bytes()) else {
+					return Vec::new();
+				};
+				let name = serde_json::from_slice::<EventName>(&raw)
+					.map(|e| e.kind)
+					.unwrap_or_default();
+				vec![encode_sse_event(&name, Bytes::from(raw))]
+			},
+		)
 	}
 }
 
@@ -3724,7 +4715,6 @@ mod helpers {
 		"context-1m-2025-08-07",
 		"context-management-2025-06-27",
 		"effort-2025-11-24",
-		"tool-search-tool-2025-10-19",
 		"tool-examples-2025-10-29",
 	];
 	const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS";
@@ -3941,34 +4931,6 @@ mod helpers {
 		headers: &http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
-	}
-
-	/// Extract all `anthropic-beta` header values without filtering.
-	///
-	/// Used for the native InvokeModel path, where the request goes directly to Anthropic's
-	/// Claude engine (not through Bedrock Converse). Anthropic validates beta identifiers
-	/// itself and returns a proper error for unrecognised values, so no gateway-side
-	/// allowlist is needed here.
-	pub fn extract_all_beta_headers(
-		headers: &http::HeaderMap,
-	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
-		let mut beta_features: Vec<serde_json::Value> = Vec::new();
-		for value in headers.get_all("anthropic-beta") {
-			let header_str = value
-				.to_str()
-				.map_err(|_| AIError::MissingField("Invalid anthropic-beta header value".into()))?;
-			for feature in header_str.split(',') {
-				let trimmed = feature.trim();
-				if !trimmed.is_empty() {
-					beta_features.push(serde_json::Value::String(trimmed.to_string()));
-				}
-			}
-		}
-		if beta_features.is_empty() {
-			Ok(None)
-		} else {
-			Ok(Some(beta_features))
-		}
 	}
 
 	pub fn extract_beta_headers_with_allowed(

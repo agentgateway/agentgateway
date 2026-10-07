@@ -595,7 +595,11 @@ impl ChatTranslation {
 				if matches!(ctx.provider, AIProvider::Bedrock(_))
 					&& bedrock_provider_uses_runtime_invoke(ctx) =>
 			{
-				conversion::bedrock::from_messages_invoke::translate_request(req, ctx.headers)
+				conversion::bedrock::from_messages_invoke::translate_request(
+					req,
+					ctx.headers,
+					ctx.request_model,
+				)
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
@@ -738,21 +742,14 @@ impl ChatTranslation {
 			},
 
 			ChatFormat::AnthropicMessages => match self.input {
-				InputFormat::Messages if ctx.bedrock_runtime_invoke => {
-					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
-					resp.map(move |b| {
-						conversion::bedrock::from_messages::translate_stream(
-							b,
-							ctx.buffer_limit,
-							ctx.logger,
-							&ctx.model,
-							&msg,
-							ctx.log_content,
-							tool_name_map,
-						)
-					})
-				},
+				InputFormat::Messages if ctx.bedrock_runtime_invoke => resp.map(|b| {
+					conversion::bedrock::from_messages_invoke::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
 				InputFormat::Messages => resp.map(|b| {
 					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),

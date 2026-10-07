@@ -101,6 +101,9 @@ fn test_extract_beta_headers_variants() {
 		"anthropic-beta",
 		"interleaved-thinking-2025-05-14".parse().unwrap(),
 	);
+	// Converse rejects tool-search-tool ("not currently supported on the Converse APIs"), so it
+	// must not be forwarded on this path; Claude tool search goes through InvokeModel instead
+	// (agentgateway/agentgateway#3818 section 4).
 	headers.append(
 		"anthropic-beta",
 		"tool-search-tool-2025-10-19".parse().unwrap(),
@@ -114,10 +117,7 @@ fn test_extract_beta_headers_variants() {
 	beta_features.sort();
 	assert_eq!(
 		beta_features,
-		vec![
-			"interleaved-thinking-2025-05-14".to_string(),
-			"tool-search-tool-2025-10-19".to_string(),
-		]
+		vec!["interleaved-thinking-2025-05-14".to_string()]
 	);
 
 	let mut headers = HeaderMap::new();
@@ -2089,23 +2089,92 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 }
 
 // ── from_messages_invoke tests ────────────────────────────────────────────────
+//
+// A faithful port of router0's internal/bedrock/sanitize_test.go, asserted on the body
+// translate_request emits (it returns only the bytes, so router0's dropped-list checks become
+// observable output checks). preserve_order is on workspace-wide, so byte-for-byte survival is
+// checked by substring. The agentgateway-only cases (defer_loading, PDF documents, streaming)
+// follow at the end.
+
+// Measured capability rows are matched by substring on the model id (bedrock.rs capability_for).
+const HAIKU: &str = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+const SONNET46: &str = "global.anthropic.claude-sonnet-4-6";
+const OPUS48: &str = "global.anthropic.claude-opus-4-8";
+const SONNET55: &str = "global.anthropic.claude-sonnet-5-5";
+const OPUS55: &str = "global.anthropic.claude-opus-5-5";
+
+fn invoke(model: &str, body: serde_json::Value) -> serde_json::Value {
+	invoke_betas(model, body, &[])
+}
+
+fn invoke_betas(model: &str, body: serde_json::Value, betas: &[&str]) -> serde_json::Value {
+	let mut headers = HeaderMap::new();
+	for b in betas {
+		headers.append("anthropic-beta", b.parse().unwrap());
+	}
+	let req = types::ChatRequest::Messages(serde_json::from_value(body).unwrap());
+	let out = from_messages_invoke::translate_request(req, &headers, model).unwrap();
+	serde_json::from_slice(&out).unwrap()
+}
+
+fn betas_of(v: &serde_json::Value) -> Vec<String> {
+	v.get("anthropic_beta")
+		.and_then(|b| b.as_array())
+		.map(|a| {
+			a.iter()
+				.filter_map(|b| b.as_str().map(str::to_string))
+				.collect()
+		})
+		.unwrap_or_default()
+}
+
+fn raw(v: &serde_json::Value) -> String {
+	serde_json::to_string(v).unwrap()
+}
+
+fn simple() -> serde_json::Value {
+	json!({"max_tokens": 50, "messages": [{"role": "user", "content": "hi"}]})
+}
+
+/// A tagged system-reminder text block inside a message, if the message carries one.
+fn reminder_text(msg: &serde_json::Value) -> Option<String> {
+	msg["content"].as_array()?.iter().find_map(|b| {
+		b.get("text")
+			.and_then(|t| t.as_str())
+			.filter(|t| t.contains("<system-reminder>"))
+			.map(str::to_string)
+	})
+}
+
+/// user "go", assistant tool_use, system (cached) "remember", user tool_result for the tool_use.
+fn mid_system() -> serde_json::Value {
+	json!({
+		"max_tokens": 50,
+		"messages": [
+			{"role": "user", "content": "go"},
+			{"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "X", "input": {}}]},
+			{"role": "system", "content": [{"type": "text", "text": "remember", "cache_control": {"type": "ephemeral"}}]},
+			{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}
+		]
+	})
+}
 
 #[test]
-fn invoke_body_removes_model_and_stream_adds_anthropic_version() {
-	let req = types::ChatRequest::Messages(
-		serde_json::from_value(json!({
-				"model": "anthropic.claude-sonnet-4-5",
-				"stream": true,
-				"max_tokens": 1024,
-				"messages": [{"role": "user", "content": "hello"}]
-		}))
-		.unwrap(),
+fn invoke_envelope_matches_claude_codes_bedrock_mode() {
+	// model and stream come from the URL on InvokeModel; the version is fixed; the betas keep order.
+	let v = invoke_betas(
+		SONNET55,
+		json!({
+			"model": "anthropic.claude-sonnet-5-5",
+			"stream": true,
+			"max_tokens": 50,
+			"messages": [{"role": "user", "content": "hi"}]
+		}),
+		&[
+			"claude-code-20250219,interleaved-thinking-2025-05-14",
+			"effort-2025-11-24",
+		],
 	);
-
-	let headers = HeaderMap::new();
-	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
-	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
 	assert!(
 		v.get("model").is_none(),
 		"model must be removed for InvokeModel"
@@ -2114,108 +2183,787 @@ fn invoke_body_removes_model_and_stream_adds_anthropic_version() {
 		v.get("stream").is_none(),
 		"stream must be removed for InvokeModel"
 	);
+	assert_eq!(v["anthropic_version"], "bedrock-2023-05-31");
 	assert_eq!(
-		v["anthropic_version"].as_str().unwrap(),
-		"bedrock-2023-05-31"
-	);
-	assert_eq!(v["max_tokens"].as_u64().unwrap(), 1024);
-}
-
-#[test]
-fn invoke_body_promotes_allowlisted_beta_header_to_body_array() {
-	let req = types::ChatRequest::Messages(
-		serde_json::from_value(json!({
-				"model": "anthropic.claude-sonnet-4-5",
-				"max_tokens": 1024,
-				"messages": [{"role": "user", "content": "hi"}]
-		}))
-		.unwrap(),
-	);
-
-	let mut headers = HeaderMap::new();
-	headers.insert(
-		"anthropic-beta",
-		"tool-search-tool-2025-10-19,interleaved-thinking-2025-05-14"
-			.parse()
-			.unwrap(),
-	);
-
-	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
-	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-	let betas: Vec<&str> = v["anthropic_beta"]
-		.as_array()
-		.unwrap()
-		.iter()
-		.map(|b| b.as_str().unwrap())
-		.collect();
-	assert!(betas.contains(&"tool-search-tool-2025-10-19"));
-	assert!(betas.contains(&"interleaved-thinking-2025-05-14"));
-}
-
-#[test]
-fn invoke_body_passes_all_betas_without_allowlist_filtering() {
-	// On the InvokeModel path, all anthropic-beta values are forwarded to Anthropic's native
-	// engine without gateway filtering. Anthropic validates and rejects unknown betas itself,
-	// so gateway-side filtering would only block legitimate new betas not yet in the list
-	// (e.g. claude-code, mid-conversation-system, dangerous-tool-use, afk-mode).
-	let req = types::ChatRequest::Messages(
-		serde_json::from_value(json!({
-				"model": "anthropic.claude-sonnet-4-5",
-				"max_tokens": 1024,
-				"messages": [{"role": "user", "content": "hi"}]
-		}))
-		.unwrap(),
-	);
-
-	let mut headers = HeaderMap::new();
-	// Mix of allowlisted and non-allowlisted betas — all should reach the body.
-	headers.insert(
-		"anthropic-beta",
-		"claude-code-20250219,dangerous-tool-use-2025-01-01,tool-search-tool-2025-10-19"
-			.parse()
-			.unwrap(),
-	);
-
-	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
-	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-
-	let betas: Vec<&str> = v["anthropic_beta"]
-		.as_array()
-		.expect("anthropic_beta must be an array")
-		.iter()
-		.map(|b| b.as_str().unwrap())
-		.collect();
-
-	assert!(
-		betas.contains(&"claude-code-20250219"),
-		"claude-code beta must pass through"
-	);
-	assert!(
-		betas.contains(&"dangerous-tool-use-2025-01-01"),
-		"dangerous-tool-use must pass through"
-	);
-	assert!(
-		betas.contains(&"tool-search-tool-2025-10-19"),
-		"known beta must also pass through"
+		betas_of(&v),
+		[
+			"claude-code-20250219",
+			"interleaved-thinking-2025-05-14",
+			"effort-2025-11-24"
+		]
+		.map(String::from)
 	);
 }
 
 #[test]
-fn invoke_body_preserves_tools_documents_and_thinking() {
-	let req = types::ChatRequest::Messages(serde_json::from_value(json!({
-        "model": "anthropic.claude-sonnet-4-5",
-        "max_tokens": 512,
-        "thinking": {"type": "enabled", "budget_tokens": 1024},
-        "tools": [{"name": "search", "description": "search the web", "input_schema": {"type": "object"}}],
-        "messages": [{"role": "user", "content": "hi"}]
-    })).unwrap());
+fn invoke_no_betas_means_no_field() {
+	let v = invoke(SONNET55, simple());
+	assert!(v.get("anthropic_beta").is_none());
+}
 
-	let headers = HeaderMap::new();
-	let body = from_messages_invoke::translate_request(req, &headers).unwrap();
-	let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+#[test]
+fn invoke_drops_fields_bedrock_rejects() {
+	// InvokeModel closes the top-level schema (unknown keys 400 "Extra inputs are not permitted");
+	// sampling and stop_sequences pass through.
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"messages": [{"role": "user", "content": "hi"}],
+			"container": "c",
+			"mcp_servers": [],
+			"service_tier": "auto",
+			"temperature": 1,
+			"top_k": 4,
+			"stop_sequences": ["x"]
+		}),
+	);
+	for k in ["container", "mcp_servers", "service_tier"] {
+		assert!(v.get(k).is_none(), "{k} must be dropped");
+	}
+	for k in ["temperature", "top_k", "stop_sequences"] {
+		assert!(v.get(k).is_some(), "{k} must pass through");
+	}
+}
 
-	assert!(v.get("tools").is_some(), "tools must pass through");
-	assert!(v.get("thinking").is_some(), "thinking must pass through");
-	assert_eq!(v["thinking"]["type"], "enabled");
+#[test]
+fn invoke_metadata_keeps_only_user_id() {
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"metadata": {"user_id": "u-123", "session": "s-1", "trace": "t-1"},
+			"messages": [{"role": "user", "content": "hi"}]
+		}),
+	);
+	assert_eq!(v["metadata"], json!({"user_id": "u-123"}));
+}
+
+#[test]
+fn invoke_filters_betas_per_model() {
+	// Only accepted betas survive; dangerous-tool-use is accepted but field-coupled, so it is
+	// dropped here (no safeguards field). Sonnet 4.6 additionally rejects the claude46 betas.
+	let sent = "claude-code-20250219,dangerous-tool-use-2026-09-03,prompt-caching-scope-2026-01-05,thinking-display-updates-2026-08-18,tool-search-tool-2025-10-19,made-up-2099-01-01";
+	assert_eq!(
+		betas_of(&invoke_betas(SONNET55, simple(), &[sent])),
+		[
+			"claude-code-20250219",
+			"thinking-display-updates-2026-08-18",
+			"tool-search-tool-2025-10-19"
+		]
+		.map(String::from)
+	);
+	assert_eq!(
+		betas_of(&invoke_betas(SONNET46, simple(), &[sent])),
+		["claude-code-20250219", "tool-search-tool-2025-10-19"].map(String::from)
+	);
+}
+
+#[test]
+fn invoke_renames_advanced_tool_use_to_tool_search() {
+	// Bedrock rejects the advanced-tool-use umbrella beta and takes its tool-search part.
+	let v = invoke_betas(OPUS55, simple(), &["advanced-tool-use-2025-11-20"]);
+	assert_eq!(
+		betas_of(&v),
+		["tool-search-tool-2025-10-19"].map(String::from)
+	);
+}
+
+#[test]
+fn invoke_every_rejected_beta_is_otherwise_accepted() {
+	// Each per-model-rejected beta is in the shared accepted set, so a capable model keeps it while
+	// Sonnet 4.6 drops it (router0 TestEveryRejectedBetaIsAlsoKnownAsAccepted). dangerous-tool-use
+	// is excluded: it is field-coupled and never travels without a safeguards field.
+	for b in [
+		"thinking-display-updates-2026-08-18",
+		"thinking-binding-controls-2026-08-01",
+		"inline-tools-2026-09-15",
+		"mid-conversation-system-clear-at-2026-08-21",
+	] {
+		assert!(
+			betas_of(&invoke_betas(SONNET55, simple(), &[b])).contains(&b.to_string()),
+			"{b} must be kept on a capable model"
+		);
+		assert!(
+			!betas_of(&invoke_betas(SONNET46, simple(), &[b])).contains(&b.to_string()),
+			"{b} must be rejected on Sonnet 4.6"
+		);
+	}
+}
+
+#[test]
+fn invoke_dangerous_tool_use_beta_travels_only_with_safeguards() {
+	// Without a safeguards field the beta is dropped even on models that accept the field.
+	for target in [HAIKU, OPUS48, SONNET55, OPUS55] {
+		let v = invoke_betas(
+			target,
+			simple(),
+			&["claude-code-20250219,dangerous-tool-use-2026-09-03"],
+		);
+		assert!(
+			!betas_of(&v).contains(&"dangerous-tool-use-2026-09-03".to_string()),
+			"{target}: dangerous-tool-use must not travel without safeguards"
+		);
+		assert!(betas_of(&v).contains(&"claude-code-20250219".to_string()));
+	}
+}
+
+#[test]
+fn invoke_safeguards_stay_with_their_beta_where_supported() {
+	let body = json!({
+		"max_tokens": 50,
+		"messages": [{"role": "user", "content": "hi"}],
+		"safeguards": {"auto_mode": true}
+	});
+	// Kept, and the beta added even if the client forgot it.
+	for target in [HAIKU, OPUS48, SONNET55, OPUS55] {
+		let v = invoke(target, body.clone());
+		assert!(
+			v.get("safeguards").is_some(),
+			"{target}: safeguards must stay"
+		);
+		assert!(
+			betas_of(&v).contains(&"dangerous-tool-use-2026-09-03".to_string()),
+			"{target}: the dangerous-tool-use beta must be added for the field"
+		);
+	}
+	// Sonnet 4.6 does not take the field; it goes, and its orphaned beta with it.
+	let v = invoke_betas(SONNET46, body, &["dangerous-tool-use-2026-09-03"]);
+	assert!(v.get("safeguards").is_none());
+	assert!(v.get("anthropic_beta").is_none());
+}
+
+#[test]
+fn invoke_signed_thinking_and_untouched_blocks_keep_their_bytes() {
+	// Blocks Bedrock accepts are re-encoded verbatim (preserve_order), including a signed thinking
+	// block, a Claude redacted_thinking block, a tool_use, and odd characters that must not be
+	// HTML-escaped (router0 TestSignedThinkingReplaysByteForByte / TestUntouchedBlocksKeepTheirBytes).
+	use base64::Engine;
+	let claude = base64::prelude::BASE64_STANDARD.encode("claude-opaque");
+	let signed =
+		json!({"type": "thinking", "thinking": "weigh <a> & <b>", "signature": "EuYBCkQ4Zm9v==abc<>&"});
+	let redacted = json!({"type": "redacted_thinking", "data": claude});
+	let tool_use =
+		json!({"type": "tool_use", "id": "toolu_1", "name": "Read", "input": {"path": "a<b>"}});
+	let body = json!({
+		"max_tokens": 50,
+		"messages": [
+			{"role": "user", "content": "go"},
+			{"role": "assistant", "content": [signed.clone(), redacted.clone(), tool_use.clone()]},
+			{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_1", "content": "ok"}]}
+		]
+	});
+	for target in [HAIKU, SONNET46, OPUS48, SONNET55, OPUS55] {
+		let s = raw(&invoke(target, body.clone()));
+		for want in [&signed, &redacted, &tool_use] {
+			assert!(
+				s.contains(&raw(want)),
+				"{target}: a passed-through block changed or was dropped"
+			);
+		}
+	}
+}
+
+#[test]
+fn invoke_removes_only_foreign_and_unsigned_reasoning() {
+	// Unsigned thinking and a GPT redacted_thinking (data decodes to an "rsn_" prefix) are both
+	// rejected by Bedrock and dropped; a signed block and a Claude redacted block stay. router0
+	// also strips a synthetic unsigned placeholder, which this Claude-only path never produces.
+	use base64::Engine;
+	let gpt = base64::prelude::BASE64_STANDARD.encode("rsn_abcdef");
+	let claude = base64::prelude::BASE64_STANDARD.encode("claude-opaque");
+	let v = invoke(
+		OPUS55,
+		json!({
+			"max_tokens": 50,
+			"messages": [
+				{"role": "user", "content": "go"},
+				{"role": "assistant", "content": [
+					{"type": "redacted_thinking", "data": gpt},
+					{"type": "thinking", "thinking": "forged", "signature": ""},
+					{"type": "thinking", "thinking": "no sig key at all"},
+					{"type": "redacted_thinking", "data": claude.clone()},
+					{"type": "text", "text": "answer"}
+				]}
+			]
+		}),
+	);
+	let content = v["messages"][1]["content"].as_array().unwrap();
+	assert_eq!(
+		content.len(),
+		2,
+		"only the Claude redacted block and the text survive"
+	);
+	assert_eq!(content[0]["data"], claude);
+	assert_eq!(content[1]["type"], "text");
+}
+
+#[test]
+fn invoke_drops_assistant_turn_left_empty() {
+	// An assistant turn whose only block is dropped must not reach Bedrock as an empty message.
+	use base64::Engine;
+	let gpt = base64::prelude::BASE64_STANDARD.encode("rsn_abc");
+	let v = invoke(
+		OPUS55,
+		json!({
+			"max_tokens": 50,
+			"messages": [
+				{"role": "user", "content": "a"},
+				{"role": "assistant", "content": [{"type": "redacted_thinking", "data": gpt}]},
+				{"role": "user", "content": "b"}
+			]
+		}),
+	);
+	assert_eq!(v["messages"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn invoke_drops_empty_text_keeps_whitespace() {
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"messages": [
+				{"role": "user", "content": [
+					{"type": "text", "text": ""},
+					{"type": "text", "text": "  \n"},
+					{"type": "text", "text": "real"}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "t", "content": [
+						{"type": "text", "text": ""},
+						{"type": "text", "text": "out"}
+					]}
+				]}
+			]
+		}),
+	);
+	let msgs = v["messages"].as_array().unwrap();
+	let user0 = msgs[0]["content"].as_array().unwrap();
+	assert_eq!(user0.len(), 2, "empty text goes, whitespace stays");
+	assert_eq!(user0[0]["text"], "  \n");
+	assert_eq!(
+		msgs[1]["content"][0]["content"].as_array().unwrap().len(),
+		1,
+		"empty tool_result part goes"
+	);
+}
+
+#[test]
+fn invoke_drops_empty_string_message() {
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"messages": [
+				{"role": "user", "content": "a"},
+				{"role": "assistant", "content": ""},
+				{"role": "user", "content": "b"}
+			]
+		}),
+	);
+	assert_eq!(v["messages"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn invoke_repairs_non_object_tool_use_input() {
+	for input in [json!([]), json!("paris"), json!(null), json!(3)] {
+		let v = invoke(
+			OPUS55,
+			json!({
+				"max_tokens": 50,
+				"messages": [
+					{"role": "user", "content": "a"},
+					{"role": "assistant", "content": [{"type": "tool_use", "id": "t", "name": "X", "input": input.clone()}]},
+					{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t", "content": "ok"}]}
+				]
+			}),
+		);
+		assert_eq!(
+			v["messages"][1]["content"][0]["input"],
+			json!({}),
+			"a non-object tool_use input ({input}) must become an empty object"
+		);
+	}
+}
+
+#[test]
+fn invoke_moves_leading_system_into_system() {
+	let body = json!({
+		"max_tokens": 50,
+		"system": [{"type": "text", "text": "top"}],
+		"messages": [
+			{"role": "system", "content": [{"type": "text", "text": "lead", "cache_control": {"type": "ephemeral"}}]},
+			{"role": "user", "content": "hi"}
+		]
+	});
+	for target in [HAIKU, SONNET55] {
+		let v = invoke(target, body.clone());
+		let sys = v["system"].as_array().unwrap();
+		assert_eq!(
+			sys.len(),
+			2,
+			"{target}: the leading system message appends to system"
+		);
+		assert_eq!(sys[1]["text"], "lead");
+		assert!(
+			sys[1]["cache_control"].is_object(),
+			"{target}: the cache marker travels with it"
+		);
+		assert_eq!(v["messages"].as_array().unwrap().len(), 1);
+	}
+}
+
+#[test]
+fn invoke_mid_conversation_system_native_where_supported() {
+	for target in [OPUS48, SONNET55, OPUS55] {
+		let v = invoke(target, mid_system());
+		let msgs = v["messages"].as_array().unwrap();
+		assert_eq!(
+			msgs.len(),
+			4,
+			"{target}: mid-conversation system stays its own turn"
+		);
+		assert_eq!(msgs[2]["role"], "system");
+	}
+}
+
+#[test]
+fn invoke_mid_conversation_system_fallback_keeps_position_and_cache() {
+	// Models with no mid-conversation system role fold the text into the next user turn, after the
+	// tool_result that must follow the tool_use, carrying the cache marker.
+	for target in [HAIKU, SONNET46] {
+		let v = invoke(target, mid_system());
+		let msgs = v["messages"].as_array().unwrap();
+		assert_eq!(msgs.len(), 3);
+		assert_eq!(msgs[2]["role"], "user");
+		let blocks = msgs[2]["content"].as_array().unwrap();
+		assert_eq!(blocks.len(), 2);
+		assert_eq!(blocks[0]["type"], "tool_result");
+		assert!(
+			blocks[1]["text"]
+				.as_str()
+				.unwrap()
+				.contains("<system-reminder>")
+		);
+		assert!(blocks[1]["text"].as_str().unwrap().contains("remember"));
+		assert!(blocks[1]["cache_control"].is_object());
+		assert!(v.get("system").is_none());
+	}
+}
+
+#[test]
+fn invoke_mid_conversation_system_branches() {
+	let roles = |v: &serde_json::Value| {
+		v["messages"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|m| m["role"].as_str().unwrap().to_string())
+			.collect::<Vec<_>>()
+			.join(",")
+	};
+	let run = |target: &str, msgs: serde_json::Value| {
+		invoke(target, json!({"max_tokens": 50, "messages": msgs}))
+	};
+
+	let developer = json!([
+		{"role": "user", "content": "go"},
+		{"role": "assistant", "content": "ok"},
+		{"role": "developer", "content": "note"},
+		{"role": "user", "content": "next"}
+	]);
+	let plain = json!([
+		{"role": "user", "content": "go"},
+		{"role": "assistant", "content": [{"type": "tool_use", "id": "t", "name": "X", "input": {}}]},
+		{"role": "system", "content": "note"},
+		{"role": "user", "content": "then"}
+	]);
+	let before = json!([
+		{"role": "user", "content": "go"},
+		{"role": "system", "content": "note"},
+		{"role": "assistant", "content": "ok"}
+	]);
+	let last = json!([
+		{"role": "user", "content": "go"},
+		{"role": "assistant", "content": "ok"},
+		{"role": "system", "content": "note"}
+	]);
+
+	// Native: developer is renamed to system; every position holds.
+	assert_eq!(
+		roles(&run(OPUS55, developer.clone())),
+		"user,assistant,system,user"
+	);
+	assert_eq!(
+		roles(&run(OPUS55, plain.clone())),
+		"user,assistant,system,user"
+	);
+	assert_eq!(roles(&run(OPUS55, before.clone())), "user,system,assistant");
+	assert_eq!(roles(&run(OPUS55, last.clone())), "user,assistant,system");
+
+	// Fallback: the text folds into a user turn in place, tagged as a system-reminder.
+	let m = run(HAIKU, developer);
+	assert_eq!(roles(&m), "user,assistant,user");
+	assert!(reminder_text(&m["messages"][2]).is_some_and(|t| t.contains("note")));
+
+	let m = run(HAIKU, plain);
+	assert_eq!(roles(&m), "user,assistant,user");
+	let blocks = m["messages"][2]["content"].as_array().unwrap();
+	assert_eq!(blocks.len(), 2);
+	assert_eq!(blocks[0]["text"], "then");
+	assert!(reminder_text(&m["messages"][2]).is_some_and(|t| t.contains("note")));
+
+	let m = run(HAIKU, before);
+	assert_eq!(roles(&m), "user,user,assistant");
+	assert!(reminder_text(&m["messages"][1]).is_some_and(|t| t.contains("note")));
+
+	let m = run(HAIKU, last);
+	assert_eq!(roles(&m), "user,assistant,user");
+	assert!(reminder_text(&m["messages"][2]).is_some_and(|t| t.contains("note")));
+}
+
+#[test]
+fn invoke_tool_fields() {
+	// Server tools drop; a "custom" wrapper is hoisted; strict and input_examples are gated.
+	let tools = json!([
+		{"name": "a", "input_schema": {"type": "object"}, "strict": true},
+		{"name": "b", "input_schema": {"type": "object"}, "custom": {"defer_loading": true}},
+		{"name": "c", "input_schema": {"type": "object"}, "defer_loading": true, "eager_input_streaming": true},
+		{"name": "d", "input_schema": {"type": "object"}, "input_examples": [{"x": 1}]},
+		{"type": "web_search_20250305", "name": "web_search"},
+		{"type": "bash_20250124", "name": "bash"},
+		{"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"}
+	]);
+	let body =
+		json!({"max_tokens": 50, "messages": [{"role": "user", "content": "hi"}], "tools": tools});
+
+	let v = invoke(SONNET55, body.clone());
+	let got = v["tools"].as_array().unwrap();
+	let names: Vec<&str> = got.iter().map(|t| t["name"].as_str().unwrap()).collect();
+	assert_eq!(
+		names,
+		["a", "b", "c", "d", "bash", "tool_search_tool_regex"]
+	);
+	assert!(
+		got[0].get("strict").is_none(),
+		"strict is dropped on Sonnet 5.5"
+	);
+	assert!(
+		got[1].get("custom").is_none(),
+		"the custom wrapper is hoisted away"
+	);
+	assert_eq!(got[1]["defer_loading"], json!(true));
+	assert_eq!(got[2]["defer_loading"], json!(true));
+	assert_eq!(got[2]["eager_input_streaming"], json!(true));
+	assert!(
+		got[3].get("input_examples").is_none(),
+		"input_examples needs its beta"
+	);
+
+	// strict stays on Haiku; input_examples stays with its beta.
+	let v = invoke_betas(HAIKU, body, &["tool-examples-2025-10-29"]);
+	let got = v["tools"].as_array().unwrap();
+	assert_eq!(got[0]["strict"], json!(true));
+	assert!(got[3]["input_examples"].is_array());
+}
+
+#[test]
+fn invoke_cache_markers_respect_bedrock_rules() {
+	// Counted in order tools, system, messages: at most four, scope stripped, 1h dropped after 5m.
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"tools": [{"name": "a", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral", "scope": "global"}}],
+			"system": [
+				{"type": "text", "text": "s1", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "s2", "cache_control": {"type": "ephemeral", "ttl": "1h"}}
+			],
+			"messages": [{"role": "user", "content": [
+				{"type": "text", "text": "m1", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "m2", "cache_control": {"type": "ephemeral"}}
+			]}]
+		}),
+	);
+	let s = raw(&v);
+	assert_eq!(
+		s.matches("\"cache_control\"").count(),
+		4,
+		"the fifth marker is stripped"
+	);
+	assert!(!s.contains("\"scope\""), "scope is not allowed on Bedrock");
+	assert!(
+		!s.contains("\"ttl\""),
+		"the 1h ttl after a 5m marker is dropped"
+	);
+
+	// A 1h marker before any 5m marker is valid and stays.
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"system": [
+				{"type": "text", "text": "a", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+				{"type": "text", "text": "b", "cache_control": {"type": "ephemeral"}}
+			],
+			"messages": [{"role": "user", "content": "hi"}]
+		}),
+	);
+	assert_eq!(v["system"][0]["cache_control"]["ttl"], "1h");
+}
+
+#[test]
+fn invoke_context_management_keeps_only_supported_edits() {
+	let cm = |edits: serde_json::Value| json!({"max_tokens": 50, "messages": [{"role": "user", "content": "hi"}], "context_management": {"edits": edits}});
+	let clear_thinking = json!({"type": "clear_thinking_20251015", "keep": "all"});
+	let compact = json!({"type": "compact_20260112"});
+	let clear_tools =
+		json!({"type": "clear_tool_uses_20250919", "trigger": {"type": "tool_uses", "value": 2}});
+
+	// Sonnet 5.5 keeps all three; its edits need the context-management beta, compact needs its own.
+	let v = invoke(
+		SONNET55,
+		cm(json!([
+			clear_thinking.clone(),
+			compact.clone(),
+			clear_tools.clone()
+		])),
+	);
+	assert_eq!(
+		v["context_management"]["edits"].as_array().unwrap().len(),
+		3
+	);
+	assert_eq!(
+		betas_of(&v),
+		["context-management-2025-06-27", "compact-2026-01-12"].map(String::from)
+	);
+
+	// Haiku takes neither clear_thinking (thinking off) nor compact; only clear_tools stays.
+	let v = invoke(
+		HAIKU,
+		cm(json!([clear_thinking.clone(), compact, clear_tools])),
+	);
+	let edits = v["context_management"]["edits"].as_array().unwrap();
+	assert_eq!(edits.len(), 1);
+	assert_eq!(edits[0]["type"], "clear_tool_uses_20250919");
+
+	// clear_thinking stays once thinking is on.
+	let v = invoke(
+		HAIKU,
+		json!({
+			"max_tokens": 50,
+			"thinking": {"type": "enabled", "budget_tokens": 1024},
+			"messages": [{"role": "user", "content": "hi"}],
+			"context_management": {"edits": [clear_thinking.clone()]}
+		}),
+	);
+	assert!(v.get("context_management").is_some());
+
+	// Nothing left: the field goes.
+	let v = invoke(OPUS48, cm(json!([clear_thinking])));
+	assert!(v.get("context_management").is_none());
+}
+
+#[test]
+fn invoke_output_config_format_only_where_supported() {
+	let body = json!({
+		"max_tokens": 50,
+		"messages": [{"role": "user", "content": "hi"}],
+		"output_config": {"effort": "high", "format": {"type": "json_schema", "schema": {}}}
+	});
+	for target in [OPUS48, SONNET55, OPUS55] {
+		let v = invoke(target, body.clone());
+		assert!(
+			v["output_config"].get("format").is_none(),
+			"{target}: format is dropped"
+		);
+		assert_eq!(
+			v["output_config"]["effort"], "high",
+			"{target}: the rest of output_config stays"
+		);
+	}
+	for target in [HAIKU, SONNET46] {
+		assert!(
+			invoke(target, body.clone())["output_config"]["format"].is_object(),
+			"{target}: format stays"
+		);
+	}
+	// output_config with only a rejected format is removed entirely.
+	let v = invoke(
+		SONNET55,
+		json!({"max_tokens": 50, "messages": [{"role": "user", "content": "hi"}], "output_config": {"format": {"type": "json_schema", "schema": {}}}}),
+	);
+	assert!(v.get("output_config").is_none());
+}
+
+#[test]
+fn invoke_thinking_subfields_follow_their_betas() {
+	let body = json!({
+		"max_tokens": 50,
+		"messages": [{"role": "user", "content": "hi"}],
+		"thinking": {"type": "adaptive", "display": "updates", "block_binding": {"prefix_mismatch_behavior": "error"}}
+	});
+	let betas = &["thinking-display-updates-2026-08-18,thinking-binding-controls-2026-08-01"];
+	let v = invoke_betas(SONNET55, body.clone(), betas);
+	assert_eq!(v["thinking"]["display"], "updates");
+	assert!(v["thinking"]["block_binding"].is_object());
+	// Sonnet 4.6 rejects both betas, so both sub-fields go and the type stays.
+	let v = invoke_betas(SONNET46, body, betas);
+	assert!(v["thinking"].get("display").is_none());
+	assert!(v["thinking"].get("block_binding").is_none());
+	assert_eq!(v["thinking"]["type"], "adaptive");
+	assert!(v.get("anthropic_beta").is_none());
+}
+
+#[test]
+fn invoke_disabled_thinking_omitted_where_thinking_is_always_on() {
+	let body = json!({"max_tokens": 50, "thinking": {"type": "disabled"}, "messages": [{"role": "user", "content": "hi"}]});
+	for target in [SONNET55, OPUS55] {
+		assert!(
+			invoke(target, body.clone()).get("thinking").is_none(),
+			"{target}: cannot turn thinking off"
+		);
+	}
+	for target in [HAIKU, SONNET46, OPUS48] {
+		assert_eq!(
+			invoke(target, body.clone())["thinking"]["type"],
+			"disabled",
+			"{target}: takes disabled thinking"
+		);
+	}
+}
+
+#[test]
+fn invoke_does_not_rewrite_sampling_or_tool_choice() {
+	let v = invoke(
+		OPUS55,
+		json!({
+			"max_tokens": 50,
+			"temperature": 0.5,
+			"top_p": 0.9,
+			"top_k": 4,
+			"thinking": {"type": "enabled", "budget_tokens": 1024},
+			"tools": [{"name": "a", "input_schema": {"type": "object"}}],
+			"tool_choice": {"type": "any"},
+			"messages": [{"role": "user", "content": "hi"}]
+		}),
+	);
+	for k in ["temperature", "top_p", "top_k", "thinking", "tool_choice"] {
+		assert!(v.get(k).is_some(), "{k} must pass through untouched");
+	}
+}
+
+#[test]
+fn invoke_unmeasured_claude_model_is_handled_like_sonnet_55() {
+	let v = invoke_betas(
+		"global.anthropic.claude-opus-9",
+		json!({
+			"max_tokens": 50,
+			"messages": [{"role": "user", "content": "hi"}],
+			"safeguards": {"auto_mode": true},
+			"output_config": {"format": {"type": "json_schema", "schema": {}}}
+		}),
+		&["dangerous-tool-use-2026-09-03,claude-code-20250219"],
+	);
+	assert!(
+		v.get("safeguards").is_some(),
+		"an unmeasured model keeps safeguards like Sonnet 5.5"
+	);
+	assert!(
+		v.get("output_config").is_none(),
+		"an unmeasured model drops format like Sonnet 5.5"
+	);
+	let mut betas = betas_of(&v);
+	betas.sort();
+	assert_eq!(
+		betas,
+		["claude-code-20250219", "dangerous-tool-use-2026-09-03"].map(String::from)
+	);
+}
+
+#[test]
+fn invoke_matches_capability_for_us_prefixed_ids() {
+	// capability_for matches on a substring, so a us.* id resolves to the same row as global.*.
+	let body = json!({"max_tokens": 50, "thinking": {"type": "disabled"}, "messages": [{"role": "user", "content": "hi"}]});
+	assert!(
+		invoke("us.anthropic.claude-haiku-4-5-20251001-v1:0", body.clone())
+			.get("thinking")
+			.is_some(),
+		"a us.* Haiku id takes disabled thinking"
+	);
+	assert!(
+		invoke("us.anthropic.claude-sonnet-5-5", body)
+			.get("thinking")
+			.is_none(),
+		"a us.* Sonnet 5.5 id drops disabled thinking"
+	);
+}
+
+#[test]
+fn invoke_preserves_defer_loading_on_tools() {
+	// Tool search marks deferred tools with defer_loading: true. If it is lost on the round-trip,
+	// Bedrock gets full schemas every turn and tool search never activates (#3240 C2).
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"tools": [{"name": "search", "description": "d", "input_schema": {"type": "object"}, "defer_loading": true}],
+			"messages": [{"role": "user", "content": "hi"}]
+		}),
+	);
+	assert_eq!(v["tools"][0]["defer_loading"], json!(true));
+}
+
+#[test]
+fn invoke_preserves_pdf_document_blocks() {
+	// Converse drops PDFs; the InvokeModel passthrough must keep document blocks verbatim (#3240 C5).
+	let doc = json!({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": "JVBERi0xLjQK"}});
+	let v = invoke(
+		SONNET55,
+		json!({
+			"max_tokens": 50,
+			"messages": [{"role": "user", "content": [doc.clone(), {"type": "text", "text": "summarize"}]}]
+		}),
+	);
+	assert!(
+		raw(&v).contains(&raw(&doc)),
+		"a PDF document block must survive to Bedrock"
+	);
+}
+
+// invoke-with-response-stream wraps each native Anthropic SSE event, base64-encoded, in a
+// {"bytes": "...", "p": "..."} envelope inside an AWS event-stream frame. The inner payload is
+// native Anthropic (content_block_delta), NOT Converse (contentBlockDelta), so it must be
+// re-emitted verbatim with its own event name rather than translated through the Converse path.
+#[tokio::test]
+async fn invoke_stream_unwraps_frames_to_native_anthropic_sse() {
+	use aws_smithy_eventstream::frame::write_message_to;
+	use base64::Engine;
+	use bytes::BytesMut;
+
+	use crate::parse::aws_sse::Message;
+
+	let inner =
+		br#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}"#;
+	let b64 = base64::prelude::BASE64_STANDARD.encode(inner);
+	let envelope = format!(r#"{{"bytes":"{b64}","p":"abcdef"}}"#);
+
+	let mut encoded = BytesMut::new();
+	let msg = Message::new(Bytes::from(envelope.into_bytes()));
+	write_message_to(&msg, &mut encoded).expect("frame should encode");
+
+	let body = agent_http::Body::from(Bytes::from(encoded.to_vec()));
+	let out = from_messages_invoke::unwrap_invoke_frames(body, 1024 * 1024);
+	let bytes = out
+		.collect()
+		.await
+		.expect("body should complete")
+		.to_bytes();
+	let text = std::str::from_utf8(&bytes).expect("output should be utf8");
+
+	assert_eq!(
+		text,
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n"
+	);
 }
