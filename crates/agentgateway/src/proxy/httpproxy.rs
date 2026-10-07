@@ -4441,7 +4441,7 @@ mod tests {
 			.merge(BackendPolicies {
 				backend_auth: Some(BackendAuth {
 					kind: key.map(|value| BackendAuthKind::Key {
-						value: value.into(),
+						value: secrecy::SecretString::from(value).into(),
 						location: primary_header.map(|name| AuthorizationLocation::Header {
 							name: name.parse().unwrap(),
 							prefix: None,
@@ -4457,7 +4457,7 @@ mod tests {
 							name: name.parse().unwrap(),
 							prefix: None,
 						},
-						key: value.into(),
+						key: secrecy::SecretString::from(value).into(),
 					})
 					.collect(),
 				}),
@@ -4546,13 +4546,13 @@ mod tests {
 				let mut policies = provider.default_connector_policies().unwrap();
 				if let Some(key) = key {
 					policies = policies.merge(BackendPolicies {
-						backend_auth: Some(BackendAuth::new(BackendAuthKind::Key { value: key.into(), location: None })),
+						backend_auth: Some(BackendAuth::new(BackendAuthKind::Key { value: secrecy::SecretString::from(key).into(), location: None })),
 						..Default::default()
 					});
 				}
 				policies.backend_auth.as_mut().unwrap().credentials.push(BackendAuthCredential {
 					location: AuthorizationLocation::Header { name: "x-initiator".parse().unwrap(), prefix: None },
-					key: "credential-initiator".into(),
+					key: secrecy::SecretString::from("credential-initiator").into(),
 				});
 				policies.llm_provider = Some(Arc::new(llm::NamedAIProvider {
 					name: "copilot".into(), provider: provider.clone(), provider_backend: None,
