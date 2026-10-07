@@ -39,8 +39,10 @@ jobs:
       continue-on-error: true
     - name: Clippy (agentgateway, schema feature)
       run: "cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields"
-    - name: Tests (agentgateway MCP)
+    - name: Tests (agentgateway MCP + overrides)
       run: "cargo test -p agentgateway --features schema -- mcp::"
+    - name: Tests (toolNameOverrides config validation)
+      run: "cargo test -p agentgateway --features schema -- tool_name_overrides"
     - name: Regenerate JSON schema and metrics docs
       if: always()
       run: make generate-schema
