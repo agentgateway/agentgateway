@@ -1639,7 +1639,7 @@ mcp:
 "#,
 	)
 	.await
-	expect_err("toolNameOverrides referencing an unknown target should be rejected");
+	.expect_err("toolNameOverrides referencing an unknown target should be rejected");
 	assert!(err.to_string().contains("unknown target"), "{err:?}");
 }
 
@@ -1666,7 +1666,7 @@ mcp:
 "#,
 	)
 	.await
-	expect_err("duplicate client-facing names should be rejected");
+	.expect_err("duplicate client-facing names should be rejected");
 	assert!(
 		err.to_string().contains("duplicate client-facing name"),
 		"{err:?}"
@@ -1696,7 +1696,7 @@ mcp:
 "#,
 	)
 	.await
-	expect_err("duplicate (target, source) pairs should be rejected");
+	.expect_err("duplicate (target, source) pairs should be rejected");
 	assert!(
 		err.to_string().contains("duplicate source"),
 		"{err:?}"

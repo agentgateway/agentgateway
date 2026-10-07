@@ -740,7 +740,7 @@ async fn multiplex_never_prefix_drops_ambiguous_names() {
 
 #[tokio::test]
 async fn multiplex_never_prefix_renames_colliding_tools_via_overrides() {
-	use rmcp::model::{ListToolsResult, Tool};
+	use rmcp::model::{ListToolsResult, ServerResult, Tool};
 
 	let backend = McpBackendGroup {
 		targets: vec![
