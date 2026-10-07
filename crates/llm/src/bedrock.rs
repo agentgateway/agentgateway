@@ -22,11 +22,13 @@ pub enum BedrockEndpointPreference {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum RuntimeAnthropicApi {
-	#[default]
-	Converse,
-	/// Use Bedrock InvokeModel with a native Anthropic Messages body.
+	/// Use Bedrock InvokeModel with a native Anthropic Messages body. Default.
 	/// Supports Anthropic-specific features Converse drops: documents, redacted-thinking, beta headers.
+	#[default]
 	InvokeModel,
+	/// Use Bedrock Converse. Lossy for Anthropic models (drops documents, beta headers,
+	/// deferred tools); kept only for explicit opt-out.
+	Converse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

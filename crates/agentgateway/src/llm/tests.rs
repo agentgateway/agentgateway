@@ -114,7 +114,7 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: pref,
-			runtime_anthropic_api: Default::default(),
+			runtime_anthropic_api: bedrock::RuntimeAnthropicApi::Converse,
 		}))
 	}
 
@@ -1380,6 +1380,119 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 	assert_eq!(llm_request.request_model, "claude-3-5-sonnet");
 }
 
+#[tokio::test]
+async fn count_tokens_returns_404_on_bedrock_invoke_runtime() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	// Bedrock Runtime's CountTokens rejects Anthropic models invoked via InvokeModel
+	// (global / cross-Region inference profiles). The gateway returns 404 so the client
+	// falls back to its own tokenizer instead of the inaccurate GPT-tokenizer estimate.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+		runtime_anthropic_api: bedrock::RuntimeAnthropicApi::InvokeModel,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([(
+			strng::new("claude-sonnet-5-5"),
+			strng::new("anthropic.claude-sonnet-5-5"),
+		)]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-5-5",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Rejected(resp) = provider
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
+		.await
+		.expect("count_tokens request should process")
+	else {
+		panic!("expected a locally-generated response, not an upstream forward");
+	};
+
+	assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+	let body = resp.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("response should be JSON");
+	assert_eq!(json["error"]["type"], json!("not_found_error"));
+}
+
+#[tokio::test]
+async fn count_tokens_does_not_404_on_bedrock_converse() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	// On the Converse path CountTokens is supported natively on Bedrock Runtime, so the
+	// request must forward upstream rather than hit the InvokeModel 404 branch.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+		runtime_anthropic_api: bedrock::RuntimeAnthropicApi::Converse,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([(
+			strng::new("claude-sonnet-5-5"),
+			strng::new("anthropic.claude-sonnet-5-5"),
+		)]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-5-5",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let result = provider
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
+		.await
+		.expect("count_tokens request should process");
+
+	if let RequestResult::Rejected(resp) = &result {
+		assert_ne!(
+			resp.status(),
+			::http::StatusCode::NOT_FOUND,
+			"Converse path must not hit the InvokeModel 404 branch"
+		);
+	}
+}
+
 fn gemini_generate_content_request(uri: &str) -> ::http::Request<Body> {
 	::http::Request::builder()
 		.uri(uri)
@@ -2018,7 +2131,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
-		runtime_anthropic_api: Default::default(),
+		runtime_anthropic_api: bedrock::RuntimeAnthropicApi::Converse,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -2101,7 +2214,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		guardrail_identifier: None,
 		guardrail_version: None,
 		endpoint_preference: Default::default(),
-		runtime_anthropic_api: Default::default(),
+		runtime_anthropic_api: bedrock::RuntimeAnthropicApi::Converse,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -3423,7 +3536,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			guardrail_identifier: None,
 			guardrail_version: None,
 			endpoint_preference: Default::default(),
-			runtime_anthropic_api: Default::default(),
+			runtime_anthropic_api: bedrock::RuntimeAnthropicApi::Converse,
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",

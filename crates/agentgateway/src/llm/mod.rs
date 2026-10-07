@@ -1965,6 +1965,29 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
+		// Bedrock Runtime's CountTokens API rejects Anthropic models invoked via InvokeModel
+		// (global / cross-Region inference profiles) with a 4xx. The local-estimation fallback
+		// below answers with a GPT tokenizer, which is inaccurate for Claude, so for that path we
+		// return 404 and let the client fall back to its own tokenizer.
+		if let AIProvider::Bedrock(p) = self {
+			let model = req
+				.model
+				.as_deref()
+				.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
+			let endpoint = p.resolve_endpoint(RouteType::AnthropicTokenCount, Some(model), catalog);
+			if endpoint == agent_llm::bedrock::BedrockEndpoint::Runtime
+				&& p.uses_runtime_invoke(model, agent_llm::bedrock::BedrockEndpoint::Runtime)
+			{
+				let body = br#"{"type":"error","error":{"type":"not_found_error","message":"count_tokens is not available for this model on Bedrock Runtime"}}"#.to_vec();
+				let resp = ::http::Response::builder()
+					.status(::http::StatusCode::NOT_FOUND)
+					.header(::http::header::CONTENT_TYPE, "application/json")
+					.body(Body::from(body))
+					.expect("failed to build count_tokens 404 response");
+				return Ok(RequestResult::Rejected(resp));
+			}
+		}
+
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
