@@ -1,0 +1,41 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/basic.json
+info:
+  model: gpt-4o
+  max_output_tokens: 1024
+  input: "Hello, world"
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-4o",
+    "max_tokens": 1024
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "messages",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/custom-tool.json
+info:
+  model: claude-sonnet-4-5
+  input:
+    - role: user
+      content: Run the calculation.
+    - type: custom_tool_call
+      id: ctc_python
+      call_id: call_python
+      name: python
+      input: print(6 * 7)
+    - type: custom_tool_call_output
+      call_id: call_python
+      output: "42\n"
+  tools:
+    - type: custom
+      name: python
+      description: Run Python.
+      format:
+        type: text
+  tool_choice:
+    type: custom
+    name: python
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Run the calculation."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_python",
+            "name": "python",
+            "input": {
+              "content": "print(6 * 7)"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_python",
+            "content": "42\n"
+          }
+        ]
+      }
+    ],
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 4096,
+    "tools": [
+      {
+        "type": "custom",
+        "name": "python",
+        "description": "Run Python.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string",
+              "description": "The python content following the specified format"
+            }
+          },
+          "required": [
+            "content"
+          ]
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "tool",
+      "name": "python"
+    }
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-5",
+    "provider": "messages",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Run the calculation."
+      }
+    ]
+  }
+}

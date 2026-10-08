@@ -1,0 +1,77 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/input-list.json
+info:
+  input:
+    - role: user
+      content: Hello
+    - type: reasoning
+      id: rs_replay
+      summary: []
+      encrypted_content: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
+    - role: assistant
+      content: Hello!
+    - role: user
+      content: How are you?
+    - type: reasoning
+      id: rs_unsigned
+      summary: []
+      content:
+        - type: reasoning_text
+          text: Let me think through this.
+    - role: user
+      content: Continue.
+    - type: reasoning
+      id: rs_signed
+      summary: []
+      content:
+        - type: reasoning_text
+          text: Let me check the signature.
+      encrypted_content: SIG-xyz==
+    - role: user
+      content: Keep going.
+    - type: reasoning
+      id: rs_empty
+      summary: []
+    - role: user
+      content: Please continue.
+  model: gpt-4o
+  stream: true
+---
+{
+  "error": "unsupported conversion: Responses reasoning history is unsupported",
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "messages",
+    "streaming": true,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello"
+      },
+      {
+        "role": "assistant",
+        "content": "Hello!"
+      },
+      {
+        "role": "user",
+        "content": "How are you?"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
+      },
+      {
+        "role": "user",
+        "content": "Keep going."
+      },
+      {
+        "role": "user",
+        "content": "Please continue."
+      }
+    ]
+  }
+}

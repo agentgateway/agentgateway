@@ -854,6 +854,8 @@ pub mod typed {
 			name: String,
 			input: serde_json::Value,
 			#[serde(skip_serializing_if = "Option::is_none")]
+			caller: Option<serde_json::Value>,
+			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
 		/// Tool result content
@@ -1231,9 +1233,19 @@ pub mod typed {
 			signature: String,
 		},
 		CitationsDelta {
+			#[serde(skip_serializing_if = "Option::is_none")]
+			citation: Option<serde_json::Value>,
 			#[serde(default)]
 			citations: Vec<serde_json::Value>,
 		},
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	pub struct OutputTokensDetails {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub thinking_tokens: Option<usize>,
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1251,6 +1263,8 @@ pub mod typed {
 		/// Cache creation tokens split by TTL
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		pub cache_creation: Option<CacheCreation>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub output_tokens_details: Option<OutputTokensDetails>,
 	}
 
 	/// Cache creation tokens split by TTL.
@@ -1344,13 +1358,16 @@ pub mod typed {
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub service_tier: Option<String>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub output_tokens_details: Option<OutputTokensDetails>,
 	}
 
-	/// Tool definition. A client-defined custom tool always carries `input_schema` and no `type`
-	/// tag. An Anthropic server tool (`web_search_20250305`, `bash_20250124`, `computer_20250124`,
-	/// `text_editor_20250728`, `code_execution_20250522`, etc.) is tagged with `type` and never
-	/// carries `input_schema` since it runs server-side. `Custom` is tried first so existing custom
-	/// tool payloads (no `type` field) keep matching without a discriminant lookup.
+	/// Tool definition. A client-defined custom tool carries `input_schema` and may include the
+	/// `custom` type tag. An Anthropic server tool (`web_search_20250305`, `bash_20250124`,
+	/// `computer_20250124`, `text_editor_20250728`, `code_execution_20250522`, etc.) is tagged with
+	/// `type` and never carries `input_schema` since it runs server-side. `Custom` is tried first so
+	/// existing custom tool payloads (no `type` field) keep matching without a discriminant lookup.
 	#[derive(Debug, Serialize, Deserialize)]
 	#[serde(untagged)]
 	pub enum Tool {
@@ -1375,7 +1392,15 @@ pub mod typed {
 	}
 
 	#[derive(Debug, Serialize, Deserialize)]
+	#[serde(rename_all = "snake_case")]
+	pub enum CustomToolType {
+		Custom,
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
 	pub struct CustomTool {
+		#[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+		pub tool_type: Option<CustomToolType>,
 		/// Name of the tool
 		pub name: String,
 		/// Description of the tool
@@ -1688,6 +1713,7 @@ mod tests {
 					id: "toolu_01A".to_string(),
 					name: "get_weather".to_string(),
 					input: serde_json::json!({"location": "San Francisco"}),
+					caller: None,
 					cache_control: None,
 				},
 				typed::ContentBlock::ServerToolUse {
@@ -1707,6 +1733,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				output_tokens_details: None,
 			},
 			input_audio_tokens: None,
 			output_audio_tokens: None,
@@ -1767,6 +1794,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				output_tokens_details: None,
 			},
 			input_audio_tokens: None,
 			output_audio_tokens: None,
