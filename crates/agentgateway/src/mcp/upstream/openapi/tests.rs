@@ -2061,6 +2061,7 @@ async fn test_openapi_from_url() {
 		sse_keep_alive: None,
 		dns_rebinding_protection: false,
 		server: None,
+		lazy_tools: false,
 	});
 
 	// Convert to runtime backends

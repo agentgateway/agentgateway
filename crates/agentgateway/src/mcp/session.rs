@@ -644,8 +644,8 @@ impl Session {
 								}
 								ctr.params.arguments =
 									args.get("arguments").and_then(|v| v.as_object()).cloned();
-								ctr.params.name = inner.as_str().into();
-								name = inner.into();
+								name = Cow::Owned(inner);
+								ctr.params.name = name.clone();
 							}
 						}
 						// Propagate the client's `_meta` to the resolve list request so modern

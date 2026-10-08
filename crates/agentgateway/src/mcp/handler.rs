@@ -174,24 +174,19 @@ fn finalize_catalog(
 	policies: &McpAuthorizationSet,
 	cel: &CelExecWrapper,
 ) -> Vec<Tool> {
-	let public_name =
-		|target: &str, raw: &str| -> String { resource_name(prefix_names, target, raw) };
-	let duplicates = duplicate_owned_names(
+	// Mirrors `merge_tools`: ambiguous (raw) names served by several targets are dropped.
+	let duplicates = duplicate_names(
 		reject_duplicates,
-		per_target.iter().flat_map(|(target, tools)| {
-			tools
-				.iter()
-				.map(|t| public_name(target.as_str(), t.name.as_ref()))
-		}),
+		per_target
+			.iter()
+			.flat_map(|(_, tools)| tools.iter().map(|t| t.name.as_ref())),
 	);
 	per_target
 		.into_iter()
 		.flat_map(|(server_name, tools)| {
 			tools
 				.into_iter()
-				.filter(|t| {
-					!duplicates.contains(&public_name(server_name.as_str(), t.name.as_ref()))
-				})
+				.filter(|t| !duplicates.contains(t.name.as_ref()))
 				.filter(|t| {
 					policies.validate(
 						&rbac::ResourceType::Tool(rbac::ResourceId::new(
@@ -203,8 +198,7 @@ fn finalize_catalog(
 					)
 				})
 				.map(|mut t| {
-					let name = public_name(server_name.as_str(), t.name.as_ref());
-					t.name = Cow::Owned(name);
+					t.name = Cow::Owned(resource_name(prefix_names, server_name.as_str(), &t.name));
 					t
 				})
 				.collect_vec()
