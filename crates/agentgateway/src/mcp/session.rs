@@ -538,7 +538,12 @@ impl Session {
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						if self.relay.lazy_tools() {
-							Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_tools_lazy())).await
+							Box::pin(
+								self
+									.relay
+									.send_fanout(r, ctx, self.relay.merge_tools_lazy()),
+							)
+							.await
 						} else {
 							Box::pin(
 								self
@@ -616,12 +621,11 @@ impl Session {
 									.get::<RequestMetaObject>()
 									.and_then(non_empty_meta)
 									.cloned();
-								return Box::pin(self.relay.send_lazy_search(
-									request_id,
-									ctx,
-									args,
-									search_meta,
-								))
+								return Box::pin(
+									self
+										.relay
+										.send_lazy_search(request_id, ctx, args, search_meta),
+								)
 								.await;
 							}
 							if name.as_ref() == crate::mcp::handler::LAZY_CALL_TOOL {
@@ -642,8 +646,7 @@ impl Session {
 										"mcp_call cannot invoke the gateway search/call tools".to_string(),
 									));
 								}
-								ctr.params.arguments =
-									args.get("arguments").and_then(|v| v.as_object()).cloned();
+								ctr.params.arguments = args.get("arguments").and_then(|v| v.as_object()).cloned();
 								name = Cow::Owned(inner);
 								ctr.params.name = name.clone();
 							}

@@ -11,13 +11,12 @@ use http::StatusCode;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
-	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
-	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
-	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
-	CallToolResult, ContentBlock, JsonObject, Tool,
+	CacheScope, CallToolRequestMethod, CallToolResult, ClientJsonRpcMessage, ClientNotification,
+	ClientRequest, ConstString, ContentBlock, DiscoverResult, ExtensionCapabilities, Extensions,
+	GetMeta, Implementation, JsonObject, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
+	ProtocolVersion, RequestId, RequestMetaObject, ResultType, ServerCapabilities, ServerConfig,
+	ServerJsonRpcMessage, ServerNotification, ServerRequest, ServerResult, SubscriptionFilter, Tool,
 };
 use tracing::{debug, info, warn};
 
@@ -1029,8 +1028,7 @@ impl Relay {
 					_ => Err(incompatible_upstream_result("tools/list")),
 				})
 				.collect::<Result<Vec<_>, ClientError>>()?;
-			let catalog =
-				finalize_catalog(per_target, prefix_names, reject_duplicates, &policies, cel);
+			let catalog = finalize_catalog(per_target, prefix_names, reject_duplicates, &policies, cel);
 			let matches = search_catalog(catalog, &query, limit);
 			Ok(ServerResult::CallToolResult(CallToolResult::success(vec![
 				ContentBlock::text(render_search_matches(&query, &matches)),
@@ -2534,11 +2532,13 @@ mod tests {
 				Arc::new(json!({ "type": "object" }).as_object().cloned().unwrap()),
 			)
 		};
-		let policies =
-			McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()));
+		let policies = McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()));
 		let cel: CelExecWrapper = upstream::IncomingRequestContext::empty().into();
 		let prefixed = finalize_catalog(
-			vec![("a".into(), vec![tool("echo")]), ("b".into(), vec![tool("ping")])],
+			vec![
+				("a".into(), vec![tool("echo")]),
+				("b".into(), vec![tool("ping")]),
+			],
 			true,
 			false,
 			&policies,
@@ -2549,7 +2549,10 @@ mod tests {
 		assert_eq!(names, vec!["a_echo".to_string(), "b_ping".to_string()]);
 		// The same raw name served by two targets is dropped as ambiguous.
 		let deduped = finalize_catalog(
-			vec![("a".into(), vec![tool("echo")]), ("b".into(), vec![tool("echo")])],
+			vec![
+				("a".into(), vec![tool("echo")]),
+				("b".into(), vec![tool("echo")]),
+			],
 			false,
 			true,
 			&policies,
@@ -2563,7 +2566,12 @@ mod tests {
 		let tool = Tool::new_with_raw(
 			Cow::Borrowed("mcp_call"),
 			Some(Cow::Borrowed("Invoke a tool")),
-			Arc::new(json!({ "type": "object", "properties": {} }).as_object().cloned().unwrap()),
+			Arc::new(
+				json!({ "type": "object", "properties": {} })
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
 		);
 		let rendered = render_search_matches("call", &[tool]);
 		let parsed: serde_json::Value = serde_json::from_str(&rendered).unwrap();
