@@ -22,6 +22,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
@@ -33,6 +34,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|

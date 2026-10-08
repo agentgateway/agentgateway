@@ -164,14 +164,15 @@ func (m Model) IsZero() bool {
 }
 
 type Rates struct {
-	Input       Money `json:"input,omitempty"`
-	Output      Money `json:"output,omitempty"`
-	CacheRead   Money `json:"cacheRead,omitempty"`
-	CacheWrite  Money `json:"cacheWrite,omitempty"`
-	Reasoning   Money `json:"reasoning,omitempty"`
-	InputAudio  Money `json:"inputAudio,omitempty"`
-	OutputAudio Money `json:"outputAudio,omitempty"`
-	PerPage     Money `json:"perPage,omitempty"`
+	Input        Money `json:"input,omitempty"`
+	Output       Money `json:"output,omitempty"`
+	CacheRead    Money `json:"cacheRead,omitempty"`
+	CacheWrite   Money `json:"cacheWrite,omitempty"`
+	CacheWrite1h Money `json:"cacheWrite1h,omitempty"`
+	Reasoning    Money `json:"reasoning,omitempty"`
+	InputAudio   Money `json:"inputAudio,omitempty"`
+	OutputAudio  Money `json:"outputAudio,omitempty"`
+	PerPage      Money `json:"perPage,omitempty"`
 }
 
 type Tier struct {
