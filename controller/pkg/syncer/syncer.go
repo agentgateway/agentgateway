@@ -75,6 +75,7 @@ type Syncer struct {
 	gatewayCollectionOptions []translator.GatewayCollectionConfigOption
 
 	customResourceCollections   func(cfg CustomResourceCollectionsConfig)
+	finalStatusCollections      []func(FinalStatusCollectionsConfig)
 	buildAddressCollectionsFunc AgentgatewayAddressBuilderFunc
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	extraListenerSets           ExtraListenerSetsBuilderFunc
@@ -104,6 +105,7 @@ func NewAgwSyncer(
 			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
 		},
 		customResourceCollections:   cfg.CustomResourceCollections,
+		finalStatusCollections:      cfg.FinalStatusCollections,
 		buildAddressCollectionsFunc: cfg.BuildAddressCollectionsFunc,
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 		extraListenerSets:           cfg.ExtraListenerSets,
@@ -138,6 +140,18 @@ type CustomResourceCollectionsConfig struct {
 	ConfigMaps        krt.Collection[*corev1.ConfigMap]
 	KrtOpts           krtutil.KrtOptions
 	StatusCollections *status.StatusCollections
+}
+
+type FinalStatusCollectionsConfig struct {
+	ControllerName string
+	// Includes arbitration losers.
+	GatewayListeners krt.Collection[*translator.GatewayListener]
+	// Admission rejections, not arbitration conflicts.
+	RejectedListenerSets krt.Collection[RejectedListenerSet]
+	// Logical attachments, not programmed routes.
+	RouteAttachments  krt.Collection[*plugins.RouteAttachment]
+	StatusCollections *status.StatusCollections
+	KrtOpts           krtutil.KrtOptions
 }
 
 func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
@@ -189,6 +203,16 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 
 	listenerSetFinalStatus := s.buildFinalListenerSetStatus(gateways, listenerSetInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, listenerSetFinalStatus, translator.GetStatus)
+	for _, finalize := range s.finalStatusCollections {
+		finalize(FinalStatusCollectionsConfig{
+			ControllerName:       s.controllerName,
+			GatewayListeners:     gateways,
+			RejectedListenerSets: rejectedListenerSets,
+			RouteAttachments:     routeAttachments,
+			StatusCollections:    s.statusCollections,
+			KrtOpts:              krtopts,
+		})
+	}
 
 	// Build address collections
 	addressBuilder := s.buildAddressCollectionsFunc
