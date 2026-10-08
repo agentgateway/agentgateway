@@ -677,6 +677,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`binds[].listeners[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`binds[].listeners[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.lazyTools`|boolean|Expose the aggregated tool catalog lazily: `tools/list` advertises only two<br>gateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`<br>(invoke a tool found via `mcp_search`). Direct calls to upstream tool names<br>keep working, so enabling this only changes discovery, never capability.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -2230,6 +2231,7 @@
 |`backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`backends[].mcp.lazyTools`|boolean|Expose the aggregated tool catalog lazily: `tools/list` advertises only two<br>gateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`<br>(invoke a tool found via `mcp_search`). Direct calls to upstream tool names<br>keep working, so enabling this only changes discovery, never capability.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -3363,6 +3365,7 @@
 |`routeGroups[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routeGroups[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routeGroups[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`routeGroups[].routes[].backends[].mcp.lazyTools`|boolean|Expose the aggregated tool catalog lazily: `tools/list` advertises only two<br>gateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`<br>(invoke a tool found via `mcp_search`). Direct calls to upstream tool names<br>keep working, so enabling this only changes discovery, never capability.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routeGroups[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -4983,6 +4986,7 @@
 |`routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`routes[].backends[].mcp.lazyTools`|boolean|Expose the aggregated tool catalog lazily: `tools/list` advertises only two<br>gateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`<br>(invoke a tool found via `mcp_search`). Direct calls to upstream tool names<br>keep working, so enabling this only changes discovery, never capability.|
 |`routes[].backends[].ai`|object||
 |`routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -6172,6 +6176,7 @@
 |`mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`mcp.lazyTools`|boolean|Expose the aggregated tool catalog lazily: `tools/list` advertises only two<br>gateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`<br>(invoke a tool found via `mcp_search`). Direct calls to upstream tool names<br>keep working, so enabling this only changes discovery, never capability.|
 |`mcp.policies`|object|Policies applied to MCP requests.|
 |`mcp.policies.requestHeaderModifier`|object|Modify request headers before forwarding.|
 |`mcp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|

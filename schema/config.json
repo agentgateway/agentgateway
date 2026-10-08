@@ -8597,6 +8597,10 @@
               "type": "null"
             }
           ]
+        },
+        "lazyTools": {
+          "description": "Expose the aggregated tool catalog lazily: `tools/list` advertises only two\ngateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`\n(invoke a tool found via `mcp_search`). Direct calls to upstream tool names\nkeep working, so enabling this only changes discovery, never capability.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -13258,6 +13262,10 @@
               "type": "null"
             }
           ]
+        },
+        "lazyTools": {
+          "description": "Expose the aggregated tool catalog lazily: `tools/list` advertises only two\ngateway tools, `mcp_search` (find tools by name or purpose) and `mcp_call`\n(invoke a tool found via `mcp_search`). Direct calls to upstream tool names\nkeep working, so enabling this only changes discovery, never capability.",
+          "type": "boolean"
         },
         "policies": {
           "description": "Policies applied to MCP requests.",
