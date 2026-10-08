@@ -408,6 +408,122 @@ async fn test_call_tool_get_with_header() {
 }
 
 #[tokio::test]
+async fn test_call_tool_omits_null_query_values() {
+	let (server, handler) = setup().await;
+	Mock::given(method("GET"))
+		.and(path("/users/123"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(json!({ "id": "123" })))
+		.mount(&server)
+		.await;
+	let args = json!({
+		"path": { "user_id": "123" },
+		"query": { "verbose": null, "enabled": false, "limit": 0, "q": "", "tags": [null, "ready"] }
+	});
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+	assert!(!result.is_error.unwrap_or(false));
+	let requests = server.received_requests().await.unwrap();
+	let query: HashMap<_, _> = requests[0].url.query_pairs().into_owned().collect();
+	assert_eq!(
+		query,
+		HashMap::from([
+			("enabled".to_string(), "false".to_string()),
+			("limit".to_string(), "0".to_string()),
+			("q".to_string(), "".to_string()),
+			("tags".to_string(), "ready".to_string()),
+		])
+	);
+}
+
+#[rstest]
+#[case(200, false)]
+#[case(400, true)]
+#[case(401, true)]
+#[case(404, true)]
+#[case(429, true)]
+#[tokio::test]
+async fn test_call_tool_preserves_http_error_status(
+	#[case] status: u16,
+	#[case] failed: bool,
+	#[values(true, false)] json_body: bool,
+) {
+	let (server, handler) = setup().await;
+	let body = json!({ "code": 400, "message": "Invalid filter" });
+	let response = if json_body {
+		ResponseTemplate::new(status).set_body_json(&body)
+	} else {
+		ResponseTemplate::new(status).set_body_string("Invalid filter")
+	};
+	Mock::given(method("GET"))
+		.and(path("/users/123"))
+		.respond_with(response)
+		.mount(&server)
+		.await;
+	let args = json!({ "path": { "user_id": "123" } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(result.is_error.unwrap_or(false), failed);
+	let rmcp::model::ContentBlock::Text(text) = &result.content[0] else {
+		panic!("expected text content");
+	};
+	if json_body {
+		assert_eq!(result.structured_content, Some(body.clone()));
+		assert_eq!(serde_json::from_str::<Value>(&text.text).unwrap(), body);
+	} else {
+		assert!(result.structured_content.is_none());
+		assert_eq!(text.text, "Invalid filter");
+	}
+}
+
+#[rstest]
+#[case(200, false)]
+#[case(400, true)]
+#[tokio::test]
+async fn test_call_tool_empty_and_binary_error_status(
+	#[case] status: u16,
+	#[case] failed: bool,
+	#[values("", "audio/wav", "application/octet-stream")] mime: &str,
+) {
+	let (server, handler) = setup().await;
+	let response = if mime.is_empty() {
+		ResponseTemplate::new(status)
+	} else {
+		ResponseTemplate::new(status)
+			.insert_header("content-type", mime)
+			.set_body_bytes(vec![0xff, 0xfe, 0x80])
+	};
+	Mock::given(method("GET"))
+		.and(path("/users/123"))
+		.respond_with(response)
+		.mount(&server)
+		.await;
+	let args = json!({ "path": { "user_id": "123" } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(result.is_error.unwrap_or(false), failed);
+	assert_eq!(result.content.len(), usize::from(!mime.is_empty()));
+	assert!(result.structured_content.is_none());
+}
+
+#[tokio::test]
 async fn test_call_tool_post_with_body() {
 	let (server, handler) = setup().await;
 
@@ -732,8 +848,11 @@ async fn test_call_tool_response_wrapping() {
 	}
 }
 
+#[rstest]
+#[case(200, false)]
+#[case(400, true)]
 #[tokio::test]
-async fn test_call_tool_image_response() {
+async fn test_call_tool_image_response(#[case] status: u16, #[case] failed: bool) {
 	let (server, handler) = setup().await;
 
 	// PNG signature followed by bytes that are not valid UTF-8
@@ -742,7 +861,7 @@ async fn test_call_tool_image_response() {
 	Mock::given(method("GET"))
 		.and(path("/users/img"))
 		.respond_with(
-			ResponseTemplate::new(200)
+			ResponseTemplate::new(status)
 				.insert_header("content-type", "image/png; charset=binary")
 				.set_body_bytes(png.to_vec()),
 		)
@@ -759,6 +878,7 @@ async fn test_call_tool_image_response() {
 		.await
 		.unwrap();
 
+	assert_eq!(result.is_error.unwrap_or(false), failed);
 	assert!(result.structured_content.is_none());
 	assert_eq!(result.content.len(), 1);
 	let rmcp::model::ContentBlock::Image(image) = &result.content[0] else {
