@@ -3078,6 +3078,32 @@ mod tests {
 	}
 
 	#[test]
+	fn grpc_refusal_by_the_proxy_logs_its_grpc_status() {
+		use crate::http::jwt::TokenError;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::resolve_response;
+
+		let refusal = || {
+			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
+		};
+
+		// Trailers-only: HTTP 200 with the gRPC status in the headers, which the log records.
+		let mut log = test_request_log();
+		let (response, _) = resolve_response(refusal(), &mut log, true);
+		assert_eq!(response.status(), http::StatusCode::OK);
+		assert_eq!(
+			log.grpc_status.load(),
+			Some(tonic::Code::Unauthenticated as u8)
+		);
+
+		// A plain HTTP refusal carries no gRPC status.
+		let mut log = test_request_log();
+		let (response, _) = resolve_response(refusal(), &mut log, false);
+		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+		assert_eq!(log.grpc_status.load(), None);
+	}
+
+	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
