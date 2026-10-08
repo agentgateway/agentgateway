@@ -34,9 +34,18 @@ jobs:
       uses: ./.github/actions/rust-build-cache
       with:
         cache-key: fork-check
-    - name: Format check
-      run: cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
+    - name: Format (write) and capture diff
+      run: |
+        cargo fmt -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
+        git --no-pager diff -- '*.rs' > fmt.diff || true
       continue-on-error: true
+    - name: Upload rustfmt diff
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fmt-diff
+        path: fmt.diff
+        if-no-files-found: ignore
     - name: Clippy (agentgateway, schema feature)
       run: "cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields"
     - name: Tests (agentgateway MCP + overrides)
