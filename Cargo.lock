@@ -369,6 +369,7 @@ dependencies = [
  "sqlx",
  "sse-stream 0.3.0",
  "stacker",
+ "strum",
  "subtle",
  "symcrypt",
  "tempfile",

@@ -3265,27 +3265,63 @@ async fn convert(
 			backend_target,
 		)
 		.await?;
-		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
-			bail!("'policies' must contain exactly 1 policy");
+
+		if res.route_policies.is_empty() && res.backend_policies.is_empty() {
+			bail!("'policies' must contain at least 1 policy");
 		}
-		let tp = if let Some(route_policy) = res.route_policies.into_iter().next() {
-			PolicyType::from((route_policy, p.phase))
-		} else {
-			res.backend_policies.into_iter().next().unwrap().into()
+
+		// Each internal policy is keyed by its kind, so two settings that become the same kind
+		// (e.g. mcpAuthentication and jwtAuth are both JWT authentication) would share a key and
+		// one would silently replace the other in the store. Reject that instead.
+		let mut kinds = std::collections::HashSet::new();
+		let mut claim_kind = |kind: &'static str| {
+			if kinds.insert(kind) {
+				Ok(())
+			} else {
+				Err(anyhow::anyhow!(
+					"policy '{}' configures more than one '{kind}' policy; these settings cannot be combined in one policy entry",
+					p.name
+				))
+			}
 		};
-		let tgt_policy = TargetedPolicy {
-			name: Some(TypedResourceName {
-				kind: strng::literal!("Local"),
-				name: p.name.name.clone(),
-				namespace: p.name.namespace.clone(),
-			}),
-			key: p.name.to_string().into(),
-			target: p.target,
-			creation_timestamp: 0,
-			inheritance: Default::default(),
-			policy: tp,
-		};
-		all_policies.push(tgt_policy);
+
+		for pol in res.route_policies {
+			let kind: &'static str = (&pol).into();
+			claim_kind(kind)?;
+			let key = format!("{}:{kind}", p.name).into();
+			let tp = PolicyType::from((pol, p.phase));
+			let tgt_policy = TargetedPolicy {
+				name: Some(TypedResourceName {
+					kind: strng::literal!("Local"),
+					name: p.name.name.clone(),
+					namespace: p.name.namespace.clone(),
+				}),
+				key,
+				target: p.target.clone(),
+				creation_timestamp: 0,
+				inheritance: Default::default(),
+				policy: tp,
+			};
+			all_policies.push(tgt_policy);
+		}
+
+		for pol in res.backend_policies {
+			let kind: &'static str = (&pol).into();
+			claim_kind(kind)?;
+			let tgt_policy = TargetedPolicy {
+				name: Some(TypedResourceName {
+					kind: strng::literal!("Local"),
+					name: p.name.name.clone(),
+					namespace: p.name.namespace.clone(),
+				}),
+				key: format!("{}:{kind}", p.name).into(),
+				target: p.target.clone(),
+				creation_timestamp: 0,
+				inheritance: Default::default(),
+				policy: pol.into(),
+			};
+			all_policies.push(tgt_policy);
+		}
 	}
 
 	for b in backends {

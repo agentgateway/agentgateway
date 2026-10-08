@@ -2909,7 +2909,8 @@ pub enum FrontendPolicy {
 	Metrics(frontend::MetricsFieldsPolicy),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, strum::IntoStaticStr)]
+#[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "camelCase")]
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
@@ -2944,7 +2945,8 @@ pub enum TrafficPolicy {
 	CORS(RequestPolicy<http::cors::Cors>),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, strum::IntoStaticStr)]
+#[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "camelCase")]
 pub enum BackendTrafficPolicy {
 	Authorization(Authorization),
