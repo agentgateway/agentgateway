@@ -1042,6 +1042,10 @@ mod responses {
 				COMPLETIONS_TO_RESPONSES,
 			],
 		),
+		(
+			"stream-gemini_tool_calls_without_index",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[

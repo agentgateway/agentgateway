@@ -657,6 +657,7 @@ pub mod to_responses {
 		let mut response_builder: Option<types::responses::ResponseBuilder> = None;
 
 		let mut next_output_index: u32 = 1;
+		let mut tool_indexer = crate::conversion::ToolCallIndexer::default();
 		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
@@ -812,7 +813,7 @@ pub mod to_responses {
 
 							if let Some(tcs) = &choice.delta.tool_calls {
 								for tc in tcs {
-									let tool_index = tc.index;
+									let tool_index = tool_indexer.resolve(tc.index, tc.id.as_deref());
 									if let Some(logged_tool_calls) = logged_tool_calls.as_mut() {
 										let logged_entry = logged_tool_calls.entry(tool_index).or_default();
 										if let Some(id) = &tc.id {

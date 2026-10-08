@@ -7,6 +7,7 @@ use http::Response;
 use itertools::Itertools;
 use tracing::debug;
 
+use crate::conversion::ToolCallIndexer;
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 
 #[cfg(test)]
@@ -284,7 +285,7 @@ pub mod from_messages {
 			arguments: String,
 		}
 
-		#[derive(Debug, Default)]
+		#[derive(Default)]
 		struct StreamState {
 			sent_message_start: bool,
 			sent_message_stop: bool,
@@ -297,6 +298,7 @@ pub mod from_messages {
 			tool_block_indices: HashMap<u32, usize>,
 			open_tool_blocks: HashSet<u32>,
 			pending_tool_calls: HashMap<u32, PendingToolCall>,
+			tool_indexer: ToolCallIndexer,
 			pending_stop_reason: Option<messages::StopReason>,
 			pending_stop_sequence: Option<String>,
 			pending_usage: Option<completions::Usage>,
@@ -677,7 +679,9 @@ pub mod from_messages {
 
 						if let Some(tool_calls) = &choice.delta.tool_calls {
 							for tool_call in tool_calls {
-								let tool_index = tool_call.index;
+								let tool_index = state
+									.tool_indexer
+									.resolve(tool_call.index, tool_call.id.as_deref());
 								let (should_open, id, name, pending_json) = {
 									let entry =
 										state
@@ -1362,6 +1366,7 @@ pub fn passthrough_stream(
 
 	let mut completion = log_content.completion.then(String::new);
 	let mut finish_reason = None;
+	let mut tool_indexer = ToolCallIndexer::default();
 	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
 		log_content.tool_calls.then(std::collections::HashMap::new);
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
@@ -1391,7 +1396,9 @@ pub fn passthrough_stream(
 							&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
 						{
 							for chunk in deltas {
-								let entry = pending.entry(chunk.index).or_default();
+								let entry = pending
+									.entry(tool_indexer.resolve(chunk.index, chunk.id.as_deref()))
+									.or_default();
 								if let Some(id) = &chunk.id {
 									entry.id = Some(id.clone());
 								}

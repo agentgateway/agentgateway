@@ -85,6 +85,37 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
+/// Numbers the tool calls of a streamed Chat Completions reply.
+///
+/// OpenAI puts an `index` on every tool call chunk, but Gemini's compatibility endpoint leaves it
+/// out and sends each call whole in its own chunk. Without an index every call would land on the
+/// same slot, so a chunk without one starts a new call unless its `id` names a call already seen.
+/// A chunk with neither continues the most recent call.
+#[derive(Default)]
+pub(crate) struct ToolCallIndexer {
+	next: u32,
+	last: Option<u32>,
+	by_id: std::collections::HashMap<String, u32>,
+}
+
+impl ToolCallIndexer {
+	pub(crate) fn resolve(&mut self, index: Option<u32>, id: Option<&str>) -> u32 {
+		let known = id.and_then(|id| self.by_id.get(id)).copied();
+		let resolved = match (index, known, id) {
+			(Some(index), _, _) => index,
+			(None, Some(known), _) => known,
+			(None, None, Some(_)) => self.next,
+			(None, None, None) => self.last.unwrap_or(self.next),
+		};
+		if let Some(id) = id {
+			self.by_id.insert(id.to_string(), resolved);
+		}
+		self.next = self.next.max(resolved + 1);
+		self.last = Some(resolved);
+		resolved
+	}
+}
+
 #[cfg(test)]
 mod rerank_tests;
 
@@ -92,7 +123,27 @@ mod rerank_tests;
 mod tests {
 	use serde_json::json;
 
-	use super::tool_arguments_to_input;
+	use super::{ToolCallIndexer, tool_arguments_to_input};
+
+	#[test]
+	fn tool_call_indexer_numbers_calls_without_an_index_in_arrival_order() {
+		let mut indexer = ToolCallIndexer::default();
+		assert_eq!(indexer.resolve(None, Some("call_a")), 0);
+		assert_eq!(indexer.resolve(None, Some("call_b")), 1);
+		assert_eq!(indexer.resolve(None, Some("call_a")), 0);
+		// No id and no index continues the latest call.
+		assert_eq!(indexer.resolve(None, None), 0);
+	}
+
+	#[test]
+	fn tool_call_indexer_keeps_the_provider_index() {
+		let mut indexer = ToolCallIndexer::default();
+		assert_eq!(indexer.resolve(Some(0), Some("call_a")), 0);
+		assert_eq!(indexer.resolve(Some(1), Some("call_b")), 1);
+		assert_eq!(indexer.resolve(Some(1), None), 1);
+		// A call without an index after indexed ones gets a fresh slot.
+		assert_eq!(indexer.resolve(None, Some("call_c")), 2);
+	}
 
 	#[test]
 	fn thinking_budget_buckets() {
