@@ -1929,6 +1929,10 @@ pub struct McpBackend {
 	/// back to the normal defaults.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub server: Option<McpServerOverrides>,
+	/// Expose tools lazily: advertise only the gateway-generated `mcp_search` and
+	/// `mcp_call` tools instead of the full aggregated catalog.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub lazy_tools: bool,
 }
 
 impl McpBackend {

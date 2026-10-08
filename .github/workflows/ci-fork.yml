@@ -1,0 +1,81 @@
+# Fork-only verification workflow.
+#
+# The upstream `pull_request.yml` runs most Rust jobs on `blacksmith-*` runners,
+# which are not available on this personal fork. This workflow runs the same
+# build/lint/test surface on GitHub-hosted runners so the rename-map patch can be
+# compile-checked without a local Rust toolchain. It must be removed before any
+# upstream pull request.
+name: Fork verify
+
+on:
+  push:
+    branches:
+      - "feat/mcp-lazy-tools"
+  workflow_dispatch:
+
+concurrency:
+  group: fork-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CI: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
+      with:
+        cache-key: fork-check
+    - name: Format check
+      run: cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
+      continue-on-error: true
+    - name: Clippy (agentgateway, schema feature)
+      run: "cargo clippy -p agentgateway --all-targets --features schema -- -D clippy::disallowed_methods -D clippy::disallowed_fields"
+    - name: Tests (agentgateway MCP + overrides)
+      run: "cargo test -p agentgateway --features schema -- mcp::"
+    - name: Tests (toolNameOverrides config validation)
+      run: "cargo test -p agentgateway --features schema -- tool_name_overrides"
+    - name: Regenerate JSON schema and metrics docs
+      if: always()
+      run: make generate-schema
+      continue-on-error: true
+    - name: Upload generated schema artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: config-schema
+        path: schema/
+        if-no-files-found: ignore
+    - name: Show repo drift
+      if: always()
+      run: git --no-pager diff --stat
+      continue-on-error: true
+
+  build-macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
+      with:
+        cache-key: macos-release
+    - name: Build release binary
+      run: cargo build --release -p agentgateway-app
+    - name: Upload macOS arm64 binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: agentgateway-macos-arm64
+        path: target/release/agentgateway
+        if-no-files-found: error

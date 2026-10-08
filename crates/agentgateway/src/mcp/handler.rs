@@ -17,6 +17,7 @@ use rmcp::model::{
 	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
 	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
 	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
+	CallToolResult, ContentBlock, JsonObject, Tool,
 };
 use tracing::{debug, info, warn};
 
@@ -121,6 +122,146 @@ fn per_target_deduped<T>(
 			})
 			.collect_vec(),
 	)
+}
+
+/// Names of the gateway-generated tools advertised when `lazy_tools` is enabled.
+pub const LAZY_SEARCH_TOOL: &str = "mcp_search";
+pub const LAZY_CALL_TOOL: &str = "mcp_call";
+
+/// Gateway-generated tool definitions advertised by a lazy backend.
+fn lazy_tool_defs() -> Vec<Tool> {
+	let obj = |v: serde_json::Value| -> Arc<JsonObject> {
+		Arc::new(v.as_object().cloned().unwrap_or_default())
+	};
+	let search_schema = serde_json::json!({
+		"type": "object",
+		"properties": {
+			"query": { "type": "string", "description": "Words or a substring to match against tool names and descriptions." },
+			"limit": { "type": "integer", "minimum": 1, "maximum": 25, "default": 8 }
+		},
+		"required": ["query"]
+	});
+	let call_schema = serde_json::json!({
+		"type": "object",
+		"properties": {
+			"name": { "type": "string", "description": "Exact tool name returned by mcp_search." },
+			"arguments": { "type": "object", "additionalProperties": true, "description": "Arguments for the tool, matching its inputSchema." }
+		},
+		"required": ["name"]
+	});
+	vec![
+		Tool::new_with_raw(
+			Cow::Borrowed(LAZY_SEARCH_TOOL),
+			Some(Cow::Borrowed(
+				"Search the MCP tool catalog by name or purpose, then invoke a match with mcp_call.",
+			)),
+			obj(search_schema),
+		),
+		Tool::new_with_raw(
+			Cow::Borrowed(LAZY_CALL_TOOL),
+			Some(Cow::Borrowed("Invoke an MCP tool found via mcp_search.")),
+			obj(call_schema),
+		),
+	]
+}
+
+/// Build the client-facing tool catalog from per-target `tools/list` results, applying the
+/// same prefix-naming and RBAC filtering rules as the eager `tools/list` merge.
+fn finalize_catalog(
+	per_target: Vec<(Strng, Vec<Tool>)>,
+	prefix_names: bool,
+	reject_duplicates: bool,
+	policies: &McpAuthorizationSet,
+	cel: &CelExecWrapper,
+) -> Vec<Tool> {
+	let public_name =
+		|target: &str, raw: &str| -> String { resource_name(prefix_names, target, raw) };
+	let duplicates = duplicate_owned_names(
+		reject_duplicates,
+		per_target.iter().flat_map(|(target, tools)| {
+			tools
+				.iter()
+				.map(|t| public_name(target.as_str(), t.name.as_ref()))
+		}),
+	);
+	per_target
+		.into_iter()
+		.flat_map(|(server_name, tools)| {
+			tools
+				.into_iter()
+				.filter(|t| {
+					!duplicates.contains(&public_name(server_name.as_str(), t.name.as_ref()))
+				})
+				.filter(|t| {
+					policies.validate(
+						&rbac::ResourceType::Tool(rbac::ResourceId::new(
+							server_name.to_string(),
+							t.name.to_string(),
+						)),
+						&crate::mcp::guardrails::methods::TOOLS_LIST,
+						cel,
+					)
+				})
+				.map(|mut t| {
+					let name = public_name(server_name.as_str(), t.name.as_ref());
+					t.name = Cow::Owned(name);
+					t
+				})
+				.collect_vec()
+		})
+		.collect_vec()
+}
+
+/// Rank catalog tools against a free-text query: name hits weigh more than description hits.
+fn search_catalog(catalog: Vec<Tool>, query: &str, limit: usize) -> Vec<Tool> {
+	let tokens: Vec<String> = query
+		.to_lowercase()
+		.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-'))
+		.filter(|t| !t.is_empty())
+		.map(|t| t.to_string())
+		.collect();
+	if tokens.is_empty() {
+		return Vec::new();
+	}
+	let mut scored: Vec<(i64, Tool)> = catalog
+		.into_iter()
+		.filter_map(|t| {
+			let name = t.name.to_lowercase();
+			let desc = t.description.as_deref().unwrap_or("").to_lowercase();
+			let mut score = 0i64;
+			for tok in &tokens {
+				if name.contains(tok.as_str()) {
+					score += 10;
+				}
+				if desc.contains(tok.as_str()) {
+					score += 2;
+				}
+			}
+			(score > 0).then_some((score, t))
+		})
+		.collect();
+	scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.cmp(&b.1.name)));
+	scored.into_iter().take(limit).map(|(_, t)| t).collect()
+}
+
+/// Render `mcp_search` matches as JSON so the caller gets each tool's full `inputSchema`.
+fn render_search_matches(query: &str, matches: &[Tool]) -> String {
+	let items: Vec<serde_json::Value> = matches
+		.iter()
+		.map(|t| {
+			serde_json::json!({
+				"name": t.name,
+				"description": t.description,
+				"inputSchema": t.input_schema.as_ref(),
+			})
+		})
+		.collect();
+	serde_json::to_string_pretty(&serde_json::json!({
+		"query": query,
+		"count": items.len(),
+		"matches": items,
+	}))
+	.unwrap_or_else(|_| "{}".to_string())
 }
 
 fn incompatible_upstream_result(method: &str) -> ClientError {
@@ -841,6 +982,68 @@ impl Relay {
 				.into(),
 			)
 		})
+	}
+
+	/// Whether this backend advertises only the gateway `mcp_search`/`mcp_call` tools.
+	pub fn lazy_tools(&self) -> bool {
+		self.upstreams.lazy_tools
+	}
+
+	/// `tools/list` merge for a lazy backend: advertise only the two gateway tools.
+	pub fn merge_tools_lazy(&self) -> Box<MergeFn> {
+		Box::new(move |_streams, _cel| {
+			Ok(ServerResult::ListToolsResult(
+				ListToolsResult {
+					tools: lazy_tool_defs(),
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
+			))
+		})
+	}
+
+	/// Handle a client `mcp_search` call: list every target's tools, rank them against the
+	/// query, and return the matches (with their `inputSchema`) as a tool result.
+	pub async fn send_lazy_search(
+		&self,
+		id: RequestId,
+		ctx: IncomingRequestContext,
+		args: Option<JsonObject>,
+		meta: Option<RequestMetaObject>,
+	) -> Result<Response, UpstreamError> {
+		let query = args
+			.as_ref()
+			.and_then(|a| a.get("query"))
+			.and_then(|v| v.as_str())
+			.unwrap_or_default()
+			.to_string();
+		let limit = args
+			.as_ref()
+			.and_then(|a| a.get("limit"))
+			.and_then(|v| v.as_u64())
+			.unwrap_or(8)
+			.clamp(1, 25) as usize;
+		let prefix_names = self.prefix_names();
+		let reject_duplicates = self.needs_resolution();
+		let policies = self.policies.clone();
+		let merge: Box<MergeFn> = Box::new(move |streams, cel| {
+			let per_target = streams
+				.into_iter()
+				.map(|(name, s)| match s {
+					ServerResult::ListToolsResult(ltr) => Ok((name, ltr.tools)),
+					_ => Err(incompatible_upstream_result("tools/list")),
+				})
+				.collect::<Result<Vec<_>, ClientError>>()?;
+			let catalog =
+				finalize_catalog(per_target, prefix_names, reject_duplicates, &policies, cel);
+			let matches = search_catalog(catalog, &query, limit);
+			Ok(ServerResult::CallToolResult(CallToolResult::success(vec![
+				ContentBlock::text(render_search_matches(&query, &matches)),
+			])))
+		});
+		let req = JsonRpcRequest::new(id, ResolveKind::Tool.list_request(None, meta.as_ref()));
+		self.send_fanout(req, ctx, merge).await
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {

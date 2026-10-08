@@ -473,6 +473,8 @@ pub(crate) struct UpstreamGroup {
 	all_targets_conditioned_out: bool,
 	pub failure_mode: FailureMode,
 	pub sse_keep_alive: Option<Duration>,
+	/// When set, `tools/list` advertises only the gateway `mcp_search`/`mcp_call` tools.
+	pub lazy_tools: bool,
 }
 
 impl UpstreamGroup {
@@ -510,6 +512,7 @@ impl UpstreamGroup {
 			failure_mode: backend.failure_mode,
 			prefix_mode: backend.prefix_mode,
 			sse_keep_alive: backend.sse_keep_alive,
+			lazy_tools: backend.lazy_tools,
 			backend,
 			client,
 			by_name: IndexMap::new(),

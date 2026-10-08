@@ -2198,6 +2198,8 @@ pub(crate) fn backend_with_policies_from_proto(
 				// Not yet exposed over xDS; only the local/static config surface
 				// (`LocalMcpBackend`) supports these overrides today.
 				server: None,
+				// Not yet exposed over xDS; only `LocalMcpBackend` supports lazy tools today.
+				lazy_tools: false,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
