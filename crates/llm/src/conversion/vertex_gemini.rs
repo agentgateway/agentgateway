@@ -68,6 +68,11 @@ pub fn passthrough_stream(
 				r.response.total_tokens = Some(total);
 				r.response.cached_input_tokens = um.cached_content_token_count;
 				r.response.reasoning_tokens = um.thoughts_token_count;
+				r.response.service_tier = um
+					.service_tier
+					.as_deref()
+					.or(um.traffic_type.as_deref())
+					.map(strng::new);
 			});
 		}
 		if log_content.completion {
@@ -1256,7 +1261,7 @@ pub mod to_completions {
 			model,
 			choices,
 			usage: resp.usage_metadata.as_ref().map(build_usage),
-			service_tier: None,
+			service_tier: resp.usage_metadata.as_ref().and_then(openai_service_tier),
 			system_fingerprint: None,
 		}
 	}
@@ -1482,7 +1487,7 @@ pub mod to_completions {
 				choices,
 				created: self.created,
 				model: self.model_version.clone(),
-				service_tier: None,
+				service_tier: chunk.usage_metadata.as_ref().and_then(openai_service_tier),
 				system_fingerprint: None,
 				object: "chat.completion.chunk".to_string(),
 				usage,
@@ -1545,6 +1550,11 @@ pub mod to_completions {
 					r.response.total_tokens = Some(total);
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
+					r.response.service_tier = um
+						.service_tier
+						.as_deref()
+						.or(um.traffic_type.as_deref())
+						.map(strng::new);
 				});
 			}
 
@@ -1610,6 +1620,18 @@ pub mod to_completions {
 			}
 		});
 		parse::sse::append_done_on_success(body)
+	}
+
+	/// Maps Gemini service tiers and Vertex traffic types to OpenAI service tiers.
+	fn openai_service_tier(um: &vg::UsageMetadata) -> Option<String> {
+		let tier = match um.service_tier.as_deref().or(um.traffic_type.as_deref())? {
+			"standard" | "ON_DEMAND" => "default",
+			"flex" | "ON_DEMAND_FLEX" => "flex",
+			"priority" | "ON_DEMAND_PRIORITY" => "priority",
+			"PROVISIONED_THROUGHPUT" => "scale",
+			_ => return None,
+		};
+		Some(tier.to_string())
 	}
 
 	fn build_usage(um: &vg::UsageMetadata) -> completions::Usage {

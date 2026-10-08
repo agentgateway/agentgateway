@@ -604,7 +604,7 @@
           "$ref": "#/$defs/Rates"
         },
         "tiers": {
-          "description": "Context-length pricing tiers that override the base rates.",
+          "description": "Pricing rules ordered by increasing context threshold within each service tier.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Tier"
@@ -722,10 +722,21 @@
       "type": "object",
       "properties": {
         "contextOver": {
-          "description": "Context-token threshold above which this tier's rates apply.",
+          "description": "Context-token threshold above which this rule applies. Defaults to zero.",
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "serviceTier": {
+          "description": "Normalized served service tier; absent matches any service tier.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PricingTier"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "rates": {
           "description": "Pricing rates for this tier, overlaid on the base model rates.",
@@ -734,8 +745,16 @@
       },
       "additionalProperties": false,
       "required": [
-        "contextOver",
         "rates"
+      ]
+    },
+    "PricingTier": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "flex",
+        "priority",
+        "reserved"
       ]
     },
     "Config": {

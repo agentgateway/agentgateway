@@ -38,13 +38,15 @@ type importOptions struct {
 	providers        []string
 	excludeProviders []string
 	legacy           bool
+	// merged holds the output of earlier sources.
+	merged *ModelCatalog
 }
 
 var importSources = map[string]func(ctx context.Context, opts importOptions) (*ModelCatalog, []string, error){}
 
-// defaultImportSources merge (in order) when --source is unset: models.dev rates + Bedrock tags.
+// defaultImportSources merge (in order) when --source is unset: models.dev rates + Bedrock tags + Vertex service tiers.
 func defaultImportSources() []string {
-	return []string{modelsDevSourceName, bedrockMantleSourceName}
+	return []string{modelsDevSourceName, bedrockMantleSourceName, vertexSourceName}
 }
 
 func importSourceNames() []string {
@@ -75,7 +77,7 @@ supplies pricing and aws-bedrock-mantle overlays Bedrock endpoint tags onto it).
 Examples:
 	agctl catalog import --out ./costs/catalog.json
 	agctl catalog import --source models.dev --providers anthropic,google,openai
-	agctl catalog import --source models.dev,aws-bedrock-mantle --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
+	agctl catalog import --source models.dev,aws-bedrock-mantle,vertex-pricing --overlay ./catalog/model-catalog-overrides.yaml --out ./catalog/model-catalog.json --pretty`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -111,6 +113,7 @@ func runImport(cmd *cobra.Command, f *importFlags) error {
 			providers:        f.providers,
 			excludeProviders: f.excludeProviders,
 			legacy:           f.legacy,
+			merged:           merged,
 		})
 		if err != nil {
 			return fmt.Errorf("source %q: %w", name, err)

@@ -2604,7 +2604,15 @@ impl AIProvider {
 				}));
 			}
 
-			let llm_resp = resp.to_llm_response(log_content);
+			let mut llm_resp = resp.to_llm_response(log_content);
+			if matches!(self, AIProvider::Bedrock(_))
+				&& let Some(tier) = parts
+					.headers
+					.get("x-amzn-bedrock-service-tier")
+					.and_then(|value| value.to_str().ok())
+			{
+				llm_resp.service_tier = Some(strng::new(tier));
+			}
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
 		};
@@ -2986,10 +2994,18 @@ impl AIProvider {
 			None
 		};
 		// Store an empty response, as we stream in info we will parse into it
-		let llmresp = llm::LLMInfo {
+		let mut llmresp = llm::LLMInfo {
 			request: req,
 			response: LLMResponse::default(),
 		};
+		if matches!(self, AIProvider::Bedrock(_))
+			&& let Some(tier) = resp
+				.headers()
+				.get("x-amzn-bedrock-service-tier")
+				.and_then(|value| value.to_str().ok())
+		{
+			llmresp.response.service_tier = Some(strng::new(tier));
+		}
 		log.store(Some(llmresp));
 		let buffer = http::response_buffer_limit(&resp);
 
