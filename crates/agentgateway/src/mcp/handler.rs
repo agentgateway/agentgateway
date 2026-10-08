@@ -2489,6 +2489,90 @@ mod tests {
 	}
 
 	#[test]
+	fn lazy_tool_defs_expose_search_and_call() {
+		let defs = lazy_tool_defs();
+		let names: Vec<&str> = defs.iter().map(|t| t.name.as_ref()).collect();
+		assert_eq!(names, vec![LAZY_SEARCH_TOOL, LAZY_CALL_TOOL]);
+		for d in &defs {
+			assert!(d.description.is_some(), "gateway tool needs a description");
+			assert_eq!(
+				d.input_schema.get("type").and_then(|v| v.as_str()),
+				Some("object")
+			);
+		}
+	}
+
+	#[test]
+	fn search_catalog_ranks_name_hits_above_description() {
+		let tool = |name: &str, desc: &str| {
+			Tool::new_with_raw(
+				Cow::Owned(name.to_string()),
+				Some(Cow::Owned(desc.to_string())),
+				Arc::new(json!({ "type": "object" }).as_object().cloned().unwrap()),
+			)
+		};
+		let catalog = vec![
+			tool("project_status", "Returns the database schema overview"),
+			tool("db_inspect", "Show project status and health"),
+			tool("unrelated", "nothing to see here"),
+		];
+		let ranked = search_catalog(catalog, "status", 5);
+		let names: Vec<String> = ranked.iter().map(|t| t.name.to_string()).collect();
+		assert_eq!(names.first().map(String::as_str), Some("project_status"));
+		assert!(names.contains(&"db_inspect".to_string()));
+		assert!(!names.contains(&"unrelated".to_string()));
+		// An empty query matches nothing rather than dumping the whole catalog.
+		assert!(search_catalog(vec![tool("x", "y")], "   ", 5).is_empty());
+	}
+
+	#[test]
+	fn finalize_catalog_prefixes_names_and_drops_duplicates() {
+		let tool = |name: &str| {
+			Tool::new_with_raw(
+				Cow::Owned(name.to_string()),
+				None,
+				Arc::new(json!({ "type": "object" }).as_object().cloned().unwrap()),
+			)
+		};
+		let policies =
+			McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(Vec::new()));
+		let cel: CelExecWrapper = upstream::IncomingRequestContext::empty().into();
+		let prefixed = finalize_catalog(
+			vec![("a".into(), vec![tool("echo")]), ("b".into(), vec![tool("ping")])],
+			true,
+			false,
+			&policies,
+			&cel,
+		);
+		let mut names: Vec<String> = prefixed.iter().map(|t| t.name.to_string()).collect();
+		names.sort();
+		assert_eq!(names, vec!["a_echo".to_string(), "b_ping".to_string()]);
+		// The same raw name served by two targets is dropped as ambiguous.
+		let deduped = finalize_catalog(
+			vec![("a".into(), vec![tool("echo")]), ("b".into(), vec![tool("echo")])],
+			false,
+			true,
+			&policies,
+			&cel,
+		);
+		assert!(deduped.is_empty());
+	}
+
+	#[test]
+	fn render_search_matches_includes_input_schema() {
+		let tool = Tool::new_with_raw(
+			Cow::Borrowed("mcp_call"),
+			Some(Cow::Borrowed("Invoke a tool")),
+			Arc::new(json!({ "type": "object", "properties": {} }).as_object().cloned().unwrap()),
+		);
+		let rendered = render_search_matches("call", &[tool]);
+		let parsed: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+		assert_eq!(parsed["count"], 1);
+		assert_eq!(parsed["matches"][0]["name"], "mcp_call");
+		assert_eq!(parsed["matches"][0]["inputSchema"]["type"], "object");
+	}
+
+	#[test]
 	fn resource_uri_multiplexes_opaque_and_hierarchical() {
 		let single = Some("only".to_string());
 		assert_eq!(
