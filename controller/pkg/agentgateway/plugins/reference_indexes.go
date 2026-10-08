@@ -79,6 +79,9 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 		// An AgentgatewayBackend is a grant source for its own backendRefs,
 		// e.g. spec.policies.mcp.authentication.jwks.remote.
 		wellknown.AgentgatewayBackendGVK.GroupKind(),
+		// An AgentgatewayModel is a grant source for its own backendRefs,
+		// e.g. spec.virtualModel.callout and spec.policies.promptGuard webhooks.
+		wellknown.AgentgatewayModelGVK.GroupKind(),
 		wellknown.GatewayGVK.GroupKind(),
 		wellknown.HTTPRouteGVK.GroupKind(),
 		wellknown.GRPCRouteGVK.GroupKind(),
