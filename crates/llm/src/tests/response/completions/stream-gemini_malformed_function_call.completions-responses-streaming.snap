@@ -1,0 +1,30 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-gemini_malformed_function_call.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":4,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":5,"response":{"created_at":123,"id":"","model":"gemini-3.8-flash","object":"response","output":[{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":106,"input_tokens_details":{"cached_tokens":0},"output_tokens":183,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":289}}}
+
+
+
+{
+  "input_tokens": 106,
+  "output_tokens": 183,
+  "total_tokens": 289,
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ]
+}

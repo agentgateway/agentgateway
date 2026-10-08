@@ -934,6 +934,14 @@ mod responses {
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 		(
+			"gemini_length_no_message",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"gemini_malformed_function_call",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
 			"gemini_thinking",
 			&[
 				COMPLETIONS_TO_COMPLETIONS,
@@ -1036,6 +1044,14 @@ mod responses {
 		),
 		(
 			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
+		(
+			"stream-gemini_malformed_function_call",
 			&[
 				COMPLETIONS_TO_COMPLETIONS,
 				COMPLETIONS_TO_MESSAGES,
