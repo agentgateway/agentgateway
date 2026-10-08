@@ -933,6 +933,7 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		("gemini_tool_calls_stop", &[COMPLETIONS_TO_MESSAGES]),
 		(
 			"gemini_thinking",
 			&[
@@ -1596,6 +1597,79 @@ mod responses {
 			})
 			.await;
 		}
+	}
+
+	#[tokio::test]
+	async fn completions_to_messages_stream_reports_tool_use_without_finish_reason() {
+		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_weather","type":"function","function":{"name":"get_weather","arguments":"{}"}}]}}],"model":"gpt-5"}
+
+data: [DONE]
+
+"#;
+		let output = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let events: Vec<Value> = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect();
+
+		assert_eq!(
+			events[events.len() - 3],
+			json!({"type": "content_block_stop", "index": 0})
+		);
+		assert_eq!(
+			events[events.len() - 2]["delta"],
+			json!({"stop_reason": "tool_use", "stop_sequence": null})
+		);
+		assert_eq!(events.last().unwrap(), &json!({"type": "message_stop"}));
+	}
+
+	#[tokio::test]
+	async fn messages_stream_tool_calls_without_index() {
+		let input =
+			include_str!("tests/response/completions/stream-gemini_tool_calls_without_index.json");
+		let output = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let tool_use_blocks: Vec<(u64, String, String)> = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.map(|data| serde_json::from_str::<Value>(data).unwrap())
+			.filter(|event| event["type"] == "content_block_start")
+			.map(|event| {
+				(
+					event["index"].as_u64().unwrap(),
+					event["content_block"]["id"].as_str().unwrap().to_string(),
+					event["content_block"]["name"].as_str().unwrap().to_string(),
+				)
+			})
+			.collect();
+
+		assert_eq!(
+			tool_use_blocks,
+			vec![
+				(0, "call_575029".to_string(), "get_weather".to_string()),
+				(1, "call_575030".to_string(), "get_time".to_string()),
+			]
+		);
 	}
 
 	#[tokio::test]

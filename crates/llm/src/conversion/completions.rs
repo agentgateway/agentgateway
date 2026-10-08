@@ -7,7 +7,7 @@ use http::Response;
 use itertools::Itertools;
 use tracing::debug;
 
-use crate::conversion::ToolCallIndexer;
+use super::ToolCallIndexer;
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 
 #[cfg(test)]
@@ -95,6 +95,7 @@ pub mod from_messages {
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
+	use crate::conversion::ToolCallIndexer;
 	use crate::parse::sse::SseJsonEvent;
 	use crate::types::ResponseType;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, types};
@@ -218,6 +219,13 @@ pub mod from_messages {
 		if stop_sequence.is_some() {
 			stop_reason = messages::StopReason::StopSequence;
 		}
+		if stop_reason == messages::StopReason::EndTurn
+			&& content
+				.iter()
+				.any(|block| matches!(block, messages::ContentBlock::ToolUse { .. }))
+		{
+			stop_reason = messages::StopReason::ToolUse;
+		}
 
 		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
 			u.prompt_tokens_details
@@ -298,10 +306,11 @@ pub mod from_messages {
 			tool_block_indices: HashMap<u32, usize>,
 			open_tool_blocks: HashSet<u32>,
 			pending_tool_calls: HashMap<u32, PendingToolCall>,
-			tool_indexer: ToolCallIndexer,
 			pending_stop_reason: Option<messages::StopReason>,
 			pending_stop_sequence: Option<String>,
 			pending_usage: Option<completions::Usage>,
+
+			tool_indexer: ToolCallIndexer,
 		}
 
 		fn push_event(
@@ -483,10 +492,16 @@ pub mod from_messages {
 			if state.sent_message_stop {
 				return;
 			}
-			let stop_reason = match state.pending_stop_reason.take() {
-				Some(stop_reason) => stop_reason,
-				None if force => messages::StopReason::EndTurn,
-				None => return,
+			let stop_reason = match (state.pending_stop_reason.take(), force) {
+				(None, false) => return,
+				(None, true) => {
+					if state.tool_block_indices.is_empty() {
+						messages::StopReason::EndTurn
+					} else {
+						messages::StopReason::ToolUse
+					}
+				},
+				(Some(stop_reason), _) => stop_reason,
 			};
 			let usage = match state.pending_usage.take() {
 				Some(usage) => Some(usage),
@@ -751,6 +766,11 @@ pub mod from_messages {
 							{
 								stop_reason = messages::StopReason::StopSequence;
 								state.pending_stop_sequence = Some(seq);
+							}
+							if stop_reason == messages::StopReason::EndTurn
+								&& !state.tool_block_indices.is_empty()
+							{
+								stop_reason = messages::StopReason::ToolUse;
 							}
 							state.pending_stop_reason = Some(stop_reason);
 						}

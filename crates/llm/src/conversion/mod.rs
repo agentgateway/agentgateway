@@ -85,12 +85,11 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
-/// Numbers the tool calls of a streamed Chat Completions reply.
+/// Assigns indices to streamed Chat Completions tool calls.
 ///
-/// OpenAI puts an `index` on every tool call chunk, but Gemini's compatibility endpoint leaves it
-/// out and sends each call whole in its own chunk. Without an index every call would land on the
-/// same slot, so a chunk without one starts a new call unless its `id` names a call already seen.
-/// A chunk with neither continues the most recent call.
+/// Gemini's compatibility endpoint sends whole calls without OpenAI's `index`. For unindexed
+/// chunks, a new `id` starts a call, a known `id` reuses its index, and no `id` continues the
+/// most recent call.
 #[derive(Default)]
 pub(crate) struct ToolCallIndexer {
 	next: u32,
@@ -100,12 +99,10 @@ pub(crate) struct ToolCallIndexer {
 
 impl ToolCallIndexer {
 	pub(crate) fn resolve(&mut self, index: Option<u32>, id: Option<&str>) -> u32 {
-		let known = id.and_then(|id| self.by_id.get(id)).copied();
-		let resolved = match (index, known, id) {
-			(Some(index), _, _) => index,
-			(None, Some(known), _) => known,
-			(None, None, Some(_)) => self.next,
-			(None, None, None) => self.last.unwrap_or(self.next),
+		let resolved = match (index, id) {
+			(Some(index), _) => index,
+			(None, Some(id)) => self.by_id.get(id).copied().unwrap_or(self.next),
+			(None, None) => self.last.unwrap_or(self.next),
 		};
 		if let Some(id) = id {
 			self.by_id.insert(id.to_string(), resolved);
