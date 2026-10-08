@@ -22,10 +22,11 @@ pub struct NamespaceToolMap {
 
 impl NamespaceToolMap {
 	/// Rewrite namespace definitions, forced function choices, and function-call history
-	/// for Chat Completions and Bedrock Converse. Returns aliases for response restoration.
-	/// Bare choices must identify a unique member; qualified `namespace__function` names
-	/// are also accepted. Custom namespace members and allowed-tool constraints are unsupported.
-	/// On error the request may be partially rewritten and must be discarded.
+	/// for Chat Completions, Bedrock Converse, and Anthropic Messages. Returns aliases for
+	/// response restoration. Bare choices must identify a unique member; qualified
+	/// `namespace__function` names are also accepted. Custom namespace members and allowed-tool
+	/// constraints are unsupported. On error the request may be partially rewritten and must be
+	/// discarded.
 	pub fn rewrite_request(req: &mut responses::CreateResponse) -> Result<Self, AIError> {
 		let mut map = Self::default();
 		map.flatten_tools(&mut req.tools)?;
@@ -99,10 +100,10 @@ impl NamespaceToolMap {
 		choice: &mut Option<responses::ToolChoiceParam>,
 		names: &HashSet<&str>,
 	) -> Result<(), AIError> {
-		// Neither target conversion can enforce an allowed-tools constraint.
+		// The target conversions cannot enforce an allowed-tools constraint.
 		if matches!(choice, Some(responses::ToolChoiceParam::AllowedTools(_))) {
 			return Err(AIError::UnsupportedConversion(strng::literal!(
-				"allowed_tools tool choice is unsupported for Chat Completions and Bedrock Converse"
+				"allowed_tools tool choice is unsupported for Chat Completions, Bedrock Converse, and Anthropic Messages"
 			)));
 		}
 
@@ -242,7 +243,7 @@ mod tests {
 			),
 			(
 				json!({"tool_choice": {"type": "allowed_tools", "mode": "auto", "tools": [{"type": "function", "name": "js"}]}}),
-				"allowed_tools tool choice is unsupported for Chat Completions and Bedrock Converse",
+				"allowed_tools tool choice is unsupported for Chat Completions, Bedrock Converse, and Anthropic Messages",
 			),
 		] {
 			let mut request = json!({"input": "hello"});

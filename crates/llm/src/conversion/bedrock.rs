@@ -1787,6 +1787,7 @@ pub mod from_messages {
 						id,
 						name,
 						input,
+						caller: _,
 						cache_control,
 					} => (
 						bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
@@ -2187,6 +2188,7 @@ pub mod from_messages {
 								cache_creation_input_tokens: None,
 								cache_read_input_tokens: None,
 								service_tier: None,
+								output_tokens_details: None,
 							},
 							input_audio_tokens: None,
 							output_audio_tokens: None,
@@ -2218,6 +2220,7 @@ pub mod from_messages {
 								id: s.tool_use_id,
 								name,
 								input,
+								caller: None,
 								cache_control: None,
 							}
 						},
@@ -2447,6 +2450,7 @@ pub mod from_messages {
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			output_tokens_details: None,
 		}
 	}
 }
@@ -4605,6 +4609,7 @@ impl ConverseResponseAdapter {
 					id: tool_use.tool_use_id.clone(),
 					name: restore_tool_name(tool_name_map, &tool_use.name),
 					input: tool_use.input.clone(),
+					caller: None,
 					cache_control: None,
 				}),
 				bedrock::ContentBlock::Image(img) => Some(messagest::ContentBlock::Image(
@@ -4637,6 +4642,7 @@ impl ConverseResponseAdapter {
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
 				service_tier: None,
+				output_tokens_details: None,
 			})
 			.unwrap_or(messagest::Usage {
 				input_tokens: 0,
@@ -4644,6 +4650,7 @@ impl ConverseResponseAdapter {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				output_tokens_details: None,
 			});
 
 		Ok(messagest::MessagesResponse {

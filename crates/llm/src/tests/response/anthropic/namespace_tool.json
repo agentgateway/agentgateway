@@ -1,0 +1,17 @@
+{
+  "id": "msg_namespace_tool",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-5-5",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "call_namespace_1",
+      "name": "multi_agent_v1__spawn_agent",
+      "input": {"task": "review the bridge"}
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {"input_tokens": 18, "output_tokens": 12}
+}

@@ -1,0 +1,75 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/custom_tool.json
+info:
+  id: msg_custom_tool
+  type: message
+  model: claude-sonnet-4-5
+  stop_reason: tool_use
+  role: assistant
+  content:
+    - type: tool_use
+      id: toolu_python
+      name: python
+      input:
+        content: print(6 * 7)
+  usage:
+    input_tokens: 20
+    output_tokens: 12
+    output_tokens_details:
+      thinking_tokens: 4
+    service_tier: standard
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "custom_tool_call",
+        "call_id": "toolu_python",
+        "input": "print(6 * 7)",
+        "name": "python",
+        "id": "[id]"
+      }
+    ],
+    "model": "claude-sonnet-4-5",
+    "service_tier": "default",
+    "usage": {
+      "input_tokens": 20,
+      "output_tokens": 12,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 4
+      },
+      "total_tokens": 32
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 20,
+    "output_tokens": 12,
+    "total_tokens": 32,
+    "reasoning_tokens": 4,
+    "cached_input_tokens": 0,
+    "service_tier": "standard",
+    "provider_model": "claude-sonnet-4-5",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "toolu_python",
+            "name": "python",
+            "arguments": "print(6 * 7)"
+          }
+        ],
+        "finish_reason": "completed"
+      }
+    ]
+  }
+}

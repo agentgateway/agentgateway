@@ -1,0 +1,48 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_metadata.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"resp_msg_metadata","model":"claude-sonnet-4-5","object":"response","output":[],"status":"in_progress"}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"created_at":123,"id":"resp_msg_metadata","model":"claude-sonnet-4-5","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"msg_msg_metadata_0","role":"assistant","status":"in_progress"}}
+
+event: response.content_part.added
+data: {"type":"response.content_part.added","sequence_number":3,"item_id":"msg_msg_metadata_0","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"msg_msg_metadata_0","output_index":0,"content_index":0,"delta":"hello"}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"msg_msg_metadata_0","output_index":0,"content_index":0,"delta":" world"}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","sequence_number":6,"item_id":"msg_msg_metadata_0","output_index":0,"content_index":0,"text":"hello world","logprobs":null}
+
+event: response.content_part.done
+data: {"type":"response.content_part.done","sequence_number":7,"item_id":"msg_msg_metadata_0","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"hello world"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":8,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"hello world"}],"id":"msg_msg_metadata_0","role":"assistant","phase":"final_answer","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":9,"response":{"created_at":123,"id":"resp_msg_metadata","model":"claude-sonnet-4-5","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"hello world"}],"id":"msg_msg_metadata_0","role":"assistant","phase":"final_answer","status":"completed"}],"status":"completed","usage":{"input_tokens":40,"input_tokens_details":{"cached_tokens":12,"cache_write_tokens":13},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":45}}}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 5,
+  "total_tokens": 20,
+  "reasoning_tokens": 2,
+  "cache_creation_input_tokens": 13,
+  "cached_input_tokens": 12,
+  "provider_model": "claude-sonnet-4-5",
+  "completion": [
+    "hello world"
+  ]
+}
