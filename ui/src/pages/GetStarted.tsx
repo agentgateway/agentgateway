@@ -1,5 +1,4 @@
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Bot, Network, Server } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { gatewayOptions } from '@/components/GatewayBindingEditor';
@@ -20,7 +19,6 @@ const surfaceConfig: Record<
 	{
 		title: string;
 		description: string;
-		icon: typeof Bot;
 		enabled: (config: GatewayConfig | undefined) => boolean;
 		destination: string;
 		destinationLabel: string;
@@ -28,27 +26,21 @@ const surfaceConfig: Record<
 > = {
 	llm: {
 		title: 'Enable LLM',
-		description:
-			'Create the LLM configuration section so models, providers, keys, guardrails, logs, and playground tools can be configured.',
-		icon: Bot,
+		description: 'Add LLM settings to the configuration, then set up models.',
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
 		destinationLabel: 'Continue to models'
 	},
 	mcp: {
 		title: 'Enable MCP',
-		description:
-			'Create the MCP configuration section so servers and MCP playground tools can be configured.',
-		icon: Server,
+		description: 'Add MCP settings to the configuration, then connect servers.',
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
 		destinationLabel: 'Continue to servers'
 	},
 	traffic: {
 		title: 'Enable Traffic',
-		description:
-			'Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.',
-		icon: Network,
+		description: 'Add traffic settings to the configuration, then set up gateways and routes.',
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
@@ -75,7 +67,6 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	const enableSurface = useEnableSurface();
 	const navigate = useNavigate();
 	const surface = surfaceConfig[props.surface];
-	const Icon = surface.icon;
 	const effectiveConfig =
 		props.surface === 'mcp'
 			? mcpData.data
@@ -145,22 +136,6 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			) : null}
 
 			<Panel className="surface-enable-panel">
-				<div className="surface-enable-heading">
-					<span className="policy-form-section-icon">
-						<Icon size={18} />
-					</span>
-					<div>
-						<h3>
-							{enabled ? `${surface.title.replace('Enable ', '')} is enabled` : surface.title}
-						</h3>
-						<p>
-							{enabled
-								? 'The top-level configuration section already exists.'
-								: surface.description}
-						</p>
-					</div>
-				</div>
-
 				{!enabled && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
 						<summary>Advanced</summary>

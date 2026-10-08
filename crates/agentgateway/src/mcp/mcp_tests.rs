@@ -19,7 +19,8 @@ use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test,
+	setup_proxy_test_with_config, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
@@ -1075,6 +1076,44 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 	}
 }
 
+// MCP requires clients to start a new session after a 404
+// https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management
+#[tokio::test]
+async fn stale_session_key_returns_not_found() {
+	const OLD_KEY: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+	const CURRENT_KEY: &str = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	config.session_encoder = http::sessionpersistence::Encoder::aes(CURRENT_KEY).unwrap();
+	let bind = setup_proxy_test_with_config(config)
+		.with_mcp_backend_policies(mock.addr, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = bind.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let old_encoder = http::sessionpersistence::Encoder::aes(OLD_KEY).unwrap();
+	let session_id = http::sessionpersistence::SessionState::MCP(
+		http::sessionpersistence::MCPSessionState::new(vec![]),
+	)
+	.encode(&old_encoder)
+	.unwrap();
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", session_id)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+}
+
 #[tokio::test]
 async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	let mock = mock_streamable_http_server(false).await;
@@ -1934,6 +1973,41 @@ fn mcp_initialize_body() -> serde_json::Value {
 			"clientInfo": {"name": "test-client", "version": "0.0.1"}
 		}
 	})
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_comma_separated_accept_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let response = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_separate_accept_header_lines() {
+	use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let body = mcp_initialize_body().to_string();
+	let request = format!(
+		"POST /mcp HTTP/1.1\r\nHost: {io}\r\nContent-Type: application/json\r\nAccept: application/json\r\nAccept: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	stream.write_all(request.as_bytes()).await.unwrap();
+	let mut reader = tokio::io::BufReader::new(stream);
+	let mut status_line = String::new();
+	reader.read_line(&mut status_line).await.unwrap();
+	assert!(
+		status_line.starts_with("HTTP/1.1 200"),
+		"unexpected response: {status_line}"
+	);
 }
 
 #[tokio::test]
@@ -2938,7 +3012,7 @@ async fn stream_to_stream_single_tls() {
 		true,
 		false,
 		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("my-key".into()),
+			value: SecretString::new("my-key".into()).into(),
 			location: None,
 		})],
 	)
@@ -3019,6 +3093,44 @@ async fn authorization_denied_returns_unknown_tool_error() {
 		"Unknown tool: echo",
 		"Expected error message 'Unknown tool: echo', got: {}",
 		mcp_error.message
+	);
+}
+
+/// An upstream JSON-RPC error response must keep its own code, message, and
+/// data instead of being flattened into a generic internal error. The
+/// hand-written mock answers `tools/call` (its catch-all branch) with
+/// `-32601`, which the gateway must propagate verbatim (#3748).
+#[tokio::test]
+async fn upstream_jsonrpc_error_code_is_propagated() {
+	let mock = mock_streamable_http_server_without_discover().await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![]).await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	let mcp_error = match result.expect_err("tool call should fail") {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32601,
+		"the upstream METHOD_NOT_FOUND code must be propagated, got: {} ({})",
+		mcp_error.code.0, mcp_error.message
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"tools/call",
+		"the upstream error message must be propagated"
 	);
 }
 
@@ -7981,6 +8093,85 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
 	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+}
+
+// mcpGuardrails request-result metadata should be visible to access-log CEL
+// (`frontendPolicies.accessLog.add`), mirroring the backend filters (authz,
+// transformation) that run after the hook and can already read it.
+#[tokio::test]
+async fn mcp_guardrails_metadata_visible_to_access_log_cel() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let trace_id = format!("mcp-guardrails-access-log-{}", uuid::Uuid::new_v4());
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"decision": "allow"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (mut t, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {
+				"mcp_trace": "mcp.tool.arguments.traceId",
+				"mcp_guardrail_decision": "mcpGuardrails != null ? string(mcpGuardrails.decision) : \"\""
+			}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/accessLog".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"traceId": trace_id, "hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_guardrail_decision"),
+		Some(&serde_json::json!("allow")),
+		"mcpGuardrails request-result metadata should be readable from access-log CEL"
+	);
 }
 
 // Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.

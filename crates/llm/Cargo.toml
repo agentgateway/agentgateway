@@ -16,19 +16,14 @@ agent-core.workspace = true
 agent-http.workspace = true
 anyhow.workspace = true
 async-openai.workspace = true
-aws-credential-types.workspace = true
 aws-smithy-eventstream.workspace = true
 aws-smithy-types.workspace = true
-azure_core.workspace = true
-axum.workspace = true
 axum-core.workspace = true
 base64.workspace = true
 bytes.workspace = true
 cel.workspace = true
 chrono.workspace = true
-futures-core.workspace = true
 futures-util.workspace = true
-headers.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
@@ -40,7 +35,7 @@ rand.workspace = true
 schemars = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
-serde_regex.workspace = true
+indexmap.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
@@ -49,7 +44,6 @@ tokio-util.workspace = true
 tokio_sse_codec.workspace = true
 tracing.workspace = true
 vector-map.workspace = true
-x509-parser.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

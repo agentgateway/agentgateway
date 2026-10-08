@@ -46,6 +46,7 @@ const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
 const VERTEX_EMBED_CONTENT: &str = "vertex-embed-content";
+const SYSTEMONE: &str = "systemone";
 
 mod requests {
 	use super::*;
@@ -144,6 +145,7 @@ mod requests {
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
+		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
@@ -194,9 +196,14 @@ mod requests {
 			"cache_control",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
 		),
+		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_reasoning_prefix", &[BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
+		("cache_control_dropped_server_tools", &[BEDROCK]),
+		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
+		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
 		(
 			"tool_history_without_tools",
@@ -497,6 +504,19 @@ mod requests {
 					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
 				}
 			}
+		}
+	}
+
+	#[test]
+	fn decisions() {
+		for name in ["basic", "full"] {
+			let path = format!("requests/decisions/{name}.json");
+			test_request(OPENAI, &path, |i: &mut types::decisions::Request| {
+				serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+			});
+			test_request(SYSTEMONE, &path, |i: &mut types::decisions::Request| {
+				conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
+			});
 		}
 	}
 
@@ -875,10 +895,7 @@ mod responses {
 		("reasoning", ALL_BEDROCK),
 		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		(
-			"cache_write",
-			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
-		),
+		("cache_write", ALL_BEDROCK),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -914,6 +931,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
@@ -982,6 +1007,7 @@ mod responses {
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
@@ -1005,6 +1031,14 @@ mod responses {
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
@@ -1341,6 +1375,25 @@ mod responses {
 				other => panic!("unsupported provider in RERANK_RESPONSES: {other}"),
 			}
 		}
+	}
+
+	#[test]
+	fn decisions() {
+		let parse = |bytes: &[u8]| {
+			serde_json::from_slice::<types::decisions::Response>(bytes)
+				.map(|r| Box::new(r) as Box<dyn ResponseType>)
+				.map_err(AIError::ResponseParsing)
+		};
+		test_response(OPENAI, "response/openai/decisions.json", |i| parse(&i));
+		let req: types::decisions::Request =
+			serde_json::from_slice(&fs::read(fixture_path("requests/decisions/full.json")).unwrap())
+				.unwrap();
+		let (_, state) = conversion::systemone::from_decisions::translate(&req).unwrap();
+		test_response(SYSTEMONE, "response/systemone/decisions.json", |i| {
+			parse(&conversion::systemone::from_decisions::translate_response(
+				&i, &state,
+			)?)
+		});
 	}
 
 	#[test]
@@ -1868,4 +1921,56 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
 		"explicit"
 	);
+}
+
+mod response_guardrails {
+	use super::*;
+
+	fn test_scopes<T: ResponseType + DeserializeOwned>(path: &str) {
+		let input = fs::read_to_string(fixture_path(path)).unwrap();
+		let mut response: T = serde_json::from_str(&input).unwrap();
+		let mut scanned = Vec::new();
+		response.visit_text_mut(&mut |content, text| {
+			scanned.push(json!({"scope": content.scope, "signed": content.signed, "text": text}));
+		});
+		scanned.sort_by_cached_key(Value::to_string);
+		let mut masked = serde_json::Map::new();
+		for scope in [
+			ContentScope::Messages,
+			ContentScope::ToolInput,
+			ContentScope::ToolOutput,
+		] {
+			let mut response: T = serde_json::from_str(&input).unwrap();
+			response.visit_text_mut(&mut |content, text| {
+				if content.scope == scope && !content.signed {
+					*text = "<masked>".into();
+				}
+			});
+			let name = serde_json::to_value(scope)
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.to_owned();
+			masked.insert(
+				name,
+				serde_json::from_slice(&response.serialize().unwrap()).unwrap(),
+			);
+		}
+		let (snapshot_path, snapshot_name) = snapshot_path_and_name(path, "guardrails");
+		insta::with_settings!({
+			snapshot_path => snapshot_path,
+			prepend_module_to_snapshot => false,
+			omit_expression => true,
+		}, {
+			insta::assert_json_snapshot!(snapshot_name, json!({"scanned": scanned, "masked": masked}));
+		});
+	}
+
+	#[test]
+	fn response_scopes() {
+		test_scopes::<types::completions::Response>("response/completions/guardrails.json");
+		test_scopes::<types::messages::Response>("response/anthropic/guardrails.json");
+		test_scopes::<types::gemini::Response>("response/vertex-gemini/guardrails.json");
+		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
+	}
 }

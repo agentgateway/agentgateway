@@ -16,7 +16,7 @@ impl EmailRecognizer {
 			],
 		);
 		// Standard email regex (simplified, but robust for most cases)
-		let email_regex = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+";
+		let email_regex = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+";
 		recognizer.add_pattern("Standard Email", email_regex, 0.85);
 		Self { recognizer }
 	}

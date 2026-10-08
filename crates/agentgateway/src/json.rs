@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::http::{Request, Response};
+use crate::http::Response;
 use crate::*;
 
 /// Parsed JSON corresponding to the current body bytes.
@@ -9,18 +9,6 @@ use crate::*;
 pub(crate) struct ParsedJson(pub Value);
 
 impl agent_http::BodyExtension for ParsedJson {}
-
-pub fn must_traverse<'a, T>(
-	value: &'a Value,
-	path: &[&str],
-	f: impl Fn(&'a Value) -> Option<T>,
-) -> anyhow::Result<T> {
-	if let Some(res) = traverse(value, path).and_then(f) {
-		Ok(res)
-	} else {
-		Err(anyhow::anyhow!("missing field {}", path.join(".")))
-	}
-}
 
 pub fn traverse<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
 	if path.is_empty() {
@@ -49,12 +37,6 @@ fn parse_index(s: &str) -> Option<usize> {
 		return None;
 	}
 	s.parse().ok()
-}
-
-/// Read and parse JSON within the attached body deadline.
-pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> Result<T, http::Error> {
-	let lim = http::buffer_limit(&req);
-	from_body_with_limit(req.into_body(), lim).await
 }
 
 /// Read and parse JSON within the attached body deadline.

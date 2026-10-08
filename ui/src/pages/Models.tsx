@@ -115,7 +115,7 @@ export function ModelsPage() {
 			<div className="page-stack">
 				<PageHeader
 					title="LLM Models"
-					description="Onboard provider-backed models and configure model-specific behavior."
+					description="Configure the models callers can request and the providers that serve them."
 				/>
 				<Panel>
 					<StatusBanner state="loading" title="Detecting model configuration mode" />
@@ -308,7 +308,7 @@ function ModelsEditorPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="LLM Models"
-				description="Onboard provider-backed models and configure model-specific behavior."
+				description="Configure the models callers can request and the providers that serve them."
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={openNewVirtualModel}>

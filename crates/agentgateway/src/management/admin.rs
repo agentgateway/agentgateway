@@ -118,15 +118,6 @@ pub struct CertDump {
 	expiration_time: String,
 }
 
-#[derive(serde::Serialize, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct CertsDump {
-	identity: String,
-	state: String,
-	cert_chain: Vec<CertDump>,
-	root_certs: Vec<CertDump>,
-}
-
 impl Service {
 	#[allow(clippy::too_many_arguments)]
 	pub async fn new(

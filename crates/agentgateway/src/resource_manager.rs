@@ -352,11 +352,6 @@ impl ResourceManager {
 		self.inner.change_tx.subscribe()
 	}
 
-	pub async fn fetch_and_wait(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {
-		let resource = normalize_resource(resource)?;
-		self.fetch_and_wait_normalized(resource).await
-	}
-
 	async fn fetch_and_wait_normalized(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {
 		if let ResourceRef::File(path) = &resource {
 			self.watch_file(path)?;
@@ -367,11 +362,6 @@ impl ResourceManager {
 		let FetchResult { content, next } = self.fetch(&resource).await?;
 		self.store(resource, content.clone(), next);
 		Ok(content)
-	}
-
-	pub async fn fetch_cached_or_direct(&self, resource: ResourceRef) -> anyhow::Result<Bytes> {
-		let resource = normalize_resource(resource)?;
-		self.fetch_cached_or_direct_normalized(resource).await
 	}
 
 	async fn fetch_cached_or_direct_normalized(

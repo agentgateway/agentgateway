@@ -2,6 +2,9 @@ ai:
   providerGroups:
   - providers:
     - inlinePolicies:
+      - authorization:
+          allow:
+          - request.headers["x-tenant"] == "acme"
       - auth:
           key:
             secret: first-token

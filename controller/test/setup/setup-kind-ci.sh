@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
 
 TIMINGS_FILE="${REPO_ROOT}/controller/_test/ci-step-timings.log"
 CLUSTER_NAME="${CLUSTER_NAME:-kind}"
-KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.36.1}"
+KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.37.0}"
 KIND_REGISTRY_NAME="${KIND_REGISTRY_NAME:-kind-registry}"
 KIND_REGISTRY_PORT="${KIND_REGISTRY_PORT:-5000}"
 LOCAL_REGISTRY="localhost:${KIND_REGISTRY_PORT}"
@@ -251,6 +251,9 @@ function step_push_proxy_to_local_registry() {
    else
       (cd "${REPO_ROOT}" && ./tools/proxy-dev-build ci)
    fi
+
+   docker exec "${CLUSTER_NAME}-control-plane" \
+     crictl pull "${LOCAL_REGISTRY}/agentgateway:${TAG}"
 }
 
 function step_deploy_helm() {
@@ -270,20 +273,26 @@ function step_setup_gateway_api() {
 function step_preload_images() {(
   if [[ "${TEST_MODE}" == "e2e" ]]; then
     make --no-print-directory -C controller testbox-docker kind-load-testbox &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/otel/opentelemetry-collector-contrib:0.143.0 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/library/redis:7.4.3 &
-    docker exec "${CLUSTER_NAME}-control-plane" crictl pull docker.io/envoyproxy/ratelimit:3e085e5b &
-  elif [[ "${TEST_MODE}" == "conformance" ]]; then
-    # TODO?
-    :
   fi
 
-  wait
+  # Skip images built into the kind node, and locally built images which are loaded by other steps.
+  local existing
+  existing="$(docker exec "${CLUSTER_NAME}-control-plane" ctr --namespace k8s.io images list --quiet)"
+  for image in $(grep -vxFf <(echo "${existing}") "${SCRIPT_DIR}/${TEST_MODE}-images.txt" | grep -Ev '^localhost:|/testbox:'); do
+    (
+      docker image inspect "${image}" &>/dev/null || docker pull "${image}"
+      kind load docker-image "${image}" --name "${CLUSTER_NAME}"
+    ) &
+  done
+
+  for pid in $(jobs -p); do
+    wait $pid
+  done
 )}
 
 function step_warm_test() {
   if [[ "${TEST_MODE}" == "e2e" ]]; then
-    CGO_ENABLED=0 go test -tags=e2e -exec=true -toolexec=./tools/go-compile-without-link -vet=off ./controller/test/e2e
+    CGO_ENABLED=0 go test -trimpath -tags=e2e,agent,disable_pgv -exec=true -toolexec="${REPO_ROOT}/tools/go-compile-without-link" -vet=off ./controller/test/e2e
   elif [[ "${TEST_MODE}" == "conformance" ]]; then
     # TODO
     :
@@ -313,6 +322,12 @@ function await() {
     done
   done
 }
+
+function cleanup_controller_images() {
+  docker image ls --filter "reference=${LOCAL_REGISTRY}/agentgateway-controller:*" --format '{{.Repository}}:{{.Tag}}' |
+    xargs -r docker image rm
+}
+
 function main() {
   echo "Timings will be written to: ${TIMINGS_FILE}"
 
@@ -321,6 +336,7 @@ function main() {
   run_step "create-kind-cluster" step_create_kind_cluster & PID_KIND=$!
   run_step "build-go-controller-binary" step_build_go_controller_binary & PID_BUILD_CONTROLLER=$!
   run_step "build-proxy-binary" step_build_proxy_binary & PID_BUILD_PROXY=$!
+  run_step "warm-helm" helm version & PID_HELM=$!
 
   (await $PID_BUILD_CONTROLLER && run_step "warm-test" step_warm_test) &
 
@@ -330,9 +346,9 @@ function main() {
   (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) & PID_PUSH_CONTROLLER=$!
   (await $PID_REGISTRY $PID_BUILD_PROXY && run_step "push-proxy-to-local-registry" step_push_proxy_to_local_registry) &
 
-  (await $PID_REGISTRY && run_step "preload-images" step_preload_images) &
+  (await $PID_KIND && run_step "preload-images" step_preload_images) &
   (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
-  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER && run_step "deploy-helm" step_deploy_helm "$@") &
+  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER $PID_HELM && run_step "deploy-helm" step_deploy_helm "$@") &
 
   # Wait each one, not just a raw `wait`, to ensure we fail on errors
   for pid in $(jobs -p); do
@@ -340,4 +356,5 @@ function main() {
   done
 }
 
+trap cleanup_controller_images EXIT
 main "$@"

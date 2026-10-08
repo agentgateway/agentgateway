@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+pub use agent_core::metrics::OutboundCallSubtype;
 use agent_core::metrics::{
 	CustomField, DefaultedUnknown, EncodeArc, EncodeDebug, EncodeDisplay, MetricRegistry,
 	OptionallyEncode,
@@ -224,41 +225,6 @@ impl OutboundCallKind {
 			Self::Primary => "Primary",
 			Self::Policy => "Policy",
 			Self::Mirror => "Mirror",
-		}
-	}
-}
-
-#[derive(
-	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
-)]
-pub enum OutboundCallSubtype {
-	// Primary
-	#[default]
-	Http,
-	Llm,
-	Mcp,
-
-	// Policy
-	ExtAuthz,
-	Substrate,
-	ExtProc,
-	Guardrail,
-	RateLimit,
-	Oidc,
-}
-
-impl OutboundCallSubtype {
-	pub const fn as_str(self) -> &'static str {
-		match self {
-			Self::Http => "Http",
-			Self::Llm => "Llm",
-			Self::Mcp => "Mcp",
-			Self::ExtAuthz => "ExtAuthz",
-			Self::Substrate => "Substrate",
-			Self::ExtProc => "ExtProc",
-			Self::Guardrail => "Guardrail",
-			Self::RateLimit => "RateLimit",
-			Self::Oidc => "Oidc",
 		}
 	}
 }

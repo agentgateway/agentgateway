@@ -46,15 +46,15 @@ require (
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	helm.sh/helm/v4 v4.3.0
-	istio.io/api v1.31.0-alpha.1.0.20260917210935-09c7d5318bb1
-	istio.io/client-go v1.31.0-alpha.1.0.20260917211300-e00df3915210
-	istio.io/istio v0.0.0-20260922124221-31ce90461f54
-	k8s.io/api v0.37.0
-	k8s.io/apiextensions-apiserver v0.37.0
-	k8s.io/apimachinery v0.37.0
-	k8s.io/client-go v0.37.0
+	istio.io/api v1.31.0-alpha.1.0.20260924080753-e0d275e5684d
+	istio.io/client-go v1.31.0-alpha.1.0.20260924081053-3eeb139684f9
+	istio.io/istio v0.0.0-20260926220654-22d0ef667771
+	k8s.io/api v0.37.1
+	k8s.io/apiextensions-apiserver v0.37.1
+	k8s.io/apimachinery v0.37.1
+	k8s.io/client-go v0.37.1
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/streaming v0.37.0
+	k8s.io/streaming v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.1
 	sigs.k8s.io/controller-tools v0.22.0
@@ -230,9 +230,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiserver v0.37.0 // indirect
+	k8s.io/apiserver v0.37.1 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
-	k8s.io/component-base v0.37.0 // indirect
+	k8s.io/component-base v0.37.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
 	k8s.io/kubectl v0.37.0 // indirect
 	oras.land/oras-go/v2 v2.6.2 // indirect

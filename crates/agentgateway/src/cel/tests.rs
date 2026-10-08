@@ -1,11 +1,10 @@
-use std::collections::HashSet;
-
 use http::{HeaderValue, Method};
 use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
 use crate::http::Body;
+use crate::mcp::MCPView;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
@@ -484,6 +483,54 @@ mod headers {
 	}
 
 	#[test]
+	fn optimized_lookup_matches_unoptimized() {
+		let req = || {
+			let mut req = request_with_header_modes();
+			let h = req.headers_mut();
+			h.insert(
+				"utf8",
+				http::HeaderValue::from_bytes("café".as_bytes()).unwrap(),
+			);
+			h.insert("invalid", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.append("mixed", http::HeaderValue::from_static("ok"));
+			h.append("mixed", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.insert("empty", http::HeaderValue::from_static(""));
+			req
+		};
+		for name in [
+			"single",
+			"SINGLE",
+			"multi",
+			"authorization",
+			"utf8",
+			"invalid",
+			"mixed",
+			"empty",
+			"missing",
+		] {
+			let expr = format!(r#"request.headers["{name}"]"#);
+			let optimized = crate::cel::Expression::new_strict(&expr).unwrap();
+			assert!(
+				matches!(
+					optimized.ast().expr,
+					cel::common::ast::Expr::Optimized { .. }
+				),
+				"{expr} was not optimized"
+			);
+			let unoptimized = crate::cel::Expression::new_unoptimized(&expr).unwrap();
+			let r1 = req();
+			let r2 = req();
+			let a = crate::cel::Executor::new_request(&r1)
+				.eval(&optimized)
+				.map(|v| v.as_static());
+			let b = crate::cel::Executor::new_request(&r2)
+				.eval(&unoptimized)
+				.map(|v| v.as_static());
+			assert_eq!(a.ok(), b.ok(), "optimizations changed behavior ({expr})");
+		}
+	}
+
+	#[test]
 	fn cookie_missing() {
 		let req = ::http::Request::builder()
 			.method(http::Method::GET)
@@ -569,47 +616,6 @@ request.uri.setQuery("foo", "qux") == "http://example.com/api/test?zap=zip&foo=q
 			.unwrap()
 		);
 	}
-}
-
-#[test]
-fn test_properties() {
-	let test = |e: &str, want: &[&str]| {
-		let p = Program::compile(e).unwrap();
-		let mut props = Vec::with_capacity(5);
-		crate::cel::properties::properties(&p.expression().expr, &mut props, &mut Vec::default());
-		let want = HashSet::from_iter(want.iter().map(|s| s.to_string()));
-		let got = props
-			.into_iter()
-			.map(|p| p.join("."))
-			.collect::<HashSet<_>>();
-		assert_eq!(want, got, "expression: {e}");
-	};
-
-	test(r#"foo.bar.baz"#, &["foo.bar.baz"]);
-	test(r#"foo["bar"]"#, &["foo"]);
-	test(r#"foo.baz["bar"]"#, &["foo.baz"]);
-	// This is not quite right but maybe good enough.
-	test(r#"foo.with(x, x.body)"#, &["foo", "x", "x.body"]);
-	test(r#"foo.map(x, x.body)"#, &["foo", "x", "x.body"]);
-	test(r#"foo.bar.map(x, x.body)"#, &["foo.bar", "x", "x.body"]);
-
-	test(r#"fn(bar.baz)"#, &["bar.baz"]);
-	test(r#"{"key":val, "listkey":[a.b]}"#, &["val", "a.b"]);
-	test(r#"{"key":val, "listkey":[a.b]}"#, &["val", "a.b"]);
-	test(r#"a? b: c"#, &["a", "b", "c"]);
-	test(r#"a || b"#, &["a", "b"]);
-	test(r#"!a.b"#, &["a.b"]);
-	test(r#"a.b < c"#, &["a.b", "c"]);
-	test(r#"a.b + c + 2"#, &["a.b", "c"]);
-	test(r#"a["b"].c"#, &["a"]);
-	test(r#"a["b"]["c"]"#, &["a"]);
-	test(r#"a.b[0]"#, &["a.b"]);
-	test(r#"a.b[0].c"#, &["a.b"]);
-	test(r#"a[b.c]"#, &["a", "b.c"]);
-	test(r#"{"a":"b"}.a"#, &[]);
-	// Test extauthz namespace recognition
-	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);
-	test(r#"extauthz.role == "admin""#, &["extauthz.role"]);
 }
 
 #[test]
@@ -699,4 +705,33 @@ fn log_guardrails_binding() {
 	)
 	.unwrap();
 	assert!(exec.eval_bool(&exp));
+}
+
+#[test]
+fn mcp_view() {
+	let exec_serde = full_example_executor();
+	let info = exec_serde.mcp.as_ref().unwrap();
+	assert_eq!(
+		MCPView::new(info).materialize().json().unwrap(),
+		info.materialize().json().unwrap()
+	);
+
+	let payload = json!({"name": "get_weather", "arguments": {"city": "SF"}});
+	let mut exec = exec_serde.as_executor();
+	exec.mcp = Some(MCPView {
+		info,
+		params: Some(&payload),
+		result: None,
+	});
+	let mut expected = info.materialize().json().unwrap();
+	expected["params"] = payload.clone();
+	assert_eq!(
+		exec.mcp.as_ref().unwrap().materialize().json().unwrap(),
+		expected
+	);
+	let exp = Expression::new_strict(r#"[mcp.tool.name, mcp.params.arguments.city]"#).unwrap();
+	assert_eq!(
+		exec.eval(&exp).unwrap().json().unwrap(),
+		json!(["get_weather", "SF"])
+	);
 }

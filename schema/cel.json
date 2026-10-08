@@ -87,6 +87,23 @@
             "string",
             "null"
           ]
+        },
+        "agent": {
+          "description": "The agent harness that sent the request.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "session": {
+              "description": "The agent session the request belongs to, from `standardAttributes.session` or detected from\nwell-known agent headers such as `x-claude-code-session-id`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -1101,6 +1118,12 @@
         },
         "resourceTemplatesList": {
           "description": "The terminal resources/templates/list result returned to the client, if available."
+        },
+        "params": {
+          "description": "Current request parameters, with the same structure as the `params` object in an MCP request.\nAvailable only during request-phase CEL guardrails."
+        },
+        "result": {
+          "description": "Current response result, with the same structure as the `result` object in an MCP response.\nAvailable only during response-phase CEL guardrails."
         }
       },
       "additionalProperties": false
@@ -1118,7 +1141,7 @@
           "default": ""
         },
         "endpoint": {
-          "description": "The selected backend call target, including the port for network endpoints. This is available\nonce the target has been resolved.",
+          "description": "The resolved target for directly addressed backends, including the port for network endpoints.\nAbsent for Service backends, whose workload endpoints are selected separately.",
           "type": [
             "string",
             "null"

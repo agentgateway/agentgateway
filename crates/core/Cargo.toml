@@ -27,8 +27,6 @@ hyper-util.workspace = true
 itertools.workspace = true
 macro_rules_attribute.workspace = true
 once_cell.workspace = true
-opentelemetry-otlp.workspace = true
-opentelemetry_sdk.workspace = true
 pin-project-lite.workspace = true
 prometheus-client.workspace = true
 schemars = { workspace = true, optional = true }

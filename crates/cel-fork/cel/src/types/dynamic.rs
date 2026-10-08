@@ -96,14 +96,14 @@ impl<'a> DynamicValue<'a> {
 
 	pub fn materialize(&self) -> Value<'a> {
 		match &self.dyn_ref {
-			DynamicRef::Borrowed(dyn_ref) => dyn_ref.materialize(),
+			DynamicRef::Borrowed(dyn_ref) => (*dyn_ref).materialize(),
 			DynamicRef::Owned(dyn_ref) => dyn_ref.materialize().as_static(),
 		}
 	}
 
 	pub fn field(&self, field: &str) -> Option<Value<'a>> {
 		match &self.dyn_ref {
-			DynamicRef::Borrowed(dyn_ref) => dyn_ref.field(field),
+			DynamicRef::Borrowed(dyn_ref) => (*dyn_ref).field(field),
 			DynamicRef::Owned(dyn_ref) => dyn_ref.field(field).map(|value| value.as_static()),
 		}
 	}
@@ -114,7 +114,7 @@ impl<'a> DynamicValue<'a> {
 		ftx: &mut FunctionContext<'a, 'rf>,
 	) -> Option<crate::ResolveResult<'a>> {
 		match &self.dyn_ref {
-			DynamicRef::Borrowed(dyn_ref) => dyn_ref.call_function(name, ftx),
+			DynamicRef::Borrowed(dyn_ref) => (*dyn_ref).call_function(name, ftx),
 			DynamicRef::Owned(dyn_ref) => dyn_ref.call_function(name, ftx),
 		}
 	}
@@ -315,7 +315,7 @@ impl DynamicFlatten for std::collections::HashMap<String, String> {
 	}
 }
 
-impl<T: DynamicType> DynamicType for &T {
+impl<T: DynamicType + ?Sized> DynamicType for &T {
 	fn auto_materialize(&self) -> bool {
 		(*self).auto_materialize()
 	}
@@ -337,6 +337,12 @@ impl<T: DynamicType> DynamicType for &T {
 		Self: 'a,
 	{
 		(*self).call_function(name, ftx)
+	}
+}
+
+impl<T: DynamicFlatten + ?Sized> DynamicFlatten for &T {
+	fn materialize_into<'a>(&'a self, map: &mut VecMap<KeyRef<'a>, Value<'a>>) {
+		(*self).materialize_into(map);
 	}
 }
 

@@ -17,22 +17,6 @@ use crate::{apply, transport};
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
 	Lazy::new(|| ResolvedBackendTLS::default().try_into().unwrap());
-pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
-	ResolvedBackendTLS {
-		cert: None,
-		key: None,
-		root: None,
-		hostname: None,
-		insecure: true,
-		insecure_host: false,
-		alpn: None,
-		subject_alt_names: None,
-		key_exchange_groups: None,
-		spiffe: false,
-	}
-	.try_into()
-	.unwrap()
-});
 
 // a ClientConfig stores the ALPN, but we need to set it per request possibly. This struct helps manage that.
 #[derive(Clone, Debug)]
@@ -104,11 +88,6 @@ pub struct SpiffeBackendTLS {
 }
 
 impl BackendTLS {
-	/// Whether this backend sources the gateway's client identity/roots from SPIFFE.
-	pub fn is_spiffe(&self) -> bool {
-		matches!(self.source, BackendTLSSource::Spiffe(_))
-	}
-
 	/// Returns the static config for the requested HTTP version. Only valid for
 	/// [`BackendTLSSource::Static`]; SPIFFE-sourced backends are resolved at connection time via
 	/// `proxy::httpproxy::resolve_backend_tls` and must not reach here.

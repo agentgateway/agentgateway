@@ -1,0 +1,5 @@
+services:
+  headroom:
+    image: ghcr.io/chopratejas/headroom:0.27.0-code
+    command: ["--host", "127.0.0.1", "--port", "8787", "--mode", "cache"]
+    network_mode: host

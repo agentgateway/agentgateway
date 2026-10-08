@@ -13,7 +13,6 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display, Write as FmtWrite};
 use std::future::Future;
 use std::str::FromStr;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use std::{env, fmt, io};
@@ -90,23 +89,6 @@ fn current_task_local_ids() -> TaskLocalIds {
 	TaskLocalIds {
 		connection_id: current_connection_id(),
 		request_id: current_request_id(),
-	}
-}
-
-pub trait OtelLogSink: Send + Sync {
-	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]);
-	fn shutdown(&self);
-}
-
-static OTEL_LOG_SINK: OnceLock<Box<dyn OtelLogSink>> = OnceLock::new();
-
-pub fn set_otel_log_sink(sink: Box<dyn OtelLogSink>) {
-	let _ = OTEL_LOG_SINK.set(sink);
-}
-
-pub fn shutdown_otel_log_sink() {
-	if let Some(sink) = OTEL_LOG_SINK.get() {
-		sink.shutdown();
 	}
 }
 
@@ -213,10 +195,6 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 		buf.clear();
 		Ok::<(), anyhow::Error>(())
 	});
-
-	if let Some(sink) = OTEL_LOG_SINK.get() {
-		sink.emit(level, target, kv);
-	}
 }
 
 fn write_json_log(

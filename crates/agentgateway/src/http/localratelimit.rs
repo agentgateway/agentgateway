@@ -264,7 +264,20 @@ impl RateLimit {
 	}
 }
 
-impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
+/// Rate limits that all apply to the same request.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(transparent)]
+pub struct RateLimits(pub Vec<RateLimit>);
+
+impl std::ops::Deref for RateLimits {
+	type Target = Vec<RateLimit>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+impl crate::store::RequestPolicyTrait for RateLimits {
 	async fn apply(
 		&self,
 		_client: &crate::proxy::httpproxy::PolicyClient,
@@ -274,7 +287,7 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		let exec = Executor::new_request(req);
 		let mut status: Option<RateLimitStatus> = None;
 		let mut taken = Vec::new();
-		for rate_limit in self {
+		for rate_limit in self.iter() {
 			match rate_limit.check_request(&exec) {
 				Ok(Some((s, bucket))) => {
 					status = RateLimitStatus::most_constrained(status, Some(s));

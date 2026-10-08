@@ -57,11 +57,12 @@ info:
     }
   },
   "parsed": {
-    "input_tokens": 308,
+    "input_tokens": 320,
     "input_audio_tokens": 240,
     "output_tokens": 180,
     "output_audio_tokens": 90,
-    "total_tokens": 488,
+    "total_tokens": 500,
+    "reasoning_tokens": 15,
     "cached_input_tokens": 12,
     "service_tier": "default",
     "provider_model": "gpt-4o-audio-preview"

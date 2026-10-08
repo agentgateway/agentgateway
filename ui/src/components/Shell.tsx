@@ -7,6 +7,7 @@ import {
 	Braces,
 	Cable,
 	ChevronDown,
+	ChevronRight,
 	Coins,
 	FileCode2,
 	GitFork,
@@ -112,10 +113,11 @@ export function Shell() {
 		dumpMode
 	});
 	const nav = navGroups.flatMap(group => group.items);
-	const currentNav =
-		nav
-			.filter(item => navItemActive(item, router.location.pathname))
-			.sort((left, right) => right.to.length - left.to.length)[0] ?? nav[0];
+	const matchedNav = nav
+		.filter(item => navItemActive(item, router.location.pathname))
+		.sort((left, right) => right.to.length - left.to.length)[0];
+	const currentNav = matchedNav ?? nav[0];
+	const currentGroup = navGroups.find(group => group.items.includes(currentNav));
 	const CurrentIcon = currentNav.icon;
 
 	useEffect(() => {
@@ -133,6 +135,9 @@ export function Shell() {
 				<Link to="/" className="brand" aria-label="agentgateway home">
 					<img className="brand-logo brand-logo-light" src={logoLight} alt="agentgateway" />
 					<img className="brand-logo brand-logo-dark" src={logoDark} alt="agentgateway" />
+					{runtime.data?.build.version && (
+						<small title={runtime.data.build.gitRevision}>{runtime.data.build.version}</small>
+					)}
 				</Link>
 				<nav className="nav-list" aria-label="Primary">
 					{navGroups.map(group => (
@@ -190,7 +195,13 @@ export function Shell() {
 								</nav>
 							) : null}
 						</div>
-						<span className="eyebrow">{eyebrowForPath(router.location.pathname)}</span>
+						{matchedNav && currentGroup && (
+							<nav className="breadcrumb" aria-label="Breadcrumb">
+								<span>{currentGroup.title}</span>
+								<ChevronRight size={14} />
+								<span aria-current="page">{matchedNav.label}</span>
+							</nav>
+						)}
 					</div>
 					<div className="topbar-controls">
 						{runtime.data?.user && <UserMenu user={runtime.data.user} />}
@@ -211,6 +222,12 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
+					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
+						<StatusBanner state="warn" title="Configuration reload failed">
+							The last configuration reload was rejected, so the gateway is still running the
+							previous configuration. Fix the configuration and save it to retry.
+						</StatusBanner>
+					)}
 					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.
@@ -357,7 +374,10 @@ function navigationGroups(options: {
 	} else {
 		groups.push({
 			title: 'LLM',
-			items: [{ to: '/llm/models', label: 'Models', icon: Bot }]
+			items: [
+				{ to: '/llm/models', label: 'Models', icon: Bot },
+				{ to: '/llm/client-setup', label: 'Client Setup', icon: Cable }
+			]
 		});
 	}
 	groups.push({
@@ -476,15 +496,6 @@ function MobileNavItem(props: {
 			<span>{props.label}</span>
 		</Link>
 	);
-}
-
-function eyebrowForPath(path: string) {
-	if (path === '/') return 'Gateway overview';
-	if (path.startsWith('/mcp')) return 'MCP configuration';
-	if (path.startsWith('/traffic')) return 'Traffic configuration';
-	if (path.startsWith('/cel') || path.startsWith('/raw-config') || path.startsWith('/settings'))
-		return 'Policy tools';
-	return 'LLM configuration';
 }
 
 function NavItem(props: {

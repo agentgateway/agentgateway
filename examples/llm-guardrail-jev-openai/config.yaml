@@ -47,10 +47,24 @@ llm:
       - webhook:
           target:
             host: 127.0.0.1:8000
-  - name: jev-latest
-    provider:
-      custom:
-        providerOverride: typesafe
+  # Guardrail evaluators. Both serve the OpenAI Decisions API; agentgateway translates
+  # decisions requests to Jev's native /v1/systemone API.
+  - name: gpt-6-luna
+    visibility: internal
+    provider: openai
     params:
-      baseUrl: https://api.typesafe.ai
+      apiKey: $OPENAI_API_KEY
+  - name: jev-latest
+    visibility: internal
+    provider: typesafe
+    params:
       apiKey: $TYPESAFE_API_KEY
+  virtualModels:
+  - name: guardrail
+    routing:
+      weighted:
+        targets:
+        - model: gpt-6-luna
+          weight: 50
+        - model: jev-latest
+          weight: 50

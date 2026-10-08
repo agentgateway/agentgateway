@@ -20,6 +20,7 @@ span more than one agentgateway traffic type.
 
 * [mcp-basic](mcp-basic/README.md): the simplest way to get started with agentgateway, exposing a single MCP server over Stdio.
 * [mcp-multiplex](mcp-multiplex/README.md): multiplex multiple MCP targets on a single listener.
+* [mcp-guardrails/expression](mcp-guardrails/expression/README.md): deny MCP calls and mask request/response text with CEL guardrails.
 * [mcp-authorization](mcp-authorization/README.md): apply JWT authentication and MCP authorization policies to incoming requests.
 * [mcp-authzen](mcp-authzen/README.md): authorize MCP tool calls based OpenID [AuthZEN](https://openid.net/specs/openid-authzen-authorization-api-1_0-ID1.html) standard.
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
@@ -31,6 +32,7 @@ span more than one agentgateway traffic type.
 ### LLM
 
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-context-compression](llm-context-compression/README.md): shrink LLM request context with Headroom through external authorization.
 * [llm-cost-routing](llm-cost-routing/README.md): classify LLM requests with CEL and route the same public model name to different upstream models.
 * [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-keyed-rate-limit](llm-keyed-rate-limit/README.md): give every caller its own local rate limit buckets, keyed by JWT claims and the requested model.

@@ -51,6 +51,7 @@ info:
     "input_tokens": 17,
     "output_tokens": 23,
     "total_tokens": 40,
+    "reasoning_tokens": 12,
     "provider_model": "qwen3"
   }
 }

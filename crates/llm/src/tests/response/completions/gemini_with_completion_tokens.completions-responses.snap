@@ -40,7 +40,7 @@ info:
     "model": "input-model",
     "usage": {
       "input_tokens": 7,
-      "output_tokens": 12,
+      "output_tokens": 395,
       "input_tokens_details": {
         "cached_tokens": 0
       },
@@ -57,7 +57,7 @@ info:
   },
   "parsed": {
     "input_tokens": 7,
-    "output_tokens": 12,
+    "output_tokens": 395,
     "total_tokens": 402,
     "reasoning_tokens": 0,
     "cached_input_tokens": 0,

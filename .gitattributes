@@ -10,3 +10,4 @@ crates/agentgateway/src/llm/tests/**/*.bin -text
 schema/*.json linguist-generated=true
 schema/cel.md linguist-generated=true
 schema/config.md linguist-generated=true
+ui/** text=auto eol=lf

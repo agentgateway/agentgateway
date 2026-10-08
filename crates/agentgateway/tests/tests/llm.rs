@@ -225,7 +225,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -288,7 +288,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -425,7 +425,7 @@ llm:
 	assert_eq!(requests.len(), 3);
 	assert_eq!(
 		&requests[0].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/responses?trace=1"
+		"/v1/responses"
 	);
 	assert_eq!(
 		&requests[1].url[Position::BeforePath..Position::AfterQuery],
@@ -1216,7 +1216,7 @@ async fn llm_custom_provider_uses_upstream_route_fallback() {
 	let response_body: Value =
 		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
 	assert_eq!(response_body["object"], "chat.completion");
-	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["prompt_tokens"], 40);
 	assert_eq!(response_body["usage"]["completion_tokens"], 21);
 
 	let request = single_upstream_request(&mock).await;
@@ -1744,7 +1744,7 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 #[rstest::rstest]
 #[case::preserves_path(None, None, "/v1/messages?trace=repro")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
-#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses?trace=repro")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]
 async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	#[case] path_override: Option<&str>,

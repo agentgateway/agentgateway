@@ -110,6 +110,7 @@ info:
     "input_tokens": 10,
     "output_tokens": 10,
     "total_tokens": 20,
+    "reasoning_tokens": 0,
     "service_tier": "default",
     "provider_model": "gpt-4o-2024-08-06"
   }

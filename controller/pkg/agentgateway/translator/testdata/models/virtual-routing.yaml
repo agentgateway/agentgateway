@@ -235,6 +235,7 @@ output:
       concreteModel:
         backend:
           backend: default/openai-models/backend.llm
+        discoveryProvider: openai
         modelVisibility: INTERNAL
       key: default/openai-models.llm
       listenerKey: default/virtual-models.llm

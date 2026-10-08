@@ -1,11 +1,20 @@
+use std::convert::Infallible;
+use std::fmt::Display;
 use std::str::FromStr;
+use std::time::Duration;
 
-use ::http::{HeaderValue, Method, StatusCode, header};
+use agent_core::define_schema_aliases;
+use agent_core::serdes::{apply, ser_string_or_bytes_option, serde_dur_option};
+use agent_core::strng::Strng;
+use agent_http::{PolicyResponse, Request};
+use agent_policy::{
+	BoxError, PolicyContext, RequestAction, RequestPolicy, TraceSeverity as Severity, pol_result,
+};
+use http::{HeaderValue, Method, StatusCode, header};
 use serde::de::Error;
+use serde::{Serialize, Serializer};
 
-use crate::http::{PolicyResponse, Request, filters};
-use crate::proxy::dtrace::{self};
-use crate::*;
+define_schema_aliases!();
 
 const TRACE_POLICY_KIND: &str = "cors";
 
@@ -141,14 +150,20 @@ impl TryFrom<CorsSerde> for Cors {
 	}
 }
 
-impl Cors {
+impl RequestPolicy for Cors {
+	type ResponseState = Infallible;
+
 	/// Apply applies the CORS header. It seems a lot of implementations handle this differently wrt when
 	/// to add or not add headers, and when to forward the request.
 	/// We follow Envoy semantics here (with forwardNotMatchingPreflights=false)
-	pub fn apply(&self, req: &mut Request) -> Result<PolicyResponse, filters::Error> {
+	async fn apply(
+		&self,
+		_ctx: PolicyContext<'_>,
+		req: &mut Request,
+	) -> Result<RequestAction<Infallible>, BoxError> {
 		// If no origin, return immediately
 		let Some(origin) = req.headers().get(header::ORIGIN) else {
-			dtrace::pol_result!(dtrace::Info, Skip, "request has no Origin header");
+			pol_result!(Severity::Info, Skip, "request has no Origin header");
 			return Ok(Default::default());
 		};
 		// Determine whether this is a CORS preflight request:
@@ -180,33 +195,32 @@ impl Cors {
 			if is_preflight {
 				// Semantics: do not forward non-matching preflight requests.
 				// If it is a preflight and the origin does not match, respond locally with 200 and no CORS headers.
-				dtrace::pol_result!(
-					dtrace::Severity::Warn,
+				pol_result!(
+					Severity::Warn,
 					Apply,
 					"short-circuited preflight request for disallowed origin {origin:?}",
 				);
 				let response = ::http::Response::builder()
 					.status(StatusCode::OK)
-					.body(crate::http::Body::empty())?;
-				return Ok(PolicyResponse {
-					direct_response: Some(response),
-					response_headers: None,
-				});
+					.body(agent_http::Body::empty())?;
+				return Ok(
+					PolicyResponse {
+						direct_response: Some(response),
+						response_headers: None,
+					}
+					.into(),
+				);
 			} else {
 				// If not a preflight, and origin is not allowed, do nothing (let it pass through without CORS headers).
-				dtrace::pol_result!(
-					dtrace::Severity::Warn,
-					Skip,
-					"origin {origin:?} is not allowed",
-				);
+				pol_result!(Severity::Warn, Skip, "origin {origin:?} is not allowed");
 				return Ok(Default::default());
 			}
 		}
 
 		if req.method() == Method::OPTIONS {
 			// Handle preflight request
-			dtrace::pol_result!(
-				dtrace::Severity::Success,
+			pol_result!(
+				Severity::Success,
 				Apply,
 				"allowed preflight request for origin {origin:?}",
 			);
@@ -228,15 +242,18 @@ impl Cors {
 			if let Some(h) = self.expose_headers.to_header_value() {
 				rb = rb.header(header::ACCESS_CONTROL_EXPOSE_HEADERS, h);
 			}
-			let response = rb.body(crate::http::Body::empty())?;
-			return Ok(PolicyResponse {
-				direct_response: Some(response),
-				response_headers: None,
-			});
+			let response = rb.body(agent_http::Body::empty())?;
+			return Ok(
+				PolicyResponse {
+					direct_response: Some(response),
+					response_headers: None,
+				}
+				.into(),
+			);
 		}
 
-		dtrace::pol_result!(
-			dtrace::Severity::Info,
+		pol_result!(
+			Severity::Info,
 			Apply,
 			"attached CORS response headers for origin {origin:?}",
 		);
@@ -250,12 +267,17 @@ impl Cors {
 		}
 		// For actual requests, we would need to add CORS headers to the response
 		// but since we only have access to the request here, we return None
-		Ok(PolicyResponse {
-			direct_response: None,
-			response_headers: Some(response_headers),
-		})
+		Ok(
+			PolicyResponse {
+				direct_response: None,
+				response_headers: Some(response_headers),
+			}
+			.into(),
+		)
 	}
+}
 
+impl Cors {
 	fn preflight_allow_methods(&self, headers: &http::HeaderMap) -> Option<http::HeaderValue> {
 		match &self.allow_methods {
 			WildcardOrList::None => None,
@@ -288,20 +310,6 @@ impl Cors {
 				}),
 			WildcardOrList::List(_) => self.allow_headers.to_header_value(),
 		}
-	}
-}
-
-impl crate::store::RequestPolicyTrait for Cors {
-	async fn apply(
-		&self,
-		_client: &crate::proxy::httpproxy::PolicyClient,
-		_log: &mut crate::telemetry::log::RequestLog,
-		req: &mut Request,
-	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
-		self
-			.apply(req)
-			.map_err(crate::proxy::ProxyError::from)
-			.map_err(Into::into)
 	}
 }
 
@@ -456,6 +464,8 @@ fn wildcard_match(pattern: &str, value: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+	use agent_policy::testing::{PolicyTest, TestRequest};
+
 	use super::*;
 
 	#[test]
@@ -506,8 +516,8 @@ mod tests {
 		assert!(ParsedOrigin::parse("http://exa*mple.com", false).is_none());
 	}
 
-	#[test]
-	fn preflight_wildcard_headers_echo_request_headers() {
+	#[tokio::test]
+	async fn preflight_wildcard_headers_echo_request_headers() {
 		let cors = Cors::try_from(CorsSerde {
 			allow_credentials: false,
 			allow_headers: vec!["*".to_string()],
@@ -517,20 +527,28 @@ mod tests {
 			max_age: None,
 		})
 		.expect("valid cors policy");
-		let mut req = ::http::Request::builder()
-			.method(Method::OPTIONS)
-			.uri("http://lo")
-			.header(header::ORIGIN, "http://example.com")
-			.header(header::ACCESS_CONTROL_REQUEST_METHOD, "PUT")
-			.header(
-				header::ACCESS_CONTROL_REQUEST_HEADERS,
-				"x-header-1, x-header-2",
+		let mut test = PolicyTest::from_policy(cors);
+		let response = test
+			.request(
+				TestRequest::new(Method::OPTIONS, "http://lo")
+					.header(
+						header::ORIGIN,
+						HeaderValue::from_static("http://example.com"),
+					)
+					.header(
+						header::ACCESS_CONTROL_REQUEST_METHOD,
+						HeaderValue::from_static("PUT"),
+					)
+					.header(
+						header::ACCESS_CONTROL_REQUEST_HEADERS,
+						HeaderValue::from_static("x-header-1, x-header-2"),
+					),
 			)
-			.body(crate::http::Body::empty())
-			.expect("valid request");
-
-		let response = cors.apply(&mut req).expect("cors evaluation");
-		let direct = response.direct_response.expect("preflight response");
+			.await;
+		let direct = response
+			.direct_response
+			.as_ref()
+			.expect("preflight response");
 		assert_eq!(
 			direct
 				.headers()

@@ -7,8 +7,7 @@ use std::time::{Duration, Instant, SystemTime};
 use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
-	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
-	quoted,
+	OptionExt, ValueBag, current_connection_id, current_request_id, debug, display, quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::{Buf, Bytes};
@@ -381,6 +380,9 @@ impl<T: Debug> Debug for AsyncLog<T> {
 /// Per-request accumulator of prompt-guard guardrail evaluations.
 pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 
+/// Per-request accumulator of mcpGuardrails dynamic metadata.
+pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
+
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: MetricFields,
@@ -396,6 +398,9 @@ pub struct Config {
 	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
 	#[serde(skip)]
 	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
+	/// Compiled `standardAttributes.session`, replaced on config reload.
+	#[serde(skip)]
+	pub session: Arc<arc_swap::ArcSwapOption<cel::Expression>>,
 	/// Level sets the level for logs
 	pub level: String,
 	/// Format sets the logging format (text or json)
@@ -519,21 +524,6 @@ fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
 	} else {
 		ValueBag::capture_serde1(v)
 	}
-}
-
-fn original_model_from_metadata<'a>(
-	req: Option<&'a cel::RequestSnapshot>,
-	resp: Option<&'a cel::ResponseSnapshot>,
-) -> Option<&'a str> {
-	resp
-		.and_then(|snapshot| snapshot.metadata.as_ref())
-		.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		.or_else(|| {
-			req
-				.and_then(|snapshot| snapshot.metadata.as_ref())
-				.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		})
-		.and_then(Value::as_str)
 }
 
 /// The incoming trace context picks which setting applies: `random_sampling` when the request has
@@ -776,7 +766,7 @@ impl CelLogging {
 			database_fields,
 			metric_fields,
 		} = self;
-		let executor = if inputs.req.is_none() && inputs.source_context.is_some() {
+		let mut executor = if inputs.req.is_none() && inputs.source_context.is_some() {
 			// TCP case: use new_tcp_logger
 			cel::Executor::new_tcp_logger(inputs.source_context, inputs.end_time)
 		} else {
@@ -791,6 +781,9 @@ impl CelLogging {
 				inputs.proxy,
 			)
 		};
+		if let Some(md) = inputs.mcp_guardrails {
+			executor.mcp_guardrails = cel::ExtensionOrDirect::Direct(Some(md));
+		}
 		CelLoggingExecutor {
 			executor,
 			filter,
@@ -809,6 +802,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub llm_response: Option<&'a LLMContext>,
 	pub mcp: Option<&'a MCPInfo>,
 	pub guardrails: Option<&'a Vec<cel::GuardrailInfo>>,
+	pub mcp_guardrails: Option<&'a mcp::guardrails::McpGuardrailsDynamicMetadata>,
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
@@ -1155,7 +1149,9 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			original_model: None,
 			guardrails: Default::default(),
+			mcp_guardrails: Default::default(),
 			budgets: None,
 			a2a_method: None,
 			a2a_response: None,
@@ -1251,6 +1247,7 @@ impl RequestLog {
 			llm_response,
 			mcp: mcp.filter(|m| !m.is_empty()),
 			guardrails: None,
+			mcp_guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
 			proxy: Some(&proxy_timing),
@@ -1333,7 +1330,9 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
+	pub mcp_guardrails: McpGuardrailsLog,
 	pub budgets: Option<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
@@ -1379,6 +1378,7 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 		// These operations have no standard GenAI operation name. Keep the custom values bounded.
 		InputFormat::Realtime => "realtime",
 		InputFormat::Rerank => "rerank",
+		InputFormat::Decisions => "decisions",
 		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
 		// Detection has not identified the operation; do not assume it is chat.
 		InputFormat::Detect => "unknown",
@@ -1457,6 +1457,7 @@ impl Drop for DropOnLog {
 
 			let mcp = log.mcp_status.take();
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
+			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
 			let cel_end_time = cel::RequestTime(end_time.as_datetime());
 			// The response snapshot is captured before the response body is drained, so
@@ -1477,6 +1478,7 @@ impl Drop for DropOnLog {
 				llm_response: llm_response.as_ref(),
 				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
 				guardrails: guardrails.as_ref(),
+				mcp_guardrails: mcp_guardrails.as_ref(),
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
@@ -1822,13 +1824,10 @@ impl Drop for DropOnLog {
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
-					log.llm_request.as_ref().map(|r| {
-						if r.input_format == InputFormat::Embeddings {
-							"embeddings".into()
-						} else {
-							"chat".into()
-						}
-					}),
+					log
+						.llm_request
+						.as_ref()
+						.map(|r| gen_ai_operation_name(r.input_format).into()),
 				),
 				(
 					"gen_ai.provider.name",
@@ -1843,6 +1842,10 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.response_model.display()),
+				),
+				(
+					"agw.ai.original_model",
+					log.original_model.as_deref().map(Into::into),
 				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
@@ -2123,22 +2126,12 @@ impl Drop for DropOnLog {
 				}
 
 				if log_store_enabled {
-					let original_model = original_model_from_metadata(
-						log.request_snapshot.as_deref(),
-						log.response_snapshot.as_ref(),
-					)
-					.map(str::to_owned);
-
 					let mut db_kv = kv.clone();
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
 							Cow::Borrowed("user_agent.name"),
 							user_agent_name(log.request_snapshot.as_deref()).map(Value::String),
-						),
-						(
-							Cow::Borrowed("agw.ai.original_model"),
-							original_model.clone().map(Value::String),
 						),
 						(
 							Cow::Borrowed("agw.api_key.name"),
@@ -2445,9 +2438,7 @@ impl OtelAccessLogger {
 	pub fn shutdown(&self) {
 		let _ = self.inner.provider.shutdown();
 	}
-}
 
-impl OtelLogSink for OtelAccessLogger {
 	fn emit<'v>(&self, level: &str, _target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
 		let severity = match level {
 			"error" => Severity::Error,
@@ -2510,10 +2501,6 @@ impl OtelLogSink for OtelAccessLogger {
 		}
 
 		self.inner.logger.emit(record);
-	}
-
-	fn shutdown(&self) {
-		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -3220,6 +3207,7 @@ mod tests {
 			(InputFormat::Embeddings, "embeddings"),
 			(InputFormat::Realtime, "realtime"),
 			(InputFormat::Rerank, "rerank"),
+			(InputFormat::Decisions, "decisions"),
 			(InputFormat::CountTokens, "count_tokens"),
 			(InputFormat::GeminiCountTokens, "count_tokens"),
 			(InputFormat::Detect, "unknown"),
@@ -3747,6 +3735,39 @@ mod tests {
 				.iter()
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
+		);
+	}
+
+	#[test]
+	fn original_model_span_attribute() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(metric_test_llm_request());
+		log.original_model = Some("smart-model".to_string());
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.to_string())
+		};
+		assert_eq!(value("gen_ai.request.model").as_deref(), Some("test-model"));
+		assert_eq!(
+			value("agw.ai.original_model").as_deref(),
+			Some("smart-model")
 		);
 	}
 

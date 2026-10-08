@@ -819,6 +819,13 @@
             "string",
             "null"
           ]
+        },
+        "session": {
+          "description": "CEL expression identifying the session a request belongs to, exposed to CEL as `request.agent.session`.\nIf unset, or if the expression fails, the session is detected from well-known agent headers\nsuch as `x-claude-code-session-id`. Return `null` to mark the request as having no session.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -1861,7 +1868,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"
@@ -2780,8 +2787,59 @@
               ]
             }
           ]
+        },
+        {
+          "description": "In-process guardrail driven by CEL expressions.",
+          "type": "object",
+          "properties": {
+            "condition": {
+              "description": "Condition gating the action; absent means always.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Expression"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "expression"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "oneOf": [
+            {
+              "description": "Reject with this message. Exactly one of `reject` or `transform` is required.",
+              "type": "object",
+              "properties": {
+                "reject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reject"
+              ]
+            },
+            {
+              "description": "Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).\nUse `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.",
+              "type": "object",
+              "properties": {
+                "transform": {
+                  "$ref": "#/$defs/Expression"
+                }
+              },
+              "required": [
+                "transform"
+              ]
+            }
+          ]
         }
-      ]
+      ],
+      "unevaluatedProperties": false
     },
     "Phase": {
       "type": "string",
@@ -3110,7 +3168,7 @@
               ]
             },
             {
-              "description": "Send a configured secret value to the backend.",
+              "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
               "type": "object",
               "properties": {
                 "key": {
@@ -3118,7 +3176,26 @@
                   "properties": {
                     "value": {
                       "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
-                      "$ref": "#/$defs/FileOrInline"
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/FileOrInline"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expression": {
+                      "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/Expression"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
                     },
                     "location": {
                       "description": "Where to place the secret in the backend request.",
@@ -3132,10 +3209,7 @@
                       ]
                     }
                   },
-                  "additionalProperties": false,
-                  "required": [
-                    "value"
-                  ]
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -4411,14 +4485,32 @@
           "$ref": "#/$defs/AuthorizationLocation"
         },
         "key": {
-          "description": "Credential value.",
-          "$ref": "#/$defs/FileOrInline"
+          "description": "Credential value. Exactly one of `key` or `expression` must be set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
-        "location",
-        "key"
+        "location"
       ]
     },
     "BackendAuth": {
@@ -4451,7 +4543,7 @@
           "additionalProperties": false
         },
         {
-          "description": "Send a configured secret value to the backend.",
+          "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
           "type": "object",
           "properties": {
             "key": {
@@ -4459,7 +4551,26 @@
               "properties": {
                 "value": {
                   "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
-                  "$ref": "#/$defs/FileOrInline"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "expression": {
+                  "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
                 },
                 "location": {
                   "description": "Where to place the secret in the backend request.",
@@ -4473,10 +4584,7 @@
                   ]
                 }
               },
-              "additionalProperties": false,
-              "required": [
-                "value"
-              ]
+              "additionalProperties": false
             }
           },
           "required": [
@@ -5196,7 +5304,7 @@
       "additionalProperties": false
     },
     "ContentScope": {
-      "description": "A category of request content that a prompt guard can inspect.",
+      "description": "Which category of request or response content a prompt guard inspects.\nEncrypted payloads are excluded. Signed response payloads are scanned but\na mask that would change them rejects the response instead.",
       "oneOf": [
         {
           "description": "The system/developer prompt.",
@@ -5204,7 +5312,7 @@
           "const": "systemPrompt"
         },
         {
-          "description": "Regular user/assistant message text.",
+          "description": "Regular user/assistant message text and plaintext reasoning blocks.",
           "type": "string",
           "const": "messages"
         },
@@ -5697,6 +5805,17 @@
             "body": "The request was rejected due to inappropriate content",
             "status": 403
           }
+        },
+        "scope": {
+          "description": "Which parts of the response this guard inspects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentScope"
+          },
+          "minItems": 1,
+          "default": [
+            "messages"
+          ]
         }
       },
       "unevaluatedProperties": false,
@@ -5902,6 +6021,11 @@
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"
+        },
+        {
+          "description": "OpenAI /v1/decisions",
+          "type": "string",
+          "const": "decisions"
         }
       ]
     },
@@ -6501,7 +6625,7 @@
       ]
     },
     "LocalOidcConfig": {
-      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated document navigations redirect to the provider login flow. Browser requests\npositively identified as non-navigation requests return 401 so the caller can initiate a\ndocument navigation.",
+      "description": "Browser-based OIDC authentication policy.\n\nExplicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.\nUnauthenticated document navigations redirect to the provider login flow. Browser requests\npositively identified as non-navigation requests return 401 so the caller can initiate a\ndocument navigation.\n\nConcurrent session refreshes are coalesced per gateway replica, with results reused for\n30 seconds; temporary failures are cached for one second. With multiple replicas, configure\nthe provider's refresh-token reuse grace period (for example, Okta's rotation grace period)\nto accommodate concurrent refreshes. A late rejection from another replica can otherwise\nclear a newly rotated refresh cookie.\n\nSession refresh requires the provider to return a new `id_token` in each refresh response.\nProviders that omit it require the user to sign in again when the stored ID token expires.",
       "type": "object",
       "properties": {
         "issuer": {
@@ -6571,7 +6695,7 @@
           "type": "string"
         },
         "scopes": {
-          "description": "Additional OAuth2 scopes to request. `openid` is always included.",
+          "description": "Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when\nthe provider requires it to issue a refresh token; returned refresh tokens are used\nautomatically.",
           "type": "array",
           "items": {
             "type": "string"
@@ -7001,7 +7125,7 @@
           ]
         },
         "cache": {
-          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.\nThe TTL is evaluated after the authorization response has been applied to the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -7244,11 +7368,11 @@
           }
         },
         "ttl": {
-          "description": "CEL expression that returns how long cached authorization results are reused.\nThe expression is evaluated after the authorization response has been applied\nto the request, and must return either a duration or timestamp.",
+          "description": "CEL expression that returns how long cached results are reused.\nMust return either a duration or timestamp.",
           "$ref": "#/$defs/Expression"
         },
         "maxEntries": {
-          "description": "Maximum number of authorization results to keep in the cache.",
+          "description": "Maximum number of results to keep in the cache.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
@@ -7306,7 +7430,7 @@
           ]
         },
         "cache": {
-          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.\nThe TTL is evaluated after the authorization response has been applied to the request.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -9340,7 +9464,9 @@
         "generateContent",
         "geminiCountTokens",
         "realtime",
-        "rerank"
+        "rerank",
+        "decisions",
+        "systemOne"
       ]
     },
     "LocalBackendPolicies": {
@@ -9500,7 +9626,7 @@
           "default": null
         },
         "mcpGuardrails": {
-          "description": "External MCP policy processors.",
+          "description": "Remote and in-process CEL policy processors for MCP requests and responses.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpGuardrails"
@@ -12177,7 +12303,10 @@
         "openrouter",
         "togetherai",
         "xai",
-        "fireworks"
+        "fireworks",
+        "meta",
+        "perplexity",
+        "typesafe"
       ]
     },
     "LocalLLMProviderDefaults": {
@@ -12208,6 +12337,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
+        },
+        "requestTransformation": {
+          "description": "CEL expressions that modify the HTTP request (headers, metadata, etc) to the LLM provider.\nUnlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestHeaders": {
           "description": "Headers to add, set, or remove on requests to the LLM provider.",
@@ -12378,7 +12518,7 @@
           "additionalProperties": true
         },
         "transformation": {
-          "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.",
+          "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.\nThis operates on fields of the LLM request payload; to modify the HTTP request (headers, metadata, etc), use `requestTransformation`.",
           "type": [
             "object",
             "null"
@@ -12396,6 +12536,17 @@
           "additionalProperties": {
             "$ref": "#/$defs/Expression"
           }
+        },
+        "requestTransformation": {
+          "description": "requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.\nUnlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "requestHeaders": {
           "description": "requestHeaders modifies headers in requests to the LLM provider.",
@@ -12617,6 +12768,17 @@
               "type": "null"
             }
           ]
+        },
+        "callout": {
+          "description": "callout selects the target model by calling an external HTTP service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VirtualModelCallout"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -12732,6 +12894,147 @@
       "additionalProperties": false,
       "required": [
         "model"
+      ]
+    },
+    "VirtualModelCallout": {
+      "description": "Selects a virtual model's target by calling an external HTTP service.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "description": "Headers to set on the callout request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "body": {
+          "description": "CEL expression that computes the callout request body.\nStrings and bytes are used directly; other values are JSON-encoded.\nIf unset, the original request body is forwarded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transformation": {
+          "description": "CEL expressions that compute request payload fields from the callout response, overriding existing values.\n`callout.headers` holds the response headers and `callout.body` the decoded JSON response body.\n`model` is required and selects the target from `llm.models`.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the callout fails, returns a non-2xx or non-JSON response, or selects an unknown model.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/VirtualModelCalloutFailureMode",
+          "default": "failClosed"
+        },
+        "cache": {
+          "description": "Reuse callout responses using CEL expressions as the cache key.\nOn a cache hit, `transformation` is evaluated against the cached response.\nKeying on a session identifier makes routing sticky for that session.\nThe TTL is evaluated with `callout` available, before `transformation` is applied.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "transformation"
+      ]
+    },
+    "VirtualModelCalloutFailureMode": {
+      "oneOf": [
+        {
+          "description": "Reject the request.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Route to this model, which is resolved against llm.models, without applying `transformation`.",
+          "type": "object",
+          "properties": {
+            "fallback": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fallback"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "LocalLLMPolicy": {

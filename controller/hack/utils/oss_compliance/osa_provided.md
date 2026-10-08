@@ -38,15 +38,15 @@ Name|Version|License
 [google.golang.org/grpc](https://google.golang.org/grpc)|v1.84.0|Apache License 2.0
 [google.golang.org/protobuf](https://google.golang.org/protobuf)|v1.36.12|BSD 3-clause "New" or "Revised" License
 [helm/v4](https://helm.sh/helm/v4)|v4.3.0|Apache License 2.0
-[istio.io/api](https://istio.io/api)|v1.31.0-alpha.1.0.20260917210935-09c7d5318bb1|Apache License 2.0
-[istio.io/client-go](https://istio.io/client-go)|v1.31.0-alpha.1.0.20260917211300-e00df3915210|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260922124221-31ce90461f54|Apache License 2.0
-[k8s.io/api](https://k8s.io/api)|v0.37.0|Apache License 2.0
-[k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.37.0|Apache License 2.0
-[k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.37.0|Apache License 2.0
-[k8s.io/client-go](https://k8s.io/client-go)|v0.37.0|Apache License 2.0
+[istio.io/api](https://istio.io/api)|v1.31.0-alpha.1.0.20260924080753-e0d275e5684d|Apache License 2.0
+[istio.io/client-go](https://istio.io/client-go)|v1.31.0-alpha.1.0.20260924081053-3eeb139684f9|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260926220654-22d0ef667771|Apache License 2.0
+[k8s.io/api](https://k8s.io/api)|v0.37.1|Apache License 2.0
+[k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.37.1|Apache License 2.0
+[k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.37.1|Apache License 2.0
+[k8s.io/client-go](https://k8s.io/client-go)|v0.37.1|Apache License 2.0
 [klog/v2](https://k8s.io/klog/v2)|v2.140.0|Apache License 2.0
-[k8s.io/streaming](https://k8s.io/streaming)|v0.37.0|Apache License 2.0
+[k8s.io/streaming](https://k8s.io/streaming)|v0.37.1|Apache License 2.0
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260707023825-cf1189d6abe3|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.25.1|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.22.0|Apache License 2.0

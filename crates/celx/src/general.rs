@@ -34,6 +34,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("default", default);
 	ctx.add_function("coalesce", coalesce);
 	ctx.add_function("regexReplace", regex_replace);
+	ctx.add_function("regexReplaceAll", regex_replace_all);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
 
@@ -377,6 +378,25 @@ pub fn regex_replace<'a>(
 	match regex::Regex::new(regex.as_ref()) {
 		Ok(re) => Ok(
 			re.replace(this.as_ref(), replacement.as_ref())
+				.to_string()
+				.into(),
+		),
+		Err(err) => Err(ftx.error(format!("'{}' not a valid regex:\n{err}", regex.as_ref()))),
+	}
+}
+
+pub fn regex_replace_all<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	regex: Argument,
+	replacement: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let regex: StringValue = regex.load_value(ftx)?;
+	let replacement: StringValue = replacement.load_value(ftx)?;
+	match regex::Regex::new(regex.as_ref()) {
+		Ok(re) => Ok(
+			re.replace_all(this.as_ref(), replacement.as_ref())
 				.to_string()
 				.into(),
 		),

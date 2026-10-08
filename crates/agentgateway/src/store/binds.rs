@@ -13,7 +13,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::{BackendAuth, BackendAuthKind};
+use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -286,6 +286,7 @@ pub struct BackendPolicies {
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: BackendPolicy<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
+	pub url_rewrite: Option<filters::UrlRewrite>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
@@ -341,6 +342,7 @@ impl BackendPolicies {
 				.response_header_modifier
 				.or(self.response_header_modifier),
 			request_redirect: other.request_redirect.or(self.request_redirect),
+			url_rewrite: other.url_rewrite.or(self.url_rewrite),
 			request_mirror: if other.request_mirror.is_empty() {
 				self.request_mirror
 			} else {
@@ -366,12 +368,8 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(BackendAuth {
-			kind: Some(BackendAuthKind::Aws(aws)),
-			..
-		}) = self.backend_auth.as_ref()
-		{
-			for expr in aws.cel_expressions() {
+		if let Some(backend_auth) = self.backend_auth.as_ref() {
+			for expr in backend_auth.cel_expressions() {
 				ctx.register_expression(expr);
 			}
 		}
@@ -386,6 +384,11 @@ impl BackendPolicies {
 		if let Some(session_affinity) = self.session_affinity.as_ref() {
 			session_affinity.register_expressions(ctx);
 		}
+		if let Some(guardrails) = self.mcp_guardrails.as_ref() {
+			for expr in guardrails.expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 	}
 }
 
@@ -393,7 +396,7 @@ impl BackendPolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
-	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub local_rate_limit: RequestPolicy<http::localratelimit::RateLimits>,
 	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
 	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -504,7 +507,7 @@ impl RoutePolicies {
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub local_rate_limit: Option<Arc<http::localratelimit::RateLimits>>,
 	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
@@ -605,12 +608,6 @@ pub struct RoutePath<'a> {
 	pub service: Option<&'a NamespacedHostname>,
 	pub routes: Vec<&'a RouteName>,
 	pub route_inlines: Vec<&'a [TrafficPolicy]>,
-}
-
-impl<'a> RoutePath<'a> {
-	pub fn final_route(&self) -> Option<&'a RouteName> {
-		self.routes.last().copied()
-	}
 }
 
 impl Store {
@@ -1410,6 +1407,9 @@ impl Store {
 				BackendTrafficPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
 				},
+				BackendTrafficPolicy::UrlRewrite(p) => {
+					pol.url_rewrite.get_or_insert_with(|| p.clone());
+				},
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
@@ -1477,25 +1477,6 @@ impl Store {
 				},
 				_ => None,
 			})
-			.collect_vec()
-	}
-
-	pub fn all_access_log_policies(&self) -> Vec<Arc<crate::types::agent::AccessLogPolicy>> {
-		self
-			.binds
-			.iter()
-			.flat_map(|(bind_key, bind)| {
-				self
-					.listeners
-					.get(bind_key)
-					.into_iter()
-					.flat_map(|listeners| listeners.iter())
-					.map(|listener| {
-						self.listener_frontend_policies(&listener.name, Some(bind.address.port()), None)
-					})
-			})
-			.filter_map(|fp| fp.access_log_otlp)
-			.unique_by(|p| Arc::as_ptr(p) as usize)
 			.collect_vec()
 	}
 
@@ -2958,6 +2939,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: None,
 			authorization: None,
@@ -3065,6 +3047,7 @@ mod tests {
 					)),
 				}),
 				backend_policies: vec![],
+				..Default::default()
 			})),
 			ai_policy: None,
 			authorization: None,
@@ -3201,6 +3184,7 @@ mod tests {
 						kind: Some(backend_reference::Kind::Backend(format!("/default/{name}"))),
 					}),
 					backend_policies: vec![],
+					..Default::default()
 				})),
 				ai_policy: None,
 				authorization: None,

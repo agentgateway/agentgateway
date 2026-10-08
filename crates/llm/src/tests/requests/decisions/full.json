@@ -1,0 +1,44 @@
+{
+  "model": "gpt-6-luna",
+  "input": [
+    {"type": "message", "role": "user", "content": "My order arrived with a cracked screen."},
+    {
+      "role": "user",
+      "content": [
+        {"type": "input_text", "text": "I want my money back."},
+        {"type": "input_text", "text": "This is the second time."}
+      ]
+    }
+  ],
+  "questions": [
+    {"type": "predicate", "name": "refund", "instructions": "Is the customer asking for a refund?"},
+    {"type": "predicate", "instructions": "Is the customer angry?"},
+    {
+      "type": "choice",
+      "name": "category",
+      "instructions": "What is the ticket about?",
+      "choices": [
+        {"value": "damage", "description": "Item arrived damaged"},
+        {"value": "shipping"}
+      ]
+    },
+    {
+      "type": "choice",
+      "name": "repeat",
+      "instructions": "Has this happened before?",
+      "choices": [{"value": true}, {"value": false}, {"value": "unsure"}]
+    },
+    {
+      "type": "score",
+      "name": "urgency",
+      "instructions": "How urgent is this ticket?",
+      "levels": [
+        {"label": "Low", "description": "Can wait"},
+        {"label": "Medium"},
+        {"label": "High"}
+      ]
+    },
+    {"type": "predicate", "name": "1", "instructions": "Is this the customer's first message?"}
+  ],
+  "safety_identifier": "user-123"
+}

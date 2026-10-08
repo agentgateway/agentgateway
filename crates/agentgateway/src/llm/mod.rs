@@ -10,8 +10,8 @@ pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
 	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
-	RequestType, ResponseType, RouteType, SimpleChatCompletionMessage, TokenGapSummary, anthropic,
-	conversion, copilot, custom, gemini, logged_response_parsing, openai, types,
+	RequestType, ResponseText, ResponseType, RouteType, SimpleChatCompletionMessage, TokenGapSummary,
+	anthropic, conversion, copilot, custom, gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -32,6 +32,7 @@ use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
 pub mod model_router;
 pub mod model_transform;
+pub mod router_callout;
 pub use agent_llm::{azure, bedrock, vertex};
 
 /// Default body buffer limit once a request enters LLM processing.
@@ -253,14 +254,33 @@ impl AIProvider {
 /// Classify how the upstream reports cached tokens, from the source wire format the
 /// gateway is about to parse — not the provider name, which can carry another
 /// provider's native semantics (e.g. Vertex serving Anthropic models).
+///
+/// For chat, `chat_output` decides: `provider_format` echoes the client format for Bedrock
+/// Converse, so it can't distinguish Converse from Mantle's OpenAI APIs.
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
+	chat_output: Option<ChatFormat>,
 	request_model: &str,
+	path: &str,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	if let Some(output) = chat_output {
+		return match output {
+			ChatFormat::AnthropicMessages | ChatFormat::BedrockConverse => InputExcludesCache,
+			ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses | ChatFormat::VertexGemini => {
+				InputIncludesCache
+			},
+		};
+	}
 	match provider {
+		// Detect passthrough to Mantle's OpenAI APIs.
+		AIProvider::Bedrock(_)
+			if path.ends_with("/chat/completions") || path.ends_with("/responses") =>
+		{
+			InputIncludesCache
+		},
 		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
 		AIProvider::Copilot(_) if copilot::Provider::is_anthropic_model(request_model) => {
 			InputExcludesCache
@@ -536,7 +556,7 @@ impl ChatTranslation {
 			ChatFormat::AnthropicMessages => custom::ProviderFormat::Messages,
 			ChatFormat::BedrockConverse => match self.input {
 				// Bedrock chat always renders to Converse. This format is only used for
-				// shared bookkeeping (route type, cache convention, custom-style labels);
+				// shared bookkeeping (route type, custom-style labels);
 				// Bedrock path setup ignores these chat distinctions for Converse.
 				InputFormat::Completions => custom::ProviderFormat::Completions,
 				InputFormat::Messages => custom::ProviderFormat::Messages,
@@ -972,7 +992,14 @@ impl AIProvider {
 	pub fn supported_formats(&self, request_model: &str) -> Vec<custom::ProviderFormat> {
 		use custom::ProviderFormat::*;
 		match self {
-			AIProvider::OpenAI(_) => vec![Completions, Responses, Embeddings, Realtime, Rerank],
+			AIProvider::OpenAI(_) => vec![
+				Completions,
+				Responses,
+				Embeddings,
+				Realtime,
+				Rerank,
+				Decisions,
+			],
 			AIProvider::Copilot(_) => {
 				if copilot::Provider::is_anthropic_model(request_model) {
 					vec![Messages]
@@ -1119,6 +1146,11 @@ impl AIProvider {
 			InputFormat::CountTokens => AnthropicTokenCount,
 			InputFormat::GeminiCountTokens => GeminiCountTokens,
 			InputFormat::Rerank => Rerank,
+			InputFormat::Decisions => {
+				return [Decisions, SystemOne]
+					.into_iter()
+					.find(|f| self.supports_format(*f, request_model));
+			},
 			InputFormat::Detect
 			| InputFormat::Completions
 			| InputFormat::Messages
@@ -1301,6 +1333,31 @@ impl AIProvider {
 
 		if has_host_override && path_prefix.is_none() && !matches!(self, AIProvider::Custom(_)) {
 			return Ok(());
+		}
+
+		// The client's query belongs to the inbound API format (e.g. Anthropic's `?beta=true`), so
+		// drop it once the request is translated to another format; strict upstreams like Google
+		// reject unknown parameters. Bedrock Runtime always speaks its own APIs (Converse, etc), even
+		// though its route type mirrors the input format; Mantle serves the native formats.
+		let translated = llm_request.is_some_and(|l| {
+			if matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Runtime)) {
+				return true;
+			}
+			let same_format = match l.input_format {
+				InputFormat::Completions => RouteType::Completions,
+				InputFormat::Messages => RouteType::Messages,
+				InputFormat::Responses => RouteType::Responses,
+				InputFormat::Gemini => RouteType::GenerateContent,
+				_ => return false,
+			};
+			route_type != same_format
+		});
+		if translated {
+			http::modify_req_uri(req, |uri| {
+				let path = uri.path_and_query.as_ref().map_or("/", |p| p.path());
+				uri.path_and_query = Some(PathAndQuery::try_from(path)?);
+				Ok(())
+			})?;
 		}
 
 		// Native Gemini paths carry their own `?alt=sse` (see `native_gemini_path`) while the
@@ -1840,6 +1897,43 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_decisions_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		let (parts, managed_body, mut req) = self
+			.read_body_and_default_model::<types::decisions::Request>(policies, req, log)
+			.await?;
+		self.apply_model_alias(policies, &mut req);
+
+		self
+			.process_non_chat_request(
+				backend_info,
+				policies,
+				InputFormat::Decisions,
+				req,
+				parts,
+				managed_body,
+				tokenize,
+				log,
+				|provider, req, _, llm| match provider
+					.non_chat_provider_format_for(InputFormat::Decisions, &llm.request_model)
+				{
+					Some(custom::ProviderFormat::SystemOne) => {
+						let (body, state) = conversion::systemone::from_decisions::translate(req)?;
+						llm.provider_state = Some(ProviderState::SystemOneDecisions(Arc::new(state)));
+						Ok(body)
+					},
+					_ => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+				},
+			)
+			.await
+	}
+
 	pub async fn process_responses_request(
 		&self,
 		backend_info: &crate::http::auth::BackendInfo,
@@ -1926,8 +2020,8 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				move |provider, req, parts, request_model| {
-					provider.render_count_tokens_request(req, &parts.headers, request_model, catalog)
+				move |provider, req, parts, llm| {
+					provider.render_count_tokens_request(req, &parts.headers, &llm.request_model, catalog)
 				},
 			)
 			.await
@@ -1958,8 +2052,8 @@ impl AIProvider {
 				managed_body,
 				false,
 				log,
-				|provider, req, _, request_model| {
-					provider.render_gemini_count_tokens_request(req, request_model)
+				|provider, req, _, llm| {
+					provider.render_gemini_count_tokens_request(req, &llm.request_model)
 				},
 			)
 			.await
@@ -1998,7 +2092,8 @@ impl AIProvider {
 			{
 				p.unmarshal_request(&bytes, log)
 			} else {
-				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
+				serde_json::from_slice(bytes.as_ref())
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
 			}
 			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
 		} else {
@@ -2137,6 +2232,7 @@ impl AIProvider {
 		req: &mut impl RequestType,
 		parts: &mut Parts,
 		provider_format: Option<custom::ProviderFormat>,
+		chat_output: Option<ChatFormat>,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<PreparedRequest, AIError> {
@@ -2175,8 +2271,13 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		llm_info.cache_convention = cache_convention_for(
+			self,
+			provider_format,
+			chat_output,
+			&llm_info.request_model,
+			parts.uri.path(),
+		);
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()
 		{
@@ -2234,6 +2335,7 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				Some(provider_format),
+				Some(chat_translation.output),
 				tokenize,
 				log,
 			)
@@ -2291,7 +2393,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError>
 	where
 		T: RequestType,
-		F: FnOnce(&AIProvider, &T, &Parts, &str) -> Result<Vec<u8>, AIError>,
+		F: FnOnce(&AIProvider, &T, &Parts, &mut LLMRequest) -> Result<Vec<u8>, AIError>,
 	{
 		// Detect is raw passthrough and keeps its client-facing route type upstream.
 		let provider_format = match original_format {
@@ -2321,11 +2423,12 @@ impl AIProvider {
 				&mut req,
 				&mut parts,
 				provider_format,
+				None,
 				tokenize,
 				log,
 			)
 			.await?;
-		let llm_info = match prepared {
+		let mut llm_info = match prepared {
 			PreparedRequest::Ready(llm_info) => llm_info,
 			PreparedRequest::GuardrailRejected {
 				response,
@@ -2337,8 +2440,7 @@ impl AIProvider {
 				});
 			},
 		};
-		let request_model = llm_info.request_model.as_str();
-		let body = render(self, &req, &parts, request_model)?;
+		let body = render(self, &req, &parts, &mut llm_info)?;
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {
 			Some(p) if req.body_is_json() => p.apply_final_transformations(body, log)?,
@@ -2398,12 +2500,27 @@ impl AIProvider {
 			InputFormat::GeminiCountTokens => {
 				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &logging.response)
 			},
-			InputFormat::Embeddings => {
-				self.process_embeddings_buffered_response(req, buffered, model_catalog, &logging.response)
-			},
-			InputFormat::Rerank => {
-				self.process_rerank_buffered_response(req, buffered, model_catalog, &logging.response)
-			},
+			InputFormat::Embeddings => self.process_non_chat_buffered_response(
+				req,
+				buffered,
+				model_catalog,
+				&logging.response,
+				|req, headers, bytes| self.process_embeddings_response(req, headers, bytes),
+			),
+			InputFormat::Rerank => self.process_non_chat_buffered_response(
+				req,
+				buffered,
+				model_catalog,
+				&logging.response,
+				|_, _, bytes| self.process_rerank_response(bytes),
+			),
+			InputFormat::Decisions => self.process_non_chat_buffered_response(
+				req,
+				buffered,
+				model_catalog,
+				&logging.response,
+				|req, _, bytes| self.process_decisions_response(req, bytes),
+			),
 			_ => {
 				self
 					.process_chat_or_detect_buffered_response(
@@ -2667,12 +2784,17 @@ impl AIProvider {
 		))
 	}
 
-	fn process_embeddings_buffered_response(
+	fn process_non_chat_buffered_response(
 		&self,
 		req: LLMRequest,
 		buffered: BufferedResponse,
 		model_catalog: Option<&catalog::ModelCatalog>,
 		log: &AsyncLog<llm::LLMInfo>,
+		process: impl FnOnce(
+			&LLMRequest,
+			&::http::HeaderMap,
+			Bytes,
+		) -> Result<(LLMResponse, Bytes), AIError>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
 			mut parts,
@@ -2697,49 +2819,7 @@ impl AIProvider {
 				log,
 			));
 		}
-		let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
-		Ok(Self::finalize_response(
-			parts,
-			bytes,
-			managed_body,
-			req,
-			llm_resp,
-			model_catalog,
-			log,
-		))
-	}
-
-	fn process_rerank_buffered_response(
-		&self,
-		req: LLMRequest,
-		buffered: BufferedResponse,
-		model_catalog: Option<&catalog::ModelCatalog>,
-		log: &AsyncLog<llm::LLMInfo>,
-	) -> Result<Response, AIError> {
-		let BufferedResponse {
-			mut parts,
-			bytes,
-			managed_body,
-		} = buffered;
-		parts.headers.remove(header::CONTENT_LENGTH);
-		if !parts.status.is_success() {
-			let body = self.process_error(
-				&req,
-				parts.status,
-				&bytes,
-				model_catalog.map(|c| c.as_handle()),
-			)?;
-			return Ok(Self::finalize_response(
-				parts,
-				body,
-				managed_body,
-				req,
-				LLMResponse::default(),
-				model_catalog,
-				log,
-			));
-		}
-		let (llm_resp, bytes) = self.process_rerank_response(bytes)?;
+		let (llm_resp, bytes) = process(&req, &parts.headers, bytes)?;
 		Ok(Self::finalize_response(
 			parts,
 			bytes,
@@ -2818,6 +2898,22 @@ impl AIProvider {
 				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
+	}
+
+	fn process_decisions_response(
+		&self,
+		req: &LLMRequest,
+		bytes: Bytes,
+	) -> Result<(LLMResponse, Bytes), AIError> {
+		let bytes = match &req.provider_state {
+			Some(ProviderState::SystemOneDecisions(state)) => Bytes::from(
+				conversion::systemone::from_decisions::translate_response(&bytes, state)?,
+			),
+			_ => bytes,
+		};
+		let resp: types::decisions::Response =
+			serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
+		Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 	}
 
 	fn parse_response<T>(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError>
@@ -3068,7 +3164,7 @@ impl AIProvider {
 				Some(json::ParsedJson(value)) => serde_json::from_value(value),
 				None => serde_json::from_slice(&bytes),
 			}
-			.map_err(AIError::RequestParsing)?;
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 			let model = req.model();
 			if model.as_deref().is_none() {
 				return Err(AIError::MissingField("model not specified".into()));
@@ -3078,7 +3174,8 @@ impl AIProvider {
 
 		let mut request = match cached {
 			Some(json::ParsedJson(value)) => value,
-			None => serde_json::from_slice(&bytes).map_err(AIError::RequestParsing)?,
+			None => serde_json::from_slice(&bytes)
+				.map_err(|err| AIError::RequestParsing(T::input_format(), err))?,
 		};
 		self.set_provider_request_model(&parts, &mut request, path_model_wins)?;
 		let mut request = if let Some(p) = policies {
@@ -3087,7 +3184,8 @@ impl AIProvider {
 			request
 		};
 		self.finalize_request_model(&mut request)?;
-		let req: T = serde_json::from_value(request).map_err(AIError::RequestParsing)?;
+		let req: T = serde_json::from_value(request)
+			.map_err(|err| AIError::RequestParsing(T::input_format(), err))?;
 
 		Ok((parts, managed_body, req))
 	}
@@ -3163,7 +3261,7 @@ impl AIProvider {
 				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
 				Ok(bytes.clone())
 			},
-			(_, InputFormat::Detect) => {
+			(_, InputFormat::Detect | InputFormat::Decisions) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},

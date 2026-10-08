@@ -27,19 +27,20 @@ import (
 )
 
 const (
-	aiPolicySuffix                = ":ai"
-	backendTlsPolicySuffix        = ":backend-tls"
-	backendTcpPolicySuffix        = ":backend-tcp"
-	backendTunnelPolicySuffix     = ":backend-tunnel"
-	backendauthPolicySuffix       = ":backend-auth"
-	backendTransformationSuffix   = ":backend-transformation"
-	tlsPolicySuffix               = ":tls"
-	backendHttpPolicySuffix       = ":backend-http"
-	mcpAuthorizationPolicySuffix  = ":mcp-authorization"
-	mcpAuthenticationPolicySuffix = ":mcp-authentication"
-	mcpGuardrailsPolicySuffix     = ":mcp-guardrails"
-	healthPolicySuffix            = ":health"
-	sessionAffinityPolicySuffix   = ":session-affinity"
+	aiPolicySuffix                   = ":ai"
+	backendTlsPolicySuffix           = ":backend-tls"
+	backendTcpPolicySuffix           = ":backend-tcp"
+	backendTunnelPolicySuffix        = ":backend-tunnel"
+	backendauthPolicySuffix          = ":backend-auth"
+	backendAuthorizationPolicySuffix = ":backend-authorization"
+	backendTransformationSuffix      = ":backend-transformation"
+	tlsPolicySuffix                  = ":tls"
+	backendHttpPolicySuffix          = ":backend-http"
+	mcpAuthorizationPolicySuffix     = ":mcp-authorization"
+	mcpAuthenticationPolicySuffix    = ":mcp-authentication"
+	mcpGuardrailsPolicySuffix        = ":mcp-guardrails"
+	healthPolicySuffix               = ":health"
+	sessionAffinityPolicySuffix      = ":session-affinity"
 )
 
 func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessionTag {
@@ -188,6 +189,10 @@ func translateBackendPolicyToAgw(
 		appendPolicy("backendTransformation")(translateBackendTransformation(policy))
 	}
 
+	if backend.Authorization != nil {
+		appendPolicy("backendAuthorization")(translateBackendAuthorization(policy))
+	}
+
 	if s := backend.MCP; s != nil {
 		if backend.MCP.Authorization != nil {
 			appendPolicy("backendMCPAuthorization")(translateBackendMCPAuthorization(policy))
@@ -217,6 +222,32 @@ func translateBackendPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
+func translateBackendAuthorization(policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
+	backend := policy.Spec.Backend
+	if backend == nil || backend.Authorization == nil {
+		return nil, nil
+	}
+
+	authorization, err := TranslateAuthorization(backend.Authorization)
+	backendPolicy := &api.Policy{
+		Key:  getBackendPolicyName(policy.Namespace, policy.Name) + backendAuthorizationPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Authorization{
+					Authorization: authorization,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated backend authorization policy",
+		"policy", policy.Name,
+		"agentgateway_policy", backendPolicy.Name)
+
+	return backendPolicy, err
+}
+
 func translateBackendExtAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	spec, err := buildExtAuthSpec(ctx, policy.Spec.Backend.ExtAuth, config.NamespacedName(policy))
 	return &api.Policy{
@@ -239,35 +270,60 @@ func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.Agentgate
 	processors := make([]*api.BackendPolicySpec_McpGuardrails_Processor, 0, len(em.Processors))
 	for i := range em.Processors {
 		p := &em.Processors[i]
-		if p.Remote == nil {
-			// ExactlyOneOf guards this at admission; skip defensively.
-			continue
-		}
-		be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, p.Remote.PolicyBackendEndpoint, policy.Namespace)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
-		}
-		metadata := castCELMap(p.Remote.Metadata, func(key string, expr agentgateway.CELExpression) {
-			errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
-		})
 		methods := make(map[string]api.BackendPolicySpec_McpGuardrails_Phase, len(p.Methods))
 		for name, phase := range p.Methods {
 			methods[name] = mcpMethodPhase(phase)
 		}
-		headerName := func(h agentgateway.HeaderName) string { return string(h) }
-		processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
-			Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
-				Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
-					Target:                   be,
-					InlinePolicies:           inlinePolicies,
-					FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
-					Metadata:                 metadata,
-					AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
-					DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
+		switch {
+		case p.Remote != nil:
+			be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, p.Remote.PolicyBackendEndpoint, policy.Namespace)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
+			}
+			metadata := castCELMap(p.Remote.Metadata, func(key string, expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("mcpGuardrails metadata %q is not a valid CEL expression: %s", key, expr))
+			})
+			headerName := func(h agentgateway.HeaderName) string { return string(h) }
+			processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
+				Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
+					Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
+						Target:                   be,
+						InlinePolicies:           inlinePolicies,
+						FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
+						Metadata:                 metadata,
+						AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
+						DisallowedRequestHeaders: slices.Map(p.Remote.DisallowedRequestHeaders, headerName),
+					},
 				},
-			},
-			Methods: methods,
-		})
+				Methods: methods,
+			})
+		case p.Expression != nil:
+			e := p.Expression
+			expr := &api.BackendPolicySpec_McpGuardrails_Expression{
+				Condition: castCELPtr(e.Condition, func(expr agentgateway.CELExpression) {
+					errs = append(errs, fmt.Errorf("mcpGuardrails condition is not a valid CEL expression: %s", expr))
+				}),
+			}
+			switch {
+			case e.Reject != nil:
+				expr.Action = &api.BackendPolicySpec_McpGuardrails_Expression_Reject{Reject: *e.Reject}
+			case e.Transform != nil:
+				expr.Action = &api.BackendPolicySpec_McpGuardrails_Expression_Transform{
+					Transform: castCEL(*e.Transform, func(expr agentgateway.CELExpression) {
+						errs = append(errs, fmt.Errorf("mcpGuardrails transform is not a valid CEL expression: %s", expr))
+					}),
+				}
+			default:
+				// ExactlyOneOf guards this at admission; skip defensively.
+				continue
+			}
+			processors = append(processors, &api.BackendPolicySpec_McpGuardrails_Processor{
+				Kind:    &api.BackendPolicySpec_McpGuardrails_Processor_Expression{Expression: expr},
+				Methods: methods,
+			})
+		default:
+			// ExactlyOneOf guards this at admission; skip defensively.
+		}
 	}
 
 	spec := &api.BackendPolicySpec_McpGuardrails{Processors: processors}
@@ -1088,6 +1144,9 @@ var oauthReservedAdditionalParams = []string{
 
 func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
 	oauth, err := BuildOAuthTokenExchange(ctx, auth, namespace, nil)
+	if err != nil {
+		oauth = &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	}
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
 			OauthTokenExchange: oauth,
@@ -1158,6 +1217,9 @@ func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjec
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	crossAppAccess, err := BuildCrossAppAccess(ctx, auth, namespace)
+	if err != nil {
+		crossAppAccess = &api.CrossAppAccessAuth{TranslationError: new(err.Error())}
+	}
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_CrossAppAccess{
 			CrossAppAccess: crossAppAccess,
@@ -1593,6 +1655,8 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 		return api.BackendPolicySpec_Ai_GENERATE_CONTENT
 	case agentgateway.RouteTypeGeminiCountTokens:
 		return api.BackendPolicySpec_Ai_GEMINI_COUNT_TOKENS
+	case agentgateway.RouteTypeDecisions:
+		return api.BackendPolicySpec_Ai_DECISIONS
 	default:
 		// Default to completions if unknown type
 		return api.BackendPolicySpec_Ai_COMPLETIONS

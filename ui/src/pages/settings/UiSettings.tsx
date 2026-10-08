@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
-import { Dropdown, FieldGroup, Panel, StatusBanner } from '@/components/Primitives';
+import { ConfirmDialog, Dropdown, Panel, StatusBanner } from '@/components/Primitives';
 import type { LocalUIConfig } from '@/gateway-config';
 import { useEffectiveGatewayConfig, useUpdateConfig } from '@/hooks';
 import { PolicyCatalogPage } from '@/pages/Policies';
@@ -26,10 +26,10 @@ const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 	}
 ];
 
-export function RawSettingsPage() {
+export function UiSettingsPage() {
 	return (
 		<PolicyCatalogPage
-			title="UI Settings"
+			title="UI"
 			description="Expose the UI on a traffic gateway and configure policies that protect the UI."
 			schemaRoot="LocalUIPolicy"
 			resourceKind="ui.policy"
@@ -62,10 +62,18 @@ function UiGatewayPanel() {
 	const gatewayOptions = useMemo(() => gatewayReferenceOptions(config.data), [config.data]);
 	const selectedGateway = uiGateway(config.data);
 	const [draftGateway, setDraftGateway] = useState(selectedGateway ?? noneGateway);
+	const [confirming, setConfirming] = useState(false);
 
 	useEffect(() => {
 		setDraftGateway(selectedGateway ?? noneGateway);
 	}, [selectedGateway]);
+
+	function save() {
+		setConfirming(false);
+		update.mutate(next => {
+			applyUiGateway(next);
+		});
+	}
 
 	function applyUiGateway(next: GatewayConfig) {
 		if (draftGateway === noneGateway) {
@@ -80,53 +88,73 @@ function UiGatewayPanel() {
 		}
 	}
 
+	const dirty = draftGateway !== (selectedGateway ?? noneGateway);
+
 	return (
-		<Panel>
-			<div className="form-grid">
-				<FieldGroup label="Public UI gateway" tooltip="Which traffic gateway exposes the UI.">
+		<section className="policy-page-section">
+			<h3>Gateway</h3>
+			<Panel className="settings-row">
+				<div className="settings-row-label">
+					<strong>Public gateway</strong>
+					<p>
+						{gatewayOptions.length
+							? 'Serve the UI on a traffic gateway in addition to the admin interface.'
+							: 'Add a traffic gateway to serve the UI outside the admin interface.'}
+					</p>
+				</div>
+				<div className="settings-row-control">
 					<Dropdown
 						ariaLabel="Public UI gateway"
 						value={draftGateway}
-						options={[
-							{
-								value: noneGateway,
-								label: 'None (admin interface only)',
-								description: 'Do not expose the UI on a traffic gateway.'
-							},
-							...gatewayOptions
-						]}
-						disabled={update.isPending}
+						options={[{ value: noneGateway, label: 'None' }, ...gatewayOptions]}
+						disabled={update.isPending || !gatewayOptions.length}
 						onChange={setDraftGateway}
 					/>
-				</FieldGroup>
-			</div>
-			<div className="button-row">
-				<ConfigDiffSaveActions
-					config={config.data}
-					diffTitle="UI gateway config diff"
-					saveLabel="Save UI gateway"
-					saving={update.isPending}
-					saveDisabled={!config.data || draftGateway === (selectedGateway ?? noneGateway)}
-					onSave={() =>
-						update.mutate(next => {
-							applyUiGateway(next);
-						})
-					}
-					applyDiff={applyUiGateway}
-				/>
-			</div>
-			{!gatewayOptions.length ? (
-				<StatusBanner state="warn" title="No gateways configured">
-					Add a gateway before exposing the UI.
-				</StatusBanner>
-			) : null}
+					{dirty ? (
+						<div className="button-row">
+							<ConfigDiffSaveActions
+								config={config.data}
+								diffTitle="UI gateway config diff"
+								saveLabel="Save UI gateway"
+								saving={update.isPending}
+								saveDisabled={!config.data}
+								onSave={() => (selectedGateway ? setConfirming(true) : save())}
+								applyDiff={applyUiGateway}
+							/>
+						</div>
+					) : null}
+				</div>
+			</Panel>
 			{update.isError ? (
 				<StatusBanner state="bad" title="Save failed">
 					{update.error.message}
 				</StatusBanner>
 			) : null}
-			{update.isSuccess ? <StatusBanner state="ok" title="Gateway saved" /> : null}
-		</Panel>
+			{confirming ? (
+				<ConfirmDialog
+					title="Change UI gateway?"
+					destructive
+					confirmLabel="Save UI gateway"
+					onCancel={() => setConfirming(false)}
+					onConfirm={save}
+				>
+					<p>
+						The UI will no longer be served on <strong>{selectedGateway}</strong>. If you are
+						accessing the UI through that gateway, you will lose access to this page.
+					</p>
+					{draftGateway === noneGateway ? (
+						<p>
+							The UI will only be reachable on the admin interface, which listens on localhost by
+							default and may not be reachable when running in a container.
+						</p>
+					) : (
+						<p>
+							The UI will be served on <strong>{draftGateway}</strong> instead.
+						</p>
+					)}
+				</ConfirmDialog>
+			) : null}
+		</section>
 	);
 }
 

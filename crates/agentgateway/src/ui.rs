@@ -190,6 +190,15 @@ struct RuntimeInfo {
 	user: Option<RuntimeUser>,
 	build: RuntimeBuildInfo,
 	ui: RuntimeUiInfo,
+	config_reload: RuntimeConfigReloadInfo,
+}
+
+/// Standalone config reload outcome, mirroring the `config_synchronized` metric.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeConfigReloadInfo {
+	synchronized: bool,
+	last_error: Option<String>,
 }
 
 /// Display-only identity from standardAttributes.user, with optional JWT profile details.
@@ -351,6 +360,13 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 					GatewayRuntimeMode::Standalone
 				},
 				config_store_mode: app.state.storage.mode,
+			},
+			config_reload: {
+				let last_error = app.state.config_reload_status.last_error();
+				RuntimeConfigReloadInfo {
+					synchronized: last_error.is_none(),
+					last_error,
+				}
 			},
 		}),
 	)
@@ -658,7 +674,8 @@ async fn update_config_resource(
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => vec![
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => vec![
 			crate::config_store::prepare_policy_upsert(kind, id.clone(), resource.value)
 				.map_err(resource_api_error)?,
 		],
@@ -697,7 +714,10 @@ async fn update_config_resource(
 		.any(|resource| resource.kind == kind && resource.id == id);
 	let is_policy = matches!(
 		kind,
-		ConfigResourceKind::LlmPolicy | ConfigResourceKind::McpPolicy | ConfigResourceKind::UiPolicy
+		ConfigResourceKind::LlmPolicy
+			| ConfigResourceKind::McpPolicy
+			| ConfigResourceKind::UiPolicy
+			| ConfigResourceKind::FrontendPolicy
 	);
 	if !exists && !is_policy {
 		return Err(resource_api_error(ConfigResourceError::Conflict(format!(
@@ -1137,6 +1157,19 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn effective_config_reports_the_on_disk_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let on_disk = "binds:\n- port: 7070\n  listeners: []\n";
+		fs_err::write(&path, on_disk).unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path));
+
+		let Json(value) = get_effective_config(State(app)).await.unwrap();
+		assert_eq!(value, yaml::from_str::<Value>(on_disk).unwrap());
+	}
+
+	#[tokio::test]
 	async fn config_writes_preserve_yaml_comments_and_validate_before_writing() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("config.yaml");
@@ -1208,6 +1241,7 @@ mod tests {
 				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
 					user: expression.map(str::to_owned),
 					group: None,
+					session: None,
 				}))
 				.unwrap(),
 			));

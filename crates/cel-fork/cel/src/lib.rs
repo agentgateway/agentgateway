@@ -181,17 +181,6 @@ impl ExecutionError {
 		}
 	}
 
-	pub fn unsupported_target_type(target: Value<'static>) -> Self {
-		ExecutionError::UnsupportedTargetType { target }
-	}
-
-	pub fn not_supported_as_method(method: &str, target: Value<'static>) -> Self {
-		ExecutionError::NotSupportedAsMethod {
-			method: method.to_string(),
-			target,
-		}
-	}
-
 	pub fn unsupported_key_type(value: Value<'static>) -> Self {
 		ExecutionError::UnsupportedKeyType(value)
 	}

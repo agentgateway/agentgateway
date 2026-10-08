@@ -321,10 +321,6 @@ impl Socket {
 		&mut self.ext
 	}
 
-	pub fn must_ext<T: Send + Sync + 'static>(&self) -> &T {
-		self.ext().expect("expected required extension")
-	}
-
 	pub fn tcp(&self) -> &TCPConnectionInfo {
 		self.ext.get::<TCPConnectionInfo>().unwrap()
 	}

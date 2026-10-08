@@ -851,9 +851,9 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		true,
 	)
 	// Istio doesn't include InferencePools, but we need them; add our own after the Istio build
-	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, InferencePoolBuilder(),
+	inferencePoolsInfo := krt.NewPointerCollection(cols.InferencePools, InferencePoolBuilder(),
 		krtopts.ToOptions("addresses/InferencePoolServices")...)
-	services = krt.JoinCollection([]krt.Collection[model.ServiceInfo]{services, inferencePoolsInfo}, append(krtopts.ToOptions("addresses/ServicesWithInferencePools"), krt.WithJoinUnchecked())...)
+	services = krt.JoinCollection([]krt.Collection[*model.ServiceInfo]{services, inferencePoolsInfo}, append(krtopts.ToOptions("addresses/ServicesWithInferencePools"), krt.WithJoinUnchecked())...)
 
 	nodeLocality := ambient.NodesCollection(cols.Nodes, opts.WithName("NodeLocality")...)
 	workloads := builder.WorkloadsCollection(
@@ -878,11 +878,11 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		opts,
 	)
 
-	workloadAddresses := krt.MapCollection(workloads, func(t model.WorkloadInfo) Address {
-		return Address{Workload: &t}
+	workloadAddresses := krt.MapCollection(workloads, func(t *model.WorkloadInfo) Address {
+		return Address{Workload: t}
 	}, krtopts.ToOptions("addresses/WorkloadAddresses")...)
-	svcAddresses := krt.MapCollection(services, func(t model.ServiceInfo) Address {
-		return Address{Service: &t}
+	svcAddresses := krt.MapCollection(services, func(t *model.ServiceInfo) Address {
+		return Address{Service: t}
 	}, krtopts.ToOptions("addresses/ServiceAddresses")...)
 
 	adpAddresses := krt.JoinCollection([]krt.Collection[Address]{svcAddresses, workloadAddresses}, krtopts.ToOptions("addresses/All")...)

@@ -71,19 +71,6 @@ pub fn request_header_response_with_dynamic_metadata(
 	})
 }
 
-pub fn response_header_response_with_dynamic_metadata(
-	cr: Option<CommonResponse>,
-	metadata: prost_wkt_types::Struct,
-) -> Result<ProcessingResponse, Status> {
-	Ok(ProcessingResponse {
-		response: Some(processing_response::Response::ResponseHeaders(
-			proto::HeadersResponse { response: cr },
-		)),
-		dynamic_metadata: Some(metadata),
-		..Default::default()
-	})
-}
-
 #[async_trait]
 pub trait Handler {
 	async fn on_open(&mut self, _metadata: &tonic::metadata::MetadataMap) {}

@@ -451,6 +451,7 @@ pub fn parse_config(
 		backend: raw.backend,
 		admin_runtime_handle: None,
 		budget_policy: Arc::new(crate::http::budget::BudgetPolicy::default()),
+		config_reload_status: Arc::new(crate::ConfigReloadStatus::default()),
 		termination_max_deadline,
 		tracing: raw
 			.tracing
@@ -576,6 +577,10 @@ pub fn parse_config(
 					standard_attributes(raw.standard_attributes.as_ref())
 						.ctx("invalid config.standardAttributes")?,
 				)),
+				session: Arc::new(arc_swap::ArcSwapOption::new(
+					session_attribute(raw.standard_attributes.as_ref())
+						.ctx("invalid config.standardAttributes.session")?,
+				)),
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -676,6 +681,10 @@ pub(crate) fn standard_attributes(
 				.and_then(|attributes| attributes.group.clone())
 				.unwrap_or_else(|| DEFAULT_UI_GROUP_ATTRIBUTE.to_string()),
 		),
+		(
+			"agentgateway.session".to_string(),
+			"request.agent.session".to_string(),
+		),
 	];
 
 	Ok(LoggingFields {
@@ -692,6 +701,15 @@ pub(crate) fn standard_attributes(
 		),
 	})
 }
+pub(crate) fn session_attribute(
+	standard_attributes: Option<&crate::RawStandardAttributes>,
+) -> anyhow::Result<Option<Arc<cel::Expression>>> {
+	let Some(session) = standard_attributes.and_then(|attributes| attributes.session.as_ref()) else {
+		return Ok(None);
+	};
+	Ok(Some(Arc::new(cel::Expression::new_strict(session)?)))
+}
+
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,

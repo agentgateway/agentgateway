@@ -25,7 +25,8 @@ export type ConfigResourceKind =
 	| 'traffic.gateway'
 	| 'traffic.route'
 	| 'traffic.tcpRoute'
-	| 'ui.policy';
+	| 'ui.policy'
+	| 'frontend.policy';
 
 export type PolicyResourceKind = Extract<ConfigResourceKind, `${string}.policy`>;
 
@@ -57,7 +58,7 @@ export type ConfigResourceValue<K extends ConfigResourceKind> = K extends 'model
 										? TrafficRouteResource
 										: K extends 'traffic.tcpRoute'
 											? TrafficTcpRouteResource
-											: K extends 'llm.policy' | 'mcp.policy' | 'ui.policy'
+											: K extends PolicyResourceKind
 												? unknown
 												: never;
 

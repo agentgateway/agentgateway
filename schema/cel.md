@@ -15,6 +15,8 @@
 |`request.bodyPrefix`|string|The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
+|`request.agent`|object|The agent harness that sent the request.|
+|`request.agent.session`|string|The agent session the request belongs to, from `standardAttributes.session` or detected from<br>well-known agent headers such as `x-claude-code-session-id`.|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
@@ -160,9 +162,11 @@
 |`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
 |`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
 |`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
+|`mcp.params`|any|Current request parameters, with the same structure as the `params` object in an MCP request.<br>Available only during request-phase CEL guardrails.|
+|`mcp.result`|any|Current response result, with the same structure as the `result` object in an MCP response.<br>Available only during response-phase CEL guardrails.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
-|`backend.endpoint`|string|The selected backend call target, including the port for network endpoints. This is available<br>once the target has been resolved.|
+|`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|

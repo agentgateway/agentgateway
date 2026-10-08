@@ -18,6 +18,10 @@ spec:
       - name: openai-gpt4
         openai: {}
         policies:
+          authorization:
+            policy:
+              matchExpressions:
+              - 'request.headers["x-tenant"] == "acme"'
           ai:
             modelAliases:
               fast: gpt-5-nano
@@ -101,6 +105,10 @@ spec:
   policies:
     http:
       version: HTTP2
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-tenant"] == "acme"'
   static:
     host: example.com
     port: 443
@@ -259,3 +267,34 @@ spec:
           guardrail:
             identifier: test-guardrail
             version: "1"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-single-selector-target-condition
+spec:
+  mcp:
+    targets:
+    - name: internal
+      selector:
+        services:
+          matchLabels:
+            app: mcp
+      condition: 'jwt.sub == "admin"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-multi-static-target-condition
+spec:
+  mcp:
+    targets:
+    - name: admin
+      static:
+        host: admin.example.com
+        port: 80
+      condition: 'jwt.sub == "admin"'
+    - name: public
+      static:
+        host: public.example.com
+        port: 80

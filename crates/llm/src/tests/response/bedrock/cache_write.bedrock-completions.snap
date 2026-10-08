@@ -21,7 +21,7 @@ info:
   "response": {
     "model": "input-model",
     "usage": {
-      "prompt_tokens": 16,
+      "prompt_tokens": 2403,
       "completion_tokens": 9,
       "total_tokens": 2412,
       "prompt_tokens_details": {

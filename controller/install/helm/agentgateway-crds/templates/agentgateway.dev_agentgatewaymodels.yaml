@@ -221,6 +221,7 @@ spec:
                           enum:
                           - AnthropicTokenCount
                           - Completions
+                          - Decisions
                           - Embeddings
                           - Messages
                           - Realtime
@@ -3399,6 +3400,29 @@ spec:
                                 Custom response message to return to the client. If not specified, defaults to
                                 `The request was rejected due to inappropriate content`.
                               properties:
+                                headers:
+                                  description: Headers to include in the rejection
+                                    response.
+                                  items:
+                                    description: HTTPHeader represents an HTTP Header
+                                      name and value as defined by RFC 7230.
+                                    properties:
+                                      name:
+                                        description: Name of the HTTP header, case-insensitive
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: Value for the HTTP header
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  type: array
                                 message:
                                   description: |-
                                     Custom response message to return to the client. If not specified, defaults to
@@ -3421,8 +3445,10 @@ spec:
                                 arguments are masked as a single string, meaning a prompt guard has the
                                 potential to rewrite the arguments into invalid JSON.
                               items:
-                                description: Which category of request content a prompt
-                                  guard inspects.
+                                description: |-
+                                  Which category of request or response content a prompt guard inspects.
+                                  Encrypted payloads are excluded. Signed response payloads are scanned but
+                                  a mask that would change them rejects the response instead.
                                 enum:
                                 - Messages
                                 - SystemPrompt
@@ -4742,6 +4768,29 @@ spec:
                                 Custom response message to return to the client. If not specified, defaults to
                                 `The response was rejected due to inappropriate content`.
                               properties:
+                                headers:
+                                  description: Headers to include in the rejection
+                                    response.
+                                  items:
+                                    description: HTTPHeader represents an HTTP Header
+                                      name and value as defined by RFC 7230.
+                                    properties:
+                                      name:
+                                        description: Name of the HTTP header, case-insensitive
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      value:
+                                        description: Value for the HTTP header
+                                        maxLength: 4096
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    - value
+                                    type: object
+                                  type: array
                                 message:
                                   description: |-
                                     Custom response message to return to the client. If not specified, defaults to
@@ -4755,6 +4804,30 @@ spec:
                                   minimum: 200
                                   type: integer
                               type: object
+                            scope:
+                              description: |-
+                                Which parts of the response this guard inspects. When unset, defaults to
+                                `Messages`. Tool calls generated by the model are not inspected unless
+                                `ToolInput` is listed explicitly; `ToolOutput` covers results of
+                                serverside tools.
+                                In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                arguments are masked as a single string, meaning a prompt guard has the
+                                potential to rewrite the arguments into invalid JSON.
+                              items:
+                                description: |-
+                                  Which category of request or response content a prompt guard inspects.
+                                  Encrypted payloads are excluded. Signed response payloads are scanned but
+                                  a mask that would change them rejects the response instead.
+                                enum:
+                                - Messages
+                                - SystemPrompt
+                                - ToolInput
+                                - ToolOutput
+                                type: string
+                              maxItems: 4
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: set
                             webhook:
                               description: Webhook that receives responses for prompt
                                 guarding.
@@ -4882,6 +4955,11 @@ spec:
                               type: object
                           type: object
                           x-kubernetes-validations:
+                          - message: 'scope: only regex and bedrockGuardrails guards
+                              support a non-default scope; other guard kinds always
+                              inspect the default (Messages)'
+                            rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                              || (self.scope.size() == 1 && ''Messages'' in self.scope)'
                           - message: exactly one of the fields in [regex webhook bedrockGuardrails
                               googleModelArmor] must be set
                             rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
@@ -4898,6 +4976,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-validations:
+                    - message: streaming response guards only support the Messages
+                        scope
+                      rule: '!has(self.streaming) || self.streaming != ''Enabled''
+                        || !has(self.response) || self.response.all(g, !has(g.scope)
+                        || g.scope.all(s, s == ''Messages''))'
                     - message: at least one of the fields in [request response] must
                         be set
                       rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
@@ -5196,10 +5279,12 @@ spec:
                 - Gemini
                 - Groq
                 - Huggingface
+                - Meta
                 - Mistral
                 - Ollama
                 - OpenAI
                 - Openrouter
+                - Perplexity
                 - TogetherAI
                 - VertexAI
                 - XAI

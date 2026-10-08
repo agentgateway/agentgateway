@@ -427,7 +427,7 @@ async fn test_backend_auth_key() {
 	};
 
 	let key_auth = BackendAuth::new(BackendAuthKind::Key {
-		value: SecretString::new("my-secret-key".into()),
+		value: SecretString::new("my-secret-key".into()).into(),
 		location: None,
 	});
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
@@ -462,7 +462,7 @@ async fn test_backend_auth_key_query_parameter() {
 	};
 
 	let key_auth = BackendAuth::new(BackendAuthKind::Key {
-		value: SecretString::new("my-secret-key".into()),
+		value: SecretString::new("my-secret-key".into()).into(),
 		location: Some(AuthorizationLocation::QueryParameter { name: "key".into() }),
 	});
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
@@ -493,7 +493,7 @@ async fn test_backend_auth_key_default_sets_non_explicit_extension() {
 	};
 
 	let key_auth = BackendAuth::new(BackendAuthKind::Key {
-		value: SecretString::new("my-secret-key".into()),
+		value: SecretString::new("my-secret-key".into()).into(),
 		location: None,
 	});
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
@@ -528,7 +528,7 @@ async fn test_backend_auth_key_explicit_location_sets_explicit_extension() {
 	};
 
 	let key_auth = BackendAuth::new(BackendAuthKind::Key {
-		value: SecretString::new("my-secret-key".into()),
+		value: SecretString::new("my-secret-key".into()).into(),
 		location: Some(AuthorizationLocation::bearer_header()),
 	});
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
@@ -911,7 +911,7 @@ fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendA
 			name: ::http::HeaderName::from_static(name),
 			prefix: prefix.map(Into::into),
 		},
-		key: SecretString::new(value.to_string().into()),
+		key: SecretString::new(value.to_string().into()).into(),
 	}
 }
 
@@ -1009,7 +1009,7 @@ async fn test_backend_auth_credential_query_parameter() {
 
 	let credentials = vec![BackendAuthCredential {
 		location: AuthorizationLocation::QueryParameter { name: "key".into() },
-		key: SecretString::new("my-secret-key".into()),
+		key: SecretString::new("my-secret-key".into()).into(),
 	}];
 
 	let auth = BackendAuth {
@@ -1043,7 +1043,7 @@ async fn test_backend_auth_combined_key_and_credentials() {
 
 	let auth = BackendAuth {
 		kind: Some(BackendAuthKind::Key {
-			value: SecretString::new("primary".into()),
+			value: SecretString::new("primary".into()).into(),
 			location: None,
 		}),
 		credentials: vec![credential("x-auth-email", "user@example.com", None)],
@@ -1097,11 +1097,54 @@ async fn test_backend_auth_credentials_invalid_value_is_local() {
 	);
 }
 
+#[tokio::test]
+async fn test_invalid_backend_auth_rejects_without_changing_request() {
+	let mut req = ::http::Request::builder()
+		.header(http::header::AUTHORIZATION, "Bearer subj")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs: t.inputs(),
+	};
+	let reason = "missing Secret default/oauth-client";
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::Invalid {
+			kind: "oauthTokenExchange",
+			reason: reason.to_string(),
+		}),
+		credentials: vec![credential("x-extra", "v", None)],
+	};
+
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid backend auth must reject");
+
+	assert!(matches!(
+		&err,
+		ProxyError::BackendAuthenticationFailed(BackendAuthError::Local(_))
+	));
+	let message = err.to_string();
+	assert!(message.contains("oauthTokenExchange configuration is invalid"));
+	assert!(!message.contains(reason));
+	assert_eq!(
+		req.headers().get(http::header::AUTHORIZATION).unwrap(),
+		"Bearer subj"
+	);
+	assert!(req.headers().get("x-extra").is_none());
+}
+
 #[test]
 fn test_apply_tunnel_auth_rejects_credentials() {
 	let auth = BackendAuth {
 		kind: Some(BackendAuthKind::Key {
-			value: SecretString::new("primary".into()),
+			value: SecretString::new("primary".into()).into(),
 			location: None,
 		}),
 		credentials: vec![credential("x-extra", "v", None)],
@@ -1119,7 +1162,7 @@ fn test_backend_auth_serde_backward_compat_no_credentials() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let policy = BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-		value: SecretString::new("primary".into()),
+		value: SecretString::new("primary".into()).into(),
 		location: None,
 	});
 	let yaml = serde_norway::to_string(&policy).expect("serialize");
@@ -1138,7 +1181,7 @@ fn test_backend_auth_serde_with_credentials_includes_field() {
 
 	let policy = BackendTrafficPolicy::BackendAuth(BackendAuth {
 		kind: Some(BackendAuthKind::Key {
-			value: SecretString::new("primary".into()),
+			value: SecretString::new("primary".into()).into(),
 			location: None,
 		}),
 		credentials: vec![credential("x-extra", "v", None)],
@@ -1199,7 +1242,7 @@ async fn test_backend_auth_credential_other_header_keeps_primary_marker() {
 
 	let auth = BackendAuth {
 		kind: Some(BackendAuthKind::Key {
-			value: SecretString::new("primary".into()),
+			value: SecretString::new("primary".into()).into(),
 			location: None,
 		}),
 		credentials: vec![credential("x-api-key", "v", None)],
@@ -1710,6 +1753,7 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 
 #[tokio::test]
 async fn test_local_jwt_sign_resolves_file_key_into_runtime_auth() {
+	crate::crypto::jwt::init();
 	let dir = tempfile::tempdir().unwrap();
 	let key_path = dir.path().join("signing.pem");
 	std::fs::write(&key_path, TEST_JWT_SIGN_EC_KEY).unwrap();

@@ -935,27 +935,46 @@ mod tests {
 	#[test]
 	fn openai_prices_cache_writes_once() {
 		let snap = CatalogSnapshot::parse(
-			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","cacheRead":"0.1","cacheWrite":"1.25"}}}}}}"#,
+			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","output":"0","cacheRead":"0.1","cacheWrite":"1.25"}}}}}}"#,
 		)
 		.unwrap();
-		let resp = LLMResponse {
-			input_tokens: Some(1_000_000),
-			cached_input_tokens: Some(300_000),
-			cache_creation_input_tokens: Some(200_000),
-			..Default::default()
-		};
-
-		let projection = snap.project(
-			"openai",
-			"gpt-5.6",
-			&resp,
-			CacheTokenConvention::InputIncludesCache,
-		);
-		let cost = projection.cost.expect("model is priced");
-		assert_eq!(cost.input.to_f64(), Some(0.5));
-		assert_eq!(cost.cache_read.to_f64(), Some(0.03));
-		assert_eq!(cost.cache_write.to_f64(), Some(0.25));
-		assert_eq!(cost.total().to_f64(), Some(0.78));
+		let completions = bytes::Bytes::from_static(include_bytes!(
+			"../../../../llm/src/tests/response/completions/cache_write.json"
+		));
+		let responses = bytes::Bytes::from_static(include_bytes!(
+			"../../../../llm/src/tests/response/responses/tool.json"
+		));
+		for (translated, expected_input, expected_read, expected_write, expected_total) in [
+			(
+				agent_llm::conversion::completions::from_messages::translate_response(&completions),
+				0.0005,
+				0.00003,
+				0.00025,
+				0.00078,
+			),
+			(
+				agent_llm::conversion::responses::from_messages::translate_response(&responses),
+				0.00002,
+				0.0000004,
+				0.0000075,
+				0.0000279,
+			),
+		] {
+			let resp = translated
+				.unwrap()
+				.to_llm_response(agent_llm::LogContentFields::default());
+			let projection = snap.project(
+				"openai",
+				"gpt-5.6",
+				&resp,
+				CacheTokenConvention::InputIncludesCache,
+			);
+			let cost = projection.cost.expect("model is priced");
+			assert_eq!(cost.input.to_f64(), Some(expected_input));
+			assert_eq!(cost.cache_read.to_f64(), Some(expected_read));
+			assert_eq!(cost.cache_write.to_f64(), Some(expected_write));
+			assert_eq!(cost.total().to_f64(), Some(expected_total));
+		}
 	}
 
 	#[test]

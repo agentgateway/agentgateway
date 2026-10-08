@@ -488,10 +488,7 @@ export function PlaygroundPage() {
 
 	return (
 		<div className="page-stack">
-			<PageHeader
-				title="LLM Playground"
-				description="Send a real chat completion request through the configured gateway for setup debugging."
-			/>
+			<PageHeader title="LLM Playground" description="Send test requests through the gateway." />
 			{configDataLoading ? (
 				<StatusBanner state="loading" title="Loading LLM configuration" />
 			) : configDataError ? (

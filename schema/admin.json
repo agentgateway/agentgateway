@@ -1141,6 +1141,18 @@
             "conditional"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "callout": {
+              "$ref": "#/$defs/VirtualModelCallout"
+            }
+          },
+          "required": [
+            "callout"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -1189,6 +1201,2242 @@
       "required": [
         "model",
         "when"
+      ]
+    },
+    "VirtualModelCallout": {
+      "description": "Selects a virtual model's target by calling an external HTTP service.",
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headers": {
+          "description": "Headers to set on the callout request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "body": {
+          "description": "CEL expression that computes the callout request body.\nStrings and bytes are used directly; other values are JSON-encoded.\nIf unset, the original request body is forwarded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "transformation": {
+          "description": "CEL expressions that compute request payload fields from the callout response, overriding existing values.\n`callout.headers` holds the response headers and `callout.body` the decoded JSON response body.\n`model` is required and selects the target from `llm.models`.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the callout fails, returns a non-2xx or non-JSON response, or selects an unknown model.\nDefaults to `failClosed`.",
+          "$ref": "#/$defs/VirtualModelCalloutFailureMode",
+          "default": "failClosed"
+        },
+        "cache": {
+          "description": "Reuse callout responses using CEL expressions as the cache key.\nOn a cache hit, `transformation` is evaluated against the cached response.\nKeying on a session identifier makes routing sticky for that session.\nThe TTL is evaluated with `callout` available, before `transformation` is applied.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "transformation",
+        "failureMode"
+      ]
+    },
+    "SimpleLocalBackendPolicies": {
+      "type": "object",
+      "properties": {
+        "requestHeaderModifier": {
+          "description": "Modify request headers before forwarding to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response data for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "description": "TLS settings used when connecting to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backendAuth": {
+          "description": "Authentication credentials sent to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuthCompat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "http": {
+          "description": "HTTP protocol settings for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HTTP"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tcp": {
+          "description": "TCP protocol settings for this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TCP"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTunnel": {
+          "description": "Tunnel settings used when connecting to this backend.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "requestHeaderModifier",
+        "transformations",
+        "backendTLS",
+        "backendAuth",
+        "http",
+        "tcp",
+        "backendTunnel"
+      ]
+    },
+    "HeaderModifier": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "description": "Headers to append without replacing existing values.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "set": {
+          "description": "Headers to set, replacing any existing values.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "remove": {
+          "description": "Header names to remove.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalTransformationConfig": {
+      "type": "object",
+      "properties": {
+        "request": {
+          "description": "Transform the request before it is forwarded.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "response": {
+          "description": "Transform the response before it is returned.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTransform"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "request",
+        "response"
+      ]
+    },
+    "LocalTransform": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "description": "Headers to append using CEL expressions for values.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "set": {
+          "description": "Headers to set using CEL expressions for values.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "remove": {
+          "description": "Header names to remove.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "replace": {
+          "description": "CEL expression that computes the full set of headers, replacing all existing headers.\nThe expression must evaluate to a map of header name to value (a string, or a list of\nstrings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;\nset those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,\nso those still operate on top of the replaced headers.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "description": "CEL expression that computes a replacement body.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadata": {
+          "description": "Metadata values to add using CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalBackendTLS": {
+      "type": "object",
+      "properties": {
+        "cert": {
+          "description": "Client certificate file to present to the backend.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "description": "Private key file for the client certificate.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "Root certificate bundle used to verify the backend certificate.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostname": {
+          "description": "Server name to use for TLS verification and SNI.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "insecure": {
+          "description": "Skip certificate trust verification for the backend connection.",
+          "type": "boolean",
+          "default": false
+        },
+        "insecureHost": {
+          "description": "Skip hostname verification for the backend certificate.",
+          "type": "boolean",
+          "default": false
+        },
+        "alpn": {
+          "description": "ALPN protocols to offer to the backend.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "subjectAltNames": {
+          "description": "Additional subject alternative names accepted for the backend certificate.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "default": null
+        },
+        "keyExchangeGroups": {
+          "description": "Key exchange groups allowed for negotiating TLS.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/KeyExchangeGroup"
+          },
+          "default": null
+        },
+        "spiffe": {
+          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nIf `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalSpiffeBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "cert",
+        "key",
+        "root",
+        "hostname",
+        "insecure",
+        "insecureHost",
+        "alpn",
+        "subjectAltNames",
+        "keyExchangeGroups"
+      ]
+    },
+    "KeyExchangeGroup": {
+      "type": "string",
+      "enum": [
+        "X25519",
+        "P-256",
+        "P-384",
+        "X25519_MLKEM768"
+      ]
+    },
+    "LocalSpiffeBackendTLS": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "BackendAuthCompat": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/FileOrInline"
+            }
+          },
+          "required": [
+            "key"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "description": "Forward the validated incoming JWT to the backend.",
+              "type": "object",
+              "properties": {
+                "passthrough": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "description": "Where to place the forwarded credential in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "passthrough"
+              ]
+            },
+            {
+              "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/FileOrInline"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expression": {
+                      "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/Expression"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null
+                    },
+                    "location": {
+                      "description": "Where to place the secret in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "value",
+                    "expression"
+                  ]
+                }
+              },
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "description": "Authenticate to Google Cloud services.",
+              "type": "object",
+              "properties": {
+                "gcp": {
+                  "$ref": "#/$defs/GcpAuth"
+                }
+              },
+              "required": [
+                "gcp"
+              ]
+            },
+            {
+              "description": "Sign backend requests with AWS credentials.",
+              "type": "object",
+              "properties": {
+                "aws": {
+                  "$ref": "#/$defs/AwsAuth"
+                }
+              },
+              "required": [
+                "aws"
+              ]
+            },
+            {
+              "description": "Authenticate to Azure services.",
+              "type": "object",
+              "properties": {
+                "azure": {
+                  "$ref": "#/$defs/AzureAuth"
+                }
+              },
+              "required": [
+                "azure"
+              ]
+            },
+            {
+              "description": "Authenticate to GitHub Copilot.",
+              "type": "string",
+              "const": "copilot"
+            },
+            {
+              "description": "Sign a short-lived JWT with a private key on each request.",
+              "type": "object",
+              "properties": {
+                "jwtSign": {
+                  "$ref": "#/$defs/JwtSignAuth"
+                }
+              },
+              "required": [
+                "jwtSign"
+              ]
+            },
+            {
+              "description": "Use OAuth token exchange flows to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "oauthTokenExchange": {
+                  "$ref": "#/$defs/OAuthTokenExchangeAuth"
+                }
+              },
+              "required": [
+                "oauthTokenExchange"
+              ]
+            },
+            {
+              "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "crossAppAccess": {
+                  "$ref": "#/$defs/CrossAppAccessAuth"
+                }
+              },
+              "required": [
+                "crossAppAccess"
+              ]
+            }
+          ],
+          "required": [
+            "credentials"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
+            }
+          },
+          "required": [
+            "credentials"
+          ]
+        },
+        {
+          "$ref": "#/$defs/BackendAuth"
+        }
+      ]
+    },
+    "FileOrInline": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "description": "Path to a file on disk to load the value from.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "description": "Read the credential from an HTTP header.",
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Header name containing the credential.",
+                  "type": "string"
+                },
+                "prefix": {
+                  "description": "Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a URL query parameter.",
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Query parameter name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a request cookie.",
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Cookie name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "required": [
+            "expression"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GcpAuth": {
+      "anyOf": [
+        {
+          "description": "Fetch an id token",
+          "type": "object",
+          "properties": {
+            "type": {
+              "$ref": "#/$defs/IdToken"
+            },
+            "audience": {
+              "description": "Audience for the token. If not set, the destination host will be used.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "credential": {
+              "description": "ADC-compatible Google credential JSON. If not set, ambient credentials are used.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "audience"
+          ]
+        },
+        {
+          "description": "Fetch an access token",
+          "type": "object",
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AccessToken"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "credential": {
+              "description": "ADC-compatible Google credential JSON. If not set, ambient credentials are used.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "IdToken": {
+      "type": "string",
+      "format": "const",
+      "const": "idToken"
+    },
+    "AccessToken": {
+      "type": "string",
+      "format": "const",
+      "const": "accessToken"
+    },
+    "AwsAuth": {
+      "anyOf": [
+        {
+          "description": "Use explicit AWS credentials",
+          "type": "object",
+          "properties": {
+            "accessKeyId": {
+              "type": "string"
+            },
+            "secretAccessKey": {
+              "type": "string"
+            },
+            "region": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "sessionToken": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "accessKeyId",
+            "secretAccessKey",
+            "region"
+          ]
+        },
+        {
+          "description": "Use implicit AWS authentication (environment variables, IAM roles, etc.)",
+          "type": "object",
+          "properties": {
+            "serviceName": {
+              "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "region": {
+              "description": "AWS SigV4 signing region (for example, \"us-east-1\"). If unset, typed AWS\nbackends may provide this automatically; otherwise the ambient AWS region\nis used.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "assumeRole": {
+              "description": "Optional AWS STS role to assume before signing requests.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AwsAssumeRole"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AwsAssumeRole": {
+      "type": "object",
+      "properties": {
+        "roleArn": {
+          "description": "AWS IAM role ARN to assume.",
+          "type": "string"
+        },
+        "sessionName": {
+          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Either a static string or `{expression: ...}` with a CEL\nexpression evaluated against each request. Max 64 chars, matching\n`[\\w+=,.@-]`. If unset, the AWS SDK generates a random session name.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AwsSessionName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL\nexpression evaluated against each request (`expression`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AwsSessionTag"
+          }
+        },
+        "externalId": {
+          "description": "Set when the role's trust policy requires `sts:ExternalId`. 2-1224 chars,\nmatching `[\\w+=,.@:/-]`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "roleArn"
+      ]
+    },
+    "AwsSessionName": {
+      "description": "Session name (RoleSessionName) in configuration form: a static string, or a\nCEL expression evaluated against each request. Untagged, so a plain string\nkeeps its existing meaning.",
+      "anyOf": [
+        {
+          "description": "Static session name.",
+          "type": "string"
+        },
+        {
+          "description": "CEL expression evaluated against each request to produce the session\nname, for example `jwt.sub` or `request.headers[\"x-team\"]`. If the\nexpression does not produce a valid session name at request time, the\nrequest is rejected.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "expression"
+          ]
+        }
+      ]
+    },
+    "AwsSessionTag": {
+      "description": "An AWS STS session tag passed to AssumeRole for cost attribution.\nExactly one of `value` and `expression` must be set.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Tag key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Static tag value.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against each request to produce the tag value, for\nexample `jwt.sub` or `request.headers[\"x-app\"]`. If the expression does not\nproduce a valid tag value at request time, the request is rejected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
+      ]
+    },
+    "AzureAuth": {
+      "type": "object",
+      "properties": {
+        "scopes": {
+          "description": "Scopes requested for the Azure access token. When unset, the scope is\ninferred from the backend hostname.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Use explicit Azure credentials",
+          "type": "object",
+          "properties": {
+            "explicitConfig": {
+              "type": "object",
+              "unevaluatedProperties": false,
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "clientSecret": {
+                      "type": "object",
+                      "properties": {
+                        "tenant_id": {
+                          "type": "string"
+                        },
+                        "client_id": {
+                          "type": "string"
+                        },
+                        "client_secret": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "tenant_id",
+                        "client_id",
+                        "client_secret"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "clientSecret"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "managedIdentity": {
+                      "type": "object",
+                      "properties": {
+                        "userAssignedIdentity": {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/AzureUserAssignedIdentity"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "userAssignedIdentity"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "managedIdentity"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "workloadIdentity": {
+                      "type": "object",
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "workloadIdentity"
+                  ]
+                }
+              ]
+            }
+          },
+          "required": [
+            "explicitConfig"
+          ]
+        },
+        {
+          "description": "Use implicit Azure auth. Note that this is for developer use-cases only!",
+          "type": "object",
+          "properties": {
+            "developerImplicit": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "developerImplicit"
+          ]
+        },
+        {
+          "description": "Automatically detect authentication method based on environment.\nUses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.",
+          "type": "object",
+          "properties": {
+            "implicit": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "implicit"
+          ]
+        }
+      ]
+    },
+    "AzureUserAssignedIdentity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "clientId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "objectId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "objectId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resourceId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "resourceId"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "JwtSignAuth": {
+      "description": "Signs a short-lived JWT with a private key on each request and sends it to\nthe backend. For upstreams that require per-request keypair JWTs (e.g. the\nSnowflake SQL API) rather than a static credential.",
+      "type": "object",
+      "properties": {
+        "signingKey": {
+          "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "alg": {
+          "description": "JWS signing algorithm. Defaults to RS256.",
+          "$ref": "#/$defs/JwtSigningAlg",
+          "default": "RS256"
+        },
+        "kid": {
+          "description": "Optional JWS key ID header.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "claims": {
+          "description": "Static claims added to every token (e.g. iss, sub, aud). Values may be\nany JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,\nand `nbf` are reserved for the signer and cannot be configured here.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "ttl": {
+          "description": "Token lifetime used for `exp`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "description": "Where the signed token is written. Defaults to the Authorization\nheader with a `Bearer ` prefix.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "signingKey",
+        "alg",
+        "claims"
+      ]
+    },
+    "JwtSigningAlg": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "ES256",
+        "ES384"
+      ]
+    },
+    "OAuthTokenExchangeAuth": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "grantType": {
+          "description": "Selects which RFC the request follows; defaults to token exchange (RFC 8693).",
+          "$ref": "#/$defs/OAuthGrantType",
+          "default": "tokenExchange"
+        },
+        "subjectToken": {
+          "description": "Where the subject token is read from, and its token type. Defaults to the\nAuthorization Bearer header with token type access_token.",
+          "$ref": "#/$defs/TokenSpec",
+          "default": {
+            "source": {
+              "header": {
+                "name": "authorization",
+                "prefix": "Bearer "
+              }
+            },
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token"
+          }
+        },
+        "actorToken": {
+          "description": "RFC 8693 delegation actor token. Token-exchange grant only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActorTokenSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audiences": {
+          "description": "`audience` parameters naming the target services at the authorization server.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "description": "`resource` parameters with the target service URIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedTokenType": {
+          "description": "`requested_token_type` parameter. When unset it is omitted from the request\n(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)\nreject an explicit access_token value paired with a custom `subject_token_type`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.\nWhen unset, no client authentication fields are sent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OAuthClientAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "authorizationLocation": {
+          "description": "Where to place the exchanged token in the backend request. Defaults to the\nAuthorization header with a \"Bearer \" prefix. The CEL `expression` source is\nnot valid here (it cannot insert).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "grantType",
+        "subjectToken",
+        "authorizationLocation"
+      ]
+    },
+    "OAuthGrantType": {
+      "oneOf": [
+        {
+          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
+          "type": "string",
+          "const": "tokenExchange"
+        },
+        {
+          "description": "RFC 7523; the subject token is sent as the `assertion`.",
+          "type": "string",
+          "const": "jwtBearer"
+        }
+      ]
+    },
+    "TokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "tokenType"
+      ]
+    },
+    "ActorTokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "tokenType": {
+          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        },
+        "enforceMayAct": {
+          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "tokenType",
+        "enforceMayAct"
+      ]
+    },
+    "OAuthClientAuth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawOAuthClientAuth"
+        },
+        {
+          "$ref": "#/$defs/RawDefaultClientSecretBasicAuth"
+        }
+      ]
+    },
+    "RawOAuthClientAuth": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretBasic"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientSecret"
+          ]
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretPost"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientSecret"
+          ]
+        },
+        {
+          "description": "`privateKeyJwt` client assertion (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "signingKey": {
+              "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "certificate": {
+              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is logged and does not prevent loading.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificateHeader": {
+              "description": "JWS certificate header emitted from `certificate`. Required when `certificate` is set.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CertificateHeader"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "alg": {
+              "$ref": "#/$defs/JwtSigningAlg",
+              "default": "RS256"
+            },
+            "kid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "assertionAudience": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "const": "privateKeyJwt"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "signingKey",
+            "certificate",
+            "certificateHeader",
+            "alg",
+            "assertionAudience"
+          ]
+        }
+      ]
+    },
+    "CertificateHeader": {
+      "oneOf": [
+        {
+          "description": "Send the X.509 certificate chain in `x5c`.",
+          "type": "string",
+          "const": "x5c"
+        },
+        {
+          "description": "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
+          "type": "string",
+          "const": "x5t#S256"
+        }
+      ]
+    },
+    "RawDefaultClientSecretBasicAuth": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "description": "`client_id` parameter identifying the gateway at the authorization server.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.",
+          "$ref": "#/$defs/FileOrInline"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "clientSecret"
+      ]
+    },
+    "CrossAppAccessAuth": {
+      "type": "object",
+      "properties": {
+        "identityProvider": {
+          "description": "The user's IdP authorization server, used for the RFC 8693 token exchange.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "resourceAuthorizationServer": {
+          "description": "The resource authorization server, which exchanges the ID-JAG for an access token.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "audience": {
+          "description": "Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.",
+          "type": "string"
+        },
+        "resources": {
+          "description": "`resource` parameters naming the protected resource APIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values requested when obtaining the ID-JAG from the identity provider, sent\nspace-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accessTokenScopes": {
+          "description": "`scope` values requested when exchanging the ID-JAG for an access token. When unset,\ninherits `scopes`. When empty, omits `scope`.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "subjectToken": {
+          "description": "Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read\nfrom the Authorization Bearer header.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CrossAppAccessSubjectToken"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identityProvider",
+        "resourceAuthorizationServer",
+        "audience"
+      ]
+    },
+    "CrossAppAccessEndpoint": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.",
+          "$ref": "#/$defs/OAuthClientAuth"
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "clientAuth"
+      ]
+    },
+    "CrossAppAccessSubjectToken": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where to read the subject token. Defaults to the Authorization Bearer header.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
+    "BackendAuthCredential": {
+      "description": "An additional credential to inject on the backend request.",
+      "type": "object",
+      "properties": {
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "key": {
+          "description": "Credential value. Exactly one of `key` or `expression` must be set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against the request to produce the credential value.\nIf it fails or does not return a string, the credential location is cleared instead.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "key",
+        "expression"
+      ]
+    },
+    "BackendAuth": {
+      "oneOf": [
+        {
+          "description": "Forward the validated incoming JWT to the backend.",
+          "type": "object",
+          "properties": {
+            "passthrough": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "description": "Where to place the forwarded credential in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "passthrough"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Send a configured secret value, or a value computed from the request, to the backend.\nExactly one of `value` or `expression` must be set.",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Secret value to send to the backend. File references are watched, so\nrotating the file reloads it without a restart.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "expression": {
+                  "description": "CEL expression evaluated against the request to produce the value to send.\nIf it fails or does not return a string, the target location is cleared instead.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "location": {
+                  "description": "Where to place the secret in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "expression"
+              ]
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Google Cloud services.",
+          "type": "object",
+          "properties": {
+            "gcp": {
+              "$ref": "#/$defs/GcpAuth"
+            }
+          },
+          "required": [
+            "gcp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Sign backend requests with AWS credentials.",
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/AwsAuth"
+            }
+          },
+          "required": [
+            "aws"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Azure services.",
+          "type": "object",
+          "properties": {
+            "azure": {
+              "$ref": "#/$defs/AzureAuth"
+            }
+          },
+          "required": [
+            "azure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to GitHub Copilot.",
+          "type": "string",
+          "const": "copilot"
+        },
+        {
+          "description": "Sign a short-lived JWT with a private key on each request.",
+          "type": "object",
+          "properties": {
+            "jwtSign": {
+              "$ref": "#/$defs/JwtSignAuth"
+            }
+          },
+          "required": [
+            "jwtSign"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Use OAuth token exchange flows to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "oauthTokenExchange": {
+              "$ref": "#/$defs/OAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oauthTokenExchange"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "crossAppAccess": {
+              "$ref": "#/$defs/CrossAppAccessAuth"
+            }
+          },
+          "required": [
+            "crossAppAccess"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "HTTP": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "description": "HTTP version to use when connecting to the backend.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "requestTimeout": {
+          "description": "Maximum time allowed for a backend HTTP request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "maxConnectionDuration": {
+          "description": "Maximum time a connection to the backend may stay open. A connection past this duration is\nnot reused for new requests; a fresh connection is established instead, while in-flight\nrequests are not interrupted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ]
+    },
+    "TCP": {
+      "type": "object",
+      "properties": {
+        "keepalives": {
+          "description": "TCP keepalive settings for backend connections.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectTimeout": {
+          "description": "Maximum time allowed to establish a backend TCP connection.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "KeepaliveConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable TCP keepalive probes on backend connections. Defaults to true.",
+          "type": "boolean",
+          "default": true
+        },
+        "time": {
+          "description": "Idle time before the first keepalive probe is sent.",
+          "type": "string",
+          "default": "3m0s"
+        },
+        "interval": {
+          "description": "Time between successive keepalive probes.",
+          "type": "string",
+          "default": "3m0s"
+        },
+        "retries": {
+          "description": "Number of unacknowledged probes before the connection is considered dead.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 9
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "time",
+        "interval",
+        "retries"
+      ]
+    },
+    "Tunnel": {
+      "type": "object",
+      "properties": {
+        "proxy": {
+          "description": "Proxy backend used to tunnel the connection.",
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "mode": {
+          "description": "How requests are sent through the proxy.",
+          "$ref": "#/$defs/TunnelMode",
+          "default": "auto"
+        },
+        "policies": {
+          "description": "Policies to connect to the proxy backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "proxy",
+        "mode"
+      ]
+    },
+    "SimpleLocalBackendSerde": {
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TunnelMode": {
+      "oneOf": [
+        {
+          "description": "Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Use CONNECT for all transports, including plaintext HTTP.",
+          "type": "string",
+          "const": "connect"
+        }
+      ]
+    },
+    "VirtualModelCalloutFailureMode": {
+      "oneOf": [
+        {
+          "description": "Reject the request.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Route to this model, which is resolved against llm.models, without applying `transformation`.",
+          "type": "object",
+          "properties": {
+            "fallback": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fallback"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CacheConfig": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "ttl": {
+          "description": "CEL expression that returns how long cached results are reused.\nMust return either a duration or timestamp.",
+          "$ref": "#/$defs/Expression"
+        },
+        "maxEntries": {
+          "description": "Maximum number of results to keep in the cache.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 10000
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "ttl",
+        "maxEntries"
       ]
     }
   }

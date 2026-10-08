@@ -1,0 +1,114 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/decisions/full.json
+info:
+  model: gpt-6-luna
+  input:
+    - type: message
+      role: user
+      content: My order arrived with a cracked screen.
+    - role: user
+      content:
+        - type: input_text
+          text: I want my money back.
+        - type: input_text
+          text: This is the second time.
+  questions:
+    - type: predicate
+      name: refund
+      instructions: Is the customer asking for a refund?
+    - type: predicate
+      instructions: Is the customer angry?
+    - type: choice
+      name: category
+      instructions: What is the ticket about?
+      choices:
+        - value: damage
+          description: Item arrived damaged
+        - value: shipping
+    - type: choice
+      name: repeat
+      instructions: Has this happened before?
+      choices:
+        - value: true
+        - value: false
+        - value: unsure
+    - type: score
+      name: urgency
+      instructions: How urgent is this ticket?
+      levels:
+        - label: Low
+          description: Can wait
+        - label: Medium
+        - label: High
+    - type: predicate
+      name: "1"
+      instructions: "Is this the customer's first message?"
+  safety_identifier: user-123
+---
+{
+  "request": {
+    "model": "gpt-6-luna",
+    "state": [
+      {
+        "role": "user",
+        "content": "My order arrived with a cracked screen."
+      },
+      {
+        "role": "user",
+        "content": "I want my money back.\nThis is the second time."
+      }
+    ],
+    "questions": {
+      "refund": {
+        "type": "noul",
+        "instructions": "Is the customer asking for a refund?"
+      },
+      "1_": {
+        "type": "noul",
+        "instructions": "Is the customer angry?"
+      },
+      "category": {
+        "type": "choice",
+        "instructions": "What is the ticket about?",
+        "criteria": {
+          "damage": "Item arrived damaged",
+          "shipping": null
+        }
+      },
+      "repeat": {
+        "type": "choice",
+        "instructions": "Has this happened before?",
+        "criteria": {
+          "true": null,
+          "false": null,
+          "unsure": null
+        }
+      },
+      "urgency": {
+        "type": "score",
+        "instructions": "How urgent is this ticket?",
+        "criteria": [
+          {
+            "label": "Low",
+            "description": "Can wait"
+          },
+          "Medium",
+          "High"
+        ]
+      },
+      "1": {
+        "type": "noul",
+        "instructions": "Is this the customer's first message?"
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Decisions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-6-luna",
+    "provider": "systemone",
+    "streaming": false,
+    "params": {}
+  }
+}

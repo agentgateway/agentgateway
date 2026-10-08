@@ -64,6 +64,7 @@ func hasLoggedCostBelow(logs string, ceiling float64) bool {
 
 func TestModelCatalogCost(tt *testing.T) {
 	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireRouteNames))
+	t.Parallel() // Uses its own Gateway, not shared with other tests.
 
 	t.Apply(modelCatalogSetupManifest)
 	t.GatewayReady(modelCatalogGatewayName, modelCatalogNamespace)
@@ -95,7 +96,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return fmt.Errorf("logged cost %v < expected floor %v (catalog rate not applied?)", maxCost, minSentinelCost)
 			}
 			return nil
-		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).Should(gomega.Succeed())
 	})
 
 	t.Run("ConfigMapUpdatePropagatesWithoutRestart", func(t base.Test) {
@@ -139,7 +140,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return fmt.Errorf("no agw.ai.usage.cost.total below ceiling %v in gateway logs (ConfigMap update not yet reflected by running pod)", minSentinelCost)
 			}
 			return nil
-		}).WithTimeout(10 * time.Second).WithPolling(1 * time.Second).Should(gomega.Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(250 * time.Millisecond).Should(gomega.Succeed())
 
 		podsAfter, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -176,7 +177,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return fmt.Errorf("logged cost %v >= ceiling %v (sentinel rate applied instead of alt catalog?)", maxCost, minSentinelCost)
 			}
 			return nil
-		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
+		}).WithTimeout(30 * time.Second).WithPolling(250 * time.Millisecond).Should(gomega.Succeed())
 	})
 }
 

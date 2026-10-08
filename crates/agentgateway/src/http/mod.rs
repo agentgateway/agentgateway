@@ -5,7 +5,6 @@ pub mod timeout;
 pub mod budget;
 pub mod buffer;
 pub mod bufferbody;
-pub mod cors;
 pub mod delay;
 pub mod jwt;
 pub mod localratelimit;
@@ -26,6 +25,7 @@ pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
 pub mod remoteratelimit;
+pub mod session;
 pub mod sessionaffinity;
 pub mod sessionpersistence;
 pub mod substrate;
@@ -33,10 +33,11 @@ pub mod tests_common;
 pub mod transformation_cel;
 
 pub use agent_http::{
-	Body, BodyContent, BodyInspection, BufferLimit, Error, RawBody, RecordedBody, RecordedBodyHandle,
-	Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit, read_body_with_limit,
-	response_buffer_limit, x_headers,
+	Body, BodyContent, BodyInspection, BufferLimit, Error, PolicyResponse, RawBody, RecordedBody,
+	RecordedBodyHandle, Request, RequestBodyExt, Response, ResponseBodyExt, buffer_limit,
+	merge_in_headers, read_body_with_limit, response_buffer_limit, x_headers,
 };
+pub use agent_policy_cors as cors;
 
 pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
 	for (name, value) in req.headers_mut() {
@@ -748,17 +749,6 @@ pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
-pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
-	// We expect a normalized request, so this will always be in the URI
-	// TODO: handle absolute HTTP/1.1 form
-	let host = req
-		.uri()
-		.authority()
-		.map(|a| a.as_str())
-		.ok_or(ProxyError::InvalidRequest)?;
-	Ok(host)
-}
-
 /// Read with the request's size limit and remaining body deadline.
 pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
@@ -792,70 +782,19 @@ pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyIn
 	resp.body_mut().inspect(lim).await
 }
 
-#[derive(Debug, Default)]
-#[must_use]
-pub struct PolicyResponse {
-	pub direct_response: Option<Response>,
-	pub response_headers: Option<crate::http::HeaderMap>,
+// Small extension to allow apply()ing a PolicyResponse which doesn't have access to a ProxyResponse.
+pub trait PolicyResponseExt {
+	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse>;
 }
 
-impl PolicyResponse {
-	pub fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
+impl PolicyResponseExt for PolicyResponse {
+	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
 		if let Some(mut dr) = self.direct_response {
 			merge_in_headers(self.response_headers, dr.headers_mut());
 			Err(ProxyResponse::DirectResponse(Box::new(dr)))
 		} else {
 			merge_in_headers(self.response_headers, hm);
 			Ok(())
-		}
-	}
-	pub fn should_short_circuit(&self) -> bool {
-		self.direct_response.is_some()
-	}
-	pub fn with_response(self, other: Response) -> Self {
-		PolicyResponse {
-			direct_response: Some(other),
-			response_headers: self.response_headers,
-		}
-	}
-	pub fn merge(self, other: Self) -> Self {
-		if other.direct_response.is_some() {
-			other
-		} else {
-			match (self.response_headers, other.response_headers) {
-				(None, None) => PolicyResponse::default(),
-				(a, b) => PolicyResponse {
-					direct_response: None,
-					response_headers: Some({
-						let mut hm = HeaderMap::new();
-						merge_in_headers(a, &mut hm);
-						merge_in_headers(b, &mut hm);
-						hm
-					}),
-				},
-			}
-		}
-	}
-}
-
-pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
-	if let Some(rh) = additional_headers {
-		// HeaderMap::into_iter reports the name only for the first value in a repeated field.
-		let mut previous_name = None;
-		for (k, v) in rh.into_iter() {
-			if let Some(k) = k {
-				previous_name = Some(k.clone());
-				// Most response mutations replace an existing header. Set-Cookie is not list-valued,
-				// so each policy and upstream cookie must remain a separate appended field.
-				if k == header::SET_COOKIE {
-					dest.append(k, v);
-				} else {
-					dest.insert(k, v);
-				}
-			// Preserve subsequent Set-Cookie values whose repeated field name was omitted above.
-			} else if previous_name.as_ref() == Some(&header::SET_COOKIE) {
-				dest.append(header::SET_COOKIE, v);
-			}
 		}
 	}
 }

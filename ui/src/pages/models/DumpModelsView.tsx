@@ -136,5 +136,12 @@ function virtualRoutingTarget(routing: VirtualModelRouting): { summary: string; 
 				.join(', ')
 		};
 	}
+	if ('callout' in routing) {
+		const { failureMode } = routing.callout;
+		return {
+			summary: 'Callout',
+			detail: typeof failureMode === 'object' ? `fallback ${failureMode.fallback}` : undefined
+		};
+	}
 	return { summary: 'Failover', detail: routeBackendLabel(routing.failover.backend) };
 }

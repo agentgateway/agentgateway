@@ -59,16 +59,21 @@ func TestChooseMetallbAddressRejectsStaticAutoAssignedOverlap(t *testing.T) {
 }
 
 func TestChooseMetallbAddressFallsBackToAutoAssignedPool(t *testing.T) {
-	got, err := chooseMetallbAddress([]metalLBAddressPool{
+	pools := []metalLBAddressPool{
 		{
 			name:       "default",
 			autoAssign: true,
-			addresses:  []string{"192.0.2.10"},
+			addresses:  []string{"2001:db8::1/128", "172.18.2.9/32", "172.18.2.189/32", "172.18.2.238/32", "172.18.2.237/32"},
 		},
-	}, nil)
+	}
+	got, err := chooseMetallbAddress(pools, nil)
 
 	require.NoError(t, err)
-	require.Equal(t, "192.0.2.10", got)
+	require.Equal(t, "172.18.2.237", got)
+
+	got, err = chooseMetallbAddress(pools, map[string]struct{}{"172.18.2.237": {}})
+	require.NoError(t, err)
+	require.Equal(t, "172.18.2.238", got)
 }
 
 func TestCandidateIPv4Addresses(t *testing.T) {

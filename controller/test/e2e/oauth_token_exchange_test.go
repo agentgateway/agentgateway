@@ -3,19 +3,27 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
+
+const invalidOAuthTokenType = agentgateway.OAuthTokenType("not-a-token-type")
 
 func TestOAuthTokenExchange(tt *testing.T) {
 	t := New(tt)
@@ -25,6 +33,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 	t.HTTPRouteAccepted("oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-subject", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-bearer", base.Namespace)
+	t.HTTPRouteAccepted("invalid-oauth-token-exchange", base.Namespace)
 
 	assertions.EventuallyAgwPolicyCondition(t, "cross-app-access", base.Namespace, "Accepted", metav1.ConditionTrue)
 	t.Run("CrossAppAccess", func(t base.Test) {
@@ -62,6 +71,52 @@ func TestOAuthTokenExchange(tt *testing.T) {
 		)
 	})
 
+	t.Run("InvalidUpdate", func(t base.Test) {
+		policyKey := types.NamespacedName{Name: "oauth-token-exchange", Namespace: base.Namespace}
+		policy := &agentgateway.AgentgatewayPolicy{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), policyKey, policy); err != nil {
+			t.Fatalf("failed to get valid OAuth policy: %v", err)
+		}
+		validAuth := policy.Spec.Backend.Auth.OAuthTokenExchange.DeepCopy()
+		testutils.Cleanup(t, func() {
+			updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
+				*auth = *validAuth.DeepCopy()
+			})
+			waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonValid, "")
+		})
+
+		updateOAuthTokenExchange(t, policyKey, func(auth *agentgateway.OAuthTokenExchange) {
+			auth.SubjectToken = &agentgateway.OAuthTokenSpec{TokenType: new(invalidOAuthTokenType)}
+		})
+		waitForOAuthPolicyReason(t, policyKey, agentgateway.PolicyReasonPartiallyValid, "oauth subjectToken tokenType")
+		t.Send("oauth-token-exchange.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
+			},
+			curl.WithHeader("Authorization", "Bearer subject-token"),
+			curl.WithHeader("X-Actor-Token", "actor-token"),
+			curl.WithHeader("X-Tenant", "tenant-a"),
+		)
+	})
+
+	t.Run("InvalidConfiguration", func(t base.Test) {
+		waitForOAuthPolicyReason(
+			t,
+			types.NamespacedName{Name: "invalid-oauth-token-exchange", Namespace: base.Namespace},
+			agentgateway.PolicyReasonPartiallyValid,
+			"oauth subjectToken tokenType",
+		)
+
+		t.Send("invalid-oauth-token-exchange.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
+			},
+			curl.WithHeader("Authorization", "Bearer subject-token"),
+		)
+	})
+
 	assertions.EventuallyAgwPolicyCondition(t, "oauth-jwt-subject-auth", base.Namespace, "Accepted", metav1.ConditionTrue)
 	assertions.EventuallyAgwPolicyCondition(t, "oauth-jwt-subject", base.Namespace, "Accepted", metav1.ConditionTrue)
 	t.Run("ValidatedJWTSubject", func(t base.Test) {
@@ -87,5 +142,47 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			},
 			curl.WithHeader("X-Client-Assertion", "jwt-assertion"),
 		)
+	})
+}
+
+func updateOAuthTokenExchange(
+	t base.Test,
+	policyKey types.NamespacedName,
+	mutate func(*agentgateway.OAuthTokenExchange),
+) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		policy := &agentgateway.AgentgatewayPolicy{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), policyKey, policy); err != nil {
+			return err
+		}
+		mutate(policy.Spec.Backend.Auth.OAuthTokenExchange)
+		return t.E2EClusterContext().ControllerClient.Update(t.E2EContext(), policy)
+	})
+}
+
+func waitForOAuthPolicyReason(
+	t base.Test,
+	policyKey types.NamespacedName,
+	reason string,
+	message string,
+) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		policy := &agentgateway.AgentgatewayPolicy{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), policyKey, policy); err != nil {
+			return err
+		}
+		for _, ancestor := range policy.Status.Ancestors {
+			for _, condition := range ancestor.Conditions {
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
+					condition.Status == metav1.ConditionTrue &&
+					condition.Reason == reason &&
+					strings.Contains(condition.Message, message) {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("policy status does not report Accepted=True/%s containing %q", reason, message)
 	})
 }

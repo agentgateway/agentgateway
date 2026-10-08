@@ -178,8 +178,8 @@ func CreateAgwResponseHeadersFilter(filter *gwv1.HTTPHeaderFilter) *api.HeaderMo
 	}
 }
 
-// CreateAgwRewriteFilter creates an agw TrafficPolicySpec based on a HTTPURLRewriteFilter
-func CreateAgwRewriteFilter(filter *gwv1.HTTPURLRewriteFilter) *api.TrafficPolicySpec {
+// CreateAgwRewriteFilter creates an agw UrlRewrite based on a HTTPURLRewriteFilter
+func CreateAgwRewriteFilter(filter *gwv1.HTTPURLRewriteFilter) *api.UrlRewrite {
 	if filter == nil {
 		return nil
 	}
@@ -199,11 +199,7 @@ func CreateAgwRewriteFilter(filter *gwv1.HTTPURLRewriteFilter) *api.TrafficPolic
 			ff.Path = &api.UrlRewrite_Full{Full: *filter.Path.ReplaceFullPath}
 		}
 	}
-	return &api.TrafficPolicySpec{
-		Kind: &api.TrafficPolicySpec_UrlRewrite{
-			UrlRewrite: ff,
-		},
-	}
+	return ff
 }
 
 // CreateAgwMirrorFilter creates an agw RequestMirror based on a HTTPRequestMirrorFilter

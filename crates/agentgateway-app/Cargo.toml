@@ -18,7 +18,7 @@ test = false
 # This comes at the small cost of a few mb memory overhead relative to others (most notable in an empty setup).
 default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "agentgateway/jemalloc"]
-mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
+mimalloc = ["agentgateway/mimalloc"]
 # Crypto provider passthroughs. A provider must be selected; `crypto-aws-lc` is the default.
 # Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add
 # a `crypto-*` backend, otherwise the agentgateway crypto code will fail to compile. `fips`
@@ -38,7 +38,6 @@ clap.workspace = true
 fs-err = { workspace = true, features = ["tokio"] }
 libc.workspace = true
 include_dir = { workspace = true, optional = true }
-mimalloc = { workspace = true, optional = true }
 tokio.workspace = true
 tracing.workspace = true
 

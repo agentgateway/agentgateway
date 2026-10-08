@@ -155,13 +155,6 @@ impl Connected {
 		self
 	}
 
-	/// Copies the extra connection information into an `Extensions` map.
-	pub fn get_extras(&self, extensions: &mut Extensions) {
-		if let Some(extra) = &self.extra {
-			extra.set(extensions);
-		}
-	}
-
 	/// Set a deadline after which the connection is no longer used for new requests.
 	///
 	/// The pool treats a connection past its deadline like an idle-expired one at checkout:

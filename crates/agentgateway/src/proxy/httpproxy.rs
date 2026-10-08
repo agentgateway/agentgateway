@@ -28,11 +28,12 @@ use crate::http::backendtls::{
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
+use crate::http::substrate::{ActorIdentity, EgressRequestProtocol, EgressTlsMode};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
-	merge_in_headers, retry,
+	Authority, HeaderName, HeaderValue, PolicyResponseExt, Request, Response, Scheme, StatusCode,
+	Uri, auth, filters, merge_in_headers, retry,
 };
 use crate::llm::{
 	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
@@ -254,10 +255,16 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
-	pol
+	let egress = pol
 		.substrate_egress
-		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.apply_selected("substrate egress", c, l, req, rp.headers())
 		.await?;
+	if req.extensions().get::<ActorIdentity>().is_some() && egress.is_none() {
+		return Err(
+			ProxyError::SubstrateEgressDenied("missing substrate egress request policy".to_owned())
+				.into(),
+		);
+	}
 	pol
 		.substrate_ingress
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
@@ -397,6 +404,7 @@ async fn apply_backend_policies(
 		request_header_modifier,
 		response_header_modifier,
 		request_redirect,
+		url_rewrite,
 		transformation,
 		// Applied during service endpoint selection
 		session_affinity: _,
@@ -434,6 +442,10 @@ async fn apply_backend_policies(
 	if let Some(rhm) = request_header_modifier {
 		rhm.apply_request(req).map_err(ProxyError::from)?;
 		dtrace::snapshot!(Request, "backend request header modifier", &req);
+	}
+	if let Some(ur) = url_rewrite {
+		ur.apply(req).map_err(ProxyError::from)?;
+		dtrace::snapshot!(Request, "backend url rewrite", &req);
 	}
 	if let Some(rr) = request_redirect {
 		rr.apply(req)
@@ -566,7 +578,7 @@ async fn apply_llm_request_policies(
 	let limits = policies
 		.local_rate_limit
 		.as_deref()
-		.map(Vec::as_slice)
+		.map(|limits| limits.as_slice())
 		.unwrap_or_default();
 	if !limits.is_empty() {
 		// The context costs a clone of the request, so it is only built for a key that reads it.
@@ -719,7 +731,25 @@ impl HTTPProxy {
 			.expect("tcp connection must be set")
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
-		connection.copy::<http::substrate::ActorIdentity>(req.extensions_mut());
+		if connection
+			.copy::<ActorIdentity>(req.extensions_mut())
+			.is_some()
+		{
+			connection.copy::<EgressTlsMode>(req.extensions_mut());
+			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
+			let protocol = if matches!(
+				self
+					.selected_listener
+					.as_ref()
+					.map(|listener| &listener.protocol),
+				Some(ListenerProtocol::HTTPS(_))
+			) {
+				EgressRequestProtocol::Https
+			} else {
+				EgressRequestProtocol::Http
+			};
+			req.extensions_mut().insert(protocol);
+		}
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
@@ -799,6 +829,25 @@ impl HTTPProxy {
 	) -> Result<Response, SnapshottedProxyResponse> {
 		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
+		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
+			if let Some(actor) = req.extensions().get::<ActorIdentity>() {
+				log.ate_actor_name = Some(actor.actor_name.clone());
+				log.ate_actor_uid = actor.actor_uid.clone();
+				log.ate_atespace = Some(actor.atespace.clone());
+			}
+			log.bind_name = Some(self.bind_name.clone());
+			log.listener_name = self.selected_listener.as_ref().map(|l| l.name.clone());
+			log.host = http::get_host(&req).ok().map(str::to_owned);
+			log.scheme = Some(Scheme::HTTPS);
+			log.server_port = req.uri().port_u16();
+			log.method = Some(req.method().clone());
+			log.path = req.uri().path_and_query().map(ToString::to_string);
+			log.version = Some(req.version());
+			return Err(ProxyError::SubstrateEgressDenied(
+				"actor egress policy denied TLS destination".to_owned(),
+			))
+			.snapshot_on_err(log, &mut req);
+		}
 
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();
@@ -844,6 +893,7 @@ impl HTTPProxy {
 			},
 		);
 		log.version = Some(req.version());
+		http::session::apply(self.inputs.cfg.logging.session.load().as_deref(), &mut req);
 		dtrace::snapshot!(Request, "initial request", &req);
 
 		// Now check if we actually have a listener - fail after tracing is set up
@@ -945,7 +995,7 @@ impl HTTPProxy {
 					strng::format!("{}/*", p)
 				}
 			},
-			PathMatch::Regex(r) => r.as_str().into(),
+			PathMatch::Regex(r) => PathMatch::regex_pattern(r).into(),
 			PathMatch::Invalid => strng::literal!("<invalid>"),
 		});
 		cel::ProxyContext::mutate(&mut req, |ctx| {
@@ -1321,7 +1371,11 @@ impl HTTPProxy {
 			call_target: backend_call.target.clone(),
 			inputs: self.inputs.clone(),
 		};
-		set_backend_cel_context(req, Some(&log), Some(&backend_call.target));
+		set_backend_cel_context(
+			req,
+			Some(&log),
+			backend_call.static_target.then_some(&backend_call.target),
+		);
 		{
 			let mut maybe_log = Some(&mut *log);
 			apply_backend_policies(
@@ -1478,6 +1532,11 @@ impl HTTPProxy {
 		) {
 			return Ok(());
 		}
+		// Substrate checks each HTTP authority independently of the ClientHello SNI.
+		if req.extensions().get::<ActorIdentity>().is_some() {
+			return Ok(());
+		}
+
 		// From the spec:
 		// * If another Listener has an exact match or more specific wildcard entry,
 		//   the Gateway SHOULD return a 421.
@@ -2379,7 +2438,14 @@ async fn make_backend_call(
 		if let Some(path_match) = router.trace_path(&req) {
 			log.add(|log| log.path_match = Some(path_match));
 		}
-		let resolved = match router.resolve(&mut req, &inputs.model_catalog).await {
+		let client = PolicyClient::new(inputs.clone()).with_parent(&req);
+		let resolved = router
+			.resolve(&mut req, &inputs.model_catalog, &client)
+			.await;
+		if let Some(original_model) = req.extensions_mut().remove::<model_router::OriginalModel>() {
+			log.add(|log| log.original_model = Some(original_model.0));
+		}
+		let resolved = match resolved {
 			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
 			model_router::ResolveResult::Backend(resolved) => resolved,
 		};
@@ -2628,6 +2694,15 @@ async fn make_backend_call(
 				expr,
 				|| target_from_request(&req),
 			)?;
+			let mut policies = policies;
+			if req.extensions().get::<ActorIdentity>().is_some()
+				&& req.extensions().get::<EgressRequestProtocol>() == Some(&EgressRequestProtocol::Https)
+				&& policies.backend_tls.is_none()
+			{
+				// Re-originate intercepted HTTPS with TLS. Explicit settings can supply
+				// private roots or client identity.
+				Arc::make_mut(&mut policies).backend_tls = Some(http::backendtls::SYSTEM_TRUST.clone());
+			}
 			let backend_call = BackendCall::from_shared(target, policies);
 			(backend_call, None)
 		},
@@ -2664,7 +2739,11 @@ async fn make_backend_call(
 			.backend_policies
 			.register_cel_expressions(log.cel.ctx());
 	}
-	set_backend_cel_context(&mut req, log.as_ref(), Some(&backend_call.target));
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 	// Apply auth before LLM request setup, so the providers can assume auth is in standardized header
 	// Apply auth as early as possible so any ext_proc or transformations won't be repeated on retries in case it fails.
 	let backend_info = auth::BackendInfo {
@@ -2704,7 +2783,11 @@ async fn make_backend_call(
 	let llm_request_policies =
 		route_policies.merge_backend_policies(backend_call.backend_policies.llm.clone());
 
-	set_backend_cel_context(&mut req, log.as_ref(), Some(&backend_call.target));
+	set_backend_cel_context(
+		&mut req,
+		log.as_ref(),
+		backend_call.static_target.then_some(&backend_call.target),
+	);
 
 	let (mut req, llm_response_policies, llm_request) =
 		if let Some(llm) = &backend_call.backend_policies.llm_provider {
@@ -2745,6 +2828,7 @@ async fn make_backend_call(
 				| RouteType::GeminiCountTokens
 				| RouteType::Embeddings
 				| RouteType::Rerank
+				| RouteType::Decisions
 				| RouteType::Detect => {
 					let request_body_limit = crate::http::buffer_limit(&req);
 					let req = req.map(|b| {
@@ -2791,6 +2875,15 @@ async fn make_backend_call(
 						.await
 						.map_err(ProxyError::AIRequest)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(ProxyError::AIRequest)?,
+						RouteType::Decisions => Box::pin(llm.provider.process_decisions_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
 							req,
@@ -2909,7 +3002,8 @@ async fn make_backend_call(
 					log.add(|l| l.llm_request = Some(llm_request.clone()));
 					(req, response_policies, Some(llm_request))
 				},
-				RouteType::Models => {
+				// SystemOne is only an upstream route.
+				RouteType::Models | RouteType::SystemOne => {
 					return Ok(
 						::http::Response::builder()
 							.status(::http::StatusCode::NOT_IMPLEMENTED)
@@ -3329,6 +3423,7 @@ pub fn build_service_call(
 		&& service_override.destination_passthrough
 	{
 		return Ok(BackendCall {
+			static_target: false,
 			target: Target::Address(destination),
 			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
@@ -3502,6 +3597,7 @@ pub fn build_service_call(
 	};
 
 	Ok(BackendCall {
+		static_target: false,
 		target,
 		span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 		http_version_override,
@@ -3892,6 +3988,7 @@ mod tests {
 	fn response_regex_guard() -> ResponseGuard {
 		ResponseGuard {
 			rejection: RequestRejection::default(),
+			scope: crate::llm::policy::default_response_scope(),
 			kind: ResponseGuardKind::Regex(RegexRules {
 				action: Default::default(),
 				rules: vec![RegexRule::Regex {
@@ -4678,6 +4775,7 @@ fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<
 }
 
 pub struct BackendCall {
+	static_target: bool,
 	pub target: Target,
 	pub span_target: Option<Strng>,
 	pub http_version_override: Option<::http::Version>,
@@ -4700,6 +4798,7 @@ impl BackendCall {
 			Target::Address(_) | Target::UnixSocket(_) => None,
 		};
 		Self {
+			static_target: true,
 			target,
 			span_target,
 			http_version_override: None,
@@ -4877,10 +4976,6 @@ impl ResponsePolicies {
 }
 
 #[derive(Debug, Clone)]
-pub struct TunnelClient {
-	pub inputs: Arc<ProxyInputs>,
-}
-#[derive(Debug, Clone)]
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,
 	context: Option<Arc<PolicyClientContext>>,
@@ -4983,6 +5078,7 @@ impl PolicyClient {
 				OutboundCallSubtype::Guardrail => "guardrail",
 				OutboundCallSubtype::RateLimit => "rate_limit",
 				OutboundCallSubtype::Oidc => "oidc",
+				OutboundCallSubtype::Callout => "callout",
 				_ => labels.subtype.as_str(),
 			},
 		})
@@ -5247,6 +5343,27 @@ impl PolicyClient {
 			Self::finish_outbound_span(span.as_deref_mut(), &result);
 			result
 		})
+	}
+}
+
+impl agent_policy::BackendReferenceClient<SimpleBackendReference, BackendTrafficPolicy>
+	for PolicyClient
+{
+	type Error = ProxyError;
+
+	fn with_policy_call(&self, call: OutboundCallSubtype) -> Self {
+		self.with_outbound(OutboundCallKind::Policy, call)
+	}
+
+	async fn call_reference_with_policies(
+		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+		policies: &[BackendTrafficPolicy],
+	) -> Result<Response, Self::Error> {
+		self
+			.call_reference_with_policies(req, backend_ref, policies)
+			.await
 	}
 }
 
