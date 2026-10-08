@@ -212,10 +212,19 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 			.map(|r| r.expect_err("must be err"))
 			.collect();
 		// Do not advertise rejected resources as retained on reconnect.
-		let rejected_names: HashSet<_> = decode_failures
-			.iter()
-			.chain(result.as_ref().err().into_iter().flatten())
+		let rejects = || {
+			decode_failures
+				.iter()
+				.chain(result.as_ref().err().into_iter().flatten())
+		};
+		let rejected_names: HashSet<_> = rejects()
 			.filter(|reject| matches!(reject.severity, RejectedConfigSeverity::Error))
+			.map(|reject| reject.name.clone())
+			.collect();
+		// Advertise resources with warnings without a version, so a control plane resends them on
+		// reconnect and the new connection learns about the warnings too.
+		let warned_names: HashSet<_> = rejects()
+			.filter(|reject| matches!(reject.severity, RejectedConfigSeverity::Warning))
 			.map(|reject| reject.name.clone())
 			.collect();
 
@@ -235,9 +244,15 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 				name: r.name.into(),
 				type_url: type_url.clone(),
 			};
-			if !rejected_names.contains(&key.name) {
-				state.add_resource(key.type_url, key.name, r.version.into());
+			if rejected_names.contains(&key.name) {
+				continue;
 			}
+			let version = if warned_names.contains(&key.name) {
+				Strng::default()
+			} else {
+				r.version.into()
+			};
+			state.add_resource(key.type_url, key.name, version);
 		}
 
 		// Reclaim excess capacity after the batch, leaving headroom for future updates.
@@ -858,5 +873,39 @@ mod tests {
 
 		client.record_response(Some(type_url.as_str()), has_errors);
 		assert!(client.block_ready.is_none());
+	}
+
+	#[test]
+	fn warned_resource_is_advertised_without_version() {
+		let type_url: Strng = "type.googleapis.com/test".into();
+		let config = Config::new(
+			GrpcClient::new(TestClient),
+			"gateway".into(),
+			"default".into(),
+		)
+		.with_watched_handler(type_url.clone(), WarningHandler);
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(Metrics::new(&mut registry));
+		let (ready, _) = tokio::sync::watch::channel(());
+		let mut client = AdsClient::new(config, metrics, ready);
+
+		let resource = |name: &str| ProtoResource {
+			name: name.to_string(),
+			version: "v1".to_string(),
+			resource: Some(Default::default()),
+			..Default::default()
+		};
+		client
+			.handle_stream_event(DeltaDiscoveryResponse {
+				type_url: type_url.to_string(),
+				nonce: "nonce".to_string(),
+				resources: vec![resource("test-resource"), resource("other-resource")],
+				..Default::default()
+			})
+			.expect("warning-only responses should be handled");
+
+		let known = &client.state.known_resources[&type_url];
+		assert_eq!(known.get("test-resource").map(|v| v.as_str()), Some(""));
+		assert_eq!(known.get("other-resource").map(|v| v.as_str()), Some("v1"));
 	}
 }
