@@ -1,3 +1,4 @@
+---
 apiVersion: v2
 name: agentgateway
 description: A Helm chart for the agentgateway project
@@ -8,4 +9,5 @@ version: "0.0.2"
 # Makefile release-charts target via --app-version $(HELM_CHART_VERSION_V).
 # Using 0.0.0-dev makes it clear this is not a real release version.
 appVersion: "0.0.0-dev"
-
+sources:
+  - https://github.com/agentgateway/agentgateway
