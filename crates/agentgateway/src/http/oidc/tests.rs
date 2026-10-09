@@ -1050,6 +1050,7 @@ async fn apply_session_with_bearer() {
 
 #[tokio::test]
 async fn apply_permissive_decides_by_browser_signals() {
+	let valid_bearer = format!("Bearer {}", signed_id_token(TEST_NONCE));
 	for (name, credentials, uri, fetch_mode, accept, authorization, expected) in [
 		// Browser requests keep today's behavior.
 		(
@@ -1137,6 +1138,15 @@ async fn apply_permissive_decides_by_browser_signals() {
 			Some("Bearer not-for-oidc"),
 			Outcome::Login,
 		),
+		(
+			"login path with valid bearer",
+			OidcCredentials::Permissive,
+			"https://app.example.com/auth/start",
+			None,
+			None,
+			Some(valid_bearer.as_str()),
+			Outcome::Login,
+		),
 		// The other modes never continue.
 		(
 			"session mode client",
@@ -1154,6 +1164,15 @@ async fn apply_permissive_decides_by_browser_signals() {
 			None,
 			Some("*/*"),
 			None,
+			Outcome::Login,
+		),
+		(
+			"sessionOrBearer login path with valid bearer",
+			OidcCredentials::SessionOrBearer,
+			"https://app.example.com/auth/start",
+			None,
+			None,
+			Some(valid_bearer.as_str()),
 			Outcome::Login,
 		),
 	] {

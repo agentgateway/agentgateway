@@ -236,9 +236,14 @@ impl OidcPolicy {
 			return Ok(PolicyResponse::default());
 		}
 
+		let is_login_path = self
+			.login
+			.as_ref()
+			.is_some_and(|login| req.uri().path() == login.path);
 		let bearer = crate::http::auth::AuthorizationLocation::bearer_header();
 		let permissive = self.credentials == OidcCredentials::Permissive;
-		if (self.credentials == OidcCredentials::SessionOrBearer || permissive)
+		if !is_login_path
+			&& (self.credentials == OidcCredentials::SessionOrBearer || permissive)
 			&& let Some(token) = bearer.extract(req)
 		{
 			match self.provider.id_token_validator.validate_claims(&token) {
@@ -332,10 +337,6 @@ impl OidcPolicy {
 			}
 		}
 
-		let is_login_path = self
-			.login
-			.as_ref()
-			.is_some_and(|login| req.uri().path() == login.path);
 		// Fetches cannot complete cross-origin login.
 		let non_navigation = req.headers().get("sec-fetch-mode").is_some_and(|mode| {
 			matches!(
