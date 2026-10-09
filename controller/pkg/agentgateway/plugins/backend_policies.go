@@ -521,21 +521,30 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		if len(tls.MtlsCertificateRef) > 0 {
 			// Currently we only support one, and enforce this in the API
 			mtls := tls.MtlsCertificateRef[0]
-			nn := types.NamespacedName{
-				Namespace: policy.Namespace,
-				Name:      string(mtls.Name),
-			}
-			data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
-			if err != nil {
-				errs = append(errs, err)
-			} else {
-				if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
-					errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+			if mtls.Kind == "File" {
+				// The controller doesn't read these files; the gateway does.
+				p.CertPath = new(mtls.File.Cert)
+				p.KeyPath = new(mtls.File.Key)
+				if mtls.File.Root != "" {
+					p.RootPath = new(mtls.File.Root)
 				}
-				p.Cert = data[corev1.TLSCertKey]
-				p.Key = data[corev1.TLSPrivateKeyKey]
-				if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
-					p.Root = ca
+			} else {
+				nn := types.NamespacedName{
+					Namespace: policy.Namespace,
+					Name:      string(mtls.Name),
+				}
+				data, err := ctx.ResolveCredentialRef(agentgateway.LocalSecretObjectRef{Name: mtls.Name, Group: mtls.Group, Kind: mtls.Kind}, policy.Namespace)
+				if err != nil {
+					errs = append(errs, err)
+				} else {
+					if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
+						errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+					}
+					p.Cert = data[corev1.TLSCertKey]
+					p.Key = data[corev1.TLSPrivateKeyKey]
+					if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
+						p.Root = ca
+					}
 				}
 			}
 		}

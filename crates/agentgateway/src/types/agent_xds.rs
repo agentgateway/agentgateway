@@ -2572,6 +2572,9 @@ fn backend_policy_from_proto(
 					&btls.key_exchange_groups,
 					diagnostics,
 				),
+				cert_path: btls.cert_path.as_ref().map(Into::into),
+				key_path: btls.key_path.as_ref().map(Into::into),
+				root_path: btls.root_path.as_ref().map(Into::into),
 				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
 					.unwrap_or_default()
 					== bps::backend_tls::CertificateSource::Spiffe,
@@ -4899,6 +4902,55 @@ mod tests {
 		.unwrap_err();
 		assert!(err.to_string().contains("mcpAuthorization"), "{err}");
 		targeted_policy_from_proto(&policy(None), &mut Diagnostics::default()).unwrap();
+	}
+
+	#[test]
+	fn test_backend_policy_from_proto_backend_tls_file_paths() {
+		let key = rcgen::KeyPair::generate().unwrap();
+		let cert = rcgen::CertificateParams::new(vec!["localhost".to_string()])
+			.unwrap()
+			.self_signed(&key)
+			.unwrap();
+		let dir = tempfile::tempdir().unwrap();
+		let cert_path = dir.path().join("cert.pem");
+		std::fs::write(&cert_path, cert.pem()).unwrap();
+		let key_path = dir.path().join("key.pem");
+		std::fs::write(&key_path, key.serialize_pem()).unwrap();
+		let path_str = |p: &std::path::Path| Some(p.to_str().unwrap().to_string());
+
+		let convert = |btls: proto::agent::backend_policy_spec::BackendTls| {
+			backend_policy_from_proto(
+				&proto::agent::BackendPolicySpec {
+					kind: Some(proto::agent::backend_policy_spec::Kind::BackendTls(btls)),
+				},
+				&mut Diagnostics::default(),
+			)
+		};
+
+		let policy = convert(proto::agent::backend_policy_spec::BackendTls {
+			cert_path: path_str(&cert_path),
+			key_path: path_str(&key_path),
+			..Default::default()
+		})
+		.unwrap();
+		assert!(matches!(policy, BackendTrafficPolicy::BackendTLS(_)));
+
+		// Inline material cannot be combined with a path.
+		convert(proto::agent::backend_policy_spec::BackendTls {
+			cert: Some(b"inline-cert".to_vec()),
+			cert_path: path_str(&cert_path),
+			key_path: path_str(&key_path),
+			..Default::default()
+		})
+		.expect_err("inline cert and cert_path must be rejected");
+
+		// An unreadable file is rejected rather than silently dropping client auth.
+		convert(proto::agent::backend_policy_spec::BackendTls {
+			cert_path: path_str(&dir.path().join("does-not-exist.pem")),
+			key_path: path_str(&key_path),
+			..Default::default()
+		})
+		.expect_err("a missing cert_path must be rejected");
 	}
 
 	#[test]
