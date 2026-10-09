@@ -9,6 +9,27 @@ pub mod systemone;
 pub mod vertex;
 pub mod vertex_gemini;
 
+// Keep provider state in the client API's opaque reasoning field so long signatures do not alter
+// public tool IDs. The embedded call ID preserves the association across parallel tool calls.
+const GEMINI_THOUGHT_SIGNATURE_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+#[derive(serde::Deserialize)]
+struct GeminiThoughtSignature {
+	call_id: String,
+	signature: String,
+}
+
+impl GeminiThoughtSignature {
+	fn encode(call_id: &str, signature: &str) -> String {
+		let value = serde_json::json!({ "call_id": call_id, "signature": signature });
+		format!("{GEMINI_THOUGHT_SIGNATURE_PREFIX}{value}")
+	}
+
+	fn decode(carrier: &str) -> Option<Self> {
+		serde_json::from_str(carrier.strip_prefix(GEMINI_THOUGHT_SIGNATURE_PREFIX)?).ok()
+	}
+}
+
 #[derive(Default)]
 struct ProviderUsage {
 	input_tokens: u64,

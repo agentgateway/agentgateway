@@ -46,6 +46,7 @@ pub mod from_responses {
 		};
 
 		let mut messages: Vec<completions::RequestMessage> = Vec::new();
+		let mut gemini_signatures = std::collections::HashMap::new();
 
 		if let Some(instructions) = &req.instructions {
 			messages.push(completions::RequestMessage::Developer(
@@ -171,6 +172,15 @@ pub mod from_responses {
 					continue;
 				},
 				InputItem::Item(item) => match item {
+					Item::Reasoning(reasoning) => {
+						if let Some(value) = reasoning
+							.encrypted_content
+							.as_deref()
+							.and_then(crate::conversion::GeminiThoughtSignature::decode)
+						{
+							gemini_signatures.insert(value.call_id, value.signature);
+						}
+					},
 					Item::Message(msg_item) => match msg_item {
 						MessageItem::Input(msg) => match msg.role {
 							InputRole::User => {
@@ -276,13 +286,18 @@ pub mod from_responses {
 						},
 					},
 					Item::FunctionCall(call) => {
-						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+						let mut function_call = completions::MessageToolCall {
 							id: call.call_id.clone(),
 							function: completions::FunctionCall {
 								name: call.name.clone(),
 								arguments: call.arguments.clone(),
 							},
-						});
+							extra_content: None,
+						};
+						if let Some(signature) = gemini_signatures.remove(&call.call_id) {
+							function_call.set_thought_signature(signature);
+						}
+						let tool_call = completions::MessageToolCalls::Function(function_call);
 						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
 							&& let Some(tool_calls) = &mut message.tool_calls
 						{
@@ -326,6 +341,7 @@ pub mod from_responses {
 								name: call.name.clone(),
 								arguments,
 							},
+							extra_content: None,
 						});
 						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
 							&& let Some(tool_calls) = &mut message.tool_calls
@@ -545,6 +561,17 @@ pub mod to_responses {
 				for tc in tcs {
 					match tc {
 						completions::MessageToolCalls::Function(f) => {
+							if let Some(signature) = f.thought_signature() {
+								tool_calls.push(responses::OutputItem::Reasoning(responses::ReasoningItem {
+									id: Some(format!("rs_{:016x}", rand::rng().random::<u64>())),
+									summary: vec![],
+									content: None,
+									encrypted_content: Some(crate::conversion::GeminiThoughtSignature::encode(
+										&f.id, signature,
+									)),
+									status: Some(responses::OutputStatus::Completed),
+								}));
+							}
 							tool_calls.push(responses::OutputItem::FunctionCall(
 								responses::FunctionToolCall {
 									arguments: f.function.arguments.clone(),

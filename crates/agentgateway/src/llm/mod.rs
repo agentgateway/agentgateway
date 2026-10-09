@@ -407,12 +407,18 @@ fn render_openai_completions(
 		},
 		types::ChatRequest::Messages(req) => {
 			let mut translated = conversion::completions::from_messages::translate_request(&req)?;
+			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
+				translated.strip_thought_signatures();
+			}
 			apply_openai_moderation(&mut translated.moderation, ctx)?;
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Responses(req) => {
 			let translated = conversion::openai_compat::from_responses::translate_request(&req)?;
 			let mut request = translated.request;
+			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
+				request.strip_thought_signatures();
+			}
 			let namespaces = translated.namespaces;
 			if !namespaces.is_empty() {
 				provider_state = Some(ProviderState::OpenAICompletions {
@@ -431,6 +437,23 @@ fn render_openai_completions(
 		body,
 		provider_state,
 	})
+}
+
+/// Gemini and Vertex Gemini accept `extra_content.google.thought_signature` on replayed tool calls;
+/// other providers must not receive it.
+fn preserves_gemini_signatures(provider: &AIProvider, request_model: Option<&str>) -> bool {
+	match provider {
+		AIProvider::Gemini(_) => true,
+		AIProvider::Vertex(provider) => provider.is_gemini_model(
+			provider
+				.model_override
+				.as_ref()
+				.map(|model| model.as_str())
+				.or(request_model)
+				.unwrap_or_default(),
+		),
+		_ => false,
+	}
 }
 
 fn render_openai_responses(

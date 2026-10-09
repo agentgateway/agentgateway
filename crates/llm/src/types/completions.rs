@@ -668,8 +668,7 @@ pub mod typed {
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
 		ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
-		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
-		ChatCompletionMessageToolCalls as MessageToolCalls,
+		ChatCompletionMessageCustomToolCall, ChatCompletionMessageToolCallChunk,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessageAudio as RequestAssistantMessageAudio,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -698,6 +697,53 @@ pub mod typed {
 		ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct MessageToolCall {
+		pub id: String,
+		pub function: FunctionCall,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub extra_content: Option<ExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct ExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub google: Option<GoogleExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct GoogleExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub thought_signature: Option<String>,
+	}
+
+	impl MessageToolCall {
+		pub fn thought_signature(&self) -> Option<&str> {
+			self
+				.extra_content
+				.as_ref()?
+				.google
+				.as_ref()?
+				.thought_signature
+				.as_deref()
+		}
+
+		pub fn set_thought_signature(&mut self, signature: String) {
+			self.extra_content = Some(ExtraContent {
+				google: Some(GoogleExtraContent {
+					thought_signature: Some(signature),
+				}),
+			});
+		}
+	}
+
+	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum MessageToolCalls {
+		Function(MessageToolCall),
+		Custom(ChatCompletionMessageCustomToolCall),
+	}
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
 	///
@@ -1278,6 +1324,20 @@ pub mod typed {
 	}
 
 	impl Request {
+		/// Remove Gemini thought signatures from replayed tool calls, for providers that would
+		/// reject or mishandle the unknown `extra_content` field.
+		pub fn strip_thought_signatures(&mut self) {
+			for message in &mut self.messages {
+				if let RequestMessage::Assistant(assistant) = message {
+					for call in assistant.tool_calls.iter_mut().flatten() {
+						if let MessageToolCalls::Function(call) = call {
+							call.extra_content = None;
+						}
+					}
+				}
+			}
+		}
+
 		pub fn max_tokens(&self) -> usize {
 			self
 				.max_completion_tokens

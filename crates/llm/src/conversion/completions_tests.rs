@@ -174,6 +174,95 @@ fn non_data_urls_are_rejected() {
 }
 
 #[test]
+fn gemini_thought_signature_round_trips_through_messages_thinking_block() {
+	use bytes::Bytes;
+	use serde_json::{Value, json};
+
+	let signature = "CqUBAbc123def456GHI789jklMNOpqrSTUvwxYZ0123456789+/aBcDeFgHiJkLmNoPqRsTuVwXyZ==";
+	let second_signature = "sequential-step-signature";
+	let second_carrier =
+		crate::conversion::GeminiThoughtSignature::encode("call_step_2", second_signature);
+	let mut upstream: Value = serde_json::from_slice(include_bytes!(
+		"../tests/response/completions/tool_call.json"
+	))
+	.unwrap();
+	upstream["choices"][0]["message"]["tool_calls"][0]["extra_content"] = json!({
+		"google": {"thought_signature": signature}
+	});
+	let response =
+		super::from_messages::translate_response(&Bytes::from(serde_json::to_vec(&upstream).unwrap()))
+			.unwrap();
+	let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
+	let content = response["content"].as_array().unwrap();
+	assert_eq!(content[0]["type"], "thinking");
+	assert_eq!(content[1]["type"], "tool_use");
+	assert_eq!(content[1]["id"], "call_abc123");
+	assert_eq!(content[2]["type"], "tool_use");
+	assert_eq!(content[2]["id"], "call_xyz789");
+
+	let request: crate::types::messages::Request = serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"max_tokens": 64,
+		"messages": [
+			{"role": "user", "content": "Use the tools"},
+			{"role": "assistant", "content": content},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "call_abc123", "content": "sunny", "is_error": true},
+				{"type": "tool_result", "tool_use_id": "call_xyz789", "content": "done"}
+			]},
+			{"role": "assistant", "content": [
+				{"type": "thinking", "thinking": "", "signature": second_carrier},
+				{"type": "tool_use", "id": "call_step_2", "name": "book_taxi", "input": {"time": "10:00"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "call_step_2", "content": "booked"}
+			]}
+		]
+	}))
+	.unwrap();
+	let translated = super::from_messages::translate_request(&request).unwrap();
+	let next_request: Value = serde_json::to_value(&translated).unwrap();
+	let calls = next_request["messages"][1]["tool_calls"]
+		.as_array()
+		.unwrap();
+
+	assert_eq!(calls[0]["id"], "call_abc123");
+	assert_eq!(
+		calls[0]["extra_content"]["google"]["thought_signature"],
+		signature
+	);
+	assert_eq!(calls[1]["id"], "call_xyz789");
+	assert!(calls[1].get("extra_content").is_none());
+	assert!(
+		next_request["messages"][1]
+			.get("reasoning_signature")
+			.is_none()
+	);
+	assert_eq!(
+		next_request["messages"][4]["tool_calls"][0]["extra_content"]["google"]["thought_signature"],
+		second_signature
+	);
+
+	let mut stripped = translated;
+	stripped.strip_thought_signatures();
+	let other_provider: Value = serde_json::to_value(stripped).unwrap();
+	let calls = other_provider["messages"][1]["tool_calls"]
+		.as_array()
+		.unwrap();
+	assert!(calls[0].get("extra_content").is_none());
+	assert!(
+		other_provider["messages"][4]["tool_calls"][0]
+			.get("extra_content")
+			.is_none()
+	);
+	assert!(
+		other_provider["messages"][1]
+			.get("reasoning_signature")
+			.is_none()
+	);
+}
+
+#[test]
 fn messages_stop_sequences_are_forwarded_as_chat_completions_stop() {
 	let request: crate::types::messages::Request = serde_json::from_value(serde_json::json!({
 		"model": "test-model",
