@@ -496,6 +496,7 @@ pub mod to_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
 
+	use crate::conversion::ToolCallIndexer;
 	use crate::parse::sse::SseJsonEvent;
 	use crate::types::ResponseType;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
@@ -537,6 +538,14 @@ pub mod to_responses {
 						annotations: vec![],
 						logprobs: None,
 						text: content.clone(),
+					},
+				));
+			}
+
+			if let Some(refusal) = choice.message.refusal.as_ref().filter(|r| !r.is_empty()) {
+				text_parts.push(responses::OutputMessageContent::Refusal(
+					responses::RefusalContent {
+						refusal: refusal.clone(),
 					},
 				));
 			}
@@ -641,14 +650,14 @@ pub mod to_responses {
 	) -> Body {
 		use responses::{
 			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
-			OutputTextContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
-			ResponseOutputItemAddedEvent, ResponseStreamEvent, ResponseTextDeltaEvent,
+			OutputTextContent, RefusalContent, ResponseContentPartAddedEvent,
+			ResponseFunctionCallArgumentsDeltaEvent, ResponseOutputItemAddedEvent,
+			ResponseRefusalDeltaEvent, ResponseStreamEvent, ResponseTextDeltaEvent,
 		};
 
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut sent_created = false;
-		let mut sent_content_part = false;
 		let mut flushed = false;
 
 		let mut sequence_number: u64 = 0;
@@ -657,12 +666,11 @@ pub mod to_responses {
 		let mut response_builder: Option<types::responses::ResponseBuilder> = None;
 
 		let mut next_output_index: u32 = 1;
+		let mut tool_indexer = ToolCallIndexer::default();
 		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
-		// The full text, for `output_text.done` and the finished items: clients
-		// (the SDKs' `get_final_response()`) read those, not the deltas.
-		let mut text = String::new();
+		let mut message_content = PendingMessageContent::default();
 		let mut pending_stop_reason: Option<completions::FinishReason> = None;
 		let mut pending_usage: Option<completions::Usage> = None;
 
@@ -688,8 +696,7 @@ pub mod to_responses {
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
-								&sent_content_part,
-								&text,
+								&message_content,
 								&log,
 								response_builder,
 								&mut completion,
@@ -762,9 +769,9 @@ pub mod to_responses {
 								if let Some(completion) = completion.as_mut() {
 									completion.push_str(content);
 								}
-								text.push_str(content);
-								if !sent_content_part {
-									sent_content_part = true;
+								message_content.text.push_str(content);
+								let (content_index, is_new) = message_content.text_index();
+								if is_new {
 									sequence_number += 1;
 									events.push((
 										"event",
@@ -772,7 +779,7 @@ pub mod to_responses {
 											sequence_number,
 											item_id: message_item_id.clone(),
 											output_index: 0,
-											content_index: 0,
+											content_index,
 											part: OutputContent::OutputText(OutputTextContent {
 												text: String::new(),
 												annotations: Vec::new(),
@@ -803,16 +810,50 @@ pub mod to_responses {
 										sequence_number,
 										item_id: message_item_id.clone(),
 										output_index: 0,
-										content_index: 0,
+										content_index,
 										delta: content.clone(),
 										logprobs: None,
 									}),
 								));
 							}
 
+							if let Some(delta) = choice.delta.refusal.as_deref().filter(|s| !s.is_empty()) {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(delta);
+								}
+								message_content.refusal.push_str(delta);
+								let (content_index, is_new) = message_content.refusal_index();
+								if is_new {
+									sequence_number += 1;
+									events.push((
+										"event",
+										ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
+											sequence_number,
+											item_id: message_item_id.clone(),
+											output_index: 0,
+											content_index,
+											part: OutputContent::Refusal(RefusalContent {
+												refusal: String::new(),
+											}),
+										}),
+									));
+								}
+								sequence_number += 1;
+								events.push((
+									"event",
+									ResponseStreamEvent::ResponseRefusalDelta(ResponseRefusalDeltaEvent {
+										sequence_number,
+										item_id: message_item_id.clone(),
+										output_index: 0,
+										content_index,
+										delta: delta.to_string(),
+									}),
+								));
+							}
+
 							if let Some(tcs) = &choice.delta.tool_calls {
 								for tc in tcs {
-									let tool_index = tc.index;
+									let tool_index = tool_indexer.resolve(tc.index, tc.id.as_deref());
 									if let Some(logged_tool_calls) = logged_tool_calls.as_mut() {
 										let logged_entry = logged_tool_calls.entry(tool_index).or_default();
 										if let Some(id) = &tc.id {
@@ -916,8 +957,7 @@ pub mod to_responses {
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
-								&sent_content_part,
-								&text,
+								&message_content,
 								&log,
 								response_builder,
 								&mut completion,
@@ -945,19 +985,17 @@ pub mod to_responses {
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
-		sent_content_part: &bool,
-		text: &str,
+		message_content: &PendingMessageContent,
 		log: &StreamingUsageGuard,
 		response_builder: &types::responses::ResponseBuilder,
 		completion: &mut Option<String>,
 		logged_tool_calls: &mut Option<LoggedToolCalls>,
 	) {
 		use responses::{
-			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
-			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ResponseContentPartDoneEvent, ResponseError,
+			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputItem,
+			OutputMessage, OutputStatus, OutputTokenDetails, ResponseError,
 			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
-			ResponseTextDoneEvent, ResponseUsage,
+			ResponseUsage,
 		};
 
 		let stop_reason = pending_stop_reason.take();
@@ -1035,39 +1073,35 @@ pub mod to_responses {
 		}
 
 		let mut content = Vec::new();
-		if *sent_content_part {
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
-					sequence_number: *sequence_number,
-					item_id: message_item_id.to_string(),
-					output_index: 0,
-					content_index: 0,
-					text: text.to_string(),
-					logprobs: None,
-				}),
-			));
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
-					sequence_number: *sequence_number,
-					item_id: message_item_id.to_string(),
-					output_index: 0,
-					content_index: 0,
-					part: OutputContent::OutputText(OutputTextContent {
-						annotations: Vec::new(),
-						logprobs: None,
-						text: text.to_string(),
-					}),
-				}),
-			));
-			content.push(OutputMessageContent::OutputText(OutputTextContent {
-				annotations: Vec::new(),
-				logprobs: None,
-				text: text.to_string(),
-			}));
+		// Done events follow the order the parts were opened in.
+		let refusal_first = matches!(
+			(message_content.refusal_index, message_content.text_index),
+			(Some(refusal), Some(text)) if refusal < text
+		);
+		if refusal_first {
+			finish_refusal_part(
+				events,
+				sequence_number,
+				message_item_id,
+				message_content,
+				&mut content,
+			);
+		}
+		finish_text_part(
+			events,
+			sequence_number,
+			message_item_id,
+			message_content,
+			&mut content,
+		);
+		if !refusal_first {
+			finish_refusal_part(
+				events,
+				sequence_number,
+				message_item_id,
+				message_content,
+				&mut content,
+			);
 		}
 
 		let message = OutputItem::Message(OutputMessage {
@@ -1167,5 +1201,156 @@ pub mod to_responses {
 		}
 
 		events.push(("event", done_event));
+	}
+
+	/// The content parts of the message item being streamed. Each part gets the next free
+	/// `content_index` when its first delta arrives, so the parts keep their arrival order.
+	#[derive(Default)]
+	struct PendingMessageContent {
+		// The full text, for `output_text.done` and the finished items: clients
+		// (the SDKs' `get_final_response()`) read those, not the deltas.
+		text: String,
+		text_index: Option<u32>,
+		refusal: String,
+		refusal_index: Option<u32>,
+	}
+
+	impl PendingMessageContent {
+		/// The text part's content index, and whether this call opened the part.
+		fn text_index(&mut self) -> (u32, bool) {
+			if let Some(index) = self.text_index {
+				return (index, false);
+			}
+			let index = self.next_index();
+			self.text_index = Some(index);
+			(index, true)
+		}
+
+		/// The refusal part's content index, and whether this call opened the part.
+		fn refusal_index(&mut self) -> (u32, bool) {
+			if let Some(index) = self.refusal_index {
+				return (index, false);
+			}
+			let index = self.next_index();
+			self.refusal_index = Some(index);
+			(index, true)
+		}
+
+		fn next_index(&self) -> u32 {
+			u32::from(self.text_index.is_some()) + u32::from(self.refusal_index.is_some())
+		}
+	}
+
+	fn finish_text_part(
+		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
+		sequence_number: &mut u64,
+		message_item_id: &str,
+		message_content: &PendingMessageContent,
+		content: &mut Vec<responses::OutputMessageContent>,
+	) {
+		use responses::{
+			OutputContent, OutputMessageContent, OutputTextContent, ResponseContentPartDoneEvent,
+			ResponseStreamEvent, ResponseTextDoneEvent,
+		};
+
+		let Some(content_index) = message_content.text_index else {
+			return;
+		};
+		let text = &message_content.text;
+		*sequence_number += 1;
+		events.push((
+			"event",
+			ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
+				sequence_number: *sequence_number,
+				item_id: message_item_id.to_string(),
+				output_index: 0,
+				content_index,
+				text: text.clone(),
+				logprobs: None,
+			}),
+		));
+		*sequence_number += 1;
+		events.push((
+			"event",
+			ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
+				sequence_number: *sequence_number,
+				item_id: message_item_id.to_string(),
+				output_index: 0,
+				content_index,
+				part: OutputContent::OutputText(OutputTextContent {
+					annotations: Vec::new(),
+					logprobs: None,
+					text: text.clone(),
+				}),
+			}),
+		));
+		content.push(OutputMessageContent::OutputText(OutputTextContent {
+			annotations: Vec::new(),
+			logprobs: None,
+			text: text.clone(),
+		}));
+	}
+
+	fn finish_refusal_part(
+		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
+		sequence_number: &mut u64,
+		message_item_id: &str,
+		message_content: &PendingMessageContent,
+		content: &mut Vec<responses::OutputMessageContent>,
+	) {
+		use responses::{
+			OutputContent, OutputMessageContent, RefusalContent, ResponseContentPartDoneEvent,
+			ResponseRefusalDoneEvent, ResponseStreamEvent,
+		};
+
+		let Some(content_index) = message_content.refusal_index else {
+			return;
+		};
+		let refusal = &message_content.refusal;
+		*sequence_number += 1;
+		events.push((
+			"event",
+			ResponseStreamEvent::ResponseRefusalDone(ResponseRefusalDoneEvent {
+				sequence_number: *sequence_number,
+				item_id: message_item_id.to_string(),
+				output_index: 0,
+				content_index,
+				refusal: refusal.clone(),
+			}),
+		));
+		*sequence_number += 1;
+		events.push((
+			"event",
+			ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
+				sequence_number: *sequence_number,
+				item_id: message_item_id.to_string(),
+				output_index: 0,
+				content_index,
+				part: OutputContent::Refusal(RefusalContent {
+					refusal: refusal.clone(),
+				}),
+			}),
+		));
+		content.push(OutputMessageContent::Refusal(RefusalContent {
+			refusal: refusal.clone(),
+		}));
+	}
+
+	#[cfg(test)]
+	mod pending_message_content_tests {
+		use super::PendingMessageContent;
+
+		#[test]
+		fn content_indexes_follow_arrival_order() {
+			let mut refusal_first = PendingMessageContent::default();
+			assert_eq!(refusal_first.refusal_index(), (0, true));
+			assert_eq!(refusal_first.text_index(), (1, true));
+			assert_eq!(refusal_first.refusal_index(), (0, false));
+
+			let mut text_first = PendingMessageContent::default();
+			assert_eq!(text_first.text_index(), (0, true));
+			assert_eq!(text_first.refusal_index(), (1, true));
+			assert_eq!(text_first.text_index(), (0, false));
+		}
 	}
 }
