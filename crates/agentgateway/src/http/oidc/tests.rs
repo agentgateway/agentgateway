@@ -170,6 +170,10 @@ fn encoded_callback_state(transaction_id: &str, csrf_state: &str) -> String {
 }
 
 fn signed_id_token(nonce: &str) -> String {
+	signed_id_token_for_audience(TEST_CLIENT_ID, nonce)
+}
+
+fn signed_id_token_for_audience(aud: &str, nonce: &str) -> String {
 	crate::crypto::jwt::init();
 	let mut header = Header::new(Algorithm::ES256);
 	header.kid = Some(TEST_KEY_ID.into());
@@ -177,7 +181,7 @@ fn signed_id_token(nonce: &str) -> String {
 		&header,
 		&TestIdTokenClaims {
 			iss: TEST_ISSUER,
-			aud: TEST_CLIENT_ID,
+			aud,
 			exp: now_unix() + 600,
 			nonce,
 			sub: "user-1",
@@ -831,41 +835,138 @@ async fn apply_returns_unauthorized_for_fetch_requests() {
 	);
 }
 
+/// What the policy does with a request that is not handled by the callback or logout paths.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Outcome {
+	/// Claims set from the bearer or session, no direct response.
+	Authenticated,
+	/// `AuthenticationRequired` error (a 401).
+	Rejected,
+	/// Redirect to the identity provider's authorization endpoint.
+	Login,
+	/// No claims and no direct response: a later policy decides.
+	Continue,
+}
+
+fn encoded_session_cookie(policy: &OidcPolicy) -> String {
+	let encoded = policy
+		.session
+		.encode_browser_session(&browser_session(signed_id_token(TEST_NONCE)))
+		.expect("encode session");
+	format!("{}={encoded}", policy.session.cookie_name)
+}
+
+fn assert_outcome(
+	name: &str,
+	result: Result<PolicyResponse, crate::proxy::ProxyResponse>,
+	req: &crate::http::Request,
+	expected: Outcome,
+) {
+	match expected {
+		Outcome::Authenticated => {
+			assert!(result.expect(name).direct_response.is_none(), "{name}");
+			let claims = req.extensions().get::<jwt::Claims>().expect(name);
+			assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")), "{name}");
+		},
+		Outcome::Rejected => {
+			let err = result.expect_err(name).downcast();
+			assert!(
+				matches!(&err, ProxyError::OidcFailure(Error::AuthenticationRequired)),
+				"{name}: {err:?}"
+			);
+		},
+		Outcome::Login => {
+			let response = result.expect(name).direct_response.expect(name);
+			assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
+			assert!(
+				redirect_location(&response).starts_with("https://issuer.example.com/authorize?"),
+				"{name}"
+			);
+			assert!(req.extensions().get::<jwt::Claims>().is_none(), "{name}");
+		},
+		Outcome::Continue => {
+			assert!(result.expect(name).direct_response.is_none(), "{name}");
+			assert!(req.extensions().get::<jwt::Claims>().is_none(), "{name}");
+			assert!(
+				req.extensions().get::<AuthenticatedSession>().is_none(),
+				"{name}"
+			);
+		},
+	}
+}
+
 #[tokio::test]
 async fn apply_bearer_credentials() {
 	let id_token = signed_id_token(TEST_NONCE);
-	for (name, credentials, bearer, authenticated) in [
+	let wrong_audience = signed_id_token_for_audience("other-client", TEST_NONCE);
+	// Rows without `Sec-Fetch-Mode` are navigations, so a bearer the policy does not consume
+	// shows up as a login redirect rather than the same 401 an invalid bearer gets.
+	for (name, credentials, bearer, fetch_mode, expected) in [
 		(
 			"session ignores bearer",
 			OidcCredentials::Session,
 			Some(id_token.as_str()),
-			false,
+			None,
+			Outcome::Login,
 		),
 		(
 			"valid bearer",
 			OidcCredentials::SessionOrBearer,
 			Some(id_token.as_str()),
-			true,
+			Some("cors"),
+			Outcome::Authenticated,
 		),
 		(
 			"invalid bearer",
 			OidcCredentials::SessionOrBearer,
 			Some("not-a-jwt"),
-			false,
+			Some("cors"),
+			Outcome::Rejected,
+		),
+		(
+			"wrong audience bearer",
+			OidcCredentials::SessionOrBearer,
+			Some(wrong_audience.as_str()),
+			Some("cors"),
+			Outcome::Rejected,
 		),
 		(
 			"missing bearer",
 			OidcCredentials::SessionOrBearer,
 			None,
-			false,
+			None,
+			Outcome::Login,
+		),
+		(
+			"permissive valid bearer",
+			OidcCredentials::Permissive,
+			Some(id_token.as_str()),
+			Some("cors"),
+			Outcome::Authenticated,
+		),
+		(
+			"permissive invalid bearer",
+			OidcCredentials::Permissive,
+			Some("not-a-jwt"),
+			Some("cors"),
+			Outcome::Continue,
+		),
+		(
+			"permissive wrong audience bearer",
+			OidcCredentials::Permissive,
+			Some(wrong_audience.as_str()),
+			Some("cors"),
+			Outcome::Continue,
 		),
 	] {
 		let mut policy = test_policy();
 		policy.credentials = credentials;
 		let mut req = request(Method::GET, "https://app.example.com/private", None);
-		req
-			.headers_mut()
-			.insert("sec-fetch-mode", "cors".parse().unwrap());
+		if let Some(fetch_mode) = fetch_mode {
+			req
+				.headers_mut()
+				.insert("sec-fetch-mode", fetch_mode.parse().unwrap());
+		}
 		if let Some(bearer) = bearer {
 			req.headers_mut().insert(
 				header::AUTHORIZATION,
@@ -874,19 +975,294 @@ async fn apply_bearer_credentials() {
 		}
 
 		let result = test_helpers::test_policy(&policy, &mut req).await;
-		if authenticated {
-			assert!(result.expect(name).direct_response.is_none(), "{name}");
-			let claims = req.extensions().get::<jwt::Claims>().expect(name);
-			assert_eq!(claims.inner.get("sub"), Some(&json!("user-1")), "{name}");
-			assert!(req.headers().get(header::AUTHORIZATION).is_none(), "{name}");
-		} else {
-			let err = result.expect_err(name).downcast();
-			assert!(
-				matches!(&err, ProxyError::OidcFailure(Error::AuthenticationRequired)),
-				"{name}"
+		assert_outcome(name, result, &req, expected);
+		// The header is consumed only when the policy authenticated with it.
+		assert_eq!(
+			req.headers().get(header::AUTHORIZATION).is_some(),
+			bearer.is_some() && expected != Outcome::Authenticated,
+			"{name}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn apply_session_with_bearer() {
+	let id_token = signed_id_token(TEST_NONCE);
+	for (name, credentials, bearer, expected) in [
+		(
+			"session without bearer",
+			OidcCredentials::SessionOrBearer,
+			None,
+			Outcome::Authenticated,
+		),
+		(
+			"session with valid bearer",
+			OidcCredentials::SessionOrBearer,
+			Some(id_token.as_str()),
+			Outcome::Authenticated,
+		),
+		// The bearer is checked first, so a stale header loses the session. Accepted trade-off.
+		(
+			"session with invalid bearer",
+			OidcCredentials::SessionOrBearer,
+			Some("not-a-jwt"),
+			Outcome::Rejected,
+		),
+		(
+			"permissive session without bearer",
+			OidcCredentials::Permissive,
+			None,
+			Outcome::Authenticated,
+		),
+		// Permissive ignores the invalid bearer, so the session still authenticates.
+		(
+			"permissive session with invalid bearer",
+			OidcCredentials::Permissive,
+			Some("not-a-jwt"),
+			Outcome::Authenticated,
+		),
+	] {
+		let mut policy = test_policy();
+		policy.credentials = credentials;
+		let mut req = request(Method::GET, "https://app.example.com/private", None);
+		req
+			.headers_mut()
+			.insert("sec-fetch-mode", "cors".parse().unwrap());
+		add_cookie(&mut req, encoded_session_cookie(&policy));
+		if let Some(bearer) = bearer {
+			req.headers_mut().insert(
+				header::AUTHORIZATION,
+				format!("bearer {bearer}").parse().unwrap(),
+			);
+		}
+
+		let result = test_helpers::test_policy(&policy, &mut req).await;
+		assert_outcome(name, result, &req, expected);
+		if expected == Outcome::Authenticated {
+			assert_eq!(
+				req.extensions().get::<AuthenticatedSession>().is_some(),
+				bearer != Some(id_token.as_str()),
+				"{name}: only a session authentication marks the request as a session"
 			);
 		}
 	}
+}
+
+#[tokio::test]
+async fn apply_permissive_decides_by_browser_signals() {
+	for (name, credentials, uri, fetch_mode, accept, authorization, expected) in [
+		// Browser requests keep today's behavior.
+		(
+			"fetch without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("cors"),
+			None,
+			None,
+			Outcome::Rejected,
+		),
+		(
+			"navigation without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("navigate"),
+			None,
+			None,
+			Outcome::Login,
+		),
+		// Only the known fetch modes get the 401; any other value is treated as a navigation.
+		(
+			"unknown fetch mode without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("nested-navigate"),
+			None,
+			None,
+			Outcome::Login,
+		),
+		(
+			"plain-http navigation accepting html",
+			OidcCredentials::Permissive,
+			"http://app.example.com/private",
+			None,
+			Some("text/html,application/xhtml+xml"),
+			None,
+			Outcome::Login,
+		),
+		// Non-browser clients continue so a later policy can decide.
+		(
+			"client accepting anything",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			None,
+			Some("*/*"),
+			None,
+			Outcome::Continue,
+		),
+		(
+			"client without accept",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			None,
+			None,
+			None,
+			Outcome::Continue,
+		),
+		// Any credential continues, even from a browser, so a later policy can validate it.
+		(
+			"fetch with foreign bearer",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("cors"),
+			None,
+			Some("Bearer not-for-oidc"),
+			Outcome::Continue,
+		),
+		(
+			"navigation with basic credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("navigate"),
+			Some("text/html"),
+			Some("Basic dXNlcjpwYXNz"),
+			Outcome::Continue,
+		),
+		// The login path always starts login, even with a credential.
+		(
+			"login path with foreign bearer",
+			OidcCredentials::Permissive,
+			"https://app.example.com/auth/start",
+			None,
+			None,
+			Some("Bearer not-for-oidc"),
+			Outcome::Login,
+		),
+		// The other modes never continue.
+		(
+			"session mode client",
+			OidcCredentials::Session,
+			"https://app.example.com/private",
+			None,
+			Some("*/*"),
+			None,
+			Outcome::Login,
+		),
+		(
+			"sessionOrBearer mode client",
+			OidcCredentials::SessionOrBearer,
+			"https://app.example.com/private",
+			None,
+			Some("*/*"),
+			None,
+			Outcome::Login,
+		),
+	] {
+		let mut policy = test_policy();
+		policy.credentials = credentials;
+		policy.login = Some(OidcLogin {
+			path: "/auth/start".into(),
+			redirect: None,
+		});
+		let mut req = request(Method::GET, uri, accept);
+		if let Some(fetch_mode) = fetch_mode {
+			req
+				.headers_mut()
+				.insert("sec-fetch-mode", fetch_mode.parse().unwrap());
+		}
+		if let Some(authorization) = authorization {
+			req
+				.headers_mut()
+				.insert(header::AUTHORIZATION, authorization.parse().unwrap());
+		}
+
+		let result = test_helpers::test_policy(&policy, &mut req).await;
+		assert_outcome(name, result, &req, expected);
+		assert_eq!(
+			req.headers().get(header::AUTHORIZATION).is_some(),
+			authorization.is_some(),
+			"{name}: credentials the policy did not consume stay on the request"
+		);
+	}
+}
+
+#[tokio::test]
+async fn apply_permissive_fetch_gets_login_redirect_location() {
+	let mut policy = test_policy();
+	policy.credentials = OidcCredentials::Permissive;
+	policy.login = Some(OidcLogin {
+		path: "/auth/start".into(),
+		redirect: Some("/sign-in".into()),
+	});
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("fetch gets a direct response")
+		.direct_response
+		.expect("direct response");
+	assert_eq!(response.status(), ::http::StatusCode::UNAUTHORIZED);
+	assert_eq!(redirect_location(&response), "/sign-in");
+}
+
+#[tokio::test]
+async fn apply_permissive_continue_still_clears_refresh_cookie() {
+	let mock = MockServer::start().await;
+	let mut policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
+	policy.credentials = OidcCredentials::Permissive;
+	let encoded_session = policy
+		.session
+		.encode_browser_session(&BrowserSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
+			expires_at_unix: Some(now_unix().saturating_sub(1)),
+		})
+		.expect("encode expired session");
+	let encoded_refresh = policy
+		.session
+		.encode_refresh_session(&RefreshSession {
+			policy_id: policy.policy_id.clone(),
+			subject: Some("user-1".into()),
+			refresh_token: SecretString::new("refresh-token".into()),
+			expires_at_unix: now_unix() + 300,
+		})
+		.expect("encode refresh session");
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(400).set_body_json(json!({"error": "invalid_grant"})))
+		.expect(1)
+		.mount(&mock)
+		.await;
+
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_session}", policy.session.cookie_name),
+	);
+	add_cookie(
+		&mut req,
+		format!("{}={encoded_refresh}", policy.session.refresh_cookie_name),
+	);
+
+	let response = test_helpers::test_policy(&policy, &mut req)
+		.await
+		.expect("non-browser request continues");
+	assert!(response.direct_response.is_none());
+	assert!(req.extensions().get::<jwt::Claims>().is_none());
+	let cleared = response
+		.response_headers
+		.expect("response headers")
+		.get_all(header::SET_COOKIE)
+		.iter()
+		.map(|value| parse_set_cookie(value.to_str().unwrap()))
+		.find(|cookie| cookie.name() == policy.session.refresh_cookie_name)
+		.expect("cleared refresh cookie");
+	assert_eq!(cleared.value(), "");
+	assert_eq!(cleared.max_age().unwrap().whole_seconds(), 0);
+	mock.verify().await;
 }
 
 #[tokio::test]

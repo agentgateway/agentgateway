@@ -410,7 +410,7 @@
 |`binds[].listeners[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`binds[].listeners[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`binds[].listeners[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -1342,7 +1342,7 @@
 |`binds[].listeners[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -1965,7 +1965,7 @@
 |`policies[].policy.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`policies[].policy.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`policies[].policy.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`policies[].policy.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`policies[].policy.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -3099,7 +3099,7 @@
 |`routeGroups[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routeGroups[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routeGroups[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`routeGroups[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`routeGroups[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -4003,7 +4003,7 @@
 |`gateways.*.listeners[].oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.listeners[].oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.listeners[].oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4243,7 +4243,7 @@
 |`gateways.*.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4722,7 +4722,7 @@
 |`routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -5904,7 +5904,7 @@
 |`llm.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`llm.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`llm.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -6434,7 +6434,7 @@
 |`mcp.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`mcp.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`mcp.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`mcp.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`mcp.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -6684,7 +6684,7 @@
 |`ui.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`ui.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`ui.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
-|`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`.|
+|`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

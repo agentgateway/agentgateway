@@ -237,23 +237,28 @@ impl OidcPolicy {
 		}
 
 		let bearer = crate::http::auth::AuthorizationLocation::bearer_header();
-		if self.credentials == OidcCredentials::SessionOrBearer
+		let permissive = self.credentials == OidcCredentials::Permissive;
+		if (self.credentials == OidcCredentials::SessionOrBearer || permissive)
 			&& let Some(token) = bearer.extract(req)
 		{
-			let claims = self
-				.provider
-				.id_token_validator
-				.validate_claims(&token)
-				.map_err(|e| {
+			match self.provider.id_token_validator.validate_claims(&token) {
+				Ok(claims) => {
+					if let Some(Value::String(sub)) = claims.inner.get("sub") {
+						log.jwt_sub = Some(sub.clone());
+					}
+					req.extensions_mut().insert(claims);
+					bearer.remove(req).map_err(|e| Error::Http(e.into()))?;
+					return Ok(PolicyResponse::default());
+				},
+				Err(e) if permissive => {
+					// The token may be valid for a later authentication policy; leave it in place.
+					debug!(error=%e, "ignoring invalid bearer id token in permissive mode");
+				},
+				Err(e) => {
 					debug!(error=%e, "rejected invalid bearer id token");
-					Error::AuthenticationRequired
-				})?;
-			if let Some(Value::String(sub)) = claims.inner.get("sub") {
-				log.jwt_sub = Some(sub.clone());
+					return Err(Error::AuthenticationRequired);
+				},
 			}
-			req.extensions_mut().insert(claims);
-			bearer.remove(req).map_err(|e| Error::Http(e.into()))?;
-			return Ok(PolicyResponse::default());
 		}
 
 		let mut clear_refresh_cookie = false;
@@ -327,6 +332,10 @@ impl OidcPolicy {
 			}
 		}
 
+		let is_login_path = self
+			.login
+			.as_ref()
+			.is_some_and(|login| req.uri().path() == login.path);
 		// Fetches cannot complete cross-origin login.
 		let non_navigation = req.headers().get("sec-fetch-mode").is_some_and(|mode| {
 			matches!(
@@ -338,7 +347,14 @@ impl OidcPolicy {
 			.login
 			.as_ref()
 			.and_then(|login| login.redirect.as_deref());
-		let mut response = if non_navigation {
+		let mut response = if permissive
+			&& !is_login_path
+			&& (req.headers().contains_key(header::AUTHORIZATION) || !is_browser(req))
+		{
+			// Permissive mode: a credential for a later policy, or a non-browser client with no
+			// credential, continues unauthenticated. Browsers still get the 401 or login below.
+			PolicyResponse::default()
+		} else if non_navigation {
 			if !clear_refresh_cookie && login_redirect.is_none() {
 				return Err(Error::AuthenticationRequired);
 			}
@@ -448,6 +464,17 @@ impl crate::store::RequestPolicyTrait for OidcPolicy {
 			.await
 			.map_err(|e| crate::proxy::ProxyResponse::from(crate::proxy::ProxyError::OidcFailure(e)))
 	}
+}
+
+/// Whether the request looks like it came from a browser: either it carries `Sec-Fetch-Mode`
+/// (sent by browsers to secure contexts only) or it accepts HTML (the plain-HTTP fallback).
+fn is_browser(req: &Request) -> bool {
+	req.headers().contains_key("sec-fetch-mode")
+		|| req
+			.headers()
+			.get(header::ACCEPT)
+			.and_then(|accept| accept.to_str().ok())
+			.is_some_and(|accept| accept.contains("text/html"))
 }
 
 fn is_cors_preflight(req: &Request) -> bool {

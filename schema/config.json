@@ -6852,6 +6852,11 @@
           "description": "Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.\nThis lets non-browser clients authenticate with a token obtained from the provider directly.",
           "type": "string",
           "const": "sessionOrBearer"
+        },
+        {
+          "description": "Like `sessionOrBearer`, but leaves unrecognized `Authorization` credentials and\nnon-browser requests without credentials for later policies. Unauthenticated browser\nrequests still enter the login flow or receive 401.\n\n**Warning:** Some requests continue unauthenticated. Pair this mode with an\n`authorization` policy or another enforcement point.",
+          "type": "string",
+          "const": "permissive"
         }
       ]
     },
