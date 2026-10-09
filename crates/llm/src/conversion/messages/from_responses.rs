@@ -1102,6 +1102,14 @@ pub fn translate_response(
 		state,
 		buffer_limit,
 	)?;
+	let saw_tool = output.iter().any(|item| {
+		matches!(
+			item,
+			responses::OutputItem::FunctionCall(_) | responses::OutputItem::CustomToolCall(_)
+		)
+	});
+	validate_terminal(stop_reason, response.stop_sequence.as_deref(), saw_tool)
+		.map_err(|_| invalid_response())?;
 	let builder =
 		types::responses::ResponseBuilder::new(format!("resp_{}", response.id), response.model);
 	let mut typed = builder.response(
@@ -1157,6 +1165,29 @@ fn terminal_status(
 		},
 		messages::StopReason::PauseTurn => None,
 	}
+}
+
+fn validate_terminal(
+	stop_reason: messages::StopReason,
+	stop_sequence: Option<&str>,
+	saw_tool: bool,
+) -> Result<(), ()> {
+	if (matches!(stop_reason, messages::StopReason::ToolUse) && !saw_tool)
+		|| (saw_tool
+			&& matches!(
+				stop_reason,
+				messages::StopReason::EndTurn | messages::StopReason::StopSequence
+			))
+	{
+		return Err(());
+	}
+	if match stop_reason {
+		messages::StopReason::StopSequence => !stop_sequence.is_some_and(|value| !value.is_empty()),
+		_ => stop_sequence.is_some(),
+	} {
+		return Err(());
+	}
+	Ok(())
 }
 
 /// `phase` labels an assistant message as intermediate commentary or the final answer. A
@@ -2195,23 +2226,11 @@ pub fn translate_stream(
 						let terminal = stream.terminal_usage.clone().ok_or(())?;
 						let usage = stream_usage(&initial, &terminal)?;
 						let stop_reason = stream.stop_reason.ok_or(())?;
-						if (matches!(stop_reason, messages::StopReason::ToolUse) && !stream.saw_tool)
-							|| (stream.saw_tool
-								&& matches!(
-									stop_reason,
-									messages::StopReason::EndTurn | messages::StopReason::StopSequence
-								)) {
-							return Err(());
-						}
-						if match stop_reason {
-							messages::StopReason::StopSequence => !stream
-								.stop_sequence
-								.as_ref()
-								.is_some_and(|value| !value.is_empty()),
-							_ => stream.stop_sequence.is_some(),
-						} {
-							return Err(());
-						}
+						validate_terminal(
+							stop_reason,
+							stream.stop_sequence.as_deref(),
+							stream.saw_tool,
+						)?;
 						stream.ensure_retained_limit(buffer_limit, &model)?;
 						let builder = response_builder.as_ref().ok_or(())?;
 						let (status, incomplete_reason) = terminal_status(stop_reason).ok_or(())?;

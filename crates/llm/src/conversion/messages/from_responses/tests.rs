@@ -1642,6 +1642,94 @@ fn buffered_refusal_is_a_completed_refusal() {
 	);
 }
 
+#[rstest::rstest]
+#[case::tool_reason_without_tool("tool_use", false, None, false)]
+#[case::tool_with_end_turn("end_turn", true, None, false)]
+#[case::tool_with_stop_sequence("stop_sequence", true, Some("END"), false)]
+#[case::missing_stop_sequence("stop_sequence", false, None, false)]
+#[case::empty_stop_sequence("stop_sequence", false, Some(""), false)]
+#[case::unexpected_stop_sequence("end_turn", false, Some("END"), false)]
+#[case::tool_use("tool_use", true, None, true)]
+#[case::end_turn("end_turn", false, None, true)]
+#[case::stop_sequence("stop_sequence", false, Some("END"), true)]
+#[case::limited_text("max_tokens", false, None, true)]
+#[case::limited_tool("max_tokens", true, None, true)]
+#[case::context_limit("model_context_window_exceeded", false, None, true)]
+#[tokio::test]
+async fn terminal_responses_agree_on_output_validation(
+	#[case] stop_reason: &str,
+	#[case] tool: bool,
+	#[case] stop_sequence: Option<&str>,
+	#[case] valid: bool,
+) {
+	let content = if tool {
+		json!({"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {}})
+	} else {
+		json!({"type": "text", "text": "done"})
+	};
+	let body = Bytes::from(
+		json!({
+			"id": "msg_upstream", "type": "message", "role": "assistant", "model": "upstream-model",
+			"content": [content.clone()], "stop_reason": stop_reason, "stop_sequence": stop_sequence,
+			"usage": {"input_tokens": 1, "output_tokens": 1}
+		})
+		.to_string(),
+	);
+	let mut start_content = content;
+	if !tool {
+		start_content["text"] = json!("");
+	}
+	let mut frames = vec![
+		message_start(1),
+		sse_event(
+			"content_block_start",
+			json!({
+				"type": "content_block_start", "index": 0, "content_block": start_content
+			}),
+		),
+	];
+	if !tool {
+		frames.push(sse_event(
+			"content_block_delta",
+			json!({
+				"type": "content_block_delta", "index": 0,
+				"delta": {"type": "text_delta", "text": "done"}
+			}),
+		));
+	}
+	frames.extend([
+		sse_event(
+			"content_block_stop",
+			json!({"type": "content_block_stop", "index": 0}),
+		),
+		sse_event(
+			"message_delta",
+			json!({
+				"type": "message_delta", "delta": {"stop_reason": stop_reason, "stop_sequence": stop_sequence},
+				"usage": {"output_tokens": 1}
+			}),
+		),
+		sse_event("message_stop", json!({"type": "message_stop"})),
+	]);
+	let events = collect_stream(frames, 1024 * 1024, response_state()).await;
+	let response = translate_response(&body, &response_state(), 1024 * 1024);
+	if valid {
+		let response = serde_json::to_value(response.expect("valid terminal response"))
+			.expect("serializable response");
+		assert!(!events.iter().any(|event| event["type"] == "error"));
+		let terminal = events.last().expect("terminal event");
+		assert!(matches!(
+			terminal["type"].as_str(),
+			Some("response.completed" | "response.incomplete")
+		));
+		assert_eq!(response["output"], terminal["response"]["output"]);
+		assert_eq!(response["usage"], terminal["response"]["usage"]);
+	} else {
+		assert_one_safe_error(&events);
+		assert!(response.is_err());
+	}
+}
+
 #[tokio::test]
 async fn streaming_text_is_emitted_before_the_terminal_event() {
 	let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
