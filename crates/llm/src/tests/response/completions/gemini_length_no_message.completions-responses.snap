@@ -1,0 +1,50 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_length_no_message.json
+info:
+  choices:
+    - finish_reason: length
+      index: 0
+      logprobs: ~
+  model: google/gemini-3.8-flash
+  object: chat.completion
+  usage:
+    completion_tokens_details:
+      reasoning_tokens: 29
+    prompt_tokens: 8509
+    prompt_tokens_details:
+      cached_tokens: 4061
+    total_tokens: 8538
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 8509,
+      "output_tokens": 29,
+      "input_tokens_details": {
+        "cached_tokens": 4061
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 29
+      },
+      "total_tokens": 8538
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_tokens"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 8509,
+    "output_tokens": 29,
+    "total_tokens": 8538,
+    "reasoning_tokens": 29,
+    "cached_input_tokens": 4061,
+    "provider_model": "input-model"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"location\":\"Paris\"}",
+              "name": "get_weather"
+            },
+            "id": "call_575029",
+            "type": "function"
+          }
+        ]
+      }
+    }
+  ],
+  "created": 1791284455,
+  "id": "x7TEaqD0Eeet5OUPoYHGgQo",
+  "model": "gemini-3.8-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 20,
+    "prompt_tokens": 120,
+    "total_tokens": 140
+  }
+}

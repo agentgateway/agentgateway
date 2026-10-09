@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_unexpected_tool_call.json
+info:
+  choices:
+    - finish_reason: unexpected_tool_call
+      index: 0
+      message:
+        content: ~
+        refusal: I could not call get_weather because tool calls are disabled for this request.
+        role: assistant
+  created: 1791284455
+  id: 9tTEaqrlEeeKvdIPv7bgyAw
+  model: gemini-2.5-flash
+  object: chat.completion
+  usage:
+    completion_tokens: 22
+    prompt_tokens: 106
+    total_tokens: 128
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "refusal",
+            "refusal": "I could not call get_weather because tool calls are disabled for this request."
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 106,
+      "output_tokens": 22,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 128
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 106,
+    "output_tokens": 22,
+    "total_tokens": 128,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}

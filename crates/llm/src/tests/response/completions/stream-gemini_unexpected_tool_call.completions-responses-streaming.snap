@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-gemini_unexpected_tool_call.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"gemini-2.5-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"part":{"type":"refusal","refusal":""}}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":"I could not call get_weather "}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":6,"item_id":"","output_index":0,"content_index":0,"delta":"because tool calls are disabled for this request."}
+
+event: event
+data: {"type":"response.refusal.done","sequence_number":7,"item_id":"","output_index":0,"content_index":0,"refusal":"I could not call get_weather because tool calls are disabled for this request."}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":8,"item_id":"","output_index":0,"content_index":0,"part":{"type":"refusal","refusal":"I could not call get_weather because tool calls are disabled for this request."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":9,"output_index":0,"item":{"type":"message","content":[{"type":"refusal","refusal":"I could not call get_weather because tool calls are disabled for this request."}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":10,"response":{"created_at":123,"id":"","model":"gemini-2.5-flash","object":"response","output":[{"type":"message","content":[{"type":"refusal","refusal":"I could not call get_weather because tool calls are disabled for this request."}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":106,"input_tokens_details":{"cached_tokens":0},"output_tokens":22,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":128}}}
+
+
+
+{
+  "input_tokens": 106,
+  "output_tokens": 22,
+  "total_tokens": 128,
+  "provider_model": "gemini-2.5-flash",
+  "completion": [
+    "I could not call get_weather because tool calls are disabled for this request."
+  ]
+}

@@ -1,0 +1,42 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_malformed_function_call.json
+info:
+  choices:
+    - finish_reason: "function_call_filter: MALFORMED_FUNCTION_CALL"
+      index: 0
+      message:
+        extra_content:
+          google:
+            thought_signature: Er0E
+        role: assistant
+  created: 1791284455
+  id: 4tTEaqrlEeeKvdIPv7bgyAw
+  model: gemini-3.8-flash
+  object: chat.completion
+  usage:
+    completion_tokens: 22
+    prompt_tokens: 106
+    total_tokens: 289
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [],
+    "model": "gemini-3.8-flash",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 106,
+      "output_tokens": 183
+    }
+  },
+  "parsed": {
+    "input_tokens": 106,
+    "output_tokens": 183,
+    "total_tokens": 289,
+    "provider_model": "gemini-3.8-flash"
+  }
+}

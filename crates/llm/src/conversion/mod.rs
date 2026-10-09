@@ -85,6 +85,34 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
+/// Assigns indices to streamed Chat Completions tool calls.
+///
+/// Gemini's compatibility endpoint sends whole calls without OpenAI's `index`. For unindexed
+/// chunks, a new `id` starts a call, a known `id` reuses its index, and no `id` continues the
+/// most recent call.
+#[derive(Default)]
+pub(crate) struct ToolCallIndexer {
+	next: u32,
+	last: Option<u32>,
+	by_id: std::collections::HashMap<String, u32>,
+}
+
+impl ToolCallIndexer {
+	pub(crate) fn resolve(&mut self, index: Option<u32>, id: Option<&str>) -> u32 {
+		let resolved = match (index, id) {
+			(Some(index), _) => index,
+			(None, Some(id)) => self.by_id.get(id).copied().unwrap_or(self.next),
+			(None, None) => self.last.unwrap_or(self.next),
+		};
+		if let Some(id) = id {
+			self.by_id.insert(id.to_string(), resolved);
+		}
+		self.next = self.next.max(resolved + 1);
+		self.last = Some(resolved);
+		resolved
+	}
+}
+
 #[cfg(test)]
 mod rerank_tests;
 
@@ -92,7 +120,27 @@ mod rerank_tests;
 mod tests {
 	use serde_json::json;
 
-	use super::tool_arguments_to_input;
+	use super::{ToolCallIndexer, tool_arguments_to_input};
+
+	#[test]
+	fn tool_call_indexer_numbers_calls_without_an_index_in_arrival_order() {
+		let mut indexer = ToolCallIndexer::default();
+		assert_eq!(indexer.resolve(None, Some("call_a")), 0);
+		assert_eq!(indexer.resolve(None, Some("call_b")), 1);
+		assert_eq!(indexer.resolve(None, Some("call_a")), 0);
+		// No id and no index continues the latest call.
+		assert_eq!(indexer.resolve(None, None), 0);
+	}
+
+	#[test]
+	fn tool_call_indexer_keeps_the_provider_index() {
+		let mut indexer = ToolCallIndexer::default();
+		assert_eq!(indexer.resolve(Some(0), Some("call_a")), 0);
+		assert_eq!(indexer.resolve(Some(1), Some("call_b")), 1);
+		assert_eq!(indexer.resolve(Some(1), None), 1);
+		// A call without an index after indexed ones gets a fresh slot.
+		assert_eq!(indexer.resolve(None, Some("call_c")), 2);
+	}
 
 	#[test]
 	fn thinking_budget_buckets() {
