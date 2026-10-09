@@ -133,6 +133,102 @@ binds:
             - query
             resourceDocumentation: http://localhost:3000/keycloak/docs
             resourcePolicyUri: http://localhost:3000/keycloak/policies
+    # --- Scenario C2: Local stdio MCP + Keycloak public client
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              args:
+              - '@modelcontextprotocol/server-everything'
+              cmd: npx
+      matches:
+      - path:
+          exact: /keycloak-public/mcp
+      - path:
+          exact: /.well-known/oauth-protected-resource/keycloak-public/mcp
+      - path:
+          pathPrefix: /.well-known/oauth-authorization-server/keycloak-public/mcp
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          issuer: http://localhost:7080/realms/mcp
+          audiences:
+          - mcp_proxy
+          jwks:
+            url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
+          provider:
+            keycloak: {}
+          # Pre-registered public client; PKCE is required.
+          # relaySigningKey is used by the gateway-managed authorization flow.
+          # Generate with `openssl rand -hex 32`.
+          clientId: mcp-gateway-public
+          relaySigningKey: "REPLACE_WITH_64_HEX_CHARACTERS"
+          resourceMetadata:
+            resource: http://localhost:3000/keycloak-public/mcp
+            scopesSupported:
+            - profile
+            - offline_access
+            - openid
+            bearerMethodsSupported:
+            - header
+            - body
+            - query
+            resourceDocumentation: http://localhost:3000/keycloak-public/docs
+            resourcePolicyUri: http://localhost:3000/keycloak-public/policies
+    # --- Scenario C3: Local stdio MCP + Keycloak with a confidential client
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              args:
+              - '@modelcontextprotocol/server-everything'
+              cmd: npx
+      matches:
+      - path:
+          exact: /keycloak-confidential/mcp
+      - path:
+          exact: /.well-known/oauth-protected-resource/keycloak-confidential/mcp
+      - path:
+          pathPrefix: /.well-known/oauth-authorization-server/keycloak-confidential/mcp
+      policies:
+        cors:
+          allowHeaders:
+          - mcp-protocol-version
+          - content-type
+          allowOrigins:
+          - '*'
+        mcpAuthentication:
+          issuer: http://localhost:7080/realms/mcp
+          audiences:
+          - mcp_proxy
+          jwks:
+            url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
+          provider:
+            keycloak: {}
+          # Pre-registered confidential client.
+          clientId: mcp-gateway-confidential
+          clientSecret: mcp-gateway-confidential-secret
+          # Required for the gateway-managed authorization flow; independent of clientSecret.
+          relaySigningKey: "REPLACE_WITH_64_HEX_CHARACTERS"
+          resourceMetadata:
+            resource: http://localhost:3000/keycloak-confidential/mcp
+            scopesSupported:
+            - profile
+            - offline_access
+            - openid
+            bearerMethodsSupported:
+            - header
+            - body
+            - query
+            resourceDocumentation: http://localhost:3000/keycloak-confidential/docs
+            resourcePolicyUri: http://localhost:3000/keycloak-confidential/policies
             # Example configuration for Auth0:
             # - backends:
             #   - mcp:
