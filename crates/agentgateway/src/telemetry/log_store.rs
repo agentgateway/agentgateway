@@ -23,6 +23,7 @@ static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 #[derive(Eq, PartialEq)]
 pub struct Config {
 	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
+	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub url: String,
 	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
 	/// When the request log and config stores have matching database settings, they share one pool
@@ -832,5 +833,20 @@ impl Backend {
 			Self::Sqlite(store) => store.tail(request).await,
 			Self::Postgres(store) => store.tail(request).await,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn serialization_redacts_database_url() {
+		let config = Config {
+			url: "postgres://agentgateway:s3cret@db.example/agentgateway".to_string(),
+			max_connections: None,
+		};
+		let json = serde_json::to_value(&config).unwrap();
+		assert_eq!(json["url"], "<redacted>");
 	}
 }
