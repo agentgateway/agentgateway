@@ -1402,7 +1402,7 @@ impl Gateway {
 		let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 
 		let cert = ca.get_identity().await?;
-		let sc = Arc::new(cert.hbone_termination()?);
+		let sc = cert.hbone_termination()?;
 		let tls = tokio::time::timeout(to, crate::transport::tls::accept(raw_stream, sc)).await??;
 
 		debug!("accepted connection");
@@ -1439,7 +1439,7 @@ impl Gateway {
 		let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 
 		let cert = ca.get_identity().await?;
-		let sc = Arc::new(cert.hbone_termination()?);
+		let sc = cert.hbone_termination()?;
 		let tls = tokio::time::timeout(to, crate::transport::tls::accept(raw_stream, sc)).await??;
 
 		debug!("accepted connection");

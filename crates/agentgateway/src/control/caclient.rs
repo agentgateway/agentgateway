@@ -1,8 +1,10 @@
 use std::cmp;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use parking_lot::RwLock;
 use rustls::client::Resumption;
 use rustls::server::VerifierBuilderError;
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
@@ -15,6 +17,9 @@ use x509_parser::certificate::X509Certificate;
 
 use crate::types::discovery::Identity;
 use crate::*;
+
+/// Cache key for server TLS configs: (ALPN protocols, require client cert).
+type ServerConfigCacheKey = (Vec<Vec<u8>>, bool);
 
 // Generated from proto/citadel.proto
 pub mod istio {
@@ -79,8 +84,6 @@ pub struct Expiration {
 
 #[derive(Debug)]
 pub struct WorkloadCertificate {
-	// server_config: Arc<ServerConfig>,
-	// client_config: Arc<ClientConfig>,
 	roots: Arc<RootCertStore>,
 	chain: Vec<Certificate>,
 	private_key: PrivateKeyDer<'static>,
@@ -88,6 +91,11 @@ pub struct WorkloadCertificate {
 	identity: Identity,
 	allowed_trust_domains: Arc<[Strng]>,
 	skip_validate_trust_domain: bool,
+	// Cache TLS configs to avoid expensive per-request rebuilds.
+	// Keyed by the variable parameters (identity list, ALPNs, etc.).
+	legacy_mtls_cache: RwLock<HashMap<Vec<Identity>, Arc<ClientConfig>>>,
+	hbone_mtls_cache: RwLock<HashMap<Vec<Identity>, Arc<ClientConfig>>>,
+	server_config_cache: RwLock<HashMap<ServerConfigCacheKey, Arc<ServerConfig>>>,
 }
 
 impl WorkloadCertificate {
@@ -139,6 +147,9 @@ impl WorkloadCertificate {
 			identity,
 			allowed_trust_domains,
 			skip_validate_trust_domain,
+			legacy_mtls_cache: RwLock::new(HashMap::new()),
+			hbone_mtls_cache: RwLock::new(HashMap::new()),
+			server_config_cache: RwLock::new(HashMap::new()),
 		})
 	}
 	pub fn is_expired(&self) -> bool {
@@ -154,52 +165,79 @@ impl WorkloadCertificate {
 	}
 
 	pub fn legacy_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
-		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
-		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
-			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
-			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
-			.with_custom_certificate_verifier(Arc::new(verifier))
-			.with_client_auth_cert(
-				self.chain.iter().map(|c| c.der.clone()).collect(),
-				self.private_key.clone_key(),
-			)?;
-		cc.key_log = transport::tls::key_log();
-		cc.alpn_protocols = vec![b"istio".into()];
-		cc.resumption = Resumption::disabled();
-		// cc.enable_sni = false;
+		// Check cache first
+		if let Some(cached) = self.legacy_mtls_cache.read().get(&identity) {
+			return Ok(VersionedBackendTLS {
+				hostname_override: None,
+				config: cached.clone(),
+				peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+			});
+		}
+
+		let cc = self.build_client_config(&identity, vec![b"istio".into()])?;
+		let arc_cc = Arc::new(cc);
+		self
+			.legacy_mtls_cache
+			.write()
+			.insert(identity, arc_cc.clone());
 		Ok(VersionedBackendTLS {
 			hostname_override: None,
-			config: Arc::new(cc),
+			config: arc_cc,
 			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
 		})
 	}
+
 	pub fn hbone_mtls(&self, identity: Vec<Identity>) -> Result<VersionedBackendTLS, Error> {
-		// TODO: this is (way) too expensive to build per request
+		// Check cache first
+		if let Some(cached) = self.hbone_mtls_cache.read().get(&identity) {
+			return Ok(VersionedBackendTLS {
+				hostname_override: None,
+				config: cached.clone(),
+				peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+			});
+		}
+
+		let mut cc = self.build_client_config(&identity, vec![b"h2".into()])?;
+		cc.enable_sni = false;
+		let arc_cc = Arc::new(cc);
+		self
+			.hbone_mtls_cache
+			.write()
+			.insert(identity, arc_cc.clone());
+		Ok(VersionedBackendTLS {
+			hostname_override: None,
+			config: arc_cc,
+			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+		})
+	}
+
+	/// Build a rustls ClientConfig for mTLS. Extracted to avoid duplication between
+	/// cached methods. Callers should set any post-build fields (e.g. enable_sni) before use.
+	fn build_client_config(
+		&self,
+		identity: &[Identity],
+		alpn: Vec<Vec<u8>>,
+	) -> Result<ClientConfig, Error> {
 		let roots = self.roots.clone();
-		let verifier = transport::tls::identity::IdentityVerifier { roots, identity };
+		let verifier = transport::tls::identity::IdentityVerifier {
+			roots,
+			identity: identity.to_vec(),
+		};
 		let mut cc = ClientConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("client config must be valid")
-			.dangerous() // Customer verifier is requires "dangerous" opt-in
+			.dangerous() // Custom verifier requires "dangerous" opt-in
 			.with_custom_certificate_verifier(Arc::new(verifier))
 			.with_client_auth_cert(
 				self.chain.iter().map(|c| c.der.clone()).collect(),
 				self.private_key.clone_key(),
 			)?;
 		cc.key_log = transport::tls::key_log();
-		cc.alpn_protocols = vec![b"h2".into()];
+		cc.alpn_protocols = alpn;
 		cc.resumption = Resumption::disabled();
-		cc.enable_sni = false;
-		Ok(VersionedBackendTLS {
-			hostname_override: None,
-			config: Arc::new(cc),
-			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
-		})
+		Ok(cc)
 	}
-	pub fn hbone_termination(&self) -> Result<ServerConfig, Error> {
+	pub fn hbone_termination(&self) -> Result<Arc<ServerConfig>, Error> {
 		self.server_config(vec![b"h2".into()], true)
 	}
 
@@ -207,8 +245,27 @@ impl WorkloadCertificate {
 		&self,
 		alpns: Vec<Vec<u8>>,
 		require_client_cert: bool,
+	) -> Result<Arc<ServerConfig>, Error> {
+		let cache_key = (alpns.clone(), require_client_cert);
+		// Check cache first
+		if let Some(cached) = self.server_config_cache.read().get(&cache_key) {
+			return Ok(cached.clone());
+		}
+
+		let sc = self.build_server_config(alpns, require_client_cert)?;
+		let arc_sc = Arc::new(sc);
+		self
+			.server_config_cache
+			.write()
+			.insert(cache_key, arc_sc.clone());
+		Ok(arc_sc)
+	}
+
+	fn build_server_config(
+		&self,
+		alpns: Vec<Vec<u8>>,
+		require_client_cert: bool,
 	) -> Result<ServerConfig, Error> {
-		// TODO: this is too expensive to build per request
 		let roots = self.roots.clone();
 		let scb = ServerConfig::builder_with_provider(transport::tls::provider())
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -656,5 +713,120 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4f6wg4PvmdHJzX...
 		assert!(result.is_err());
 		// Just verify it fails - the actual error message depends on the input format
 		let _error = result.unwrap_err();
+	}
+
+	/// Helper: generate a self-signed CA + leaf cert for testing TLS config caching.
+	fn test_workload_certificate() -> WorkloadCertificate {
+		use std::time::{Duration, SystemTime};
+
+		use rcgen::{
+			BasicConstraints, CertificateParams, DistinguishedName, DnType, IsCa, Issuer, KeyPair,
+			KeyUsagePurpose, SanType,
+		};
+
+		// Generate CA key + self-signed CA cert
+		let ca_kp = KeyPair::generate().unwrap();
+		let mut ca_params = CertificateParams::default();
+		ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+		ca_params.not_before = SystemTime::now().into();
+		ca_params.not_after = (SystemTime::now() + Duration::from_secs(3600)).into();
+		let mut ca_dn = DistinguishedName::new();
+		ca_dn.push(DnType::OrganizationName, "test-ca");
+		ca_params.distinguished_name = ca_dn;
+		let ca_cert = ca_params.self_signed(&ca_kp).unwrap();
+
+		// Generate leaf key + cert signed by CA with SPIFFE SAN
+		let leaf_kp = KeyPair::generate().unwrap();
+		let mut leaf_params = CertificateParams::default();
+		leaf_params.not_before = SystemTime::now().into();
+		leaf_params.not_after = (SystemTime::now() + Duration::from_secs(3600)).into();
+		leaf_params.key_usages = vec![KeyUsagePurpose::DigitalSignature];
+		leaf_params.extended_key_usages = vec![
+			rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+			rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+		];
+		leaf_params.subject_alt_names = vec![SanType::URI(
+			"spiffe://cluster.local/ns/default/sa/test"
+				.try_into()
+				.unwrap(),
+		)];
+		let issuer = Issuer::from_params(&ca_params, &ca_kp);
+		let leaf_cert = leaf_params.signed_by(&leaf_kp, &issuer).unwrap();
+
+		let leaf_pem = leaf_cert.pem();
+		let ca_pem = ca_cert.pem();
+		let key_pem = leaf_kp.serialize_pem();
+
+		WorkloadCertificate::new(
+			key_pem.as_bytes(),
+			leaf_pem.as_bytes(),
+			vec![ca_pem.as_bytes()],
+			Arc::from([Strng::from("cluster.local")]),
+			false,
+		)
+		.expect("test cert should be valid")
+	}
+
+	#[test]
+	fn test_legacy_mtls_caching() {
+		let cert = test_workload_certificate();
+		let identity =
+			vec![Identity::from_str("spiffe://cluster.local/ns/default/sa/backend").unwrap()];
+
+		// First call builds the config
+		let result1 = cert.legacy_mtls(identity.clone()).unwrap();
+		// Second call should return the cached config (same Arc pointer)
+		let result2 = cert.legacy_mtls(identity.clone()).unwrap();
+
+		assert!(Arc::ptr_eq(&result1.config, &result2.config));
+	}
+
+	#[test]
+	fn test_hbone_mtls_caching() {
+		let cert = test_workload_certificate();
+		let identity =
+			vec![Identity::from_str("spiffe://cluster.local/ns/default/sa/backend").unwrap()];
+
+		let result1 = cert.hbone_mtls(identity.clone()).unwrap();
+		let result2 = cert.hbone_mtls(identity.clone()).unwrap();
+
+		assert!(Arc::ptr_eq(&result1.config, &result2.config));
+	}
+
+	#[test]
+	fn test_server_config_caching() {
+		let cert = test_workload_certificate();
+
+		let result1 = cert.server_config(vec![b"h2".into()], true).unwrap();
+		let result2 = cert.server_config(vec![b"h2".into()], true).unwrap();
+
+		assert!(Arc::ptr_eq(&result1, &result2));
+	}
+
+	#[test]
+	fn test_server_config_different_keys() {
+		let cert = test_workload_certificate();
+
+		// Different ALPNs → different cache entries
+		let r1 = cert.server_config(vec![b"h2".into()], true).unwrap();
+		let r2 = cert.server_config(vec![b"http/1.1".into()], true).unwrap();
+		// Different require_client_cert → different cache entries
+		let r3 = cert.server_config(vec![b"h2".into()], false).unwrap();
+
+		assert!(!Arc::ptr_eq(&r1, &r2));
+		assert!(!Arc::ptr_eq(&r1, &r3));
+	}
+
+	#[test]
+	fn test_mtls_different_identities_not_cached() {
+		let cert = test_workload_certificate();
+		let id1 = vec![Identity::from_str("spiffe://cluster.local/ns/default/sa/backend").unwrap()];
+		let id2 = vec![Identity::from_str("spiffe://cluster.local/ns/default/sa/frontend").unwrap()];
+
+		let r1 = cert.hbone_mtls(id1).unwrap();
+		let r2 = cert.hbone_mtls(id2).unwrap();
+
+		// Different identities → different configs
+		assert!(!Arc::ptr_eq(&r1.config, &r2.config));
 	}
 }

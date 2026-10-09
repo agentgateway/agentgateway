@@ -413,7 +413,7 @@ impl ServerTLSConfig {
 				.and_then(|t| t.alpn.clone())
 				.unwrap_or_else(|| default_alpns.clone());
 			let cert = ca.get_identity().await?;
-			return Ok(Arc::new(cert.server_config(alpns, *mtls)?));
+			return Ok(cert.server_config(alpns, *mtls)?);
 		}
 
 		if let ServerTlsCertificateSource::Spiffe { default_alpns } = &self.source {
