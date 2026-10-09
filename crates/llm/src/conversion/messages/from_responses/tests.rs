@@ -1614,7 +1614,7 @@ fn buffered_pause_turn_is_rejected() {
 }
 
 #[test]
-fn buffered_refusal_is_a_completed_refusal() {
+fn buffered_refusal_reports_content_filter() {
 	let body = Bytes::from(
 		serde_json::to_vec(&json!({
 			"id": "msg_1",
@@ -1633,11 +1633,16 @@ fn buffered_refusal_is_a_completed_refusal() {
 		translate_response(&body, &State::default(), 1024 * 1024).expect("refusal should translate");
 	let value = serde_json::to_value(response).expect("serializable response");
 
-	assert_eq!(value["status"], "completed");
-	assert_eq!(value["output"][0]["status"], "completed");
-	assert_eq!(value["output"][0]["content"][0]["type"], "refusal");
+	assert_eq!(value["status"], "failed");
 	assert_eq!(
-		value["output"][0]["content"][0]["refusal"],
+		value["error"],
+		json!({"code": "content_filter", "message": "Content filtered"})
+	);
+	assert!(value["incomplete_details"].is_null());
+	assert_eq!(value["output"][0]["status"], "completed");
+	assert_eq!(value["output"][0]["content"][0]["type"], "output_text");
+	assert_eq!(
+		value["output"][0]["content"][0]["text"],
 		"I cannot help with that."
 	);
 }
@@ -1655,6 +1660,7 @@ fn buffered_refusal_is_a_completed_refusal() {
 #[case::limited_text("max_tokens", false, None, true)]
 #[case::limited_tool("max_tokens", true, None, true)]
 #[case::context_limit("model_context_window_exceeded", false, None, true)]
+#[case::refusal("refusal", false, None, true)]
 #[tokio::test]
 async fn terminal_responses_agree_on_output_validation(
 	#[case] stop_reason: &str,
@@ -1720,10 +1726,11 @@ async fn terminal_responses_agree_on_output_validation(
 		let terminal = events.last().expect("terminal event");
 		assert!(matches!(
 			terminal["type"].as_str(),
-			Some("response.completed" | "response.incomplete")
+			Some("response.completed" | "response.incomplete" | "response.failed")
 		));
-		assert_eq!(response["output"], terminal["response"]["output"]);
-		assert_eq!(response["usage"], terminal["response"]["usage"]);
+		for field in ["error", "incomplete_details", "output", "status", "usage"] {
+			assert_eq!(response[field], terminal["response"][field]);
+		}
 	} else {
 		assert_one_safe_error(&events);
 		assert!(response.is_err());
@@ -1783,7 +1790,7 @@ async fn streaming_text_is_emitted_before_the_terminal_event() {
 }
 
 #[tokio::test]
-async fn streaming_refusal_completes_as_output_text() {
+async fn streaming_refusal_preserves_text_and_reports_content_filter() {
 	let mut frames = vec![
 		message_start(1),
 		sse_event(
@@ -1809,7 +1816,8 @@ async fn streaming_refusal_completes_as_output_text() {
 	];
 	frames.extend(terminal("refusal", 6));
 
-	let events = collect_stream(frames, 1024 * 1024, State::default()).await;
+	let (guard, info) = tracking_stream();
+	let events = collect_stream_with_guard(frames, 1024 * 1024, State::default(), guard).await;
 
 	assert!(
 		events
@@ -1817,12 +1825,23 @@ async fn streaming_refusal_completes_as_output_text() {
 			.any(|event| event["type"] == "response.output_text.delta")
 	);
 	assert!(!events.iter().any(|event| event["type"] == "error"));
-	let completed = events
+	assert!(
+		!events
+			.iter()
+			.any(|event| event["type"] == "response.completed")
+	);
+	let failed = events
 		.iter()
-		.find(|event| event["type"] == "response.completed")
-		.expect("completed response");
+		.find(|event| event["type"] == "response.failed")
+		.expect("content-filter terminal response");
+	assert_eq!(failed["response"]["status"], "failed");
 	assert_eq!(
-		completed["response"]["output"][0]["content"][0],
+		failed["response"]["error"],
+		json!({"code": "content_filter", "message": "Content filtered"})
+	);
+	assert!(failed["response"]["incomplete_details"].is_null());
+	assert_eq!(
+		failed["response"]["output"][0]["content"][0],
 		json!({
 			"type": "output_text",
 			"annotations": [],
@@ -1830,6 +1849,10 @@ async fn streaming_refusal_completes_as_output_text() {
 			"text": "I cannot help with that."
 		})
 	);
+	let info = info.lock().expect("reporter lock");
+	assert_eq!(info.response.input_tokens, Some(1));
+	assert_eq!(info.response.output_tokens, Some(6));
+	assert_eq!(info.response.total_tokens, Some(7));
 }
 
 #[test]

@@ -1080,11 +1080,12 @@ pub fn translate_response(
 	}
 	let upstream_usage = response.usage.clone();
 	let stop_reason = response.stop_reason.ok_or_else(invalid_response)?;
-	let (status, incomplete_reason) = terminal_status(stop_reason).ok_or_else(invalid_response)?;
-	let output_status = if status == "completed" {
-		responses::OutputStatus::Completed
-	} else {
+	let (status, incomplete_reason, error) =
+		terminal_status(stop_reason).ok_or_else(invalid_response)?;
+	let output_status = if status == responses::Status::Incomplete {
 		responses::OutputStatus::Incomplete
+	} else {
+		responses::OutputStatus::Completed
 	};
 	let usage = responses_usage(&response.usage)?;
 	let service_tier = response
@@ -1098,7 +1099,6 @@ pub fn translate_response(
 		response.content,
 		output_status,
 		message_phase(stop_reason),
-		matches!(stop_reason, messages::StopReason::Refusal),
 		state,
 		buffer_limit,
 	)?;
@@ -1113,13 +1113,9 @@ pub fn translate_response(
 	let builder =
 		types::responses::ResponseBuilder::new(format!("resp_{}", response.id), response.model);
 	let mut typed = builder.response(
-		if output_status == responses::OutputStatus::Completed {
-			responses::Status::Completed
-		} else {
-			responses::Status::Incomplete
-		},
+		status,
 		Some(usage),
-		None,
+		error,
 		incomplete_reason.map(|reason| responses::IncompleteDetails {
 			reason: reason.to_string(),
 		}),
@@ -1154,15 +1150,29 @@ fn direct_tool_caller(caller: Option<&serde_json::Value>) -> bool {
 
 fn terminal_status(
 	stop_reason: messages::StopReason,
-) -> Option<(&'static str, Option<&'static str>)> {
+) -> Option<(
+	responses::Status,
+	Option<&'static str>,
+	Option<responses::ResponseError>,
+)> {
 	match stop_reason {
 		messages::StopReason::EndTurn
 		| messages::StopReason::StopSequence
-		| messages::StopReason::ToolUse
-		| messages::StopReason::Refusal => Some(("completed", None)),
-		messages::StopReason::MaxTokens | messages::StopReason::ModelContextWindowExceeded => {
-			Some(("incomplete", Some("max_output_tokens")))
-		},
+		| messages::StopReason::ToolUse => Some((responses::Status::Completed, None, None)),
+		messages::StopReason::MaxTokens | messages::StopReason::ModelContextWindowExceeded => Some((
+			responses::Status::Incomplete,
+			Some("max_output_tokens"),
+			None,
+		)),
+		messages::StopReason::Refusal => Some((
+			responses::Status::Failed,
+			None,
+			Some(responses::ResponseError {
+				code: responses::ResponseErrorCode::Other("content_filter".to_string()),
+				message: "Content filtered".to_string(),
+				misalignment: None,
+			}),
+		)),
 		messages::StopReason::PauseTurn => None,
 	}
 }
@@ -1272,7 +1282,6 @@ fn response_output(
 	content: Vec<messages::ContentBlock>,
 	status: responses::OutputStatus,
 	phase: responses::MessagePhase,
-	refusal: bool,
 	state: &State,
 	buffer_limit: usize,
 ) -> Result<Vec<responses::OutputItem>, AIError> {
@@ -1285,15 +1294,13 @@ fn response_output(
 				return Err(invalid_response());
 			}
 			let (_, parts) = pending_text.get_or_insert_with(|| (index, Vec::new()));
-			parts.push(if refusal {
-				responses::OutputMessageContent::Refusal(responses::RefusalContent { refusal: text.text })
-			} else {
-				responses::OutputMessageContent::OutputText(responses::OutputTextContent {
+			parts.push(responses::OutputMessageContent::OutputText(
+				responses::OutputTextContent {
 					annotations: Vec::new(),
 					logprobs: None,
 					text: text.text,
-				})
-			});
+				},
+			));
 			continue;
 		}
 		// Drop reasoning before flushing so surrounding text stays in one message item.
@@ -2233,11 +2240,11 @@ pub fn translate_stream(
 						)?;
 						stream.ensure_retained_limit(buffer_limit, &model)?;
 						let builder = response_builder.as_ref().ok_or(())?;
-						let (status, incomplete_reason) = terminal_status(stop_reason).ok_or(())?;
-						let output_status = if status == "completed" {
-							responses::OutputStatus::Completed
-						} else {
+						let (status, incomplete_reason, error) = terminal_status(stop_reason).ok_or(())?;
+						let output_status = if status == responses::Status::Incomplete {
 							responses::OutputStatus::Incomplete
+						} else {
+							responses::OutputStatus::Completed
 						};
 						for item in &mut stream.output {
 							set_output_item_status(item, output_status)?;
@@ -2261,7 +2268,7 @@ pub fn translate_stream(
 								stream.output_messages = Some(vec![types::OutputMessage {
 									role: strng::literal!("assistant"),
 									content,
-									finish_reason: Some(strng::new(status)),
+									finish_reason: types::serialize_str(&status),
 								}]);
 							}
 						}
@@ -2279,13 +2286,9 @@ pub fn translate_stream(
 							));
 						}
 						let mut response = builder.response(
-							if status == "completed" {
-								responses::Status::Completed
-							} else {
-								responses::Status::Incomplete
-							},
+							status.clone(),
 							Some(usage.clone()),
-							None,
+							error,
 							incomplete_reason.map(|reason| responses::IncompleteDetails {
 								reason: reason.to_string(),
 							}),
@@ -2293,28 +2296,36 @@ pub fn translate_stream(
 						response.output = output;
 						response.service_tier = stream_service_tier(initial.service_tier.as_deref())?;
 						let sequence_number = stream.sequence()?;
-						let event = if status == "completed" {
-							responses::ResponseStreamEvent::ResponseCompleted(responses::ResponseCompletedEvent {
-								sequence_number,
-								response,
-							})
-						} else {
-							responses::ResponseStreamEvent::ResponseIncomplete(
-								responses::ResponseIncompleteEvent {
+						let (event_type, event) = match status {
+							responses::Status::Completed => (
+								"response.completed",
+								responses::ResponseStreamEvent::ResponseCompleted(
+									responses::ResponseCompletedEvent {
+										sequence_number,
+										response,
+									},
+								),
+							),
+							responses::Status::Incomplete => (
+								"response.incomplete",
+								responses::ResponseStreamEvent::ResponseIncomplete(
+									responses::ResponseIncompleteEvent {
+										sequence_number,
+										response,
+									},
+								),
+							),
+							responses::Status::Failed => (
+								"response.failed",
+								responses::ResponseStreamEvent::ResponseFailed(responses::ResponseFailedEvent {
 									sequence_number,
 									response,
-								},
-							)
+								}),
+							),
+							_ => return Err(()),
 						};
 						stream.terminal_ready = true;
-						events.push((
-							if status == "completed" {
-								"response.completed"
-							} else {
-								"response.incomplete"
-							},
-							event,
-						));
+						events.push((event_type, event));
 						Ok(events)
 					},
 					messages::MessagesStreamEvent::Ping => {
