@@ -3796,12 +3796,8 @@ pub(crate) fn resolve_response(
 		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
 		ProxyResponse::DirectResponse(response) => *response,
 	});
-	// A gRPC request the proxy refuses itself is answered trailers-only: HTTP 200 with the
-	// gRPC status in the headers. Record that status so the log tells the refusal (a JWT
-	// authentication failure, for one) from a success.
-	if is_grpc_request {
-		maybe_set_grpc_status(&log.grpc_status, response.headers());
-	}
+	// Trailers-only responses, including our own gRPC errors, carry grpc-status in the headers.
+	maybe_set_grpc_status(&log.grpc_status, response.headers());
 	if let Some(error) = error {
 		if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
 			context.error = Some(error);

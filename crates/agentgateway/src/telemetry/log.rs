@@ -3087,7 +3087,6 @@ mod tests {
 			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
 		};
 
-		// Trailers-only: HTTP 200 with the gRPC status in the headers, which the log records.
 		let mut log = test_request_log();
 		let (response, _) = resolve_response(refusal(), &mut log, true);
 		assert_eq!(response.status(), http::StatusCode::OK);
@@ -3096,7 +3095,6 @@ mod tests {
 			Some(tonic::Code::Unauthenticated as u8)
 		);
 
-		// A plain HTTP refusal carries no gRPC status.
 		let mut log = test_request_log();
 		let (response, _) = resolve_response(refusal(), &mut log, false);
 		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
