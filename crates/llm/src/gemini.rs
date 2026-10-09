@@ -42,6 +42,14 @@ pub fn native_gemini_path(route: RouteType, request_model: &str, streaming: bool
 	}
 }
 
+pub fn model_is_safe_for_path(request_model: &str) -> bool {
+	let id = match request_model.split_once('/') {
+		Some(("models" | "tunedModels", id)) => id,
+		_ => request_model,
+	};
+	agent_http::path::is_safe_segment(id)
+}
+
 /// `{collection}/{id}` for the `/v1beta/{model}:{method}` URL bindings, which accept `models/*`
 /// and `tunedModels/*`. Configs and clients write either the bare id or the full resource name,
 /// and the router percent-encodes a target's `/` to keep it in one segment, so both arrive here.
@@ -94,5 +102,24 @@ mod tests {
 			native_gemini_path(RouteType::GenerateContent, "tunedModels/abc", true).as_str(),
 			"/v1beta/tunedModels/abc:streamGenerateContent?alt=sse"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::dot(".")]
+	#[case::dot_dot("..")]
+	#[case::parent_escape("../../foo")]
+	#[case::resource_parent_escape("models/../foo")]
+	#[case::query("model?x=1")]
+	#[case::fragment("model#fragment")]
+	fn rejects_unsafe_path_models(#[case] model: &str) {
+		assert!(!model_is_safe_for_path(model));
+	}
+
+	#[rstest::rstest]
+	#[case::bare("gemini-2.5-flash")]
+	#[case::model("models/gemini-2.5-flash")]
+	#[case::tuned("tunedModels/example")]
+	fn accepts_supported_path_models(#[case] model: &str) {
+		assert!(model_is_safe_for_path(model));
 	}
 }
