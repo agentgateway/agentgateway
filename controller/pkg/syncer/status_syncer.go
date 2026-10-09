@@ -488,116 +488,73 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 	}
 }
 
-func mergeXBackendAncestorStatuses(ourControllerName string, existing, desired []gwxv1a1.BackendAncestorStatus) []gwxv1a1.BackendAncestorStatus {
-	out := make([]gwxv1a1.BackendAncestorStatus, 0, len(existing)+len(desired))
-	for _, ancestor := range existing {
-		if string(ancestor.ControllerName) != ourControllerName {
-			out = append(out, ancestor)
+// mergeOwnedStatuses merges this controller's desired status entries into the existing list.
+//
+// The existing order is preserved: entries of other controllers are untouched, our entries are replaced in
+// place, our stale entries are dropped, and only entries new to the list are appended, in sorted order.
+// Appending our entries after everyone else's instead would make two controllers rewrite each other's order
+// forever, since each one would move its own entries to the end.
+func mergeOwnedStatuses[T any](existing, desired []T, owned func(T) bool, sameRef func(a, b T) bool, compare func(a, b T) int) []T {
+	ours := make([]T, 0, len(desired))
+	for _, d := range desired {
+		if owned(d) {
+			ours = append(ours, d)
 		}
 	}
-	ours := make([]gwxv1a1.BackendAncestorStatus, 0, len(desired))
-	for _, ancestor := range desired {
-		if string(ancestor.ControllerName) == ourControllerName {
-			ours = append(ours, ancestor)
+	slices.SortFunc(ours, compare)
+
+	out := make([]T, 0, len(existing)+len(ours))
+	for _, e := range existing {
+		if !owned(e) {
+			out = append(out, e)
+			continue
+		}
+		if i := slices.IndexFunc(ours, func(d T) bool { return sameRef(e, d) }); i != -1 {
+			out = append(out, ours[i])
+			ours = slices.Delete(ours, i)
 		}
 	}
-	slices.SortFunc(ours, func(a, b gwxv1a1.BackendAncestorStatus) int {
-		return compareParentReference(a.AncestorRef, b.AncestorRef)
-	})
 	return append(out, ours...)
 }
 
+func mergeXBackendAncestorStatuses(ourControllerName string, existing, desired []gwxv1a1.BackendAncestorStatus) []gwxv1a1.BackendAncestorStatus {
+	return mergeOwnedStatuses(existing, desired,
+		func(a gwxv1a1.BackendAncestorStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwxv1a1.BackendAncestorStatus) bool {
+			return compareParentReference(a.AncestorRef, b.AncestorRef) == 0
+		},
+		func(a, b gwxv1a1.BackendAncestorStatus) int {
+			return compareParentReference(a.AncestorRef, b.AncestorRef)
+		},
+	)
+}
+
 func mergePolicyAncestorStatuses(ourControllerName string, existing []gwv1.PolicyAncestorStatus, desired []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
-	out := make([]gwv1.PolicyAncestorStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, a := range existing {
-		if string(a.ControllerName) != ourControllerName {
-			out = append(out, a)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]gwv1.PolicyAncestorStatus, 0, len(desired))
-	for _, a := range desired {
-		if string(a.ControllerName) == ourControllerName {
-			ours = append(ours, a)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b gwv1.PolicyAncestorStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareParentReference(a.AncestorRef, b.AncestorRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return mergeOwnedStatuses(existing, desired,
+		func(a gwv1.PolicyAncestorStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwv1.PolicyAncestorStatus) bool {
+			return compareParentReference(a.AncestorRef, b.AncestorRef) == 0
+		},
+		func(a, b gwv1.PolicyAncestorStatus) int { return compareParentReference(a.AncestorRef, b.AncestorRef) },
+	)
 }
 
 func mergeRouteParentStatuses(ourControllerName string, existing []gwv1.RouteParentStatus, desired []gwv1.RouteParentStatus) []gwv1.RouteParentStatus {
-	out := make([]gwv1.RouteParentStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, a := range existing {
-		if string(a.ControllerName) != ourControllerName {
-			out = append(out, a)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]gwv1.RouteParentStatus, 0, len(desired))
-	for _, a := range desired {
-		if string(a.ControllerName) == ourControllerName {
-			ours = append(ours, a)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b gwv1.RouteParentStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareParentReference(a.ParentRef, b.ParentRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return mergeOwnedStatuses(existing, desired,
+		func(a gwv1.RouteParentStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwv1.RouteParentStatus) bool { return compareParentReference(a.ParentRef, b.ParentRef) == 0 },
+		func(a, b gwv1.RouteParentStatus) int { return compareParentReference(a.ParentRef, b.ParentRef) },
+	)
 }
 
 func mergeInferencePoolParentStatuses(ourControllerName string, existing []inf.ParentStatus, desired []inf.ParentStatus) []inf.ParentStatus {
-	out := make([]inf.ParentStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, p := range existing {
-		if string(p.ControllerName) != ourControllerName {
-			out = append(out, p)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]inf.ParentStatus, 0, len(desired))
-	for _, p := range desired {
-		if string(p.ControllerName) == ourControllerName {
-			ours = append(ours, p)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b inf.ParentStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareInferencePoolParentReference(a.ParentRef, b.ParentRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return mergeOwnedStatuses(existing, desired,
+		func(a inf.ParentStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b inf.ParentStatus) bool {
+			return compareInferencePoolParentReference(a.ParentRef, b.ParentRef) == 0
+		},
+		func(a, b inf.ParentStatus) int { return compareInferencePoolParentReference(a.ParentRef, b.ParentRef) },
+	)
 }
 
 func mergeGatewayStatus(existing gwv1.GatewayStatus, desired gwv1.GatewayStatus) gwv1.GatewayStatus {

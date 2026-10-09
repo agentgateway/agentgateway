@@ -321,17 +321,14 @@ func TranslateAgentgatewayPolicy(
 		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
 
-	// Build final status from accumulated ancestors
+	// Sort only our new entries. MergeAncestors keeps existing entries in place, matching the order the status
+	// syncer writes, so a re-sort of the whole list would make desired and live status differ without a change.
+	slices.SortStableFunc(ancestors, func(a, b gwv1.PolicyAncestorStatus) int {
+		return strings.Compare(reports.ParentString(a.AncestorRef), reports.ParentString(b.AncestorRef))
+	})
 	status := gwv1.PolicyStatus{
 		Ancestors: MergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
-
-	// sort all parents for consistency with Equals and for Update
-	// match sorting semantics of istio/istio, see:
-	// https://github.com/istio/istio/blob/6dcaa0206bcaf20e3e3b4e45e9376f0f96365571/pilot/pkg/config/kube/gateway/conditions.go#L188-L193
-	slices.SortStableFunc(status.Ancestors, func(a, b gwv1.PolicyAncestorStatus) int {
-		return strings.Compare(reports.ParentString(a.AncestorRef), reports.ParentString(b.AncestorRef))
-	})
 
 	return &status, agwPolicies
 }

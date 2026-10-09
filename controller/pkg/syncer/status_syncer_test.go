@@ -45,6 +45,76 @@ func TestMergePolicyAncestorStatuses_SortsOurEntriesOnly(t *testing.T) {
 	require.Equal(t, string(out[3].AncestorRef.Name), "z")
 }
 
+func TestMergePolicyAncestorStatuses_ReplacesOurEntriesInPlace(t *testing.T) {
+	our := "agentgateway.dev/agentgateway"
+	other := "kgateway.dev/kgateway"
+	ancestor := func(controller, name, message string) gwv1.PolicyAncestorStatus {
+		return gwv1.PolicyAncestorStatus{
+			ControllerName: gwv1.GatewayController(controller),
+			AncestorRef:    gwv1.ParentReference{Name: gwv1.ObjectName(name)},
+			Conditions:     []metav1.Condition{{Type: "Attached", Message: message}},
+		}
+	}
+
+	existing := []gwv1.PolicyAncestorStatus{
+		ancestor(our, "z", "old"),
+		ancestor(other, "a", "theirs"),
+		ancestor(our, "m", "old"),
+		ancestor(our, "stale", "old"),
+	}
+	desired := []gwv1.PolicyAncestorStatus{
+		ancestor(our, "new", "new"),
+		ancestor(our, "m", "new"),
+		ancestor(our, "z", "new"),
+	}
+
+	out := mergePolicyAncestorStatuses(our, existing, desired)
+	require.Equal(t, []gwv1.PolicyAncestorStatus{
+		ancestor(our, "z", "new"),
+		ancestor(other, "a", "theirs"),
+		ancestor(our, "m", "new"),
+		ancestor(our, "new", "new"),
+	}, out)
+}
+
+// Two controllers sharing a policy must settle on one order, otherwise each write triggers the other.
+func TestMergePolicyAncestorStatuses_TwoControllersConverge(t *testing.T) {
+	a := "agentgateway.dev/a"
+	b := "agentgateway.dev/b"
+	entry := func(controller string) gwv1.PolicyAncestorStatus {
+		return gwv1.PolicyAncestorStatus{
+			ControllerName: gwv1.GatewayController(controller),
+			AncestorRef:    gwv1.ParentReference{Name: "gw"},
+		}
+	}
+
+	live := mergePolicyAncestorStatuses(a, nil, []gwv1.PolicyAncestorStatus{entry(a)})
+	live = mergePolicyAncestorStatuses(b, live, []gwv1.PolicyAncestorStatus{entry(b)})
+	require.Equal(t, []gwv1.PolicyAncestorStatus{entry(a), entry(b)}, live)
+
+	for range 3 {
+		require.Equal(t, live, mergePolicyAncestorStatuses(a, live, []gwv1.PolicyAncestorStatus{entry(a)}))
+		require.Equal(t, live, mergePolicyAncestorStatuses(b, live, []gwv1.PolicyAncestorStatus{entry(b)}))
+	}
+}
+
+func TestMergeRouteParentStatuses_ReplacesOurEntriesInPlace(t *testing.T) {
+	our := "agentgateway.dev/agentgateway"
+	other := "kgateway.dev/kgateway"
+	parent := func(controller, name string) gwv1.RouteParentStatus {
+		return gwv1.RouteParentStatus{
+			ControllerName: gwv1.GatewayController(controller),
+			ParentRef:      gwv1.ParentReference{Name: gwv1.ObjectName(name)},
+		}
+	}
+
+	out := mergeRouteParentStatuses(our,
+		[]gwv1.RouteParentStatus{parent(our, "z"), parent(other, "a"), parent(our, "stale")},
+		[]gwv1.RouteParentStatus{parent(our, "z"), parent(our, "m")},
+	)
+	require.Equal(t, []gwv1.RouteParentStatus{parent(our, "z"), parent(other, "a"), parent(our, "m")}, out)
+}
+
 func TestMergeRouteParentStatuses_SortsOurEntriesOnly(t *testing.T) {
 	our := "agentgateway.dev/agentgateway"
 	other := "kgateway.dev/kgateway"
