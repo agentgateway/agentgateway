@@ -60,6 +60,125 @@ async fn llm_openai_tokenize() {
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
 }
 
+const GEMINI_SIGNATURE: &str = "opaque-thought-signature";
+const GEMINI_SIGNATURE_CARRIER_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+fn gemini_signature_carrier() -> String {
+	format!(
+		"{GEMINI_SIGNATURE_CARRIER_PREFIX}{}",
+		json!({"call_id": "call_1", "signature": GEMINI_SIGNATURE})
+	)
+}
+
+// A client replays the assistant turn it received from a Gemini-backed route. Only Gemini
+// understands the signature, so every other provider must get a request without it.
+fn gemini_signature_replay(api: &str, model: &str) -> (&'static str, Value) {
+	let carrier = gemini_signature_carrier();
+	match api {
+		"messages" => (
+			"/v1/messages",
+			json!({
+				"model": model,
+				"max_tokens": 64,
+				"messages": [
+					{"role": "user", "content": "What is the weather?"},
+					{"role": "assistant", "content": [
+						{"type": "thinking", "thinking": "", "signature": carrier},
+						{"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {"city": "Paris"}}
+					]},
+					{"role": "user", "content": [
+						{"type": "tool_result", "tool_use_id": "call_1", "content": "sunny"}
+					]}
+				]
+			}),
+		),
+		"responses" => (
+			"/v1/responses",
+			json!({
+				"model": model,
+				"input": [
+					{"role": "user", "content": "What is the weather?"},
+					{"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": carrier},
+					{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{\"city\":\"Paris\"}"},
+					{"type": "function_call_output", "call_id": "call_1", "output": "sunny"}
+				]
+			}),
+		),
+		_ => unreachable!("unknown client API {api}"),
+	}
+}
+
+#[rstest::rstest]
+#[case::messages_to_openai("messages", false)]
+#[case::responses_to_gemini("responses", true)]
+#[tokio::test]
+async fn llm_gemini_thought_signature_follows_provider(#[case] api: &str, #[case] is_gemini: bool) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let provider = if is_gemini {
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		})
+	} else {
+		AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		})
+	};
+	let (mock, mut bind, io) = setup_llm_mock(mock, provider, false, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/messages": "messages",
+					"/v1/responses": "responses"
+				}
+			}
+		}))
+		.await;
+	let model = if is_gemini {
+		"gemini-3.8-flash"
+	} else {
+		"gpt-4o"
+	};
+	let (path, body) = gemini_signature_replay(api, model);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		&format!("http://lo{path}"),
+		body.to_string().as_bytes(),
+	)
+	.await;
+	// The canned upstream response may not match the format the request was translated to;
+	// only the upstream request matters here.
+	let _ = read_body_raw(res.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	let upstream = serde_json::from_slice::<Value>(&request.body).unwrap();
+	let upstream_text = upstream.to_string();
+	assert!(
+		!upstream_text.contains(GEMINI_SIGNATURE_CARRIER_PREFIX),
+		"carrier leaked upstream: {upstream_text}"
+	);
+	if is_gemini {
+		let tool_call = upstream["messages"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find_map(|message| message["tool_calls"].get(0))
+			.unwrap_or_else(|| panic!("no replayed tool call: {upstream_text}"));
+		assert_eq!(
+			tool_call["extra_content"]["google"]["thought_signature"],
+			GEMINI_SIGNATURE
+		);
+	} else {
+		assert!(
+			!upstream_text.contains(GEMINI_SIGNATURE) && !upstream_text.contains("extra_content"),
+			"signature leaked upstream: {upstream_text}"
+		);
+	}
+}
+
 #[tokio::test]
 async fn llm_token_budget_persists_and_blocks_requests() {
 	let pool =
