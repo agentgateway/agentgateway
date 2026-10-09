@@ -2721,15 +2721,19 @@ async fn make_backend_call(
 					ProxyError::ProcessingString("invalid: log required for MCP".to_string()).into(),
 				);
 			};
-			let res = Box::pin(
+			let response = Box::pin(
 				inputs
 					.clone()
 					.mcp_state
 					.serve(inputs, name, backend, policies.as_ref().clone(), req, log)
 					.assert_size::<{ 4 * 1024 }>(),
 			)
-			.await;
-			return res.map_err(ProxyResponse::from);
+			.await
+			.map_err(ProxyResponse::from)?;
+			return Ok(http::timeout::apply_response_idle_timeout(
+				response,
+				response_policies.timeout.as_ref(),
+			));
 		},
 		Backend::LLMRouter(_, _) => unreachable!("LLMRouter is resolved before backend calls"),
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
@@ -3224,18 +3228,10 @@ async fn make_backend_call(
 			Some(err.to_string()),
 		),
 	});
-	let mut resp = resp?;
 	// Protect reads from the actual upstream before any policy buffers, transforms,
 	// or replaces its body. CONNECT tunnels take a separate path above.
-	if resp.status() != StatusCode::SWITCHING_PROTOCOLS
-		&& let Some(timeout) = response_policies
-			.timeout
-			.as_ref()
-			.and_then(|t| t.response_idle_timeout)
-			.filter(|d| !d.is_zero())
-	{
-		resp = http::timeout::apply_response_idle_timeout(resp, timeout);
-	}
+	let mut resp =
+		http::timeout::apply_response_idle_timeout(resp?, response_policies.timeout.as_ref());
 	if let Some(log) = log.as_ref() {
 		resp
 			.extensions_mut()
