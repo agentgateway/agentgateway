@@ -6943,7 +6943,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7243,7 +7243,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`<BackendAuth>.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendAuth>.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<BackendAuth>.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7620,7 +7620,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7908,7 +7908,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8190,7 +8190,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8472,7 +8472,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8752,7 +8752,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9056,7 +9056,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9346,7 +9346,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9628,7 +9628,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9908,7 +9908,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|

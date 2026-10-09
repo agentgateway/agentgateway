@@ -2605,6 +2605,11 @@
           "description": "RFC 7523; the subject token is sent as the `assertion`.",
           "type": "string",
           "const": "jwtBearer"
+        },
+        {
+          "description": "RFC 6749 §4.4 client credentials. No incoming subject token is used; the\ngateway authenticates as itself with the configured `client_auth` and mints\na backend token independent of the caller. The minted token is shared across\ncallers and refreshed from the token endpoint's `expires_in`.",
+          "type": "string",
+          "const": "clientCredentials"
         }
       ]
     },

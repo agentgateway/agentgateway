@@ -3075,9 +3075,10 @@ func (OAuthClientAuth_PrivateKeyJwt_CertificateHeader) EnumDescriptor() ([]byte,
 type OAuthTokenExchange_GrantType int32
 
 const (
-	OAuthTokenExchange_UNSPECIFIED    OAuthTokenExchange_GrantType = 0 // defaults to TOKEN_EXCHANGE
-	OAuthTokenExchange_TOKEN_EXCHANGE OAuthTokenExchange_GrantType = 1 // RFC 8693
-	OAuthTokenExchange_JWT_BEARER     OAuthTokenExchange_GrantType = 2 // RFC 7523
+	OAuthTokenExchange_UNSPECIFIED        OAuthTokenExchange_GrantType = 0 // defaults to TOKEN_EXCHANGE
+	OAuthTokenExchange_TOKEN_EXCHANGE     OAuthTokenExchange_GrantType = 1 // RFC 8693
+	OAuthTokenExchange_JWT_BEARER         OAuthTokenExchange_GrantType = 2 // RFC 7523
+	OAuthTokenExchange_CLIENT_CREDENTIALS OAuthTokenExchange_GrantType = 3 // RFC 6749 §4.4
 )
 
 // Enum value maps for OAuthTokenExchange_GrantType.
@@ -3086,11 +3087,13 @@ var (
 		0: "UNSPECIFIED",
 		1: "TOKEN_EXCHANGE",
 		2: "JWT_BEARER",
+		3: "CLIENT_CREDENTIALS",
 	}
 	OAuthTokenExchange_GrantType_value = map[string]int32{
-		"UNSPECIFIED":    0,
-		"TOKEN_EXCHANGE": 1,
-		"JWT_BEARER":     2,
+		"UNSPECIFIED":        0,
+		"TOKEN_EXCHANGE":     1,
+		"JWT_BEARER":         2,
+		"CLIENT_CREDENTIALS": 3,
 	}
 )
 
@@ -9371,7 +9374,7 @@ func (x *OAuthClientAuth) GetPrivateKeyJwt() *OAuthClientAuth_PrivateKeyJwt {
 	return nil
 }
 
-// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
+// Token exchange for the OAuth family (RFC 8693 / RFC 7523 / RFC 6749 §4.4).
 type OAuthTokenExchange struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// ----- Token endpoint -----
@@ -9384,10 +9387,11 @@ type OAuthTokenExchange struct {
 	// Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
 	GrantType OAuthTokenExchange_GrantType `protobuf:"varint,9,opt,name=grant_type,json=grantType,proto3,enum=agentgateway.dev.resource.OAuthTokenExchange_GrantType" json:"grant_type,omitempty"`
 	// Subject token (RFC 8693) / assertion (RFC 7523). When unset, defaults to
-	// {source: Authorization header, Bearer prefix; token_type: access_token}
+	// {source: Authorization header, Bearer prefix; token_type: access_token}.
+	// Ignored under CLIENT_CREDENTIALS, which sends no incoming token.
 	SubjectToken *OAuthTokenExchange_TokenSpec `protobuf:"bytes,10,opt,name=subject_token,json=subjectToken,proto3" json:"subject_token,omitempty"`
 	// RFC 8693 §2.1 delegation actor token. TOKEN_EXCHANGE only; rejected under
-	// JWT_BEARER.
+	// JWT_BEARER and CLIENT_CREDENTIALS.
 	// When set, its token_type defaults to access_token if empty.
 	ActorToken *OAuthTokenExchange_ActorToken `protobuf:"bytes,11,opt,name=actor_token,json=actorToken,proto3" json:"actor_token,omitempty"`
 	// ----- Token request parameters -----
@@ -9398,15 +9402,17 @@ type OAuthTokenExchange struct {
 	Scopes    []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	Resources []string `protobuf:"bytes,4,rep,name=resources,proto3" json:"resources,omitempty"`
 	// requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
-	// under JWT_BEARER. When unset under TOKEN_EXCHANGE, the gateway sends
-	// access_token because this backend auth policy forwards bearer access tokens.
+	// under JWT_BEARER and CLIENT_CREDENTIALS. When unset under TOKEN_EXCHANGE,
+	// the gateway sends access_token because this backend auth policy forwards
+	// bearer access tokens.
 	RequestedTokenType *string `protobuf:"bytes,5,opt,name=requested_token_type,json=requestedTokenType,proto3,oneof" json:"requested_token_type,omitempty"`
 	// Arbitrary extra string form fields appended to the token exchange request.
 	// Values are CEL expressions evaluated against the incoming request.
 	AdditionalParams map[string]string `protobuf:"bytes,12,rep,name=additional_params,json=additionalParams,proto3" json:"additional_params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// ----- Authorization server client authentication -----
 	// When unset, no client authentication fields are sent; this supports
-	// public-client exchanges such as Google STS.
+	// public-client exchanges such as Google STS. Required under
+	// CLIENT_CREDENTIALS, which has no other way to authenticate the gateway.
 	ClientAuth *OAuthClientAuth `protobuf:"bytes,6,opt,name=client_auth,json=clientAuth,proto3" json:"client_auth,omitempty"`
 	// ----- Output and runtime behavior -----
 	// Where to forward the exchanged token to the upstream. The expression
@@ -19888,7 +19894,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x13CLIENT_SECRET_BASIC\x10\x01\x12\x16\n" +
 	"\x12CLIENT_SECRET_POST\x10\x02\x12\x13\n" +
 	"\x0fPRIVATE_KEY_JWT\x10\x03B\x10\n" +
-	"\x0e_client_secret\"\xa1\x0e\n" +
+	"\x0e_client_secret\"\xb9\x0e\n" +
 	"\x12OAuthTokenExchange\x12R\n" +
 	"\x0etoken_endpoint\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\rtokenEndpoint\x123\n" +
 	"\x13token_endpoint_path\x18\a \x01(\tH\x00R\x11tokenEndpointPath\x88\x01\x01\x12U\n" +
@@ -19931,12 +19937,13 @@ const file_resource_proto_rawDesc = "" +
 	"\vdefault_ttl\x18\x03 \x01(\v2\x19.google.protobuf.DurationH\x01R\n" +
 	"defaultTtl\x88\x01\x01B\x0e\n" +
 	"\f_max_entriesB\x0e\n" +
-	"\f_default_ttl\"@\n" +
+	"\f_default_ttl\"X\n" +
 	"\tGrantType\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eTOKEN_EXCHANGE\x10\x01\x12\x0e\n" +
 	"\n" +
-	"JWT_BEARER\x10\x02B\x16\n" +
+	"JWT_BEARER\x10\x02\x12\x16\n" +
+	"\x12CLIENT_CREDENTIALS\x10\x03B\x16\n" +
 	"\x14_token_endpoint_pathB\x17\n" +
 	"\x15_requested_token_typeB\x14\n" +
 	"\x12_translation_error\"\xa1\t\n" +
