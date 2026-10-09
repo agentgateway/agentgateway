@@ -2954,6 +2954,23 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 }
 
 #[tokio::test]
+async fn substrate_egress_admits_resuming_actors() {
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state: ActorState::Resuming,
+				error: None
+			},
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::OK,
+	);
+}
+
+#[tokio::test]
 async fn substrate_egress_reports_an_unreachable_actor_service_as_unavailable() {
 	let closed = UNREACHABLE_ADDR.parse().unwrap();
 	assert_eq!(
