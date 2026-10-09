@@ -1,0 +1,21 @@
+{
+  "id": "msg_custom_tool",
+  "type": "message",
+  "model": "claude-sonnet-4-5",
+  "stop_reason": "tool_use",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_python",
+      "name": "python",
+      "input": {"content": "print(6 * 7)"}
+    }
+  ],
+	"usage": {
+		"input_tokens": 20,
+		"output_tokens": 12,
+		"output_tokens_details": {"thinking_tokens": 4},
+		"service_tier": "standard"
+	}
+}

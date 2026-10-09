@@ -1,0 +1,22 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-custom-tool.json
+info: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"created_at\":123,\"id\":\"resp_123\",\"model\":\"gpt-5.6-luna\",\"object\":\"response\",\"output\":[],\"status\":\"in_progress\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_123\",\"call_id\":\"call_123\",\"name\":\"exec\",\"input\":\"\"}}\n\nevent: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"ctc_123\",\"delta\":\"const r = await tools.exec_command({cmd:\\\"echo\\\"}); \"}\n\nevent: response.custom_tool_call_input.delta\ndata: {\"type\":\"response.custom_tool_call_input.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"ctc_123\",\"delta\":\"text(r.output);\"}\n\nevent: response.custom_tool_call_input.done\ndata: {\"type\":\"response.custom_tool_call_input.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"ctc_123\",\"input\":\"const r = await tools.exec_command({cmd:\\\"echo\\\"}); text(r.output);\"}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":5,\"output_index\":0,\"item\":{\"type\":\"custom_tool_call\",\"id\":\"ctc_123\",\"call_id\":\"call_123\",\"name\":\"exec\",\"input\":\"const r = await tools.exec_command({cmd:\\\"echo\\\"}); text(r.output);\"}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":6,\"response\":{\"created_at\":123,\"id\":\"resp_123\",\"model\":\"gpt-5.6-luna\",\"object\":\"response\",\"output\":[{\"type\":\"custom_tool_call\",\"id\":\"ctc_123\",\"call_id\":\"call_123\",\"name\":\"exec\",\"input\":\"const r = await tools.exec_command({cmd:\\\"echo\\\"}); text(r.output);\"}],\"status\":\"completed\",\"usage\":{\"input_tokens\":10,\"input_tokens_details\":{\"cached_tokens\":4},\"output_tokens\":5,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":15}}}\n\ndata: [DONE]\n\n"
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"resp_123","type":"message","role":"assistant","content":[],"model":"gpt-5.6-luna","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"call_123","name":"exec","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"content\":\"const r = await tools.exec_command({cmd:\\\"echo\\\"}); text(r.output);\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":6,"output_tokens":5,"cache_read_input_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}

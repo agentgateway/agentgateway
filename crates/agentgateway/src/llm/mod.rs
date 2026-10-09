@@ -290,6 +290,7 @@ fn cache_convention_for(
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
 			_ => InputIncludesCache,
 		},
+		_ if matches!(provider_format, Some(Messages)) => InputExcludesCache,
 		_ => InputIncludesCache, // openai, azure, gemini, copilot/vertex non-anthropic
 	}
 }
@@ -330,8 +331,8 @@ struct ChatRequestContext<'a> {
 // Context provider to each response translation
 struct ChatResponseContext<'a> {
 	model: &'a str,
-	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
-	namespaces: Option<&'a conversion::namespace_tools::NamespaceToolMap>,
+	buffer_limit: usize,
+	provider_state: Option<&'a ProviderState>,
 }
 
 /// Log handles and content-capture flags threaded through response processing.
@@ -348,8 +349,7 @@ struct ChatStreamContext {
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	log_content: LogContentFields,
-	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
-	namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
+	provider_state: Option<ProviderState>,
 }
 
 /// Ordered chat conversion table.
@@ -389,9 +389,9 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Messages, messages_fallback),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
+		chat(InputFormat::Responses, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
-		// Missing: Responses -> Messages
 	]
 });
 
@@ -470,19 +470,35 @@ fn apply_openai_moderation(
 fn render_anthropic_messages(
 	req: types::ChatRequest,
 	catalog: agent_llm::model_catalog::Catalog<'_>,
-) -> Result<Vec<u8>, AIError> {
-	match req {
-		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+) -> Result<RenderedChatRequest, AIError> {
+	let (body, provider_state) = match req {
+		types::ChatRequest::Completions(req) => (
+			conversion::messages::from_completions::translate(&req, catalog)?,
+			None,
+		),
+		types::ChatRequest::Messages(req) => (
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)?,
+			None,
+		),
+		types::ChatRequest::Responses(req) => {
+			let (body, state) = conversion::messages::from_responses::translate(&req)?;
+			(
+				body,
+				Some(ProviderState::ResponsesToMessages {
+					state: Arc::new(state),
+				}),
+			)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
-		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"responses to messages"
-		))),
-		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"gemini to messages"
-		))),
-	}
+		types::ChatRequest::Gemini(_) => {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"gemini to messages"
+			)));
+		},
+	};
+	Ok(RenderedChatRequest {
+		body,
+		provider_state,
+	})
 }
 
 fn render_vertex_gemini(
@@ -576,9 +592,20 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				let mut rendered = render_anthropic_messages(req, ctx.catalog)?;
+				rendered.body = vertex::prepare_anthropic_message_body(rendered.body)?;
+				return Ok(rendered);
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Copilot(_)) => {
+				let req = match req {
+					types::ChatRequest::Responses(req) => {
+						types::ChatRequest::Responses(copilot::prepare_responses_request(req))
+					},
+					other => other,
+				};
+				return render_anthropic_messages(req, ctx.catalog);
+			},
+			ChatFormat::AnthropicMessages => return render_anthropic_messages(req, ctx.catalog),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -607,7 +634,7 @@ impl ChatTranslation {
 				InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
 					bytes,
 					ctx.model,
-					ctx.namespaces,
+					namespace_tool_map(ctx.provider_state).map(Arc::as_ref),
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -629,6 +656,12 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::messages::from_completions::translate_response(bytes)
 				},
+				InputFormat::Responses => conversion::messages::from_responses::translate_response(
+					bytes,
+					responses_to_messages_state(ctx.provider_state)?,
+					ctx.buffer_limit,
+				)
+				.map(|response| Box::new(response) as Box<dyn ResponseType>),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -639,18 +672,18 @@ impl ChatTranslation {
 				InputFormat::Completions => conversion::bedrock::from_completions::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
+					bedrock_tool_name_map(ctx.provider_state),
 				),
 				InputFormat::Messages => conversion::bedrock::from_messages::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
+					bedrock_tool_name_map(ctx.provider_state),
 				),
 				InputFormat::Responses => conversion::bedrock::from_responses::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
-					ctx.namespaces,
+					bedrock_tool_name_map(ctx.provider_state),
+					namespace_tool_map(ctx.provider_state).map(Arc::as_ref),
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -672,8 +705,8 @@ impl ChatTranslation {
 		}
 	}
 
-	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Response {
-		match self.output {
+	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Result<Response, AIError> {
+		Ok(match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
 				InputFormat::Completions => {
 					conversion::completions::passthrough_stream(ctx.logger, ctx.log_content, resp)
@@ -692,7 +725,7 @@ impl ChatTranslation {
 						ctx.buffer_limit,
 						ctx.logger,
 						ctx.log_content,
-						ctx.namespaces,
+						namespace_tool_map(ctx.provider_state.as_ref()).cloned(),
 					)
 				}),
 				_ => resp,
@@ -730,13 +763,26 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Responses => {
+					let state = responses_to_messages_state(ctx.provider_state.as_ref())?.clone();
+					resp.map(move |body| {
+						conversion::messages::from_responses::translate_stream(
+							body,
+							ctx.buffer_limit,
+							ctx.logger,
+							&ctx.model,
+							ctx.log_content,
+							state,
+						)
+					})
+				},
 				_ => resp,
 			},
 
 			ChatFormat::BedrockConverse => match self.input {
 				InputFormat::Completions => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_completions::translate_stream(
 							b,
@@ -751,7 +797,7 @@ impl ChatTranslation {
 				},
 				InputFormat::Messages => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_messages::translate_stream(
 							b,
@@ -766,7 +812,7 @@ impl ChatTranslation {
 				},
 				InputFormat::Responses => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_responses::translate_stream(
 							b,
@@ -776,13 +822,12 @@ impl ChatTranslation {
 							&msg,
 							ctx.log_content,
 							tool_name_map,
-							ctx.namespaces,
+							namespace_tool_map(ctx.provider_state.as_ref()).cloned(),
 						)
 					})
 				},
 				_ => resp,
 			},
-
 			ChatFormat::VertexGemini => match self.input {
 				InputFormat::Gemini => resp.map(|b| {
 					conversion::vertex_gemini::passthrough_stream(
@@ -803,7 +848,7 @@ impl ChatTranslation {
 				}),
 				_ => resp,
 			},
-		}
+		})
 	}
 
 	fn error(
@@ -859,6 +904,9 @@ impl ChatTranslation {
 					InputFormat::Messages => conversion::messages::translate_anthropic_error(bytes, status),
 					InputFormat::Completions => {
 						conversion::messages::from_completions::translate_error(bytes)
+					},
+					InputFormat::Responses => {
+						conversion::messages::from_responses::translate_error(bytes, status)
 					},
 					_ => unsupported(),
 				},
@@ -922,6 +970,7 @@ struct BufferedResponse {
 	// Original body owner with its content extracted into `bytes` (and decoded).
 	// Retains body metadata while we translate the response which we install the content back into.
 	managed_body: Body,
+	buffer_limit: usize,
 }
 
 // The upstream chose this representation encoding. Keep it out of the headers while the decoded
@@ -1616,6 +1665,10 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Copilot(_) if route_type == RouteType::Messages => http::modify_req(req, |req| {
+				copilot::prepare_messages_headers(&mut req.headers);
+				Ok(())
+			}),
 			AIProvider::Azure(p) => {
 				// Foundry's Anthropic-native endpoint requires the anthropic-version header,
 				// but only for Claude models — GPT models use the OpenAI-compatible path.
@@ -2564,6 +2617,7 @@ impl AIProvider {
 			mut parts,
 			bytes,
 			mut managed_body,
+			buffer_limit,
 		} = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
@@ -2578,6 +2632,7 @@ impl AIProvider {
 			let mut resp = self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
+				buffer_limit,
 				model_catalog.map(|c| c.as_handle()),
 			)?;
 			let prompt_guard_headers =
@@ -2657,6 +2712,7 @@ impl AIProvider {
 			parts,
 			bytes,
 			managed_body,
+			buffer_limit,
 		})
 	}
 
@@ -2692,6 +2748,7 @@ impl AIProvider {
 			mut parts,
 			bytes,
 			managed_body,
+			..
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2757,6 +2814,7 @@ impl AIProvider {
 			mut parts,
 			bytes,
 			managed_body,
+			..
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2807,6 +2865,7 @@ impl AIProvider {
 			mut parts,
 			bytes,
 			managed_body,
+			..
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
@@ -2936,6 +2995,7 @@ impl AIProvider {
 		&self,
 		req: &LLMRequest,
 		bytes: &Bytes,
+		buffer_limit: usize,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		if req.input_format == InputFormat::Detect {
@@ -2950,8 +3010,8 @@ impl AIProvider {
 			bytes,
 			&ChatResponseContext {
 				model: &req.request_model,
-				tool_name_map: bedrock_tool_name_map(req),
-				namespaces: namespace_tool_map(req).map(Arc::as_ref),
+				buffer_limit,
+				provider_state: req.provider_state.as_ref(),
 			},
 		)
 	}
@@ -2974,8 +3034,7 @@ impl AIProvider {
 		} = logging;
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
-		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
-		let namespaces = namespace_tool_map(&req).cloned();
+		let provider_state = req.provider_state.clone();
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
 				input_format,
@@ -3067,10 +3126,9 @@ impl AIProvider {
 					logger,
 					model: model.to_string(),
 					log_content,
-					tool_name_map: bedrock_tool_name_map,
-					namespaces,
+					provider_state,
 				},
-			)
+			)?
 		} else {
 			match (self, input_format) {
 				(AIProvider::Bedrock(_), InputFormat::Detect) => {
@@ -3330,21 +3388,34 @@ fn strip_alt_query(req: &mut Request) {
 	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
 }
 
-fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {
-	match &req.provider_state {
+fn bedrock_tool_name_map(
+	provider_state: Option<&ProviderState>,
+) -> Option<&conversion::bedrock::BedrockToolNameMap> {
+	match provider_state {
 		Some(ProviderState::Bedrock { tool_names, .. }) => Some(tool_names.as_ref()),
 		_ => None,
 	}
 }
 
 fn namespace_tool_map(
-	req: &LLMRequest,
+	provider_state: Option<&ProviderState>,
 ) -> Option<&Arc<conversion::namespace_tools::NamespaceToolMap>> {
-	match &req.provider_state {
+	match provider_state {
 		Some(
 			ProviderState::Bedrock { namespaces, .. } | ProviderState::OpenAICompletions { namespaces },
 		) => Some(namespaces),
 		_ => None,
+	}
+}
+
+fn responses_to_messages_state(
+	provider_state: Option<&ProviderState>,
+) -> Result<&conversion::messages::from_responses::State, AIError> {
+	match provider_state {
+		Some(ProviderState::ResponsesToMessages { state }) => Ok(state.as_ref()),
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"missing Responses-to-Messages state"
+		))),
 	}
 }
 

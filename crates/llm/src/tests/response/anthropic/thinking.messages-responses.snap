@@ -1,0 +1,75 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/thinking.json
+info:
+  id: msg_01BE9GBzjs95TqdG8FeUanUn
+  type: message
+  role: assistant
+  model: claude-opus-4-6
+  content:
+    - type: thinking
+      thinking: The user is asking me about the current weather in San Francisco
+      signature: Es8DCkYI
+    - type: text
+      text: "I don't have access to real-time weather data"
+  stop_reason: end_turn
+  stop_sequence: ~
+  usage:
+    input_tokens: 47
+    cache_creation_input_tokens: 1
+    cache_read_input_tokens: 2
+    cache_creation:
+      ephemeral_5m_input_tokens: 0
+      ephemeral_1h_input_tokens: 0
+    output_tokens: 251
+    service_tier: standard
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "I don't have access to real-time weather data"
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "phase": "final_answer",
+        "status": "completed"
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "service_tier": "default",
+    "usage": {
+      "input_tokens": 50,
+      "output_tokens": 251,
+      "input_tokens_details": {
+        "cached_tokens": 2,
+        "cache_write_tokens": 1
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 301
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 47,
+    "output_tokens": 251,
+    "total_tokens": 298,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 1,
+    "cached_input_tokens": 2,
+    "service_tier": "standard",
+    "provider_model": "claude-opus-4-6"
+  }
+}

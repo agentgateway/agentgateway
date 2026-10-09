@@ -222,6 +222,7 @@ pub mod from_completions {
 							id: call.id.clone(),
 							name: call.function.name.clone(),
 							input,
+							caller: None,
 							cache_control: None,
 						});
 					},
@@ -231,6 +232,7 @@ pub mod from_completions {
 							id: call.id.clone(),
 							name: call.custom_tool.name.clone(),
 							input,
+							caller: None,
 							cache_control: None,
 						});
 					},
@@ -404,14 +406,15 @@ pub mod from_completions {
 				.filter_map(|tool| match tool {
 					completions::Tool::Function(function_tool) => {
 						Some(messages::Tool::Custom(messages::CustomTool {
+							tool_type: None,
 							name: function_tool.function.name.clone(),
-							strict: None,
 							description: function_tool.function.description.clone(),
 							input_schema: function_tool
 								.function
 								.parameters
 								.clone()
 								.unwrap_or_default(),
+							strict: None,
 							cache_control: None,
 						}))
 					},
@@ -717,14 +720,13 @@ pub mod from_completions {
 		let mut output_tokens = 0;
 		let mut cache_read_input_tokens = None;
 		let mut cache_creation_input_tokens = None;
+		let mut completion = log_content.completion.then(String::new);
+		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 		let created = chrono::Utc::now().timestamp() as u32;
-		// let mut finish_reason = None;
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut next_tool_index = 0u32;
 		let mut ongoing_tool_calls: HashMap<usize, OngoingToolCall> = HashMap::new();
-		let mut completion = log_content.completion.then(String::new);
-		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
 		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
 		let body = parse::sse::json_transform::<
@@ -1010,6 +1012,8 @@ pub mod from_completions {
 		parse::sse::append_done_on_success(body)
 	}
 }
+
+pub mod from_responses;
 
 fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReason {
 	match resp {

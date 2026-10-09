@@ -36,6 +36,7 @@ const BEDROCK_OPENAI_GPT: &str = "bedrock-openai-gpt";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
 const GEMINI: &str = "gemini";
+const MESSAGES: &str = "messages";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
@@ -225,15 +226,19 @@ mod requests {
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("namespace-tools", &[BEDROCK, GEMINI]),
+		("namespace-tools-messages", &[MESSAGES]),
 		("namespace-tools-long", &[BEDROCK]),
-		("basic", &[BEDROCK, GEMINI]),
-		("instructions", &[BEDROCK, GEMINI]),
-		("input-list", &[BEDROCK, GEMINI]),
+		("basic", &[BEDROCK, GEMINI, MESSAGES]),
+		("instructions", &[BEDROCK, GEMINI, MESSAGES]),
+		("input-list", &[BEDROCK, GEMINI, MESSAGES]),
 		("codex-assistant-history", &[BEDROCK, GEMINI]),
-		("parallel-tool-call", &[BEDROCK, GEMINI]),
-		("structured-output", &[BEDROCK]),
+		("parallel-tool-call", &[BEDROCK, GEMINI, MESSAGES]),
+		("structured-output", &[BEDROCK, MESSAGES]),
+		// The fixture includes Bedrock-only document media types and repeated document names.
 		("input-media", &[BEDROCK]),
-		("cache_control", &[BEDROCK, GEMINI]),
+		("cache_control", &[BEDROCK, GEMINI, MESSAGES]),
+		("messages-rich", &[BEDROCK, GEMINI, MESSAGES]),
+		("custom-tool", &[MESSAGES]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -408,6 +413,9 @@ mod requests {
 					}),
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
+					}),
+					MESSAGES => test_request(MESSAGES, &path, |i| {
+						conversion::messages::from_responses::translate(i).map(|(body, _)| body)
 					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
@@ -875,6 +883,7 @@ mod responses {
 	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
 	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
 	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
+	const MESSAGES_TO_RESPONSES: &str = "messages-responses";
 	const MESSAGES_TO_DETECT: &str = "messages-detect";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
@@ -902,13 +911,17 @@ mod responses {
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
 		MESSAGES_TO_COMPLETIONS,
+		MESSAGES_TO_RESPONSES,
 		MESSAGES_TO_DETECT,
 	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
+		// The citation in this fixture is an explicit error for Messages-to-Responses.
 		("multiple_text_blocks", ALL_ANTHROPIC),
+		("custom_tool", &[MESSAGES_TO_RESPONSES]),
+		("namespace_tool", &[MESSAGES_TO_RESPONSES]),
 	];
 	const ALL_COMPLETIONS: &[&str] = &[
 		COMPLETIONS_TO_COMPLETIONS,
@@ -1020,13 +1033,55 @@ mod responses {
 		),
 		(
 			"stream_tool",
-			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+			&[
+				MESSAGES_TO_MESSAGES,
+				MESSAGES_TO_COMPLETIONS,
+				MESSAGES_TO_RESPONSES,
+			],
 		),
+		("stream_namespace_tool", &[MESSAGES_TO_RESPONSES]),
 		(
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		("stream_custom_tool", &[MESSAGES_TO_RESPONSES]),
+		("stream_metadata", &[MESSAGES_TO_RESPONSES]),
 	];
+
+	fn responses_to_messages_state() -> Result<conversion::messages::from_responses::State, AIError> {
+		let request = serde_json::from_value(json!({
+			"model": "request-model",
+			"input": "test",
+			"tools": [
+				{
+					"type": "function",
+					"name": "get_weather",
+					"description": "Get the weather.",
+					"parameters": {"type": "object"}
+				},
+				{
+					"type": "custom",
+					"name": "python",
+					"description": "Run Python.",
+					"format": {"type": "text"}
+				},
+				{
+					"type": "namespace",
+					"name": "multi_agent_v1",
+					"description": "Tools for managing agents.",
+					"tools": [{
+						"type": "function",
+						"name": "spawn_agent",
+						"description": "Start an agent.",
+						"parameters": {"type": "object", "required": ["task"]},
+						"strict": false
+					}]
+				}
+			]
+		}))
+		.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
+		conversion::messages::from_responses::translate(&request).map(|(_, state)| state)
+	}
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("stream", ALL_COMPLETIONS),
@@ -1207,6 +1262,14 @@ mod responses {
 					}),
 					MESSAGES_TO_COMPLETIONS => test_response(provider, &path, |i| {
 						conversion::messages::from_completions::translate_response(&i)
+					}),
+					MESSAGES_TO_RESPONSES => test_response(provider, &path, |i| {
+						conversion::messages::from_responses::translate_response(
+							&i,
+							&responses_to_messages_state()?,
+							1024 * 1024,
+						)
+						.map(|response| Box::new(response) as Box<dyn ResponseType>)
 					}),
 					MESSAGES_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(
@@ -1506,6 +1569,16 @@ mod responses {
 							BUFFER_LIMIT,
 							reporter,
 							LOG_CONTENT,
+						)
+					}),
+					MESSAGES_TO_RESPONSES => response.map(|body| {
+						conversion::messages::from_responses::translate_stream(
+							body,
+							BUFFER_LIMIT,
+							reporter,
+							"input-model",
+							LOG_CONTENT,
+							responses_to_messages_state().expect("Responses-to-Messages state"),
 						)
 					}),
 					MESSAGES_TO_DETECT => types::detect::passthrough_stream(reporter, response),
