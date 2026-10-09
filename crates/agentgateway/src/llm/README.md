@@ -1,52 +1,61 @@
-# Agentgateway LLM Functionality
+# agentgateway LLM Support
 
-This module builds functionality for handling LLM requests.
-This includes support for multiple different types of requests (OpenAI completions, Embeddings, Anthropic messages, etc),
-policy and manipulation of these, parsing, and in some cases conversion.
+This module handles LLM requests, including Anthropic Messages, OpenAI completions and embeddings,
+and applies policy, parses replies and converts between API formats when needed.
 
 ## Responses to Anthropic Messages
 
-Providers that advertise Anthropic Messages can accept OpenAI Responses requests through the
-shared Responses-to-Messages converter. This includes Anthropic, Copilot Claude, Vertex Claude,
-Azure Foundry Claude, and custom Messages providers. Providers with a native Responses or Converse
-route keep their existing path.
+The shared Responses-to-Messages converter accepts OpenAI Responses requests for providers that
+support Anthropic Messages, including Anthropic, Azure Foundry Claude, Copilot Claude, custom
+Messages providers and Vertex Claude. Providers with native Responses or Converse routes use
+those routes.
 
-The converter deserializes the public request into the typed Responses model, then maps the common
-request surface into Anthropic Messages. Function tools keep their names, descriptions, and
-parameter schemas. Responses custom tools keep their identity and expose free-form input through a
-`content` string schema. Function namespace tools use the shared `NamespaceToolMap`, which
-rewrites declarations, choices and history, then restores tool names and namespaces in buffered
-and streamed replies. Namespaced custom tools and built-in tools such as `shell`, `local_shell`,
-and `apply_patch` remain unsupported.
+Requests are parsed into the typed Responses model and converted to Messages, with `ProviderState`
+holding the conversion state for each request.
 
-Responses cache-breakpoint markers become ephemeral Messages cache controls on supported text,
-image, document and tool-result content, including system and developer text. Calls and results
-keep their IDs across follow-up requests. Unsupported opaque history and nonempty Responses
-compaction controls produce explicit errors. Responses `prompt_cache_options`, including cache
-prewarming without generation, also remain unsupported.
-In-progress function results and unfinished function calls are rejected before history is replayed.
-Citation output that cannot be represented in Responses produces an explicit response error,
-including a safe error event for streams.
+Function tools keep their names, descriptions and parameter schemas. Custom tools keep their
+identity and carry free-form input in a `content` string schema. For function namespaces,
+`NamespaceToolMap` rewrites declarations, tool choices and history, then restores names and
+namespaces in buffered replies and stream events. Namespaced custom tools and the built-ins
+`apply_patch`, `local_shell` and `shell` are unsupported.
 
-Buffered and streaming translations return the standard Responses types. They report the upstream
-Messages model and include cache, cache-write, and reasoning token usage when the provider sends
-those fields. Terminal stream counters replace initial counters when supplied. Missing terminal
-counters retain their initial values, and cached input is added once. Thinking blocks, including
-unsigned blocks, are discarded from Responses output. An unsigned block does not acquire a
-signature for replay to Anthropic. Conversion state is carried per request through `ProviderState`.
+Responses cache-breakpoint markers become ephemeral Messages cache controls on supported
+documents, images, text and tool results, including system and developer text.
+Calls and results keep their IDs across follow-up requests.
 
-Copilot Claude requests use `/v1/messages`. Copilot's provider policy sets the Anthropic version,
-filters beta features known to be unsupported, and preserves native Messages `context_management`.
-Context editing requires the provider's `context-management-2025-06-27` beta header. Custom host
-and `pathPrefix` behavior stays unchanged.
+Nonempty Responses compaction controls and unsupported opaque history return explicit errors,
+as does `prompt_cache_options`, including requests to prewarm the cache without generating output.
+In-progress function results and unfinished function calls are rejected before replay.
+When a response contains citations that Responses cannot represent, conversion returns a
+response error or a safe error event for a stream.
 
-In order to facilitate maximum compatibility (across providers or across versions, as new fields are added),
-we use a "passthrough" approach to parsing. Each message includes a final `rest` field that stores all unknown fields:
+Buffered replies and stream events use the standard Responses types and report the model
+returned by Messages. Usage includes cache, cache-write and reasoning tokens when the provider
+supplies them. Each supplied terminal usage counter replaces its initial value, while any
+missing counter retains the value from the start of the stream. Cached input is counted once.
+
+Thinking blocks, including unsigned blocks, are discarded from Responses output, and unsigned
+thinking does not get a signature for replay to Anthropic.
+
+Text streams as it arrives. When the upstream stop reason is `refusal`, buffered and streamed
+replies keep `output_text` but return `status: "failed"` with error code `content_filter`, and
+the stream ends with `response.failed`. This follows the Bedrock and Chat Completions adapters.
+
+Copilot Claude requests go to `/v1/messages`, where the provider policy sets the Anthropic version,
+filters beta features known to be unsupported and passes through native Messages `context_management`.
+To use native context editing, send the `context-management-2025-06-27` beta header along with
+the Messages `context_management` field. Custom hosts and `pathPrefix` settings follow the
+provider's normal routing rules.
+
+## Parsing and Conversion
+
+Passthrough types store unknown fields in `rest`. This lets the gateway accept provider
+extensions and fields added in later API versions without defining each one.
+
 ```rust
 #[serde(flatten, default)]
 pub rest: serde_json::Value
 ```
-Only fields we specifically operate on (like `model`) need to be included in the type definitions.
 
-However, in some cases having the full typed definitions is useful, such as for conversion from one type to another.
-For these cases, we define additional `typed` variants and convert the passthrough types to them internally.
+Fields the gateway reads or changes, such as `model`, have explicit definitions. Conversions
+use additional `typed` variants when they need the full schema.
