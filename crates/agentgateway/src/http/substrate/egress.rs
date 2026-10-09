@@ -286,7 +286,7 @@ fn credential_header(
 	let mut value = injection.prefix.as_bytes().to_vec();
 	value.extend(&secret);
 	let mut value = HeaderValue::from_bytes(&value).map_err(|error| {
-		ProxyError::SubstrateEgressUnavailable(format!("credential header value is invalid: {error}"))
+		ProxyError::SubstrateEgressFailed(format!("credential header value is invalid: {error}"))
 	})?;
 	value.set_sensitive(true);
 	Ok((name, value))
@@ -310,13 +310,20 @@ fn protected_credential_header(name: &HeaderName) -> bool {
 
 fn credential_provider_error(uri: &str, status: tonic::Status) -> ProxyError {
 	let provider = provider_name(uri).unwrap_or("unknown");
+	policy_call_error(&format!("credential provider {provider}"), &status)
+}
+
+/// 403 when the service refuses, 503 when a retry may help, 502 for anything
+/// else (usually a bug in the service).
+pub(super) fn policy_call_error(call: &str, status: &tonic::Status) -> ProxyError {
 	match status.code() {
-		Code::Unavailable | Code::DeadlineExceeded => ProxyError::SubstrateEgressUnavailable(format!(
-			"credential provider {provider} unavailable: {status}"
-		)),
-		_ => {
-			ProxyError::SubstrateEgressDenied(format!("credential provider {provider} denied: {status}"))
+		Code::NotFound | Code::PermissionDenied | Code::FailedPrecondition => {
+			ProxyError::SubstrateEgressDenied(format!("{call} denied: {status}"))
 		},
+		Code::Unavailable | Code::DeadlineExceeded | Code::ResourceExhausted => {
+			ProxyError::SubstrateEgressUnavailable(format!("{call} unavailable: {status}"))
+		},
+		_ => ProxyError::SubstrateEgressFailed(format!("{call} failed: {status}")),
 	}
 }
 
@@ -325,7 +332,7 @@ fn credential_secret(secret: Vec<u8>) -> Result<Vec<u8>, ProxyResponse> {
 	let secret = secret.strip_suffix(b"\r").unwrap_or(secret);
 	if secret.is_empty() || secret.iter().any(|byte| byte.is_ascii_control()) {
 		return Err(
-			ProxyError::SubstrateEgressUnavailable(
+			ProxyError::SubstrateEgressFailed(
 				"credential provider returned an unusable secret".to_owned(),
 			)
 			.into(),
@@ -365,12 +372,7 @@ async fn fetch_policy(
 	drop(span);
 	match response {
 		Ok(response) => Ok(response.into_inner()),
-		Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => Err(
-			ProxyError::SubstrateEgressUnavailable(format!("actor egress policy unavailable: {status}")),
-		),
-		Err(status) => Err(ProxyError::SubstrateEgressDenied(format!(
-			"actor egress policy denied: {status}"
-		))),
+		Err(status) => Err(policy_call_error("actor egress policy", &status)),
 	}
 }
 
@@ -929,22 +931,27 @@ mod tests {
 	}
 
 	#[test]
-	fn credential_provider_errors_preserve_availability_semantics() {
-		for code in [Code::Unavailable, Code::DeadlineExceeded] {
+	fn policy_call_errors_answer_by_class() {
+		use ::http::StatusCode;
+		for (code, want) in [
+			(Code::NotFound, StatusCode::FORBIDDEN),
+			(Code::PermissionDenied, StatusCode::FORBIDDEN),
+			(Code::FailedPrecondition, StatusCode::FORBIDDEN),
+			(Code::Unavailable, StatusCode::SERVICE_UNAVAILABLE),
+			(Code::DeadlineExceeded, StatusCode::SERVICE_UNAVAILABLE),
+			(Code::ResourceExhausted, StatusCode::SERVICE_UNAVAILABLE),
+			(Code::Unauthenticated, StatusCode::BAD_GATEWAY),
+			(Code::Internal, StatusCode::BAD_GATEWAY),
+			(Code::Unknown, StatusCode::BAD_GATEWAY),
+			(Code::InvalidArgument, StatusCode::BAD_GATEWAY),
+		] {
 			let response = credential_provider_error(
 				"ate-secret://kubernetes.io/default/token",
 				tonic::Status::new(code, "provider failed"),
 			)
 			.into_response_with_grpc(false);
-			assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
+			assert_eq!(response.status(), want, "{code:?}");
 		}
-
-		let response = credential_provider_error(
-			"ate-secret://kubernetes.io/default/token",
-			tonic::Status::permission_denied("not allowed"),
-		)
-		.into_response_with_grpc(false);
-		assert_eq!(response.status(), ::http::StatusCode::FORBIDDEN);
 	}
 
 	#[test]
@@ -954,8 +961,13 @@ mod tests {
 			prefix: "Bearer ".to_owned(),
 			credential_uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
-		assert!(credential_header(&injection, Vec::new()).is_err());
-		assert!(credential_header(&injection, b"bad\nsecret".to_vec()).is_err());
+		for secret in [Vec::new(), b"bad\nsecret".to_vec()] {
+			let response = credential_header(&injection, secret)
+				.unwrap_err()
+				.downcast()
+				.into_response_with_grpc(false);
+			assert_eq!(response.status(), ::http::StatusCode::BAD_GATEWAY);
+		}
 	}
 
 	#[test]

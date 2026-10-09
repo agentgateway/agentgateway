@@ -1556,6 +1556,8 @@ async fn substrate_egress_connect_status_at(
 		StatusCode::FORBIDDEN
 	} else if response.starts_with("HTTP/1.1 503 Service Unavailable\r\n") {
 		StatusCode::SERVICE_UNAVAILABLE
+	} else if response.starts_with("HTTP/1.1 502 Bad Gateway\r\n") {
+		StatusCode::BAD_GATEWAY
 	} else {
 		panic!("unexpected CONNECT response: {response}")
 	}
@@ -2950,6 +2952,19 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 		)
 		.await,
 		StatusCode::SERVICE_UNAVAILABLE,
+	);
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state: running,
+				error: Some(tonic::Code::Internal)
+			},
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::BAD_GATEWAY,
 	);
 }
 
