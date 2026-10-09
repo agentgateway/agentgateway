@@ -331,18 +331,11 @@ fn replace_path(uri: &str, path: &str) -> String {
 
 /// Strip `prefix` only when it ends on a path-segment boundary.
 fn strip_complete_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	// A2A-specific: empty prefix (not "/") is treated as "no match".
 	if prefix.is_empty() {
 		return None;
 	}
-	let prefix = prefix.trim_end_matches('/');
-	if prefix.is_empty() {
-		return Some(path);
-	}
-	if path == prefix {
-		return Some("");
-	}
-	let stripped = path.strip_prefix(prefix)?;
-	stripped.starts_with('/').then_some(stripped)
+	crate::http::route::strip_path_prefix(path, prefix)
 }
 
 fn join_path_prefix(prefix: &str, rest: &str) -> String {
