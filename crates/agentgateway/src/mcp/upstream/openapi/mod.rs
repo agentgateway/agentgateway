@@ -794,7 +794,7 @@ impl Handler {
 		} else {
 			let format_pair = |param_name: &str, key: &str, v: &Value| -> Option<String> {
 				match v {
-					Value::Null => Some(key.to_string()),
+					Value::Null => None,
 					Value::Bool(b) => Some(format!("{key}={b}")),
 					Value::Number(n) => Some(format!("{key}={n}")),
 					Value::String(s) => Some(format!("{key}={}", encode_query_value(s))),
@@ -919,10 +919,6 @@ impl Handler {
 		// Read response body
 		let status = response.status();
 
-		// per https://modelcontextprotocol.io/specification/2025-11-25/server/tools
-		// Clients MAY provide protocol errors to language models which are mainly caught up higher.
-		// However we contend that server errors on the tool call should also count as protocol
-		// Everything else should be treated as a success from an http perspective and wrapped in the json-rpc format.
 		if !status.is_server_error() {
 			let lim = crate::http::response_buffer_limit(&response);
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
@@ -940,7 +936,9 @@ impl Handler {
 			.1;
 
 			if body_bytes.is_empty() {
-				return Ok(CallToolResult::success(vec![]));
+				let mut result = CallToolResult::success(vec![]);
+				result.is_error = Some(status.is_client_error());
+				return Ok(result);
 			}
 			let encode = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
 			// The bytes decide for anything not declared text-like so text formats missing from is_text_like still arrive as text.
@@ -956,22 +954,24 @@ impl Handler {
 						ResourceContents::blob(data, format!("tool://{name}")).with_mime_type(mime),
 					),
 				};
-				return Ok(CallToolResult::success(vec![block]));
+				let mut result = CallToolResult::success(vec![block]);
+				result.is_error = Some(status.is_client_error());
+				return Ok(result);
 			}
 
 			// JSON is attempted first even for text types because some upstreams mislabel JSON bodies.
 			// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
 			//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
 			// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
-			Ok(
-				match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-					Ok(val @ (Value::Object(_) | Value::Null)) => CallToolResult::structured(val),
-					Ok(data) => CallToolResult::structured(json!({ "data": data })),
-					Err(_) => CallToolResult::success(vec![ContentBlock::text(String::from_utf8_lossy(
-						&body_bytes,
-					))]),
-				},
-			)
+			let mut result = match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+				Ok(val @ (Value::Object(_) | Value::Null)) => CallToolResult::structured(val),
+				Ok(data) => CallToolResult::structured(json!({ "data": data })),
+				Err(_) => CallToolResult::success(vec![ContentBlock::text(String::from_utf8_lossy(
+					&body_bytes,
+				))]),
+			};
+			result.is_error = Some(status.is_client_error());
+			Ok(result)
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(
