@@ -590,15 +590,15 @@ type BackendTLS struct {
 	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
 
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-	// referenced credential source (defaulting to a Kubernetes `Secret`). An
-	// optional `ca.cert`, if present, verifies the server certificate, but
-	// `caCertificateRefs` takes priority. If unspecified, no client certificate
-	// is used.
+	// referenced credential source (defaulting to a Kubernetes `Secret`), or from
+	// files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+	// present, verifies the server certificate, but `caCertificateRefs` takes
+	// priority. If unspecified, no client certificate is used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
+	MtlsCertificateRef []BackendTLSCertificateRef `json:"mtlsCertificateRef,omitempty"`
 	// CA certificate source to use to verify the server certificate. Omitted kind
 	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The bundle is
 	// read from the `ca.crt` key unless `key` names a different one. If unset, the
@@ -649,6 +649,45 @@ type BackendTLS struct {
 	// For example: `X25519_MLKEM768,X25519`.
 	// +optional
 	KeyExchangeGroups []KeyExchangeGroup `json:"keyExchangeGroups,omitempty"`
+}
+
+// References the backend mTLS client credential: a same-namespace `Secret` (or custom
+// credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
+//
+// +structType=atomic
+// +kubebuilder:validation:XValidation:rule="has(self.kind) && self.kind == 'File' ? (has(self.file) && !has(self.name) && !has(self.group)) : (has(self.name) && !has(self.file))",message="kind File requires file and no name/group; any other kind requires name and no file"
+// +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret' || self.kind == 'File') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
+type BackendTLSCertificateRef struct {
+	// Name of the referenced credential. Required unless `kind` is `File`.
+	// +optional
+	Name gwv1.ObjectName `json:"name,omitempty"`
+
+	// API group of the referenced credential; empty selects the core API group.
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// Kind of the referenced credential; empty defaults to `Secret`. `File` reads from `file`.
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// Paths on the agentgateway pod's local filesystem. Required when `kind` is `File`.
+	// +optional
+	File *BackendTLSFile `json:"file,omitempty"`
+}
+
+// BackendTLSFile references client certificate, key and CA bundle files on the agentgateway
+// pod's local filesystem. The controller does not read them; it forwards the paths to the gateway.
+type BackendTLSFile struct {
+	// Path to the client certificate file.
+	// +required
+	Cert LongString `json:"cert"`
+	// Path to the client certificate's private key file.
+	// +required
+	Key LongString `json:"key"`
+	// Path to a CA bundle file used to verify the backend's certificate.
+	// If unset, the system's trusted certificates are used.
+	// +optional
+	Root LongString `json:"root,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
