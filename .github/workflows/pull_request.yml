@@ -19,7 +19,7 @@ env:
   CARGO_TERM_COLOR: always
   CI: true
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
 
 jobs:
   #### Proxy jobs ####

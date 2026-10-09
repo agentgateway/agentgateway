@@ -10,7 +10,7 @@ require (
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
-	github.com/envoyproxy/go-control-plane/envoy v1.39.1-0.20260829101913-1e3cf565f8ea
+	github.com/envoyproxy/go-control-plane/envoy v1.39.1-0.20261003070529-6b14e001be9b
 	github.com/gdamore/tcell/v2 v2.13.10
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
 	github.com/go-jose/go-jose/v4 v4.1.5
@@ -24,13 +24,13 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/prometheus/client_model v0.6.3
-	github.com/prometheus/common v0.71.0
+	github.com/prometheus/common v0.72.0
 	github.com/rivo/tview v0.42.0
-	github.com/shopspring/decimal v1.4.0
+	github.com/shopspring/decimal v1.5.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -38,17 +38,17 @@ require (
 	go.uber.org/atomic v1.12.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
-	golang.design/x/clipboard v0.9.0
+	golang.design/x/clipboard v0.11.0
 	golang.org/x/sync v0.23.0
 	golang.org/x/time v0.16.0
-	golang.org/x/tools v0.50.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260921155816-b14227669459
+	golang.org/x/tools v0.51.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	helm.sh/helm/v4 v4.3.0
-	istio.io/api v1.31.0-alpha.1.0.20260924080753-e0d275e5684d
-	istio.io/client-go v1.31.0-alpha.1.0.20260924081053-3eeb139684f9
-	istio.io/istio v0.0.0-20260926220654-22d0ef667771
+	istio.io/api v1.31.0-alpha.1.0.20260928195158-409e35b92127
+	istio.io/client-go v1.31.0-alpha.1.0.20260928195457-15cb8ceac95b
+	istio.io/istio v0.0.0-20261008180231-a8dce154a704
 	k8s.io/api v0.37.1
 	k8s.io/apiextensions-apiserver v0.37.1
 	k8s.io/apimachinery v0.37.1
@@ -56,7 +56,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/streaming v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
-	sigs.k8s.io/controller-runtime v0.25.1
+	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/controller-tools v0.22.0
 	sigs.k8s.io/gateway-api v1.6.2
 	sigs.k8s.io/gateway-api-inference-extension v1.6.2
@@ -92,7 +92,7 @@ require (
 	github.com/dylibso/observe-sdk/go v0.0.0-20240819160327-2d926c5d788a // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
-	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20260829101913-1e3cf565f8ea // indirect
+	github.com/envoyproxy/go-control-plane/contrib v1.36.1-0.20261003070529-6b14e001be9b // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
@@ -179,7 +179,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240409071808-615f978279ca // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
-	github.com/prometheus/procfs v0.21.1 // indirect
+	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/redis/go-redis/extra/redisotel/v9 v9.7.1 // indirect
@@ -218,8 +218,8 @@ require (
 	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/mobile v0.0.0-20250606033058-a2a15c67f36f // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
