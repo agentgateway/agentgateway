@@ -2549,6 +2549,7 @@ async fn make_backend_call(
 				name: n.name.as_ref(),
 				namespace: n.namespace.as_ref(),
 				section: Some(provider.name.as_ref()),
+				kind: n.kind.as_deref(),
 			};
 			let sub_backend_policies = inputs
 				.stores

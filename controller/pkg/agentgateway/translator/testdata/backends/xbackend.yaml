@@ -29,8 +29,9 @@ output:
           version: HTTP2
       - backendTls:
           hostname: api.example.com
-      key: default/external-api
+      key: gateway.networking.x-k8s.io/XBackend/default/external-api
       name:
+        kind: XBackend
         name: external-api
         namespace: default
       static:

@@ -75,6 +75,8 @@ message ListenerName {
 message ResourceName {
   string name = 1;
   string namespace = 2;
+  // Resource kind, set when the same namespace/name can exist under multiple resource types.
+  optional string kind = 3;
 }
 
 message TypedResourceName {
@@ -701,6 +703,8 @@ message PolicyTarget {
     string name = 1;
     string namespace = 2;
     optional string section = 3;
+    // Resource kind, set when the same namespace/name can exist under multiple backend types.
+    optional string kind = 4;
   }
   message GatewayTarget {
     string name = 1;

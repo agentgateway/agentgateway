@@ -987,11 +987,18 @@ pub struct ResourceName {
 	pub name: Strng,
 	/// Namespace scoping this resource, used in fully qualified `namespace/name` references.
 	pub namespace: Strng,
+	/// Resource kind, set when the same namespace/name can exist under multiple resource types.
+	#[serde(skip)]
+	pub kind: Option<Strng>,
 }
 
 impl ResourceName {
 	pub fn new(name: Strng, namespace: Strng) -> Self {
-		Self { name, namespace }
+		Self {
+			name,
+			namespace,
+			kind: None,
+		}
 	}
 }
 
@@ -1023,6 +1030,8 @@ pub enum BackendTarget {
 		namespace: Strng,
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		section: Option<Strng>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		kind: Option<Strng>,
 	},
 	Service {
 		hostname: Strng,
@@ -1039,6 +1048,7 @@ pub enum BackendTargetRef<'a> {
 		name: &'a str,
 		namespace: &'a str,
 		section: Option<&'a str>,
+		kind: Option<&'a str>,
 	},
 	Service {
 		hostname: &'a str,
@@ -1055,10 +1065,12 @@ impl<'a> From<&'a BackendTarget> for BackendTargetRef<'a> {
 				name,
 				namespace,
 				section,
+				kind,
 			} => BackendTargetRef::Backend {
 				name,
 				namespace,
 				section: section.as_deref(),
+				kind: kind.as_deref(),
 			},
 			BackendTarget::Service {
 				hostname,
@@ -1078,11 +1090,15 @@ impl BackendTargetRef<'_> {
 	pub fn strip_section(&self) -> BackendTargetRef {
 		match self {
 			BackendTargetRef::Backend {
-				name, namespace, ..
+				name,
+				namespace,
+				kind,
+				..
 			} => BackendTargetRef::Backend {
 				name,
 				namespace,
 				section: None,
+				kind: *kind,
 			},
 			BackendTargetRef::Service {
 				namespace,
@@ -1751,15 +1767,11 @@ impl SimpleBackend {
 				namespace: svc.namespace.as_ref(),
 				port: Some(*port),
 			},
-			SimpleBackend::Opaque(name, _) => BackendTargetRef::Backend {
+			SimpleBackend::Opaque(name, _) | SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
 				section: None,
-			},
-			SimpleBackend::Aws(name, _) => BackendTargetRef::Backend {
-				name: name.name.as_ref(),
-				namespace: name.namespace.as_ref(),
-				section: None,
+				kind: name.kind.as_deref(),
 			},
 			SimpleBackend::Invalid => BackendTargetRef::Invalid,
 		}
@@ -1800,6 +1812,7 @@ impl Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
 				section: None,
+				kind: name.kind.clone(),
 			},
 			Backend::Invalid => BackendTarget::Invalid,
 		}
@@ -1822,6 +1835,7 @@ impl Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
 				section: None,
+				kind: name.kind.as_deref(),
 			},
 			Backend::Invalid => BackendTargetRef::Invalid,
 		}
@@ -4065,6 +4079,7 @@ jwtValidationOptions:
 				name: "test-aws",
 				namespace: "ns",
 				section: None,
+				kind: None,
 			}
 		);
 	}

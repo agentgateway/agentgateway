@@ -62,6 +62,9 @@ func buildXBackend(
 		return nil, fmt.Errorf("only ExternalHostname XBackends are supported")
 	}
 
+	name := plugins.ResourceName(backend)
+	name.Kind = new(wellknown.XBackendGVK.Kind)
+
 	inlinePolicies, err := xBackendProtocolPolicies(backend.Spec.Protocol, backend.Spec.TLS)
 	if err != nil {
 		return nil, err
@@ -77,8 +80,8 @@ func buildXBackend(
 	}
 	if backend.Spec.Protocol != nil && *backend.Spec.Protocol == gwxv1a1.BackendProtocolMCP {
 		return &api.Backend{
-			Key:  backend.Namespace + "/" + backend.Name,
-			Name: plugins.ResourceName(backend),
+			Key:  utils.InternalTypedBackendKey(wellknown.XBackendGVK.Group, wellknown.XBackendGVK.Kind, backend.Namespace, backend.Name),
+			Name: name,
 			Kind: &api.Backend_Mcp{Mcp: &api.MCPBackend{
 				Targets: []*api.MCPTarget{{
 					Name: backend.Name,
@@ -100,8 +103,8 @@ func buildXBackend(
 	}
 
 	return &api.Backend{
-		Key:  backend.Namespace + "/" + backend.Name,
-		Name: plugins.ResourceName(backend),
+		Key:  utils.InternalTypedBackendKey(wellknown.XBackendGVK.Group, wellknown.XBackendGVK.Kind, backend.Namespace, backend.Name),
+		Name: name,
 		Kind: &api.Backend_Static{Static: &api.StaticBackend{
 			Host: string(backend.Spec.ExternalHostname.Hostname),
 			Port: int32(backend.Spec.Port.Port),

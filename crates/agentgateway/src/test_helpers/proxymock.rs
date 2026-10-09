@@ -1110,6 +1110,7 @@ impl TestBind {
 					name: addr.to_string().into(),
 					namespace: Default::default(),
 					section: None,
+					kind: None,
 				}),
 				inheritance: Default::default(),
 				policy: v.into(),

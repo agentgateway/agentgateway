@@ -1351,6 +1351,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 			name: strng::literal!("dynamic"),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		}),
 		policy: BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(

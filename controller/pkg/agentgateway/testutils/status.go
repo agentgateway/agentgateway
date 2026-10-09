@@ -60,7 +60,10 @@ func (t *TestStatusQueue) dump() []crd.IstioKind {
 		if r := gocmp.Compare(a.Namespace, b.Namespace); r != 0 {
 			return r
 		}
-		return gocmp.Compare(a.Name, b.Name)
+		if r := gocmp.Compare(a.Name, b.Name); r != 0 {
+			return r
+		}
+		return gocmp.Compare(a.Kind, b.Kind)
 	})
 	return objs
 }
