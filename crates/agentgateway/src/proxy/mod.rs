@@ -64,6 +64,7 @@ impl ProxyError {
 			ProxyError::NoHealthyEndpoints
 			| ProxyError::InvalidBackendType
 			| ProxyError::DnsResolution
+			| ProxyError::DynamicBackendLoopback
 			| ProxyError::NoValidBackends
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
@@ -196,6 +197,8 @@ pub enum ProxyError {
 	BackendDoesNotExist,
 	#[error("backends required DNS resolution which failed")]
 	DnsResolution,
+	#[error("dynamic backend resolved to a loopback address")]
+	DynamicBackendLoopback,
 	#[error("failed to apply filters: {0}")]
 	FilterError(#[from] http::filters::Error),
 	#[error("policy failed: {0}")]
@@ -442,6 +445,7 @@ impl ProxyError {
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::DynamicBackendLoopback => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoHealthyEndpoints => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallFailed(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::UpstreamCallTimeout => StatusCode::GATEWAY_TIMEOUT,

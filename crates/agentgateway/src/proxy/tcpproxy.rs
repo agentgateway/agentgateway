@@ -251,6 +251,7 @@ impl TCPProxy {
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
 				},
+				deny_loopback: matches!(selected_backend.backend.backend, Backend::Dynamic(_, _)),
 			})
 			.await?;
 		Ok(())

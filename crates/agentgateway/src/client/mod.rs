@@ -45,12 +45,14 @@ pub struct Call {
 	pub req: http::Request,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	pub deny_loopback: bool,
 }
 
 pub struct TCPCall {
 	pub source: Socket,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	pub deny_loopback: bool,
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
@@ -541,6 +543,15 @@ pub struct Config {
 	pub resolver_opts: ResolverOpts,
 }
 
+/// Rejects loopback destinations, checked after DNS resolution.
+fn check_not_loopback(dest: SocketAddr) -> Result<(), ProxyError> {
+	let ip = dest.ip().to_canonical();
+	if ip.is_loopback() || (ip.is_unspecified() && dest.port() != 0) {
+		return Err(ProxyError::DynamicBackendLoopback);
+	}
+	Ok(())
+}
+
 impl Client {
 	pub fn new(
 		cfg: &Config,
@@ -630,6 +641,7 @@ impl Client {
 					tcp,
 					max_connection_duration: None,
 				},
+				deny_loopback: false,
 			})
 			.await
 	}
@@ -640,12 +652,16 @@ impl Client {
 			source,
 			target,
 			connection,
+			deny_loopback,
 		} = call;
 
 		let dest = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
+		if deny_loopback {
+			check_not_loopback(dest)?;
+		}
 
 		let transport_name = connection.transport.name();
 		let target_name = target.to_string();
@@ -717,11 +733,15 @@ impl Client {
 			mut req,
 			target,
 			connection,
+			deny_loopback,
 		} = call;
 		async move {
 			let dest = connector
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await?;
+			if deny_loopback {
+				check_not_loopback(dest)?;
+			}
 			http::modify_req_uri(&mut req, |uri| {
 				let scheme = connection.transport.scheme();
 				// Strip the port from the hostname if its the default already

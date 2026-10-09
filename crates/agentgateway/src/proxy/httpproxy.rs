@@ -2217,7 +2217,12 @@ fn evaluate_dynamic_backend_target(
 	};
 	let target = Target::try_from(s.as_str())
 		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target {s:?}: {e}")))?;
-	Ok(target)
+	match target {
+		Target::Address(_) | Target::Hostname(_, _) => Ok(target),
+		Target::UnixSocket(_) => Err(ProxyError::ProcessingString(format!(
+			"dynamic backend target {s:?} must be a host:port"
+		))),
+	}
 }
 
 fn resolve_tunnel_backend_call(
@@ -3151,6 +3156,7 @@ async fn make_backend_call(
 				.as_ref()
 				.and_then(|h| h.max_connection_duration),
 		},
+		deny_loopback: matches!(backend, Backend::Dynamic(_, _)),
 	};
 	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
@@ -3905,9 +3911,27 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
-		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
+		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies,
+		evaluate_dynamic_backend_target, hop_by_hop_headers, resolved_workload_target_hostname,
+		select_service_target_port, spiffe_backend_alpns,
 	};
+
+	#[test]
+	fn dynamic_backend_target_expression_rejects_unix_socket() {
+		let request = ::http::Request::builder()
+			.uri("http://example.com")
+			.body(http::Body::empty())
+			.unwrap();
+		let executor = crate::cel::Executor::new_request(&request);
+		let expression = crate::cel::Expression::new_strict("'unix:/run/admin.sock'").unwrap();
+
+		let error = evaluate_dynamic_backend_target(&executor, &expression).unwrap_err();
+
+		assert_eq!(
+			error.to_string(),
+			"processing failed: dynamic backend target \"unix:/run/admin.sock\" must be a host:port"
+		);
+	}
 
 	#[test]
 	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
