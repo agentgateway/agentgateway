@@ -286,11 +286,17 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => InputExcludesCache,
+		AIProvider::Azure(p)
+			if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+				&& p.is_anthropic_model(request_model) =>
+		{
+			InputExcludesCache
+		},
 		AIProvider::Custom(_) => match provider_format {
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
 			_ => InputIncludesCache,
 		},
-		_ => InputIncludesCache, // openai, azure, gemini, copilot/vertex non-anthropic
+		_ => InputIncludesCache, // openai, azure non-anthropic, gemini, copilot/vertex non-anthropic
 	}
 }
 
