@@ -37,7 +37,7 @@ async fn webhook_fail_open_emits_single_metric() {
 	assert!(blocked.is_none(), "FailOpen must not block the request");
 	let entry = &log.take().unwrap()[0];
 	assert_eq!(entry.guard, "webhook");
-	assert_eq!(entry.action, "failOpen");
+	assert_eq!(entry.action, GuardrailAction::FailOpen);
 
 	let fail_open = client
 		.inputs
@@ -102,7 +102,7 @@ async fn audit_mode_records_allow_when_nothing_matches() {
 		&client,
 		None,
 		None,
-		Some(&mut false),
+		true,
 	)
 	.await
 	.unwrap();
@@ -146,7 +146,7 @@ async fn audit_mode_records_audit_and_passes_through_on_match() {
 		&client,
 		None,
 		None,
-		Some(&mut false),
+		true,
 	)
 	.await
 	.unwrap();
@@ -2528,7 +2528,7 @@ async fn regex_reject_records_guardrail_info() {
 	let entry = &log.take().unwrap()[0];
 	assert_eq!(entry.phase, "request");
 	assert_eq!(entry.guard, "regex");
-	assert_eq!(entry.action, "reject");
+	assert_eq!(entry.action, GuardrailAction::Reject);
 }
 
 #[test]

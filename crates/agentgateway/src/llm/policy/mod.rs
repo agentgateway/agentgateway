@@ -38,13 +38,6 @@ fn record_guardrail(
 	action: GuardrailAction,
 	detail: Option<GuardDetail>,
 ) {
-	let action = match action {
-		GuardrailAction::Allow => strng::literal!("allow"),
-		GuardrailAction::FailOpen => strng::literal!("failOpen"),
-		GuardrailAction::Audit => strng::literal!("audit"),
-		GuardrailAction::Mask => strng::literal!("mask"),
-		GuardrailAction::Reject => strng::literal!("reject"),
-	};
 	let Some(log) = log else { return };
 	log.mutate_or_default(|entries| {
 		entries.push(cel::GuardrailInfo {
@@ -53,6 +46,25 @@ fn record_guardrail(
 			action,
 			detail: detail.unwrap_or_default(),
 		});
+	});
+}
+
+/// Merge `new` into a log shared across many evaluations, such as a realtime connection.
+/// Keeps one entry per phase and guard with the most severe action seen, so a client that keeps
+/// tripping a guard cannot grow the log, and a reject stays visible in the access log.
+fn merge_most_severe_guardrails(log: &GuardrailLog, new: GuardrailLog) {
+	let Some(new) = new.take() else { return };
+	log.mutate_or_default(|entries| {
+		for e in new {
+			match entries
+				.iter_mut()
+				.find(|x| x.phase == e.phase && x.guard == e.guard)
+			{
+				Some(x) if e.action > x.action => *x = e,
+				Some(_) => {},
+				None => entries.push(e),
+			}
+		}
 	});
 }
 
@@ -582,6 +594,9 @@ impl PromptGuard {
 		let mut req = TextRequest {
 			content: text.to_string(),
 		};
+		// The connection log outlives every event; record this event separately and merge it in.
+		let event_log = GuardrailLog::default();
+		let mut blocked = None;
 		for g in &self.request {
 			match Policy::apply_single_request_guard(
 				g,
@@ -590,7 +605,7 @@ impl PromptGuard {
 				client,
 				claims.clone(),
 				original,
-				guardrail_log,
+				guardrail_log.map(|_| &event_log),
 			)
 			.await
 			{
@@ -603,7 +618,8 @@ impl PromptGuard {
 							.await
 							.map(|b| b.to_bytes())
 							.unwrap_or_else(|_| g.rejection.body.clone());
-						return Some(body);
+						blocked = Some(body);
+						break;
 					}
 					// The realtime path cannot rewrite the original WebSocket frame.
 				},
@@ -611,7 +627,8 @@ impl PromptGuard {
 					FailureMode::FailClosed => {
 						tracing::warn!("request guard error in realtime path, failing closed: {e}");
 						Policy::record_guardrail_trip(client, GuardrailPhase::Request, GuardrailAction::Reject);
-						return Some(g.rejection.body.clone());
+						blocked = Some(g.rejection.body.clone());
+						break;
 					},
 					FailureMode::FailOpen => {
 						tracing::warn!("request guard error in realtime path, failing open: {e}");
@@ -624,7 +641,10 @@ impl PromptGuard {
 				},
 			}
 		}
-		None
+		if let Some(log) = guardrail_log {
+			merge_most_severe_guardrails(log, event_log);
+		}
+		blocked
 	}
 
 	/// Returns `true` if there is at least one response guard configured.
@@ -665,7 +685,6 @@ impl PromptGuard {
 		http_headers: &HeaderMap,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
-		allow_recorded: &mut bool,
 	) -> anyhow::Result<(Option<StreamingGuardrailOutcome>, GuardrailAction)> {
 		if window.is_empty() {
 			return Ok((None, GuardrailAction::Allow));
@@ -680,7 +699,7 @@ impl PromptGuard {
 			client,
 			original,
 			guardrail_log,
-			Some(allow_recorded),
+			true,
 		)
 		.await?;
 		let streaming = match rejection {
@@ -1907,7 +1926,7 @@ impl Policy {
 				client,
 				original,
 				guardrail_log,
-				None,
+				false,
 			)
 			.await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
@@ -1926,13 +1945,13 @@ impl Policy {
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
 		guardrail_log: Option<&GuardrailLog>,
-		streaming_allow_recorded: Option<&mut bool>,
+		streaming: bool,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let (outcome, detail) =
 			match Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await
 			{
 				Err(e)
-					if streaming_allow_recorded.is_none()
+					if !streaming
 						&& guard.failure_mode() == FailureMode::FailOpen =>
 				{
 					tracing::warn!("response guard error, failing open: {e}");
@@ -1941,25 +1960,19 @@ impl Policy {
 				result => result?,
 			};
 
-		if streaming_allow_recorded.is_some() && matches!(outcome, GuardrailOutcome::Masked(_)) {
+		if streaming && matches!(outcome, GuardrailOutcome::Masked(_)) {
 			// Streaming cannot apply masking; do not report this as a passed check.
 			return Ok((GuardrailAction::Allow, None));
 		}
 
 		let (action, rejection) = Self::apply_response_guard_outcome(outcome, &guard.rejection, resp)?;
-		let record = match streaming_allow_recorded {
-			Some(recorded) if action == GuardrailAction::Allow => !std::mem::replace(recorded, true),
-			_ => true,
-		};
-		if record {
-			record_guardrail(
-				guardrail_log,
-				GuardrailPhase::Response,
-				guard.kind.name(),
-				action,
-				detail,
-			);
-		}
+		record_guardrail(
+			guardrail_log,
+			GuardrailPhase::Response,
+			guard.kind.name(),
+			action,
+			detail,
+		);
 		Ok((action, rejection))
 	}
 

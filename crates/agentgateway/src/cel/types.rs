@@ -32,6 +32,7 @@ use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::guardrails::McpGuardrailsDynamicMetadata;
 use crate::mcp::{MCPInfo, MCPTool, MCPView};
 use crate::proxy::dtrace;
+use crate::telemetry::metrics::GuardrailAction;
 use crate::serdes::schema;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
@@ -1465,8 +1466,8 @@ pub struct GuardrailInfo {
 	pub phase: Strng,
 	/// The guard kind that was evaluated, such as `bedrockGuardrails`.
 	pub guard: Strng,
-	/// The action the guardrail took (allow/mask/reject/audit/failOpen).
-	pub action: Strng,
+	/// The action the guardrail took.
+	pub action: GuardrailAction,
 	#[serde(flatten, default)]
 	#[dynamic(flatten)]
 	pub detail: GuardDetail,
@@ -1489,6 +1490,25 @@ pub struct GuardDetail {
 	/// only. Content-bearing fields (such as the matched text) are never included.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub assessments: Vec<serde_json::Value>,
+}
+
+impl DynamicType for GuardrailAction {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::String(
+			match self {
+				GuardrailAction::Allow => "allow",
+				GuardrailAction::FailOpen => "failOpen",
+				GuardrailAction::Audit => "audit",
+				GuardrailAction::Mask => "mask",
+				GuardrailAction::Reject => "reject",
+			}
+			.into(),
+		)
+	}
 }
 
 impl GuardrailInfo {
@@ -2551,7 +2571,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		guardrails: Some(vec![GuardrailInfo {
 			phase: "request".into(),
 			guard: "bedrockGuardrails".into(),
-			action: "reject".into(),
+			action: GuardrailAction::Reject,
 			detail: GuardDetail {
 				guardrail_id: Some("gr-abc123".into()),
 				guardrail_version: Some("1".into()),

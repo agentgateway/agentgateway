@@ -2145,6 +2145,7 @@ pub mod from_messages {
 		let mut last_token_at: Option<Instant> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut redacted_blocks: HashMap<i32, Vec<u8>> = HashMap::new();
+		let mut redacted_bytes = 0usize;
 		let mut pending_reasoning_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
@@ -2304,6 +2305,23 @@ pub mod from_messages {
 								},
 								// Redacted content is emitted as a single block once it is complete.
 								bedrock::ReasoningContentBlockDelta::RedactedContent(data) => {
+									// Fragments produce no output until the block stops, so bound what is held.
+									redacted_bytes += data.len();
+									if redacted_bytes > buffer_limit {
+										tracing::error!("bedrock redacted reasoning exceeded buffer limit");
+										redacted_blocks.clear();
+										redacted_bytes = 0;
+										return vec![(
+											"error",
+											serde_json::json!({
+												"type": "error",
+												"error": {
+													"type": "api_error",
+													"message": "Stream processing error"
+												}
+											}),
+										)];
+									}
 									redacted_blocks
 										.entry(delta.content_block_index)
 										.or_default()
@@ -2340,6 +2358,7 @@ pub mod from_messages {
 					// Emit the deferred start for redacted or empty reasoning blocks.
 					let content_block = if let Some(data) = redacted_blocks.remove(&stop.content_block_index)
 					{
+						redacted_bytes -= data.len();
 						Some(messages::ContentBlock::RedactedThinking {
 							data: base64::prelude::BASE64_STANDARD.encode(data),
 						})

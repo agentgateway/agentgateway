@@ -178,7 +178,7 @@
 |`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
 |`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
 |`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
-|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
+|`guardrails[].action`|enum|The action the guardrail took.<br>Possible values: `allow`, `failOpen`, `audit`, `mask`, `reject`.|
 |`guardrails[].guardrailId`|string|The configured guardrail identifier.|
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|

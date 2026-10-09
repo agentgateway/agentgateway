@@ -7,6 +7,9 @@ use crate::AIError;
 use crate::types::responses::typed as responses;
 
 pub(crate) const NAMESPACE_SEPARATOR: &str = "__";
+/// Namespace descriptions are copied onto every member; bound the total copied so a small
+/// request cannot expand into a huge upstream one.
+const MAX_COPIED_DESCRIPTION_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct OriginalTool {
@@ -47,6 +50,7 @@ impl NamespaceToolMap {
 
 	fn flatten_tools(&mut self, tools: &mut Option<Vec<responses::Tool>>) -> Result<(), AIError> {
 		if let Some(tools) = tools {
+			let mut copied_description_bytes = 0usize;
 			for tool in std::mem::take(tools) {
 				let responses::Tool::Namespace(namespace) = tool else {
 					tools.push(tool);
@@ -70,6 +74,10 @@ impl NamespaceToolMap {
 					// Keep the namespace's instructions visible after removing its container.
 					let mut description = function.description;
 					if !namespace.description.is_empty() {
+						copied_description_bytes += namespace.description.len();
+						if copied_description_bytes > MAX_COPIED_DESCRIPTION_BYTES {
+							return Err(AIError::RequestTooLarge);
+						}
 						let mut combined = namespace.description.clone();
 						if let Some(member) = description.as_ref().filter(|text| !text.is_empty()) {
 							combined.push_str("\n\n");

@@ -683,7 +683,7 @@ fn log_guardrails_binding() {
 	let entries = vec![crate::cel::GuardrailInfo {
 		phase: "request".into(),
 		guard: "bedrockGuardrails".into(),
-		action: "reject".into(),
+		action: crate::telemetry::metrics::GuardrailAction::Reject,
 		detail: crate::cel::GuardDetail {
 			guardrail_id: Some("gr-1".into()),
 			guardrail_version: Some("3".into()),

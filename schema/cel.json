@@ -1218,8 +1218,15 @@
             "type": "string"
           },
           "action": {
-            "description": "The action the guardrail took (allow/mask/reject/audit/failOpen).",
-            "type": "string"
+            "description": "The action the guardrail took.",
+            "type": "string",
+            "enum": [
+              "allow",
+              "failOpen",
+              "audit",
+              "mask",
+              "reject"
+            ]
           },
           "guardrailId": {
             "description": "The configured guardrail identifier.",

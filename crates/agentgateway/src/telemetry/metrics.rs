@@ -52,13 +52,17 @@ pub enum GuardrailPhase {
 	Ord,
 	prometheus_client::encoding::EncodeLabelValue,
 	Default,
+	serde::Serialize,
+	serde::Deserialize,
 )]
-// Ordered by severity so streaming guards can retain the strongest window result.
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+// Ordered by severity so guards can retain the most severe result.
 pub enum GuardrailAction {
 	#[default]
 	Allow,
 	FailOpen,
-	/// Guard ran in observe mode: the verdict was recorded but not enforced.
+	// Guard ran in observe mode: the verdict was recorded but not enforced.
 	Audit,
 	Mask,
 	Reject,
