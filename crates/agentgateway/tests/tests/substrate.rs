@@ -47,13 +47,14 @@ struct IngressHandler {
 #[derive(Clone)]
 struct EgressHandler {
 	uid: &'static str,
-	state: ActorState,
+	state: Option<i32>,
 	error: Option<tonic::Code>,
 }
 
 #[derive(Clone)]
 struct CredentialEgressHandler {
 	policy: Result<EgressPolicy, tonic::Status>,
+	state: ActorState,
 }
 
 #[async_trait::async_trait]
@@ -73,7 +74,7 @@ impl ateapimock::Handler for CredentialEgressHandler {
 				..Default::default()
 			}),
 			status: Some(ActorStatus {
-				state: ActorState::Running as i32,
+				state: self.state as i32,
 				worker_assignment: None,
 			}),
 		})
@@ -137,8 +138,8 @@ impl ateapimock::Handler for EgressHandler {
 				uid: self.uid.to_owned(),
 				..Default::default()
 			}),
-			status: Some(ActorStatus {
-				state: self.state as i32,
+			status: self.state.map(|state| ActorStatus {
+				state,
 				worker_assignment: None,
 			}),
 		})
@@ -1720,6 +1721,7 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 async fn substrate_egress_replaces_only_requested_credentials(
 	#[case] https: bool,
 	#[case] placeholder: bool,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 ) {
 	let (upstream, backend_tls) = if https {
 		let (upstream, certs) = tls_mock().await;
@@ -1793,6 +1795,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	};
 	let api = ateapimock::AteApiMock::new(move || CredentialEgressHandler {
 		policy: Ok(policy.clone()),
+		state,
 	})
 	.spawn()
 	.await;
@@ -1937,11 +1940,13 @@ async fn substrate_egress_replaces_only_requested_credentials(
 // even when the HTTPS listener is a more specific static listener match.
 async fn substrate_tls_gateway(
 	policy: Result<EgressPolicy, tonic::Status>,
+	state: ActorState,
 	upstream: std::net::SocketAddr,
 	root: Option<Vec<u8>>,
 ) -> (TestBind, agentgateway::test_helpers::MockInstance) {
 	let api = ateapimock::AteApiMock::new(move || CredentialEgressHandler {
 		policy: policy.clone(),
+		state,
 	})
 	.spawn()
 	.await;
@@ -2037,6 +2042,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	#[case] intercept: bool,
 	#[case] allowed_request: bool,
 	#[case] use_connect_ip: bool,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 ) {
 	let (upstream, certs) = tls_mock().await;
 	let port = upstream.address().port();
@@ -2072,6 +2078,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	};
 	let (gateway, _api) = substrate_tls_gateway(
 		Ok(policy),
+		state,
 		*upstream.address(),
 		Some(certs.root_cert.pem().into_bytes()),
 	)
@@ -2210,6 +2217,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			rules: vec![rule],
 			..Default::default()
 		}),
+		ActorState::Running,
 		address,
 		root,
 	)
@@ -2378,6 +2386,7 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 		};
 		let (mut gateway, _api) = substrate_tls_gateway(
 			Ok(policy),
+			ActorState::Running,
 			address,
 			Some(certs.root_cert.pem().into_bytes()),
 		)
@@ -2523,9 +2532,13 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 #[case("missing-sni")]
 #[case("missing-https-listener")]
 #[case("api-unavailable")]
+#[case("missing-policy")]
 #[case("static-backend")]
 #[tokio::test]
-async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[case] kind: &str) {
+async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(
+	#[case] kind: &str,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
+) {
 	let (upstream, _certs) = tls_mock().await;
 	let raw_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let address = if matches!(kind, "opaque" | "server-first" | "static-backend") {
@@ -2547,13 +2560,15 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 	};
 	let policy = if kind == "api-unavailable" {
 		Err(tonic::Status::unavailable("control API unavailable"))
+	} else if kind == "missing-policy" {
+		Err(tonic::Status::not_found("actor has no egress policy"))
 	} else {
 		Ok(EgressPolicy {
 			rules: vec![rule],
 			..Default::default()
 		})
 	};
-	let (gateway, _api) = substrate_tls_gateway(policy, address, None).await;
+	let (gateway, _api) = substrate_tls_gateway(policy, state, address, None).await;
 	let gateway = if kind == "static-backend" {
 		gateway.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
@@ -2752,6 +2767,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 			Traceparents::new(
 				CredentialEgressHandler {
 					policy: Ok(policy.clone()),
+					state: ActorState::Running,
 				},
 				seen.clone(),
 			)
@@ -2898,7 +2914,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 
 #[tokio::test]
 async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time() {
-	let running = ActorState::Running;
+	let running = Some(ActorState::Running as i32);
 	assert_eq!(
 		substrate_egress_connect_status(
 			EgressHandler {
@@ -2920,19 +2936,6 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				error: None
 			},
 			"spiffe://substrate-actor.local/actor/demo/my-actor",
-			b"",
-		)
-		.await,
-		StatusCode::FORBIDDEN,
-	);
-	assert_eq!(
-		substrate_egress_connect_status(
-			EgressHandler {
-				uid: "uid-1",
-				state: ActorState::Suspended,
-				error: None
-			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -2967,8 +2970,42 @@ async fn substrate_egress_reports_an_unreachable_actor_service_as_unavailable() 
 	);
 }
 
+#[rstest::rstest]
+#[case::unspecified(Some(ActorState::Unspecified as i32))]
+#[case::suspending(Some(ActorState::Suspending as i32))]
+#[case::suspended(Some(ActorState::Suspended as i32))]
+#[case::pausing(Some(ActorState::Pausing as i32))]
+#[case::paused(Some(ActorState::Paused as i32))]
+#[case::crashed(Some(ActorState::Crashed as i32))]
+#[case::deleting(Some(ActorState::Deleting as i32))]
+#[case::unknown(Some(999))]
+#[case::missing_status(None)]
 #[tokio::test]
-async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection() {
+async fn substrate_egress_rejects_actor_states_without_worker_placement(
+	#[case] state: Option<i32>,
+) {
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state,
+				error: None,
+			},
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::FORBIDDEN,
+	);
+}
+
+#[rstest::rstest]
+#[case::running(ActorState::Running)]
+#[case::resuming(ActorState::Resuming)]
+#[tokio::test]
+async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection(
+	#[case] state: ActorState,
+) {
 	for payload in [
 		b"GET / HTTP/1.1\r\nHost: allowed.example\r\n\r\n".as_slice(),
 		b"\x16\x03\x03\x00\x01\x00".as_slice(),
@@ -2978,7 +3015,7 @@ async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection(
 			substrate_egress_connect_status(
 				EgressHandler {
 					uid: "uid-1",
-					state: ActorState::Running,
+					state: Some(state as i32),
 					error: None
 				},
 				"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",

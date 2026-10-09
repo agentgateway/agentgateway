@@ -1,3 +1,4 @@
+use protos::ateapi::ActorState;
 use tonic::Code;
 use x509_parser::extensions::GeneralName;
 
@@ -134,10 +135,15 @@ impl EgressActorResolution {
 				);
 			},
 		};
-		if current.status.as_ref().map(|status| status.state)
-			!= Some(protos::ateapi::ActorState::Running as i32)
-		{
-			return Err(ProxyError::SubstrateEgressDenied("actor is not running".to_owned()).into());
+		// RESUMING is persisted with the worker assignment. Booting or restoring
+		// workloads may need egress before their wakeup probe makes them RUNNING.
+		if !matches!(
+			current.status.as_ref().map(|status| status.state()),
+			Some(ActorState::Running | ActorState::Resuming)
+		) {
+			return Err(
+				ProxyError::SubstrateEgressDenied("actor is not running or resuming".to_owned()).into(),
+			);
 		}
 		Ok(ActorIdentity {
 			atespace: actor.atespace.clone(),
