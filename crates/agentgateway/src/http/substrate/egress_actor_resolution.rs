@@ -1,6 +1,6 @@
-use tonic::Code;
 use x509_parser::extensions::GeneralName;
 
+use super::egress::policy_call_error;
 use super::{ActorRef, TRACE_POLICY_KIND, valid_resource_name};
 use crate::http::Request;
 use crate::proxy::httpproxy::PolicyClient;
@@ -119,20 +119,7 @@ impl EgressActorResolution {
 		.await;
 		let current = match result {
 			Ok(response) => response.into_inner(),
-			Err(status) if matches!(status.code(), Code::Unavailable | Code::DeadlineExceeded) => {
-				return Err(
-					ProxyError::SubstrateEgressUnavailable(format!(
-						"actor identity check unavailable: {status}"
-					))
-					.into(),
-				);
-			},
-			Err(status) => {
-				return Err(
-					ProxyError::SubstrateEgressDenied(format!("actor identity check denied: {status}"))
-						.into(),
-				);
-			},
+			Err(status) => return Err(policy_call_error("actor identity check", &status).into()),
 		};
 		if current.status.as_ref().map(|status| status.state)
 			!= Some(protos::ateapi::ActorState::Running as i32)
