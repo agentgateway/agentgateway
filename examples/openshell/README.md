@@ -160,6 +160,128 @@ grpcRoute:
 
 ## Verify the integration
 
+### Manual verification
+
+First, confirm that the cluster CNI enforces both ingress and egress
+`NetworkPolicy`. Create two temporary pods and verify connectivity before
+applying a policy:
+
+```bash
+kubectl create namespace openshell-policy-probe
+kubectl run policy-server -n openshell-policy-probe \
+  --image=busybox:1.37.0 --labels=app=policy-server \
+  --command -- sh -c \
+  'mkdir -p /www && echo ready >/www/index.html && httpd -f -p 8080 -h /www'
+kubectl run policy-client -n openshell-policy-probe \
+  --image=busybox:1.37.0 --labels=app=policy-client \
+  --command -- sleep 3600
+kubectl expose pod policy-server -n openshell-policy-probe \
+  --port=8080 --target-port=8080
+kubectl wait --for=condition=Ready pod/policy-server pod/policy-client \
+  -n openshell-policy-probe --timeout=120s
+kubectl exec -n openshell-policy-probe policy-client -- \
+  wget -q -T 5 -O - http://policy-server:8080
+```
+
+The final command prints `ready`. Apply an ingress-deny policy:
+
+```bash
+kubectl apply -n openshell-policy-probe -f - <<'EOF'
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-server-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: policy-server
+  policyTypes:
+    - Ingress
+EOF
+
+sleep 5
+kubectl exec -n openshell-policy-probe policy-client -- \
+  wget -q -T 5 -O - http://policy-server:8080
+```
+
+The request must time out or otherwise fail. Remove the ingress policy and
+confirm that connectivity recovers before testing egress:
+
+```bash
+kubectl delete networkpolicy deny-server-ingress -n openshell-policy-probe
+sleep 5
+kubectl exec -n openshell-policy-probe policy-client -- \
+  wget -q -T 5 -O - http://policy-server:8080
+
+kubectl apply -n openshell-policy-probe -f - <<'EOF'
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-client-egress
+spec:
+  podSelector:
+    matchLabels:
+      app: policy-client
+  policyTypes:
+    - Egress
+EOF
+
+sleep 5
+kubectl exec -n openshell-policy-probe policy-client -- \
+  wget -q -T 5 -O - http://policy-server:8080
+```
+
+The first request prints `ready`; the request after applying the egress policy
+must fail. Remove the probe namespace:
+
+```bash
+kubectl delete namespace openshell-policy-probe
+```
+
+Wait for the OpenShell Gateway API resources and workloads:
+
+```bash
+kubectl wait --for=condition=Programmed gateway/openshell-ingress \
+  -n openshell --timeout=5m
+kubectl wait \
+  --for=jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}'=True \
+  grpcroute/openshell -n openshell --timeout=5m
+kubectl wait \
+  --for=jsonpath='{.status.parents[0].conditions[?(@.type=="ResolvedRefs")].status}'=True \
+  grpcroute/openshell -n openshell --timeout=5m
+kubectl rollout status deployment/openshell-ingress \
+  -n openshell --timeout=5m
+kubectl rollout status statefulset/openshell \
+  -n openshell --timeout=5m
+```
+
+In one terminal, forward the agentgateway proxy Service:
+
+```bash
+kubectl port-forward -n openshell service/openshell-ingress 18080:80
+```
+
+In a second terminal, use a temporary configuration directory so the test does
+not change existing OpenShell gateway registrations:
+
+```bash
+export XDG_CONFIG_HOME="$(mktemp -d)"
+openshell gateway add http://127.0.0.1:18080 \
+  --local --name agentgateway-example
+openshell status
+
+openshell sandbox create \
+  --name agw-example --detach -- sleep 3600
+openshell sandbox exec agw-example \
+  --no-login-shell -- sh -c 'printf agentgateway-openshell'
+openshell sandbox delete agw-example
+```
+
+The exec command prints `agentgateway-openshell`. Stop the port-forward with
+Control-C when testing is complete.
+
+### Automated verification
+
 Run the smoke test with the matching OpenShell CLI on `PATH`:
 
 ```bash
