@@ -1271,42 +1271,93 @@ spec:
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                                is used.
+                                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                                priority. If unspecified, no client certificate is used.
                                                               items:
                                                                 description: |-
-                                                                  References a same-namespace credential
-                                                                  Set only `name` for a Kubernetes Secret
+                                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                                 properties:
+                                                                  file:
+                                                                    description: Paths
+                                                                      on the agentgateway
+                                                                      pod's local
+                                                                      filesystem.
+                                                                      Required when
+                                                                      `kind` is `File`.
+                                                                    properties:
+                                                                      cert:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate
+                                                                          file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      key:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate's
+                                                                          private
+                                                                          key file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      root:
+                                                                        description: |-
+                                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                                          If unset, the system's trusted certificates are used.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                    required:
+                                                                    - cert
+                                                                    - key
+                                                                    type: object
                                                                   group:
                                                                     description: API
                                                                       group of the
                                                                       referenced credential;
                                                                       empty selects
                                                                       the core API
-                                                                      group
+                                                                      group.
                                                                     type: string
                                                                   kind:
                                                                     description: Kind
                                                                       of the referenced
                                                                       credential;
                                                                       empty defaults
-                                                                      to `Secret`
+                                                                      to `Secret`.
+                                                                      `File` reads
+                                                                      from `file`.
                                                                     type: string
                                                                   name:
                                                                     description: Name
                                                                       of the referenced
-                                                                      credential
+                                                                      credential.
+                                                                      Required unless
+                                                                      `kind` is `File`.
                                                                     maxLength: 253
                                                                     minLength: 1
                                                                     type: string
-                                                                required:
-                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
+                                                                - message: kind File
+                                                                    requires file
+                                                                    and no name/group;
+                                                                    any other kind
+                                                                    requires name
+                                                                    and no file
+                                                                  rule: 'has(self.kind)
+                                                                    && self.kind ==
+                                                                    ''File'' ? (has(self.file)
+                                                                    && !has(self.name)
+                                                                    && !has(self.group))
+                                                                    : (has(self.name)
+                                                                    && !has(self.file))'
                                                                 - message: custom
                                                                     credential refs
                                                                     must set both
@@ -1316,8 +1367,9 @@ spec:
                                                                     == 0) ? (!has(self.kind)
                                                                     || size(self.kind)
                                                                     == 0 || self.kind
-                                                                    == ''Secret'')
-                                                                    : (has(self.kind)
+                                                                    == ''Secret''
+                                                                    || self.kind ==
+                                                                    ''File'') : (has(self.kind)
                                                                     && size(self.kind)
                                                                     > 0)'
                                                               maxItems: 1
@@ -1833,42 +1885,93 @@ spec:
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                                is used.
+                                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                                priority. If unspecified, no client certificate is used.
                                                               items:
                                                                 description: |-
-                                                                  References a same-namespace credential
-                                                                  Set only `name` for a Kubernetes Secret
+                                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                                 properties:
+                                                                  file:
+                                                                    description: Paths
+                                                                      on the agentgateway
+                                                                      pod's local
+                                                                      filesystem.
+                                                                      Required when
+                                                                      `kind` is `File`.
+                                                                    properties:
+                                                                      cert:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate
+                                                                          file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      key:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate's
+                                                                          private
+                                                                          key file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      root:
+                                                                        description: |-
+                                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                                          If unset, the system's trusted certificates are used.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                    required:
+                                                                    - cert
+                                                                    - key
+                                                                    type: object
                                                                   group:
                                                                     description: API
                                                                       group of the
                                                                       referenced credential;
                                                                       empty selects
                                                                       the core API
-                                                                      group
+                                                                      group.
                                                                     type: string
                                                                   kind:
                                                                     description: Kind
                                                                       of the referenced
                                                                       credential;
                                                                       empty defaults
-                                                                      to `Secret`
+                                                                      to `Secret`.
+                                                                      `File` reads
+                                                                      from `file`.
                                                                     type: string
                                                                   name:
                                                                     description: Name
                                                                       of the referenced
-                                                                      credential
+                                                                      credential.
+                                                                      Required unless
+                                                                      `kind` is `File`.
                                                                     maxLength: 253
                                                                     minLength: 1
                                                                     type: string
-                                                                required:
-                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
+                                                                - message: kind File
+                                                                    requires file
+                                                                    and no name/group;
+                                                                    any other kind
+                                                                    requires name
+                                                                    and no file
+                                                                  rule: 'has(self.kind)
+                                                                    && self.kind ==
+                                                                    ''File'' ? (has(self.file)
+                                                                    && !has(self.name)
+                                                                    && !has(self.group))
+                                                                    : (has(self.name)
+                                                                    && !has(self.file))'
                                                                 - message: custom
                                                                     credential refs
                                                                     must set both
@@ -1878,8 +1981,9 @@ spec:
                                                                     == 0) ? (!has(self.kind)
                                                                     || size(self.kind)
                                                                     == 0 || self.kind
-                                                                    == ''Secret'')
-                                                                    : (has(self.kind)
+                                                                    == ''Secret''
+                                                                    || self.kind ==
+                                                                    ''File'') : (has(self.kind)
                                                                     && size(self.kind)
                                                                     > 0)'
                                                               maxItems: 1
@@ -2415,42 +2519,93 @@ spec:
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                                is used.
+                                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                                priority. If unspecified, no client certificate is used.
                                                               items:
                                                                 description: |-
-                                                                  References a same-namespace credential
-                                                                  Set only `name` for a Kubernetes Secret
+                                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                                 properties:
+                                                                  file:
+                                                                    description: Paths
+                                                                      on the agentgateway
+                                                                      pod's local
+                                                                      filesystem.
+                                                                      Required when
+                                                                      `kind` is `File`.
+                                                                    properties:
+                                                                      cert:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate
+                                                                          file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      key:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate's
+                                                                          private
+                                                                          key file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      root:
+                                                                        description: |-
+                                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                                          If unset, the system's trusted certificates are used.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                    required:
+                                                                    - cert
+                                                                    - key
+                                                                    type: object
                                                                   group:
                                                                     description: API
                                                                       group of the
                                                                       referenced credential;
                                                                       empty selects
                                                                       the core API
-                                                                      group
+                                                                      group.
                                                                     type: string
                                                                   kind:
                                                                     description: Kind
                                                                       of the referenced
                                                                       credential;
                                                                       empty defaults
-                                                                      to `Secret`
+                                                                      to `Secret`.
+                                                                      `File` reads
+                                                                      from `file`.
                                                                     type: string
                                                                   name:
                                                                     description: Name
                                                                       of the referenced
-                                                                      credential
+                                                                      credential.
+                                                                      Required unless
+                                                                      `kind` is `File`.
                                                                     maxLength: 253
                                                                     minLength: 1
                                                                     type: string
-                                                                required:
-                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
+                                                                - message: kind File
+                                                                    requires file
+                                                                    and no name/group;
+                                                                    any other kind
+                                                                    requires name
+                                                                    and no file
+                                                                  rule: 'has(self.kind)
+                                                                    && self.kind ==
+                                                                    ''File'' ? (has(self.file)
+                                                                    && !has(self.name)
+                                                                    && !has(self.group))
+                                                                    : (has(self.name)
+                                                                    && !has(self.file))'
                                                                 - message: custom
                                                                     credential refs
                                                                     must set both
@@ -2460,8 +2615,9 @@ spec:
                                                                     == 0) ? (!has(self.kind)
                                                                     || size(self.kind)
                                                                     == 0 || self.kind
-                                                                    == ''Secret'')
-                                                                    : (has(self.kind)
+                                                                    == ''Secret''
+                                                                    || self.kind ==
+                                                                    ''File'') : (has(self.kind)
                                                                     && size(self.kind)
                                                                     > 0)'
                                                               maxItems: 1
@@ -4238,42 +4394,93 @@ spec:
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                                is used.
+                                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                                priority. If unspecified, no client certificate is used.
                                                               items:
                                                                 description: |-
-                                                                  References a same-namespace credential
-                                                                  Set only `name` for a Kubernetes Secret
+                                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                                 properties:
+                                                                  file:
+                                                                    description: Paths
+                                                                      on the agentgateway
+                                                                      pod's local
+                                                                      filesystem.
+                                                                      Required when
+                                                                      `kind` is `File`.
+                                                                    properties:
+                                                                      cert:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate
+                                                                          file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      key:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate's
+                                                                          private
+                                                                          key file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      root:
+                                                                        description: |-
+                                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                                          If unset, the system's trusted certificates are used.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                    required:
+                                                                    - cert
+                                                                    - key
+                                                                    type: object
                                                                   group:
                                                                     description: API
                                                                       group of the
                                                                       referenced credential;
                                                                       empty selects
                                                                       the core API
-                                                                      group
+                                                                      group.
                                                                     type: string
                                                                   kind:
                                                                     description: Kind
                                                                       of the referenced
                                                                       credential;
                                                                       empty defaults
-                                                                      to `Secret`
+                                                                      to `Secret`.
+                                                                      `File` reads
+                                                                      from `file`.
                                                                     type: string
                                                                   name:
                                                                     description: Name
                                                                       of the referenced
-                                                                      credential
+                                                                      credential.
+                                                                      Required unless
+                                                                      `kind` is `File`.
                                                                     maxLength: 253
                                                                     minLength: 1
                                                                     type: string
-                                                                required:
-                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
+                                                                - message: kind File
+                                                                    requires file
+                                                                    and no name/group;
+                                                                    any other kind
+                                                                    requires name
+                                                                    and no file
+                                                                  rule: 'has(self.kind)
+                                                                    && self.kind ==
+                                                                    ''File'' ? (has(self.file)
+                                                                    && !has(self.name)
+                                                                    && !has(self.group))
+                                                                    : (has(self.name)
+                                                                    && !has(self.file))'
                                                                 - message: custom
                                                                     credential refs
                                                                     must set both
@@ -4283,8 +4490,9 @@ spec:
                                                                     == 0) ? (!has(self.kind)
                                                                     || size(self.kind)
                                                                     == 0 || self.kind
-                                                                    == ''Secret'')
-                                                                    : (has(self.kind)
+                                                                    == ''Secret''
+                                                                    || self.kind ==
+                                                                    ''File'') : (has(self.kind)
                                                                     && size(self.kind)
                                                                     > 0)'
                                                               maxItems: 1
@@ -4800,42 +5008,93 @@ spec:
                                                             mtlsCertificateRef:
                                                               description: |-
                                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                                is used.
+                                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                                priority. If unspecified, no client certificate is used.
                                                               items:
                                                                 description: |-
-                                                                  References a same-namespace credential
-                                                                  Set only `name` for a Kubernetes Secret
+                                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                                 properties:
+                                                                  file:
+                                                                    description: Paths
+                                                                      on the agentgateway
+                                                                      pod's local
+                                                                      filesystem.
+                                                                      Required when
+                                                                      `kind` is `File`.
+                                                                    properties:
+                                                                      cert:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate
+                                                                          file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      key:
+                                                                        description: Path
+                                                                          to the client
+                                                                          certificate's
+                                                                          private
+                                                                          key file.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                      root:
+                                                                        description: |-
+                                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                                          If unset, the system's trusted certificates are used.
+                                                                        maxLength: 1024
+                                                                        minLength: 1
+                                                                        type: string
+                                                                    required:
+                                                                    - cert
+                                                                    - key
+                                                                    type: object
                                                                   group:
                                                                     description: API
                                                                       group of the
                                                                       referenced credential;
                                                                       empty selects
                                                                       the core API
-                                                                      group
+                                                                      group.
                                                                     type: string
                                                                   kind:
                                                                     description: Kind
                                                                       of the referenced
                                                                       credential;
                                                                       empty defaults
-                                                                      to `Secret`
+                                                                      to `Secret`.
+                                                                      `File` reads
+                                                                      from `file`.
                                                                     type: string
                                                                   name:
                                                                     description: Name
                                                                       of the referenced
-                                                                      credential
+                                                                      credential.
+                                                                      Required unless
+                                                                      `kind` is `File`.
                                                                     maxLength: 253
                                                                     minLength: 1
                                                                     type: string
-                                                                required:
-                                                                - name
                                                                 type: object
                                                                 x-kubernetes-map-type: atomic
                                                                 x-kubernetes-validations:
+                                                                - message: kind File
+                                                                    requires file
+                                                                    and no name/group;
+                                                                    any other kind
+                                                                    requires name
+                                                                    and no file
+                                                                  rule: 'has(self.kind)
+                                                                    && self.kind ==
+                                                                    ''File'' ? (has(self.file)
+                                                                    && !has(self.name)
+                                                                    && !has(self.group))
+                                                                    : (has(self.name)
+                                                                    && !has(self.file))'
                                                                 - message: custom
                                                                     credential refs
                                                                     must set both
@@ -4845,8 +5104,9 @@ spec:
                                                                     == 0) ? (!has(self.kind)
                                                                     || size(self.kind)
                                                                     == 0 || self.kind
-                                                                    == ''Secret'')
-                                                                    : (has(self.kind)
+                                                                    == ''Secret''
+                                                                    || self.kind ==
+                                                                    ''File'') : (has(self.kind)
                                                                     && size(self.kind)
                                                                     > 0)'
                                                               maxItems: 1
@@ -8515,41 +8775,77 @@ spec:
                                       mtlsCertificateRef:
                                         description: |-
                                           Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                          referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                          optional `ca.cert`, if present, verifies the server certificate, but
-                                          `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                          is used.
+                                          referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                          files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                          present, verifies the server certificate, but `caCertificateRefs` takes
+                                          priority. If unspecified, no client certificate is used.
                                         items:
                                           description: |-
-                                            References a same-namespace credential
-                                            Set only `name` for a Kubernetes Secret
+                                            References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                            credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                           properties:
+                                            file:
+                                              description: Paths on the agentgateway
+                                                pod's local filesystem. Required when
+                                                `kind` is `File`.
+                                              properties:
+                                                cert:
+                                                  description: Path to the client
+                                                    certificate file.
+                                                  maxLength: 1024
+                                                  minLength: 1
+                                                  type: string
+                                                key:
+                                                  description: Path to the client
+                                                    certificate's private key file.
+                                                  maxLength: 1024
+                                                  minLength: 1
+                                                  type: string
+                                                root:
+                                                  description: |-
+                                                    Path to a CA bundle file used to verify the backend's certificate.
+                                                    If unset, the system's trusted certificates are used.
+                                                  maxLength: 1024
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - cert
+                                              - key
+                                              type: object
                                             group:
                                               description: API group of the referenced
                                                 credential; empty selects the core
-                                                API group
+                                                API group.
                                               type: string
                                             kind:
                                               description: Kind of the referenced
-                                                credential; empty defaults to `Secret`
+                                                credential; empty defaults to `Secret`.
+                                                `File` reads from `file`.
                                               type: string
                                             name:
                                               description: Name of the referenced
-                                                credential
+                                                credential. Required unless `kind`
+                                                is `File`.
                                               maxLength: 253
                                               minLength: 1
                                               type: string
-                                          required:
-                                          - name
                                           type: object
                                           x-kubernetes-map-type: atomic
                                           x-kubernetes-validations:
+                                          - message: kind File requires file and no
+                                              name/group; any other kind requires
+                                              name and no file
+                                            rule: 'has(self.kind) && self.kind ==
+                                              ''File'' ? (has(self.file) && !has(self.name)
+                                              && !has(self.group)) : (has(self.name)
+                                              && !has(self.file))'
                                           - message: custom credential refs must set
                                               both group and kind
                                             rule: '(!has(self.group) || size(self.group)
                                               == 0) ? (!has(self.kind) || size(self.kind)
-                                              == 0 || self.kind == ''Secret'') : (has(self.kind)
-                                              && size(self.kind) > 0)'
+                                              == 0 || self.kind == ''Secret'' || self.kind
+                                              == ''File'') : (has(self.kind) && size(self.kind)
+                                              > 0)'
                                         maxItems: 1
                                         type: array
                                         x-kubernetes-list-type: atomic
@@ -11868,40 +12164,76 @@ spec:
                                     mtlsCertificateRef:
                                       description: |-
                                         Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                        referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                        optional `ca.cert`, if present, verifies the server certificate, but
-                                        `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                        is used.
+                                        referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                        files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                        present, verifies the server certificate, but `caCertificateRefs` takes
+                                        priority. If unspecified, no client certificate is used.
                                       items:
                                         description: |-
-                                          References a same-namespace credential
-                                          Set only `name` for a Kubernetes Secret
+                                          References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                          credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                         properties:
+                                          file:
+                                            description: Paths on the agentgateway
+                                              pod's local filesystem. Required when
+                                              `kind` is `File`.
+                                            properties:
+                                              cert:
+                                                description: Path to the client certificate
+                                                  file.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                              key:
+                                                description: Path to the client certificate's
+                                                  private key file.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                              root:
+                                                description: |-
+                                                  Path to a CA bundle file used to verify the backend's certificate.
+                                                  If unset, the system's trusted certificates are used.
+                                                maxLength: 1024
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - cert
+                                            - key
+                                            type: object
                                           group:
                                             description: API group of the referenced
                                               credential; empty selects the core API
-                                              group
+                                              group.
                                             type: string
                                           kind:
                                             description: Kind of the referenced credential;
-                                              empty defaults to `Secret`
+                                              empty defaults to `Secret`. `File` reads
+                                              from `file`.
                                             type: string
                                           name:
-                                            description: Name of the referenced credential
+                                            description: Name of the referenced credential.
+                                              Required unless `kind` is `File`.
                                             maxLength: 253
                                             minLength: 1
                                             type: string
-                                        required:
-                                        - name
                                         type: object
                                         x-kubernetes-map-type: atomic
                                         x-kubernetes-validations:
+                                        - message: kind File requires file and no
+                                            name/group; any other kind requires name
+                                            and no file
+                                          rule: 'has(self.kind) && self.kind == ''File''
+                                            ? (has(self.file) && !has(self.name) &&
+                                            !has(self.group)) : (has(self.name) &&
+                                            !has(self.file))'
                                         - message: custom credential refs must set
                                             both group and kind
                                           rule: '(!has(self.group) || size(self.group)
                                             == 0) ? (!has(self.kind) || size(self.kind)
-                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
-                                            && size(self.kind) > 0)'
+                                            == 0 || self.kind == ''Secret'' || self.kind
+                                            == ''File'') : (has(self.kind) && size(self.kind)
+                                            > 0)'
                                       maxItems: 1
                                       type: array
                                       x-kubernetes-list-type: atomic
@@ -12772,43 +13104,79 @@ spec:
                                             mtlsCertificateRef:
                                               description: |-
                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                is used.
+                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                priority. If unspecified, no client certificate is used.
                                               items:
                                                 description: |-
-                                                  References a same-namespace credential
-                                                  Set only `name` for a Kubernetes Secret
+                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
+                                                  file:
+                                                    description: Paths on the agentgateway
+                                                      pod's local filesystem. Required
+                                                      when `kind` is `File`.
+                                                    properties:
+                                                      cert:
+                                                        description: Path to the client
+                                                          certificate file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      key:
+                                                        description: Path to the client
+                                                          certificate's private key
+                                                          file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      root:
+                                                        description: |-
+                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                          If unset, the system's trusted certificates are used.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - cert
+                                                    - key
+                                                    type: object
                                                   group:
                                                     description: API group of the
                                                       referenced credential; empty
-                                                      selects the core API group
+                                                      selects the core API group.
                                                     type: string
                                                   kind:
                                                     description: Kind of the referenced
                                                       credential; empty defaults to
-                                                      `Secret`
+                                                      `Secret`. `File` reads from
+                                                      `file`.
                                                     type: string
                                                   name:
                                                     description: Name of the referenced
-                                                      credential
+                                                      credential. Required unless
+                                                      `kind` is `File`.
                                                     maxLength: 253
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
+                                                - message: kind File requires file
+                                                    and no name/group; any other kind
+                                                    requires name and no file
+                                                  rule: 'has(self.kind) && self.kind
+                                                    == ''File'' ? (has(self.file)
+                                                    && !has(self.name) && !has(self.group))
+                                                    : (has(self.name) && !has(self.file))'
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
                                                     == 0) ? (!has(self.kind) || size(self.kind)
-                                                    == 0 || self.kind == ''Secret'')
-                                                    : (has(self.kind) && size(self.kind)
-                                                    > 0)'
+                                                    == 0 || self.kind == ''Secret''
+                                                    || self.kind == ''File'') : (has(self.kind)
+                                                    && size(self.kind) > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -13254,43 +13622,79 @@ spec:
                                             mtlsCertificateRef:
                                               description: |-
                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                is used.
+                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                priority. If unspecified, no client certificate is used.
                                               items:
                                                 description: |-
-                                                  References a same-namespace credential
-                                                  Set only `name` for a Kubernetes Secret
+                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
+                                                  file:
+                                                    description: Paths on the agentgateway
+                                                      pod's local filesystem. Required
+                                                      when `kind` is `File`.
+                                                    properties:
+                                                      cert:
+                                                        description: Path to the client
+                                                          certificate file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      key:
+                                                        description: Path to the client
+                                                          certificate's private key
+                                                          file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      root:
+                                                        description: |-
+                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                          If unset, the system's trusted certificates are used.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - cert
+                                                    - key
+                                                    type: object
                                                   group:
                                                     description: API group of the
                                                       referenced credential; empty
-                                                      selects the core API group
+                                                      selects the core API group.
                                                     type: string
                                                   kind:
                                                     description: Kind of the referenced
                                                       credential; empty defaults to
-                                                      `Secret`
+                                                      `Secret`. `File` reads from
+                                                      `file`.
                                                     type: string
                                                   name:
                                                     description: Name of the referenced
-                                                      credential
+                                                      credential. Required unless
+                                                      `kind` is `File`.
                                                     maxLength: 253
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
+                                                - message: kind File requires file
+                                                    and no name/group; any other kind
+                                                    requires name and no file
+                                                  rule: 'has(self.kind) && self.kind
+                                                    == ''File'' ? (has(self.file)
+                                                    && !has(self.name) && !has(self.group))
+                                                    : (has(self.name) && !has(self.file))'
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
                                                     == 0) ? (!has(self.kind) || size(self.kind)
-                                                    == 0 || self.kind == ''Secret'')
-                                                    : (has(self.kind) && size(self.kind)
-                                                    > 0)'
+                                                    == 0 || self.kind == ''Secret''
+                                                    || self.kind == ''File'') : (has(self.kind)
+                                                    && size(self.kind) > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -13760,43 +14164,79 @@ spec:
                                             mtlsCertificateRef:
                                               description: |-
                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                is used.
+                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                priority. If unspecified, no client certificate is used.
                                               items:
                                                 description: |-
-                                                  References a same-namespace credential
-                                                  Set only `name` for a Kubernetes Secret
+                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
+                                                  file:
+                                                    description: Paths on the agentgateway
+                                                      pod's local filesystem. Required
+                                                      when `kind` is `File`.
+                                                    properties:
+                                                      cert:
+                                                        description: Path to the client
+                                                          certificate file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      key:
+                                                        description: Path to the client
+                                                          certificate's private key
+                                                          file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      root:
+                                                        description: |-
+                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                          If unset, the system's trusted certificates are used.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - cert
+                                                    - key
+                                                    type: object
                                                   group:
                                                     description: API group of the
                                                       referenced credential; empty
-                                                      selects the core API group
+                                                      selects the core API group.
                                                     type: string
                                                   kind:
                                                     description: Kind of the referenced
                                                       credential; empty defaults to
-                                                      `Secret`
+                                                      `Secret`. `File` reads from
+                                                      `file`.
                                                     type: string
                                                   name:
                                                     description: Name of the referenced
-                                                      credential
+                                                      credential. Required unless
+                                                      `kind` is `File`.
                                                     maxLength: 253
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
+                                                - message: kind File requires file
+                                                    and no name/group; any other kind
+                                                    requires name and no file
+                                                  rule: 'has(self.kind) && self.kind
+                                                    == ''File'' ? (has(self.file)
+                                                    && !has(self.name) && !has(self.group))
+                                                    : (has(self.name) && !has(self.file))'
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
                                                     == 0) ? (!has(self.kind) || size(self.kind)
-                                                    == 0 || self.kind == ''Secret'')
-                                                    : (has(self.kind) && size(self.kind)
-                                                    > 0)'
+                                                    == 0 || self.kind == ''Secret''
+                                                    || self.kind == ''File'') : (has(self.kind)
+                                                    && size(self.kind) > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -15356,43 +15796,79 @@ spec:
                                             mtlsCertificateRef:
                                               description: |-
                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                is used.
+                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                priority. If unspecified, no client certificate is used.
                                               items:
                                                 description: |-
-                                                  References a same-namespace credential
-                                                  Set only `name` for a Kubernetes Secret
+                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
+                                                  file:
+                                                    description: Paths on the agentgateway
+                                                      pod's local filesystem. Required
+                                                      when `kind` is `File`.
+                                                    properties:
+                                                      cert:
+                                                        description: Path to the client
+                                                          certificate file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      key:
+                                                        description: Path to the client
+                                                          certificate's private key
+                                                          file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      root:
+                                                        description: |-
+                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                          If unset, the system's trusted certificates are used.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - cert
+                                                    - key
+                                                    type: object
                                                   group:
                                                     description: API group of the
                                                       referenced credential; empty
-                                                      selects the core API group
+                                                      selects the core API group.
                                                     type: string
                                                   kind:
                                                     description: Kind of the referenced
                                                       credential; empty defaults to
-                                                      `Secret`
+                                                      `Secret`. `File` reads from
+                                                      `file`.
                                                     type: string
                                                   name:
                                                     description: Name of the referenced
-                                                      credential
+                                                      credential. Required unless
+                                                      `kind` is `File`.
                                                     maxLength: 253
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
+                                                - message: kind File requires file
+                                                    and no name/group; any other kind
+                                                    requires name and no file
+                                                  rule: 'has(self.kind) && self.kind
+                                                    == ''File'' ? (has(self.file)
+                                                    && !has(self.name) && !has(self.group))
+                                                    : (has(self.name) && !has(self.file))'
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
                                                     == 0) ? (!has(self.kind) || size(self.kind)
-                                                    == 0 || self.kind == ''Secret'')
-                                                    : (has(self.kind) && size(self.kind)
-                                                    > 0)'
+                                                    == 0 || self.kind == ''Secret''
+                                                    || self.kind == ''File'') : (has(self.kind)
+                                                    && size(self.kind) > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -15838,43 +16314,79 @@ spec:
                                             mtlsCertificateRef:
                                               description: |-
                                                 Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                                                referenced credential source (defaulting to a Kubernetes `Secret`). An
-                                                optional `ca.cert`, if present, verifies the server certificate, but
-                                                `caCertificateRefs` takes priority. If unspecified, no client certificate
-                                                is used.
+                                                referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                                                files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                                                present, verifies the server certificate, but `caCertificateRefs` takes
+                                                priority. If unspecified, no client certificate is used.
                                               items:
                                                 description: |-
-                                                  References a same-namespace credential
-                                                  Set only `name` for a Kubernetes Secret
+                                                  References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                                                  credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                                                 properties:
+                                                  file:
+                                                    description: Paths on the agentgateway
+                                                      pod's local filesystem. Required
+                                                      when `kind` is `File`.
+                                                    properties:
+                                                      cert:
+                                                        description: Path to the client
+                                                          certificate file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      key:
+                                                        description: Path to the client
+                                                          certificate's private key
+                                                          file.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                      root:
+                                                        description: |-
+                                                          Path to a CA bundle file used to verify the backend's certificate.
+                                                          If unset, the system's trusted certificates are used.
+                                                        maxLength: 1024
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - cert
+                                                    - key
+                                                    type: object
                                                   group:
                                                     description: API group of the
                                                       referenced credential; empty
-                                                      selects the core API group
+                                                      selects the core API group.
                                                     type: string
                                                   kind:
                                                     description: Kind of the referenced
                                                       credential; empty defaults to
-                                                      `Secret`
+                                                      `Secret`. `File` reads from
+                                                      `file`.
                                                     type: string
                                                   name:
                                                     description: Name of the referenced
-                                                      credential
+                                                      credential. Required unless
+                                                      `kind` is `File`.
                                                     maxLength: 253
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
                                                 type: object
                                                 x-kubernetes-map-type: atomic
                                                 x-kubernetes-validations:
+                                                - message: kind File requires file
+                                                    and no name/group; any other kind
+                                                    requires name and no file
+                                                  rule: 'has(self.kind) && self.kind
+                                                    == ''File'' ? (has(self.file)
+                                                    && !has(self.name) && !has(self.group))
+                                                    : (has(self.name) && !has(self.file))'
                                                 - message: custom credential refs
                                                     must set both group and kind
                                                   rule: '(!has(self.group) || size(self.group)
                                                     == 0) ? (!has(self.kind) || size(self.kind)
-                                                    == 0 || self.kind == ''Secret'')
-                                                    : (has(self.kind) && size(self.kind)
-                                                    > 0)'
+                                                    == 0 || self.kind == ''Secret''
+                                                    || self.kind == ''File'') : (has(self.kind)
+                                                    && size(self.kind) > 0)'
                                               maxItems: 1
                                               type: array
                                               x-kubernetes-list-type: atomic
@@ -19941,38 +20453,69 @@ spec:
                       mtlsCertificateRef:
                         description: |-
                           Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
-                          referenced credential source (defaulting to a Kubernetes `Secret`). An
-                          optional `ca.cert`, if present, verifies the server certificate, but
-                          `caCertificateRefs` takes priority. If unspecified, no client certificate
-                          is used.
+                          referenced credential source (defaulting to a Kubernetes `Secret`), or from
+                          files on the agentgateway pod (kind `File`). An optional `ca.cert`, if
+                          present, verifies the server certificate, but `caCertificateRefs` takes
+                          priority. If unspecified, no client certificate is used.
                         items:
                           description: |-
-                            References a same-namespace credential
-                            Set only `name` for a Kubernetes Secret
+                            References the backend mTLS client credential: a same-namespace `Secret` (or custom
+                            credential via `group`/`kind`), or with kind `File`, files on the agentgateway pod.
                           properties:
+                            file:
+                              description: Paths on the agentgateway pod's local filesystem.
+                                Required when `kind` is `File`.
+                              properties:
+                                cert:
+                                  description: Path to the client certificate file.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  type: string
+                                key:
+                                  description: Path to the client certificate's private
+                                    key file.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  type: string
+                                root:
+                                  description: |-
+                                    Path to a CA bundle file used to verify the backend's certificate.
+                                    If unset, the system's trusted certificates are used.
+                                  maxLength: 1024
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - cert
+                              - key
+                              type: object
                             group:
                               description: API group of the referenced credential;
-                                empty selects the core API group
+                                empty selects the core API group.
                               type: string
                             kind:
                               description: Kind of the referenced credential; empty
-                                defaults to `Secret`
+                                defaults to `Secret`. `File` reads from `file`.
                               type: string
                             name:
-                              description: Name of the referenced credential
+                              description: Name of the referenced credential. Required
+                                unless `kind` is `File`.
                               maxLength: 253
                               minLength: 1
                               type: string
-                          required:
-                          - name
                           type: object
                           x-kubernetes-map-type: atomic
                           x-kubernetes-validations:
+                          - message: kind File requires file and no name/group; any
+                              other kind requires name and no file
+                            rule: 'has(self.kind) && self.kind == ''File'' ? (has(self.file)
+                              && !has(self.name) && !has(self.group)) : (has(self.name)
+                              && !has(self.file))'
                           - message: custom credential refs must set both group and
                               kind
                             rule: '(!has(self.group) || size(self.group) == 0) ? (!has(self.kind)
-                              || size(self.kind) == 0 || self.kind == ''Secret'')
-                              : (has(self.kind) && size(self.kind) > 0)'
+                              || size(self.kind) == 0 || self.kind == ''Secret'' ||
+                              self.kind == ''File'') : (has(self.kind) && size(self.kind)
+                              > 0)'
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic

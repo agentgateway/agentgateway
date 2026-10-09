@@ -1566,3 +1566,22 @@ spec:
             policies:
               auth:
                 gcp: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-files
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+        - kind: File
+          file:
+            cert: /etc/certs/tls.crt
+            key: /etc/certs/tls.key
+            root: /etc/certs/ca.crt
+      sni: api.example.com
