@@ -270,6 +270,346 @@ async fn gateway_phase_oidc_callback_authenticates_and_strips_reserved_cookies()
 	assert!(!cookie.contains("agw_oidc_t_"));
 }
 
+// ---- OIDC `credentials: permissive`: browsers use OIDC, other clients use sibling policies.
+
+const CLI_ISSUER: &str = "https://cli.example.com";
+const CLI_AUDIENCE: &str = "my-app-cli";
+
+#[derive(Serialize)]
+struct TestAccessTokenClaims<'a> {
+	iss: &'a str,
+	aud: &'a str,
+	exp: u64,
+	sub: &'a str,
+}
+
+/// A bearer token from a second issuer, for `cli_jwt_auth_policy`. Signed with the same key as
+/// the OIDC ID tokens, but with an issuer and audience the OIDC policy does not accept.
+fn signed_cli_token() -> String {
+	jsonwebtoken::encode(
+		&Header {
+			alg: Algorithm::ES256,
+			kid: Some(TEST_KEY_ID.into()),
+			..Header::default()
+		},
+		&TestAccessTokenClaims {
+			iss: CLI_ISSUER,
+			aud: CLI_AUDIENCE,
+			exp: agentgateway::http::oidc::now_unix() + 300,
+			sub: "cli-user",
+		},
+		&EncodingKey::from_ec_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).expect("encoding key"),
+	)
+	.expect("signed cli token")
+}
+
+fn cli_jwt_auth_policy() -> Value {
+	json!({
+		"issuer": CLI_ISSUER,
+		"audiences": [CLI_AUDIENCE],
+		"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+	})
+}
+
+/// `gateway_oidc_policy` with `credentials: permissive`, merged with `siblings` into one policy
+/// document.
+fn permissive_oidc_policy(mock: &MockServer, siblings: Value) -> Value {
+	let mut policy = gateway_oidc_policy(format!("{}/token", mock.uri()));
+	policy["oidc"]["credentials"] = json!("permissive");
+	let object = policy.as_object_mut().expect("policy object");
+	for (key, value) in siblings.as_object().expect("sibling object") {
+		object.insert(key.clone(), value.clone());
+	}
+	policy
+}
+
+/// The compiled route-phase OIDC policy attached to the test route.
+fn compiled_route_oidc(bind: &TestBind) -> Arc<agentgateway::http::oidc::OidcPolicy> {
+	bind
+		.pi
+		.stores
+		.read_binds()
+		.all_policies()
+		.into_iter()
+		.find_map(|policy| match policy.policy.as_traffic_route_phase() {
+			Some(agentgateway::types::agent::TrafficPolicy::Oidc(oidc)) => {
+				oidc.iter().next().map(|entry| entry.pol.clone())
+			},
+			_ => None,
+		})
+		.expect("compiled route oidc policy")
+}
+
+fn assert_oidc_login_redirect(res: &Response) {
+	assert_eq!(res.status(), 302);
+	assert!(
+		res
+			.hdr(header::LOCATION)
+			.starts_with("https://issuer.example.com/authorize?"),
+		"expected the OIDC login redirect"
+	);
+}
+
+/// Completes the browser login flow against `oidc` and returns the session cookie pair.
+async fn login_session_cookie(
+	io: MemoryClient,
+	oidc: &agentgateway::http::oidc::OidcPolicy,
+	token_response: &Arc<StdMutex<Option<String>>>,
+) -> String {
+	let login = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/private",
+		&[("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&login);
+
+	let state = query_param(login.hdr(header::LOCATION), "state");
+	let transaction_cookie = login
+		.headers()
+		.get(header::SET_COOKIE)
+		.and_then(|value| value.to_str().ok())
+		.expect("transaction set-cookie");
+	let transaction_cookie =
+		cookie::Cookie::parse(transaction_cookie.to_string()).expect("transaction cookie");
+	let transaction = oidc
+		.session
+		.decode_transaction(transaction_cookie.value())
+		.expect("decode transaction cookie");
+	*token_response.lock().expect("token mutex") = Some(signed_id_token(&transaction.nonce));
+
+	let callback = send_request_headers(
+		io,
+		Method::GET,
+		&format!(
+			"http://lo{}?code=auth-code&state={state}",
+			oidc.redirect_uri.callback_path.path()
+		),
+		&[(
+			"cookie",
+			&format!(
+				"{}={}",
+				transaction_cookie.name(),
+				transaction_cookie.value()
+			),
+		)],
+	)
+	.await;
+	assert_eq!(callback.status(), 302);
+	find_set_cookie_pair(callback.headers(), "agw_oidc_s_")
+}
+
+/// A bind whose `/` route carries permissive OIDC plus `siblings`. The route matches the
+/// callback path so a route-phase login can complete.
+async fn permissive_oidc_route(
+	siblings: Value,
+) -> (MockServer, Arc<StdMutex<Option<String>>>, TestBind) {
+	let (mock, token_response) = oidc_backend_mock().await;
+	let mut bind = setup_proxy_test_with_oidc()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(route_with_prefix(*mock.address(), "/"));
+	bind
+		.attach_route_policy(permissive_oidc_policy(&mock, siblings))
+		.await;
+	(mock, token_response, bind)
+}
+
+#[tokio::test]
+async fn permissive_oidc_route_accepts_session_or_second_issuer_jwt() {
+	let (_mock, token_response, bind) = permissive_oidc_route(json!({
+		"jwtAuth": cli_jwt_auth_policy(),
+		"authorization": {"rules": [{"allow": "has(jwt.sub)"}]},
+	}))
+	.await;
+	let oidc = compiled_route_oidc(&bind);
+	let io = bind.serve_http(BIND_KEY);
+
+	// A browser session authenticates through OIDC.
+	let session_cookie = login_session_cookie(io.clone(), &oidc, &token_response).await;
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("cookie", &session_cookie)],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	// A stale bearer alongside the session: OIDC authenticates via the session and leaves the
+	// header for jwtAuth, which validates any token it is given. `optional` means not required,
+	// not unchecked.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[
+			("cookie", &session_cookie),
+			("authorization", "Bearer not-a-token"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	assert!(res.headers().get(header::LOCATION).is_none());
+
+	// A CLI token from the second issuer passes through OIDC and is validated by jwtAuth,
+	// which strips it before forwarding as usual.
+	let token = signed_cli_token();
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("authorization", &format!("Bearer {token}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let upstream = read_body(res.into_body()).await;
+	assert!(upstream.headers.get(header::AUTHORIZATION).is_none());
+
+	// The same token from a browser `fetch()` also reaches jwtAuth.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[
+			("authorization", &format!("Bearer {token}")),
+			("sec-fetch-mode", "cors"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	// An invalid token is rejected by jwtAuth, not sent to login.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("authorization", "Bearer not-a-token")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	assert!(res.headers().get(header::LOCATION).is_none());
+
+	// A CLI with no credential continues unauthenticated; the authorization rule denies it.
+	let res = send_request(io.clone(), Method::GET, "http://lo/upstream").await;
+	assert_eq!(res.status(), 403);
+
+	// Browser requests without a credential keep the OIDC behavior.
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&res);
+	let res = send_request_headers(
+		io,
+		Method::GET,
+		"http://lo/upstream",
+		&[("sec-fetch-mode", "cors")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+}
+
+#[tokio::test]
+async fn permissive_oidc_route_lets_mcp_authentication_answer_clients() {
+	let (_mock, _token_response, bind) = permissive_oidc_route(json!({
+		"mcpAuthentication": {
+			"issuer": CLI_ISSUER,
+			"audiences": [CLI_AUDIENCE],
+			"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+			"resourceMetadata": {"mcpResourceUri": "mcp://test"},
+		},
+	}))
+	.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	// MCP discovery needs no credential and must not start the browser login flow.
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/.well-known/oauth-protected-resource/mcp",
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("content-type"), "application/json");
+
+	// A token-less MCP request gets mcpAuthentication's challenge, which points the client at
+	// the discovery document, rather than OIDC's login redirect.
+	let res = send_request_headers(
+		io.clone(),
+		Method::POST,
+		"http://lo/mcp",
+		&[("content-type", "application/json")],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	assert!(
+		res
+			.hdr(header::WWW_AUTHENTICATE)
+			.contains("/.well-known/oauth-protected-resource/mcp")
+	);
+	assert!(res.headers().get(header::LOCATION).is_none());
+
+	// A valid MCP token is accepted by mcpAuthentication.
+	let token = signed_cli_token();
+	let res = send_request_headers(
+		io,
+		Method::POST,
+		"http://lo/mcp",
+		&[
+			("content-type", "application/json"),
+			("authorization", &format!("Bearer {token}")),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+}
+
+#[tokio::test]
+async fn permissive_oidc_applies_in_gateway_phase() {
+	let (mock, _token_response) = oidc_backend_mock().await;
+	let mut bind = setup_proxy_test_with_oidc()
+		.with_backend(*mock.address())
+		.with_bind(simple_bind())
+		.with_route(route_with_prefix(*mock.address(), "/upstream"));
+	bind
+		.attach_gateway_policy(permissive_oidc_policy(
+			&mock,
+			json!({
+				"jwtAuth": cli_jwt_auth_policy(),
+				"authorization": {"rules": [{"allow": "has(jwt.sub)"}]},
+			}),
+		))
+		.await;
+	let io = bind.serve_http(BIND_KEY);
+
+	let token = signed_cli_token();
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("authorization", &format!("Bearer {token}"))],
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/upstream").await;
+	assert_eq!(res.status(), 403);
+
+	let res = send_request_headers(
+		io,
+		Method::GET,
+		"http://lo/upstream",
+		&[("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&res);
+}
+
 #[tokio::test]
 async fn gateway_phase_authorization_runs_before_route_selection() {
 	let (_mock, mut bind, io) = basic_setup().await;
