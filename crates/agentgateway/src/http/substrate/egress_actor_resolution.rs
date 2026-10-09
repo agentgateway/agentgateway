@@ -134,9 +134,10 @@ impl EgressActorResolution {
 				);
 			},
 		};
-		if current.status.as_ref().map(|status| status.state)
-			!= Some(protos::ateapi::ActorState::Running as i32)
-		{
+		if !matches!(
+			current.status.as_ref().map(|status| status.state()),
+			Some(protos::ateapi::ActorState::Resuming | protos::ateapi::ActorState::Running)
+		) {
 			return Err(ProxyError::SubstrateEgressDenied("actor is not running".to_owned()).into());
 		}
 		Ok(ActorIdentity {
