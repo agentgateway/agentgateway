@@ -1668,6 +1668,10 @@ message BackendPolicySpec {
     // If empty, defaults are used.
     repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
     CertificateSource certificate_source = 9;
+    // Local file paths to read the client cert, key and root from, watched and reloaded on change.
+    optional string cert_path = 10;
+    optional string key_path = 11;
+    optional string root_path = 12;
   }
   message BackendHTTP {
     enum HttpVersion {

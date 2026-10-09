@@ -1,0 +1,20 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mtls-mcp-backend
+spec:
+  mcp:
+    targets:
+    - name: mtls-mcp
+      static:
+        host: mcp.example.internal
+        port: 443
+        policies:
+          tls:
+            sni: mcp.example.internal
+            mtlsCertificateRef:
+            - kind: File
+              file:
+                cert: /var/run/certs/tls.crt
+                key: /var/run/certs/tls.key
+                root: /var/run/certs/ca.crt
