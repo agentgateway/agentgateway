@@ -3,7 +3,7 @@ use agent_core::strng;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ContentScope, RequestType, messages};
+use crate::types::{ContentScope, NormalizedMessage, RequestType, messages};
 use crate::{
 	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, logged_response_parsing,
 };
@@ -60,6 +60,10 @@ impl RequestType for Request {
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
 		messages::get_messages_helper(&self.messages, &self.system)
+	}
+
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		messages::get_messages_v2_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {

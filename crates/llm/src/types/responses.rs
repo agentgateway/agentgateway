@@ -889,9 +889,16 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
-			Some(tokens)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self
+					.rest
+					.get("tools")
+					.and_then(Value::as_array)
+					.into_iter()
+					.flatten(),
+			))
 		} else {
 			None
 		};

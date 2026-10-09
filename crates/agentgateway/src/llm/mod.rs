@@ -6,7 +6,7 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
-pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
+pub use agent_llm::tokenizer::{num_tokens, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
 	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
@@ -2002,9 +2002,16 @@ impl AIProvider {
 				.ok_or_else(|| AIError::MissingField("model not specified".into()))?,
 		);
 		if use_local {
-			let messages = req.get_messages();
-			let model = req.model.as_deref().unwrap_or_default();
-			let count = num_tokens_from_messages(model, &messages)?;
+			let count = num_tokens(
+				req.model.as_deref().unwrap_or_default(),
+				&req.get_messages_v2(),
+				req
+					.rest
+					.get("tools")
+					.and_then(serde_json::Value::as_array)
+					.into_iter()
+					.flatten(),
+			);
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
 			})

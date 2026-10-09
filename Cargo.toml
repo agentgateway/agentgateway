@@ -5,6 +5,8 @@ wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d
 async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "793d289223b345161e8292af93be16755d8ccc40" }
 # Pending https://github.com/bldr-project/yaml-serde-edit/pull/1
 yaml-serde-edit = { git = "https://github.com/howardjohn/yaml-serde-edit", rev = "683e137f6760f47bb0db3d124c211433a4819f54" }
+# TODO: remove once https://github.com/goliajp/rust-tiktoken/pull/15 is released
+tiktoken = { git = "https://github.com/howardjohn/rust-tiktoken", rev = "14ea59ef50aed1d2935bbce06d8811427b7b972f" }
 
 [workspace]
 resolver = "2"
@@ -231,7 +233,7 @@ stacker = "0.1"
 subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
-tiktoken-rs = "0.12"
+tiktoken = { version = "4.1", default-features = false, features = ["vocab-o200k_base"] }
 tokio = { version = "1.53", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
