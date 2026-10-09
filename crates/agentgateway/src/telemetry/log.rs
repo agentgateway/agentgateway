@@ -1152,7 +1152,7 @@ impl RequestLog {
 			original_model: None,
 			guardrails: Default::default(),
 			mcp_guardrails: Default::default(),
-			budgets: None,
+			budgets: Vec::new(),
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
@@ -1333,7 +1333,7 @@ pub struct RequestLog {
 	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
 	pub mcp_guardrails: McpGuardrailsLog,
-	pub budgets: Option<crate::http::budget::BudgetSettlement>,
+	pub budgets: Vec<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
@@ -1451,8 +1451,10 @@ impl Drop for DropOnLog {
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
-			if let (Some(budgets), Some(llm_response)) = (log.budgets.take(), llm_response.as_ref()) {
-				budgets.settle(llm_response);
+			if let Some(llm_response) = llm_response.as_ref() {
+				for budgets in std::mem::take(&mut log.budgets) {
+					budgets.settle(llm_response);
+				}
 			}
 
 			let mcp = log.mcp_status.take();
