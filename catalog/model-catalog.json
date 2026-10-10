@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-09T08:40:15Z"
+    "generatedAt": "2026-10-10T08:34:39Z"
   },
   "providers": {
     "anthropic": {
@@ -4615,31 +4615,6 @@
             "cacheRead": "0.1"
           }
         },
-        "Qwen/Qwen3-Max": {
-          "rates": {
-            "input": "1.2",
-            "output": "6",
-            "cacheRead": "0.24"
-          },
-          "tiers": [
-            {
-              "contextOver": 32000,
-              "rates": {
-                "input": "2.4",
-                "output": "12",
-                "cacheRead": "0.48"
-              }
-            },
-            {
-              "contextOver": 128000,
-              "rates": {
-                "input": "3",
-                "output": "15",
-                "cacheRead": "0.6"
-              }
-            }
-          ]
-        },
         "Qwen/Qwen3-Next-80B-A3B-Instruct": {
           "rates": {
             "input": "0.09",
@@ -4651,6 +4626,12 @@
             "input": "0.2",
             "output": "0.88",
             "cacheRead": "0.11"
+          }
+        },
+        "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+          "rates": {
+            "input": "0.15",
+            "output": "0.6"
           }
         },
         "Qwen/Qwen3.5-27B": {
@@ -5921,6 +5902,12 @@
     },
     "huggingface": {
       "models": {
+        "MiniMaxAI/MiniMax-M1-80k": {
+          "rates": {
+            "input": "0.55",
+            "output": "2.2"
+          }
+        },
         "MiniMaxAI/MiniMax-M2": {
           "rates": {
             "input": "0.3",
@@ -6041,6 +6028,12 @@
           "rates": {
             "input": "0.98",
             "output": "3.95"
+          }
+        },
+        "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+          "rates": {
+            "input": "0.2",
+            "output": "0.7"
           }
         },
         "Qwen/Qwen3.5-122B-A10B": {
@@ -6321,6 +6314,12 @@
           "rates": {
             "input": "0.5",
             "output": "1.2"
+          }
+        },
+        "zai-org/AutoGLM-Phone-9B-Multilingual": {
+          "rates": {
+            "input": "0.035",
+            "output": "0.138"
           }
         },
         "zai-org/GLM-4.5": {
