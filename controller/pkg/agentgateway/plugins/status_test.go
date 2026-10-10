@@ -116,4 +116,7 @@ func TestSetAncestorStatusMatchesDefaultedKind(t *testing.T) {
 	if len(got.Conditions) != 1 || !got.Conditions[0].LastTransitionTime.Equal(&then) {
 		t.Fatalf("expected the existing condition to be kept with its transition time, got %#v", got.Conditions)
 	}
+	if got.AncestorRef.Kind == nil || *got.AncestorRef.Kind != "Gateway" {
+		t.Fatalf("expected the stored ancestorRef with its defaulted kind to be kept, got %#v", got.AncestorRef)
+	}
 }

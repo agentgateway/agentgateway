@@ -115,6 +115,7 @@ func SetAncestorStatus(
 	var currentConds []metav1.Condition
 	if currentAncestor != nil {
 		currentConds = currentAncestor.Conditions
+		pr = currentAncestor.AncestorRef
 	}
 	return gwv1.PolicyAncestorStatus{
 		AncestorRef:    pr,
