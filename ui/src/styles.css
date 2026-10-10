@@ -939,6 +939,12 @@ td.row-actions > * + * {
 	gap: 5px;
 }
 
+h4.field-label {
+	margin: 0;
+	font-size: inherit;
+	font-weight: inherit;
+}
+
 /* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .field-label svg {
 	color: var(--muted);
