@@ -27,6 +27,12 @@ pub enum BedrockEndpoint {
 // Mantle signs SigV4 under this name instead of the default "bedrock".
 const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
 
+// Runtime chat uses Converse unless AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE=false, in which case it
+// uses the native OpenAI/Anthropic APIs, like Mantle. Temporary until native becomes the default.
+static RUNTIME_CONVERSE: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
+	std::env::var("AGENTGATEWAY_BEDROCK_RUNTIME_CONVERSE").map_or(true, |v| v != "false")
+});
+
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "BedrockProviderConfig"))]
 pub struct Provider {
@@ -110,6 +116,52 @@ impl Provider {
 		}
 	}
 
+	/// Whether chat on the endpoint uses the native OpenAI/Anthropic APIs rather than Converse.
+	pub fn native_chat(&self, endpoint: BedrockEndpoint) -> bool {
+		match endpoint {
+			BedrockEndpoint::Mantle => true,
+			BedrockEndpoint::Runtime => !*RUNTIME_CONVERSE,
+		}
+	}
+
+	/// Runtime's Anthropic Messages API, unlike InvokeModel and Mantle, rejects a `metadata.user_id`
+	/// outside the Converse requestMetadata pattern `[a-zA-Z0-9\s:_@$#=/+,.-]{0,256}`. Claude Code
+	/// sends JSON there, so strip the disallowed characters.
+	pub fn sanitize_messages_user_id(
+		&self,
+		req: &mut crate::types::ChatRequest,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) {
+		use crate::types::ChatRequest;
+		let model = match req {
+			ChatRequest::Messages(r) => r.model.as_deref(),
+			ChatRequest::Completions(r) => r.model.as_deref(),
+			_ => return,
+		};
+		if self.resolve_endpoint(super::RouteType::Messages, model, catalog) != BedrockEndpoint::Runtime
+		{
+			return;
+		}
+		let user_id = match req {
+			ChatRequest::Messages(r) => match r
+				.rest
+				.get_mut("metadata")
+				.and_then(|m| m.get_mut("user_id"))
+			{
+				Some(serde_json::Value::String(s)) => Some(s),
+				_ => None,
+			},
+			ChatRequest::Completions(r) => r.user.as_mut(),
+			_ => None,
+		};
+		if let Some(user_id) = user_id {
+			user_id.retain(|c| {
+				c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ":_@$#=/+,.-".contains(c)
+			});
+			user_id.truncate(256);
+		}
+	}
+
 	/// SigV4 signing-service override for the endpoint (`Some` for Mantle, else the default `bedrock`).
 	pub fn signing_service_name(&self, endpoint: BedrockEndpoint) -> Option<&'static str> {
 		match endpoint {
@@ -129,31 +181,29 @@ impl Provider {
 			ChatFormat::AnthropicMessages,
 			ChatFormat::OpenAIResponses,
 		];
-		match self.chat_endpoint(Some(request_model), catalog) {
-			// all chat runtime models seem to support converse
-			BedrockEndpoint::Runtime => vec![ChatFormat::BedrockConverse],
-			BedrockEndpoint::Mantle => {
-				// Short circuit tag checks as we should just use the message endpoint
-				if self.is_anthropic_model(request_model) {
-					return vec![ChatFormat::AnthropicMessages];
-				}
-				if let Some(tags) = catalog.and_then(|c| c.get_model_tags(request_model)) {
-					let declared: Vec<ChatFormat> = NATIVE
-						.into_iter()
-						.filter(|f| tags.contains(f.tag()))
-						.collect();
-					if !declared.is_empty() {
-						return declared;
-					}
-				}
-				// fallback for entries that havent gotten into loaded to catalog yet
-				let basemodelname = request_model.to_ascii_lowercase();
-				if basemodelname.contains("openai") || basemodelname.contains("grok") {
-					vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-				} else {
-					vec![ChatFormat::OpenAICompletions]
-				}
-			},
+		// all chat runtime models seem to support converse
+		if !self.native_chat(self.chat_endpoint(Some(request_model), catalog)) {
+			return vec![ChatFormat::BedrockConverse];
+		}
+		// Short circuit tag checks as we should just use the message endpoint
+		if self.is_anthropic_model(request_model) {
+			return vec![ChatFormat::AnthropicMessages];
+		}
+		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(request_model)) {
+			let declared: Vec<ChatFormat> = NATIVE
+				.into_iter()
+				.filter(|f| tags.contains(f.tag()))
+				.collect();
+			if !declared.is_empty() {
+				return declared;
+			}
+		}
+		// fallback for entries that havent gotten into loaded to catalog yet
+		let basemodelname = request_model.to_ascii_lowercase();
+		if basemodelname.contains("openai") || basemodelname.contains("grok") {
+			vec![ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
+		} else {
+			vec![ChatFormat::OpenAICompletions]
 		}
 	}
 
@@ -174,6 +224,17 @@ impl Provider {
 				super::RouteType::Models => strng::literal!("/v1/models"),
 				_ => strng::literal!("/v1/chat/completions"),
 			};
+		}
+
+		if self.native_chat(endpoint) {
+			match route_type {
+				super::RouteType::Responses => return strng::literal!("/openai/v1/responses"),
+				super::RouteType::Messages => return strng::literal!("/anthropic/v1/messages"),
+				super::RouteType::Completions => {
+					return strng::literal!("/openai/v1/chat/completions");
+				},
+				_ => {},
+			}
 		}
 
 		const MODEL_SEGMENT: &percent_encoding::AsciiSet =

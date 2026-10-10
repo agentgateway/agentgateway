@@ -112,12 +112,10 @@ fn test_extract_beta_headers_variants() {
 		.map(|v| v.as_str().unwrap().to_string())
 		.collect::<Vec<_>>();
 	beta_features.sort();
+	// Converse rejects tool search, so it is dropped even though Bedrock otherwise accepts it.
 	assert_eq!(
 		beta_features,
-		vec![
-			"interleaved-thinking-2025-05-14".to_string(),
-			"tool-search-tool-2025-10-19".to_string(),
-		]
+		vec!["interleaved-thinking-2025-05-14".to_string()]
 	);
 
 	let mut headers = HeaderMap::new();
