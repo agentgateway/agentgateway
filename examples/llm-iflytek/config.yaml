@@ -2,9 +2,9 @@
 llm:
   port: 3000
   models:
-  - name: 4.0Ultra
+  - name: spark-x2.5
     provider: openAI
     params:
-      model: 4.0Ultra
+      model: spark-x2.5
       apiKey: $SPARK_API_PASSWORD
-      baseUrl: https://spark-api-open.xf-yun.com/v1
+      baseUrl: https://maas-api.cn-huabei-1.xf-yun.com/v2
