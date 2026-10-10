@@ -138,6 +138,12 @@ struct Cli {
 }
 
 pub fn run() -> anyhow::Result<()> {
+	// Disable transparent huge pages process-wide. Allocator settings only cover their own mappings;
+	// other mappings (such as thread stacks) can otherwise be backed by 2MB pages and inflate RSS.
+	#[cfg(target_os = "linux")]
+	unsafe {
+		libc::prctl(libc::PR_SET_THP_DISABLE, 1, 0, 0, 0);
+	}
 	cfg_select! {
 		all(target_os = "linux", target_env = "musl", target_arch = "aarch64") => {
 			pprof_alloc::configure_with_default(Allocator::Mimalloc)?;
