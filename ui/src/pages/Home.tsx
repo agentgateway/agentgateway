@@ -80,6 +80,15 @@ export function HomePage() {
 	const anySurfaceEnabled = hasLlm || hasMcp || hasTraffic || locallyEnabled.size > 0;
 
 	useEffect(() => {
+		if (!showStartup) return;
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key === 'Escape') setStartupFlow(false);
+		}
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [showStartup]);
+
+	useEffect(() => {
 		if (!config.data || pageDataLoading || pageDataError || startupEvaluated) return;
 		setStartupFlow(!hasLlm && !hasMcp && (!hasTraffic || isDefaultUiGatewayScaffold(config.data)));
 		setStartupEvaluated(true);
@@ -117,15 +126,20 @@ export function HomePage() {
 	if (showStartup) {
 		return (
 			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
-				{/** biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
+			<div
+				className="startup-shell"
+				onClick={event => {
+					if (event.target === event.currentTarget) setStartupFlow(false);
+				}}
+				onKeyDown={event => {
+					if (event.key === 'Escape') setStartupFlow(false);
+				}}
+			>
 				<section
 					className="startup-panel"
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="startup-title"
-					onClick={event => event.stopPropagation()}
 				>
 					<div className="startup-copy">
 						<h2 id="startup-title">Welcome to Agentgateway</h2>

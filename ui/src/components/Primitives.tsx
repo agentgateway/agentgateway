@@ -84,7 +84,7 @@ export function Dropdown(props: {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
-	const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
+	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 	const typeaheadRef = useRef('');
 	const typeaheadTimerRef = useRef<number | null>(null);
 	const selected =
@@ -288,8 +288,8 @@ export function Dropdown(props: {
 						/>
 					) : null}
 					{filteredOptions.map((option, index) => (
-						// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<div
+						<button
+							type="button"
 							className={[
 								'custom-select-option',
 								index === activeIndex ? 'active' : null,
@@ -310,7 +310,7 @@ export function Dropdown(props: {
 							onClick={() => selectOption(option)}
 						>
 							<DropdownOptionContent option={option} showDescription />
-						</div>
+						</button>
 					))}
 					{filteredOptions.length === 0 ? (
 						<div className="custom-select-empty">No matches</div>
