@@ -2147,7 +2147,7 @@ message OAuthClientAuth {
   PrivateKeyJwt private_key_jwt = 4;
 }
 
-// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
+// Token exchange for the OAuth family (RFC 8693 / RFC 7523 / RFC 6749 §4.4).
 message OAuthTokenExchange {
   message TokenSpec {
     // Where to extract the token from the incoming request. The `expression`
@@ -2180,9 +2180,10 @@ message OAuthTokenExchange {
   }
 
   enum GrantType {
-    UNSPECIFIED    = 0; // defaults to TOKEN_EXCHANGE
-    TOKEN_EXCHANGE = 1; // RFC 8693
-    JWT_BEARER     = 2; // RFC 7523
+    UNSPECIFIED        = 0; // defaults to TOKEN_EXCHANGE
+    TOKEN_EXCHANGE     = 1; // RFC 8693
+    JWT_BEARER         = 2; // RFC 7523
+    CLIENT_CREDENTIALS = 3; // RFC 6749 §4.4
   }
 
   // ----- Token endpoint -----
@@ -2196,10 +2197,11 @@ message OAuthTokenExchange {
   // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
   GrantType grant_type = 9;
   // Subject token (RFC 8693) / assertion (RFC 7523). When unset, defaults to
-  // {source: Authorization header, Bearer prefix; token_type: access_token}
+  // {source: Authorization header, Bearer prefix; token_type: access_token}.
+  // Ignored under CLIENT_CREDENTIALS, which sends no incoming token.
   TokenSpec subject_token = 10;
   // RFC 8693 §2.1 delegation actor token. TOKEN_EXCHANGE only; rejected under
-  // JWT_BEARER.
+  // JWT_BEARER and CLIENT_CREDENTIALS.
   // When set, its token_type defaults to access_token if empty.
   ActorToken actor_token = 11;
 
@@ -2211,8 +2213,9 @@ message OAuthTokenExchange {
   repeated string scopes = 3;
   repeated string resources = 4;
   // requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
-  // under JWT_BEARER. When unset under TOKEN_EXCHANGE, the gateway sends
-  // access_token because this backend auth policy forwards bearer access tokens.
+  // under JWT_BEARER and CLIENT_CREDENTIALS. When unset under TOKEN_EXCHANGE,
+  // the gateway sends access_token because this backend auth policy forwards
+  // bearer access tokens.
   optional string requested_token_type = 5;
   // Arbitrary extra string form fields appended to the token exchange request.
   // Values are CEL expressions evaluated against the incoming request.
@@ -2220,7 +2223,8 @@ message OAuthTokenExchange {
 
   // ----- Authorization server client authentication -----
   // When unset, no client authentication fields are sent; this supports
-  // public-client exchanges such as Google STS.
+  // public-client exchanges such as Google STS. Required under
+  // CLIENT_CREDENTIALS, which has no other way to authenticate the gateway.
   OAuthClientAuth client_auth = 6;
 
   // ----- Output and runtime behavior -----

@@ -17,8 +17,8 @@ use super::*;
 use crate::http::Body;
 use crate::http::auth::JwtSigningAlg;
 use crate::http::oauth::{
-	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
-	TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
+	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_CLIENT_CREDENTIALS, GRANT_TYPE_JWT_BEARER,
+	GRANT_TYPE_TOKEN_EXCHANGE, TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
 };
 use crate::serdes::FileOrInline;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
@@ -562,6 +562,120 @@ async fn jwt_bearer_sends_assertion() {
 	] {
 		assert!(!pairs.contains_key(k), "jwt-bearer must not send {k}");
 	}
+}
+
+#[tokio::test]
+async fn client_credentials_sends_grant_without_subject_token() {
+	// RFC 6749 §4.4 response: a plain bearer body, no issued_token_type.
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "upstream-token",
+		"token_type": "Bearer",
+		"expires_in": 3600,
+	})))
+	.await;
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::ClientCredentials,
+		scopes: vec!["read".into()],
+		client_auth: Some(OAuthClientAuth {
+			client_id: "gateway-client".into(),
+			method: OAuthClientAuthMethod::ClientSecretBasic {
+				client_secret: "s3cr3t".into(),
+			},
+		}),
+		..base_auth(endpoint(&mock))
+	};
+
+	let tok = fetch_token(
+		&policy_client(),
+		&a,
+		ExchangeRequest::client_credentials(vec![]),
+	)
+	.await
+	.expect("client-credentials grant succeeds");
+	assert_eq!(tok.expose_secret(), "upstream-token");
+
+	let req = &mock.received_requests().await.unwrap()[0];
+	let header = req.headers["authorization"].to_str().unwrap();
+	assert_eq!(
+		header,
+		format!("Basic {}", BASE64_STANDARD.encode("gateway-client:s3cr3t"))
+	);
+	let pairs = sent_form_params(&mock).await;
+	assert_eq!(pairs["grant_type"], GRANT_TYPE_CLIENT_CREDENTIALS);
+	assert_eq!(pairs["scope"], "read");
+	for k in [
+		"subject_token",
+		"subject_token_type",
+		"assertion",
+		"actor_token",
+	] {
+		assert!(
+			!pairs.contains_key(k),
+			"client-credentials must not send {k}"
+		);
+	}
+}
+
+#[test]
+fn deserializes_client_credentials_grant() {
+	let a: OAuthTokenExchangeAuth = serde_json::from_str(
+		r#"{"host": "localhost:8089", "path": "/oauth2/token", "grantType": "clientCredentials"}"#,
+	)
+	.unwrap();
+	assert_eq!(a.grant_type, OAuthGrantType::ClientCredentials);
+}
+
+#[test]
+fn client_credentials_needs_no_incoming_token() {
+	// Unlike token exchange, client credentials mints without any caller token,
+	// so a request with no Authorization header still builds a token request.
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::ClientCredentials,
+		client_auth: Some(OAuthClientAuth {
+			client_id: "gateway-client".into(),
+			method: OAuthClientAuthMethod::ClientSecretBasic {
+				client_secret: "s3cr3t".into(),
+			},
+		}),
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
+	};
+	let req = ::http::Request::builder()
+		.uri("http://upstream/")
+		.body(Body::empty())
+		.unwrap();
+	assert!(a.build_exchange_request(&req).is_ok());
+}
+
+#[test]
+fn client_credentials_requires_client_auth() {
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::ClientCredentials,
+		client_auth: None,
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
+	};
+	let err = a.validate_load().unwrap_err();
+	assert!(err.contains("client_auth is required"), "got {err:?}");
+}
+
+#[test]
+fn client_credentials_rejects_actor_token() {
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::ClientCredentials,
+		client_auth: Some(OAuthClientAuth {
+			client_id: "gateway-client".into(),
+			method: OAuthClientAuthMethod::ClientSecretBasic {
+				client_secret: "s3cr3t".into(),
+			},
+		}),
+		actor_token: Some(ActorTokenSpec {
+			source: AuthorizationLocation::default(),
+			token_type: OAuthTokenType::default(),
+			enforce_may_act: false,
+		}),
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
+	};
+	let err = a.validate_load().unwrap_err();
+	assert!(err.contains("actor_token is only valid"), "got {err:?}");
 }
 
 #[tokio::test]

@@ -9,6 +9,7 @@ use crate::{apply, schema};
 pub(crate) const GRANT_TYPE_TOKEN_EXCHANGE: &str =
 	"urn:ietf:params:oauth:grant-type:token-exchange";
 pub(crate) const GRANT_TYPE_JWT_BEARER: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+pub(crate) const GRANT_TYPE_CLIENT_CREDENTIALS: &str = "client_credentials";
 
 pub(crate) const CLIENT_ASSERTION_TYPE_JWT_BEARER: &str =
 	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
