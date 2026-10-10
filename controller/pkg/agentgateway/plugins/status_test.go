@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -84,5 +85,35 @@ func TestMergeAncestorsTruncatesWhenNoOwnedAncestorFitsInFirst16(t *testing.T) {
 		if ancestor.AncestorRef.Name == "ancestor-q" {
 			t.Fatalf("expected 17th ancestor to be truncated")
 		}
+	}
+}
+
+// The API server defaults ancestorRef.kind to Gateway on write, so the stored StatusSummary ref differs from
+// the one the translator builds without a kind. The match must still succeed or every translation recreates
+// the conditions with a fresh lastTransitionTime and rewrites the object forever.
+func TestSetAncestorStatusMatchesDefaultedKind(t *testing.T) {
+	const controllerName = "agentgateway.dev/controller"
+	computed := gwv1.ParentReference{
+		Group: new(gwv1.Group("agentgateway.dev")),
+		Name:  "StatusSummary",
+	}
+	stored := computed
+	stored.Kind = new(gwv1.Kind("Gateway"))
+	then := metav1.NewTime(time.Date(2026, 4, 22, 17, 57, 23, 0, time.UTC))
+	existing := &gwv1.PolicyStatus{Ancestors: []gwv1.PolicyAncestorStatus{{
+		AncestorRef:    stored,
+		ControllerName: controllerName,
+		Conditions: []metav1.Condition{{
+			Type: "Attached", Status: metav1.ConditionFalse, Reason: "Pending", Message: "stale",
+			ObservedGeneration: 1, LastTransitionTime: then,
+		}},
+	}}}
+
+	got := SetAncestorStatus(computed, existing, 1, map[string]*Condition{
+		"Attached": {Status: metav1.ConditionFalse, Reason: "Pending", Message: "stale"},
+	}, controllerName)
+
+	if len(got.Conditions) != 1 || !got.Conditions[0].LastTransitionTime.Equal(&then) {
+		t.Fatalf("expected the existing condition to be kept with its transition time, got %#v", got.Conditions)
 	}
 }

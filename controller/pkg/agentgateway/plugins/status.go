@@ -9,6 +9,8 @@ import (
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 )
 
 type Condition struct {
@@ -94,13 +96,10 @@ func MergeAncestors(controllerName string, existing []gwv1.PolicyAncestorStatus,
 	return existing
 }
 
+// ParentRefEquals treats omitted and defaulted group and kind as equal, since the API server defaults them on
+// write and a stored ref must still match the one the translator builds.
 func ParentRefEquals(a, b gwv1.ParentReference) bool {
-	return ptr.Equal(a.Group, b.Group) &&
-		ptr.Equal(a.Kind, b.Kind) &&
-		a.Name == b.Name &&
-		ptr.Equal(a.Namespace, b.Namespace) &&
-		ptr.Equal(a.SectionName, b.SectionName) &&
-		ptr.Equal(a.Port, b.Port)
+	return reports.CompareParentReference(a, b) == 0
 }
 
 func SetAncestorStatus(
