@@ -50,7 +50,12 @@ import type {
 	LocalLLMParams,
 	LocalLLMWeightedRouting
 } from '@/gateway-config';
-import { useDeleteConfigResource, useLlmConfigData, useUpsertConfigResource } from '@/hooks';
+import {
+	useConfigDumpMode,
+	useDeleteConfigResource,
+	useLlmConfigData,
+	useUpsertConfigResource
+} from '@/hooks';
 import {
 	concreteModelName,
 	isWildcardModelName,
@@ -59,6 +64,7 @@ import {
 	wildcardModelPrefix,
 	wildcardResolvedSuffix
 } from '@/modelResolution';
+import { DumpModelsView } from '@/pages/models/DumpModelsView';
 import { ModelMatchesEditor, normalizeMatches } from '@/pages/models/ModelMatchesEditor';
 import {
 	HeaderModifierEditor,
@@ -86,6 +92,7 @@ import {
 	virtualModelStrategy,
 	virtualModelSummary
 } from '@/pages/models/virtualModelUtils';
+import { ReadonlyModeBanner } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
@@ -102,6 +109,36 @@ type ConditionalVirtualTarget = NonNullable<
 >['targets'][number];
 
 export function ModelsPage() {
+	const mode = useConfigDumpMode();
+	if (mode.isLoading) {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="LLM Models"
+					description="Configure the models callers can request and the providers that serve them."
+				/>
+				<Panel>
+					<StatusBanner state="loading" title="Detecting model configuration mode" />
+				</Panel>
+			</div>
+		);
+	}
+	if (mode.data?.mode === 'dump') {
+		return (
+			<div className="page-stack">
+				<PageHeader
+					title="LLM Models"
+					description="Read-only model inventory from the active gateway dump."
+				/>
+				<ReadonlyModeBanner />
+				<DumpModelsView models={mode.data.dump.models ?? []} />
+			</div>
+		);
+	}
+	return <ModelsEditorPage />;
+}
+
+function ModelsEditorPage() {
 	const { config, hybrid, resources, models, virtualModels, providers, isLoading, error } =
 		useLlmConfigData();
 	const upsertResource = useUpsertConfigResource();
@@ -271,7 +308,7 @@ export function ModelsPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="LLM Models"
-				description="Onboard provider-backed models and configure model-specific behavior."
+				description="Configure the models callers can request and the providers that serve them."
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={openNewVirtualModel}>
@@ -1393,6 +1430,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="target-list">
 						{weightedTargets.map((target, index) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							<div className="target-row weighted" key={index}>
 								<VirtualTargetSelector
 									label="Model"
@@ -1466,6 +1504,7 @@ function VirtualModelEditor(props: {
 				>
 					<div className="failover-group-list">
 						{failoverGroups.map((group, groupIndex) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							<section className="match-card" key={groupIndex}>
 								<div className="match-card-header">
 									<strong>
@@ -1489,6 +1528,7 @@ function VirtualModelEditor(props: {
 								<div className="match-card-body">
 									<div className="target-list">
 										{group.map((target, targetIndex) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 											<div className="target-row failover" key={targetIndex}>
 												<VirtualTargetSelector
 													label="Model"
@@ -1579,6 +1619,7 @@ function VirtualModelEditor(props: {
 						{conditionalTargets.map((target, index) => {
 							const isFallback = !target.when?.trim();
 							return (
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								<div className="conditional-target-card" key={index}>
 									<div className="match-card-header">
 										<strong>{isFallback ? 'Fallback' : `Rule ${index + 1}`}</strong>

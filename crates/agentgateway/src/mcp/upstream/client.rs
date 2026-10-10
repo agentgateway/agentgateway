@@ -44,7 +44,7 @@ impl McpHttpClient {
 
 	pub async fn call(
 		&self,
-		req: http::Request<crate::http::Body>,
+		req: crate::http::Request,
 	) -> Result<http::Response<crate::http::Body>, ProxyError> {
 		let client = self.client.with_parent(&req);
 		let mut policies = self.base_policies.clone();

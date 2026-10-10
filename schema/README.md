@@ -16,3 +16,7 @@ The schema for the configuration file (passed with `--file` to agentgateway).
 
 * [Overview](./config.md)
 * [JSON Schema](./config.json)
+
+## Metrics
+
+* [Prometheus metrics](./metrics.md)

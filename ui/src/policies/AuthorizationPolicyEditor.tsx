@@ -142,6 +142,7 @@ export function AuthorizationPolicyEditor(props: {
 						return (
 							<section
 								className={errors[index] ? 'authz-rule-card invalid' : 'authz-rule-card'}
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								key={index}
 							>
 								<div className="authz-rule-header">

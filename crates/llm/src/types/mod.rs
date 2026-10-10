@@ -1,12 +1,14 @@
 pub mod bedrock;
 pub mod completions;
 pub mod count_tokens;
+pub mod decisions;
 pub mod detect;
 pub mod embeddings;
 pub mod gemini;
 pub mod messages;
 pub mod rerank;
 pub mod responses;
+pub mod systemone;
 pub mod vertex;
 pub mod vertex_gemini;
 
@@ -39,6 +41,50 @@ pub(crate) fn thinking_budget_for_reasoning_effort(
 	}
 }
 
+pub(crate) fn anthropic_effort_for_reasoning_effort(
+	effort: &completions::typed::ReasoningEffort,
+) -> Option<messages::typed::ThinkingEffort> {
+	use completions::typed::ReasoningEffort;
+	use messages::typed::ThinkingEffort;
+
+	match effort {
+		ReasoningEffort::None => None,
+		ReasoningEffort::Minimal | ReasoningEffort::Low => Some(ThinkingEffort::Low),
+		ReasoningEffort::Medium => Some(ThinkingEffort::Medium),
+		ReasoningEffort::High => Some(ThinkingEffort::High),
+		ReasoningEffort::Xhigh => Some(ThinkingEffort::Xhigh),
+		ReasoningEffort::Max => Some(ThinkingEffort::Max),
+	}
+}
+
+pub(crate) fn thinking_budget_for_anthropic_effort(effort: messages::typed::ThinkingEffort) -> u64 {
+	use messages::typed::ThinkingEffort;
+
+	match effort {
+		ThinkingEffort::Low => 1024,
+		ThinkingEffort::Medium => 2048,
+		ThinkingEffort::High => 4096,
+		ThinkingEffort::Xhigh => 8192,
+		ThinkingEffort::Max => 16384,
+	}
+}
+
+/// Approximate a token budget using the same thresholds as effort-to-budget translation.
+pub(crate) fn anthropic_effort_for_thinking_budget(budget: u64) -> messages::typed::ThinkingEffort {
+	use messages::typed::ThinkingEffort;
+	for effort in [
+		ThinkingEffort::Max,
+		ThinkingEffort::Xhigh,
+		ThinkingEffort::High,
+		ThinkingEffort::Medium,
+	] {
+		if budget >= thinking_budget_for_anthropic_effort(effort) {
+			return effort;
+		}
+	}
+	ThinkingEffort::Low
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {
@@ -49,15 +95,32 @@ pub trait ResponseType: Send + Sync {
 		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ResponseText, &mut String));
 }
 
-/// A category of request content that a prompt guard can inspect.
+#[derive(Clone, Copy, Debug)]
+pub struct ResponseText {
+	pub scope: ContentScope,
+	pub signed: bool,
+}
+
+impl From<ContentScope> for ResponseText {
+	fn from(scope: ContentScope) -> Self {
+		Self {
+			scope,
+			signed: false,
+		}
+	}
+}
+
+/// Which category of request or response content a prompt guard inspects.
+/// Encrypted payloads are excluded. Signed response payloads are scanned but
+/// a mask that would change them rejects the response instead.
 #[apply(schema_enum!)]
 pub enum ContentScope {
 	/// The system/developer prompt.
 	SystemPrompt,
-	/// Regular user/assistant message text.
+	/// Regular user/assistant message text and plaintext reasoning blocks.
 	Messages,
 	/// Tool call results.
 	ToolOutput,
@@ -101,9 +164,74 @@ pub(crate) fn visit_json_at(
 	}
 }
 
+pub(crate) fn has_signature(value: &serde_json::Value) -> bool {
+	[
+		"signature",
+		"thoughtSignature",
+		"thought_signature",
+		"reasoning_signature",
+		"fingerprint",
+	]
+	.iter()
+	.any(|key| {
+		value
+			.get(key)
+			.is_some_and(|v| !v.is_null() && v.as_str().is_none_or(|s| !s.is_empty()))
+	})
+}
+
+/// Scan schema documentation without rewriting property names or validation rules.
+pub(crate) fn visit_json_schema_text(
+	value: &mut serde_json::Value,
+	f: &mut dyn FnMut(&mut String),
+) {
+	let Some(schema) = value.as_object_mut() else {
+		return;
+	};
+	for (key, value) in schema {
+		match key.as_str() {
+			"title" | "description" | "$comment" => {
+				if let serde_json::Value::String(text) = value {
+					f(text);
+				}
+			},
+			"properties" | "patternProperties" | "$defs" | "definitions" | "dependentSchemas" => {
+				if let Some(schemas) = value.as_object_mut() {
+					for schema in schemas.values_mut() {
+						visit_json_schema_text(schema, f);
+					}
+				}
+			},
+			"allOf" | "anyOf" | "oneOf" | "prefixItems" | "items" => {
+				if let Some(schemas) = value.as_array_mut() {
+					for schema in schemas {
+						visit_json_schema_text(schema, f);
+					}
+				} else {
+					visit_json_schema_text(value, f);
+				}
+			},
+			"additionalProperties"
+			| "additionalItems"
+			| "unevaluatedProperties"
+			| "unevaluatedItems"
+			| "contains"
+			| "propertyNames"
+			| "not"
+			| "if"
+			| "then"
+			| "else" => visit_json_schema_text(value, f),
+			_ => {},
+		}
+	}
+}
+
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
 /// uniform policy enforcement and observability
 pub trait RequestType: Send + Sync {
+	fn input_format() -> crate::InputFormat
+	where
+		Self: Sized;
 	fn supports_model(&self) -> bool {
 		true
 	}
@@ -113,18 +241,28 @@ pub trait RequestType: Send + Sync {
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		self
+			.get_messages()
+			.into_iter()
+			.map(NormalizedMessage::from)
+			.collect()
+	}
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
-/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part (keeping its other
-/// fields, e.g. `cache_control`); untouched runs pass through unchanged.
+/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part; untouched runs pass
+/// through unchanged. `preserved_rest_keys`: when a text run is masked, which keys in `rest`
+/// should be preserved.
 pub(crate) fn scan_text_runs<T>(
 	parts: &mut Vec<T>,
 	sep: &str,
 	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
+	mut rest_of: impl FnMut(&mut T) -> Option<&mut serde_json::Value>,
+	preserved_rest_keys: &[&str],
 	f: &mut dyn FnMut(&mut String),
 ) {
 	if let [part] = parts.as_mut_slice() {
@@ -160,6 +298,34 @@ pub(crate) fn scan_text_runs<T>(
 			continue;
 		}
 
+		// a preserved key anywhere in the run must survive the collapse: the survivor's own
+		// value wins, else carry the latest drained one; JSON null counts as absent
+		for &key in preserved_rest_keys {
+			let survivor_has = rest_of(&mut parts[end - 1])
+				.and_then(|rest| rest.get(key))
+				.is_some_and(|v| !v.is_null());
+			if survivor_has {
+				continue;
+			}
+			let carried = parts[i..end - 1].iter_mut().rev().find_map(|p| {
+				rest_of(p)
+					.and_then(serde_json::Value::as_object_mut)
+					.and_then(|obj| obj.remove(key))
+					.filter(|v| !v.is_null())
+			});
+			if let Some(value) = carried
+				&& let Some(rest) = rest_of(&mut parts[end - 1])
+			{
+				// typed parts default `rest` to Null
+				if !rest.is_object() {
+					*rest = serde_json::Value::Object(Default::default());
+				}
+				if let Some(obj) = rest.as_object_mut() {
+					obj.insert(key.to_string(), value);
+				}
+			}
+		}
+
 		// collapse the run's text into the last part, and remove the others
 		if let Some(text) = text_of(&mut parts[end - 1]) {
 			*text = joined;
@@ -189,6 +355,154 @@ pub struct SimpleChatCompletionMessage {
 	pub role: Strng,
 	/// Message text content.
 	pub content: Strng,
+}
+
+/// A provider-neutral request message that preserves the ordering of text, tool calls, tool
+/// results, and reasoning. This is an observability representation, not a lossless wire format.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NormalizedMessage {
+	/// Message role, such as "system", "user", "assistant", or "tool".
+	pub role: Strng,
+	pub parts: Vec<NormalizedMessagePart>,
+}
+
+impl From<SimpleChatCompletionMessage> for NormalizedMessage {
+	fn from(message: SimpleChatCompletionMessage) -> Self {
+		Self {
+			role: message.role,
+			parts: vec![NormalizedMessagePart::text(message.content)],
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NormalizedMessagePartType {
+	Text,
+	ToolCall,
+	ToolResult,
+	Reasoning,
+}
+
+/// One ordered part of a [`NormalizedMessage`]. Fields are populated according to `type`.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NormalizedMessagePart {
+	pub r#type: NormalizedMessagePartType,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub text: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub name: Option<Strng>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub arguments: Option<serde_json::Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub content: Option<serde_json::Value>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub is_error: Option<bool>,
+}
+
+impl NormalizedMessagePart {
+	pub fn text(text: Strng) -> Self {
+		Self {
+			r#type: NormalizedMessagePartType::Text,
+			text: Some(text),
+			id: None,
+			name: None,
+			arguments: None,
+			content: None,
+			is_error: None,
+		}
+	}
+
+	pub fn tool_call(id: Strng, name: Strng, arguments: serde_json::Value) -> Self {
+		Self {
+			r#type: NormalizedMessagePartType::ToolCall,
+			text: None,
+			id: Some(id),
+			name: Some(name),
+			arguments: Some(arguments),
+			content: None,
+			is_error: None,
+		}
+	}
+
+	pub fn tool_result(
+		id: Option<Strng>,
+		name: Option<Strng>,
+		content: serde_json::Value,
+		is_error: Option<bool>,
+	) -> Self {
+		Self {
+			r#type: NormalizedMessagePartType::ToolResult,
+			text: None,
+			id,
+			name,
+			arguments: None,
+			content: Some(content),
+			is_error,
+		}
+	}
+
+	pub fn reasoning(content: serde_json::Value) -> Self {
+		Self {
+			r#type: NormalizedMessagePartType::Reasoning,
+			text: None,
+			id: None,
+			name: None,
+			arguments: None,
+			content: Some(content),
+			is_error: None,
+		}
+	}
+}
+
+pub(crate) fn normalized_tool_call(value: &serde_json::Value) -> Option<NormalizedMessagePart> {
+	let function = value.get("function").unwrap_or(value);
+	let name = function.get("name")?.as_str()?;
+	let id = value
+		.get("id")
+		.or_else(|| value.get("call_id"))
+		.and_then(serde_json::Value::as_str)
+		.unwrap_or(name);
+	let arguments = function
+		.get("arguments")
+		.or_else(|| function.get("input"))
+		.cloned()
+		.unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+	Some(NormalizedMessagePart::tool_call(
+		strng::new(id),
+		strng::new(name),
+		parse_json_string(arguments),
+	))
+}
+
+pub(crate) fn parse_json_string(value: serde_json::Value) -> serde_json::Value {
+	match value {
+		serde_json::Value::String(value) => {
+			serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value))
+		},
+		value => value,
+	}
+}
+
+pub(crate) fn attach_tool_result_names(messages: &mut [NormalizedMessage]) {
+	let calls = messages
+		.iter()
+		.flat_map(|message| &message.parts)
+		.filter(|part| part.r#type == NormalizedMessagePartType::ToolCall)
+		.filter_map(|part| Some((part.id.as_ref()?.clone(), part.name.as_ref()?.clone())))
+		.collect::<std::collections::HashMap<_, _>>();
+	for part in messages.iter_mut().flat_map(|message| &mut message.parts) {
+		if part.r#type == NormalizedMessagePartType::ToolResult
+			&& part.name.is_none()
+			&& let Some(id) = &part.id
+		{
+			part.name = calls.get(id).cloned();
+		}
+	}
 }
 
 /// ToolCall represents a single tool/function invocation surfaced for observability.

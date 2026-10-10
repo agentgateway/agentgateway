@@ -21,6 +21,7 @@ serviceAccount:
 
 # -- Configure the RBAC permissions created for the controller.
 rbac:
+  create: true
   # -- Restrict namespaced write permissions to these namespaces. The namespaces must already exist. An empty list preserves the default cluster-wide write access. Cluster-wide read permissions and writes to cluster-scoped resources are unaffected.
   # Restricting this list means only Gateways in these namespaces can be used.
   gatewayNamespaces: []
@@ -55,6 +56,9 @@ tolerations: []
 
 # -- Set affinity rules for pod scheduling, such as 'nodeAffinity:'.
 affinity: {}
+
+# -- Configure how controller pods are spread across topology domains, such as nodes or zones.
+topologySpreadConstraints: []
 
 # -- Set the pod DNS configuration, such as 'options: [{name: ndots, value: "3"}]'. Merged with the DNS settings the kubelet derives from the pod's dnsPolicy.
 dnsConfig: {}
@@ -219,17 +223,22 @@ image:
   # -- Set the default image pull policy.
   pullPolicy: IfNotPresent
 
-# -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://agentgateway.dev/docs/kubernetes/latest/inference/
+# -- Configure the integration with the Gateway API Inference Extension project, which lets you use agentgateway to route to AI inference workloads like LLMs that run locally in your Kubernetes cluster. Documentation for Inference Extension can be found here: https://agentgateway.dev/docs/kubernetes/latest/documentation/inference/
 inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
-# -- Configure the experimental AgentgatewayModel API.
+# -- Configure the AgentgatewayModel API.
 agentgatewayModels:
   # -- Enable AgentgatewayModel support in the agentgateway controller.
+  enabled: true
+
+# -- Configure the experimental Gateway API XBackend resource.
+xBackend:
+  # -- Enable XBackend support in the agentgateway controller.
   enabled: false
 
-# -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://agentgateway.dev/docs/kubernetes/latest/install/advanced/#namespace-discovery.
+# -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://agentgateway.dev/docs/kubernetes/latest/documentation/install/advanced/#namespace-discovery.
 discoveryNamespaceSelectors: []
 
 # -- Map of GatewayClass names to GatewayParameters references that will be set on
@@ -255,6 +264,10 @@ controllerName: ""
 
 # -- Control-plane-wide Istio mesh defaults.
 istio:
+  # -- Grant the controller permission to discover Istio ServiceEntry and WorkloadEntry resources.
+  #    Set to false only when the Istio CRDs are not installed. This controls RBAC generation; it
+  #    does not disable Istio integration in the controller.
+  enabled: true
   # -- Enable Istio integration by default on all built-in-class gateways.
   #    When false (default), gateways opt in via AgentgatewayParameters spec.istio;
   #    when true, individual gateways can opt out via spec.istio.enabled=false.
@@ -286,6 +299,16 @@ monitoring:
     interval: 15s
     # -- Additional labels to add to the controller ServiceMonitor and the proxy PodMonitor (e.g. release: prometheus).
     extraLabels: {}
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+    scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+    scrapeClassicHistograms: true
+    # -- Relabeling rules applied to the scrape target before metrics are ingested
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    relabelings: []
+    # -- Relabeling rules applied to scraped metrics before ingestion
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    metricRelabelings: []
 
   proxy:
     podMonitor:
@@ -293,6 +316,20 @@ monitoring:
       #    metrics port (15020) directly, without requiring a metrics port on the
       #    provisioned Service.
       enabled: true
+      # -- Pod labels copied onto scraped proxy metrics. The gateway name is required
+      #    by the bundled Grafana dashboard for gateway discovery and filtering.
+      podTargetLabels:
+        - gateway.networking.k8s.io/gateway-name
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+      scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+      scrapeClassicHistograms: true
+      # -- Relabeling rules applied to the scrape target before metrics are ingested
+      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+      relabelings: []
+      # -- Relabeling rules applied to scraped metrics before ingestion
+      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+      metricRelabelings: []
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:
       - agentgateway
@@ -305,3 +342,8 @@ monitoring:
     # -- Labels that the Grafana sidecar uses to discover dashboards.
     labels:
       grafana_dashboard: "1"
+    # -- Annotations on the dashboard ConfigMap. Provisioners that place a dashboard
+    #    by display name read the folder, and sometimes the organization, from an
+    #    annotation rather than a label, because a label value admits no spaces
+    #    (e.g. grafana_folder: "Platform gateways").
+    annotations: {}

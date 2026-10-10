@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -32,36 +33,48 @@ var logger = logging.New("agentgateway/backend")
 
 // NewBackendPlugin creates a new plugin for AgentgatewayBackends
 func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) plugins.AgwPlugin {
-	return plugins.AgwPlugin{
-		ContributesBackends: map[schema.GroupKind]plugins.BackendPlugin{
-			wellknown.AgentgatewayBackendGVK.GroupKind(): {
-				BuildReferences: func() krt.Collection[*plugins.PolicyAttachment] {
-					return krt.NewManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
-						return BuildAgwBackendReferences(backend)
-					}, agw.KrtOpts.ToOptions("references/AgentgatewayBackendPolicyAttachments")...)
-				},
-				Build: func(input plugins.PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[agwir.AgwResource]) {
-					status, col := krt.NewStatusManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) (
-						*agentgateway.AgentgatewayBackendStatus,
-						[]agwir.AgwResource,
-					) {
-						pc := plugins.PolicyCtx{
-							Krt:                ctx,
-							Collections:        agw,
-							References:         input.References,
-							Grants:             input.Grants,
-							SourceGVK:          wellknown.AgentgatewayBackendGVK,
-							Resolver:           resolver,
-							JWKSLookup:         jwksLookup,
-							CredentialResolver: credentialResolver,
-						}
-						return TranslateAgwBackend(pc, backend, input.References)
-					}, agw.KrtOpts.ToOptions("backends/Agentgateway")...)
-					return plugins.ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "backends/Agentgateway"), col
-				},
+	backends := map[schema.GroupKind]plugins.BackendPlugin{
+		wellknown.AgentgatewayBackendGVK.GroupKind(): {
+			BuildReferences: func() krt.Collection[*plugins.PolicyAttachment] {
+				return krt.NewManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) []*plugins.PolicyAttachment {
+					return BuildAgwBackendReferences(backend)
+				}, agw.KrtOpts.ToOptions("references/AgentgatewayBackendPolicyAttachments")...)
+			},
+			Build: func(input plugins.PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[agwir.AgwResource]) {
+				status, col := krt.NewStatusManyCollection(agw.Backends, func(ctx krt.HandlerContext, backend *agentgateway.AgentgatewayBackend) (
+					*agentgateway.AgentgatewayBackendStatus,
+					[]agwir.AgwResource,
+				) {
+					pc := plugins.PolicyCtx{
+						Krt:                ctx,
+						Collections:        agw,
+						References:         input.References,
+						Grants:             input.Grants,
+						SourceGVK:          wellknown.AgentgatewayBackendGVK,
+						Resolver:           resolver,
+						JWKSLookup:         jwksLookup,
+						CredentialResolver: credentialResolver,
+					}
+					return TranslateAgwBackend(pc, backend, input.References)
+				}, agw.KrtOpts.ToOptions("backends/Agentgateway")...)
+				return plugins.ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "backends/Agentgateway"), col
 			},
 		},
 	}
+	if agw.Settings.EnableXBackend {
+		backends[wellknown.XBackendGVK.GroupKind()] = plugins.BackendPlugin{
+			Build: func(input plugins.PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[agwir.AgwResource]) {
+				status, col := krt.NewStatusManyCollection(agw.XBackends, func(ctx krt.HandlerContext, backend *gwxv1a1.XBackend) (
+					*gwxv1a1.BackendStatus,
+					[]agwir.AgwResource,
+				) {
+					return TranslateXBackend(ctx, agw, backend, input.References, input.Grants)
+				}, agw.KrtOpts.ToOptions("backends/XBackend")...)
+				return plugins.ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "backends/XBackend"), col
+			},
+		}
+	}
+	return plugins.AgwPlugin{ContributesBackends: backends}
 }
 
 func BuildAgwBackendReferences(
@@ -128,7 +141,7 @@ func appendLLMProviderBackendReferences(llm *agentgateway.LLMProvider, app func(
 	}
 	var port *gwv1.PortNumber
 	if llm.Custom.BackendRef.Port != nil {
-		port = new(gwv1.PortNumber(*llm.Custom.BackendRef.Port))
+		port = new(*llm.Custom.BackendRef.Port)
 	}
 	app(gwv1.BackendObjectReference{Group: group, Kind: kind, Name: gwv1.ObjectName(llm.Custom.BackendRef.Name), Port: port})
 }
@@ -139,6 +152,9 @@ func BuildAgwBackend(
 	backend *agentgateway.AgentgatewayBackend,
 ) ([]*api.Backend, error) {
 	errs := []error{}
+	if owners := jwks.OwnersFromBackend(backend); len(owners) > 0 {
+		ctx.JWKSOwner = &owners[0]
+	}
 	pols, err := TranslateBackendPolicies(ctx, backend.Namespace, backend.Spec.Policies)
 	if err != nil {
 		errs = append(errs, err)
@@ -150,7 +166,7 @@ func BuildAgwBackend(
 		case b.UnixPath != nil:
 			sb.UnixPath = *b.UnixPath
 		default:
-			sb.Host = string(b.Host)
+			sb.Host = b.Host
 			sb.Port = b.Port
 		}
 		return []*api.Backend{{
@@ -164,7 +180,7 @@ func BuildAgwBackend(
 	}
 	if b := backend.Spec.A2A; b != nil {
 		sb := &api.StaticBackend{}
-		sb.Host = string(b.Host)
+		sb.Host = b.Host
 		sb.Port = b.Port
 		a2aPolicy := &api.BackendPolicySpec{
 			Kind: &api.BackendPolicySpec_A2A_{
@@ -218,18 +234,27 @@ func TranslateAgwBackend(
 ) (*agentgateway.AgentgatewayBackendStatus, []agwir.AgwResource) {
 	var results []agwir.AgwResource
 	backends, err := BuildAgwBackend(ctx, backend)
+	condition := metav1.Condition{
+		Type:               "Accepted",
+		Status:             metav1.ConditionTrue,
+		Reason:             "Accepted",
+		Message:            "Backend successfully accepted",
+		ObservedGeneration: backend.Generation,
+		LastTransitionTime: metav1.Now(),
+	}
 	if err != nil {
 		logger.Error("failed to translate backend", "backend", backend.Name, "namespace", backend.Namespace, "err", err)
-		return &agentgateway.AgentgatewayBackendStatus{
-			Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, metav1.Condition{
-				Type:               "Accepted",
-				Status:             metav1.ConditionFalse,
-				Reason:             "TranslationError",
-				Message:            fmt.Sprintf("failed to translate backend: %v", err),
-				ObservedGeneration: backend.Generation,
-				LastTransitionTime: metav1.Now(),
-			}),
-		}, results
+		condition.Message = fmt.Sprintf("failed to translate backend: %v", err)
+		condition.Reason = "PartiallyValid"
+		// Policy translation can return usable output alongside diagnostics. Preserve
+		// that output, including policies that enforce failure in the data plane.
+		if len(backends) == 0 {
+			condition.Status = metav1.ConditionFalse
+			condition.Reason = "TranslationError"
+			return &agentgateway.AgentgatewayBackendStatus{
+				Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, condition),
+			}, results
+		}
 	}
 
 	gtws := references.LookupGatewaysForBackend(ctx.Krt, utils.TypedNamespacedName{
@@ -250,15 +275,17 @@ func TranslateAgwBackend(
 	}
 
 	return &agentgateway.AgentgatewayBackendStatus{
-		Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, metav1.Condition{
-			Type:               "Accepted",
-			Status:             metav1.ConditionTrue,
-			Reason:             "Accepted",
-			Message:            "Backend successfully accepted",
-			ObservedGeneration: backend.Generation,
-			LastTransitionTime: metav1.Now(),
-		}),
+		Conditions: kstatus.UpdateConditionIfChanged(backend.Status.Conditions, condition),
 	}, results
+}
+
+func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) {
+	if condition == nil {
+		return
+	}
+	for _, t := range targets {
+		t.Condition = new(string(*condition))
+	}
 }
 
 func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
@@ -267,6 +294,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	var backends []*api.Backend
 	var errs []error
 	for _, target := range mcp.Targets {
+		start := len(mcpTargets)
 		if s := target.Static; s != nil {
 			if s.BackendRef != nil {
 				serviceHostname, err := ResolveMCPBackendRefHost(ctx, be.Namespace, s.BackendRef)
@@ -295,6 +323,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				}
 
 				mcpTargets = append(mcpTargets, mcpTarget)
+				applyMCPTargetCondition(mcpTargets[start:], target.Condition)
 				continue
 			}
 
@@ -348,6 +377,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 			mcpTargets = append(mcpTargets, targets...)
 		}
+		applyMCPTargetCondition(mcpTargets[start:], target.Condition)
 	}
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL
@@ -453,6 +483,7 @@ func translateAIBackendPolicies(
 	}
 	return TranslateBackendPolicies(ctx, namespace, &agentgateway.BackendFull{
 		BackendSimple:  policies.BackendSimple,
+		Authorization:  policies.Authorization,
 		AI:             policies.AI,
 		Transformation: policies.Transformation,
 		Health:         policies.Health,
@@ -492,7 +523,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
-		resourceName, resourceType := parseAzureEndpoint(string(llm.AzureOpenAI.Endpoint))
+		resourceName, resourceType := parseAzureEndpoint(llm.AzureOpenAI.Endpoint)
 		provider.Provider = &api.AIBackend_Provider_Azure{
 			Azure: &api.AIBackend_Azure{
 				ResourceName: resourceName,
@@ -508,7 +539,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		}
 		provider.Provider = &api.AIBackend_Provider_Azure{
 			Azure: &api.AIBackend_Azure{
-				ResourceName: string(llm.Azure.ResourceName),
+				ResourceName: llm.Azure.ResourceName,
 				ResourceType: resourceType,
 				Model:        llm.Azure.Model,
 				ApiVersion:   llm.Azure.ApiVersion,
@@ -531,17 +562,27 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		// TODO: publisher?
 		provider.Provider = &api.AIBackend_Provider_Vertex{
 			Vertex: &api.AIBackend_Vertex{
-				Region:    llm.VertexAI.Region,
+				Region:    ptr.NonEmptyOrDefault(llm.VertexAI.Region, "global"),
 				Model:     llm.VertexAI.Model,
 				ProjectId: llm.VertexAI.ProjectId,
 			},
 		}
 	} else if llm.Bedrock != nil {
-		region := llm.Bedrock.Region
+		region := ptr.NonEmptyOrDefault(llm.Bedrock.Region, "us-east-1")
 		var guardrailIdentifier, guardrailVersion *string
 		if llm.Bedrock.Guardrail != nil {
 			guardrailIdentifier = &llm.Bedrock.Guardrail.GuardrailIdentifier
 			guardrailVersion = &llm.Bedrock.Guardrail.GuardrailVersion
+		}
+
+		endpointPreference := api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_PREFERRED
+		switch llm.Bedrock.EndpointPreference {
+		case agentgateway.BedrockEndpointPreferenceMantlePreferred:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_PREFERRED
+		case agentgateway.BedrockEndpointPreferenceMantleOnly:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_MANTLE_ONLY
+		case agentgateway.BedrockEndpointPreferenceRuntimeOnly:
+			endpointPreference = api.AIBackend_BEDROCK_ENDPOINT_PREFERENCE_RUNTIME_ONLY
 		}
 
 		provider.Provider = &api.AIBackend_Provider_Bedrock{
@@ -550,6 +591,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				Region:              region,
 				GuardrailIdentifier: guardrailIdentifier,
 				GuardrailVersion:    guardrailVersion,
+				EndpointPreference:  endpointPreference,
 			},
 		}
 	} else if llm.Custom != nil {
@@ -559,8 +601,9 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{
 			Custom: &api.AIBackend_Custom{
-				Formats: formats,
-				Model:   llm.Custom.Model,
+				Formats:          formats,
+				Model:            llm.Custom.Model,
+				ProviderOverride: llm.Custom.ProviderOverride,
 			},
 		}
 		if llm.Custom.BackendRef != nil {
@@ -587,7 +630,7 @@ func translateOpenAIInlineModeration(m *agentgateway.OpenAIInlineModeration) (*a
 	if err != nil {
 		return nil, err
 	}
-	model := string(m.Model)
+	model := m.Model
 	if model == "" {
 		model = defaultOpenAIInlineModerationModel
 	}

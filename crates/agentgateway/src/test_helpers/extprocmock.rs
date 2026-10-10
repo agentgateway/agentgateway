@@ -71,24 +71,15 @@ pub fn request_header_response_with_dynamic_metadata(
 	})
 }
 
-pub fn response_header_response_with_dynamic_metadata(
-	cr: Option<CommonResponse>,
-	metadata: prost_wkt_types::Struct,
-) -> Result<ProcessingResponse, Status> {
-	Ok(ProcessingResponse {
-		response: Some(processing_response::Response::ResponseHeaders(
-			proto::HeadersResponse { response: cr },
-		)),
-		dynamic_metadata: Some(metadata),
-		..Default::default()
-	})
-}
-
 #[async_trait]
 pub trait Handler {
 	async fn on_open(&mut self, _metadata: &tonic::metadata::MetadataMap) {}
 
 	async fn on_request(&mut self, _request: &ProcessingRequest) {}
+
+	fn close_stream(&self) -> bool {
+		false
+	}
 
 	async fn handle_request_headers(
 		&mut self,
@@ -167,6 +158,26 @@ pub trait Handler {
 	}
 }
 
+pub struct ReplaceRequestBody(pub bytes::Bytes);
+
+#[async_trait]
+impl Handler for ReplaceRequestBody {
+	async fn handle_request_body(
+		&mut self,
+		_body: &proto::HttpBody,
+		sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let response = CommonResponse {
+			body_mutation: Some(BodyMutation {
+				mutation: Some(body_mutation::Mutation::Body(self.0.clone())),
+			}),
+			..Default::default()
+		};
+		let _ = sender.send(request_body_response(Some(response))).await;
+		Ok(())
+	}
+}
+
 /// Mock ext_proc server for testing
 pub struct ExtProcMock<T> {
 	handler: Arc<dyn Fn() -> T + Send + Sync + 'static>,
@@ -219,37 +230,46 @@ where
 		handler.on_open(request.metadata()).await;
 
 		tokio::spawn(async move {
-			let mut request_stream = request.into_inner();
+			let result = async {
+				let mut request_stream = request.into_inner();
 
-			while let Some(request_result) = request_stream.message().await? {
-				trace!("Received request: {:?}", request_result.request);
-				handler.on_request(&request_result).await;
-				match request_result.request {
-					Some(processing_request::Request::RequestHeaders(headers)) => {
-						handler.handle_request_headers(&headers, &tx).await?;
-					},
-					Some(processing_request::Request::RequestBody(body)) => {
-						handler.handle_request_body(&body, &tx).await?;
-					},
-					Some(processing_request::Request::ResponseHeaders(headers)) => {
-						handler.handle_response_headers(&headers, &tx).await?;
-					},
-					Some(processing_request::Request::ResponseBody(body)) => {
-						handler.handle_response_body(&body, &tx).await?;
-					},
-					Some(processing_request::Request::RequestTrailers(trailers)) => {
-						handler.handle_request_trailers(&trailers, &tx).await?;
-					},
-					Some(processing_request::Request::ResponseTrailers(trailers)) => {
-						handler.handle_response_trailers(&trailers, &tx).await?;
-					},
-					None => {
-						// Invalid request
-						continue;
-					},
+				while let Some(request_result) = request_stream.message().await? {
+					trace!("Received request: {:?}", request_result.request);
+					handler.on_request(&request_result).await;
+					match request_result.request {
+						Some(processing_request::Request::RequestHeaders(headers)) => {
+							handler.handle_request_headers(&headers, &tx).await?;
+						},
+						Some(processing_request::Request::RequestBody(body)) => {
+							handler.handle_request_body(&body, &tx).await?;
+						},
+						Some(processing_request::Request::ResponseHeaders(headers)) => {
+							handler.handle_response_headers(&headers, &tx).await?;
+						},
+						Some(processing_request::Request::ResponseBody(body)) => {
+							handler.handle_response_body(&body, &tx).await?;
+						},
+						Some(processing_request::Request::RequestTrailers(trailers)) => {
+							handler.handle_request_trailers(&trailers, &tx).await?;
+						},
+						Some(processing_request::Request::ResponseTrailers(trailers)) => {
+							handler.handle_response_trailers(&trailers, &tx).await?;
+						},
+						None => {
+							// Invalid request
+							continue;
+						},
+					}
+					if handler.close_stream() {
+						return Ok::<(), Status>(());
+					}
 				}
+				Ok::<(), Status>(())
 			}
-			Ok::<(), Status>(())
+			.await;
+			if let Err(status) = result {
+				let _ = tx.send(Err(status)).await;
+			}
 		});
 
 		Ok(TonicResponse::new(

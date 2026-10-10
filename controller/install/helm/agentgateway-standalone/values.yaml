@@ -151,8 +151,18 @@ monitoring:
     enabled: true
     # -- How often Prometheus scrapes the agentgateway proxy's metrics.
     interval: 15s
+    # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+    scrapeNativeHistograms: false
+    # -- Scrape classic (legacy bucket) histograms.
+    scrapeClassicHistograms: true
+    # -- Relabeling rules applied to the scrape target before metrics are ingested
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    relabelings: []
+    # -- Relabeling rules applied to scraped metrics before ingestion
+    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    metricRelabelings: []
 
-# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
+# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. Changes outside the nested 'config' section, plus 'config.modelCatalog', are applied without restarting the pods. Changes to other nested 'config' settings restart the pods because agentgateway reads them only at startup. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
 # Postgres connection used by database mode.
@@ -163,8 +173,15 @@ database:
 
 # OIDC secret that agentgateway uses to sign the Admin UI session cookie.
 oidc:
-  # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. If unset, the chart references a '<release name>-oidc' secret as an optional secret.
+  # -- Inject the OIDC cookie secret environment variable. Enable this when configuring OIDC authentication.
+  enabled: false
+  # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. Defaults to '<release name>-oidc'. The secret is required when 'oidc.enabled' is true.
   cookieSecretName: ""
+
+# Agentgateway session configuration.
+session:
+  # -- The name of an existing secret that has the 'key' entry used for the session key.
+  secretName: ""
 
 # -- Additional containers to run in the agentgateway proxy pod, such as a sidecar.
 extraContainers: []
@@ -177,3 +194,34 @@ extraVolumes: []
 
 # -- Additional volume mounts to add to the agentgateway proxy container.
 extraVolumeMounts: []
+
+# -- (object) podDisruptionBudget allows you to define minimum and maximum available pods during voluntary disruptions
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # -- Takes precedence over minAvailable when set to a non-zero number or non-empty string.
+  maxUnavailable: ""
+  # -- UnhealthyPodEvictionPolicy defines the criteria for when unhealthy pods should be considered for eviction
+  unhealthyPodEvictionPolicy: ""
+
+# -- (object) Configures HorizontalPodAutoscaler for your Deployment
+autoscaling:
+  enabled: false
+  annotations: {}
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  behavior: {}
+  # scaleDown:
+  #   stabilizationWindowSeconds: 300
+  #   policies:
+  #   - type: Pods
+  #     value: 1
+  #     periodSeconds: 180
+  # scaleUp:
+  #   stabilizationWindowSeconds: 300
+  #   policies:
+  #   - type: Pods
+  #     value: 2
+  #     periodSeconds: 60

@@ -34,6 +34,7 @@ pub fn insert_all(ctx: &mut Context) {
 	ctx.add_function("default", default);
 	ctx.add_function("coalesce", coalesce);
 	ctx.add_function("regexReplace", regex_replace);
+	ctx.add_function("regexReplaceAll", regex_replace_all);
 	ctx.add_function("fail", fail);
 	ctx.add_function("uuid", uuid_generate);
 
@@ -160,15 +161,15 @@ pub fn form_decode<'a>(ftx: &mut FunctionContext<'a, '_>, v: Argument) -> Resolv
 	let v = v.load(ftx)?.always_materialize_owned();
 	let bytes = v.as_bytes_pre_materialized()?;
 	let pairs = form_urlencoded::parse(bytes);
-	let mut map = hashbrown::HashMap::<Key, Value<'static>>::new();
+	let mut map = cel::types::map::IndexMap::<Key, Value<'static>>::default();
 	for (key, value) in pairs {
 		let key = Key::from(key.into_owned());
 		let value = Value::from(value.into_owned());
 		match map.entry(key) {
-			hashbrown::hash_map::Entry::Vacant(entry) => {
+			indexmap::map::Entry::Vacant(entry) => {
 				entry.insert(value);
 			},
-			hashbrown::hash_map::Entry::Occupied(mut entry) => match entry.get_mut() {
+			indexmap::map::Entry::Occupied(mut entry) => match entry.get_mut() {
 				Value::List(values) => {
 					let mut values = values.as_ref().to_vec();
 					values.push(value);
@@ -377,6 +378,25 @@ pub fn regex_replace<'a>(
 	match regex::Regex::new(regex.as_ref()) {
 		Ok(re) => Ok(
 			re.replace(this.as_ref(), replacement.as_ref())
+				.to_string()
+				.into(),
+		),
+		Err(err) => Err(ftx.error(format!("'{}' not a valid regex:\n{err}", regex.as_ref()))),
+	}
+}
+
+pub fn regex_replace_all<'a>(
+	ftx: &mut FunctionContext<'a, '_>,
+	this: This,
+	regex: Argument,
+	replacement: Argument,
+) -> ResolveResult<'a> {
+	let this: StringValue = this.load_value(ftx)?;
+	let regex: StringValue = regex.load_value(ftx)?;
+	let replacement: StringValue = replacement.load_value(ftx)?;
+	match regex::Regex::new(regex.as_ref()) {
+		Ok(re) => Ok(
+			re.replace_all(this.as_ref(), replacement.as_ref())
 				.to_string()
 				.into(),
 		),

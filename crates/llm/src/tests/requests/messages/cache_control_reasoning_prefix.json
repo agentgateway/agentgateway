@@ -1,0 +1,114 @@
+{
+  "model": "gpt-5.6",
+  "max_tokens": 64,
+  "system": "Retained system prefix",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Before current reasoning"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Use older user prefix",
+          "signature": "signature"
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Before previous reasoning"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "Previous reasoning-only message",
+          "signature": "signature"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        },
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "5m"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Uncached suffix"
+        }
+      ]
+    }
+  ]
+}

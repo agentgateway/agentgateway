@@ -23,6 +23,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
@@ -145,7 +146,7 @@ func Manifest(pathParts ...string) string {
 	if !ok {
 		panic("failed to resolve caller for test manifest")
 	}
-	return filepath.Join(append([]string{filepath.Dir(file), "testdata"}, pathParts...)...)
+	return filepath.Join(append([]string{filepath.Dir(fsutils.ResolveSourceFile(file)), "testdata"}, pathParts...)...)
 }
 
 func manifestNames(manifests []string) []string {

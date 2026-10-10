@@ -73,7 +73,6 @@ spec:
       - modelRef:
           name: openai-models
         model: gpt-5-large
-        weight: 10
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -117,6 +116,34 @@ spec:
         model: gpt-5-large
       - modelRef:
           name: gpt-5-mini
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: routed
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  virtualModel:
+    callout:
+      url: https://router.example.com/v1/route
+      headers:
+        x-tenant: request.headers["x-tenant"]
+      body: 'json({"messages": llm.messages})'
+      transformation:
+        model: callout.body.model
+        reasoning_effort: callout.body.effort
+      fallback:
+        modelRef:
+          name: gpt-5-mini
+      cache:
+        key:
+        - request.headers["x-session-id"]
+        ttl: 5m
 
 ---
 # Output
@@ -209,7 +236,7 @@ output:
           - model: gpt-5-mini
             weight: 90
           - model: gpt-5-large
-            weight: 10
+            weight: 1
 - gateway:
     Name: virtual-models
     Namespace: default
@@ -236,6 +263,7 @@ output:
       concreteModel:
         backend:
           backend: default/openai-models/backend.llm
+        discoveryProvider: openai
         modelVisibility: INTERNAL
       key: default/openai-models.llm
       listenerKey: default/virtual-models.llm
@@ -254,6 +282,36 @@ output:
         failover:
           backend:
             backend: default/resilient/failover.llm
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/routed.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: routed
+      virtualModel:
+        callout:
+          body: 'json({"messages": llm.messages})'
+          cache:
+            key:
+            - request.headers["x-session-id"]
+            ttl: duration("5m")
+          fallbackModel: gpt-5-mini
+          headers:
+            x-tenant: request.headers["x-tenant"]
+          inlinePolicies:
+          - backendTls:
+              hostname: router.example.com
+          path: /v1/route
+          target:
+            inline:
+              hostname: router.example.com
+              port: 443
+          transformation:
+            model: callout.body.model
+            reasoning_effort: callout.body.effort
 - gateway:
     Name: virtual-models
     Namespace: default
@@ -377,6 +435,32 @@ status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayModel
   metadata:
+    name: routed
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
     name: smart
     namespace: default
   spec: null
@@ -420,7 +504,7 @@ status:
       status: "True"
       type: Programmed
     listeners:
-    - attachedRoutes: 5
+    - attachedRoutes: 6
       conditions:
       - lastTransitionTime: fake
         message: No errors found

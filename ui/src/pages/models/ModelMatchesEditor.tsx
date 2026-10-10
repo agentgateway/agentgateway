@@ -33,6 +33,7 @@ export function ModelMatchesEditor(props: {
 				<div className="policy-editor-stack compact">
 					{matches.map((match, index) => (
 						<MatchCard
+							// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 							key={index}
 							index={index}
 							match={match}
@@ -112,6 +113,7 @@ function MatchCard(props: {
 					<div className="match-header-list">
 						{headers.map((header, index) => (
 							<HeaderMatchRow
+								// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 								key={index}
 								header={header}
 								onChange={next => updateHeader(index, next)}

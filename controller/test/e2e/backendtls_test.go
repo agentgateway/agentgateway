@@ -38,7 +38,7 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	t.Send("foo.com", base.Expect(http.StatusMovedPermanently))
 
 	assertBackendTLSPolicyStatus(t, backendTLSPolicy, metav1.Condition{
-		Type:               string(agentgateway.PolicyConditionAccepted),
+		Type:               agentgateway.PolicyConditionAccepted,
 		Status:             metav1.ConditionTrue,
 		Reason:             string(gwv1.PolicyReasonAccepted),
 		ObservedGeneration: backendTLSPolicy.Generation,

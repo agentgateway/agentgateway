@@ -259,6 +259,12 @@ impl LocalClient {
 			.model_catalog
 			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
 		self.model_catalog.replace_sources(model_catalog).await?;
+		self
+			.config
+			.logging
+			.database_fields
+			.store(config.standard_attributes);
+		self.config.logging.session.store(config.session_attribute);
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync binds first, but always run discovery sync even when a new bind cannot open.
@@ -278,6 +284,11 @@ impl LocalClient {
 				.discovery
 				.sync_local(config.services, config.workloads, prev.discovery)?;
 		let next_binds = bind_result?;
+		self
+			.config
+			.budget_policy
+			.apply_registration(config.budget_registration)?;
+		self.config.config_reload_status.record_success();
 
 		Ok(PreviousState {
 			binds: next_binds,
@@ -304,6 +315,10 @@ impl LocalClient {
 			},
 			Err(e) => {
 				self.metrics.config_synchronized.set(0);
+				self
+					.config
+					.config_reload_status
+					.record_failure(e.to_string());
 				error!("Failed to reload config: {}", e);
 				prev
 			},
@@ -461,6 +476,8 @@ mod tests {
 		format!(
 			r#"
 config:
+  standardAttributes:
+    user: '"{remove_field}"'
   modelCatalog:
   - inline:
       providers:
@@ -619,9 +636,10 @@ frontendPolicies:
 			metrics,
 		};
 
-		local_client.run().await.unwrap();
+		local_client.clone().run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
 		wait_for_catalog_model(&model_catalog, "first").await;
+		let first_attributes = config.logging.database_fields.load_full();
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
@@ -642,5 +660,93 @@ frontendPolicies:
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
 		wait_for_catalog_model(&model_catalog, "third").await;
+		let current_attributes = config.logging.database_fields.load_full();
+		let request = crate::http::Request::new(crate::http::Body::empty());
+		let exec = crate::cel::Executor::new_request(&request);
+		for (snapshot, expected) in [(&first_attributes, "first"), (&current_attributes, "third")] {
+			let expression = snapshot
+				.add
+				.iter()
+				.find(|(name, _)| name.as_ref() == "agentgateway.user")
+				.unwrap()
+				.1;
+			assert_eq!(
+				exec.eval(expression).unwrap().as_string().unwrap(),
+				expected
+			);
+		}
+
+		// Reject invalid expressions without publishing a partial attribute update.
+		let invalid = local_config("invalid").replace("'\"invalid\"'", "'('");
+		fs_err::tokio::write(&path, invalid).await.unwrap();
+		assert!(
+			local_client
+				.reload_config(PreviousState::default())
+				.await
+				.is_err()
+		);
+		let retained = config.logging.database_fields.load_full();
+		let expression = retained
+			.add
+			.iter()
+			.find(|(name, _)| name.as_ref() == "agentgateway.user")
+			.unwrap()
+			.1;
+		assert_eq!(exec.eval(expression).unwrap().as_string().unwrap(), "third");
+	}
+
+	#[tokio::test]
+	async fn rejected_reload_records_error_and_recovery_clears_it() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::tokio::write(&path, local_config("first"))
+			.await
+			.unwrap();
+
+		let mut config = test_config();
+		config.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let config = Arc::new(config);
+		let stores = test_stores();
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
+		let client = test_client();
+		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let local_client = LocalClient {
+			config: config.clone(),
+			cfg: ConfigSource::File(path.clone()),
+			config_resource_store: None,
+			model_catalog: crate::llm::catalog::ModelCatalog::empty(),
+			stores,
+			client,
+			resource_manager,
+			gateway: config.gateway(),
+			metrics,
+		};
+
+		// The initial successful load starts with no recorded error.
+		let prev = local_client
+			.reload_config(PreviousState::default())
+			.await
+			.unwrap();
+		assert!(config.config_reload_status.last_error().is_none());
+
+		// A rejected reload records its error alongside the config_synchronized metric.
+		let invalid = local_config("invalid").replace("'\"invalid\"'", "'('");
+		fs_err::tokio::write(&path, invalid).await.unwrap();
+		let _ = local_client.reload_config_after_change(prev.clone()).await;
+		assert!(
+			config
+				.config_reload_status
+				.last_error()
+				.is_some_and(|e| !e.is_empty()),
+			"rejected reload should record its error"
+		);
+
+		// A subsequent successful reload clears the error.
+		fs_err::tokio::write(&path, local_config("second"))
+			.await
+			.unwrap();
+		let _ = local_client.reload_config_after_change(prev).await;
+		assert!(config.config_reload_status.last_error().is_none());
 	}
 }

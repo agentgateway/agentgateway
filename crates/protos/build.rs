@@ -8,6 +8,8 @@ fn main() -> Result<(), anyhow::Error> {
 		"proto/ext_mcp.proto",
 		"proto/ext_proc.proto",
 		"proto/rls.proto",
+		"proto/ateapi.proto",
+		"proto/credprovider.proto",
 		"proto/workload.proto",
 		"proto/resource.proto",
 		// SPIFFE Workload API. The generated bindings are gated behind the `spiffe-test-server`

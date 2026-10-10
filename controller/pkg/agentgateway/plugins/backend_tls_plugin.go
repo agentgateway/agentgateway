@@ -198,9 +198,10 @@ func translatePoliciesForBackendTLS(
 			}
 
 			policy := &api.Policy{
-				Key:    btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
-				Name:   TypedResourceName(wellknown.BackendTLSPolicyKind, btls),
-				Target: policyTarget,
+				Key:               btls.Namespace + "/" + btls.Name + backendTlsPolicySuffix + attachmentName(policyTarget),
+				Name:              TypedResourceName(wellknown.BackendTLSPolicyKind, btls),
+				Target:            policyTarget,
+				CreationTimestamp: max(btls.CreationTimestamp.Unix(), 0),
 				Kind: &api.Policy_Backend{
 					Backend: &api.BackendPolicySpec{
 						Kind: &api.BackendPolicySpec_BackendTls{
@@ -241,6 +242,7 @@ func checkConflicted(
 	target gwv1.LocalPolicyTargetReferenceWithSectionName,
 	allMatches []*gwv1.BackendTLSPolicy,
 ) error {
+	var winner *gwv1.BackendTLSPolicy
 	for _, m := range allMatches {
 		if m.UID == btls.UID {
 			// This is ourself, skip it
@@ -252,10 +254,13 @@ func checkConflicted(
 		if conflict == nil {
 			continue
 		}
-		// If the one we match with is higher priority, we are conflicted
-		if policyselection.HasHigherPriority(m, btls) {
-			return fmt.Errorf("policy %v matches the same target but with higher priority", m.Name)
+		// If the one we match with is higher priority, we are conflicted. Report the highest priority one.
+		if policyselection.HasHigherPriority(m, btls) && (winner == nil || policyselection.HasHigherPriority(m, winner)) {
+			winner = m
 		}
+	}
+	if winner != nil {
+		return fmt.Errorf("policy %v matches the same target but with higher priority", winner.Name)
 	}
 	return nil
 }

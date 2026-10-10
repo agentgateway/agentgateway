@@ -20,11 +20,11 @@ following the [vLLM Semantic Router configuration guide](https://vllm-semantic-r
 This example assumes a working agentgateway LLM path with cost and
 observability data available:
 
-- [Install agentgateway with Helm](https://agentgateway.dev/docs/kubernetes/main/install/helm/).
-- [Set up an agentgateway proxy](https://agentgateway.dev/docs/kubernetes/main/setup/gateway/).
-- [Configure OpenAI as an LLM provider](https://agentgateway.dev/docs/kubernetes/main/llm/providers/openai/).
-- [Price LLM requests with a model cost catalog](https://agentgateway.dev/docs/kubernetes/main/llm/costs/).
-- [Install an OpenTelemetry stack](https://agentgateway.dev/docs/kubernetes/main/observability/otel-stack/).
+- [Install agentgateway with Helm](https://agentgateway.dev/docs/kubernetes/main/documentation/install/helm/).
+- [Set up an agentgateway proxy](https://agentgateway.dev/docs/kubernetes/main/documentation/setup/gateway/).
+- [Configure OpenAI as an LLM provider](https://agentgateway.dev/docs/kubernetes/main/integrations/llm/providers/openai/).
+- [Price LLM requests with a model cost catalog](https://agentgateway.dev/docs/kubernetes/main/documentation/llm/cost-controls/costs/).
+- [Install an OpenTelemetry stack](https://agentgateway.dev/docs/kubernetes/main/documentation/observability/otel-stack/).
 
 The `AgentgatewayBackend` in `agentgateway-routing.yaml` expects an
 `openai-secret` in `agentgateway-system`, matching the provider setup guide.
@@ -148,7 +148,7 @@ kubectl apply \
 ```
 
 The policy uses an [agentgateway request-body
-transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+transformation](https://agentgateway.dev/docs/kubernetes/latest/documentation/traffic-management/transformations/validate/)
 to rewrite the request's `model` field to `auto` before vSR selects a model.
 Remove it to restore direct model selection:
 
@@ -173,7 +173,7 @@ OpenAI Responses API and vSR translates streamed Responses events before the
 gateway forwards the request to the selected model.
 
 For Codex CLI and ChatGPT desktop app setup, see [Use Codex with
-agentgateway](https://agentgateway.dev/docs/kubernetes/latest/integrations/llm-clients/codex/).
+agentgateway](https://agentgateway.dev/docs/kubernetes/latest/integrations/llm/clients/codex/).
 
 ### Verify Codex Routing
 
@@ -191,9 +191,9 @@ successful `response_status`.
 The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
 clients. Agentgateway can [rewrite client-facing model names with model
-aliases](https://agentgateway.dev/docs/kubernetes/latest/llm/alias/). An
+aliases](https://agentgateway.dev/docs/kubernetes/latest/documentation/llm/alias/). An
 organization can also use a [request-body
-transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+transformation](https://agentgateway.dev/docs/kubernetes/latest/documentation/traffic-management/transformations/validate/)
 to rewrite every request to `auto`. Treat `auto` as the supported client path
 when testing this policy.
 

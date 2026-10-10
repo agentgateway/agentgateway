@@ -57,9 +57,42 @@ impl CreditCardRecognizer {
 
 impl Recognizer for CreditCardRecognizer {
 	fn recognize(&self, text: &str) -> Vec<super::recognizer_result::RecognizerResult> {
-		self.recognizer.recognize(text)
+		self
+			.recognizer
+			.recognize(text)
+			.into_iter()
+			.filter(|result| luhn_checksum_is_valid(&result.matched))
+			.collect()
 	}
 	fn name(&self) -> &str {
 		self.recognizer.name()
 	}
+}
+
+// Luhn algorithm definition: https://www.pcisecuritystandards.org/faq/articles/Frequently_Asked_Question/how-can-i-validate-if-a-number-is-a-legitimate-credit-card-number/
+fn luhn_checksum_is_valid(value: &str) -> bool {
+	let mut checksum = 0;
+	let mut double = false;
+	let mut digits = 0;
+
+	for byte in value.bytes().rev() {
+		let mut digit = match byte {
+			b'0'..=b'9' => u32::from(byte - b'0'),
+			b'-' | b' ' => continue,
+			_ => return false,
+		};
+		digits += 1;
+
+		if double {
+			digit *= 2;
+			if digit > 9 {
+				digit -= 9;
+			}
+		}
+
+		checksum += digit;
+		double = !double;
+	}
+
+	digits > 0 && checksum % 10 == 0
 }

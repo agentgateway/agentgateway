@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
 use secrecy::SecretString;
-use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serializer};
 #[cfg(not(feature = "schema"))]
@@ -33,33 +32,27 @@ pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 	*t == Default::default()
 }
 
-/// Serde yaml represents things different than just as "JSON in YAML format".
-/// We don't want this. Instead, we transcode YAML via the JSON module.
-pub mod yamlviajson {
+/// YAML with recursively map-encoded enum variants.
+pub mod yaml {
 	use serde::{de, ser};
+	use serde_norway::with::singleton_map_recursive;
 
 	pub fn from_str<T>(s: &str) -> anyhow::Result<T>
 	where
 		T: for<'de> de::Deserialize<'de>,
 	{
-		let de_yaml = serde_yaml::Deserializer::from_str(s);
-		let mut buf = Vec::with_capacity(128);
-		{
-			let mut se_json = serde_json::Serializer::new(&mut buf);
-			serde_transcode::transcode(de_yaml, &mut se_json)?;
-		}
-		Ok(serde_json_path_to_error::from_slice(&buf)?)
+		Ok(singleton_map_recursive::deserialize(
+			serde_norway::Deserializer::from_str(s),
+		)?)
 	}
 
 	pub fn to_string<T>(value: &T) -> anyhow::Result<String>
 	where
 		T: ?Sized + ser::Serialize,
 	{
-		let js = serde_json::to_string(value)?;
 		let mut buf = Vec::with_capacity(128);
-		let mut se_yaml = serde_yaml::Serializer::new(&mut buf);
-		let de_serde = serde_yaml::Deserializer::from_str(&js);
-		serde_transcode::transcode(de_serde, &mut se_yaml)?;
+		let mut serializer = serde_norway::Serializer::new(&mut buf);
+		singleton_map_recursive::serialize(&value, &mut serializer)?;
 		Ok(String::from_utf8(buf)?)
 	}
 }
@@ -295,8 +288,16 @@ pub fn ser_string_or_bytes<S: Serializer, T: AsRef<[u8]>>(
 	if let Ok(s) = std::str::from_utf8(b) {
 		serializer.serialize_str(s)
 	} else {
-		serializer.serialize_bytes(b)
+		serde::Serialize::serialize(b, serializer)
 	}
+}
+
+pub fn de_string_or_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+	D: Deserializer<'de>,
+	T: From<Vec<u8>>,
+{
+	serde_with::As::<serde_with::BytesOrString>::deserialize(deserializer).map(T::from)
 }
 
 pub fn ser_string_or_bytes_option<S: Serializer, T: AsRef<[u8]>>(
@@ -387,31 +388,6 @@ where
 	let input = String::deserialize(deserializer)?;
 
 	Ok(SecretString::from(input))
-}
-
-pub fn de_as<'de, I, O, D>(deserializer: D) -> Result<O, D::Error>
-where
-	D: Deserializer<'de>,
-	I: DeserializeOwned,
-	O: TryFrom<I>,
-	<O as TryFrom<I>>::Error: Display,
-{
-	let s: I = I::deserialize(deserializer)?;
-	O::try_from(s).map_err(serde::de::Error::custom)
-}
-
-pub fn de_as_opt<'de, I, O, D>(deserializer: D) -> Result<Option<O>, D::Error>
-where
-	D: Deserializer<'de>,
-	I: DeserializeOwned,
-	O: TryFrom<I>,
-	<O as TryFrom<I>>::Error: Display,
-{
-	let s: Option<I> = <Option<I>>::deserialize(deserializer)?;
-	match s {
-		Some(i) => Ok(Some(O::try_from(i).map_err(serde::de::Error::custom)?)),
-		None => Ok(None),
-	}
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -511,3 +487,6 @@ macro_rules! const_string {
 	};
 }
 pub use crate::const_string;
+
+#[cfg(test)]
+mod yaml_tests;

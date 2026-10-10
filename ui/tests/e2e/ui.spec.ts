@@ -4,8 +4,12 @@ import {
 	configWithClaudeSubscriptionKey,
 	emptyConfig,
 	mockGateway,
+	mockXdsGateway,
 	populatedConfig,
-	sameOriginGatewayConfig
+	sameOriginGatewayConfig,
+	xdsDump,
+	xdsDumpModels,
+	xdsWildcardModel
 } from './fixtures';
 
 const pages = [
@@ -26,7 +30,7 @@ const pages = [
 	['/traffic/listeners', 'Traffic Listeners'],
 	['/traffic/routes', 'Traffic Routes'],
 	['/cel', 'CEL Playground'],
-	['/settings', 'UI Settings']
+	['/settings', 'UI']
 ] as const;
 
 test('core pages render with mocked gateway data', async ({ page }) => {
@@ -40,6 +44,52 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
+});
+
+test('log detail renders the normalized conversation', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/logs?log=log-1#conversation-step-3');
+
+	await expect(page.locator('.log-call-preview')).toHaveText('Summarize the result.');
+	const turn = page.getByLabel('Tool result → Assistant');
+	await expect(turn).toBeVisible();
+	await turn.hover();
+	await expect(page.getByRole('tooltip')).toHaveText('Tool result → Assistant');
+	await expect(page.getByRole('heading', { name: 'Trajectory' })).toBeVisible();
+	await expect(page.locator('.log-conversation')).toHaveAttribute('open', '');
+	await expect(page.locator('#conversation-step-3')).toBeVisible();
+	await expect(page.locator('.log-trajectory-bar.input')).toHaveCount(2);
+	await expect(page.locator('.log-trajectory-bar.input.system')).toHaveCount(1);
+	await expect(page.locator('.log-trajectory-bar.model')).toHaveCount(2);
+	await expect(page.locator('.log-trajectory-bar.tool-call')).toHaveCount(1);
+	await expect(page.locator('.log-trajectory-bar.tool-result')).toHaveCount(1);
+	await expect(page.locator('.log-markdown strong')).toHaveText('pong');
+	await expect(page.locator('.log-markdown a, .log-markdown img')).toHaveCount(0);
+	await expect(page.locator('.log-msg.system .log-markdown')).toContainText('docs [image: probe]');
+	await expect(page.locator('.log-tool-block.call')).toHaveCount(1);
+	await expect(page.locator('.log-tool-block.result')).toHaveCount(1);
+	await expect(page.locator('.log-tool-block.reasoning')).toHaveCount(2);
+	await expect(page.locator('.log-tool-block.reasoning').nth(0)).toContainText(
+		'Checking the source'
+	);
+	await expect(page.locator('.log-tool-block.reasoning').nth(1)).toContainText(
+		'Encrypted (4 bytes)'
+	);
+
+	await page.locator('.log-tool-block.call .log-tool-toggle').click();
+	await expect(page.locator('.log-tool-block.call .log-tool-text')).toHaveText(
+		'line one\nline two'
+	);
+	await page.locator('.log-tool-block.result .log-tool-toggle').click();
+	await expect(page.locator('.log-tool-block.result .json-block')).toContainText('"answer": "ok"');
+
+	await page.getByRole('button', { name: 'Step 4: Tool call: lookup' }).click();
+	await expect(page.locator('.log-trajectory-caption > span')).toHaveText(
+		'Step 4 Tool call: lookup'
+	);
+	await page.getByRole('link', { name: 'Jump to conversation' }).click();
+	await expect(page).toHaveURL(/#conversation-step-4$/);
+	await expect(page.locator('#conversation-step-4')).toBeInViewport();
 });
 
 test('log settings migrate prompt logging to the database LLM mode', async ({ page }) => {
@@ -112,7 +162,7 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /LLM/ })).toBeVisible();
 	await expect(page.getByRole('button', { name: /MCP/ })).toBeVisible();
-	await page.getByRole('button', { name: /APIs/ }).click();
+	await page.getByRole('button', { name: /^Enable Traffic/ }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].gateways).toMatchObject({
@@ -123,22 +173,17 @@ test('onboards all surfaces from a completely empty config', async ({ page }) =>
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
-	expect(gateway.postedConfigs[1].llm).toMatchObject({
-		port: 4000,
-		models: [],
-		providers: [],
-		virtualModels: []
+	expect(gateway.postedConfigs[1].llm).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(3);
-	expect(gateway.postedConfigs[2].mcp).toMatchObject({
-		port: 3000,
-		targets: []
+	expect(gateway.postedConfigs[2].mcp).toEqual({
+		gateways: 'public'
 	});
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByText('3 of 3 enabled')).toBeVisible();
 	await page.getByRole('button', { name: 'Continue' }).click();
 	await expect(page.getByRole('heading', { name: 'Gateway Overview' })).toBeVisible();
 });
@@ -192,7 +237,7 @@ test('hybrid settings shows file diff without applying it', async ({ page }) => 
 			})
 		})
 	);
-	await page.goto('/settings');
+	await page.goto('/settings/ui');
 
 	await page.getByRole('combobox', { name: 'Public UI gateway' }).click();
 	await page.getByRole('option', { name: /public/ }).click();
@@ -249,7 +294,11 @@ test('raw configuration lists hybrid database resources with masked keys', async
 						id: 'key-id',
 						value: {
 							key: 'agw_sk_supersecret123',
-							metadata: { id: 'key-id', name: 'Test key' }
+							metadata: {
+								'agentgateway.dev/id': 'key-id',
+								'agentgateway.dev/createdAt': 1783641600,
+								name: 'Test key'
+							}
 						},
 						revision: 1,
 						createdAt: '2026-07-10T00:00:00Z',
@@ -287,27 +336,23 @@ test('onboards LLM and MCP onto the UI gateway when present', async ({ page }) =
 	await page.goto('/');
 
 	await expect(page.getByRole('heading', { name: 'Welcome to Agentgateway' })).toBeVisible();
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeDisabled();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeDisabled();
 
 	await page.getByRole('button', { name: /LLM/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 	expect(gateway.postedConfigs[0].llm).toMatchObject({
-		gateways: 'default',
-		models: [],
-		providers: [],
-		virtualModels: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[0].llm).not.toHaveProperty('port');
 
 	await page.getByRole('button', { name: /MCP/ }).click();
 	await expect.poll(() => gateway.postedConfigs.length).toBe(2);
 	expect(gateway.postedConfigs[1].mcp).toMatchObject({
-		gateways: 'default',
-		targets: []
+		gateways: 'default'
 	});
 	expect(gateway.postedConfigs[1].mcp).not.toHaveProperty('port');
 
-	await expect(page.getByRole('button', { name: /APIs enabled/ })).toBeVisible();
+	await expect(page.getByRole('button', { name: /^Traffic enabled/ })).toBeVisible();
 	await expect(page.locator('.nav-list').getByRole('link', { name: 'Gateways' })).toBeVisible();
 });
 
@@ -466,6 +511,125 @@ test('creates a weighted virtual model with a concrete wildcard target', async (
 			}
 		}
 	});
+});
+
+test('XDS mode lists models from the config dump as read-only', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/models');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Models' })).toBeVisible();
+	await expect(nav.getByRole('link', { name: 'Providers' })).toHaveCount(0);
+	await expect(
+		page.getByText('Read-only model inventory from the active gateway dump.')
+	).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Add model' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add virtual model' })).toHaveCount(0);
+
+	const rows = page.locator('.dump-models-table tbody tr');
+	await expect(rows).toHaveCount(5);
+	const row = (key: string) => rows.filter({ has: page.getByText(key, { exact: true }) });
+
+	await expect(row('default/gpt-4o.llm')).toContainText('Concrete');
+	await expect(row('default/gpt-4o.llm')).toContainText('public');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/gpt-4o/backend.llm');
+	await expect(row('default/gpt-4o.llm')).toContainText('default/model-gateway.llm');
+	await expect(row('default/llama.llm')).toContainText('internal');
+	await expect(row('default/llama.llm')).toContainText('default/llama/backend.llm');
+	await expect(row('default/smart.llm')).toContainText('Virtual');
+	await expect(row('default/smart.llm')).toContainText('2 weighted targets');
+	await expect(row('default/smart.llm')).toContainText('gpt-4o (80), does-not-exist (20) invalid');
+	await expect(row('default/tiered.llm')).toContainText('1 rule, fallback');
+	await expect(row('default/tiered.llm')).toContainText('gpt-4o, llama');
+	await expect(row('default/resilient.llm')).toContainText('Failover');
+	await expect(row('default/resilient.llm')).toContainText('default/resilient/backend.llm');
+
+	await page.getByRole('button', { name: 'View smart' }).click();
+	const drawer = page.getByRole('dialog', { name: 'smart' });
+	await expect(drawer).toBeVisible();
+	await expect(drawer).toContainText('does-not-exist');
+	await drawer.getByRole('button', { name: 'Close' }).click();
+	await expect(drawer).toHaveCount(0);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode shows an empty model inventory', async ({ page }) => {
+	await mockXdsGateway(page, xdsDump([]));
+	await page.goto('/llm/models');
+
+	await expect(page.getByText('No models are present in the active gateway dump.')).toBeVisible();
+	await expect(page.locator('.dump-models-table')).toHaveCount(0);
+});
+
+test('XDS mode offers Client Setup with models from the config dump', async ({ page }) => {
+	const gateway = await mockXdsGateway(page);
+	await page.goto('/llm/client-setup');
+
+	const nav = page.getByRole('navigation', { name: 'Primary' });
+	await expect(nav.getByRole('link', { name: 'Client Setup' })).toBeVisible();
+	await expect(page.getByText('This page configures the client only')).toBeVisible();
+	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
+
+	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
+	await expect(modelInput).toHaveValue('gpt-4o');
+	await page.getByRole('button', { name: 'Show Model options' }).click();
+	const modelOptions = page.getByRole('listbox', { name: 'Model' });
+	await expect(modelOptions.getByRole('option')).toHaveText([
+		'gpt-4o',
+		'resilient',
+		'smart',
+		'tiered'
+	]);
+	await modelOptions.getByRole('option', { name: 'smart' }).click();
+	await expect(modelInput).toHaveValue('smart');
+
+	await modelInput.fill('custom/model-x');
+	await expect(page.locator('.client-setup-summary')).toContainText('custom/model-x');
+
+	await page.getByLabel('Gateway base URL').fill('https://gw.example.com/llm');
+	await expect(page.getByText('Enter the gateway base URL')).toHaveCount(0);
+	await expect(page.locator('.client-setup-summary')).toContainText(
+		'https://gw.example.com/llm/v1'
+	);
+
+	expect(gateway.writeRequests).toEqual([]);
+});
+
+test('XDS mode Client Setup keeps a cleared model and asks for a concrete name', async ({
+	page
+}) => {
+	await mockXdsGateway(page, xdsDump([...xdsDumpModels(), xdsWildcardModel()]));
+	await page.goto('/llm/client-setup');
+	await page.getByLabel('Gateway base URL').fill('https://gw.example.com');
+
+	const modelInput = page.getByRole('textbox', { name: 'Model', exact: true });
+	const summary = page.locator('.client-setup-summary');
+
+	await modelInput.fill('');
+	await modelInput.press('Escape');
+	await expect(modelInput).toHaveValue('');
+	await expect(summary).toContainText('No model selected');
+
+	await modelInput.fill('gpt-5-*');
+	await modelInput.press('Escape');
+	const specificModel = page.getByRole('textbox', { name: 'Specific model' });
+	await expect(specificModel).toBeVisible();
+	await expect(summary).toContainText('gpt-5-<model>');
+
+	await specificModel.fill('nano');
+	await expect(summary).toContainText('gpt-5-nano');
+});
+
+test('Client Setup hides client snippets until the gateway URL is set', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/client-setup');
+
+	await expect(page.getByText('Enter the gateway base URL')).toHaveCount(0);
+	await page.getByLabel('Gateway base URL').fill('');
+
+	await expect(page.getByText('Enter the gateway base URL')).toBeVisible();
+	await expect(page.locator('.client-setup-summary')).toContainText('Not set');
 });
 
 test('hybrid model edits use the unified resource API', async ({ page }) => {
@@ -692,6 +856,66 @@ test('database-backed MCP servers are available across hybrid UI pages', async (
 	expect(gateway.postedConfigs).toHaveLength(0);
 });
 
+test('creates an OpenAPI MCP target', async ({ page }) => {
+	const gateway = await mockGateway(page, emptyConfig());
+	await page.goto('/mcp/servers');
+
+	await page.getByRole('button', { name: 'Add server' }).first().click();
+	await page.getByLabel('Server name').fill('weather');
+	await page.getByRole('radio', { name: 'OpenAPI' }).click();
+	await page
+		.locator('label.field', { hasText: 'URL' })
+		.getByRole('textbox')
+		.fill('http://localhost:8101/mcp');
+	await page
+		.locator('label.field', { hasText: 'Schema' })
+		.getByRole('textbox')
+		.fill('https://example.com/weather-openapi.json');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'weather',
+		openapi: {
+			host: 'http://localhost:8101/mcp',
+			schema: { url: 'https://example.com/weather-openapi.json' }
+		}
+	});
+});
+
+test('editing an OpenAPI MCP target preserves its schema', async ({ page }) => {
+	const config = emptyConfig();
+	(config.mcp as { targets?: unknown[] }).targets = [
+		{
+			name: 'invoices',
+			openapi: {
+				host: 'http://localhost:8102/openapi',
+				schema: { url: 'https://example.com/invoices-openapi.json' }
+			}
+		}
+	];
+	const gateway = await mockGateway(page, config);
+	await page.goto('/mcp/servers');
+
+	await page
+		.getByRole('row', { name: /invoices/ })
+		.getByRole('button', { name: 'Edit server' })
+		.click();
+	await page.getByLabel('Server name').fill('invoices-v2');
+	await page.getByRole('button', { name: 'Save server' }).click();
+
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	const saved = gateway.postedConfigs.at(-1) as { mcp?: { targets?: unknown[] } };
+	expect(saved.mcp?.targets?.[0]).toEqual({
+		name: 'invoices-v2',
+		openapi: {
+			host: 'http://localhost:8102/openapi',
+			schema: { url: 'https://example.com/invoices-openapi.json' }
+		}
+	});
+});
+
 test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	const config = emptyConfig();
 	config.mcp = {
@@ -901,8 +1125,10 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			const kind = String(resource.kind);
 			if (!kind.endsWith('.policy')) continue;
 			const sectionName = kind.split('.')[0];
-			const section = (effective[sectionName] ??= {}) as Record<string, unknown>;
-			const policies = (section.policies ??= {}) as Record<string, unknown>;
+			effective[sectionName] ??= {};
+			const section = effective[sectionName] as Record<string, unknown>;
+			section.policies ??= {};
+			const policies = section.policies as Record<string, unknown>;
 			policies[String(resource.id)] = resource.value;
 		}
 		return route.fulfill({
@@ -973,7 +1199,7 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 		'/mcp/policies#cors'
 	);
 
-	await page.goto('/settings');
+	await page.goto('/settings/ui');
 	await page.getByText('CORS', { exact: true }).click();
 	await page.getByRole('button', { name: 'Add current origin' }).click();
 	await page.getByRole('button', { name: 'Save policy' }).click();
@@ -1017,6 +1243,43 @@ test('reveals a virtual API key explicitly', async ({ page }) => {
 	await expect(page.getByText('agw_sk_testkey123456789')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Show full key' }).click();
 	await expect(page.getByText('agw_sk_testkey123456789')).toBeVisible();
+});
+
+test('warns that API key budgets require the primary database', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/keys');
+
+	await page.getByRole('button', { name: 'Edit key' }).click();
+	await page.getByRole('button', { name: /^Budgets/ }).click();
+	const warning = page.locator('.status-banner.warn').filter({ hasText: 'Database required' });
+	await expect(warning).toContainText('API key budgets require config.database to be configured.');
+});
+
+test('shows a banner when the last configuration reload failed', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/api/runtime', route =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				build: {
+					version: 'test',
+					gitRevision: 'test',
+					rustVersion: 'test',
+					buildProfile: 'test',
+					buildTarget: 'test'
+				},
+				ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+				configReload: { synchronized: false, lastError: "invalid CEL expression '('" }
+			})
+		})
+	);
+	await page.goto('/');
+
+	const banner = page
+		.locator('.status-banner.warn')
+		.filter({ hasText: 'Configuration reload failed' });
+	await expect(banner).toBeVisible();
+	await expect(banner).toContainText('still running the previous configuration');
 });
 
 test('LLM playground sends selected virtual model name', async ({ page }) => {
@@ -1259,3 +1522,71 @@ function trafficBaseConfig() {
 	];
 	return config;
 }
+
+for (const canLogout of [true, false]) {
+	test(`account menu shows the signed-in user (canLogout=${canLogout})`, async ({ page }) => {
+		await mockGateway(page);
+		await page.route('**/api/runtime', route =>
+			route.fulfill({
+				json: {
+					build: {},
+					ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+					user: { subject: 'user-1', name: 'Alex Rivera', email: 'alex@example.com', canLogout }
+				}
+			})
+		);
+		await page.route('**/api/auth/logout', route =>
+			route.fulfill({
+				contentType: 'text/html',
+				body: '<h1>Signed out</h1>'
+			})
+		);
+		await page.goto('/');
+		const account = page.getByRole('button', { name: 'Account: Alex Rivera' });
+		await expect(account).toBeVisible();
+		await expect(account.locator('.user-avatar')).toHaveText('AR');
+		await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+		await account.click();
+		await expect(page.getByRole('region', { name: 'Your account' })).toContainText(
+			'alex@example.com'
+		);
+		if (!canLogout) {
+			await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
+			return;
+		}
+		await page.getByRole('button', { name: 'Sign out', exact: true }).focus();
+		await page.keyboard.press('Escape');
+		await expect(account).toBeFocused();
+		await expect(account).toHaveAttribute('aria-expanded', 'false');
+		await page.setViewportSize({ width: 390, height: 844 });
+		await account.click();
+		const logout = page.waitForRequest('**/api/auth/logout');
+		await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+		expect((await logout).method()).toBe('POST');
+		await expect(page.getByRole('heading', { name: 'Signed out' })).toBeVisible();
+	});
+}
+
+test('login loads without protected API requests and preserves the return destination', async ({
+	page
+}) => {
+	const apiRequests: string[] = [];
+	page.on('request', request => {
+		if (/^\/(api\/|config_dump)/.test(new URL(request.url()).pathname)) {
+			apiRequests.push(request.url());
+		}
+	});
+	await page.goto('/login?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall');
+	await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
+	await expect(
+		page.getByRole('img', { name: 'agentgateway' }).filter({ visible: true })
+	).toBeVisible();
+	await expect(page.getByRole('navigation')).toHaveCount(0);
+	await page.evaluate(() => document.fonts.ready);
+	expect(apiRequests).toEqual([]);
+
+	await page.route('**/api/auth/login?*', route => route.fulfill({ body: 'OAuth started' }));
+	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
+	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
+	await expect(page.getByText('OAuth started')).toBeVisible();
+});

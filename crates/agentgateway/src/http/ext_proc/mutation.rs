@@ -1,16 +1,19 @@
 use std::convert::Infallible;
+use std::sync::Mutex;
 
 use bytes::Bytes;
 use http_body::Frame;
 use tokio::sync::mpsc::Sender;
 use tracing::{trace, warn};
 
-use super::headers::{apply_header_mutations_request, apply_header_mutations_response};
+use super::headers::{
+	apply_header_mutations_request, apply_header_mutations_response, apply_header_mutations_to_map,
+};
 use super::proto::body_mutation::Mutation;
 use super::proto::processing_response::Response;
 use super::{Error, ExtProcDynamicMetadata};
 use crate::http::ext_proc::proto::{
-	BodyMutation, BodyResponse, CommonResponse, HeadersResponse, ImmediateResponse,
+	BodyMutation, BodyResponse, CommonResponse, HeaderMutation, HeadersResponse, ImmediateResponse,
 	ProcessingResponse,
 };
 use crate::http::{self, PolicyResponse, envoy_proto_common};
@@ -92,6 +95,22 @@ pub(super) fn response_response_has_streamed_body_mutation(presp: &ProcessingRes
 	}
 }
 
+async fn forward_trailers(
+	direction: &'static str,
+	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
+	trailer_slot: &Mutex<Option<::http::HeaderMap>>,
+	header_mutation: Option<&HeaderMutation>,
+) -> bool {
+	let trailers = trailer_slot.lock().expect("trailers mutex poisoned").take();
+	let Some(mut trailers) = trailers else {
+		warn!("received {direction} trailers response without sent trailers");
+		return false;
+	};
+	apply_header_mutations_to_map(&mut trailers, header_mutation);
+	let _ = body_tx.send(Ok(Frame::trailers(trailers))).await;
+	true
+}
+
 // handle_response_for_request_mutation handles a single ext_proc response. If it returns 'true' we are done processing.
 pub(super) async fn handle_response_for_request_mutation(
 	had_body: bool,
@@ -99,6 +118,7 @@ pub(super) async fn handle_response_for_request_mutation(
 	validate_content_length: bool,
 	mut req: Option<&mut http::Request>,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
+	request_trailers: &Mutex<Option<::http::HeaderMap>>,
 	presp: ProcessingResponse,
 ) -> Result<(bool, bool), Error> {
 	if let Some(dm) = &presp.dynamic_metadata {
@@ -134,9 +154,18 @@ pub(super) async fn handle_response_for_request_mutation(
 			trace!("got request body back");
 			cr
 		},
-		Some(Response::RequestTrailers(_)) => {
+		Some(Response::RequestTrailers(trailers_response)) => {
 			trace!("got request trailers back");
-			return Ok((false, true));
+			return Ok((
+				false,
+				forward_trailers(
+					"request",
+					body_tx,
+					request_trailers,
+					trailers_response.header_mutation.as_ref(),
+				)
+				.await,
+			));
 		},
 		Some(Response::ImmediateResponse(_)) => {
 			if req.is_none() {
@@ -186,7 +215,11 @@ pub(super) async fn handle_response_for_request_mutation(
 		return Ok((res, true));
 	} else if is_body_response {
 		trace!("got request body back without body mutation; forwarding original body");
-		return Ok((true, true));
+		let wait_for_trailers = request_trailers
+			.lock()
+			.expect("request trailers mutex poisoned")
+			.is_some();
+		return Ok((true, !wait_for_trailers));
 	}
 	trace!("still waiting for response...");
 	Ok((res, false))
@@ -220,6 +253,7 @@ pub(super) async fn handle_response_for_response_mutation(
 	validate_content_length: bool,
 	mut resp: Option<&mut http::Response>,
 	body_tx: &mut Sender<Result<Frame<Bytes>, Infallible>>,
+	response_trailers: &Mutex<Option<::http::HeaderMap>>,
 	presp: ProcessingResponse,
 ) -> Result<(bool, bool), Error> {
 	if let Some(dm) = &presp.dynamic_metadata {
@@ -249,9 +283,18 @@ pub(super) async fn handle_response_for_response_mutation(
 			trace!("got empty response body back");
 			return Ok((res, true));
 		},
-		Some(Response::ResponseTrailers(_)) => {
+		Some(Response::ResponseTrailers(trailers_response)) => {
 			trace!("got response trailers back");
-			return Ok((res, true));
+			return Ok((
+				res,
+				forward_trailers(
+					"response",
+					body_tx,
+					response_trailers,
+					trailers_response.header_mutation.as_ref(),
+				)
+				.await,
+			));
 		},
 		Some(Response::ImmediateResponse(_)) => {
 			warn!("received ImmediateResponse during response-body continuation; treating as terminal");
@@ -296,7 +339,11 @@ pub(super) async fn handle_response_for_response_mutation(
 		return Ok((res, true));
 	} else if is_body_response {
 		trace!("got response body back without body mutation; forwarding original body");
-		return Ok((true, true));
+		let wait_for_trailers = response_trailers
+			.lock()
+			.expect("response trailers mutex poisoned")
+			.is_some();
+		return Ok((true, !wait_for_trailers));
 	}
 	trace!("still waiting for response for response...");
 	Ok((res, false))

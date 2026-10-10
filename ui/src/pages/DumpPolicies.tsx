@@ -129,6 +129,7 @@ export function DumpPoliciesPage() {
 }
 
 function FieldLabel(props: { children: string }) {
+	// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	return <label className="field-label">{props.children}</label>;
 }
 

@@ -1,0 +1,127 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-svc
+  namespace: default
+  labels:
+    app: mcp-app
+spec:
+  selector:
+    test: test
+  ports:
+    - protocol: TCP
+      appProtocol: agentgateway.dev/mcp
+      port: 80
+      targetPort: test
+    - protocol: TCP
+      appProtocol: agentgateway.dev/mcp-sse
+      port: 90
+      targetPort: test-2
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: mcp-backend
+  namespace: default
+spec:
+  mcp:
+    targets:
+      # Every Service the selector picks up is gated on the same condition.
+      - name: mcp-app
+        selector:
+          services:
+            matchLabels:
+              app: mcp-app
+        condition: 'jwt.groups.exists(g, g == "internal")'
+      - name: admin
+        static:
+          host: admin.example.com
+          port: 8080
+        condition: 'jwt.sub == "admin"'
+      - name: public
+        static:
+          host: public.example.com
+          port: 8080
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-backend
+      mcp:
+        targets:
+        - backend:
+            port: 80
+            service:
+              hostname: example-svc.default.svc.cluster.local
+              namespace: default
+          condition: jwt.groups.exists(g, g == "internal")
+          name: example-svc-80
+          protocol: STREAMABLE_HTTP
+        - backend:
+            port: 90
+            service:
+              hostname: example-svc.default.svc.cluster.local
+              namespace: default
+          condition: jwt.groups.exists(g, g == "internal")
+          name: example-svc-90
+          protocol: SSE
+        - backend:
+            backend: default/mcp-backend/admin
+          condition: jwt.sub == "admin"
+          name: admin
+        - backend:
+            backend: default/mcp-backend/public
+          name: public
+      name:
+        name: mcp-backend
+        namespace: default
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-backend/admin
+      name:
+        name: mcp-backend
+        namespace: default
+      static:
+        host: admin.example.com
+        port: 8080
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/mcp-backend/public
+      name:
+        name: mcp-backend
+        namespace: default
+      static:
+        host: public.example.com
+        port: 8080
+- canonical: true
+  hostname: example-svc.default.svc.cluster.local
+  name: example-svc
+  namespace: default
+  ports:
+  - servicePort: 80
+  - servicePort: 90
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: mcp-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

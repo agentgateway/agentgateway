@@ -52,9 +52,7 @@ impl FileInlineOrRemote {
 
 	pub async fn load_openapi_schema(&self, resources: &ResourceFetcher) -> anyhow::Result<OpenAPI> {
 		let s = self.load_string(resources, ResourceKind::OpenApi).await?;
-		stacker::grow(2 * 1024 * 1024, || {
-			yamlviajson::from_str::<OpenAPI>(s.as_str())
-		})
+		stacker::grow(2 * 1024 * 1024, || yaml::from_str::<OpenAPI>(s.as_str()))
 	}
 
 	async fn load_string(

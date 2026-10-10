@@ -28,6 +28,7 @@ export function CollapsiblePolicySection(props: {
 	description: string;
 	children: ReactNode;
 	defaultOpen?: boolean;
+	summary?: ReactNode;
 	bodyClassName?: string;
 }) {
 	const [open, setOpen] = useState(Boolean(props.defaultOpen));
@@ -50,6 +51,9 @@ export function CollapsiblePolicySection(props: {
 					<h4>{props.title}</h4>
 					<p>{props.description}</p>
 				</div>
+				{props.summary != null ? (
+					<span className="policy-form-section-summary">{props.summary}</span>
+				) : null}
 				{open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
 			</button>
 			{open ? (

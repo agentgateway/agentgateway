@@ -35,7 +35,7 @@ workloads:
     hboneMtlsPort: {hbone_port}
     services:
       default/test-service.default.svc.cluster.local:
-        "8080": 8080
+        8080: 8080
 services:
   - name: "test-service"
     namespace: "default"
@@ -43,7 +43,7 @@ services:
     vips:
       - "/127.0.0.1"
     ports:
-      "8080": 8080
+      8080: 8080
 binds:
 - port: $PORT
   listeners:
@@ -165,7 +165,7 @@ workloads:
       hboneMtlsPort: {gateway_port}
     services:
       default/remote-service.default.svc.cluster.local:
-        "8080": 8080
+        8080: 8080
 services:
   - name: "remote-service"
     namespace: "default"
@@ -173,7 +173,7 @@ services:
     vips:
       - "/127.0.0.2"
     ports:
-      "8080": 8080
+      8080: 8080
 binds:
 - port: $PORT
   listeners:
@@ -299,7 +299,7 @@ workloads:
       hboneMtlsPort: {gateway_port}
     services:
       remote/backend.remote.svc.cluster.local:
-        "8080": 8080
+        8080: 8080
 services:
   - name: "backend"
     namespace: "remote"
@@ -307,7 +307,7 @@ services:
     vips:
       - "/127.0.0.2"
     ports:
-      "8080": 8080
+      8080: 8080
 binds:
 - port: $PORT
   listeners:
@@ -418,7 +418,7 @@ workloads:
     protocol: TCP
     services:
       default/backend.default.svc.cluster.local:
-        "8080": {backend_port}
+        8080: {backend_port}
 services:
   - name: "backend"
     namespace: "default"
@@ -426,7 +426,7 @@ services:
     vips:
       - "/{backend_ip}"
     ports:
-      "8080": {backend_port}
+      8080: {backend_port}
 binds:
 - port: $PORT
   listeners:
@@ -521,7 +521,7 @@ workloads:
       hboneMtlsPort: {gateway_port}
     services:
       default/remote-service.default.svc.cluster.local:
-        "8080": 8080
+        8080: 8080
 services:
   - name: "remote-service"
     namespace: "default"
@@ -529,7 +529,7 @@ services:
     vips:
       - "/127.0.0.2"
     ports:
-      "8080": 8080
+      8080: 8080
 binds:
 - port: $PORT
   listeners:

@@ -77,9 +77,8 @@ impl NetworkAuthorizationSet {
 		Self(rs)
 	}
 
-	pub fn apply(&self, source: &crate::cel::SourceContext) -> Result<(), ProxyError> {
-		let exec = Executor::new_source(source);
-		let allowed = self.0.validate(&exec);
+	pub fn apply(&self, exec: &Executor<'_>) -> Result<(), ProxyError> {
+		let allowed = self.0.validate(exec);
 		if !allowed {
 			Err(ProxyError::AuthorizationFailed)
 		} else {
@@ -331,9 +330,6 @@ impl RuleSet {
 
 	pub fn has_allow_rules(&self) -> bool {
 		!self.rules.allow.is_empty()
-	}
-	pub fn has_require_rules(&self) -> bool {
-		!self.rules.require.is_empty()
 	}
 	pub fn denies(&self, exec: &cel::Executor) -> bool {
 		if self.rules.deny.is_empty() {

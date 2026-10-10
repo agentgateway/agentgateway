@@ -359,8 +359,11 @@ async fn network_http_ext_authz_denies_tcp_connection() {
 	assert_eq!(authz.received_requests().await.unwrap().len(), 1);
 }
 
+#[rstest::rstest]
+#[case::upstream(false)]
+#[case::direct_response(true)]
 #[tokio::test]
-async fn local_ratelimit() {
+async fn local_ratelimit(#[case] direct_response: bool) {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
 		.attach_route_policy(json!({
@@ -372,8 +375,17 @@ async fn local_ratelimit() {
 		}))
 		.await;
 
+	if direct_response {
+		bind
+			.attach_route_policy(json!({
+				"directResponse": {"status": 200, "body": "hello"}
+			}))
+			.await;
+	}
+
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
+	assert!(res.headers().get(header::RETRY_AFTER).is_none());
 	// Allowed responses advertise the current limit so clients can self-throttle.
 	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
 	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
@@ -384,6 +396,7 @@ async fn local_ratelimit() {
 	// The 429 still carries the limit info.
 	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
 	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
+	assert_eq!(res.hdr("retry-after"), "1");
 }
 
 #[tokio::test]

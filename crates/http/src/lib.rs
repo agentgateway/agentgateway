@@ -1,12 +1,79 @@
+mod body;
+mod buflist;
+mod idle_timeout;
+mod peekbody;
+mod recordbody;
+
+pub use body::{Body, BodyContent, BodyExtension, BodyObserver, BodyTimeoutError, ReplayBodyState};
+pub use buflist::BufList;
+pub use recordbody::{RecordedBody, RecordedBodyHandle};
+
 pub type Error = axum_core::Error;
-pub type Body = axum_core::body::Body;
+pub type RawBody = axum_core::body::Body;
 pub type Request = http::Request<Body>;
 pub type Response = http::Response<Body>;
+pub use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
+
+pub trait ResponseBodyExt {
+	/// Replace content and discard the old length.
+	fn replace_body_bytes(&mut self, bytes: bytes::Bytes);
+
+	fn try_modify_body<F, Fut, E>(&mut self, f: F) -> impl Future<Output = Result<(), E>>
+	where
+		F: FnOnce(Body) -> Fut,
+		Fut: Future<Output = Result<BodyContent, E>>;
+}
+
+impl ResponseBodyExt for Response {
+	fn replace_body_bytes(&mut self, bytes: bytes::Bytes) {
+		self.body_mut().replace_bytes(bytes);
+		self.headers_mut().remove(http::header::CONTENT_LENGTH);
+	}
+
+	async fn try_modify_body<F, Fut, E>(&mut self, f: F) -> Result<(), E>
+	where
+		F: FnOnce(Body) -> Fut,
+		Fut: Future<Output = Result<BodyContent, E>>,
+	{
+		self.body_mut().try_modify(f).await?;
+		self.headers_mut().remove(http::header::CONTENT_LENGTH);
+		Ok(())
+	}
+}
+
+pub trait RequestBodyExt {
+	/// Replace content and discard the old length.
+	fn replace_body_bytes(&mut self, bytes: bytes::Bytes);
+}
+
+impl RequestBodyExt for Request {
+	fn replace_body_bytes(&mut self, bytes: bytes::Bytes) {
+		self.body_mut().replace_bytes(bytes);
+		self.headers_mut().remove(http::header::CONTENT_LENGTH);
+	}
+}
 
 pub const DEFAULT_BUFFER_LIMIT: usize = 2_097_152;
 
 #[derive(Debug, Clone)]
 pub struct BufferLimit(pub usize);
+
+/// A bounded snapshot made available without consuming the body from the
+/// downstream caller's perspective.
+///
+/// Inspection may poll and buffer the body so a policy can examine it before
+/// forwarding. It belongs to the specific body content and is invalidated when
+/// that content changes. In contrast, [`RecordedBodyHandle`] passively observes
+/// bytes only as downstream consumes them, primarily for logging, and can remain
+/// attached across a content replacement.
+#[derive(Clone, Debug)]
+#[must_use]
+pub enum BodyInspection {
+	/// The complete body fit within the configured limit.
+	Complete(bytes::Bytes),
+	/// The body exceeded the limit. Contains the first `limit` bytes.
+	Partial(bytes::Bytes),
+}
 
 impl BufferLimit {
 	pub fn new(limit: usize) -> Self {
@@ -30,8 +97,58 @@ pub fn response_buffer_limit(resp: &Response) -> usize {
 		.unwrap_or(DEFAULT_BUFFER_LIMIT)
 }
 
+/// Read with a size limit and the remaining [`Body::deadline`] budget.
 pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<bytes::Bytes, Error> {
-	axum::body::to_bytes(body, limit).await
+	body.into_bytes(limit).await
+}
+
+pub fn is_length_limit_error(err: &Error) -> bool {
+	use std::error::Error as _;
+
+	err
+		.source()
+		.is_some_and(|source| source.is::<http_body_util::LengthLimitError>())
+}
+
+#[derive(Debug, Default)]
+#[must_use]
+pub struct PolicyResponse {
+	pub direct_response: Option<Response>,
+	pub response_headers: Option<HeaderMap>,
+}
+
+impl PolicyResponse {
+	pub fn should_short_circuit(&self) -> bool {
+		self.direct_response.is_some()
+	}
+	pub fn with_response(self, other: Response) -> Self {
+		PolicyResponse {
+			direct_response: Some(other),
+			response_headers: self.response_headers,
+		}
+	}
+}
+
+pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
+	if let Some(rh) = additional_headers {
+		// HeaderMap::into_iter reports the name only for the first value in a repeated field.
+		let mut previous_name = None;
+		for (k, v) in rh.into_iter() {
+			if let Some(k) = k {
+				previous_name = Some(k.clone());
+				// Most response mutations replace an existing header. Set-Cookie is not list-valued,
+				// so each policy and upstream cookie must remain a separate appended field.
+				if k == header::SET_COOKIE {
+					dest.append(k, v);
+				} else {
+					dest.insert(k, v);
+				}
+			// Preserve subsequent Set-Cookie values whose repeated field name was omitted above.
+			} else if previous_name.as_ref() == Some(&header::SET_COOKIE) {
+				dest.append(header::SET_COOKIE, v);
+			}
+		}
+	}
 }
 
 pub mod x_headers {

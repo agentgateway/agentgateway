@@ -6,7 +6,7 @@ use cel::objects::ListValue;
 use cel::{Context, ExecutionError, FunctionContext, Program, ResolveResult, Value};
 use flagset::FlagSet;
 
-use super::{Attributes, Error, ROOT_CONTEXT, attributes_for};
+use super::{Attributes, Error, ROOT_CONTEXT};
 
 #[derive(Clone, Debug)]
 struct Definition {
@@ -35,13 +35,6 @@ struct Registered {
 	program: Program,
 }
 
-#[derive(Default)]
-pub(super) struct Registry {
-	// Transitive attributes for each custom function, used when compiling
-	// expressions that call them.
-	attributes: HashMap<String, FlagSet<Attributes>>,
-}
-
 pub fn register(definitions: &str) -> Result<(), Error> {
 	if definitions.trim().is_empty() {
 		return Ok(());
@@ -63,19 +56,13 @@ pub fn register(definitions: &str) -> Result<(), Error> {
 	let mut ctx = Context::default();
 	agent_celx::insert_all(&mut ctx);
 	reject_builtin_collisions(&parsed, &ctx)?;
-	let mut registry = Registry::default();
 	for definition in parsed {
 		let function = register_function(&definition)?;
 		ctx.add_function_direct(&definition.name, function);
-		registry
-			.attributes
-			.insert(definition.name.clone(), attributes[&definition.name]);
 	}
+	agent_policy::install_custom_function_attributes(attributes)?;
 	ROOT_CONTEXT
-		.set(super::RootContext {
-			context: ctx,
-			registry,
-		})
+		.set(super::RootContext { context: ctx })
 		.map_err(|_| {
 			Error::Variable("custom CEL functions must be registered before CEL is used".to_string())
 		})?;
@@ -191,20 +178,6 @@ fn transitive_attributes(
 	attributes
 }
 
-pub fn attributes_for_functions<'a>(
-	functions: impl Iterator<Item = &'a str>,
-) -> FlagSet<Attributes> {
-	let Some(root) = ROOT_CONTEXT.get() else {
-		return FlagSet::default();
-	};
-	functions.fold(FlagSet::default(), |mut acc, function| {
-		if let Some(function_attrs) = root.registry.attributes.get(function) {
-			acc |= *function_attrs;
-		}
-		acc
-	})
-}
-
 fn register_function(definition: &Definition) -> Result<Function, Error> {
 	let program = Program::compile_with_optimizer(&definition.body, agent_celx::DefaultOptimizer)?;
 	// Custom functions live in the global CEL context for the rest of the
@@ -300,11 +273,22 @@ impl<'a> VariableResolver<'a> for CustomResolver<'a, '_> {
 	}
 
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
+		if self.masked().any(|m| m == expr) {
+			return None;
+		}
 		self.base.resolve_member(expr, member)
 	}
 
-	fn resolve_direct(&self, field: &cel::common::ast::OptimizedExpr) -> Option<Option<Value<'a>>> {
-		self.base.resolve_direct(field)
+	// resolve_direct is intentionally not forwarded: optimized expressions may reference a variable
+	// this resolver masks.
+}
+
+impl CustomResolver<'_, '_> {
+	/// Variable names shadowed by this resolver.
+	fn masked(&self) -> impl Iterator<Item = &str> {
+		std::iter::once("this")
+			.chain(self.params.iter().map(String::as_str))
+			.chain(self.variadic)
 	}
 }
 
@@ -426,7 +410,7 @@ fn parse_definition(header: &str, body: &str) -> Result<Definition, Error> {
 		.into_iter()
 		.map(str::to_string)
 		.collect::<Vec<_>>();
-	let mut attributes = attributes_for(program.expression());
+	let mut attributes = agent_policy::attributes_for(program.expression());
 	if calls.iter().any(|call| call == "variables") {
 		attributes |= FlagSet::full();
 	}

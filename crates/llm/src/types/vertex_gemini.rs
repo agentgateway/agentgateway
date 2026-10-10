@@ -1,10 +1,11 @@
 //! Wire DTOs for the Vertex native Gemini API (`:generateContent` /
-//! `:streamGenerateContent`).
+//! `:streamGenerateContent` / `:embedContent`).
 //!
 //! References:
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference>
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/generateContent>
 //! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/streamGenerateContent>
+//! - <https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/projects.locations.publishers.models/embedContent>
 //!
 //! Deserialized types tolerate unknown fields (flattened into `rest`, no `deny_unknown_fields`)
 //! so Google's additive changes don't break parsing.
@@ -62,7 +63,51 @@ pub enum Part {
 	FileData(FileDataPart),
 	ExecutableCode(ExecutableCodePart),
 	CodeExecutionResult(CodeExecutionResultPart),
+	ToolCall(ToolCallPart),
+	ToolResponse(ToolResponsePart),
 	Unknown(serde_json::Value),
+}
+
+impl Part {
+	pub(super) fn has_signature(&self) -> bool {
+		let rest = match self {
+			Self::Text(p) => {
+				return p.thought_signature.as_ref().is_some_and(|s| !s.is_empty())
+					|| super::has_signature(&p.rest);
+			},
+			Self::FunctionCall(p) => {
+				return p.thought_signature.as_ref().is_some_and(|s| !s.is_empty())
+					|| super::has_signature(&p.rest);
+			},
+			Self::FunctionResponse(p) => &p.rest,
+			Self::InlineData(p) => &p.rest,
+			Self::FileData(p) => &p.rest,
+			Self::ExecutableCode(p) => &p.rest,
+			Self::CodeExecutionResult(p) => &p.rest,
+			Self::ToolCall(p) => &p.rest,
+			Self::ToolResponse(p) => &p.rest,
+			Self::Unknown(value) => value,
+		};
+		super::has_signature(rest)
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolCallPart {
+	#[serde(alias = "tool_call")]
+	pub tool_call: serde_json::Value,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResponsePart {
+	#[serde(alias = "tool_response")]
+	pub tool_response: serde_json::Value,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -367,6 +412,49 @@ impl UsageMetadata {
 		let total = self.total_token_count.unwrap_or(prompt + completion);
 		(prompt, completion, total)
 	}
+}
+
+// ---------- embedContent ----------
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentRequest {
+	pub content: Content,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub embed_content_config: Option<EmbedContentConfig>,
+}
+
+/// embedContent also accepts these four fields at the top level of the request, but Vertex
+/// marks that form deprecated in favour of this nested config.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentConfig {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub task_type: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub title: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_dimensionality: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub auto_truncate: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentResponse {
+	pub embedding: EmbedContentEmbedding,
+	#[serde(default)]
+	pub usage_metadata: Option<UsageMetadata>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbedContentEmbedding {
+	pub values: Vec<f32>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[cfg(test)]

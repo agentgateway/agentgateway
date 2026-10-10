@@ -8,7 +8,12 @@ import (
 
 func resolveJWKSInlineForOwner(ctx PolicyCtx, owner jwks.RemoteJwksOwner) (string, error) {
 	if ctx.JWKSLookup == nil {
-		return "", fmt.Errorf("jwks lookup is not configured")
+		return `{"keys":[]}`, fmt.Errorf("jwks lookup is not configured")
 	}
-	return ctx.JWKSLookup.InlineForOwner(ctx.Krt, owner)
+	inline, err := ctx.JWKSLookup.InlineForOwner(ctx.Krt, owner)
+	if err != nil {
+		// Keep authentication installed with no trusted keys while reporting the lookup failure.
+		return `{"keys":[]}`, err
+	}
+	return inline, nil
 }

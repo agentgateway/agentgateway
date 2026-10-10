@@ -15,8 +15,8 @@ pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.google
 #[cfg_attr(feature = "schema", schemars(rename = "VertexProvider"))]
 pub struct Provider {
 	/// Model ID to send to Vertex AI, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 	/// Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`
 	/// use restricted multi-region endpoints. Other values are treated as regional locations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -36,15 +36,17 @@ pub fn prepare_anthropic_message_body(body: Vec<u8>) -> Result<Vec<u8>, AIError>
 }
 
 impl Provider {
-	fn configured_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<&'a str> {
-		self.model.as_deref().or(request_model)
+	pub fn is_anthropic_model(&self, request_model: &str) -> bool {
+		Self::anthropic_model(request_model).is_some()
 	}
 
-	pub fn is_anthropic_model(&self, request_model: Option<&str>) -> bool {
-		self.anthropic_model(request_model).is_some()
+	/// Canonical id for any model alias accepted by Vertex routing, as keyed in the model catalog.
+	pub fn canonical_model(request_model: &str) -> Strng {
+		Self::anthropic_model(request_model)
+			.unwrap_or_else(|| strng::new(strip_google_model_prefix(request_model)))
 	}
 
-	pub fn is_gemini_model(&self, request_model: Option<&str>) -> bool {
+	pub fn is_gemini_model(&self, request_model: &str) -> bool {
 		self.gemini_model(request_model).is_some()
 	}
 
@@ -53,15 +55,7 @@ impl Provider {
 	}
 
 	pub fn prepare_anthropic_count_tokens_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-		prepare_anthropic_body(body, |b| {
-			if let Some(Value::String(model)) = b.get("model") {
-				let normalized = self
-					.configured_model(Some(model))
-					.map(|s| s.to_string())
-					.unwrap_or_else(|| model.clone());
-				b.insert("model".to_string(), Value::String(normalized));
-			}
-		})
+		prepare_anthropic_body(body, |_| {})
 	}
 }
 
@@ -72,7 +66,7 @@ fn prepare_anthropic_body(
 	apply: impl FnOnce(&mut Map<String, Value>),
 ) -> Result<Vec<u8>, AIError> {
 	let mut body: Map<String, Value> =
-		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+		serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
 	body.insert(
 		"anthropic_version".to_string(),
 		Value::String(ANTHROPIC_VERSION.to_string()),
@@ -86,7 +80,7 @@ impl Provider {
 	pub fn get_path_for_model(
 		&self,
 		route: RouteType,
-		request_model: Option<&str>,
+		request_model: &str,
 		streaming: bool,
 		native_gemini: bool,
 	) -> Strng {
@@ -97,7 +91,7 @@ impl Provider {
 
 		match (
 			route,
-			self.anthropic_model(request_model),
+			Self::anthropic_model(request_model),
 			self.gemini_model(request_model),
 		) {
 			(RouteType::AnthropicTokenCount, _, _) => {
@@ -115,12 +109,18 @@ impl Provider {
 				)
 			},
 			(RouteType::Embeddings, _, _) => {
-				let model = self.configured_model(request_model).unwrap_or_default();
+				let model = strip_google_model_prefix(request_model);
+				let method = if self.uses_embed_content(request_model) {
+					"embedContent"
+				} else {
+					"predict"
+				};
 				strng::format!(
-					"/v1/projects/{}/locations/{}/publishers/google/models/{}:predict",
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
 					self.project_id,
 					location,
-					model
+					model,
+					method
 				)
 			},
 			(_, Some(model), _) => {
@@ -192,15 +192,17 @@ impl Provider {
 		}
 	}
 
-	fn gemini_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
-		let model = self.configured_model(request_model)?;
+	/// `gemini-embedding-2` and later are served only by `:embedContent`; `:predict`
+	/// returns FAILED_PRECONDITION for them. `-001` stays on `:predict`, that supports
+	/// batch prediction and avoids regression
+	pub fn uses_embed_content(&self, request_model: &str) -> bool {
+		let model = strip_google_model_prefix(request_model);
+		model.starts_with("gemini-embedding-") && !model.starts_with("gemini-embedding-001")
+	}
 
-		let stripped: &str = model
-			.split_once("publishers/google/models/")
-			.map(|(_, m)| m)
-			.or_else(|| model.strip_prefix("models/"))
-			.or_else(|| model.strip_prefix("google/"))
-			.unwrap_or(model);
+	fn gemini_model(&self, request_model: &str) -> Option<Strng> {
+		let model = request_model;
+		let stripped = strip_google_model_prefix(model);
 
 		// The publisher path supplies its own `.../models/` prefix, so what is left has to be a
 		// single segment; a `/` still in it would be choosing the upstream path, not a model.
@@ -228,8 +230,8 @@ impl Provider {
 		}
 	}
 
-	fn anthropic_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
-		let model = self.configured_model(request_model)?;
+	fn anthropic_model(request_model: &str) -> Option<Strng> {
+		let model = request_model;
 
 		let model: &str = model
 			.split_once("publishers/anthropic/models/")
@@ -255,6 +257,17 @@ impl Provider {
 			Some(strng::new(model))
 		}
 	}
+}
+
+/// Reduce a Google publisher model to its bare id, so callers can match on the model
+/// family regardless of how fully qualified the configured value is.
+fn strip_google_model_prefix(model: &str) -> &str {
+	model
+		.split_once("publishers/google/models/")
+		.map(|(_, m)| m)
+		.or_else(|| model.strip_prefix("models/"))
+		.or_else(|| model.strip_prefix("google/"))
+		.unwrap_or(model)
 }
 
 fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
@@ -293,85 +306,71 @@ mod tests {
 
 	#[rstest::rstest]
 	#[case::strip_publishers_prefix(
-		Some("publishers/anthropic/models/claude-sonnet-4-5-20251001"),
 		None,
+		"publishers/anthropic/models/claude-sonnet-4-5-20251001",
 		Some("claude-sonnet-4-5@20251001")
 	)]
 	#[case::strip_anthropic_prefix(
-		Some("anthropic/claude-haiku-4-5-20251001"),
 		None,
+		"anthropic/claude-haiku-4-5-20251001",
 		Some("claude-haiku-4-5@20251001")
 	)]
-	#[case::raw_claude_prefix(None, Some("claude-opus-3-20240229"), Some("claude-opus-3@20240229"))]
-	#[case::no_date_suffix(None, Some("claude-opus-4-6"), Some("claude-opus-4-6"))]
-	#[case::legacy_model(
-		None,
-		Some("claude-3-5-sonnet-20241022"),
-		Some("claude-3-5-sonnet@20241022")
-	)]
+	#[case::raw_claude_prefix(None, "claude-opus-3-20240229", Some("claude-opus-3@20240229"))]
+	#[case::no_date_suffix(None, "claude-opus-4-6", Some("claude-opus-4-6"))]
+	#[case::legacy_model(None, "claude-3-5-sonnet-20241022", Some("claude-3-5-sonnet@20241022"))]
 	#[case::non_digit_date_suffix(
 		None,
-		Some("claude-haiku-4-5-2025abcd"),
+		"claude-haiku-4-5-2025abcd",
 		Some("claude-haiku-4-5-2025abcd")
 	)]
-	#[case::non_anthropic_model(None, Some("text-embedding-004"), None)]
-	#[case::provider_model_precedence(
+	#[case::non_anthropic_model(None, "text-embedding-004", None)]
+	#[case::resolved_model_wins(
 		Some("anthropic/claude-haiku-4-5-20251001"),
-		Some("anthropic/claude-sonnet-4-5-20251001"),
-		Some("claude-haiku-4-5@20251001")
+		"anthropic/claude-sonnet-4-5-20251001",
+		Some("claude-sonnet-4-5@20251001")
 	)]
 	fn test_anthropic_model_normalization(
-		#[case] provider: Option<&str>,
-		#[case] req: Option<&str>,
+		#[case] _provider: Option<&str>,
+		#[case] req: &str,
 		#[case] expected: Option<&str>,
 	) {
-		let p = Provider {
-			project_id: strng::new("test-project"),
-			model: provider.map(strng::new),
-			region: None,
-		};
-		let actual = p.anthropic_model(req).map(|m| m.to_string());
+		let actual = Provider::anthropic_model(req).map(|m| m.to_string());
 		assert_eq!(actual.as_deref(), expected);
 	}
 
 	#[rstest::rstest]
-	#[case::raw_flash(None, Some("gemini-2.5-flash"), Some("gemini-2.5-flash"))]
-	#[case::raw_pro(None, Some("gemini-3-pro"), Some("gemini-3-pro"))]
-	#[case::at_separator(None, Some("gemini@001"), Some("gemini@001"))]
+	#[case::raw_flash(None, "gemini-2.5-flash", Some("gemini-2.5-flash"))]
+	#[case::raw_pro(None, "gemini-3-pro", Some("gemini-3-pro"))]
+	#[case::at_separator(None, "gemini@001", Some("gemini@001"))]
 	#[case::strip_publishers_prefix(
-		Some("publishers/google/models/gemini-2.5-pro"),
 		None,
+		"publishers/google/models/gemini-2.5-pro",
 		Some("gemini-2.5-pro")
 	)]
-	#[case::strip_models_prefix(None, Some("models/gemini-2.5-flash"), Some("gemini-2.5-flash"))]
-	#[case::strip_google_prefix(None, Some("google/gemini-2.5-flash"), Some("gemini-2.5-flash"))]
-	#[case::claude_rejected(None, Some("claude-sonnet-4-5"), None)]
-	#[case::gpt_rejected(None, Some("gpt-4o"), None)]
-	#[case::text_embedding_excluded(None, Some("text-embedding-005"), None)]
-	#[case::gemini_embedding_excluded(None, Some("gemini-embedding-001"), None)]
-	#[case::multilingual_embedding_excluded(None, Some("text-multilingual-embedding-002"), None)]
-	#[case::textembedding_legacy_excluded(None, Some("textembedding-gecko@003"), None)]
-	#[case::multimodal_embedding_excluded(None, Some("multimodalembedding@001"), None)]
-	#[case::embedding_under_models_prefix(None, Some("models/gemini-embedding-001"), None)]
+	#[case::strip_models_prefix(None, "models/gemini-2.5-flash", Some("gemini-2.5-flash"))]
+	#[case::strip_google_prefix(None, "google/gemini-2.5-flash", Some("gemini-2.5-flash"))]
+	#[case::claude_rejected(None, "claude-sonnet-4-5", None)]
+	#[case::gpt_rejected(None, "gpt-4o", None)]
+	#[case::text_embedding_excluded(None, "text-embedding-005", None)]
+	#[case::gemini_embedding_excluded(None, "gemini-embedding-001", None)]
+	#[case::multilingual_embedding_excluded(None, "text-multilingual-embedding-002", None)]
+	#[case::textembedding_legacy_excluded(None, "textembedding-gecko@003", None)]
+	#[case::multimodal_embedding_excluded(None, "multimodalembedding@001", None)]
+	#[case::embedding_under_models_prefix(None, "models/gemini-embedding-001", None)]
 	#[case::embedding_under_publishers_prefix(
 		None,
-		Some("publishers/google/models/text-embedding-005"),
+		"publishers/google/models/text-embedding-005",
 		None
 	)]
-	#[case::provider_model_precedence(
-		Some("gemini-2.5-flash"),
-		Some("claude-sonnet-4-5"),
-		Some("gemini-2.5-flash")
-	)]
-	#[case::no_model_anywhere(None, None, None)]
+	#[case::resolved_model_wins(Some("gemini-2.5-flash"), "claude-sonnet-4-5", None)]
 	fn test_gemini_model_normalization(
 		#[case] provider: Option<&str>,
-		#[case] req: Option<&str>,
+		#[case] req: &str,
 		#[case] expected: Option<&str>,
 	) {
 		let p = Provider {
 			project_id: strng::new("test-project"),
-			model: provider.map(strng::new),
+			model_override: provider.map(strng::new),
 			region: None,
 		};
 		let actual = p.gemini_model(req).map(|m| m.to_string());
@@ -390,13 +389,13 @@ mod tests {
 	fn test_gemini_model_rejects_unsafe_segments(#[case] model: &str) {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
-		assert_eq!(p.gemini_model(Some(model)), None, "{model}");
+		assert_eq!(p.gemini_model(model), None, "{model}");
 		// And so the publisher path can never be chosen by the model: it falls to the fixed
 		// OpenAI-compat endpoint instead.
-		let path = p.get_path_for_model(RouteType::Completions, Some(model), false, true);
+		let path = p.get_path_for_model(RouteType::Completions, model, false, true);
 		assert_eq!(
 			path.as_str(),
 			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
@@ -405,23 +404,22 @@ mod tests {
 	}
 
 	#[test]
-	fn test_is_gemini_model_consistency_with_optional() {
+	fn test_is_gemini_model() {
 		let p = Provider {
 			project_id: strng::new("test-project"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
-		assert!(p.is_gemini_model(Some("gemini-2.5-flash")));
-		assert!(!p.is_gemini_model(Some("claude-sonnet-4-5")));
-		assert!(!p.is_gemini_model(Some("gemini-embedding-001")));
-		assert!(!p.is_gemini_model(None));
+		assert!(p.is_gemini_model("gemini-2.5-flash"));
+		assert!(!p.is_gemini_model("claude-sonnet-4-5"));
+		assert!(!p.is_gemini_model("gemini-embedding-001"));
 	}
 
 	#[test]
 	fn test_gemini_and_anthropic_heuristics_are_disjoint() {
 		let p = Provider {
 			project_id: strng::new("test-project"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
 		for m in [
@@ -431,8 +429,8 @@ mod tests {
 			"claude-sonnet-4-5",
 			"claude-haiku-4-5-20251001",
 		] {
-			let g = p.is_gemini_model(Some(m));
-			let a = p.is_anthropic_model(Some(m));
+			let g = p.is_gemini_model(m);
+			let a = p.is_anthropic_model(m);
 			assert!(
 				!(g && a),
 				"{m} matched both Gemini and Anthropic heuristics"
@@ -443,43 +441,43 @@ mod tests {
 	#[rstest::rstest]
 	#[case::flash(
 		None,
-		Some("gemini-2.5-flash"),
+		"gemini-2.5-flash",
 		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
 	)]
 	#[case::flash_streaming(
 		None,
-		Some("gemini-2.5-flash"),
+		"gemini-2.5-flash",
 		true,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
 	)]
 	#[case::pro_regional(
 		Some("us-central1"),
-		Some("gemini-3-pro"),
+		"gemini-3-pro",
 		false,
 		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:generateContent"
 	)]
 	#[case::path_prefix_normalized(
 		None,
-		Some("publishers/google/models/gemini-2.5-flash"),
+		"publishers/google/models/gemini-2.5-flash",
 		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
 	)]
 	#[case::models_prefix_normalized(
 		None,
-		Some("models/gemini-2.5-flash"),
+		"models/gemini-2.5-flash",
 		false,
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
 	)]
 	fn test_get_path_for_gemini_native(
 		#[case] region: Option<&str>,
-		#[case] req_model: Option<&str>,
+		#[case] req_model: &str,
 		#[case] streaming: bool,
 		#[case] expected: &str,
 	) {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: region.map(strng::new),
 		};
 		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
@@ -492,27 +490,27 @@ mod tests {
 	#[rstest::rstest]
 	#[case::global(
 		None,
-		Some("gemini-2.5-flash"),
+		"gemini-2.5-flash",
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
 	)]
 	#[case::regional(
 		Some("us-central1"),
-		Some("gemini-3-pro"),
+		"gemini-3-pro",
 		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:countTokens"
 	)]
 	#[case::models_prefix_normalized(
 		None,
-		Some("models/gemini-2.5-flash"),
+		"models/gemini-2.5-flash",
 		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
 	)]
 	fn test_get_path_for_gemini_count_tokens(
 		#[case] region: Option<&str>,
-		#[case] req_model: Option<&str>,
+		#[case] req_model: &str,
 		#[case] expected: &str,
 	) {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: region.map(strng::new),
 		};
 		// countTokens never streams and carries no native_gemini provider state.
@@ -526,15 +524,10 @@ mod tests {
 	fn test_gemini_compat_translation_uses_compat_shim(#[case] streaming: bool) {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
-		let got = p.get_path_for_model(
-			RouteType::Completions,
-			Some("gemini-2.5-flash"),
-			streaming,
-			false,
-		);
+		let got = p.get_path_for_model(RouteType::Completions, "gemini-2.5-flash", streaming, false);
 		assert_eq!(
 			got.as_str(),
 			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
@@ -544,28 +537,28 @@ mod tests {
 
 	#[rstest::rstest]
 	#[case::claude_still_routes_anthropic(
-		Some("claude-sonnet-4-5"),
+		"claude-sonnet-4-5",
 		false,
 		"/v1/projects/p/locations/global/publishers/anthropic/models/claude-sonnet-4-5:rawPredict"
 	)]
 	#[case::claude_streaming_anthropic(
-		Some("claude-sonnet-4-5"),
+		"claude-sonnet-4-5",
 		true,
 		"/v1/projects/p/locations/global/publishers/anthropic/models/claude-sonnet-4-5:streamRawPredict"
 	)]
 	#[case::non_gemini_falls_to_compat(
-		Some("gpt-4o"),
+		"gpt-4o",
 		false,
 		"/v1/projects/p/locations/global/endpoints/openapi/chat/completions"
 	)]
 	fn test_get_path_non_gemini_unchanged(
-		#[case] req_model: Option<&str>,
+		#[case] req_model: &str,
 		#[case] streaming: bool,
 		#[case] expected: &str,
 	) {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
 		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, false);
@@ -576,15 +569,10 @@ mod tests {
 	fn test_embedding_route_takes_precedence_over_gemini_arm() {
 		let p = Provider {
 			project_id: strng::new("p"),
-			model: None,
+			model_override: None,
 			region: None,
 		};
-		let path = p.get_path_for_model(
-			RouteType::Embeddings,
-			Some("gemini-embedding-001"),
-			false,
-			false,
-		);
+		let path = p.get_path_for_model(RouteType::Embeddings, "gemini-embedding-001", false, false);
 		assert!(
 			path.as_str().ends_with(":predict"),
 			"expected :predict, got {path}"
@@ -596,6 +584,37 @@ mod tests {
 	}
 
 	#[rstest::rstest]
+	#[case::gemini_embedding_2(
+		"gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::gemini_embedding_1_keeps_predict(
+		"gemini-embedding-001",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-001:predict"
+	)]
+	#[case::text_embedding_keeps_predict(
+		"text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	#[case::publishers_prefix_normalized(
+		"publishers/google/models/gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::models_prefix_normalized(
+		"models/text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	fn test_get_path_for_embeddings(#[case] req_model: &str, #[case] expected: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model_override: None,
+			region: None,
+		};
+		let got = p.get_path_for_model(RouteType::Embeddings, req_model, false, false);
+		assert_eq!(got.as_str(), expected);
+	}
+
+	#[rstest::rstest]
 	#[case::no_region(None, "aiplatform.googleapis.com")]
 	#[case::global_region(Some("global"), "aiplatform.googleapis.com")]
 	#[case::multi_region(Some("us"), "aiplatform.us.rep.googleapis.com")]
@@ -603,7 +622,7 @@ mod tests {
 	fn test_get_host(#[case] region: Option<&str>, #[case] expected: &str) {
 		let p = Provider {
 			project_id: strng::new("test-project"),
-			model: None,
+			model_override: None,
 			region: region.map(strng::new),
 		};
 		assert_eq!(p.get_host(RouteType::Completions).as_str(), expected);

@@ -14,12 +14,23 @@ info:
         - type: thinking
           thinking: Two plus two.
           signature: SIG-replay==
+        - type: redacted_thinking
+          data: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
         - type: text
           text: "4"
     - role: user
       content:
         - type: text
           text: And 3+3?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Three plus three is six.
+          signature: ""
+        - type: text
+          text: "6"
+    - role: user
+      content: Continue.
 ---
 {
   "request": {
@@ -44,6 +55,11 @@ info:
             }
           },
           {
+            "reasoningContent": {
+              "redactedContent": "cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo"
+            }
+          },
+          {
             "text": "4"
           }
         ]
@@ -53,6 +69,29 @@ info:
         "content": [
           {
             "text": "And 3+3?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "Three plus three is six."
+              }
+            }
+          },
+          {
+            "text": "6"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Continue."
           }
         ]
       }
@@ -82,6 +121,14 @@ info:
       {
         "role": "user",
         "content": "And 3+3?"
+      },
+      {
+        "role": "assistant",
+        "content": "6"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
       }
     ]
   }

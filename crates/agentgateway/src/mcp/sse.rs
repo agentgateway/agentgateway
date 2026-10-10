@@ -3,13 +3,13 @@ use std::sync::Arc;
 use ::http::StatusCode;
 use axum::extract::Query;
 use axum::response::Sse;
-use axum::response::sse::Event;
+use axum::response::sse::{Event, KeepAlive};
 use axum_core::response::IntoResponse;
 use futures_util::StreamExt;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::http::{DropBody, Request, Response, filters};
+use crate::http::{Request, Response, filters};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session;
 use crate::mcp::session::SessionManager;
@@ -58,9 +58,17 @@ impl LegacySSEService {
 		};
 		let limit = http::buffer_limit(&request);
 		let (part, body) = request.into_parts();
-		let message = json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit)
-			.await
-			.map_err(mcp::Error::Deserialize)?;
+		let bytes = body.into_bytes(limit).await.map_err(|e| {
+			if agent_http::is_length_limit_error(&e) {
+				mcp::Error::PayloadTooLarge(limit)
+			} else {
+				mcp::Error::Deserialize(e)
+			}
+		})?;
+		let message = serde_json::from_slice::<ClientJsonRpcMessage>(&bytes)
+			.map_err(|err| mcp::Error::Deserialize(http::Error::new(err)))?;
+		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
+		*ctx.request.body_mut() = Some(bytes);
 
 		let Some(mut session) = self.session_manager.get_session(&session_id, inputs) else {
 			return mcp::Error::UnknownSession.into();
@@ -71,7 +79,7 @@ impl LegacySSEService {
 		// Here, we wait until the InitializeRequest is sent, and then establish the GET stream once it is.
 		let is_init = matches!(&message, ClientJsonRpcMessage::Request(r) if matches!(&r.request, &ClientRequest::InitializeRequest(_)));
 		let init_parts = if is_init { Some(part.clone()) } else { None };
-		let resp = session.send(part, message).await?;
+		let resp = session.send(ctx, message).await?;
 		if is_init {
 			trace!("received initialize request, establishing get stream");
 			let get_stream = session.get_stream(init_parts.unwrap()).await?;
@@ -91,19 +99,22 @@ impl LegacySSEService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		let idle_ttl = inputs.backend.session_idle_ttl;
+		let keep_alive = inputs.backend.sse_keep_alive;
 		let backend_id = inputs.backend_id.clone();
-		let relay = inputs.build_new_connections()?;
+		let (parts, _) = request.into_parts();
+		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		let relay = inputs.build_new_connections(&ctx)?;
 
 		// GET requests establish an SSE stream.
 		// We will return the sessionId, and all future responses will get sent on the rx channel to send to this channel.
 		let (session, rx) = self
 			.session_manager
 			.create_legacy_session(backend_id, relay, idle_ttl);
-		let mut base_url = request
-			.extensions()
+		let mut base_url = parts
+			.extensions
 			.get::<filters::OriginalUrl>()
 			.map(|u| u.0.clone())
-			.unwrap_or_else(|| request.uri().clone());
+			.unwrap_or_else(|| parts.uri.clone());
 		if let Err(e) = http::modify_url(&mut base_url, |url| {
 			url.query_pairs_mut().append_pair("sessionId", &session.id);
 			Ok(())
@@ -124,12 +135,20 @@ impl LegacySSEService {
 				Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e)),
 			}),
 		);
-		let (parts, _) = request.into_parts();
-		Ok(Sse::new(stream).into_response().map(|b| {
-			DropBody::new(
-				b,
-				session::dropper(self.session_manager.clone(), session, parts),
-			)
+		// An SSE stream that legitimately carries no traffic is indistinguishable from a dead
+		// connection to anything in the path; without a keep-alive comment it gets reaped.
+		let sse = match keep_alive {
+			Some(interval) => Sse::new(stream)
+				.keep_alive(KeepAlive::new().interval(interval))
+				.into_response(),
+			None => Sse::new(stream).into_response(),
+		};
+		Ok(sse.map(|body| {
+			crate::http::Body::new(body).with_drop_guard(session::dropper(
+				self.session_manager.clone(),
+				session,
+				parts,
+			))
 		}))
 	}
 }

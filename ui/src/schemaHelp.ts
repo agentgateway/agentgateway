@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
-import { publicAssetPath } from '@/basePath';
+import configSchema from '@/generated/schema.json';
 
 type JsonObject = { [key: string]: unknown };
+const schema = configSchema as JsonObject;
 type Primitive =
 	| string
 	| number
@@ -74,23 +75,6 @@ const helpOverrides: Record<string, string> = {
 };
 
 export function useSchemaHelp(): SchemaHelp {
-	const [schema, setSchema] = useState<JsonObject | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		fetch(publicAssetPath('config-schema.json'))
-			.then(response => (response.ok ? (response.json() as Promise<JsonObject>) : null))
-			.then(value => {
-				if (!cancelled) setSchema(value);
-			})
-			.catch(() => {
-				if (!cancelled) setSchema(null);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
 	return useMemo(
 		() => ({
 			node(path: Array<string | number>) {
@@ -126,7 +110,7 @@ export function useSchemaHelp(): SchemaHelp {
 				return Object.keys(properties);
 			}
 		}),
-		[schema]
+		[]
 	);
 }
 

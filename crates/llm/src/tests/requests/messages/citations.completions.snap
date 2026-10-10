@@ -1,0 +1,98 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/citations.json
+info:
+  model: gpt-5.6-luna
+  max_tokens: 64
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: Be concise.
+          citations: []
+    - role: user
+      content:
+        - type: text
+          text: Say hello.
+          citations: []
+    - role: assistant
+      content:
+        - type: text
+          text: Hello!
+          citations: []
+    - role: user
+      content: Continue.
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "Be concise."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Say hello."
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Hello!"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Continue."
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-luna",
+    "max_completion_tokens": 64,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.6-luna",
+    "provider": "openai",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Be concise."
+      },
+      {
+        "role": "user",
+        "content": "Say hello."
+      },
+      {
+        "role": "assistant",
+        "content": "Hello!"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
+      }
+    ]
+  }
+}

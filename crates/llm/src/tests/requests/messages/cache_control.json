@@ -10,7 +10,8 @@
       "type": "text",
       "text": "Second system block",
       "cache_control": {
-        "type": "ephemeral"
+        "type": "ephemeral",
+        "ttl": "1h"
       }
     }
   ],
@@ -26,7 +27,8 @@
           "type": "text",
           "text": "Second assistant block",
           "cache_control": {
-            "type": "ephemeral"
+            "type": "ephemeral",
+            "ttl": "1h"
           }
         }
       ]
@@ -35,6 +37,14 @@
       "role": "user",
       "content": [
         {
+          "type": "text",
+          "text": "Cached user text",
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "5m"
+          }
+        },
+        {
           "type": "image",
           "source": {
             "type": "base64",
@@ -42,7 +52,8 @@
             "data": "aGVsbG8="
           },
           "cache_control": {
-            "type": "ephemeral"
+            "type": "ephemeral",
+            "ttl": "5m"
           }
         }
       ]
@@ -72,7 +83,10 @@
           "type": "tool_use",
           "id": "call_mixed",
           "name": "lookup",
-          "input": {}
+          "input": {},
+          "cache_control": {
+            "type": "ephemeral"
+          }
         }
       ]
     },
@@ -155,6 +169,19 @@
           }
         }
       ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "lookup",
+      "description": "Look up information",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "cache_control": {
+        "type": "ephemeral"
+      }
     }
   ]
 }

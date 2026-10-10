@@ -66,13 +66,14 @@ export function McpPlaygroundPage() {
 			: false;
 	const fileCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
-			Object.prototype.hasOwnProperty.call(mcpData.rawConfig.data.mcp.policies, 'cors')
+			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 
 	useEffect(() => {
 		localStorage.removeItem('mcpPlaygroundArgs');
 	}, []);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (selectedTool?.inputSchema) {
 			setArgumentValues(defaultArgumentsFromSchema(selectedTool.inputSchema));
@@ -167,7 +168,7 @@ export function McpPlaygroundPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="MCP Playground"
-				description="Initialize a gateway MCP session, list tools, and call a tool through the MCP listener."
+				description="List and call tools through the MCP gateway."
 			/>
 			{needsCors ? (
 				<StatusBanner
@@ -585,6 +586,7 @@ function McpResultView(props: { response: McpResponse }) {
 				<div className="mcp-result-card">
 					<strong>Tool output</strong>
 					{content.map((item, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<ContentBlock block={item} key={index} />
 					))}
 					{structuredContent !== undefined ? (

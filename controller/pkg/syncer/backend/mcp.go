@@ -6,6 +6,7 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -91,7 +92,9 @@ func TranslateMCPSelectorTargets(
 		opts = append(opts, nsFilter)
 	}
 
-	matchingServices := krt.Fetch(ctx.Krt, ctx.Collections.Services, opts...)
+	matchingServices := slices.SortBy(krt.Fetch(ctx.Krt, ctx.Collections.Services, opts...), func(s *corev1.Service) string {
+		return s.Namespace + "/" + s.Name
+	})
 	var mcpTargets []*api.MCPTarget
 	for _, service := range matchingServices {
 		for _, port := range service.Spec.Ports {

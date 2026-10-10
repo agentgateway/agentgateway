@@ -113,21 +113,19 @@ fn detect_encoding(ce: &ContentEncoding) -> EncodingDecision {
 /// Use this for streaming responses (SSE, large files) where you can't buffer the entire body.
 /// If encoding is None or identity, returns the body unchanged.
 /// If encoding is unsupported or multi-encoded, returns an error.
-pub fn decompress_body<B>(
-	body: B,
+pub fn decompress_body(
+	mut body: crate::http::Body,
 	encoding: Option<&ContentEncoding>,
-) -> Result<(axum_core::body::Body, Option<&'static str>), Error>
-where
-	B: Body<Data = Bytes> + Send + Unpin + 'static,
-	B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-{
+) -> Result<(crate::http::Body, Option<&'static str>), Error> {
 	match encoding {
-		None => Ok((axum_core::body::Body::new(body), None)),
+		None => Ok((body, None)),
 		Some(ce) => match detect_encoding(ce) {
 			EncodingDecision::Single(enc) => {
-				decompress_body_with_encoding(body, enc).map(|b| (b, Some(enc)))
+				let decoded = decompress_body_with_encoding(body.take_content(), enc)?;
+				body.replace_content(decoded.into());
+				Ok((body, Some(enc)))
 			},
-			EncodingDecision::None => Ok((axum_core::body::Body::new(body), None)),
+			EncodingDecision::None => Ok((body, None)),
 			EncodingDecision::Multiple | EncodingDecision::Unsupported => Err(Error::UnsupportedEncoding),
 		},
 	}
@@ -155,19 +153,31 @@ where
 	)))
 }
 
+/// Buffer and decompress within the attached body deadline, limiting decoded bytes.
+/// Adds no timeout when no deadline is attached.
 pub async fn to_bytes_with_decompression(
-	body: axum_core::body::Body,
+	body: crate::http::Body,
 	encoding: Option<&ContentEncoding>,
 	limit: usize,
 ) -> Result<(Option<&'static str>, Bytes), Error> {
 	match encoding {
 		None => {
 			// No encoding - use optimized direct body read
-			Ok((None, read_body_with_limit(body, limit).await?))
+			Ok((None, body.into_bytes(limit).await.map_err(map_body_error)?))
 		},
 		Some(ce) => match detect_encoding(ce) {
-			EncodingDecision::Single(enc) => Ok((Some(enc), decode_body(body, enc, limit).await?)),
-			EncodingDecision::None => Ok((None, read_body_with_limit(body, limit).await?)),
+			EncodingDecision::Single(enc) => {
+				let deadline = body.deadline();
+				let read = decode_body(body.into_boxed(), enc, limit);
+				let bytes = match deadline {
+					Some(deadline) => tokio::time::timeout_at(deadline, read)
+						.await
+						.map_err(axum_core::Error::new)??,
+					None => read.await?,
+				};
+				Ok((Some(enc), bytes))
+			},
+			EncodingDecision::None => Ok((None, body.into_bytes(limit).await.map_err(map_body_error)?)),
 			EncodingDecision::Multiple | EncodingDecision::Unsupported => Err(Error::UnsupportedEncoding),
 		},
 	}
@@ -240,7 +250,7 @@ where
 }
 
 async fn read_body_with_limit(body: axum_core::body::Body, limit: usize) -> Result<Bytes, Error> {
-	crate::http::read_body_with_limit(body, limit)
+	axum::body::to_bytes(body, limit)
 		.await
 		.map_err(map_body_error)
 }
@@ -254,11 +264,7 @@ fn map_body_error(err: axum_core::Error) -> Error {
 }
 
 fn is_length_limit_error(err: &axum_core::Error) -> bool {
-	use std::error::Error as _;
-
-	err
-		.source()
-		.is_some_and(|source| source.is::<http_body_util::LengthLimitError>())
+	agent_http::is_length_limit_error(err)
 }
 
 #[cfg(test)]
@@ -406,5 +412,29 @@ mod tests {
 		let ce = make_content_encoding(GZIP);
 		let result = to_bytes_with_decompression(body, Some(&ce), 10).await;
 		assert!(matches!(result, Err(Error::LimitExceeded)));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn test_buffered_decompression_deadline() {
+		use std::convert::Infallible;
+		use std::time::Duration;
+
+		use futures_util::StreamExt;
+		use tokio::time::{Instant, advance};
+
+		let compressed = encode_body(b"hello", GZIP).await.unwrap();
+		let stream = futures_util::stream::once(async move {
+			Ok::<_, Infallible>(compressed.slice(..compressed.len() - 1))
+		})
+		.chain(futures_util::stream::pending());
+		let mut body = Body::from_stream(stream);
+		let start = Instant::now();
+		body.set_deadline(start + Duration::from_secs(5));
+		advance(Duration::from_secs(3)).await;
+
+		let ce = make_content_encoding(GZIP);
+		let result = to_bytes_with_decompression(body, Some(&ce), 1024).await;
+		assert!(matches!(result, Err(Error::Body(_))));
+		assert_eq!(Instant::now() - start, Duration::from_secs(5));
 	}
 }

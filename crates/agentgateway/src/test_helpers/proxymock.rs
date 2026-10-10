@@ -8,7 +8,7 @@ use std::time::Instant;
 use agent_core::drain::{DrainTrigger, DrainWatcher};
 use agent_core::strng::Strng;
 use agent_core::{drain, metrics, strng};
-use axum::body::to_bytes;
+use agent_http::Body;
 use bytes::Bytes;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, Uri};
 use hyper_util::client::legacy::Client;
@@ -25,8 +25,8 @@ use tracing::{info, trace};
 use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use crate::http::Response;
 use crate::http::backendtls::BackendTLS;
-use crate::http::{Body, Response};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
@@ -161,7 +161,16 @@ pub fn setup_llm_named_provider_mock(
 	provider: LocalNamedAIProvider,
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
-	let t = setup_proxy_test(config).unwrap();
+	let config = crate::config::parse_config(config.to_string(), None).unwrap();
+	setup_llm_named_provider_mock_with_config(mock, provider, config)
+}
+
+pub fn setup_llm_named_provider_mock_with_config(
+	mock: MockServer,
+	provider: LocalNamedAIProvider,
+	config: crate::Config,
+) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
+	let t = setup_proxy_test_with_config(config);
 	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
 	let be = futures::executor::block_on(
 		crate::types::local::LocalAIBackend::Provider(provider).translate(&resources),
@@ -218,7 +227,7 @@ pub fn custom_llm_backend_with_formats(
 	let provider = NamedAIProvider {
 		name: "default".into(),
 		provider: AIProvider::Custom(crate::llm::custom::Provider {
-			model: None,
+			model_override: None,
 			provider_override: None,
 			formats,
 		}),
@@ -232,7 +241,7 @@ pub fn custom_llm_backend_with_formats(
 	let providers = EndpointSet::new(vec![vec![(provider.name.clone(), provider)]]);
 	Backend::AI(
 		ResourceName::new(name.into(), "".into()),
-		AIBackend { providers },
+		AIBackend::new(providers),
 	)
 	.into()
 }
@@ -744,6 +753,7 @@ impl TestBind {
 			McpBackend {
 				targets: vec![Arc::new(McpTarget {
 					name: "mcp".into(),
+					condition: None,
 					spec: if !legacy_sse {
 						McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 							backend: sb,
@@ -760,7 +770,9 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection,
+				server: None,
 			},
 		);
 		{
@@ -806,6 +818,7 @@ impl TestBind {
 			vec![],
 			Default::default(),
 			failure_mode,
+			vec![],
 		)
 	}
 
@@ -840,9 +853,29 @@ impl TestBind {
 			policies,
 			prefix_mode,
 			FailureMode::FailClosed,
+			vec![],
 		)
 	}
 
+	pub fn with_multiplex_mcp_backend_target_conditions(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		conditions: Vec<Option<Arc<crate::cel::Expression>>>,
+	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			vec![],
+			Default::default(),
+			FailureMode::FailClosed,
+			conditions,
+		)
+	}
+
+	#[allow(clippy::too_many_arguments)]
 	fn with_multiplex_mcp_backend_options(
 		self,
 		name: &str,
@@ -851,16 +884,19 @@ impl TestBind {
 		policies: Vec<BackendTrafficPolicy>,
 		prefix_mode: crate::types::agent::McpPrefixMode,
 		failure_mode: FailureMode,
+		conditions: Vec<Option<Arc<crate::cel::Expression>>>,
 	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
 				targets: servers
 					.iter()
-					.map(|(name, addr, legacy_sse)| {
+					.zip(conditions.into_iter().chain(std::iter::repeat(None)))
+					.map(|((name, addr, legacy_sse), condition)| {
 						let sb = SimpleBackendReference::Backend(strng::format!("/basic-{}", addr));
 						Arc::new(McpTarget {
 							name: strng::new(name),
+							condition,
 							spec: if !legacy_sse {
 								McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
 									backend: sb,
@@ -879,7 +915,9 @@ impl TestBind {
 				prefix_mode,
 				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				sse_keep_alive: None,
 				dns_rebinding_protection: false,
+				server: None,
 			},
 		);
 		{
@@ -965,6 +1003,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Route(RouteName {
 					name: "route".into(),
 					namespace: "".into(),
@@ -976,6 +1015,7 @@ impl TestBind {
 			});
 		}
 	}
+
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
@@ -990,6 +1030,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
 					gateway_name: "default".into(),
 					gateway_namespace: "default".into(),
@@ -1015,6 +1056,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key,
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Service {
 					hostname: strng::literal!("my-svc.default.svc.cluster.local"),
 					namespace: strng::literal!("default"),
@@ -1038,6 +1080,12 @@ impl TestBind {
 		)
 		.await
 		.unwrap();
+		self
+			.pi
+			.cfg
+			.budget_policy
+			.apply_registration(normalized.budget_registration.clone())
+			.unwrap();
 		for v in normalized.policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
@@ -1057,6 +1105,7 @@ impl TestBind {
 			self.with_policy(TargetedPolicy {
 				key: strng::format!("pol/{}", self.policies),
 				name: None,
+				creation_timestamp: 0,
 				target: PolicyTarget::Backend(BackendTarget::Backend {
 					name: addr.to_string().into(),
 					namespace: Default::default(),
@@ -1088,6 +1137,7 @@ impl TestBind {
 		self.with_policy(TargetedPolicy {
 			key: strng::literal!("pol/frontend-connect"),
 			name: None,
+			creation_timestamp: 0,
 			inheritance: PolicyInheritance::default(),
 			target: PolicyTarget::Gateway(ListenerTarget {
 				gateway_name: strng::literal!("default"),
@@ -1271,9 +1321,16 @@ impl TestBind {
 		client
 	}
 
-	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+	/// Like [`Self::serve`], but the server-side socket already carries a downstream mTLS
+	/// identity, simulating a connection tunneled over HBONE where the outer Istio mTLS
+	/// layer authenticated the peer (see `Gateway::terminate_gateway_hbone`).
+	pub fn serve_with_src_identity(
+		&self,
+		bind_name: BindKey,
+		src_identity: crate::transport::tls::TlsInfo,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
-		let server = Socket::from_memory(
+		let mut server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
@@ -1282,6 +1339,46 @@ impl TestBind {
 				raw_peer_addr: None,
 			},
 		);
+		server
+			.ext_mut()
+			.insert(crate::transport::stream::TLSConnectionInfo {
+				src_identity: Some(src_identity),
+				..Default::default()
+			});
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
+		let bind = Gateway::proxy_bind(
+			bind_name,
+			bind.protocol,
+			server,
+			self.pi.clone(),
+			self.drain_rx.clone(),
+		);
+		tokio::spawn(bind);
+		client
+	}
+
+	pub fn serve_tunnel(&self, bind_name: BindKey) -> DuplexStream {
+		self.serve_tunnel_with_tls_info(bind_name, None)
+	}
+
+	pub fn serve_tunnel_with_tls_info(
+		&self,
+		bind_name: BindKey,
+		tls_info: Option<crate::transport::stream::TLSConnectionInfo>,
+	) -> DuplexStream {
+		let (client, server) = tokio::io::duplex(8192);
+		let mut server = Socket::from_memory(
+			server,
+			TCPConnectionInfo {
+				peer_addr: "127.0.0.1:12345".parse().unwrap(),
+				local_addr: "127.0.0.1:80".parse().unwrap(),
+				start: Instant::now(),
+				raw_peer_addr: None,
+			},
+		);
+		if let Some(tls_info) = tls_info {
+			server.ext_mut().insert(tls_info);
+		}
 		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap();
 		let bind_protocol = bind.protocol;
 		let tunnel_protocol = bind.tunnel_protocol;
@@ -1330,6 +1427,39 @@ impl TestBind {
 
 		addr
 	}
+
+	/// Only listeners started with `serve_gateway_listener` release their drain handle; other serve_*
+	/// helpers hold one for the life of the test, so a drain after them never completes.
+	pub async fn start_drain(self) {
+		let Self {
+			_drain_tx: drain_tx,
+			drain_rx,
+			..
+		} = self;
+		drop(drain_rx);
+		tokio::time::timeout(
+			std::time::Duration::from_secs(30),
+			drain_tx.start_drain_and_wait(drain::DrainMode::Graceful),
+		)
+		.await
+		.expect("drain did not complete; something still holds a DrainWatcher")
+	}
+
+	pub async fn serve_gateway_listener(&self, bind_name: BindKey) -> SocketAddr {
+		let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		listener.set_nonblocking(true).unwrap();
+		let addr = listener.local_addr().unwrap();
+		let bind = self.pi.stores.read_binds().bind(&bind_name).unwrap().bind;
+		let (_tx, config) = tokio::sync::watch::channel(bind);
+		let pi = self.pi.clone();
+		let drain = self.drain_rx.clone();
+		tokio::spawn(async move {
+			Gateway::run_bind(pi, drain, config, listener)
+				.await
+				.unwrap();
+		});
+		addr
+	}
 }
 
 pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
@@ -1357,6 +1487,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 	config: crate::Config,
 	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
 ) -> TestBind {
+	agent_core::telemetry::testing::setup_test_logging();
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let histogram_mode = config.histograms;
@@ -1378,6 +1509,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 	TestBind {
 		pi,
@@ -1389,11 +1521,11 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 	}
 }
 
-pub async fn read_body_raw(body: axum_core::body::Body) -> Bytes {
-	to_bytes(body, 2_097_152).await.unwrap()
+pub async fn read_body_raw(body: impl Into<crate::http::Body>) -> Bytes {
+	body.into().into_bytes(2_097_152).await.unwrap()
 }
 
-pub async fn read_body(body: axum_core::body::Body) -> RequestDump {
+pub async fn read_body(body: impl Into<crate::http::Body>) -> RequestDump {
 	let b = read_body_raw(body).await;
 	serde_json::from_slice(&b).unwrap()
 }

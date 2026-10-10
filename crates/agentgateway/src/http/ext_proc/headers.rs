@@ -1,31 +1,77 @@
 use itertools::Itertools;
+use tracing::warn;
 
 use super::proto;
 use crate::http::ext_proc::proto::HeaderMutation;
 use crate::http::{self, envoy_proto_common};
 
 pub(super) fn apply_header_mutations_request(req: &mut http::Request, h: Option<&HeaderMutation>) {
-	if let Some(hm) = h {
-		for rm in &hm.remove_headers {
-			req.headers_mut().remove(rm);
-		}
-		for set in &hm.set_headers {
+	apply_header_mutations(h, |operation| match operation {
+		HeaderMutationOperation::Remove(remove) => {
+			req.headers_mut().remove(remove);
+		},
+		HeaderMutationOperation::Set(set) => {
 			envoy_proto_common::apply_header_option(&mut req.into(), set);
-		}
-	}
+		},
+	});
 }
 
 pub(super) fn apply_header_mutations_response(
 	resp: &mut http::Response,
 	h: Option<&HeaderMutation>,
 ) {
-	if let Some(hm) = h {
-		for rm in &hm.remove_headers {
-			resp.headers_mut().remove(rm);
-		}
-		for set in &hm.set_headers {
+	apply_header_mutations(h, |operation| match operation {
+		HeaderMutationOperation::Remove(remove) => {
+			resp.headers_mut().remove(remove);
+		},
+		HeaderMutationOperation::Set(set) => {
 			envoy_proto_common::apply_header_option(&mut resp.into(), set);
-		}
+		},
+	});
+}
+
+pub(super) fn apply_header_mutations_to_map(
+	headers: &mut http::HeaderMap,
+	h: Option<&HeaderMutation>,
+) {
+	apply_header_mutations(h, |operation| match operation {
+		HeaderMutationOperation::Remove(remove) => {
+			headers.remove(remove);
+		},
+		HeaderMutationOperation::Set(set) => {
+			let Some(header) = &set.header else {
+				warn!("Invalid trailer mutation: no header provided");
+				return;
+			};
+			let Ok(name) = http::HeaderName::from_bytes(header.key.as_bytes()) else {
+				warn!(
+					"Invalid trailer mutation: {} is not a valid header",
+					header.key
+				);
+				return;
+			};
+			envoy_proto_common::apply_header_value_option(headers, &name, set);
+		},
+	});
+}
+
+enum HeaderMutationOperation<'a> {
+	Remove(&'a str),
+	Set(&'a proto::HeaderValueOption),
+}
+
+fn apply_header_mutations(
+	h: Option<&HeaderMutation>,
+	mut apply: impl FnMut(HeaderMutationOperation<'_>),
+) {
+	let Some(hm) = h else {
+		return;
+	};
+	for remove_header in &hm.remove_headers {
+		apply(HeaderMutationOperation::Remove(remove_header));
+	}
+	for set_header in &hm.set_headers {
+		apply(HeaderMutationOperation::Set(set_header));
 	}
 }
 

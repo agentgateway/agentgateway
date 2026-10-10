@@ -2,14 +2,17 @@ package setup
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -234,6 +237,124 @@ func TestXdsTLSMaterialSyncerRefreshesChangedSecret(t *testing.T) {
 	require.Equal(t, "watch-ca", cert.Leaf.Issuer.CommonName)
 }
 
+func TestRefreshSecretUpdatesCertMetrics(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	caCert, caKey, err := generateCA("metrics-ca")
+	require.NoError(t, err)
+	secret := xdsSecret(map[string][]byte{
+		xdsCACertKey: caCert,
+		xdsCAKeyKey:  caKey,
+	})
+	secret.ResourceVersion = "1"
+
+	require.NoError(t, s.refreshSecret(secret, true))
+
+	// Verify a valid cert was loaded with expected lifetime.
+	cert, err := material.GetCertificate(nil)
+	require.NoError(t, err)
+	require.WithinDuration(t, time.Now().Add(xdsLeafCertLifetime), cert.Leaf.NotAfter, time.Minute)
+}
+
+func TestRefreshSecretHandlesShortLivedCert(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	// Provide a direct serving certificate with a 1h remaining lifetime
+	// (within the 6h warning window) to exercise the warning log path.
+	caCert, caKey, err := generateCA("short-lived-ca")
+	require.NoError(t, err)
+	leafCert, leafKey, err := generateLeafWithLifetime(caCert, caKey, []string{"xds.default.svc"}, time.Hour)
+	require.NoError(t, err)
+	secret := xdsSecret(map[string][]byte{
+		xdsCertKey:   leafCert,
+		xdsKeyKey:    leafKey,
+		xdsCACertKey: caCert,
+	})
+	secret.ResourceVersion = "1"
+
+	// refreshSecret should succeed and load the short-lived cert without panic.
+	require.NoError(t, s.refreshSecret(secret, true))
+
+	cert, err := material.GetCertificate(nil)
+	require.NoError(t, err)
+	require.WithinDuration(t, time.Now().Add(time.Hour), cert.Leaf.NotAfter, time.Minute)
+}
+
+func TestRefreshSecretErrorOnBadSecret(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	material := &xdsTLSMaterial{}
+	s := &xdsTLSMaterialSyncer{
+		ctx:      ctx,
+		hosts:    []string{"xds.default.svc"},
+		material: material,
+	}
+
+	// A secret with no usable keys hits the error path in extractServingMaterial.
+	secret := xdsSecret(map[string][]byte{})
+	secret.ResourceVersion = "1"
+
+	require.Error(t, s.refreshSecret(secret, true))
+}
+
+// generateLeafWithLifetime creates a leaf certificate signed by the given CA
+// with a custom remaining lifetime (NotAfter = now + lifetime).
+func generateLeafWithLifetime(caCertPEM, caKeyPEM []byte, hosts []string, lifetime time.Duration) ([]byte, []byte, error) {
+	caBlock, _ := pem.Decode(caCertPEM)
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	caKeyBlock, _ := pem.Decode(caKeyPEM)
+	caKeyI, err := x509.ParsePKCS8PrivateKey(caKeyBlock.Bytes)
+	if err != nil {
+		return nil, nil, err
+	}
+	caKeySigner, ok := caKeyI.(crypto.Signer)
+	if !ok {
+		return nil, nil, fmt.Errorf("CA key is not a crypto.Signer")
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
+	tpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "agw-xds-server"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(lifetime),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     hosts,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, caCert, &leafKey.PublicKey, caKeySigner)
+	if err != nil {
+		return nil, nil, err
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyDER, err := x509.MarshalPKCS8PrivateKey(leafKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	return certPEM, keyPEM, nil
+}
+
 func testCertificate(t *testing.T, notAfter time.Time) tls.Certificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -333,4 +454,101 @@ func generateCACert(t *testing.T, commonName string, publicKey, privateKey any) 
 	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, publicKey, privateKey)
 	require.NoError(t, err)
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func TestGenerateLeafFromCARejectsWeakRSAKeyUnderFIPS(t *testing.T) {
+	caCert, caKey := generateWeakRSACA(t)
+
+	_, _, err := generateLeafFromCA(caCert, caKey, []string{"xds.default.svc"})
+	if fips140.Enabled() {
+		require.ErrorContains(t, err, "requires at least 2048 bits")
+		return
+	}
+	require.NoError(t, err)
+}
+
+func TestRefreshSecretRejectsWeakRSAServingKeyUnderFIPS(t *testing.T) {
+	certPEM, keyPEM := generateWeakRSAServingCert(t)
+	syncer := &xdsTLSMaterialSyncer{material: &xdsTLSMaterial{}, hosts: []string{"xds.default.svc"}}
+
+	err := syncer.refreshSecret(xdsSecret(map[string][]byte{
+		xdsCertKey:   certPEM,
+		xdsKeyKey:    keyPEM,
+		xdsCACertKey: certPEM,
+	}), true)
+	if fips140.Enabled() {
+		require.ErrorContains(t, err, "requires at least 2048 bits")
+		return
+	}
+	require.NoError(t, err)
+}
+
+func TestFIPSRSAKeyParameters(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	valid := key.PublicKey
+	oddModulusSize := valid
+	oddModulusSize.N = new(big.Int).Set(valid.N)
+	oddModulusSize.N.SetBit(oddModulusSize.N, 2048, 1)
+	smallExponent := valid
+	smallExponent.E = 3
+
+	tests := []struct {
+		name string
+		key  *rsa.PublicKey
+		want string
+	}{
+		{name: "approved", key: &valid},
+		{name: "odd modulus size", key: &oddModulusSize, want: "even modulus size"},
+		{name: "small exponent", key: &smallExponent, want: "greater than 2^16"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkFIPSRSAKeyParameters(tt.key)
+			if !fips140.Enabled() || tt.want == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+func generateWeakRSACA(t *testing.T) ([]byte, []byte) {
+	t.Helper()
+	key := weakRSAKey(t)
+	cert := generateCACert(t, "weak-rsa-ca", &key.PublicKey, key)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return cert, keyPEM
+}
+
+func generateWeakRSAServingCert(t *testing.T) ([]byte, []byte) {
+	t.Helper()
+	key := weakRSAKey(t)
+	serial, err := rand.Int(rand.Reader, big.NewInt(1<<62))
+	require.NoError(t, err)
+	tpl := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      pkix.Name{CommonName: "weak-rsa-leaf"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"xds.default.svc"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	return certPEM, keyPEM
+}
+
+func weakRSAKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 1024) //nolint:gosec // G403: the weak key is the point; FIPS mode must reject it
+	if err != nil {
+		t.Skipf("1024-bit RSA keys are unavailable: %v", err)
+	}
+	return key
 }

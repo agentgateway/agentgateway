@@ -22,7 +22,22 @@ spec:
               name: test-jwks
 ---
 # Output
-output: []
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - mcpAuthentication:
+          jwksInline: '{"keys":[]}'
+          mode: STRICT
+          resourceMetadata: {}
+      key: default/mcp-backend
+      mcp: {}
+      name:
+        name: mcp-backend
+        namespace: default
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayBackend
@@ -34,7 +49,7 @@ status:
     conditions:
     - lastTransitionTime: fake
       message: 'failed to translate backend: backend default/test-jwks not found,
-        policy default/inline_policy'
-      reason: TranslationError
-      status: "False"
+        referenced by AgentgatewayBackend default/mcp-backend'
+      reason: PartiallyValid
+      status: "True"
       type: Accepted

@@ -2,6 +2,8 @@
 .claude
 .codex
 /target
+/.github/rust-cache/
+/.github/rust-cache-state/
 .vscode
 .idea
 .run
@@ -9,6 +11,7 @@
 .venv
 .env
 .env.*
+!.env.example
 *.local
 var/
 controller/_output
@@ -18,10 +21,10 @@ controller/testbox
 # JavaScript / TypeScript dependencies and generated artifacts
 node_modules/
 ui/dist/
-ui/public/*-schema.json
 ui/src/cel.d.ts
 ui/src/gateway-admin.d.ts
 ui/src/gateway-config.d.ts
+ui/src/generated/cel-schema.json
 ui/src/generated/schema.json
 coverage/
 test-results/
@@ -40,3 +43,5 @@ cfg.yaml
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+/tools/.bin/

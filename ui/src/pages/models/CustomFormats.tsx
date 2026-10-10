@@ -13,7 +13,9 @@ const formats: ProviderFormat[] = [
 	'generateContent',
 	'geminiCountTokens',
 	'realtime',
-	'rerank'
+	'rerank',
+	'decisions',
+	'systemOne'
 ];
 
 const formatLabels: Record<ProviderFormat, string> = {
@@ -25,7 +27,9 @@ const formatLabels: Record<ProviderFormat, string> = {
 	generateContent: 'Gemini chat (models/{model}:generateContent)',
 	geminiCountTokens: 'Gemini token count (models/{model}:countTokens)',
 	realtime: 'Realtime (/v1/realtime)',
-	rerank: 'Rerank (/v2/rerank)'
+	rerank: 'Rerank (/v2/rerank)',
+	decisions: 'Decisions (/v1/decisions)',
+	systemOne: 'System One (/v1/systemone)'
 };
 
 export function CustomFormats(props: {
@@ -39,8 +43,10 @@ export function CustomFormats(props: {
 		props.setModel(current => {
 			const currentCustom = customProvider(current.provider);
 			const nextFormats = checked
-				? [...currentCustom.formats, { type }]
-				: currentCustom.formats.filter((format: ProviderFormatConfig) => format.type !== type);
+				? [...(currentCustom.formats ?? []), { type }]
+				: (currentCustom.formats ?? []).filter(
+						(format: ProviderFormatConfig) => format.type !== type
+					);
 			return {
 				...current,
 				provider: { custom: { ...currentCustom, formats: nextFormats } }
@@ -56,7 +62,7 @@ export function CustomFormats(props: {
 				provider: {
 					custom: {
 						...current.provider.custom,
-						formats: current.provider.custom.formats.map((format: ProviderFormatConfig) =>
+						formats: (current.provider.custom.formats ?? []).map((format: ProviderFormatConfig) =>
 							format.type === type ? { ...format, path: path || null } : format
 						)
 					}
@@ -68,7 +74,7 @@ export function CustomFormats(props: {
 	return (
 		<div className="format-grid">
 			{formats.map(type => {
-				const selected = custom.formats.find(
+				const selected = custom.formats?.find(
 					(format: ProviderFormatConfig) => format.type === type
 				);
 				return (

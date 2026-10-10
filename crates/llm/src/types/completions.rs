@@ -4,7 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	ResponseType, SimpleChatCompletionMessage,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
@@ -159,6 +160,16 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Usage {
+	/// Output tokens, including reasoning. Gemini's OpenAI-compatible endpoint leaves reasoning
+	/// out of `completion_tokens` but counts it in `total_tokens`.
+	pub fn output_tokens(&self) -> u32 {
+		self
+			.completion_tokens
+			.max(self.total_tokens.saturating_sub(self.prompt_tokens))
+	}
+}
+
 impl ResponseType for Response {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
 		let output_messages = if log_content.tool_calls {
@@ -177,7 +188,7 @@ impl ResponseType for Response {
 					.and_then(|d| d.audio_tokens)
 			}),
 
-			output_tokens: self.usage.as_ref().map(|u| u.completion_tokens as u64),
+			output_tokens: self.usage.as_ref().map(|u| u.output_tokens() as u64),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.usage.as_ref().and_then(|u| {
@@ -187,6 +198,7 @@ impl ResponseType for Response {
 			}),
 
 			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
+			pages: None,
 			count_tokens: None,
 
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
@@ -222,6 +234,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_chunk_latencies: Default::default(),
 		}
 	}
 
@@ -253,11 +267,75 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.choices {
+			visit_reasoning_text(&mut c.message.rest, f);
+			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
+			let f = &mut plain;
 			if let Some(text) = &mut c.message.content {
-				f(text);
+				f(ContentScope::Messages, text);
 			}
+			super::visit_json_at(&mut c.message.rest, &["refusal"], ContentScope::Messages, f);
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["audio", "transcript"],
+				ContentScope::Messages,
+				f,
+			);
+			// tool call args are json-in-json, same as the request side
+			if let Some(serde_json::Value::Array(calls)) = c.message.rest.get_mut("tool_calls") {
+				for call in calls {
+					super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+					super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				}
+			}
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
+		}
+	}
+}
+
+fn visit_reasoning_text(
+	rest: &mut serde_json::Value,
+	f: &mut dyn FnMut(crate::types::ResponseText, &mut String),
+) {
+	let signed = super::has_signature(rest);
+	for field in ["reasoning", "reasoning_content"] {
+		super::visit_json_at(
+			rest,
+			&[field],
+			ContentScope::Messages,
+			&mut |scope, text| {
+				f(
+					crate::types::ResponseText {
+						scope,
+						signed: signed && field == "reasoning_content",
+					},
+					text,
+				);
+			},
+		);
+	}
+	if let Some(serde_json::Value::Array(details)) = rest.get_mut("reasoning_details") {
+		for detail in details {
+			let field = match detail.get("type").and_then(serde_json::Value::as_str) {
+				Some("reasoning.text") => "text",
+				Some("reasoning.summary") => "summary",
+				_ => continue,
+			};
+			let signed = super::has_signature(detail);
+			super::visit_json_at(
+				detail,
+				&[field],
+				ContentScope::Messages,
+				&mut |scope, text| {
+					f(crate::types::ResponseText { scope, signed }, text);
+				},
+			);
 		}
 	}
 }
@@ -318,7 +396,18 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 	(!messages.is_empty()).then_some(messages)
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic-style cache breakpoint, accepted by OpenAI-compat providers (Bedrock, OpenRouter)
+	"cache_control",
+	// OpenAI explicit prompt-cache breakpoint
+	"prompt_cache_breakpoint",
+];
+
 impl super::RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Completions
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -399,6 +488,73 @@ impl super::RequestType for Request {
 			.collect()
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.messages
+			.iter()
+			.map(|message| {
+				let mut parts = Vec::new();
+				if let Some(rest) = message.rest.as_object() {
+					let reasoning = rest
+						.iter()
+						.filter(|(key, _)| {
+							key.as_str() == "reasoning"
+								|| key.starts_with("reasoning_")
+								|| key.as_str() == "thinking_blocks"
+						})
+						.map(|(key, value)| (key.clone(), value.clone()))
+						.collect::<serde_json::Map<_, _>>();
+					if !reasoning.is_empty() {
+						parts.push(NormalizedMessagePart::reasoning(serde_json::Value::Object(
+							reasoning,
+						)));
+					}
+				}
+				if matches!(message.role.as_str(), "tool" | "function") {
+					if let Some(content) = &message.content
+						&& let Ok(content) = serde_json::to_value(content)
+					{
+						parts.push(NormalizedMessagePart::tool_result(
+							message.tool_call_id.as_deref().map(strng::new),
+							message.name.as_deref().map(strng::new),
+							content,
+							None,
+						));
+					}
+				} else {
+					match &message.content {
+						Some(Content::Text(text)) => parts.push(NormalizedMessagePart::text(strng::new(text))),
+						Some(Content::Array(content)) => parts.extend(
+							content
+								.iter()
+								.filter_map(|part| part.text.as_deref())
+								.map(|text| NormalizedMessagePart::text(strng::new(text))),
+						),
+						None => {},
+					}
+				}
+				parts.extend(
+					message
+						.tool_calls
+						.iter()
+						.flatten()
+						.filter_map(crate::types::normalized_tool_call),
+				);
+				if let Some(function_call) = message.rest.get("function_call")
+					&& let Some(call) = crate::types::normalized_tool_call(function_call)
+				{
+					parts.push(call);
+				}
+				NormalizedMessage {
+					role: strng::new(&message.role),
+					parts,
+				}
+			})
+			.collect::<Vec<_>>();
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
@@ -413,7 +569,14 @@ impl super::RequestType for Request {
 			match &mut msg.content {
 				Some(Content::Text(text)) => f(scope, text),
 				Some(Content::Array(parts)) => {
-					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), &mut |text| f(scope, text));
+					super::scan_text_runs(
+						parts,
+						" ",
+						|p| p.text.as_mut(),
+						|p| Some(&mut p.rest),
+						PRESERVED_REST_KEYS,
+						&mut |text| f(scope, text),
+					);
 				},
 				None => {},
 			}
@@ -530,11 +693,10 @@ pub mod typed {
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
 		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
-		ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
+		PromptCacheBreakpointParamMode, ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
 		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
 		ToolChoiceOptions, WebSearchOptions,
 	};
-	pub use async_openai::types::responses::PromptCacheBreakpointMode;
 	use serde::{Deserialize, Serialize};
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
@@ -656,6 +818,16 @@ pub mod typed {
 		pub cache_creation_input_tokens: Option<u64>,
 	}
 
+	impl Usage {
+		/// Output tokens, including reasoning. Gemini's OpenAI-compatible endpoint leaves reasoning
+		/// out of `completion_tokens` but counts it in `total_tokens`.
+		pub fn output_tokens(&self) -> u32 {
+			self
+				.completion_tokens
+				.max(self.total_tokens.saturating_sub(self.prompt_tokens))
+		}
+	}
+
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	/// Represents a streamed chunk of a chat completion response returned by model, based on the provided input.
 	pub struct StreamResponse {
@@ -685,9 +857,17 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
+		/// The delta for this chunk. Providers are inconsistent about the final chunk: some send an
+		/// empty object alongside `finish_reason`, others omit the field entirely, so treat a missing
+		/// delta as an empty one rather than failing the whole chunk.
+		#[serde(default)]
 		pub delta: StreamResponseDelta,
 		/// The reason the model stopped generating tokens. This will be
 		/// `stop` if the model hit a natural stop point or a provided
@@ -747,6 +927,10 @@ pub mod typed {
 
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoice {
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
@@ -1065,23 +1249,6 @@ pub mod typed {
 	}
 
 	#[allow(dead_code)]
-	pub const SYSTEM_ROLE: &str = "system";
-	#[allow(dead_code)]
-	pub const ASSISTANT_ROLE: &str = "assistant";
-
-	#[allow(dead_code)]
-	pub fn message_role(msg: &RequestMessage) -> &'static str {
-		match msg {
-			RequestMessage::Developer(_) => "developer",
-			RequestMessage::System(_) => "system",
-			RequestMessage::Assistant(_) => "assistant",
-			RequestMessage::Tool(_) => "tool",
-			RequestMessage::Function(_) => "function",
-			RequestMessage::User(_) => "user",
-		}
-	}
-
-	#[allow(dead_code)]
 	pub fn message_text(msg: &RequestMessage) -> Option<&str> {
 		// All of these types support Vec<Text>... show we support those?
 		// Right now, we don't support
@@ -1116,13 +1283,6 @@ pub mod typed {
 				.max_completion_tokens
 				.or(self.max_tokens)
 				.unwrap_or(4096) as usize
-		}
-
-		pub fn max_tokens_option(&self) -> Option<u64> {
-			self
-				.max_completion_tokens
-				.or(self.max_tokens)
-				.map(Into::into)
 		}
 
 		pub fn stop_sequence(&self) -> Vec<String> {

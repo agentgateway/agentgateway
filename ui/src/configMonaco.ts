@@ -340,18 +340,17 @@ function resolveSchema(
 	if (Array.isArray(schema.allOf)) {
 		return schema.allOf.reduce<Record<string, unknown>>((merged, candidate) => {
 			const resolved = resolveSchema(candidate as Record<string, unknown>, seenRefs);
-			return {
-				...merged,
-				...resolved,
-				properties: {
-					...(typeof merged.properties === 'object' && !Array.isArray(merged.properties)
-						? merged.properties
-						: {}),
-					...(typeof resolved.properties === 'object' && !Array.isArray(resolved.properties)
-						? resolved.properties
-						: {})
-				}
-			};
+			const mergedProperties =
+				typeof merged.properties === 'object' && !Array.isArray(merged.properties)
+					? merged.properties
+					: {};
+			const resolvedProperties =
+				typeof resolved.properties === 'object' && !Array.isArray(resolved.properties)
+					? resolved.properties
+					: {};
+			return Object.assign(merged, resolved, {
+				properties: { ...mergedProperties, ...resolvedProperties }
+			});
 		}, {});
 	}
 	return schema;

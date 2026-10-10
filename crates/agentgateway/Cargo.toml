@@ -11,14 +11,21 @@ path = "src/lib.rs"
 [features]
 default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
-mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
+mimalloc = ["pprof-alloc/allocator-mimalloc"]
 # Crypto provider selection. `crypto-aws-lc` (the default) backs all crypto with
-# aws-lc-rs. `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls
-# back to aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
+# aws-lc-rs. `fips` is an operating-mode modifier; it currently requires the
+# `crypto-aws-lc` backend and builds it against AWS-LC-FIPS (aws-lc-fips-sys).
+# The concrete AWS-LC-FIPS module is determined by the aws-lc-fips-sys version
+# resolved in Cargo.lock.
+# Note the linked module version is not necessarily CMVP-validated; check the
+# certificate for the exact AWS-LC-FIPS version before making a compliance claim.
+# `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls back to
+# aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
 crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
+fips = ["aws-lc-rs?/fips", "rustls/fips", "tokio-rustls/fips"]
 crypto-symcrypt = ["dep:symcrypt", "dep:rustls-symcrypt", "dep:aws-lc-rs", "jsonwebtoken/aws_lc_rs"]
 ui = []
-schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
+schema = ["schemars", "agent-core/schema", "agent-llm/schema", "agent-policy/schema", "agent-policy-cors/schema"]
 internal_benches = ["divan"]
 assert_size_runtime = ["agent-core/assert_size_runtime"]
 
@@ -28,6 +35,8 @@ agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-http.workspace = true
 agent-llm.workspace = true
+agent-policy.workspace = true
+agent-policy-cors.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true
 anyhow.workspace = true
@@ -39,12 +48,12 @@ atomic_float.workspace = true
 aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
+aws-smithy-runtime-api.workspace = true
+aws-smithy-types = { workspace = true, features = ["http-body-1-x"] }
 aws-types.workspace = true
 aws-lc-rs = { workspace = true, optional = true }
 symcrypt = { workspace = true, optional = true }
 rustls-symcrypt = { workspace = true, optional = true }
-aws-smithy-eventstream.workspace = true
-aws-smithy-types.workspace = true
 axum-core.workspace = true
 axum-extra.workspace = true
 axum.workspace = true
@@ -58,6 +67,7 @@ chrono.workspace = true
 clocksource.workspace = true
 core_affinity.workspace = true
 crossbeam.workspace = true
+dashmap.workspace = true
 divan = { workspace = true, optional = true }
 frozen-collections.workspace = true
 fs-err = { workspace = true }
@@ -67,7 +77,6 @@ futures.workspace = true
 google-cloud-auth.workspace = true
 hashbrown.workspace = true
 headers.workspace = true
-headers-accept = "0.3.0"
 heck.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
@@ -85,7 +94,7 @@ ipnet.workspace = true
 itertools.workspace = true
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
-mediatype = "0.21.0"
+mediatype = "0.23.0"
 notify-debouncer-full.workspace = true
 notify.workspace = true
 num_cpus.workspace = true
@@ -132,7 +141,8 @@ serde_json.workspace = true
 serde_regex.workspace = true
 serde_urlencoded.workspace = true
 serde_with.workspace = true
-serde_yaml.workspace = true
+serde_norway.workspace = true
+yaml-serde-edit.workspace = true
 serde-untagged.workspace = true
 stacker.workspace = true
 shellexpand.workspace = true
@@ -142,8 +152,6 @@ sse-stream.workspace = true
 subtle.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
-tiktoken-rs.workspace = true
-mimalloc = { workspace = true, optional = true }
 tokio-rustls.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
@@ -160,6 +168,7 @@ url.workspace = true
 uuid.workspace = true
 value-bag.workspace = true
 x509-parser.workspace = true
+zstd.workspace = true
 reqwest.workspace = true
 websocket-sans-io.workspace = true
 vector-map.workspace = true
@@ -199,6 +208,7 @@ tokio = { workspace = true }
 protos = { workspace = true, features = ["spiffe-test-server"] }
 assert_matches.workspace = true
 divan.workspace = true
+h2.workspace = true
 insta.workspace = true
 rstest.workspace = true
 tempfile.workspace = true

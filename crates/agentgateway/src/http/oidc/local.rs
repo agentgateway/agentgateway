@@ -11,7 +11,7 @@ use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
 use crate::serdes::FileInlineOrRemote;
-use crate::{apply, schema_de};
+use crate::{apply, schema, schema_de};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {
@@ -37,13 +37,75 @@ struct PreparedOidcPolicy {
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
+	login: Option<OidcLogin>,
+	logout: Option<OidcLogout>,
+	credentials: OidcCredentials,
+}
+
+/// Credentials an OIDC policy accepts.
+#[apply(schema!)]
+#[derive(Copy, Default, PartialEq, Eq)]
+pub enum OidcCredentials {
+	/// Only browser sessions established through the policy's login flow.
+	#[default]
+	Session,
+	/// Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.
+	/// This lets non-browser clients authenticate with a token obtained from the provider directly.
+	SessionOrBearer,
+}
+
+/// Optional browser login entry point and unauthenticated redirect destination.
+#[apply(schema!)]
+pub struct OidcLogin {
+	/// Local endpoint that starts OAuth, for example `/auth/login`. Point your sign-in
+	/// link here, optionally with `?returnTo=/app` to choose the destination after login.
+	/// `returnTo` must be a safe local path and defaults to `/`.
+	/// This endpoint is handled by the policy, not forwarded to your application.
+	pub path: String,
+	/// Local page to redirect unauthenticated browser navigations to, for example
+	/// `/login`. This happens BEFORE authentication; it is not the OAuth callback or
+	/// the destination after successful login. The gateway appends `returnTo` so your
+	/// page can preserve it in its sign-in link to `login.path`.
+	/// Serve this page and its assets on routes that bypass authentication, using a
+	/// conditional policy or separate routes. This setting does not make them public.
+	/// Fetch requests receive 401 with this destination in the Location header.
+	/// If omitted, unauthenticated navigations start OAuth directly.
+	#[serde(default)]
+	pub redirect: Option<String>,
+}
+
+/// Optional local-session logout endpoint and destination.
+#[apply(schema!)]
+pub struct OidcLogout {
+	/// Local endpoint that clears this policy's session and login transaction cookies,
+	/// for example `/auth/logout`. Submit a POST from the callback URI's origin;
+	/// requests without a matching Origin header are rejected. The policy handles
+	/// this endpoint even when there is no valid session. This does not log out of
+	/// the identity provider or revoke tokens.
+	pub path: String,
+	/// Local destination for the 303 redirect AFTER logout, for example `/signed-out`.
+	/// Defaults to `login.redirect` if configured, otherwise `/`. Make the destination
+	/// public through routing or a conditional policy; a protected destination can
+	/// immediately start another OAuth login using the existing identity-provider session.
+	#[serde(default)]
+	pub redirect: Option<String>,
 }
 
 /// Browser-based OIDC authentication policy.
 ///
 /// Explicit mode is still OIDC: it supplies provider metadata manually instead of using discovery.
-/// Unauthenticated non-callback requests always redirect to the provider login flow. Routes that
-/// need non-redirect authentication behavior should use a different auth policy.
+/// Unauthenticated document navigations redirect to the provider login flow. Browser requests
+/// positively identified as non-navigation requests return 401 so the caller can initiate a
+/// document navigation.
+///
+/// Concurrent session refreshes are coalesced per gateway replica, with results reused for
+/// 30 seconds; temporary failures are cached for one second. With multiple replicas, configure
+/// the provider's refresh-token reuse grace period (for example, Okta's rotation grace period)
+/// to accommodate concurrent refreshes. A late rejection from another replica can otherwise
+/// clear a newly rotated refresh cookie.
+///
+/// Session refresh requires the provider to return a new `id_token` in each refresh response.
+/// Providers that omit it require the user to sign in again when the stored ID token expires.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -84,14 +146,28 @@ pub struct LocalOidcConfig {
 	pub client_secret: SecretString,
 
 	/// Absolute callback URI handled by the gateway.
-	/// This policy always redirects unauthenticated non-callback requests back through this login
-	/// flow.
+	/// Unauthenticated document navigations are redirected back through this login flow.
 	#[serde(rename = "redirectURI")]
 	pub redirect_uri: String,
 
-	/// Additional OAuth2 scopes to request. `openid` is always included.
+	/// Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when
+	/// the provider requires it to issue a refresh token; returned refresh tokens are used
+	/// automatically.
 	#[serde(default)]
 	pub scopes: Vec<String>,
+
+	/// Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.
+	#[serde(default)]
+	pub login: Option<OidcLogin>,
+
+	/// Optional logout endpoint. Independent of login; omit to disable the logout endpoint.
+	#[serde(default)]
+	pub logout: Option<OidcLogout>,
+
+	/// Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`
+	/// for `ui.policies.oidc`.
+	#[serde(default)]
+	pub credentials: Option<OidcCredentials>,
 }
 
 struct DiscoveredProviderMetadata {
@@ -129,8 +205,60 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
+			credentials,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
+		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
+		let mut login_destination = None;
+		for (name, endpoint, destination) in [
+			(
+				"login",
+				login.as_ref().map(|v| &v.path),
+				login.as_ref().and_then(|v| v.redirect.as_ref()),
+			),
+			(
+				"logout",
+				logout.as_ref().map(|v| &v.path),
+				logout.as_ref().and_then(|v| v.redirect.as_ref()),
+			),
+		] {
+			if let Some(endpoint) = endpoint {
+				let parsed = endpoint.parse::<http::uri::PathAndQuery>().ok();
+				if session::normalize_original_uri(parsed.as_ref()) != *endpoint
+					|| parsed.as_ref().is_none_or(|v| v.query().is_some())
+					|| endpoint.contains('#')
+					|| endpoints.contains(&endpoint.as_str())
+				{
+					return Err(Error::Config(format!(
+						"{name}.path must be a distinct local path without a query"
+					)));
+				}
+				endpoints.push(endpoint);
+			}
+			if let Some(destination) = destination {
+				let parsed = destination.parse::<http::uri::PathAndQuery>().ok();
+				if session::normalize_original_uri(parsed.as_ref()) != *destination
+					|| destination.contains('#')
+				{
+					return Err(Error::Config(format!(
+						"{name}.redirect must be a safe local path"
+					)));
+				}
+				if name == "login" {
+					login_destination = parsed;
+				}
+			}
+		}
+		// All endpoints are now known, including logout, which is validated after login.
+		if let Some(path) = login_destination
+			&& endpoints.contains(&path.path())
+		{
+			return Err(Error::Config(
+				"login.redirect must differ from the login, logout, and callback paths".into(),
+			));
+		}
 		let explicit_field_count = usize::from(authorization_endpoint.is_some())
 			+ usize::from(token_endpoint.is_some())
 			+ usize::from(jwks.is_some());
@@ -188,6 +316,9 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
+			credentials: credentials.unwrap_or_default(),
 		})
 	}
 }
@@ -304,6 +435,7 @@ impl PreparedOidcProvider {
 				vec![provider],
 				crate::http::jwt::Mode::Strict,
 				crate::http::auth::AuthorizationLocation::bearer_header(),
+				false,
 			),
 		})
 	}
@@ -315,19 +447,24 @@ impl PreparedOidcPolicy {
 		policy_id: PolicyId,
 		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
 	) -> Result<OidcPolicy, Error> {
-		let (cookie_name, transaction_cookie_prefix) = session::derive_cookie_names(&policy_id);
+		let (cookie_name, refresh_cookie_name, transaction_cookie_prefix) =
+			session::derive_cookie_names(&policy_id);
 		let PreparedOidcPolicy {
 			provider,
 			client_id,
 			client_secret,
 			redirect_uri,
 			scopes,
+			login,
+			logout,
+			credentials,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
 		let provider = Arc::new(provider.compile(client_id.clone())?);
 
 		Ok(OidcPolicy {
+			refresh_cache: Default::default(),
 			policy_id,
 			provider,
 			client: ClientConfig {
@@ -338,6 +475,7 @@ impl PreparedOidcPolicy {
 			redirect_uri,
 			session: SessionConfig {
 				cookie_name,
+				refresh_cookie_name,
 				transaction_cookie_prefix,
 				same_site: SameSiteMode::Lax,
 				secure: CookieSecureMode::Auto,
@@ -346,6 +484,9 @@ impl PreparedOidcPolicy {
 				encoder: oidc_cookie_encoder.clone(),
 			},
 			scopes,
+			login,
+			logout,
+			credentials,
 		})
 	}
 }

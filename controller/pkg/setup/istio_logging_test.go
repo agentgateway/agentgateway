@@ -8,8 +8,39 @@ import (
 	"time"
 
 	"go.uber.org/zap/zapcore"
+	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/test/util/assert"
 )
+
+func TestSetupLoggingAppliesLevelToIstioScopes(t *testing.T) {
+	// Keep klog verbosity out of the picture regardless of the CI environment.
+	t.Setenv(klogVerbosityEnv, "")
+	t.Cleanup(func() {
+		_ = SetupLogging("info")
+	})
+
+	tests := map[string]istiolog.Level{
+		"trace":   istiolog.DebugLevel,
+		"debug":   istiolog.DebugLevel,
+		"info":    istiolog.InfoLevel,
+		"warn":    istiolog.WarnLevel,
+		"error":   istiolog.ErrorLevel,
+		"invalid": istiolog.InfoLevel,
+	}
+
+	for level, want := range tests {
+		t.Run(level, func(t *testing.T) {
+			if err := SetupLogging(level); err != nil {
+				t.Fatalf("setup logging: %v", err)
+			}
+			for name, scope := range istiolog.Scopes() {
+				if got := scope.GetOutputLevel(); got != want {
+					t.Errorf("istio scope %q: expected level %v, got %v", name, want, got)
+				}
+			}
+		})
+	}
+}
 
 func TestIstioComponentCoreWritesControllerJSONShape(t *testing.T) {
 	tests := map[string]struct {

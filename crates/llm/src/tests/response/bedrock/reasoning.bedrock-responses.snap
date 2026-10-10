@@ -25,14 +25,21 @@ info:
     "status": "completed",
     "output": [
       {
-        "type": "message",
+        "type": "reasoning",
+        "id": "[id]",
+        "summary": [],
         "content": [
           {
-            "type": "output_text",
-            "annotations": [],
-            "logprobs": null,
+            "type": "reasoning_text",
             "text": "Two plus two is four."
-          },
+          }
+        ],
+        "encrypted_content": "SIG-xyz==",
+        "status": "completed"
+      },
+      {
+        "type": "message",
+        "content": [
           {
             "type": "output_text",
             "annotations": [],

@@ -1345,6 +1345,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 	t.with_policy(TargetedPolicy {
 		key: strng::literal!("pol/backend-tunnel"),
 		name: None,
+		creation_timestamp: 0,
 		inheritance: PolicyInheritance::default(),
 		target: PolicyTarget::Backend(BackendTarget::Backend {
 			name: strng::literal!("dynamic"),
@@ -1355,6 +1356,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
 				proxy_addr,
 			))),
+			mode: backend::TunnelMode::Auto,
 			policies: vec![],
 		})
 		.into(),

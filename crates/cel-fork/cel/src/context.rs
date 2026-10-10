@@ -179,6 +179,17 @@ impl<'a, 'rf> VariableResolver<'a> for SingleVarResolver<'a, 'rf> {
 		variables.insert(KeyRef::String(self.name.into()), self.val.clone());
 		Some(Value::Map(MapValue::Borrow(variables)))
 	}
+
+	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
+		if expr == self.name {
+			None
+		} else {
+			self.base.resolve_member(expr, member)
+		}
+	}
+
+	// resolve_direct is intentionally not forwarded: optimized expressions may reference a variable
+	// this resolver masks.
 }
 
 pub struct MapResolver<'a> {

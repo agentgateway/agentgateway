@@ -1,11 +1,10 @@
-use std::collections::HashSet;
-
 use http::{HeaderValue, Method};
 use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
 use crate::http::Body;
+use crate::mcp::MCPView;
 
 fn eval(expr: &str) -> Result<serde_json::Value, Error> {
 	let exec_serde = full_example_executor();
@@ -138,7 +137,10 @@ async fn log_only_request_body_records_without_buffering() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -146,20 +148,17 @@ async fn log_only_request_body_records_without_buffering() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	assert!(req.extensions().get::<BufferedBody>().is_none());
-	assert!(
-		req
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_some()
-	);
+	assert!(req.body().inspection().is_none());
+	assert!(req.body().recorded().is_some());
 
 	let snapshot = cb.maybe_snapshot_request(&mut req, false).unwrap();
-	let body = std::mem::replace(req.body_mut(), Body::empty());
-	let sent = body.collect().await.unwrap().to_bytes();
+	let mut body = std::mem::replace(req.body_mut(), Body::empty());
+	// Content-Length consumers can stop after the data frame without polling EOF.
+	let sent = body.frame().await.unwrap().unwrap().into_data().unwrap();
+	assert!(!body.recorded().unwrap().is_complete());
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 
-	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None);
+	let exec = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
@@ -174,7 +173,10 @@ async fn request_body_expression_buffers_before_log() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -182,13 +184,8 @@ async fn request_body_expression_buffers_before_log() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	assert!(req.extensions().get::<BufferedBody>().is_some());
-	assert!(
-		req
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_none()
-	);
+	assert!(req.body().known_bytes().is_some());
+	assert!(req.body().recorded().is_none());
 	let exec = Executor::new_request(&req);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
@@ -204,7 +201,10 @@ async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -212,8 +212,10 @@ async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
-	let buffered = req.extensions().get::<BufferedBody>().unwrap();
-	assert!(buffered.bytes().is_none());
+	assert!(matches!(
+		req.body().inspection(),
+		Some(crate::http::BodyInspection::Partial(_))
+	));
 	assert!(Executor::new_request(&req).eval(&exp).is_err());
 	let sent = req.into_body().collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
@@ -227,7 +229,10 @@ async fn request_body_prefix_is_available_when_body_exceeds_buffer_limit() {
 	let mut req = ::http::Request::builder()
 		.method(Method::POST)
 		.uri("http://example.com")
-		.body(Body::from("hello"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("hello")])))
 		.unwrap();
 	req
 		.extensions_mut()
@@ -250,25 +255,23 @@ async fn log_only_response_body_records_without_buffering() {
 	cb.register_log_expression(&exp);
 	let mut resp = ::http::Response::builder()
 		.status(200)
-		.body(Body::from("world"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("world")])))
 		.unwrap();
 
 	cb.maybe_buffer_response_body(&mut resp).await;
 
-	assert!(resp.extensions().get::<BufferedBody>().is_none());
-	assert!(
-		resp
-			.extensions()
-			.get::<crate::http::RecordedBodyHandle>()
-			.is_some()
-	);
+	assert!(resp.body().inspection().is_none());
+	assert!(resp.body().recorded().is_some());
 
 	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
 	let body = std::mem::replace(resp.body_mut(), Body::empty());
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"world")
@@ -282,7 +285,10 @@ async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
 	cb.register_log_expression(&exp);
 	let mut resp = ::http::Response::builder()
 		.status(200)
-		.body(Body::from("world"))
+		.body(Body::from_stream(tokio_stream::iter([Ok::<
+			_,
+			std::convert::Infallible,
+		>("world")])))
 		.unwrap();
 	resp
 		.extensions_mut()
@@ -290,13 +296,13 @@ async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
 
 	cb.maybe_buffer_response_body(&mut resp).await;
 
-	assert!(resp.extensions().get::<BufferedBody>().is_none());
+	assert!(resp.body().inspection().is_none());
 	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
 	let body = std::mem::replace(resp.body_mut(), Body::empty());
 	let sent = body.collect().await.unwrap().to_bytes();
 	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
 
-	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None, None);
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"worl")
@@ -477,6 +483,54 @@ mod headers {
 	}
 
 	#[test]
+	fn optimized_lookup_matches_unoptimized() {
+		let req = || {
+			let mut req = request_with_header_modes();
+			let h = req.headers_mut();
+			h.insert(
+				"utf8",
+				http::HeaderValue::from_bytes("café".as_bytes()).unwrap(),
+			);
+			h.insert("invalid", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.append("mixed", http::HeaderValue::from_static("ok"));
+			h.append("mixed", http::HeaderValue::from_bytes(b"\xff").unwrap());
+			h.insert("empty", http::HeaderValue::from_static(""));
+			req
+		};
+		for name in [
+			"single",
+			"SINGLE",
+			"multi",
+			"authorization",
+			"utf8",
+			"invalid",
+			"mixed",
+			"empty",
+			"missing",
+		] {
+			let expr = format!(r#"request.headers["{name}"]"#);
+			let optimized = crate::cel::Expression::new_strict(&expr).unwrap();
+			assert!(
+				matches!(
+					optimized.ast().expr,
+					cel::common::ast::Expr::Optimized { .. }
+				),
+				"{expr} was not optimized"
+			);
+			let unoptimized = crate::cel::Expression::new_unoptimized(&expr).unwrap();
+			let r1 = req();
+			let r2 = req();
+			let a = crate::cel::Executor::new_request(&r1)
+				.eval(&optimized)
+				.map(|v| v.as_static());
+			let b = crate::cel::Executor::new_request(&r2)
+				.eval(&unoptimized)
+				.map(|v| v.as_static());
+			assert_eq!(a.ok(), b.ok(), "optimizations changed behavior ({expr})");
+		}
+	}
+
+	#[test]
 	fn cookie_missing() {
 		let req = ::http::Request::builder()
 			.method(http::Method::GET)
@@ -565,47 +619,6 @@ request.uri.setQuery("foo", "qux") == "http://example.com/api/test?zap=zip&foo=q
 }
 
 #[test]
-fn test_properties() {
-	let test = |e: &str, want: &[&str]| {
-		let p = Program::compile(e).unwrap();
-		let mut props = Vec::with_capacity(5);
-		crate::cel::properties::properties(&p.expression().expr, &mut props, &mut Vec::default());
-		let want = HashSet::from_iter(want.iter().map(|s| s.to_string()));
-		let got = props
-			.into_iter()
-			.map(|p| p.join("."))
-			.collect::<HashSet<_>>();
-		assert_eq!(want, got, "expression: {e}");
-	};
-
-	test(r#"foo.bar.baz"#, &["foo.bar.baz"]);
-	test(r#"foo["bar"]"#, &["foo"]);
-	test(r#"foo.baz["bar"]"#, &["foo.baz"]);
-	// This is not quite right but maybe good enough.
-	test(r#"foo.with(x, x.body)"#, &["foo", "x", "x.body"]);
-	test(r#"foo.map(x, x.body)"#, &["foo", "x", "x.body"]);
-	test(r#"foo.bar.map(x, x.body)"#, &["foo.bar", "x", "x.body"]);
-
-	test(r#"fn(bar.baz)"#, &["bar.baz"]);
-	test(r#"{"key":val, "listkey":[a.b]}"#, &["val", "a.b"]);
-	test(r#"{"key":val, "listkey":[a.b]}"#, &["val", "a.b"]);
-	test(r#"a? b: c"#, &["a", "b", "c"]);
-	test(r#"a || b"#, &["a", "b"]);
-	test(r#"!a.b"#, &["a.b"]);
-	test(r#"a.b < c"#, &["a.b", "c"]);
-	test(r#"a.b + c + 2"#, &["a.b", "c"]);
-	test(r#"a["b"].c"#, &["a"]);
-	test(r#"a["b"]["c"]"#, &["a"]);
-	test(r#"a.b[0]"#, &["a.b"]);
-	test(r#"a.b[0].c"#, &["a.b"]);
-	test(r#"a[b.c]"#, &["a", "b.c"]);
-	test(r#"{"a":"b"}.a"#, &[]);
-	// Test extauthz namespace recognition
-	test(r#"extauthz.user_id"#, &["extauthz.user_id"]);
-	test(r#"extauthz.role == "admin""#, &["extauthz.role"]);
-}
-
-#[test]
 fn map() {
 	let expr = r#"request.headers.map(v, v)"#;
 	let v = eval(expr).unwrap();
@@ -662,5 +675,63 @@ fn unset_values() {
 	assert_eq!(
 		Value::Bool(false),
 		eval_request("has(jwt.sub)", req()).unwrap()
+	);
+}
+
+#[test]
+fn log_guardrails_binding() {
+	let entries = vec![crate::cel::GuardrailInfo {
+		phase: "request".into(),
+		guard: "bedrockGuardrails".into(),
+		action: "reject".into(),
+		detail: crate::cel::GuardDetail {
+			guardrail_id: Some("gr-1".into()),
+			guardrail_version: Some("3".into()),
+			action_reason: Some("Guardrail blocked.".into()),
+			assessments: vec![serde_json::json!({
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{"type": "EMAIL", "action": "BLOCKED", "detected": true}]
+				}
+			})],
+		},
+	}];
+	let exec = Executor::new_logger(None, None, None, None, Some(&entries), None, None);
+
+	let exp = Expression::new_strict(
+		r#"guardrails.size() == 1
+			&& guardrails[0].action == "reject"
+			&& guardrails[0].guardrailId == "gr-1"
+			&& guardrails[0].assessments[0].sensitiveInformationPolicy.piiEntities[0].type == "EMAIL""#,
+	)
+	.unwrap();
+	assert!(exec.eval_bool(&exp));
+}
+
+#[test]
+fn mcp_view() {
+	let exec_serde = full_example_executor();
+	let info = exec_serde.mcp.as_ref().unwrap();
+	assert_eq!(
+		MCPView::new(info).materialize().json().unwrap(),
+		info.materialize().json().unwrap()
+	);
+
+	let payload = json!({"name": "get_weather", "arguments": {"city": "SF"}});
+	let mut exec = exec_serde.as_executor();
+	exec.mcp = Some(MCPView {
+		info,
+		params: Some(&payload),
+		result: None,
+	});
+	let mut expected = info.materialize().json().unwrap();
+	expected["params"] = payload.clone();
+	assert_eq!(
+		exec.mcp.as_ref().unwrap().materialize().json().unwrap(),
+		expected
+	);
+	let exp = Expression::new_strict(r#"[mcp.tool.name, mcp.params.arguments.city]"#).unwrap();
+	assert_eq!(
+		exec.eval(&exp).unwrap().json().unwrap(),
+		json!(["get_weather", "SF"])
 	);
 }

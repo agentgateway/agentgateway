@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use futures_core::stream::BoxStream;
 use futures_util::{StreamExt, TryFutureExt};
 use headers::HeaderMapExt;
+use http_body_util::BodyExt as _;
 use rmcp::model::{
 	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
 };

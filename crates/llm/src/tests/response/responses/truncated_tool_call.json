@@ -9,7 +9,12 @@
       "call_id": "call_1",
       "name": "get_weather",
       "arguments": "{\"location\": \"Par",
-      "status": "completed"
+      "status": "incomplete"
     }
-  ]
+  ],
+  "object": "response",
+  "created_at": 123,
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  }
 }

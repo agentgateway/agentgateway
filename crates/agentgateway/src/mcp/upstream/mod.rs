@@ -29,49 +29,54 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::telemetry::log::{SpanWriteOnDrop, SpanWriter};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
-use crate::types::agent::{McpPrefixMode, McpTargetSpec};
+use crate::types::agent::{McpPrefixMode, McpServerOverrides, McpTargetSpec};
 use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
-	method: ::http::Method,
-	uri: ::http::Uri,
-	headers: http::HeaderMap,
-	ext: ::http::Extensions,
+	/// Incoming HTTP body exposed as CEL request.body and request.bodyPrefix after
+	/// parsing. Kept separate from the MCP message, which may be rewritten for upstreams.
+	/// None means this context was created from headers alone (e.g. session cleanup).
+	pub(super) request: ::http::Request<Option<bytes::Bytes>>,
 	authority: Option<::http::uri::Authority>,
 }
 
 impl IncomingRequestContext {
 	#[cfg(test)]
 	pub fn empty() -> Self {
-		Self {
-			method: ::http::Method::GET,
-			uri: ::http::Uri::from_static("/"),
-			headers: http::HeaderMap::new(),
-			ext: ::http::Extensions::new(),
-			authority: None,
-		}
+		Self::new(&::http::Request::new(()).into_parts().0)
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
-			method: parts.method.clone(),
-			uri: parts.uri.clone(),
-			headers: parts.headers.clone(),
-			ext: parts.extensions.clone(),
+			request: ::http::Request::from_parts(parts.clone(), None),
 			authority: parts.uri.authority().cloned(),
 		}
 	}
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
-		&mut self.headers
+		self.request.headers_mut()
+	}
+	pub fn with_mcp_target(mut self, target_name: &str) -> Self {
+		let mut mcp = self
+			.extensions()
+			.get::<crate::mcp::MCPInfo>()
+			.cloned()
+			.unwrap_or_default();
+		mcp.target = Some(crate::mcp::MCPTarget {
+			name: target_name.to_string(),
+		});
+		self.extensions_mut().insert(mcp);
+		self
 	}
 	pub fn extensions(&self) -> &::http::Extensions {
-		&self.ext
+		self.request.extensions()
 	}
 	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
-		&mut self.ext
+		self.request.extensions_mut()
 	}
 	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
-		req.extensions_mut().extend(self.ext.clone());
+		req
+			.extensions_mut()
+			.extend(self.request.extensions().clone());
 		let explicit_auto_hostname = req
 			.extensions()
 			.get::<crate::http::filters::AutoHostname>()
@@ -87,7 +92,7 @@ impl IncomingRequestContext {
 				auto.target = Some(authority);
 			}
 		}
-		for (k, v) in &self.headers {
+		for (k, v) in self.request.headers() {
 			// Remove headers we do not want to propagate to the backend
 			if k == http::header::CONTENT_ENCODING
 				|| k == http::header::CONTENT_LENGTH
@@ -111,7 +116,12 @@ impl IncomingRequestContext {
 	// The only trace carrier for stdio upstreams, which have no request headers.
 	fn stamp_trace_context(&self, meta: &mut rmcp::model::MetaObject) {
 		for key in ["traceparent", "tracestate", "baggage"] {
-			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
+			let Some(value) = self
+				.request
+				.headers()
+				.get(key)
+				.and_then(|v| v.to_str().ok())
+			else {
 				continue;
 			};
 			meta.0.insert(
@@ -147,14 +157,9 @@ impl IncomingRequestContext {
 		self.extensions_mut().insert(span.span_writer());
 		Some(span)
 	}
-	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
-	pub fn as_request(&self) -> crate::http::Request {
-		let mut req = ::http::Request::new(crate::http::Body::empty());
-		*req.method_mut() = self.method.clone();
-		*req.uri_mut() = self.uri.clone();
-		*req.headers_mut() = self.headers.clone();
-		*req.extensions_mut() = self.ext.clone();
-		req
+	/// Borrow the detached HTTP policy inputs, including the original body snapshot.
+	pub fn executor(&self) -> crate::cel::Executor<'_> {
+		crate::cel::Executor::new_buffered_request(&self.request)
 	}
 }
 
@@ -165,8 +170,12 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
-	#[error("mcpGuardrails rejected: {}", .0.message)]
-	McpGuardrails(rmcp::ErrorData),
+	#[error("mcpGuardrails rejected: {}", .rej.message)]
+	McpGuardrails {
+		rej: rmcp::ErrorData,
+		was_tool_call: bool,
+		downstream_modern: bool,
+	},
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	/// A server-side availability/capability gap. Distinct from `InvalidRequest`,
@@ -231,7 +240,7 @@ impl Upstream {
 		{
 			return Ok(());
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("DELETE {target_name}"), target_name, None, None);
 		let result: Result<(), UpstreamError> = async {
@@ -271,7 +280,7 @@ impl Upstream {
 				_ => unreachable!(),
 			};
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("GET {target_name}"), target_name, None, None);
 		let result: Result<Messages, UpstreamError> = async {
@@ -311,7 +320,7 @@ impl Upstream {
 			},
 			_ => (None, None),
 		};
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span = ctx.start_mcp_outbound_span(
 			match operation_target {
 				Some(operation_target) => format!("{method} {target_name}_{operation_target}"),
@@ -385,7 +394,7 @@ impl Upstream {
 			ClientNotification::CustomNotification(r) => r.method.as_str(),
 			_ => "unknown",
 		};
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span = ctx.start_mcp_outbound_span(
 			format!("{method} {target_name}"),
 			target_name,
@@ -422,7 +431,7 @@ impl Upstream {
 				"openapi upstream does not support server-to-client routing".into(),
 			));
 		}
-		let mut ctx = ctx.clone();
+		let mut ctx = ctx.clone().with_mcp_target(target_name);
 		let mut span =
 			ctx.start_mcp_outbound_span(format!("response {target_name}"), target_name, None, None);
 		let result: Result<(), UpstreamError> = async {
@@ -461,7 +470,9 @@ pub(crate) struct UpstreamGroup {
 	pub default_target_name: Option<String>,
 	pub prefix_mode: McpPrefixMode,
 	pub is_multiplexing: bool,
+	all_targets_conditioned_out: bool,
 	pub failure_mode: FailureMode,
+	pub sse_keep_alive: Option<Duration>,
 }
 
 impl UpstreamGroup {
@@ -469,23 +480,49 @@ impl UpstreamGroup {
 		self.by_name.len()
 	}
 
-	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
+	pub fn all_targets_conditioned_out(&self) -> bool {
+		self.all_targets_conditioned_out
+	}
+
+	pub(crate) fn new_for_request(
+		client: PolicyClient,
+		mut backend: McpBackendGroup,
+		ctx: &IncomingRequestContext,
+	) -> Result<Self, mcp::Error> {
 		let client = PolicyClient::new(client.inputs.clone());
 		let is_multiplexing = backend.targets.len() != 1;
 		let default_target_name = (!is_multiplexing && backend.prefix_mode != McpPrefixMode::Always)
 			.then(|| backend.targets[0].name.to_string());
+		let configured_targets = backend.targets.len();
+		let all_targets_conditioned_out = configured_targets > 0 && {
+			backend.targets.retain(|target| {
+				target.condition.as_ref().is_none_or(|condition| {
+					ctx
+						.clone()
+						.with_mcp_target(&target.name)
+						.executor()
+						.eval_bool(condition)
+				})
+			});
+			backend.targets.is_empty()
+		};
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
 			prefix_mode: backend.prefix_mode,
+			sse_keep_alive: backend.sse_keep_alive,
 			backend,
 			client,
 			by_name: IndexMap::new(),
 			extensions: RwLock::new(HashMap::new()),
 			default_target_name,
 			is_multiplexing,
+			all_targets_conditioned_out,
 		};
 		s.setup_connections()?;
 		if s.by_name.is_empty() {
+			if all_targets_conditioned_out {
+				return Ok(s);
+			}
 			if s.backend.targets.is_empty() && s.failure_mode == FailureMode::FailOpen {
 				warn!(
 					"MCP backend configured with zero targets and failure_mode=failOpen; allowing startup to avoid downstream retry loops"
@@ -537,6 +574,10 @@ impl UpstreamGroup {
 
 	pub(crate) fn stateful(&self) -> bool {
 		self.backend.stateful
+	}
+
+	pub(crate) fn server_overrides(&self) -> Option<McpServerOverrides> {
+		self.backend.server.clone()
 	}
 
 	/// True when some target's `delete` does teardown work even without an upstream

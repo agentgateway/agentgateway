@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Copy, Clone, Deserialize, Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -57,6 +56,11 @@ pub enum ReasoningContentBlock {
 	Structured {
 		#[serde(rename = "reasoningText")]
 		reasoning_text: ReasoningText,
+	},
+	// Encrypted reasoning: { "redactedContent": "<base64>" }.
+	Redacted {
+		#[serde(rename = "redactedContent")]
+		redacted_content: String,
 	},
 	// Legacy/simple format: { "text": "..." }
 	Simple {
@@ -252,6 +256,7 @@ pub struct InvokeModelBody {
 }
 
 #[derive(Clone, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolConfiguration {
 	/// An array of tools that you want to pass to a model.
 	pub tools: Vec<Tool>,
@@ -272,6 +277,8 @@ pub enum Tool {
 #[derive(Clone, std::fmt::Debug, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachePointBlock {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub ttl: Option<String>,
 	/// Specifies the type of cache point within the CachePointBlock.
 	pub r#type: CachePointType,
 }
@@ -415,9 +422,9 @@ pub enum StopReason {
 #[serde(rename_all = "camelCase")]
 pub enum ToolChoice {
 	/// The model must request at least one tool (no text is generated).
-	Any,
+	Any {},
 	/// (Default). The Model automatically decides if a tool should be called or whether to generate text instead.
-	Auto,
+	Auto {},
 	/// The Model must request the specified tool. Only supported by Anthropic Claude 3 models.
 	Tool { name: String },
 	/// The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.
@@ -590,10 +597,19 @@ pub struct ToolUseBlockDelta {
 	pub input: String,
 }
 
+fn deserialize_base64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+	use base64::Engine;
+	let s = String::deserialize(deserializer)?;
+	base64::prelude::BASE64_STANDARD
+		.decode(s)
+		.map_err(serde::de::Error::custom)
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub enum ReasoningContentBlockDelta {
-	#[serde(rename = "redactedContent")]
-	RedactedContent(#[allow(unused)] Bytes),
+	// Bedrock blobs are base64 encoded; fragments must be decoded before they can be joined.
+	#[serde(rename = "redactedContent", deserialize_with = "deserialize_base64")]
+	RedactedContent(Vec<u8>),
 	#[serde(rename = "signature")]
 	Signature(#[allow(unused)] String),
 	#[serde(rename = "text")]
@@ -668,9 +684,16 @@ pub struct CohereEmbeddingRequest {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct CohereEmbeddingResponse {
-	pub embeddings: Vec<Vec<f32>>,
+	pub embeddings: CohereEmbeddings,
 	pub id: String,
 	pub texts: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum CohereEmbeddings {
+	ByIndex(Vec<Vec<f32>>),
+	ByType(HashMap<String, Vec<Vec<f32>>>),
 }
 
 // ---- Amazon Nova Multimodal Embeddings (amazon.nova-*-multimodal-embeddings-*) ----

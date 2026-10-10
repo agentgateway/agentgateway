@@ -6,18 +6,20 @@ use crate::types;
 
 fn bedrock_provider(model: &str, region: &str) -> crate::bedrock::Provider {
 	crate::bedrock::Provider {
-		model: Some(agent_core::strng::new(model)),
+		model_override: Some(agent_core::strng::new(model)),
 		region: agent_core::strng::new(region),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	}
 }
 
 #[test]
 fn test_bedrock_rerank_request_passes_through_full_arn() {
 	let arn = "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0";
-	let req: types::rerank::Request =
+	let mut req: types::rerank::Request =
 		serde_json::from_str(r#"{"query":"q","documents":["a"]}"#).unwrap();
+	req.model = Some(arn.into());
 	let provider = bedrock_provider(arn, "us-east-1");
 	let out = crate::conversion::bedrock::from_rerank::translate(&req, &provider).unwrap();
 	let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
@@ -30,18 +32,28 @@ fn test_bedrock_rerank_request_passes_through_full_arn() {
 #[test]
 fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 	let provider = bedrock_provider("cohere.rerank-v3-5:0", "us-west-2");
+	use crate::bedrock::BedrockEndpoint;
 	assert_eq!(
-		provider.get_host(crate::RouteType::Rerank).as_str(),
+		provider
+			.get_host(crate::RouteType::Rerank, BedrockEndpoint::Runtime)
+			.as_str(),
 		"bedrock-agent-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
 		provider
-			.get_path_for_route(crate::RouteType::Rerank, false, "cohere.rerank-v3-5:0")
+			.get_path_for_route(
+				crate::RouteType::Rerank,
+				false,
+				"cohere.rerank-v3-5:0",
+				BedrockEndpoint::Runtime
+			)
 			.as_str(),
 		"/rerank"
 	);
 	assert_eq!(
-		provider.get_host(crate::RouteType::Embeddings).as_str(),
+		provider
+			.get_host(crate::RouteType::Embeddings, BedrockEndpoint::Runtime)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 }
@@ -51,19 +63,26 @@ fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 #[test]
 fn test_bedrock_connection_target_is_route_aware() {
 	use crate::RouteType;
+	use crate::bedrock::BedrockEndpoint;
 
 	let provider = bedrock_provider("cohere.rerank-v3-5:0", "us-west-2");
 
 	assert_eq!(
-		provider.get_host(RouteType::Rerank).as_str(),
+		provider
+			.get_host(RouteType::Rerank, BedrockEndpoint::Runtime)
+			.as_str(),
 		"bedrock-agent-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
-		provider.get_host(RouteType::Embeddings).as_str(),
+		provider
+			.get_host(RouteType::Embeddings, BedrockEndpoint::Runtime)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
-		provider.get_host(RouteType::Completions).as_str(),
+		provider
+			.get_host(RouteType::Completions, BedrockEndpoint::Runtime)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 }
@@ -91,7 +110,7 @@ fn test_bedrock_rerank_empty_documents_errors() {
 
 fn vertex_provider(project: &str, region: &str) -> crate::vertex::Provider {
 	crate::vertex::Provider {
-		model: None,
+		model_override: None,
 		region: Some(agent_core::strng::new(region)),
 		project_id: agent_core::strng::new(project),
 	}
@@ -135,7 +154,12 @@ fn test_vertex_rerank_uses_discovery_engine_host_and_ranking_path() {
 		crate::vertex::DISCOVERY_ENGINE_HOST.as_str(),
 		"discoveryengine.googleapis.com"
 	);
-	let path = provider.get_path_for_model(RouteType::Rerank, None, false, false);
+	let path = provider.get_path_for_model(
+		RouteType::Rerank,
+		"semantic-ranker-default@latest",
+		false,
+		false,
+	);
 	assert!(
 		path
 			.as_str()

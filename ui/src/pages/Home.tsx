@@ -5,17 +5,10 @@ import { useEffect, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
 import { PageHeader, StatusBanner } from '@/components/Primitives';
-import {
-	enableTrafficConfig,
-	ensureLlm,
-	ensureLlmFrontendDefaults,
-	fileOwnedMcpSettingFields,
-	startupLlmConfig,
-	startupMcpConfig
-} from '@/config';
-import { refreshBaseCostsAndConfigure } from '@/costs';
+import { ensureLlm, fileOwnedMcpSettingFields } from '@/config';
 import {
 	useConfigDumpMode,
+	useEnableSurface,
 	useLlmConfigData,
 	useMcpConfigData,
 	useTrafficConfigData,
@@ -55,6 +48,7 @@ export function HomePage() {
 		enabled: Boolean(mode.data && mode.data.mode !== 'dump')
 	});
 	const update = useUpdateConfig();
+	const enable = useEnableSurface();
 	const upsertResource = useUpsertConfigResource();
 	const help = useSchemaHelp();
 	const [locallyEnabled, setLocallyEnabled] = useState<Set<StartupSurface>>(() => new Set());
@@ -80,14 +74,10 @@ export function HomePage() {
 	const traffic = trafficStats(trafficData.data);
 	const [startupEvaluated, setStartupEvaluated] = useState(false);
 	const [startupFlow, setStartupFlow] = useState(false);
-	const [costRefreshError, setCostRefreshError] = useState<string | null>(null);
 	const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
 	const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 	const showStartup = Boolean(config.data && startupFlow);
-	const selectedSurfaces =
-		Number(hasLlm || locallyEnabled.has('llm')) +
-		Number(hasMcp || locallyEnabled.has('mcp')) +
-		Number(hasTraffic || locallyEnabled.has('apis'));
+	const anySurfaceEnabled = hasLlm || hasMcp || hasTraffic || locallyEnabled.size > 0;
 
 	useEffect(() => {
 		if (!config.data || pageDataLoading || pageDataError || startupEvaluated) return;
@@ -96,30 +86,13 @@ export function HomePage() {
 	}, [config.data, pageDataError, pageDataLoading, hasLlm, hasMcp, hasTraffic, startupEvaluated]);
 
 	async function enableSurface(surface: StartupSurface) {
-		setCostRefreshError(null);
 		try {
-			await update.mutateAsync(next => {
-				if (surface === 'llm') {
-					next.llm = startupLlmConfig(next, 4000);
-					ensureLlmFrontendDefaults(next);
-				} else if (surface === 'mcp') {
-					next.mcp = startupMcpConfig(next, 3000);
-				} else {
-					enableTrafficConfig(next);
-				}
+			await enable.mutateAsync({
+				surface: surface === 'apis' ? 'traffic' : surface
 			});
 			setLocallyEnabled(current => new Set(current).add(surface));
-			if (surface === 'llm') {
-				try {
-					await refreshBaseCostsAndConfigure(update);
-				} catch (err) {
-					setCostRefreshError(
-						err instanceof Error ? err.message : 'Failed to refresh base cost catalog'
-					);
-				}
-			}
 		} catch {
-			// useUpdateConfig exposes the save error through update.isError.
+			// The enable mutation exposes the save error.
 		}
 	}
 
@@ -143,7 +116,10 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
+			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
+			// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
+				{/** biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 				<section
 					className="startup-panel"
 					role="dialog"
@@ -153,10 +129,7 @@ export function HomePage() {
 				>
 					<div className="startup-copy">
 						<h2 id="startup-title">Welcome to Agentgateway</h2>
-						<p>
-							Agentgateway is a gateway that can route, secure, and observe LLM, MCP, and
-							traditional API traffic. Select one or more capabilities to enable, then continue.
-						</p>
+						<p>Choose what this gateway will serve. Anything skipped can be enabled later.</p>
 					</div>
 
 					{pageDataError ? (
@@ -164,47 +137,41 @@ export function HomePage() {
 							{pageDataError.message}
 						</StatusBanner>
 					) : null}
-					{update.isError ? (
+					{enable.isError || update.isError ? (
 						<StatusBanner state="bad" title="Save failed">
-							{update.error.message}
-						</StatusBanner>
-					) : null}
-					{costRefreshError ? (
-						<StatusBanner state="warn" title="Cost catalog refresh failed">
-							{costRefreshError}
+							{enable.error?.message ?? update.error?.message}
 						</StatusBanner>
 					) : null}
 
 					<div className="startup-chip-grid">
 						<StartupChip
 							label="LLM"
-							description="Models, keys, policies, and chat testing."
+							description="Models, providers, and API keys."
 							enabled={hasLlm || locallyEnabled.has('llm')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Bot size={24} />}
 							onClick={() => void enableSurface('llm')}
 						/>
 						<StartupChip
 							label="MCP"
-							description="Servers, tools, and MCP playground flows."
+							description="MCP servers and tools."
 							enabled={hasMcp || locallyEnabled.has('mcp')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Server size={24} />}
 							onClick={() => void enableSurface('mcp')}
 						/>
 						<StartupChip
-							label="APIs"
-							description="HTTP and TCP listeners, routes, and policy controls."
+							label="Traffic"
+							description="HTTP and TCP routes and backends."
 							enabled={hasTraffic || locallyEnabled.has('apis')}
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							icon={<Network size={24} />}
 							onClick={() => void enableSurface('apis')}
 						/>
 					</div>
 
-					{selectedSurfaces > 0 ? (
+					{anySurfaceEnabled ? (
 						<div className="startup-actions">
-							<span>{selectedSurfaces} of 3 enabled</span>
 							<button
 								className="button primary"
 								type="button"
@@ -229,19 +196,17 @@ export function HomePage() {
 		<div className="page-stack">
 			<PageHeader title="Gateway Overview" />
 
+			{enable.isError || update.isError ? (
+				<StatusBanner state="bad" title="Save failed">
+					{enable.error?.message ?? update.error?.message}
+				</StatusBanner>
+			) : null}
+
 			{pageDataLoading ? (
 				<StatusBanner state="loading" title="Loading gateway configuration" />
 			) : pageDataError ? (
 				<StatusBanner state="bad" title="Configuration API unavailable">
 					{pageDataError.message}
-				</StatusBanner>
-			) : costRefreshError ? (
-				<StatusBanner state="warn" title="Cost catalog refresh failed">
-					{costRefreshError}
-				</StatusBanner>
-			) : !hasLlm && !hasMcp && !hasTraffic ? (
-				<StatusBanner state="warn" title="No gateway surfaces enabled yet">
-					Enable the capabilities you want to operate from the setup path.
 				</StatusBanner>
 			) : warnings.length ? (
 				<StatusBanner
@@ -260,7 +225,7 @@ export function HomePage() {
 					state="warn"
 					title="UI is exposed without authentication"
 					action={
-						<Link className="button" to="/settings">
+						<Link className="button" to="/settings/ui">
 							Configure UI policies
 						</Link>
 					}
@@ -275,7 +240,7 @@ export function HomePage() {
 					title="LLM"
 					icon={<Bot size={18} />}
 					enabled={hasLlm}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('llm')}
 					setupNeeded={callableModels === 0}
 					setupText="Add a model before LLM traffic can be served."
@@ -292,7 +257,7 @@ export function HomePage() {
 						<button
 							className="button"
 							type="button"
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							onClick={() => setLlmSettingsOpen(true)}
 						>
 							<Settings size={16} />
@@ -304,7 +269,7 @@ export function HomePage() {
 					title="MCP"
 					icon={<Server size={18} />}
 					enabled={hasMcp}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('mcp')}
 					setupNeeded={mcpServers.length === 0}
 					setupText="Add an MCP target before tools are available."
@@ -318,7 +283,7 @@ export function HomePage() {
 						<button
 							className="button"
 							type="button"
-							disabled={update.isPending}
+							disabled={enable.isPending || update.isPending}
 							onClick={() => setMcpSettingsOpen(true)}
 						>
 							<Settings size={16} />
@@ -330,7 +295,7 @@ export function HomePage() {
 					title="Traffic"
 					icon={<Network size={18} />}
 					enabled={hasTraffic}
-					disabled={update.isPending}
+					disabled={enable.isPending || update.isPending}
 					onEnable={() => void enableSurface('apis')}
 					setupNeeded={hasBinds ? traffic.listeners === 0 : traffic.gateways === 0}
 					setupText={
@@ -471,7 +436,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>Not enabled</span>
 				</div>
 				<button className="button" type="button" disabled={props.disabled} onClick={props.onEnable}>
 					Enable {props.title}
@@ -486,7 +450,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>Enabled</span>
 				</div>
 				{props.setupNeeded ? (
 					<p>{props.setupText}</p>

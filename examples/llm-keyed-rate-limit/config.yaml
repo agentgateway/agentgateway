@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  port: 4000
+  policies:
+    jwtAuth:
+      issuer: agentgateway.dev
+      audiences: [test.agentgateway.dev]
+      jwks:
+        # Relative to the folder the binary runs from, not the config file
+        file: ./manifests/jwt/pub-key
+    localRateLimit:
+    # Each user may send 60 requests a minute.
+    - type: requests
+      maxTokens: 60
+      tokensPerFill: 60
+      fillInterval: 60s
+      key: jwt.sub
+    # Each team shares 100k tokens an hour. The bucket is settled with the real input and
+    # output token counts once the response is known.
+    - type: tokens
+      maxTokens: 100000
+      tokensPerFill: 100000
+      fillInterval: 1h
+      key: jwt.team
+    # Each user also gets a separate token allowance per model. A token limit is charged once
+    # the request body has been parsed, so its key can read the requested model.
+    - type: tokens
+      maxTokens: 20000
+      tokensPerFill: 20000
+      fillInterval: 1h
+      key: jwt.sub + "/" + llm.requestModel
+  models:
+  - name: qwen3
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://vllm.internal:8000/v1
+      model: Qwen/Qwen3-32B

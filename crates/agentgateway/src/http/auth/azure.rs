@@ -6,6 +6,7 @@ use azure_identity::UserAssignedId;
 use secrecy::{ExposeSecret, SecretString};
 use tracing::trace;
 
+use super::BackendAuthError;
 use crate::serdes::schema;
 use crate::util::ErrorContext;
 use crate::{apply, client, ser_redact};
@@ -57,7 +58,17 @@ impl std::fmt::Debug for AzureCredentialCache {
 }
 
 #[apply(schema!)]
-pub enum AzureAuth {
+pub struct AzureAuth {
+	#[serde(flatten)]
+	pub kind: AzureAuthKind,
+	/// Scopes requested for the Azure access token. When unset, the scope is
+	/// inferred from the backend hostname.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub scopes: Vec<String>,
+}
+
+#[apply(schema!)]
+pub enum AzureAuthKind {
 	/// Use explicit Azure credentials
 	#[serde(rename_all = "camelCase")]
 	ExplicitConfig {
@@ -87,14 +98,32 @@ pub enum AzureAuth {
 
 impl Default for AzureAuth {
 	fn default() -> Self {
-		Self::Implicit {
-			cached_cred: Default::default(),
+		Self {
+			kind: AzureAuthKind::Implicit {
+				cached_cred: Default::default(),
+			},
+			scopes: Vec::new(),
 		}
 	}
 }
 
 const SCOPES: &[&str] = &["https://cognitiveservices.azure.com/.default"];
 const FOUNDRY_SCOPES: &[&str] = &["https://ai.azure.com/.default"];
+
+fn scopes_for_target<'a>(
+	auth: &'a AzureAuth,
+	target: &crate::types::agent::Target,
+) -> Vec<&'a str> {
+	if !auth.scopes.is_empty() {
+		return auth.scopes.iter().map(String::as_str).collect();
+	}
+	if matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"))
+	{
+		FOUNDRY_SCOPES.to_vec()
+	} else {
+		SCOPES.to_vec()
+	}
+}
 
 /// A credential chain that mirrors the Azure Go SDK's DefaultAzureCredential.
 ///
@@ -127,6 +156,13 @@ struct DefaultAzureCredential {
 	/// Index of the source that first provided a token.
 	/// `usize::MAX` indicates no source has provided a token yet.
 	cached_source_index: AtomicUsize,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct AzureCredentialChainError {
+	provider_failure: bool,
+	message: String,
 }
 
 impl std::fmt::Debug for DefaultAzureCredential {
@@ -166,23 +202,67 @@ impl TokenCredential for DefaultAzureCredential {
 			}
 		}
 
-		Err(azure_core::Error::with_message_fn(
+		let provider_failure = errors.iter().any(is_azure_credential_provider_error);
+		let mut message = format!(
+			"DefaultAzureCredential: all credentials failed:\n{}",
+			format_credential_errors(&errors)
+		);
+		if !self.construction_errors.is_empty() {
+			message.push_str(&format!(
+				"\nCredentials excluded because they could not be constructed:\n{}",
+				self.construction_errors.join("\n")
+			));
+		}
+		Err(azure_core::Error::new(
 			azure_core::error::ErrorKind::Credential,
-			|| {
-				let mut msg = format!(
-					"DefaultAzureCredential: all credentials failed:\n{}",
-					format_credential_errors(&errors)
-				);
-				if !self.construction_errors.is_empty() {
-					msg.push_str(&format!(
-						"\nCredentials excluded because they could not be constructed:\n{}",
-						self.construction_errors.join("\n")
-					));
-				}
-				msg
+			AzureCredentialChainError {
+				provider_failure,
+				message,
 			},
 		))
 	}
+}
+
+fn is_azure_credential_provider_error(error: &azure_core::Error) -> bool {
+	let mut current: Option<&(dyn std::error::Error + 'static)> = Some(error);
+	while let Some(error) = current {
+		if let Some(chain_error) = error.downcast_ref::<AzureCredentialChainError>() {
+			return chain_error.provider_failure;
+		}
+		if let Some(azure_error) = error.downcast_ref::<azure_core::Error>() {
+			match azure_error.kind() {
+				azure_core::error::ErrorKind::HttpResponse { status, .. } => {
+					return status.is_server_error()
+						|| matches!(
+							*status,
+							azure_core::http::StatusCode::RequestTimeout
+								| azure_core::http::StatusCode::TooManyRequests
+						);
+				},
+				azure_core::error::ErrorKind::Connection | azure_core::error::ErrorKind::DataConversion => {
+					return true;
+				},
+				_ => {},
+			}
+		}
+		current = error.source();
+	}
+	false
+}
+
+fn classify_azure_token_error(error: azure_core::Error) -> BackendAuthError {
+	if is_azure_credential_provider_error(&error) {
+		BackendAuthError::credential_provider(error)
+	} else {
+		BackendAuthError::local(error)
+	}
+}
+
+fn azure_bearer_header(token: &str) -> Result<http::HeaderValue, BackendAuthError> {
+	let mut header = http::HeaderValue::from_str(&format!("Bearer {token}"))
+		.map_err(BackendAuthError::credential_provider)?;
+	header.set_sensitive(true);
+	Ok(header)
 }
 
 fn format_credential_errors(errors: &[azure_core::Error]) -> String {
@@ -238,8 +318,8 @@ async fn build_credential(
 		transport: Some(azure_core::http::Transport::new(Arc::new(client.clone()))),
 		..Default::default()
 	};
-	match auth {
-		AzureAuth::ExplicitConfig {
+	match &auth.kind {
+		AzureAuthKind::ExplicitConfig {
 			credential_source, ..
 		} => match credential_source {
 			AzureAuthCredentialSource::ClientSecret {
@@ -286,8 +366,10 @@ async fn build_credential(
 				))?)
 			},
 		},
-		AzureAuth::DeveloperImplicit { .. } => Ok(azure_identity::DeveloperToolsCredential::new(None)?),
-		AzureAuth::Implicit { .. } => {
+		AzureAuthKind::DeveloperImplicit { .. } => {
+			Ok(azure_identity::DeveloperToolsCredential::new(None)?)
+		},
+		AzureAuthKind::Implicit { .. } => {
 			// Build a DefaultAzureCredential chain following the Azure Go SDK pattern.
 			// Each credential is tried in order; the first to succeed is cached and
 			// used for all subsequent requests.
@@ -440,31 +522,145 @@ pub(super) async fn get_token(
 	client: &client::Client,
 	auth: &AzureAuth,
 	target: &crate::types::agent::Target,
-) -> anyhow::Result<http::HeaderValue> {
-	let cache = match auth {
-		AzureAuth::Implicit { cached_cred, .. } => &cached_cred.0,
-		AzureAuth::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
-		AzureAuth::ExplicitConfig { cached_cred, .. } => &cached_cred.0,
+) -> Result<http::HeaderValue, BackendAuthError> {
+	let cache = match &auth.kind {
+		AzureAuthKind::Implicit { cached_cred, .. } => &cached_cred.0,
+		AzureAuthKind::DeveloperImplicit { cached_cred, .. } => &cached_cred.0,
+		AzureAuthKind::ExplicitConfig { cached_cred, .. } => &cached_cred.0,
 	};
 	let cred = cache
 		.get_or_try_init(|| build_credential(client, auth))
-		.await?
-		.clone();
-	// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
-	let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
-	let scopes = if is_foundry { FOUNDRY_SCOPES } else { SCOPES };
-	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(scopes, None))
 		.await
-		.ctx("Azure token fetch timed out after 5s")??;
-	let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
-	hv.set_sensitive(true);
+		.map_err(BackendAuthError::local)?
+		.clone();
+	let scopes = scopes_for_target(auth, target);
+	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(&scopes, None))
+		.await
+		.ctx("Azure token fetch timed out after 5s")
+		.map_err(BackendAuthError::credential_provider)?
+		.map_err(classify_azure_token_error)?;
+	let hv = azure_bearer_header(token.token.secret())?;
 	trace!("attached Azure token (scope: {})", scopes[0]);
 	Ok(hv)
 }
 
 #[cfg(test)]
 mod tests {
+	use azure_core::error::ErrorKind;
+	use azure_core::http::StatusCode;
+
 	use super::*;
+
+	#[test]
+	fn classifies_azure_token_errors() {
+		let http_error = |status| {
+			azure_core::Error::with_message(
+				ErrorKind::HttpResponse {
+					status,
+					error_code: None,
+					raw_response: None,
+				},
+				"test error",
+			)
+		};
+		let cases = [
+			(
+				azure_core::Error::with_message(ErrorKind::Credential, "test error"),
+				false,
+			),
+			(http_error(StatusCode::BadRequest), false),
+			(http_error(StatusCode::Unauthorized), false),
+			(http_error(StatusCode::RequestTimeout), true),
+			(http_error(StatusCode::TooManyRequests), true),
+			(http_error(StatusCode::InternalServerError), true),
+			(
+				azure_core::Error::with_message(ErrorKind::Connection, "test error"),
+				true,
+			),
+			(
+				azure_core::Error::with_message(ErrorKind::DataConversion, "test error"),
+				true,
+			),
+			(
+				azure_core::Error::new(
+					ErrorKind::Credential,
+					AzureCredentialChainError {
+						provider_failure: true,
+						message: "test error".to_string(),
+					},
+				),
+				true,
+			),
+		];
+
+		for (error, expect_provider) in cases {
+			let classified = classify_azure_token_error(error);
+			assert_eq!(
+				matches!(classified, BackendAuthError::CredentialProvider(_)),
+				expect_provider
+			);
+		}
+	}
+
+	#[test]
+	fn classifies_malformed_azure_token_as_provider_failure() {
+		assert!(matches!(
+			azure_bearer_header("invalid\ntoken"),
+			Err(BackendAuthError::CredentialProvider(_))
+		));
+	}
+
+	#[test]
+	fn configured_scopes_are_siblings_of_the_auth_kind() {
+		let auth = serde_json::from_str::<AzureAuth>(
+			r#"{
+				"explicitConfig":{"managedIdentity":{}},
+				"scopes":["https://graph.microsoft.com/.default"]
+			}"#,
+		)
+		.expect("Azure auth with configured scopes should parse");
+
+		assert!(matches!(&auth.kind, AzureAuthKind::ExplicitConfig { .. }));
+		assert_eq!(auth.scopes, ["https://graph.microsoft.com/.default"]);
+		assert_eq!(
+			serde_json::to_value(auth).expect("Azure auth with configured scopes should serialize"),
+			serde_json::json!({
+				"explicitConfig": {"managedIdentity": {"userAssignedIdentity": null}},
+				"scopes": ["https://graph.microsoft.com/.default"]
+			})
+		);
+	}
+
+	#[test]
+	fn legacy_auth_shape_round_trips_without_scopes() {
+		let auth = serde_json::from_value::<AzureAuth>(serde_json::json!({"implicit": {}}))
+			.expect("legacy Azure auth should parse");
+
+		assert_eq!(
+			serde_json::to_value(auth).expect("legacy Azure auth should serialize"),
+			serde_json::json!({"implicit": {}})
+		);
+	}
+
+	#[test]
+	fn scopes_default_from_target_and_allow_an_explicit_override() {
+		let mut auth = AzureAuth::default();
+
+		assert_eq!(
+			scopes_for_target(&auth, &("example.openai.azure.com", 443).into()),
+			SCOPES
+		);
+		assert_eq!(
+			scopes_for_target(&auth, &("example.services.ai.azure.com", 443).into()),
+			FOUNDRY_SCOPES
+		);
+
+		auth.scopes = vec!["https://graph.microsoft.com/.default".to_string()];
+		assert_eq!(
+			scopes_for_target(&auth, &("example.services.ai.azure.com", 443).into()),
+			["https://graph.microsoft.com/.default"]
+		);
+	}
 
 	#[test]
 	fn existing_user_assigned_managed_identity_parses() {
@@ -478,9 +674,12 @@ mod tests {
 	async fn empty_managed_identity_builds_sdk_credential() {
 		let credential_source =
 			serde_json::from_str(r#"{"managedIdentity":{}}"#).expect("managed identity should parse");
-		let auth = AzureAuth::ExplicitConfig {
-			credential_source,
-			cached_cred: Default::default(),
+		let auth = AzureAuth {
+			kind: AzureAuthKind::ExplicitConfig {
+				credential_source,
+				cached_cred: Default::default(),
+			},
+			scopes: Vec::new(),
 		};
 		let config = crate::config::parse_config("{}".to_string(), None).expect("config");
 		let client = crate::client::Client::new(&config.dns, None, Default::default(), None);

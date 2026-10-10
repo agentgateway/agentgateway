@@ -388,8 +388,8 @@ fn certificate_key_matches(
 	let signing_key = PrivateKeyDer::from_pem_slice(signing_key_pem.as_bytes()).map_err(|e| {
 		format!("failed to validate oauth private_key_jwt signing_key against certificate: {e}")
 	})?;
-	let signing_key = crate::transport::tls::provider()
-		.key_provider
+	let provider = crate::transport::tls::provider();
+	let signing_key = crate::crypto::tls::key_provider(&provider)
 		.load_private_key(signing_key)
 		.map_err(|e| {
 			format!("failed to validate oauth private_key_jwt signing_key against certificate: {e}")

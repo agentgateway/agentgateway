@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
-	istiolog "istio.io/istio/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -101,20 +100,7 @@ type ControllerBuilder struct {
 }
 
 func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuilder, error) {
-	loggingOptions := istiolog.DefaultOptions()
-	loggingOptions.JSONEncoding = true
-	if cfg.Dev {
-		setupLog.Info("starting log in dev mode")
-		loggingOptions.SetDefaultOutputLevel(istiolog.OverrideScopeName, istiolog.DebugLevel)
-	}
-	istiolog.Configure(loggingOptions)
-
 	setupLog.Info("initializing agentgateway extensions")
-
-	// TODO: re-enable metrics processing https://github.com/agentgateway/agentgateway/issues/970
-	// Begin background processing of resource sync metrics.
-	// This only effects metrics in the resources subsystem and is not required for other metrics.
-	//metrics.StartResourceSyncMetricsProcessing(ctx)
 
 	if cfg.JWKSLookup == nil {
 		return nil, errors.New("jwks lookup is not configured")
@@ -152,6 +138,7 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 		cfg.ExtraAgwResourceStatusHandlers,
 		cfg.AgwCollections.Settings.EnableInferExt,
 		cfg.AgwCollections.Settings.EnableAgentgatewayModels,
+		cfg.AgwCollections.Settings.EnableXBackend,
 	)
 	if err := cfg.Manager.Add(agwStatusSyncer); err != nil {
 		setupLog.Error(err, "unable to add agentgateway StatusSyncer runnable")

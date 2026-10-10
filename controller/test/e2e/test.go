@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -31,16 +32,36 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
+const (
+	// CoreChartPathEnv overrides the local core chart used by managed test installations.
+	CoreChartPathEnv = "AGW_E2E_CORE_CHART_PATH"
+	// CoreChartExtraHelmArgsEnv contains a JSON array of additional Helm arguments
+	// for managed test installations using an overridden core chart.
+	CoreChartExtraHelmArgsEnv = "AGW_E2E_CORE_CHART_EXTRA_HELM_ARGS"
+)
+
 // CreateSharedTestInstallation constructs an installation for package-level
 // fixtures. Call Finalize after the shared installation is no longer needed.
 func CreateSharedTestInstallation(
 	installNamespace string,
 	valuesManifestFile string,
+	opts ...TestInstallationOption,
 ) *TestInstallation {
 	runtimeContext := testruntime.NewContext()
 	clusterContext := cluster.MustKindContext(runtimeContext.ClusterName)
 
-	return createTestInstallationForCluster(runtimeContext, clusterContext, installNamespace, valuesManifestFile)
+	return createTestInstallationForCluster(runtimeContext, clusterContext, installNamespace, valuesManifestFile, opts...)
+}
+
+// TestInstallationOption configures a TestInstallation.
+type TestInstallationOption func(*TestInstallation)
+
+// WithManagedLifecycle makes this installation manage its own Helm lifecycle
+// even when SKIP_INSTALL is set for a shared, externally managed installation.
+func WithManagedLifecycle() TestInstallationOption {
+	return func(i *TestInstallation) {
+		i.manageLifecycle = true
+	}
 }
 
 func createTestInstallationForCluster(
@@ -48,6 +69,7 @@ func createTestInstallationForCluster(
 	clusterContext *cluster.Context,
 	installNamespace string,
 	valuesManifestFile string,
+	opts ...TestInstallationOption,
 ) *TestInstallation {
 	if installNamespace == "" {
 		panic("install namespace must not be empty")
@@ -55,7 +77,7 @@ func createTestInstallationForCluster(
 	if valuesManifestFile == "" {
 		panic("values manifest file must not be empty")
 	}
-	return &TestInstallation{
+	installation := &TestInstallation{
 		// RuntimeContext contains the set of properties that are defined at runtime by whoever is invoking tests
 		RuntimeContext: runtimeContext,
 
@@ -73,6 +95,10 @@ func createTestInstallationForCluster(
 		// between TestInstallation outputs per CI run
 		GeneratedFiles: MustGeneratedFiles(installNamespace, clusterContext.Name),
 	}
+	for _, opt := range opts {
+		opt(installation)
+	}
+	return installation
 }
 
 // TestInstallation is the structure around a set of tests that validate behavior for an installation
@@ -90,6 +116,10 @@ type TestInstallation struct {
 	ValuesManifestFile string
 	ExtraHelmArgs      []string
 
+	// manageLifecycle allows an installation created within a test to opt out
+	// of the suite-wide SKIP_INSTALL setting used to reuse a primary install.
+	manageLifecycle bool
+
 	Helm *helmutils.Client
 
 	// GeneratedFiles is the collection of directories and files that this test installation _may_ create
@@ -98,6 +128,10 @@ type TestInstallation struct {
 
 func (i *TestInstallation) String() string {
 	return i.InstallNamespace
+}
+
+func (i *TestInstallation) shouldSkipInstallAndTeardown() bool {
+	return !i.manageLifecycle && testutils.ShouldSkipInstallAndTeardown()
 }
 
 func (i *TestInstallation) Finalize() {
@@ -130,7 +164,7 @@ func (i *TestInstallation) InstallFromLocalChart(ctx context.Context, t *testing
 
 // InstallAgentgatewayCRDsFromLocalChart installs the agentgateway CRD chart from the local filesystem
 func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Context, t *testing.T) {
-	if testutils.ShouldSkipInstallAndTeardown() {
+	if i.shouldSkipInstallAndTeardown() {
 		return
 	}
 
@@ -157,7 +191,7 @@ func (i *TestInstallation) InstallAgentgatewayCRDsFromLocalChart(ctx context.Con
 
 // InstallAgentgatewayCoreFromLocalChart installs the agentgateway main chart from the local filesystem
 func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Context, t *testing.T) {
-	if testutils.ShouldSkipInstallAndTeardown() {
+	if i.shouldSkipInstallAndTeardown() {
 		return
 	}
 
@@ -169,9 +203,17 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	}
 
 	// Use absolute chart paths so tests work regardless of current working directory.
-	coreChartPath := filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
+	coreChartPath := os.Getenv(CoreChartPathEnv)
+	if coreChartPath == "" {
+		coreChartPath = filepath.Join(fsutils.GetModuleRoot(), "controller", "install", "helm", "agentgateway")
+	}
 
-	extraArgs := i.ExtraHelmArgs
+	extraArgs := slices.Clone(i.ExtraHelmArgs)
+	configuredArgs, err := configuredCoreChartExtraHelmArgs()
+	if err != nil {
+		t.Fatalf("parse %s: %v", CoreChartExtraHelmArgsEnv, err)
+	}
+	extraArgs = append(extraArgs, configuredArgs...)
 	// If VERSION is set, override the chart's AppVersion so locally-built images are used
 	// instead of trying to pull the chart's default appVersion from the remote registry.
 	if tag, ok := testutils.VersionValue(); ok {
@@ -179,7 +221,7 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	}
 
 	// and then install the main chart
-	err := i.Helm.WithReceiver(os.Stdout).Upgrade(
+	err = i.Helm.WithReceiver(os.Stdout).Upgrade(
 		ctx,
 		helmutils.InstallOpts{
 			Namespace:       i.InstallNamespace,
@@ -196,6 +238,19 @@ func (i *TestInstallation) InstallAgentgatewayCoreFromLocalChart(ctx context.Con
 	assertions.EventuallyGatewayInstallSucceeded(t, ctx, i.ClusterContext, i.InstallNamespace)
 }
 
+func configuredCoreChartExtraHelmArgs() ([]string, error) {
+	rawArgs := os.Getenv(CoreChartExtraHelmArgsEnv)
+	if rawArgs == "" {
+		return nil, nil
+	}
+
+	var args []string
+	if err := json.Unmarshal([]byte(rawArgs), &args); err != nil {
+		return nil, err
+	}
+	return args, nil
+}
+
 func (i *TestInstallation) Uninstall(ctx context.Context, t *testing.T) {
 	i.UninstallAgentgatewayCore(ctx, t)
 	i.UninstallAgentgatewayCRDs(ctx, t)
@@ -203,7 +258,7 @@ func (i *TestInstallation) Uninstall(ctx context.Context, t *testing.T) {
 
 // UninstallAgentgatewayCore uninstalls the agentgateway main chart
 func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *testing.T) {
-	if testutils.ShouldSkipInstallAndTeardown() || testutils.ShouldPersistInstall() {
+	if i.shouldSkipInstallAndTeardown() || testutils.ShouldPersistInstall() {
 		return
 	}
 
@@ -228,7 +283,7 @@ func (i *TestInstallation) UninstallAgentgatewayCore(ctx context.Context, t *tes
 
 // UninstallAgentgatewayCRDs uninstalls the agentgateway CRD chart
 func (i *TestInstallation) UninstallAgentgatewayCRDs(ctx context.Context, t *testing.T) {
-	if testutils.ShouldSkipInstallAndTeardown() || testutils.ShouldPersistInstall() {
+	if i.shouldSkipInstallAndTeardown() || testutils.ShouldPersistInstall() {
 		return
 	}
 

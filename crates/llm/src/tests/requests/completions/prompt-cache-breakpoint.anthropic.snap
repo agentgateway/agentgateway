@@ -1,0 +1,180 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/prompt-cache-breakpoint.json
+info:
+  model: claude-sonnet-4-6
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: You are a helpful assistant.
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: developer
+      content:
+        - type: text
+          text: Follow the developer instructions.
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: user
+      content:
+        - type: text
+          text: What is prompt caching?
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: image_url
+          image_url:
+            url: "data:image/png;base64,aGVsbG8="
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: assistant
+      content:
+        - type: text
+          text: I will look that up.
+          prompt_cache_breakpoint:
+            mode: explicit
+      tool_calls:
+        - id: call_lookup
+          type: function
+          function:
+            name: lookup
+            arguments: "{}"
+    - role: tool
+      tool_call_id: call_lookup
+      content:
+        - type: text
+          text: Prompt caching reuses a prompt prefix.
+          prompt_cache_breakpoint:
+            mode: explicit
+  tools:
+    - type: function
+      function:
+        name: lookup
+        description: Look up information
+        parameters:
+          type: object
+          properties: {}
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What is prompt caching?",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "aGVsbG8="
+            },
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "I will look that up.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
+          },
+          {
+            "type": "tool_use",
+            "id": "call_lookup",
+            "name": "lookup",
+            "input": {}
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_lookup",
+            "content": [
+              {
+                "type": "text",
+                "text": "Prompt caching reuses a prompt prefix.",
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "system": [
+      {
+        "type": "text",
+        "text": "You are a helpful assistant.",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      },
+      {
+        "type": "text",
+        "text": "Follow the developer instructions.",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "model": "claude-sonnet-4-6",
+    "max_tokens": 4096,
+    "tools": [
+      {
+        "name": "lookup",
+        "description": "Look up information",
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-6",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "developer",
+        "content": "Follow the developer instructions."
+      },
+      {
+        "role": "user",
+        "content": "What is prompt caching?"
+      },
+      {
+        "role": "assistant",
+        "content": "I will look that up."
+      },
+      {
+        "role": "tool",
+        "content": "Prompt caching reuses a prompt prefix."
+      }
+    ]
+  }
+}

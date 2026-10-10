@@ -1,21 +1,14 @@
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Bot, Network, Server } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { Field, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
-import {
-	enableTrafficConfig,
-	ensureLlmFrontendDefaults,
-	startupLlmConfig,
-	startupMcpConfig,
-	usesUiGateways
-} from '@/config';
-import { refreshBaseCostsAndConfigure } from '@/costs';
+import { gatewayOptions } from '@/components/GatewayBindingEditor';
+import { Dropdown, FieldGroup, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
+import { startupGatewayRefs } from '@/config';
 import {
 	useEffectiveGatewayConfig,
+	useEnableSurface,
 	useMcpConfigData,
-	useTrafficConfigData,
-	useUpdateConfig
+	useTrafficConfigData
 } from '@/hooks';
 import type { GatewayConfig } from '@/types';
 
@@ -26,7 +19,6 @@ const surfaceConfig: Record<
 	{
 		title: string;
 		description: string;
-		icon: typeof Bot;
 		enabled: (config: GatewayConfig | undefined) => boolean;
 		destination: string;
 		destinationLabel: string;
@@ -34,27 +26,21 @@ const surfaceConfig: Record<
 > = {
 	llm: {
 		title: 'Enable LLM',
-		description:
-			'Create the LLM configuration section so models, providers, keys, guardrails, logs, and playground tools can be configured.',
-		icon: Bot,
+		description: 'Add LLM settings to the configuration, then set up models.',
 		enabled: config => Boolean(config?.llm),
 		destination: '/llm/models',
 		destinationLabel: 'Continue to models'
 	},
 	mcp: {
 		title: 'Enable MCP',
-		description:
-			'Create the MCP configuration section so servers and MCP playground tools can be configured.',
-		icon: Server,
+		description: 'Add MCP settings to the configuration, then connect servers.',
 		enabled: config => Boolean(config?.mcp),
 		destination: '/mcp/servers',
 		destinationLabel: 'Continue to servers'
 	},
 	traffic: {
 		title: 'Enable Traffic',
-		description:
-			'Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.',
-		icon: Network,
+		description: 'Add traffic settings to the configuration, then set up gateways and routes.',
 		enabled: config =>
 			Boolean(config && ('gateways' in config || 'routes' in config || 'binds' in config)),
 		destination: '/traffic/gateways',
@@ -78,10 +64,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 	const config = useEffectiveGatewayConfig();
 	const mcpData = useMcpConfigData();
 	const trafficData = useTrafficConfigData();
-	const update = useUpdateConfig();
+	const enableSurface = useEnableSurface();
 	const navigate = useNavigate();
 	const surface = surfaceConfig[props.surface];
-	const Icon = surface.icon;
 	const effectiveConfig =
 		props.surface === 'mcp'
 			? mcpData.data
@@ -100,8 +85,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 				? trafficData.error
 				: null);
 	const enabled = surface.enabled(effectiveConfig);
-	const useGateways = usesUiGateways(trafficData.data ?? config.data);
-	const [port, setPort] = useState(() => String(defaultSurfacePort(props.surface)));
+	const [gateway, setGateway] = useState('');
+	const options = gatewayOptions(trafficData.data ?? config.data);
+	const defaultGateways = startupGatewayRefs(trafficData.data ?? config.data);
 
 	useEffect(() => {
 		if (!loading && !configError && enabled) {
@@ -115,23 +101,13 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			return;
 		}
 		try {
-			await update.mutateAsync(next => {
-				if (props.surface === 'llm') {
-					next.llm = next.llm ?? startupLlmConfig(next, parsePort(port, 4000));
-					ensureLlmFrontendDefaults(next);
-				} else if (props.surface === 'mcp') {
-					next.mcp =
-						next.mcp ?? startupMcpConfig(next, parsePort(port, defaultSurfacePort(props.surface)));
-				} else {
-					enableTrafficConfig(next, parsePort(port, defaultSurfacePort(props.surface)));
-				}
+			await enableSurface.mutateAsync({
+				surface: props.surface,
+				gateway: gateway || undefined
 			});
 			void navigate({ to: surface.destination });
-			if (props.surface === 'llm') {
-				void refreshBaseCostsAndConfigure(update).catch(() => undefined);
-			}
 		} catch {
-			// useUpdateConfig exposes the save error through update.isError.
+			// The enable mutation exposes the save error.
 		}
 	}
 
@@ -153,40 +129,33 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 					{configError.message}
 				</StatusBanner>
 			) : null}
-			{update.isError ? (
+			{enableSurface.isError ? (
 				<StatusBanner state="bad" title="Save failed">
-					{update.error.message}
+					{enableSurface.error?.message}
 				</StatusBanner>
 			) : null}
 
 			<Panel className="surface-enable-panel">
-				<div className="surface-enable-heading">
-					<span className="policy-form-section-icon">
-						<Icon size={18} />
-					</span>
-					<div>
-						<h3>
-							{enabled ? `${surface.title.replace('Enable ', '')} is enabled` : surface.title}
-						</h3>
-						<p>
-							{enabled
-								? 'The top-level configuration section already exists.'
-								: surface.description}
-						</p>
-					</div>
-				</div>
-
-				{!enabled && !useGateways && (props.surface === 'llm' || props.surface === 'mcp') ? (
+				{!enabled && (props.surface === 'llm' || props.surface === 'mcp') ? (
 					<details className="schema-details">
 						<summary>Advanced</summary>
-						<Field label="Port">
-							<input
-								value={port}
-								inputMode="numeric"
-								onChange={event => setPort(event.target.value)}
-								placeholder={String(defaultSurfacePort(props.surface))}
+						<FieldGroup label="Gateway">
+							<Dropdown
+								ariaLabel="Gateway"
+								value={gateway}
+								onChange={setGateway}
+								options={[
+									{
+										value: '',
+										label: `Automatic (${Array.isArray(defaultGateways) ? defaultGateways.join(', ') : defaultGateways})`,
+										description: options.length
+											? 'Use the configured gateway.'
+											: 'Create a default gateway.'
+									},
+									...options
+								]}
 							/>
-						</Field>
+						</FieldGroup>
 					</details>
 				) : null}
 
@@ -199,7 +168,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 						<button
 							className="button primary"
 							type="button"
-							disabled={loading || update.isPending}
+							disabled={loading || enableSurface.isPending}
 							onClick={() => void enable()}
 						>
 							Enable
@@ -212,15 +181,4 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
 			</Panel>
 		</div>
 	);
-}
-
-function parsePort(value: string, fallback: number) {
-	const parsed = Number.parseInt(value, 10);
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function defaultSurfacePort(surface: SurfaceKind) {
-	if (surface === 'llm') return 4000;
-	if (surface === 'traffic') return 8080;
-	return 3000;
 }

@@ -33,7 +33,7 @@ func TestModelServingRuleGuards(t *testing.T) {
 		wantKey string
 	}{
 		{name: "valid"},
-		{name: "unnamed rule", mutate: func(r *gwv1.HTTPRouteRule) { r.Name = nil }, wantKey: "/llm:router:httproute:default:tenant1:0"},
+		{name: "unnamed rule", mutate: func(r *gwv1.HTTPRouteRule) { r.Name = nil }, wantKey: "/llm:router:httproute:default:tenant1:index:0"},
 		{name: "ordinary route", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = nil }, absent: true},
 		{name: "multiple matches", mutate: func(r *gwv1.HTTPRouteRule) { r.Matches = append(r.Matches, r.Matches[0]) }},
 		{name: "exact path", mutate: func(r *gwv1.HTTPRouteRule) { pathType := gwv1.PathMatchExact; r.Matches[0].Path.Type = &pathType }, wantErr: "must use PathPrefix"},
@@ -247,7 +247,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 				Response: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-response-policy", Value: "enabled"}}},
 			},
 			PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
-				Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
+				Regex: &agentgateway.Regex{Action: new(agentgateway.REJECT), Matches: []agentgateway.LongString{"blocked"}},
 			}}},
 		},
 	}
@@ -367,7 +367,7 @@ func TestTranslatePresetProviderBaseURL(t *testing.T) {
 	if provider.GetProviderPreset() != api.AIBackend_PROVIDER_PRESET_OLLAMA {
 		t.Fatalf("provider preset = %v, want Ollama", provider.GetProviderPreset())
 	}
-	if provider.GetBaseUrl() != string(baseURL) {
+	if provider.GetBaseUrl() != baseURL {
 		t.Errorf("base URL = %q, want %q", provider.GetBaseUrl(), baseURL)
 	}
 }

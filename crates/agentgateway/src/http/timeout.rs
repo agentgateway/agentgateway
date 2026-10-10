@@ -1,11 +1,4 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, ready};
 use std::time::Duration;
-
-use http_body::{Body, SizeHint};
-use pin_project_lite::pin_project;
-use tokio::time::{Instant, Sleep, sleep_until};
 
 use crate::*;
 
@@ -13,7 +6,9 @@ use crate::*;
 #[derive(Default, Eq, PartialEq)]
 #[cfg_attr(feature = "schema", schemars(rename = "TimeoutPolicy"))]
 pub struct Policy {
-	/// Maximum time allowed for the full downstream request and response.
+	/// Maximum time allowed from the start of downstream request processing until response headers
+	/// are received. The response body is not included; use `responseIdleTimeout` to bound gaps
+	/// between body frames.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -29,92 +24,86 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub backend_request_timeout: Option<Duration>,
+	/// Maximum time to wait for a frame from the upstream response body.
+	///
+	/// Limits how long the gateway waits for more response data from the backend.
+	/// Time spent processing the response or waiting for the client to receive it does not count.
+	///
+	/// This complements the other two rather than overlapping them: both `requestTimeout` and
+	/// `backendRequestTimeout` stop applying once the response headers arrive, so neither places
+	/// any bound on how long the response body may take, and neither can distinguish a stalled
+	/// stream from a slow one.
+	///
+	/// The timeout is disabled when this field is unset or set to zero. It does not apply to
+	/// responses that switch protocols, so upgraded WebSocket and CONNECT tunnels are never
+	/// terminated by it.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub response_idle_timeout: Option<Duration>,
 }
 
-pub enum BodyTimeout {
-	Deadline(Instant),
-	None,
+/// Attach the idle timeout to the upstream body before response processing.
+pub fn apply_response_idle_timeout(
+	mut response: crate::http::Response,
+	timeout: Duration,
+) -> crate::http::Response {
+	response.body_mut().set_idle_timeout(timeout);
+	response
 }
 
-impl BodyTimeout {
-	pub fn apply(self, r: crate::http::Response) -> crate::http::Response {
-		r.map(|b| crate::http::Body::new(TimeoutBody::new(self, b)))
-	}
-}
+#[cfg(test)]
+mod tests {
+	use std::convert::Infallible;
 
-pin_project! {
-	pub struct TimeoutBody<B> {
-		timeout: BodyTimeout,
-		#[pin]
-		sleep: Option<Sleep>,
-		#[pin]
-		body: B,
-	}
-}
+	use bytes::Bytes;
+	use futures_util::StreamExt;
+	use http_body_util::BodyExt;
 
-impl<B> TimeoutBody<B> {
-	/// Creates a new [`TimeoutBody`].
-	pub fn new(timeout: BodyTimeout, body: B) -> Self {
-		TimeoutBody {
-			timeout,
-			sleep: None,
-			body,
-		}
-	}
-}
+	use super::*;
 
-impl<B> Body for TimeoutBody<B>
-where
-	B: Body,
-	B::Error: Into<axum_core::BoxError>,
-{
-	type Data = B::Data;
-	type Error = Box<dyn std::error::Error + Send + Sync>;
+	#[tokio::test(start_paused = true)]
+	async fn idle_body_times_out() {
+		let pending = futures_util::stream::pending::<Result<Bytes, Infallible>>();
+		let mut body = apply_response_idle_timeout(
+			crate::http::Response::new(crate::http::Body::from_stream(pending)),
+			Duration::from_secs(1),
+		)
+		.into_body();
 
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-		let mut this = self.project();
+		let error = body
+			.frame()
+			.await
+			.expect("timeout should produce a body frame")
+			.expect_err("an idle body should time out");
 
-		// Start the `Sleep` if not active.
-		if let BodyTimeout::Deadline(d) = this.timeout {
-			// Start the `Sleep` if not active.
-			let sleep_pinned = if let Some(some) = this.sleep.as_mut().as_pin_mut() {
-				some
-			} else {
-				this.sleep.set(Some(sleep_until(*d)));
-				this.sleep.as_mut().as_pin_mut().unwrap()
-			};
-
-			// Error if the timeout has expired.
-			if let Poll::Ready(()) = sleep_pinned.poll(cx) {
-				return Poll::Ready(Some(Err(Box::new(TimeoutError(())))));
-			}
-		}
-
-		let frame = ready!(this.body.poll_frame(cx));
-
-		Poll::Ready(frame.transpose().map_err(Into::into).transpose())
+		assert_eq!(error.to_string(), "response idle timeout");
 	}
 
-	fn is_end_stream(&self) -> bool {
-		self.body.is_end_stream()
-	}
+	#[tokio::test(start_paused = true)]
+	async fn each_frame_restarts_the_idle_window() {
+		// Four frames spaced just inside the window: the body outlives the timeout several times
+		// over, but is never idle for a full window.
+		let frames = futures_util::stream::iter(0..4).then(|_| async {
+			tokio::time::sleep(Duration::from_millis(800)).await;
+			Ok::<_, Infallible>(Bytes::from_static(b"data"))
+		});
+		let body = apply_response_idle_timeout(
+			crate::http::Response::new(crate::http::Body::from_stream(frames)),
+			Duration::from_secs(1),
+		)
+		.into_body();
 
-	fn size_hint(&self) -> SizeHint {
-		self.body.size_hint()
-	}
-}
-
-/// Error for [`TimeoutBody`].
-#[derive(Debug)]
-pub struct TimeoutError(());
-
-impl std::error::Error for TimeoutError {}
-
-impl std::fmt::Display for TimeoutError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "data was not received within the designated timeout")
+		let collected = body
+			.collect()
+			.await
+			.expect("frames arriving inside the window should not time out");
+		assert_eq!(
+			collected.to_bytes(),
+			Bytes::from_static(b"datadatadatadata")
+		);
 	}
 }

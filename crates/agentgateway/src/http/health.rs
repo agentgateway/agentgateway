@@ -1,9 +1,9 @@
 //! Configurable backend health / eviction (outlier detection) policy.
 //!
 //! When a response is considered unhealthy (by CEL or default 5xx), the backend can be
-//! evicted for a configurable duration. If no health policy is configured, no eviction
-//! is applied. Optional health/failure thresholds and recovery health support multi-request
-//! and recovery behavior.
+//! evicted for a configurable duration. AI backends with multiple priority groups enable
+//! eviction by default; other backends require a health policy. Optional health/failure
+//! thresholds and recovery health support multi-request and recovery behavior.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -55,7 +55,7 @@ pub struct Policy {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub unhealthy_expression: Option<Arc<Expression>>,
 
-	/// Eviction settings. When absent, falls back to defaults.
+	/// Eviction settings. AI backends with multiple priority groups default to enabled.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<Eviction>,
 }

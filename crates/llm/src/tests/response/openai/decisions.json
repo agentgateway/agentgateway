@@ -1,0 +1,1 @@
+{"model":"gpt-6-luna","answers":[{"type":"predicate","name":"visible_damage","probability":0.64}],"usage":{"input_tokens":156,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"output_tokens":0,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":156}}

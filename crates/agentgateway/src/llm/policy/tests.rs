@@ -1,14 +1,14 @@
 use ::http::{HeaderName, HeaderValue};
 
 use super::*;
+use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
 use crate::types::agent::HeaderValueMatch;
 
 /// When a webhook guard fails open, exactly one metric must be emitted (`FailOpen`); the caller
 /// must not additionally record `Allow`.
 #[tokio::test]
 async fn webhook_fail_open_emits_single_metric() {
-	use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
-	use crate::types::agent::SimpleBackendReference;
+	use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 
 	let guard = PromptGuard {
 		streaming: Default::default(),
@@ -16,20 +16,28 @@ async fn webhook_fail_open_emits_single_metric() {
 			rejection: Default::default(),
 			scope: default_content_scope(),
 			kind: RequestGuardKind::Webhook(Webhook {
-				target: SimpleBackendReference::Invalid,
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(SimpleBackendReference::Invalid),
+					policies: vec![],
+				},
 				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
+				action: RejectAuditAction::Reject,
 			}),
 		}],
 		response: vec![],
 	};
 
 	let client = crate::test_helpers::policy_client();
+	let log = GuardrailLog::default();
 	let blocked = guard
-		.apply_realtime_request_guards("hello world", &client, None)
+		.apply_realtime_request_guards("hello world", &client, None, Some(&log))
 		.await;
 	assert!(blocked.is_none(), "FailOpen must not block the request");
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.guard, "webhook");
+	assert_eq!(entry.action, "failOpen");
 
 	let fail_open = client
 		.inputs
@@ -54,6 +62,317 @@ async fn webhook_fail_open_emits_single_metric() {
 	assert_eq!(
 		allow, 0,
 		"Allow must not be recorded for a FailOpen outcome"
+	);
+}
+
+fn guardrail_metric(
+	client: &crate::proxy::httpproxy::PolicyClient,
+	phase: GuardrailPhase,
+	action: GuardrailAction,
+) -> u64 {
+	client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&GuardrailLabels { phase, action })
+		.get()
+}
+
+#[tokio::test]
+async fn audit_mode_records_allow_when_nothing_matches() {
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		scope: default_response_scope(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let mut resp = TextResponse {
+		content: "nothing sensitive here".to_string(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let (action, rejection) = Policy::apply_single_response_guard(
+		&guard,
+		&mut resp,
+		&headers,
+		&client,
+		None,
+		None,
+		Some(&mut false),
+	)
+	.await
+	.unwrap();
+	assert!(rejection.is_none(), "audit mode must never reject");
+	Policy::record_guardrail_trip(&client, GuardrailPhase::Response, action);
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		1,
+		"a non-matching audit guard records Allow"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"Audit must not be recorded when the guard would not have enforced"
+	);
+}
+
+#[tokio::test]
+async fn audit_mode_records_audit_and_passes_through_on_match() {
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		scope: default_response_scope(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let original = "my SECRET token".to_string();
+	let mut resp = TextResponse {
+		content: original.clone(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let (action, rejection) = Policy::apply_single_response_guard(
+		&guard,
+		&mut resp,
+		&headers,
+		&client,
+		None,
+		None,
+		Some(&mut false),
+	)
+	.await
+	.unwrap();
+	assert_eq!(
+		action,
+		GuardrailAction::Audit,
+		"a matching audit guard yields Audit, not Reject/Mask"
+	);
+	assert!(rejection.is_none(), "audit mode must never reject");
+	Policy::record_guardrail_trip(&client, GuardrailPhase::Response, action);
+	assert_eq!(resp.content, original, "audit mode must not mutate content");
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Reject),
+		0
+	);
+}
+
+#[test]
+fn bedrock_audit_outcome_maps_interventions_to_audit() {
+	use serde_json::json;
+	let outcome =
+		|v: serde_json::Value| -> (GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>) {
+			let resp: bedrock_guardrails::ApplyGuardrailResponse = serde_json::from_value(v).unwrap();
+			Policy::bedrock_audit_outcome(resp, &bedrock_test_config())
+		};
+
+	let (blocked, detail) = outcome(json!({
+		"action": "GUARDRAIL_INTERVENED",
+		"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+	}));
+	assert!(
+		matches!(blocked, GuardrailOutcome::Audit),
+		"a would-block assessment audits, never rejects"
+	);
+	assert_eq!(
+		detail.unwrap().assessments[0]["contentPolicy"]["filters"][0]["type"],
+		"HATE"
+	);
+
+	let (anonymized, _) = outcome(json!({
+		"action": "GUARDRAIL_INTERVENED",
+		"outputs": [{"text": "redacted {NAME}"}],
+		"assessments": [{ "sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] } }]
+	}));
+	assert!(
+		matches!(anonymized, GuardrailOutcome::Audit),
+		"a would-mask assessment audits, never masks"
+	);
+
+	let (detect_only, detail) = outcome(json!({
+		"action": "NONE",
+		"assessments": [{ "contentPolicy": {
+			"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+		} }]
+	}));
+	assert!(matches!(detect_only, GuardrailOutcome::None));
+	assert!(detail.is_none());
+
+	let (benign, _) = outcome(json!({ "action": "NONE", "assessments": [{}] }));
+	assert!(matches!(benign, GuardrailOutcome::None));
+}
+
+#[tokio::test]
+async fn streaming_guard_records_one_metric_per_stream() {
+	use crate::llm::policy::streaming_guardrails::make_evaluator;
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		scope: default_response_scope(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let headers = ::http::HeaderMap::new();
+	let mut evaluator = make_evaluator(&guard, client.clone(), headers, None, Default::default());
+
+	let _ = evaluator.evaluate("clean window one").await.unwrap();
+	let _ = evaluator.evaluate("this window has SECRET").await.unwrap();
+	let _ = evaluator.evaluate("clean window three").await.unwrap();
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"no metric recorded mid-stream"
+	);
+
+	drop(evaluator);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1,
+		"exactly one Audit recorded for the whole stream, not one per window"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		0,
+		"the matching window's Audit outranks the benign windows' Allow"
+	);
+}
+
+#[test]
+fn azure_blocked_records_guardrail_info_without_matched_text() {
+	let resp: azure_content_safety::AnalyzeTextResponse = serde_json::from_value(serde_json::json!({
+		"blocklistsMatch": [{
+			"blocklistName": "banned-terms",
+			"blocklistItemId": "item-1",
+			"blocklistItemText": "secretword"
+		}],
+		"categoriesAnalysis": [
+			{"category": "Violence", "severity": 4},
+			{"category": "Hate", "severity": 0}
+		]
+	}))
+	.unwrap();
+	let detail = Policy::azure_analyze_detail(&resp, 2);
+	let assessment = &detail.assessments[0];
+	assert_eq!(
+		assessment["categoriesAnalysis"],
+		serde_json::json!([{"category": "Violence", "severity": 4}])
+	);
+	assert_eq!(
+		assessment["blocklistMatches"],
+		serde_json::json!(["banned-terms"])
+	);
+	assert!(
+		!serde_json::to_string(assessment)
+			.unwrap()
+			.contains("secretword")
+	);
+}
+
+#[test]
+fn model_armor_blocked_records_guardrail_info() {
+	let resp: google_model_armor::SanitizeResponse = serde_json::from_value(serde_json::json!({
+		"sanitizationResult": {
+			"filterResults": [
+				{"raiFilterResult": {"matchState": "MATCH_FOUND"}},
+				{"piAndJailbreakFilterResult": {"matchState": "MATCH_FOUND"}}
+			]
+		}
+	}))
+	.unwrap();
+	let config = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
+		template_id: strng::new("templates/my-template"),
+		project_id: strng::new("proj"),
+		location: None,
+		policies: vec![],
+		action: Default::default(),
+	};
+	let (outcome, detail): (GuardrailOutcome<RequestGuardMutation>, _) =
+		Policy::model_armor_outcome(resp, &config, &RequestRejection::default());
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	let detail = detail.unwrap();
+	assert_eq!(
+		detail.guardrail_id.as_deref(),
+		Some("templates/my-template")
+	);
+	assert_eq!(
+		detail.assessments[0]["matchedFilters"],
+		serde_json::json!(["raiFilterResult", "piAndJailbreakFilterResult"])
+	);
+}
+
+#[test]
+fn moderation_flagged_records_guardrail_info() {
+	let cats = [
+		"hate",
+		"hate/threatening",
+		"harassment",
+		"harassment/threatening",
+		"illicit",
+		"illicit/violent",
+		"self-harm",
+		"self-harm/intent",
+		"self-harm/instructions",
+		"sexual",
+		"sexual/minors",
+		"violence",
+		"violence/graphic",
+	];
+	let obj = |v: fn(&str) -> serde_json::Value| -> serde_json::Value {
+		cats.iter().map(|c| (c.to_string(), v(c))).collect()
+	};
+	let resp: async_openai::types::moderations::CreateModerationResponse =
+		serde_json::from_value(serde_json::json!({
+			"id": "modr-1",
+			"model": "omni-moderation-latest",
+			"results": [{
+				"flagged": true,
+				"categories": obj(|c| serde_json::json!(c == "violence")),
+				"category_scores": obj(|_| serde_json::json!(0.5)),
+				"category_applied_input_types": obj(|_| serde_json::json!(["text"])),
+			}]
+		}))
+		.unwrap();
+
+	let (outcome, detail) = Policy::moderation_outcome(resp, &RequestRejection::default(), false);
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	assert_eq!(
+		detail.unwrap().assessments[0]["flaggedCategories"],
+		serde_json::json!(["violence"])
+	);
+}
+
+#[test]
+fn webhook_reject_records_guardrail_info() {
+	use crate::llm::policy::webhook::{RejectAction, RequestAction};
+
+	let (outcome, detail) = Policy::webhook_request_outcome(RequestAction::Reject(RejectAction {
+		body: "blocked".to_string(),
+		status_code: 403,
+		reason: Some("policy violation".to_string()),
+	}))
+	.unwrap();
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	assert_eq!(
+		detail.unwrap().action_reason.as_deref(),
+		Some("policy violation")
 	);
 }
 
@@ -604,9 +923,6 @@ mod bedrock_guardrails_tests {
 		);
 	}
 
-	/// An intervention with no recognized assessment action (e.g. automated reasoning
-	/// findings carry no `action` field) must not be treated as maskable: its output
-	/// is a canned message, not per-block masked text.
 	#[test]
 	fn test_apply_guardrail_response_intervened_no_assessments() {
 		let json = json!({
@@ -646,14 +962,26 @@ fn bedrock_anonymized_assessments() -> serde_json::Value {
 	}])
 }
 
+fn bedrock_test_config() -> BedrockGuardrails {
+	BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
+		guardrail_identifier: strng::new("gr-test"),
+		guardrail_version: strng::new("1"),
+		region: strng::new("us-west-2"),
+		policies: vec![],
+		action: Default::default(),
+	}
+}
+
 /// Assert what the Bedrock guard would send, then run an anonymize verdict through
 /// the real outcome path and apply the resulting mask to the request.
 fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: &[&str]) {
 	assert_eq!(Policy::request_texts(req), sent);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(masked, bedrock_anonymized_assessments()),
 		sent.len(),
 		&RequestRejection::default(),
+		&bedrock_test_config(),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
 	let (_, rejection) =
@@ -664,17 +992,51 @@ fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: 
 
 /// Same as `apply_bedrock_request_mask`, but for responses.
 fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], masked: &[&str]) {
-	assert_eq!(Policy::response_texts(resp), sent);
-	let outcome = Policy::bedrock_guardrail_outcome(
+	let (texts, in_scope) = Policy::scoped_response_texts(resp, &default_response_scope());
+	assert_eq!(texts, sent);
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
 		bedrock_intervened(masked, bedrock_anonymized_assessments()),
 		sent.len(),
 		&RequestRejection::default(),
+		&bedrock_test_config(),
 	);
 	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
-	let (_, rejection) =
-		Policy::apply_response_guard_outcome(outcome.map_mask(ResponseGuardMutation::Texts), resp)
-			.unwrap();
+	let (_, rejection) = Policy::apply_response_guard_outcome(
+		outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+		&RequestRejection::default(),
+		resp,
+	)
+	.unwrap();
 	assert!(rejection.is_none());
+}
+
+#[test]
+fn bedrock_response_mask_only_replaces_scoped_tool_output() {
+	let mut resp: crate::llm::types::responses::Response = serde_json::from_value(serde_json::json!({
+		"id": "response", "status": "completed", "model": "model", "output": [
+			{"type": "mcp_call", "id": "call", "server_label": "server", "name": "tool", "arguments": "arguments", "output": "sensitive result"},
+			{"type": "function_call", "call_id": "call", "name": "tool", "arguments": "other arguments"}
+		]
+	})).unwrap();
+	let mut expected = serde_json::to_value(&resp).unwrap();
+	expected["output"][0]["output"] = serde_json::json!("masked result");
+	let (texts, in_scope) = Policy::scoped_response_texts(&mut resp, &[ContentScope::ToolOutput]);
+	assert_eq!(texts, ["sensitive result"]);
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(&["masked result"], bedrock_anonymized_assessments()),
+		texts.len(),
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	let (action, rejection) = Policy::apply_response_guard_outcome(
+		outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+		&RequestRejection::default(),
+		&mut resp,
+	)
+	.unwrap();
+	assert_eq!(action, GuardrailAction::Mask);
+	assert!(rejection.is_none());
+	assert_eq!(serde_json::to_value(&resp).unwrap(), expected);
 }
 
 #[test]
@@ -780,8 +1142,75 @@ fn bedrock_blocked_intervention_with_canned_output_rejects() {
 			"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]}
 		}]),
 	);
-	let outcome = Policy::bedrock_guardrail_outcome(resp, 3, &RequestRejection::default());
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		3,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+}
+
+async fn bedrock_rejected_body(outcome: GuardrailOutcome<TextReplacements>) -> Bytes {
+	let GuardrailOutcome::Rejected(resp) = outcome else {
+		panic!("expected a rejection outcome");
+	};
+	resp.into_body().collect().await.unwrap().to_bytes()
+}
+
+fn bedrock_blocked_response() -> bedrock_guardrails::ApplyGuardrailResponse {
+	bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]}
+		}]),
+	)
+}
+
+#[tokio::test]
+async fn bedrock_block_passes_block_message_through() {
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_blocked_response(),
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert_eq!(
+		bedrock_rejected_body(outcome).await,
+		Bytes::from("Sorry, I can't help with that.")
+	);
+}
+
+/// A configured custom rejection body always wins over Bedrock's block message.
+#[tokio::test]
+async fn bedrock_blocked_custom_rejection_body_wins() {
+	let rejection = RequestRejection {
+		body: Bytes::from("custom denied"),
+		..Default::default()
+	};
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		bedrock_blocked_response(),
+		1,
+		&rejection,
+		&bedrock_test_config(),
+	);
+	assert_eq!(
+		bedrock_rejected_body(outcome).await,
+		Bytes::from("custom denied")
+	);
+}
+
+/// A non-block intervention keeps the default body; masked content never leaks.
+#[tokio::test]
+async fn bedrock_anonymize_mismatch_keeps_default_body() {
+	let resp = bedrock_intervened(&["Email {EMAIL}"], bedrock_anonymized_assessments());
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		2,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert_eq!(bedrock_rejected_body(outcome).await, default_body());
 }
 
 /// Automated reasoning findings carry no `action` field; even when the output count
@@ -794,7 +1223,12 @@ fn bedrock_unrecognized_intervention_rejects_instead_of_masking() {
 			"automatedReasoningPolicy": {"findings": [{"impossible": {}}]}
 		}]),
 	);
-	let outcome = Policy::bedrock_guardrail_outcome(resp, 1, &RequestRejection::default());
+	let (outcome, _) = Policy::bedrock_guardrail_outcome(
+		resp,
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 }
 
@@ -803,8 +1237,98 @@ fn bedrock_unrecognized_intervention_rejects_instead_of_masking() {
 #[test]
 fn bedrock_masked_output_count_mismatch_rejects() {
 	let resp = bedrock_intervened(&["Email {EMAIL}"], bedrock_anonymized_assessments());
-	let outcome = Policy::bedrock_guardrail_outcome(resp, 2, &RequestRejection::default());
+	// The final decision is a rejection despite the anonymize verdict.
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
+		resp,
+		2,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
 	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	assert!(detail.is_some());
+}
+
+/// A masked intervention must carry detail with its assessment metadata.
+#[test]
+fn bedrock_masked_intervention_records_guardrail_info() {
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(&["My name is {NAME}"], bedrock_anonymized_assessments()),
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
+	let detail = detail.unwrap();
+	assert_eq!(detail.guardrail_id.as_deref(), Some("gr-test"));
+	assert_eq!(detail.guardrail_version.as_deref(), Some("1"));
+	assert_eq!(
+		detail.assessments[0]["sensitiveInformationPolicy"]["piiEntities"][0]["type"],
+		"NAME"
+	);
+}
+
+/// A blocked intervention must record a reject entry carrying the action reason
+/// and the assessment metadata, without matched content or unknown fields.
+#[test]
+fn bedrock_blocked_intervention_records_guardrail_info() {
+	let resp: bedrock_guardrails::ApplyGuardrailResponse =
+		serde_json::from_value(serde_json::json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"actionReason": "Guardrail blocked.",
+			"outputs": [{"text": "Sorry, I can't help with that."}],
+			"assessments": [{
+				"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]},
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{"match": "john.doe@example.com", "type": "EMAIL", "action": "BLOCKED"}],
+					"regexes": [{"name": "acct", "regex": "a-[0-9]+", "match": "a-42", "action": "BLOCKED"}]
+				},
+				"wordPolicy": {"customWords": [{"match": "secretword", "action": "BLOCKED"}]},
+				"automatedReasoningPolicy": {"findings": [{"claim": "user text"}]},
+				"invocationMetrics": {"guardrailProcessingLatency": 128},
+				"appliedGuardrailDetails": {
+					"guardrailId": "gr-test",
+					"guardrailVersion": "1",
+					"guardrailOrigin": ["REQUEST"]
+				}
+			}]
+		}))
+		.unwrap();
+	let (outcome, detail) = Policy::bedrock_guardrail_outcome(
+		resp,
+		1,
+		&RequestRejection::default(),
+		&bedrock_test_config(),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+	let detail = detail.unwrap();
+	assert_eq!(detail.action_reason.as_deref(), Some("Guardrail blocked."));
+	let assessment = &detail.assessments[0];
+	assert_eq!(assessment["topicPolicy"]["topics"][0]["name"], "Finance");
+	assert_eq!(
+		assessment["sensitiveInformationPolicy"]["piiEntities"][0]["type"],
+		"EMAIL"
+	);
+	assert_eq!(
+		assessment["invocationMetrics"]["guardrailProcessingLatency"],
+		128
+	);
+	assert_eq!(
+		assessment["appliedGuardrailDetails"]["guardrailId"],
+		"gr-test"
+	);
+	// An unknown policy keeps only a top-level marker; nested content and keys
+	// under it are gone, as are matched-text fields under known policies.
+	assert_eq!(assessment["automatedReasoningPolicy"], "[redacted]");
+	assert!(
+		assessment["sensitiveInformationPolicy"]["piiEntities"][0]
+			.get("match")
+			.is_none()
+	);
+	let json = serde_json::to_string(&detail.assessments).unwrap();
+	assert!(!json.contains("john.doe"));
+	assert!(!json.contains("secretword"));
+	assert!(!json.contains("a-42"));
+	assert!(!json.contains("findings"));
 }
 
 #[test]
@@ -831,7 +1355,9 @@ fn bedrock_default_scope_skips_tool_texts_and_keeps_mask_aligned() {
 		),
 		sent.len(),
 		&RequestRejection::default(),
+		&bedrock_test_config(),
 	)
+	.0
 	.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope)));
 	let (_, rejection) = Policy::apply_request_guard_outcome(outcome, &mut req).unwrap();
 	assert!(rejection.is_none());
@@ -1587,6 +2113,108 @@ mod prompt_guard_config_tests {
 	}
 
 	#[test]
+	fn test_bedrock_action_defaults_to_reject() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "gr",
+						"guardrailVersion": "1",
+						"region": "us-west-2"
+					}
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::BedrockGuardrails(bg) => {
+				assert_eq!(bg.action, RejectAuditAction::Reject);
+			},
+			_ => panic!("Expected BedrockGuardrails guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_bedrock_action_audit_deserializes() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "gr",
+						"guardrailVersion": "1",
+						"region": "us-west-2",
+						"action": "audit"
+					}
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::BedrockGuardrails(bg) => {
+				assert_eq!(bg.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected BedrockGuardrails guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_reject_only_kinds_accept_audit_action() {
+		let json = json!({
+			"promptGuard": {
+				"request": [
+					{ "openAIModeration": { "action": "audit" } },
+					{ "googleModelArmor": { "templateId": "t", "projectId": "p", "action": "audit" } }
+				]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		let request = &policy.prompt_guard.unwrap().request;
+		match &request[0].kind {
+			RequestGuardKind::OpenAIModeration(m) => {
+				assert_eq!(m.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected OpenAIModeration guard kind"),
+		}
+		match &request[1].kind {
+			RequestGuardKind::GoogleModelArmor(gma) => {
+				assert_eq!(gma.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected GoogleModelArmor guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_reject_only_kind_rejects_mask_action() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{ "openAIModeration": { "action": "mask" } }]
+			}
+		});
+		assert!(
+			serde_json::from_value::<Policy>(json).is_err(),
+			"openAIModeration must reject action=mask"
+		);
+	}
+
+	#[test]
+	fn test_regex_action_audit_deserializes() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"regex": { "action": "audit", "rules": [{ "pattern": "secret" }] }
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::Regex(rr) => {
+				assert!(matches!(rr.action, Action::Audit));
+			},
+			_ => panic!("Expected Regex guard kind"),
+		}
+	}
+
+	#[test]
 	fn test_guardrail_with_custom_rejection() {
 		let json = json!({
 			"promptGuard": {
@@ -1633,9 +2261,11 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
+		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
@@ -1676,11 +2306,13 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
+		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("bedrock-api-key".into()),
+			value: SecretString::new("bedrock-api-key".into()).into(),
 			location: None,
 		})],
 	};
@@ -1713,9 +2345,11 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	use crate::store::BindStore;
 
 	let guardrails = BedrockGuardrails {
+		failure_mode: FailureMode::FailClosed,
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
+		action: RejectAuditAction::Reject,
 		policies: vec![],
 	};
 
@@ -1750,11 +2384,13 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let model_armor = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
+		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("user-provided-api-key".into()),
+			value: SecretString::new("user-provided-api-key".into()).into(),
 			location: None,
 		})],
 	};
@@ -1787,9 +2423,11 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 	use crate::store::BindStore;
 
 	let model_armor = GoogleModelArmor {
+		failure_mode: FailureMode::FailClosed,
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: None,
+		action: RejectAuditAction::Reject,
 		policies: vec![],
 	};
 
@@ -1855,6 +2493,42 @@ fn all_scopes() -> Vec<ContentScope> {
 		ContentScope::ToolOutput,
 		ContentScope::ToolInput,
 	]
+}
+
+#[tokio::test]
+async fn regex_reject_records_guardrail_info() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "my ssn is 123-45-6789"}]
+		}))
+		.unwrap();
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		scope: default_content_scope(),
+		kind: RequestGuardKind::Regex(RegexRules {
+			action: Action::Reject,
+			rules: ssn_only(),
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let log = GuardrailLog::default();
+	let (_, rejection) = Policy::apply_single_request_guard(
+		&guard,
+		&mut req,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
+		Some(&log),
+	)
+	.await
+	.unwrap();
+	assert!(rejection.is_some());
+	let entry = &log.take().unwrap()[0];
+	assert_eq!(entry.phase, "request");
+	assert_eq!(entry.guard, "regex");
+	assert_eq!(entry.action, "reject");
 }
 
 #[test]
@@ -1934,6 +2608,7 @@ fn run_apply_regex_response(
 	fmt: ChatFmt,
 	action: Action,
 	rules: Vec<RegexRule>,
+	scope: Vec<ContentScope>,
 	input: serde_json::Value,
 ) -> (GuardrailAction, serde_json::Value) {
 	let rules = RegexRules { action, rules };
@@ -1941,23 +2616,23 @@ fn run_apply_regex_response(
 	match fmt {
 		ChatFmt::Anthropic => {
 			let mut resp: crate::llm::types::messages::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Completions => {
 			let mut resp: crate::llm::types::completions::Response =
 				serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Responses => {
 			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Gemini => {
 			let mut resp: crate::llm::types::gemini::Response = serde_json::from_value(input).unwrap();
-			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&resp.0).unwrap())
 		},
 	}
@@ -2739,13 +3414,15 @@ fn request_guard_scope_rejects_empty_list() {
 
 #[test]
 fn prompt_guard_scope_support() {
-	// claiming tool coverage on a guard that only ever sees message text must not parse
+	// claiming tool coverage on a guard that only ever sees message text must fail validation
 	let err = serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
 			"openAIModeration": {},
 			"scope": ["messages", "toolInput"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap_err();
 	assert!(err.to_string().contains("non-default scope"), "{err}");
 
@@ -2756,6 +3433,8 @@ fn prompt_guard_scope_support() {
 			"scope": ["messages", "systemPrompt"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap();
 
 	serde_json::from_value::<PromptGuard>(serde_json::json!({
@@ -2768,7 +3447,39 @@ fn prompt_guard_scope_support() {
 			"scope": ["messages", "toolOutput"],
 		}]
 	}))
+	.unwrap()
+	.validate()
 	.unwrap();
+}
+
+#[test]
+fn streaming_response_scope_validation() {
+	for scope in ["messages", "toolInput", "toolOutput", "systemPrompt"] {
+		let config = serde_json::json!({
+			"streaming": "Enabled",
+			"request": [{"regex": {"rules": []}, "scope": ["toolInput", "toolOutput"]}],
+			"response": [{"regex": {"rules": []}, "scope": ["messages", scope]}]
+		});
+		let result = serde_json::from_value::<PromptGuard>(config.clone())
+			.unwrap()
+			.validate();
+		if scope == "messages" {
+			result.unwrap();
+		} else {
+			assert!(
+				result
+					.unwrap_err()
+					.to_string()
+					.contains("streaming response guards only support the messages scope")
+			);
+		}
+		let mut config = config;
+		config["streaming"] = serde_json::json!("Disabled");
+		serde_json::from_value::<PromptGuard>(config)
+			.unwrap()
+			.validate()
+			.unwrap();
+	}
 }
 
 #[cfg(test)]
@@ -2868,7 +3579,8 @@ fn test_apply_regex_response_preserves_tool_structure(
 	#[case] input: serde_json::Value,
 	#[case] expected: Option<serde_json::Value>,
 ) {
-	let (action, actual) = run_apply_regex_response(fmt, action, rules, input);
+	let (action, actual) =
+		run_apply_regex_response(fmt, action, rules, default_response_scope(), input);
 	match expected {
 		Some(expected) => {
 			assert_eq!(action, GuardrailAction::Mask);
@@ -2876,6 +3588,79 @@ fn test_apply_regex_response_preserves_tool_structure(
 		},
 		None => assert_eq!(action, GuardrailAction::Reject),
 	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic(
+	ChatFmt::Anthropic,
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "tool_use", "id": "toolu_01", "name": "save_note", "input": {"note": "ssn 123-45-6789"}}
+		]
+	}),
+	"/content/0/input/note",
+	serde_json::json!("ssn <SSN>")
+)]
+#[case::completions(
+	ChatFmt::Completions,
+	serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [{"message": {"role": "assistant", "tool_calls": [
+			{"id": "call_01", "type": "function", "function": {
+				"name": "save_note", "arguments": "{\"note\":\"ssn 123-45-6789\"}"
+			}}
+		]}}]
+	}),
+	"/choices/0/message/tool_calls/0/function/arguments",
+	serde_json::json!("{\"note\":\"ssn <SSN>\"}")
+)]
+#[case::responses(
+	ChatFmt::Responses,
+	serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "function_call", "arguments": "{\"note\":\"ssn 123-45-6789\"}",
+				"call_id": "call_01", "name": "save_note"}
+		]
+	}),
+	"/output/0/arguments",
+	serde_json::json!("{\"note\":\"ssn <SSN>\"}")
+)]
+#[case::gemini(
+	ChatFmt::Gemini,
+	serde_json::json!({
+		"candidates": [{"content": {"role": "model", "parts": [
+			{"functionCall": {"name": "save_note", "args": {"note": "ssn 123-45-6789"}}}
+		]}}]
+	}),
+	"/candidates/0/content/parts/0/functionCall/args/note",
+	serde_json::json!("ssn <SSN>")
+)]
+fn test_apply_regex_response_tool_input_scope(
+	#[case] fmt: ChatFmt,
+	#[case] input: serde_json::Value,
+	#[case] pointer: &str,
+	#[case] masked: serde_json::Value,
+) {
+	let (action, actual) = run_apply_regex_response(
+		fmt,
+		Action::Mask,
+		ssn_only(),
+		default_response_scope(),
+		input.clone(),
+	);
+	assert_eq!(action, GuardrailAction::Allow);
+	assert_eq!(actual.pointer(pointer), input.pointer(pointer));
+
+	let scope = vec![ContentScope::Messages, ContentScope::ToolInput];
+	let (action, actual) = run_apply_regex_response(fmt, Action::Mask, ssn_only(), scope, input);
+	assert_eq!(action, GuardrailAction::Mask);
+	assert_eq!(actual.pointer(pointer), Some(&masked));
 }
 
 #[cfg(test)]
@@ -2959,6 +3744,226 @@ fn test_apply_regex_response_preserves_tool_structure(
 			{"role": "user", "content": [
 				{"type": "text", "text": "contact admin@example.com"},
 				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// the common caching layout: breakpoint on a big context block, volatile text after it
+#[case::mask_carries_drained_blocks_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "for help"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// two breakpoints collapse into one; the later one wins
+#[case::mask_keeps_survivors_cache_control_over_drained(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+#[case::system_array_mask_carries_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": [
+			{"type": "text", "text": "Contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+			{"type": "text", "text": "for support"}
+		],
+		"messages": [{"role": "user", "content": "hello"}]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": [
+			{"type": "text", "text": "Contact <EMAIL_ADDRESS>\nfor support", "cache_control": {"type": "ephemeral"}}
+		],
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+)]
+// OpenAI-format providers (Bedrock, OpenRouter) accept cache_control on content parts
+#[case::completions_mask_carries_cache_control(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN> thanks", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// OpenAI explicit breakpoints (prompt_cache_breakpoint) survive a collapse too
+#[case::responses_mask_carries_prompt_cache_breakpoint(
+	ChatFmt::Responses,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "my ssn is 123-45-6789", "prompt_cache_breakpoint": {"mode": "explicit"}},
+				{"type": "input_text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "my ssn is <SSN>\nthanks", "prompt_cache_breakpoint": {"mode": "explicit"}}
+			]}
+		]
+	}))
+)]
+#[case::completions_mask_carries_prompt_cache_breakpoint(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789", "prompt_cache_breakpoint": {"mode": "explicit"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN> thanks", "prompt_cache_breakpoint": {"mode": "explicit"}}
+			]}
+		]
+	}))
+)]
+// a masked run must not steal the breakpoint from an untouched run before the image
+#[case::mask_does_not_leak_cache_control_across_runs(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "project context", "cache_control": {"type": "ephemeral"}},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "my ssn is 123-45-6789"},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "project context", "cache_control": {"type": "ephemeral"}},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "my ssn is <SSN> thanks"}
+			]}
+		]
+	}))
+)]
+// two drained parts both marked: the later breakpoint is the one carried
+#[case::mask_carries_latest_drained_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral", "ttl": "1h"}},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help thanks", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+// an explicit null marker is not a breakpoint and must not shadow the real one
+#[case::null_cache_control_does_not_shadow_real_marker(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com", "cache_control": {"type": "ephemeral"}},
+				{"type": "text", "text": "for help", "cache_control": null}
 			]}
 		]
 	}),
@@ -3077,4 +4082,85 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		})
 	);
+}
+
+#[rstest::rstest]
+#[case::completions(ChatFmt::Completions, include_str!("../../../../llm/src/tests/response/completions/guardrails.json"))]
+#[case::messages(ChatFmt::Anthropic, include_str!("../../../../llm/src/tests/response/anthropic/guardrails.json"))]
+#[case::gemini(ChatFmt::Gemini, include_str!("../../../../llm/src/tests/response/vertex-gemini/guardrails.json"))]
+#[case::responses(ChatFmt::Responses, include_str!("../../../../llm/src/tests/response/responses/guardrails.json"))]
+fn signed_response_text_is_scanned_but_never_masked(#[case] fmt: ChatFmt, #[case] fixture: &str) {
+	let input: serde_json::Value = serde_json::from_str(fixture).unwrap();
+	let scope = vec![
+		ContentScope::Messages,
+		ContentScope::ToolInput,
+		ContentScope::ToolOutput,
+	];
+	let (_, original) =
+		run_apply_regex_response(fmt, Action::Audit, vec![], scope.clone(), input.clone());
+	let pattern = regex::Regex::new("^signed ").unwrap();
+	for (action, expected) in [
+		(Action::Mask, GuardrailAction::Reject),
+		(Action::Reject, GuardrailAction::Reject),
+		(Action::Audit, GuardrailAction::Audit),
+	] {
+		let (actual, response) = run_apply_regex_response(
+			fmt,
+			action,
+			vec![RegexRule::Regex {
+				pattern: pattern.clone(),
+			}],
+			scope.clone(),
+			input.clone(),
+		);
+		assert_eq!(actual, expected);
+		assert_eq!(response, original);
+	}
+}
+
+#[test]
+fn bedrock_signed_response_mask_rejects_without_changing_signed_text() {
+	let input = include_str!("../../../../llm/src/tests/response/anthropic/thinking.json");
+	for mask_signed in [false, true] {
+		let mut resp: crate::llm::types::messages::typed::MessagesResponse =
+			serde_json::from_str(input).unwrap();
+		let original = serde_json::to_value(&resp).unwrap();
+		let (texts, in_scope) = Policy::scoped_response_texts(&mut resp, &default_response_scope());
+		let masked: Vec<_> = texts
+			.iter()
+			.map(|text| {
+				if (text == original["content"][0]["thinking"].as_str().unwrap()) == mask_signed {
+					"<masked>"
+				} else {
+					text.as_str()
+				}
+			})
+			.collect();
+		let (outcome, _) = Policy::bedrock_guardrail_outcome(
+			bedrock_intervened(&masked, bedrock_anonymized_assessments()),
+			texts.len(),
+			&RequestRejection::default(),
+			&bedrock_test_config(),
+		);
+		let (action, rejection) = Policy::apply_response_guard_outcome(
+			outcome.map_mask(|mask| ResponseGuardMutation::Texts(mask.scatter(&in_scope))),
+			&RequestRejection::default(),
+			&mut resp,
+		)
+		.unwrap();
+		assert_eq!(
+			action,
+			if mask_signed {
+				GuardrailAction::Reject
+			} else {
+				GuardrailAction::Mask
+			}
+		);
+		assert_eq!(rejection.is_some(), mask_signed);
+		let actual = serde_json::to_value(&resp).unwrap();
+		assert_eq!(actual["content"][0], original["content"][0]);
+		if !mask_signed {
+			assert_eq!(actual["content"][1]["text"], "<masked>");
+		}
+	}
 }

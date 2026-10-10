@@ -193,7 +193,10 @@ fn test_network_authorization_allows_source_cidr() {
 		connect_headers: http::HeaderMap::new(),
 	};
 
-	assert_matches!(network_authz.apply(&source), Ok(()));
+	assert_matches!(
+		network_authz.apply(&cel::Executor::new_source(&source)),
+		Ok(())
+	);
 }
 
 #[test]
@@ -215,7 +218,10 @@ fn test_network_authorization_deny_takes_precedence() {
 		connect_headers: http::HeaderMap::new(),
 	};
 
-	assert_matches!(network_authz.apply(&source), Err(_));
+	assert_matches!(
+		network_authz.apply(&cel::Executor::new_source(&source)),
+		Err(_)
+	);
 }
 
 #[test]

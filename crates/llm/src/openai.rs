@@ -7,8 +7,8 @@ use crate::{RouteType, apply};
 #[cfg_attr(feature = "schema", schemars(rename = "OpenAIProvider"))]
 pub struct Provider {
 	/// Model ID to send to OpenAI, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 	/// Configuration for running OpenAI inline moderation on request input and generated output.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub moderation: Option<ModerationParam>,
@@ -69,6 +69,8 @@ pub fn path_suffix(route: RouteType) -> &'static str {
 		RouteType::Responses => "/responses",
 		RouteType::Embeddings => "/embeddings",
 		RouteType::Rerank => "/rerank",
+		RouteType::Decisions => "/decisions",
+		RouteType::SystemOne => "/systemone",
 		RouteType::Realtime => "/realtime",
 		// All others get translated down to completions
 		_ => "/chat/completions",

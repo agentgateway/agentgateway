@@ -6,13 +6,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use agent_http::BufList;
 use bytes::{Buf, Bytes};
 use http::HeaderMap;
 use http_body::{Body, Frame, SizeHint};
 use parking_lot::Mutex;
 use thiserror::Error;
-
-use crate::http::buflist::BufList;
 
 #[cfg(test)]
 #[path = "body_tests.rs"]
@@ -90,6 +89,11 @@ impl<B: Body> BodyState<B> {
 	/// [`Capped`][super::Capped] error when polled.
 	fn record_bytes(&mut self, mut data: B::Data) -> Bytes {
 		let length = data.remaining();
+		// Empty DATA frames can end a gRPC request. Forward them without adding
+		// empty buffers to BufList, which requires every entry to contain data.
+		if length == 0 {
+			return Bytes::new();
+		}
 		self.max_bytes = self.max_bytes.saturating_sub(length);
 
 		if self.is_capped() {

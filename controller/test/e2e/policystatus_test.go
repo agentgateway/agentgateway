@@ -56,9 +56,9 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 			ControllerName: gwv1.GatewayController(controllerName),
 			Conditions: []metav1.Condition{
 				{
-					Type:               string(agentgateway.PolicyConditionAccepted),
+					Type:               agentgateway.PolicyConditionAccepted,
 					Status:             metav1.ConditionTrue,
-					Reason:             string(agentgateway.PolicyReasonValid),
+					Reason:             agentgateway.PolicyReasonValid,
 					Message:            "Accepted by fake controller",
 					LastTransitionTime: metav1.Now(),
 				},

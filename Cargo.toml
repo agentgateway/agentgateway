@@ -2,7 +2,9 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d8bc3bce2f7b397b5791b5caef5129e6" }
-async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "681e3c6e382fa8bf8abf511d45ada73c25c659b6" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "793d289223b345161e8292af93be16755d8ccc40" }
+# Pending https://github.com/bldr-project/yaml-serde-edit/pull/1
+yaml-serde-edit = { git = "https://github.com/howardjohn/yaml-serde-edit", rev = "683e137f6760f47bb0db3d124c211433a4819f54" }
 
 [workspace]
 resolver = "2"
@@ -16,6 +18,8 @@ members = [
     "crates/pool",
     "crates/core",
     "crates/http",
+    "crates/policy-core",
+    "crates/policies/cors",
     "crates/hbone",
     "crates/htpasswd-verify-fork",
     "crates/protos",
@@ -32,6 +36,8 @@ default-members = [
     "crates/pool",
     "crates/core",
     "crates/http",
+    "crates/policy-core",
+    "crates/policies/cors",
     "crates/hbone",
     "crates/htpasswd-verify-fork",
     "crates/protos",
@@ -51,6 +57,8 @@ agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
 agent-http = { path = "crates/http" }
 agent-llm = { path = "crates/llm" }
+agent-policy = { path = "crates/policy-core" }
+agent-policy-cors = { path = "crates/policies/cors" }
 agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
@@ -62,7 +70,7 @@ anyhow = "1.0"
 arc-swap = "1.9"
 arcstr = { version = "1.2", features = ["serde"] }
 assert_matches = "1.5.0"
-async-openai = { version = "0.41", default-features = false, features = ["chat-completion-types", "moderation-types", "response-types", "realtime-types"] }
+async-openai = { version = "0.42", default-features = false, features = ["chat-completion-types", "decision-types", "moderation-types", "response-types", "realtime-types"] }
 async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", default-features = false, features = ["default-https-client", "rt-tokio", "sso"] }
@@ -70,8 +78,9 @@ aws-credential-types = "1.2"
 aws-sigv4 = "1.4"
 aws-types = "1.3"
 aws-smithy-eventstream = "0.61"
+aws-smithy-runtime-api = { version = "1.19", features = ["client", "http-1x"] }
 aws-smithy-types = "1.3"
-aws-lc-rs = "1.17"
+aws-lc-rs = "1.18"
 # SymCrypt backend: symcrypt 0.5.1 dynamic-links the system libsymcrypt by default (requires libsymcrypt installed).
 symcrypt = "0.5.1"
 rustls-symcrypt = { version = "0.2.3", features = ["chacha", "x25519"] }
@@ -92,6 +101,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.6", features = ["derive"] }
 clocksource = "1.0"
 crossbeam = "0.8"
+dashmap = "6.2"
 divan = "0.1"
 durationfmt = "0.1"
 go-parse-duration = "0.1"
@@ -101,7 +111,7 @@ futures = "0.3"
 futures-channel = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-google-cloud-auth = { version = "1.15", default-features = false, features = [
+google-cloud-auth = { version = "1.16", default-features = false, features = [
     "idtoken",
     # Support the full ADC set; this one is opt in
     "gdch",
@@ -127,7 +137,7 @@ indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
 itertools = "0.15"
-jsonwebtoken = { version = "10.4" }
+jsonwebtoken = { version = "11" }
 lazy_static = "1.5"
 libc = "0.2"
 notify = "8.2"
@@ -136,19 +146,19 @@ md-5 = "0.11"
 num_cpus = "1.17"
 once_cell = "1.21"
 openapiv3 = "2.2"
-opentelemetry = "0.32"
-opentelemetry-http = "0.32"
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
-opentelemetry-proto = { version = "0.32", features = ["gen-tonic", "logs"] }
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
+opentelemetry = "0.33"
+opentelemetry-http = "0.33"
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["http-proto", "internal-logs", "trace", "grpc-tonic", "logs"] }
+opentelemetry-proto = { version = "0.33", features = ["gen-tonic", "logs"] }
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
-pem = "3.0.6"
+pem = "4.0.0"
 percent-encoding = "2.3"
 phonenumber = "0.3"
 pin-project-lite = "0.2"
-pingora-pool = "0.8"
+pingora-pool = "0.9"
 ppp = "2.3"
-pprof-alloc = "0.5"
+pprof-alloc = "0.6"
 # NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's
 # frame-pointer unwinder only supports x86_64/aarch64/riscv64/loongarch64, and
 # its call site is not arch-gated, so enabling it breaks the build on other
@@ -178,7 +188,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "rustls",
 ] }
-rstest = "0.26"
+rstest = "0.27"
 rust_decimal = { version = "1", default-features = false }
 mimalloc = { version = "0.1", features = ["v3", "no_thp"] }
 mime_guess = "2.0"
@@ -194,22 +204,23 @@ schemars = { version = "=1.2.1", git = "https://github.com/howardjohn/schemars",
 ] }
 secrecy = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
-serde-transcode = "1.1"
 serde_json = { version = "1.0", features = ["preserve_order", "raw_value"] }
 serde-untagged = "0.1"
-serde_json_path_to_error = "0.1"
 serde_regex = "1.1"
-serde_yaml = "0.9"
+serde_norway = "0.9.42"
+yaml-serde-edit = "0.1.1"
 sha1 = "0.11"
 sha2 = "0.11"
 shellexpand = "3.1"
 socket2 = "0.6"
 spiffe = { version = "0.16", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
 split-iter = "0.1"
-sse-stream = "0.2"
+sse-stream = "0.3"
 sqlx = { version = "0.9", default-features = false, features = [
     "chrono",
     "json",
+    "macros",
+    "migrate",
     "postgres",
     "runtime-tokio",
     "sqlite",
@@ -249,6 +260,7 @@ url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
+zstd = "0.14"
 which = "8.0"
 websocket-sans-io = '0.1'
 vector-map = "1.1.0"
@@ -283,6 +295,10 @@ heck = "0.5"
 macro_rules_attribute = "0.2"
 
 [profile.dev.package.cel]
+opt-level = 1
+
+# Unoptimized SQLite makes request-log analytics queries several times slower in dev builds.
+[profile.dev.package.libsqlite3-sys]
 opt-level = 1
 
 # Release optimized but without as many dependencies, suitable for incremental development

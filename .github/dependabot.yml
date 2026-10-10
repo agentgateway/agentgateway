@@ -80,16 +80,6 @@ updates:
     cooldown:
       default-days: 7
 
-  - package-ecosystem: "uv"
-    directory: "/examples/a2a/strands-agents"
-    schedule:
-      interval: "daily"
-      time: "09:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 0
-    cooldown:
-      default-days: 7
-
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

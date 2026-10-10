@@ -78,15 +78,16 @@ func translatePoliciesForInferencePool(
 	}
 
 	failureMode := api.BackendPolicySpec_InferenceRouting_FAIL_CLOSED
-	if epr.FailureMode == inf.EndpointPickerFailOpen {
+	if epr != nil && epr.FailureMode == inf.EndpointPickerFailOpen {
 		failureMode = api.BackendPolicySpec_InferenceRouting_FAIL_OPEN
 	}
 
 	// Create the inference routing policy
 	inferencePolicy := &api.Policy{
-		Key:    pool.Namespace + "/" + pool.Name + ":inference",
-		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil)},
+		Key:               pool.Namespace + "/" + pool.Name + ":inference",
+		Name:              TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
+		Target:            &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, hostname, nil)},
+		CreationTimestamp: max(pool.CreationTimestamp.Unix(), 0),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_InferenceRouting_{
@@ -115,9 +116,10 @@ func translatePoliciesForInferencePool(
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that
 	inferencePolicyTLS := &api.Policy{
-		Key:    pool.Namespace + "/" + pool.Name + ":inferencetls",
-		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
+		Key:               pool.Namespace + "/" + pool.Name + ":inferencetls",
+		Name:              TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
+		Target:            &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
+		CreationTimestamp: max(pool.CreationTimestamp.Unix(), 0),
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{
@@ -142,6 +144,9 @@ func translatePoliciesForInferencePool(
 
 func validateInferencePoolEndpointPickerRef(krtctx krt.HandlerContext, pool *inf.InferencePool, services krt.Collection[*corev1.Service]) error {
 	epr := pool.Spec.EndpointPickerRef
+	if epr == nil {
+		return fmt.Errorf("endpointPickerRef must be specified")
+	}
 	var errs []string
 
 	if epr.Group != nil && *epr.Group != "" {
@@ -240,6 +245,12 @@ func buildInferencePoolStatus(
 	}
 
 	conditions := inferencePoolConditionMap(controllerName, validationErr)
+	if pool.Spec.EndpointPickerRef == nil {
+		conditions[string(inf.InferencePoolConditionAccepted)].Error = &ConfigError{
+			Reason:  string(inf.InferencePoolReasonEndpointPickerRefMissing),
+			Message: "endpointPickerRef must be specified",
+		}
+	}
 	for _, ref := range desiredInferencePoolParentRefs(attachedGateways, validationErr) {
 		existingConds := []metav1.Condition(nil)
 		if existing, found := existingOurs[inferencePoolParentMergeKey(ref)]; found {

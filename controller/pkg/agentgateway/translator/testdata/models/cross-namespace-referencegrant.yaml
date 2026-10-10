@@ -1,0 +1,264 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: model-referencegrant
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: other
+spec:
+  ports:
+  - port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guardrail-webhook
+  namespace: other
+spec:
+  ports:
+  - port: 8443
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-default-models
+  namespace: other
+spec:
+  from:
+  - group: agentgateway.dev
+    kind: AgentgatewayModel
+    namespace: default
+  to:
+  - group: ""
+    kind: Service
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: guarded-model
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-referencegrant
+    sectionName: llm
+  provider: OpenAI
+  policies:
+    promptGuard:
+      request:
+      - webhook:
+          action: Reject
+          backendRef:
+            name: guardrail-webhook
+            namespace: other
+            port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: callout-cross-namespace-with-grant
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-referencegrant
+    sectionName: llm
+  virtualModel:
+    callout:
+      backendRef:
+        name: router
+        namespace: other
+        port: 8080
+      transformation:
+        model: callout.body.model
+
+---
+# Output
+output:
+- gateway:
+    Name: model-referencegrant
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - ai:
+                promptGuard:
+                  request:
+                  - webhook:
+                      action: REJECT_AUDIT_ACTION_REJECT
+                      backend:
+                        port: 8443
+                        service:
+                          hostname: guardrail-webhook.other.svc.cluster.local
+                          namespace: other
+            name: backend
+            openai: {}
+      key: default/guarded-model/backend.llm
+      name:
+        name: guarded-model
+        namespace: default
+- gateway:
+    Name: model-referencegrant
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/model-referencegrant
+      port: 80
+- gateway:
+    Name: model-referencegrant
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/model-referencegrant
+      key: default/model-referencegrant.llm
+      name:
+        gatewayName: model-referencegrant
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: model-referencegrant
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/callout-cross-namespace-with-grant.llm
+      listenerKey: default/model-referencegrant.llm
+      match:
+        model: callout-cross-namespace-with-grant
+      virtualModel:
+        callout:
+          target:
+            port: 8080
+            service:
+              hostname: router.other.svc.cluster.local
+              namespace: other
+          transformation:
+            model: callout.body.model
+- gateway:
+    Name: model-referencegrant
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/guarded-model/backend.llm
+      key: default/guarded-model.llm
+      listenerKey: default/model-referencegrant.llm
+      match:
+        model: guarded-model
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: callout-cross-namespace-with-grant
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: model-referencegrant
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: guarded-model
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: model-referencegrant
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: model-referencegrant
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 2
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

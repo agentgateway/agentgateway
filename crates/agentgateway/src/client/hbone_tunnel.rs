@@ -225,8 +225,8 @@ pub async fn handshake_double(
 
 	// Spawn inner CONNECT tunnel
 	let (drain_tx, drain_rx) = tokio::sync::watch::channel(false);
-	let hbone_cfg = pool.config();
-	let mut sender = agent_hbone::client::spawn_connection(hbone_cfg, tls_stream, drain_rx, wl_key)
+	let h2_config = pool.config().h2.clone();
+	let mut sender = agent_hbone::client::spawn_connection(&h2_config, tls_stream, drain_rx, wl_key)
 		.await
 		.map_err(crate::http::Error::new)?;
 

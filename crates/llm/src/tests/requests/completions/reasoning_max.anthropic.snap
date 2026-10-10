@@ -24,8 +24,10 @@ info:
     "model": "claude-opus-4-6",
     "max_tokens": 4096,
     "thinking": {
-      "type": "enabled",
-      "budget_tokens": 4095
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "xhigh"
     }
   },
   "parsed": {

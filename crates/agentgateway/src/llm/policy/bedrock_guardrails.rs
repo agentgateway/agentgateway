@@ -2,6 +2,7 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
+use crate::cel::GuardDetail;
 use crate::http::auth::{AwsAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
@@ -27,7 +28,7 @@ pub struct GuardrailTextBlock {
 
 /// Content block for guardrail evaluation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct GuardrailContentBlock {
 	pub text: GuardrailTextBlock,
 }
@@ -40,7 +41,7 @@ pub struct GuardrailOutputContent {
 
 /// Request body for ApplyGuardrail API
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailRequest {
 	/// The source of the content (INPUT for requests, OUTPUT for responses)
 	pub source: GuardrailSource,
@@ -60,10 +61,13 @@ pub enum GuardrailAction {
 
 /// Response from ApplyGuardrail API
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub struct ApplyGuardrailResponse {
 	/// The action taken by the guardrail
 	pub action: GuardrailAction,
+	/// The reason the guardrail reported for its action
+	#[serde(default)]
+	pub action_reason: Option<String>,
 	/// Outputs with masked text (if configured with mask)
 	#[serde(default)]
 	pub outputs: Vec<GuardrailOutputContent>,
@@ -114,6 +118,84 @@ impl ApplyGuardrailResponse {
 			},
 			serde_json::Value::Array(arr) => arr.iter().any(|v| Self::value_contains_action(v, action)),
 			_ => false,
+		}
+	}
+}
+
+/// Assessment keys that are safe to log. Top-level keys are policy names (fixed
+/// API schema), so an unknown policy is kept as `"[redacted]"` to show what
+/// fired; below that, unknown keys are dropped wholesale so content — and key
+/// names that could carry it in future API shapes — never reaches logs or CEL.
+const ASSESSMENT_METADATA_KEYS: &[&str] = &[
+	// policy containers
+	"topicPolicy",
+	"topics",
+	"contentPolicy",
+	"filters",
+	"sensitiveInformationPolicy",
+	"piiEntities",
+	"regexes",
+	"wordPolicy",
+	"customWords",
+	"managedWordLists",
+	"contextualGroundingPolicy",
+	"invocationMetrics",
+	"appliedGuardrailDetails",
+	// metadata leaves
+	"name",
+	"type",
+	"action",
+	"detected",
+	"confidence",
+	"filterStrength",
+	"threshold",
+	"score",
+	"guardrailProcessingLatency",
+	"guardrailId",
+	"guardrailVersion",
+	"guardrailOrigin",
+];
+
+fn redact_assessment(value: &mut serde_json::Value) {
+	let serde_json::Value::Object(map) = value else {
+		*value = serde_json::Value::String("[redacted]".to_string());
+		return;
+	};
+	for (k, v) in map.iter_mut() {
+		if ASSESSMENT_METADATA_KEYS.contains(&k.as_str()) {
+			filter_assessment_fields(v);
+		} else {
+			*v = serde_json::Value::String("[redacted]".to_string());
+		}
+	}
+}
+
+fn filter_assessment_fields(value: &mut serde_json::Value) {
+	match value {
+		serde_json::Value::Object(map) => {
+			map.retain(|k, _| ASSESSMENT_METADATA_KEYS.contains(&k.as_str()));
+			map.values_mut().for_each(filter_assessment_fields);
+		},
+		serde_json::Value::Array(arr) => arr.iter_mut().for_each(filter_assessment_fields),
+		_ => {},
+	}
+}
+
+impl ApplyGuardrailResponse {
+	/// Guardrail-log detail for this intervention, with assessments redacted.
+	pub(super) fn build_detail(&mut self, config: &BedrockGuardrails) -> GuardDetail {
+		let assessments = std::mem::take(&mut self.assessments)
+			.into_iter()
+			.map(|mut a| {
+				redact_assessment(&mut a);
+				a
+			})
+			.collect();
+		GuardDetail {
+			guardrail_id: Some(config.guardrail_identifier.clone()),
+			guardrail_version: Some(config.guardrail_version.clone()),
+			action_reason: self.action_reason.take(),
+			assessments,
 		}
 	}
 }

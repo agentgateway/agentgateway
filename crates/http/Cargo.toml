@@ -9,10 +9,22 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [dependencies]
+anyhow.workspace = true
 axum.workspace = true
 axum-core.workspace = true
 bytes.workspace = true
+futures-core.workspace = true
 http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+parking_lot.workspace = true
+pin-project-lite.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+futures-util.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints.rust]
 # This rule makes code more confusing

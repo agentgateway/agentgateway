@@ -13,8 +13,31 @@ info:
           location:
             type: string
             description: "The city and state, e.g. San Francisco, CA"
+          unit:
+            type: string
+            description: Optional temperature unit
         required:
           - location
+    - name: get_time
+      strict: true
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+        additionalProperties: false
+    - name: get_forecast
+      strict: false
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+        additionalProperties: false
   messages:
     - role: user
       content: What is the weather like in San Francisco?
@@ -47,12 +70,51 @@ info:
             "location": {
               "type": "string",
               "description": "The city and state, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "description": "Optional temperature unit"
             }
           },
           "required": [
             "location"
           ]
-        }
+        },
+        "strict": false
+      },
+      {
+        "type": "function",
+        "name": "get_time",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "get_forecast",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ],
+          "additionalProperties": false
+        },
+        "strict": false
       }
     ]
   },

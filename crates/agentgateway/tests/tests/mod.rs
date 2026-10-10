@@ -1,3 +1,4 @@
+mod admission;
 mod auth;
 mod auto_protocol;
 mod basic;
@@ -7,10 +8,13 @@ mod connect;
 mod cors;
 mod dfp;
 mod direct_response;
+mod drain;
 mod hbone;
 mod llm;
 mod llm_providers;
 mod policy;
 mod smoke;
+mod substrate;
+mod timeout;
 mod tls;
 mod waypoint;

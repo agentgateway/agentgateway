@@ -1,0 +1,49 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/file-inline.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: What is this document about?
+        - type: file
+          file:
+            filename: report.pdf
+            file_data: "data:application/pdf;base64,JVBERi0xLjQK"
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is this document about?"
+          },
+          {
+            "inlineData": {
+              "mimeType": "application/pdf",
+              "data": "JVBERi0xLjQK"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is this document about?"
+      }
+    ]
+  }
+}

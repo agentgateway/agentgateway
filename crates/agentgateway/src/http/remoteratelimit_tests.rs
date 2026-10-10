@@ -662,9 +662,9 @@ fn apply_over_limit_response_returns_429() {
 		dynamic_metadata: None,
 		quota: None,
 	};
-	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
-	// Should have a direct response with 429
-	let direct = result.direct_response.unwrap();
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	// Denial is data; rendering builds the 429
+	let direct = err.into_response_with_grpc(false);
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
 }
@@ -719,8 +719,8 @@ fn apply_over_limit_response_sets_x_ratelimit_headers_from_most_constrained_stat
 		quota: None,
 	};
 
-	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
-	let direct = result.direct_response.unwrap();
+	let err = RemoteRateLimit::apply(&mut req, response).unwrap_err();
+	let direct = err.into_response_with_grpc(false);
 
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "38");
@@ -856,7 +856,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
 	assert_eq!(rrl.domain, "test");
 }
@@ -873,7 +873,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
 }
 
@@ -890,7 +890,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailOpen);
 
 	// Test FailClosed (PascalCase alias)
@@ -904,7 +904,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(rrl.failure_mode, FailureMode::FailClosed);
 }
 
@@ -919,7 +919,7 @@ descriptors:
         value: '"test-user"'
     type: "requests"
 "#;
-	let rrl: RemoteRateLimit = serde_yaml::from_str(yaml).unwrap();
+	let rrl: RemoteRateLimit = serde_norway::from_str(yaml).unwrap();
 	assert_eq!(
 		rrl.failure_mode,
 		FailureMode::FailClosed,

@@ -5,6 +5,50 @@ use serde_json::json;
 use super::*;
 use crate::http::Body;
 
+#[tokio::test]
+async fn policy_snapshots_ignore_recording_but_logs_use_completed_output() {
+	use http_body_util::BodyExt;
+	let mut req = ::http::Request::new(Body::from_stream(futures_util::stream::iter([Ok::<
+		_,
+		std::io::Error,
+	>(
+		Bytes::from_static(b"hello"),
+	)])));
+	let _ = req.body_mut().inspect(2).await.unwrap();
+	req.body_mut().record(100);
+	let snapshot = snapshot_request(&mut req, false);
+	while req.body_mut().frame().await.is_some() {}
+	let policy = Executor::new_request_snapshot(Some(&snapshot));
+	assert!(policy.request.as_ref().unwrap().body.bytes().is_none());
+	assert_eq!(
+		policy
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"he"
+	);
+	let logger = Executor::new_logger(Some(&snapshot), None, None, None, None, None, None);
+	assert_eq!(
+		logger.request.as_ref().unwrap().body.bytes().unwrap(),
+		"hello"
+	);
+	assert_eq!(
+		logger
+			.request
+			.as_ref()
+			.unwrap()
+			.body_prefix
+			.0
+			.prefix_bytes()
+			.unwrap(),
+		"hello"
+	);
+}
+
 /// Helper to build a test request with various fields populated
 fn build_test_request() -> crate::http::Request {
 	let mut req = ::http::Request::builder()
@@ -41,11 +85,13 @@ fn build_test_request() -> crate::http::Request {
 	// Add backend context
 	let backend = BackendContext {
 		name: "test-backend".into(),
+		endpoint: Some("example.com:443".into()),
 		backend_type: BackendType::Service,
 		protocol: BackendProtocol::http,
 	};
 	req.extensions_mut().insert(backend);
 	req.extensions_mut().insert(ProxyContext {
+		error: None,
 		bind: Some("bind".into()),
 		gateway: Some(ProxyGatewayContext {
 			namespace: "default".into(),
@@ -87,6 +133,7 @@ fn build_test_request() -> crate::http::Request {
 		provider_total_tokens: Some(150),
 		service_tier: None,
 		first_token: None,
+		inter_chunk_latencies: crate::llm::TokenGapSummary::default(),
 		time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
 		time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 		count_tokens: None,
@@ -134,6 +181,7 @@ fn test_snapshot_matches_ref() {
 		Some(&snapshot),
 		None,
 		snapshot.llm.as_ref(),
+		None,
 		None,
 		None,
 		None,
@@ -297,12 +345,26 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
+		pages: dec("0.02"),
+	});
+	// Cost per page
+	req
+		.extensions_mut()
+		.get_mut::<LLMContext>()
+		.unwrap()
+		.cost_rates = Some(llm::catalog::CostRates {
+		input: Some(3.0),
+		per_page: Some(0.005),
+		..Default::default()
 	});
 	let executor = Executor::new_request(&req);
 
-	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.525").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.input == 3.0").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.perPage == 0.005").unwrap()));
 }
 
 #[test]
@@ -327,6 +389,7 @@ fn test_route_metadata_context() {
 #[test]
 fn test_proxy_timing_is_native_duration() {
 	let proxy = ProxyContext {
+		error: None,
 		bind: None,
 		gateway: None,
 		listener: None,
@@ -335,7 +398,7 @@ fn test_proxy_timing_is_native_duration() {
 		upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
 		response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 	};
-	let executor = Executor::new_logger(None, None, None, None, None, Some(&proxy));
+	let executor = Executor::new_logger(None, None, None, None, None, None, Some(&proxy));
 	let expr = Expression::new_strict(
 		"proxy.requestProcessingDuration == duration('12ms') && \
 		 proxy.upstreamDuration == duration('675ms') && \
@@ -352,7 +415,7 @@ fn test_executor_snapshot_round_trip() {
 	let req_snapshot = snapshot_request(&mut req, true);
 
 	// Create executor from snapshot
-	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None);
+	let executor1 = Executor::new_logger(Some(&req_snapshot), None, None, None, None, None, None);
 
 	// Serialize to JSON
 	let json = exec_to_json(&executor1);
@@ -466,6 +529,7 @@ fn test_executor_snapshot_json_to_cel() {
 		},
 		"backend": {
 			"name": "my-backend",
+			"endpoint": "example.com:443",
 			"type": "service",
 			"protocol": "http"
 		},
@@ -511,6 +575,7 @@ fn test_executor_snapshot_json_to_cel() {
 	assert_eq!(cel_json["request"]["path"], "/test");
 	assert_eq!(cel_json["source"]["address"], "10.0.0.1");
 	assert_eq!(cel_json["backend"]["name"], "my-backend");
+	assert_eq!(cel_json["backend"]["endpoint"], "example.com:443");
 	assert_eq!(cel_json["proxy"]["listener"]["name"], "http");
 	assert_eq!(cel_json["proxy"]["route"]["rule"], "rule");
 	assert_eq!(cel_json["jwt"]["sub"], "test-user");

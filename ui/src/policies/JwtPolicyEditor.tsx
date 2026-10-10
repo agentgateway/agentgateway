@@ -114,16 +114,18 @@ export function JwtPolicyEditor(props: {
 	const preview = safeBuildJwtPolicy();
 
 	function buildJwtPolicy() {
-		return cleanEmpty({
-			mode,
-			location: authorizationLocationToValue(location),
-			issuer,
-			audiences,
-			jwks: buildJwks(),
+		return {
+			...(cleanEmpty({
+				mode,
+				location: authorizationLocationToValue(location),
+				issuer,
+				audiences,
+				jwks: buildJwks()
+			}) as JwtPolicy),
 			jwtValidationOptions: {
 				requiredClaims: Array.from(requiredClaims)
 			}
-		}) as JwtPolicy;
+		} as JwtPolicy;
 	}
 
 	function buildJwks() {

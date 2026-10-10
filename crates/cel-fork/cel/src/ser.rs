@@ -3,7 +3,6 @@
 // from [serde_json](https://github.com/serde-rs/json/blob/master/src/value/ser.rs),
 // also mentioned in the [serde documentation](https://serde.rs/).
 
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::iter::FromIterator;
 use std::sync::Arc;
@@ -15,6 +14,7 @@ use thiserror::Error;
 
 use crate::Value;
 use crate::objects::{BytesValue, Key, ListValue, StringValue};
+use crate::types::map::IndexMap;
 
 pub struct Serializer;
 pub struct KeySerializer;
@@ -253,7 +253,7 @@ impl ser::Serializer for Serializer {
 	where
 		T: ?Sized + Serialize,
 	{
-		Ok(HashMap::from_iter([(variant.to_string(), value.serialize(Serializer)?)]).into())
+		Ok(IndexMap::from_iter([(variant.to_string(), value.serialize(Serializer)?)]).into())
 	}
 
 	fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
@@ -289,7 +289,7 @@ impl ser::Serializer for Serializer {
 
 	fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
 		Ok(SerializeMap {
-			map: HashMap::new(),
+			map: IndexMap::default(),
 			next_key: None,
 		})
 	}
@@ -307,7 +307,7 @@ impl ser::Serializer for Serializer {
 	) -> Result<Self::SerializeStructVariant> {
 		Ok(SerializeStructVariant {
 			name: String::from(variant),
-			map: HashMap::new(),
+			map: IndexMap::default(),
 		})
 	}
 }
@@ -323,13 +323,13 @@ pub struct SerializeTupleVariant {
 }
 
 pub struct SerializeMap {
-	map: HashMap<Key, Value<'static>>,
+	map: IndexMap<Key, Value<'static>>,
 	next_key: Option<Key>,
 }
 
 pub struct SerializeStructVariant {
 	name: String,
-	map: HashMap<Key, Value<'static>>,
+	map: IndexMap<Key, Value<'static>>,
 }
 
 #[derive(Debug, Default)]
@@ -400,7 +400,7 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
 	}
 
 	fn end(self) -> Result<Self::Ok> {
-		let map: HashMap<_, _> = HashMap::from_iter([(self.name, ListValue::Owned(self.vec.into()))]);
+		let map: IndexMap<_, _> = IndexMap::from_iter([(self.name, ListValue::Owned(self.vec.into()))]);
 		Ok(Value::Map(map.into()))
 	}
 }
@@ -466,7 +466,7 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
 	}
 
 	fn end(self) -> Result<Self::Ok> {
-		let map: HashMap<String, Value> = HashMap::from_iter([(self.name, self.map.into())]);
+		let map: IndexMap<String, Value> = IndexMap::from_iter([(self.name, self.map.into())]);
 		Ok(map.into())
 	}
 }

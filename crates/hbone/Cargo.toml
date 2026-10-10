@@ -17,7 +17,6 @@ futures.workspace = true
 futures-util.workspace = true
 h2.workspace = true
 http.workspace = true
-hyper-util.workspace = true
 pingora-pool.workspace = true
 rustls.workspace = true
 serde.workspace = true

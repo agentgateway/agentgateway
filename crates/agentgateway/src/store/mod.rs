@@ -43,9 +43,6 @@ impl SelfWorkload {
 	pub fn set(&self, w: Workload) {
 		let _ = self.0.set(w);
 	}
-	pub fn is_resolved(&self) -> bool {
-		self.0.get().is_some()
-	}
 }
 
 #[derive(Clone, Debug)]

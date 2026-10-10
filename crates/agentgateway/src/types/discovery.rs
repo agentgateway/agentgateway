@@ -450,18 +450,6 @@ impl Identity {
 		}
 	}
 
-	pub fn to_strng(self: &Identity) -> Strng {
-		match self {
-			Identity::Spiffe {
-				trust_domain,
-				namespace,
-				service_account,
-			} => {
-				strng::format!("spiffe://{trust_domain}/ns/{namespace}/sa/{service_account}")
-			},
-		}
-	}
-
 	pub fn trust_domain(&self) -> Strng {
 		match self {
 			Identity::Spiffe { trust_domain, .. } => trust_domain.clone(),
@@ -471,28 +459,6 @@ impl Identity {
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 	*t == Default::default()
-}
-
-// The protocol that the sender should use to send data. Can be different from ServerProtocol when there is a
-// agentgateway in the middle (e.g. e/w gateway with double hbone).
-#[derive(
-	Default,
-	Debug,
-	Hash,
-	Eq,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	Clone,
-	Copy,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-pub enum OutboundProtocol {
-	#[default]
-	TCP,
-	HBONE,
-	DOUBLEHBONE,
 }
 
 #[derive(
@@ -833,11 +799,6 @@ impl TryFrom<&XdsGatewayAddress> for GatewayAddress {
 }
 
 impl Workload {
-	pub fn try_from_xds(resource: XdsWorkload) -> Result<Self, ProtoError> {
-		let (w, _) = Self::try_from_xds_with_services(resource)?;
-		Ok(w)
-	}
-
 	pub fn try_from_xds_with_services(
 		resource: XdsWorkload,
 	) -> Result<(Self, HashMap<String, PortList>), ProtoError> {

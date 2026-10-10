@@ -36,11 +36,11 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 /// `usageMetadata` to chunks with the full totals on the final event, so updating on every
 /// chunk leaves the last event's counts in the log even on early client disconnect.
 pub fn passthrough_stream(
-	b: axum_core::body::Body,
+	b: agent_http::Body,
 	buffer_limit: usize,
 	log: crate::StreamingUsageGuard,
 	log_content: crate::LogContentFields,
-) -> axum_core::body::Body {
+) -> agent_http::Body {
 	use std::time::Instant;
 	let mut saw_token = false;
 	crate::parse::sse::json_passthrough::<vg::GenerateContentResponse>(b, buffer_limit, move |f| {
@@ -149,22 +149,19 @@ pub mod from_completions {
 			mime_from_ext_token(hint).map(str::to_string)
 		}
 	}
-	pub fn translate(
-		req: &types::completions::Request,
-		configured_model: Option<&str>,
-	) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req, configured_model)?;
+	pub fn translate(req: &types::completions::Request, is_vertex: bool) -> Result<Vec<u8>, AIError> {
+		let out = build_request(req, is_vertex)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
-		configured_model: Option<&str>,
+		is_vertex: bool,
 	) -> Result<vg::GenerateContentRequest, AIError> {
-		let model = configured_model
-			.or(req.model.as_deref())
-			.unwrap_or_default()
-			.to_string();
+		let model = req
+			.model
+			.as_deref()
+			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
 
 		let (system_text, contents) = messages_to_contents(&req.messages)?;
 
@@ -187,7 +184,7 @@ pub mod from_completions {
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, &model);
+		let generation_config = build_generation_config(req, model, is_vertex);
 
 		let cached_content = req
 			.rest
@@ -393,6 +390,9 @@ pub mod from_completions {
 						"image_url" => {
 							parts.push(image_part(p.rest.get("image_url"))?);
 						},
+						"file" => {
+							parts.push(file_part(p.rest.get("file"))?);
+						},
 						_ => {},
 					}
 				}
@@ -402,6 +402,28 @@ pub mod from_completions {
 		Ok(parts)
 	}
 
+	fn inline_data_part(mime: &str, data: &str) -> vg::Part {
+		vg::Part::InlineData(vg::InlineDataPart {
+			inline_data: vg::Blob {
+				mime_type: canonical_mime(mime).to_string(),
+				data: data.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
+	fn file_data_part(mime: &str, uri: &str) -> vg::Part {
+		vg::Part::FileData(vg::FileDataPart {
+			file_data: vg::FileData {
+				mime_type: Some(canonical_mime(mime).to_string()),
+				file_uri: uri.to_string(),
+				rest: Value::Null,
+			},
+			rest: Value::Null,
+		})
+	}
+
 	fn image_part(image_url: Option<&Value>) -> Result<vg::Part, AIError> {
 		let url = image_url
 			.and_then(|u| u.get("url"))
@@ -409,14 +431,7 @@ pub mod from_completions {
 			.unwrap_or_default();
 
 		if let Some((mime, data)) = parse_data_url(url) {
-			return Ok(vg::Part::InlineData(vg::InlineDataPart {
-				inline_data: vg::Blob {
-					mime_type: canonical_mime(mime).to_string(),
-					data: data.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(inline_data_part(mime, data));
 		}
 
 		if url.starts_with("gs://") {
@@ -424,24 +439,87 @@ pub mod from_completions {
 			let Some(mime) =
 				explicit_mime_hint(image_url).or_else(|| mime_from_extension(url).map(str::to_string))
 			else {
-				return Err(AIError::InvalidResponse(strng::new(format!(
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// image_url ({url}) has no recognised extension or MIME hint; pass image_url.format (or mime_type/content_type), or use an object with a known extension"
 				))));
 			};
-			return Ok(vg::Part::FileData(vg::FileDataPart {
-				file_data: vg::FileData {
-					mime_type: Some(canonical_mime(&mime).to_string()),
-					file_uri: url.to_string(),
-					rest: Value::Null,
-				},
-				rest: Value::Null,
-			}));
+			return Ok(file_data_part(&mime, url));
 		}
 
 		// http(s) and anything else are not fetchable by Vertex.
-		Err(AIError::InvalidResponse(strng::new(format!(
+		Err(AIError::UnsupportedConversion(strng::new(format!(
 			"native Gemini path rejects http(s) image_url ({url}); upload to gs:// or send inline data:"
 		))))
+	}
+
+	/// Convert an OpenAI `file` content part into a Gemini part.
+	///
+	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
+	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
+	/// than dropped.
+	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
+		let field = |k: &str| {
+			file
+				.and_then(|f| f.get(k))
+				.and_then(Value::as_str)
+				.unwrap_or_default()
+		};
+		let file_data = field("file_data");
+		let file_id = field("file_id");
+
+		if let Some((mime, data)) = parse_data_url(file_data) {
+			if !mime.is_empty() {
+				return Ok(inline_data_part(mime, data));
+			}
+			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
+				)));
+			};
+			return Ok(inline_data_part(&mime, data));
+		}
+
+		// Clients carry a gs:// object in either field; Vertex fetches those directly.
+		if let Some(uri) = [file_data, file_id]
+			.into_iter()
+			.find(|u| u.starts_with("gs://"))
+		{
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+				.or_else(|| mime_from_extension(uri).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
+					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
+				))));
+			};
+			return Ok(file_data_part(&mime, uri));
+		}
+
+		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
+		// A malformed `data:` value must not reach here, or its header becomes payload.
+		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
+				)));
+			};
+			return Ok(inline_data_part(&mime, file_data));
+		}
+
+		if !file_id.is_empty() {
+			return Err(AIError::UnsupportedConversion(strng::new(format!(
+				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
+			))));
+		}
+
+		Err(AIError::UnsupportedConversion(strng::new(
+			"file content part has neither an inline data: file_data nor a gs:// reference",
+		)))
 	}
 
 	fn text_part(text: &str) -> vg::Part {
@@ -546,7 +624,9 @@ pub mod from_completions {
 					.get("description")
 					.and_then(Value::as_str)
 					.map(str::to_string),
-				parameters: f.get("parameters").map(normalize_gemini_schema),
+				parameters: f
+					.get("parameters")
+					.map(|s| normalize_gemini_schema(s, false)),
 				rest: Default::default(),
 			})
 			.collect();
@@ -599,6 +679,7 @@ pub mod from_completions {
 	fn build_generation_config(
 		req: &types::completions::Request,
 		model: &str,
+		is_vertex: bool,
 	) -> Option<vg::GenerationConfig> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
@@ -610,7 +691,7 @@ pub mod from_completions {
 			_ => Vec::new(),
 		};
 
-		let (response_mime_type, response_schema) = response_format(req);
+		let (response_mime_type, response_schema) = response_format(req, is_vertex);
 		let thinking_config = thinking_config(req, model);
 
 		let cfg = vg::GenerationConfig {
@@ -640,7 +721,10 @@ pub mod from_completions {
 		}
 	}
 
-	fn response_format(req: &types::completions::Request) -> (Option<String>, Option<Value>) {
+	fn response_format(
+		req: &types::completions::Request,
+		is_vertex: bool,
+	) -> (Option<String>, Option<Value>) {
 		let Some(rf) = req.rest.get("response_format") else {
 			return (None, None);
 		};
@@ -648,10 +732,11 @@ pub mod from_completions {
 			Some("json_object") => (Some("application/json".into()), None),
 			Some("json_schema") => {
 				// Unwrap OpenAI's {schema, strict, name, description} and normalize the bare schema.
+				// Vertex AI accepts additionalProperties in responseSchema; the Gemini API does not.
 				let schema = rf
 					.get("json_schema")
 					.and_then(|js| js.get("schema"))
-					.map(normalize_gemini_schema);
+					.map(|s| normalize_gemini_schema(s, is_vertex));
 				(Some("application/json".into()), schema)
 			},
 			_ => (None, None),
@@ -660,6 +745,9 @@ pub mod from_completions {
 
 	// Gemini's responseSchema / functionDeclarations[].parameters accept only a subset of JSON Schema.
 	// The normalization below is ported from litellm's `_build_vertex_schema` (BerriAI/litellm, MIT).
+	//
+	// Authoritative field list: google/ai/generativelanguage/v1beta/content.proto — Schema message.
+	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
 
 	/// Schema fields Gemini accepts. `format` is further pruned to enum/date-time and `enum` is
 	/// dropped on non-string types.
@@ -682,15 +770,25 @@ pub mod from_completions {
 		"maximum",
 		"exclusiveMinimum",
 		"exclusiveMaximum",
+		"minItems",
+		"maxItems",
+		"minProperties",
+		"maxProperties",
+		"example",
+		"additionalProperties",
 		"propertyOrdering",
 	];
 
-	/// Normalize an OpenAI/Pydantic JSON Schema into Gemini's responseSchema subset.
-	pub(super) fn normalize_gemini_schema(schema: &Value) -> Value {
+	/// Normalize an OpenAI JSON Schema into the Gemini/Vertex subset.
+	///
+	/// Set `preserve_ap` to `true` for Vertex AI `responseSchema` — Vertex accepts
+	/// `additionalProperties`. Set it to `false` for the Gemini API `responseSchema` and for
+	/// `functionDeclarations[].parameters` (both reject the key).
+	pub(super) fn normalize_gemini_schema(schema: &Value, preserve_ap: bool) -> Value {
 		let mut out = schema.clone();
 		let defs = take_defs(&mut out);
 		inline_refs(&mut out, &defs, &mut Vec::new());
-		clean_schema_node(&mut out);
+		clean_schema_node(&mut out, preserve_ap);
 		out
 	}
 
@@ -707,8 +805,9 @@ pub mod from_completions {
 		defs
 	}
 
-	/// Visit each direct child schema (`items`, `properties`, `anyOf`, `allOf`), shared by both passes
-	/// so they recurse the same keywords. (`clean_schema_node` flattens `allOf` first, so it is a no-op here.)
+	/// Visit each direct child schema (`items`, `properties`, `anyOf`, `allOf`, the schema form of
+	/// `additionalProperties`), shared by both passes so they recurse the same keywords.
+	/// (`clean_schema_node` flattens `allOf` first, so it is a no-op here.)
 	fn for_each_child_schema(
 		map: &mut serde_json::Map<String, Value>,
 		mut f: impl FnMut(&mut Value),
@@ -727,6 +826,13 @@ pub mod from_completions {
 					f(v);
 				}
 			}
+		}
+		// Boolean forms carry no subschema. An empty object means "anything goes" and must stay
+		// empty: recursing would let the typeless default rewrite it into {"type":"object"}.
+		if let Some(ap) = map.get_mut("additionalProperties")
+			&& ap.as_object().is_some_and(|o| !o.is_empty())
+		{
+			f(ap);
 		}
 	}
 
@@ -910,12 +1016,12 @@ pub mod from_completions {
 	}
 
 	/// Rewrite a single schema node and its children into Gemini's accepted shape.
-	fn clean_schema_node(node: &mut Value) {
+	fn clean_schema_node(node: &mut Value, preserve_ap: bool) {
 		let map = match node {
 			Value::Object(map) => map,
 			Value::Array(arr) => {
 				for v in arr.iter_mut() {
-					clean_schema_node(v);
+					clean_schema_node(v, preserve_ap);
 				}
 				return;
 			},
@@ -949,9 +1055,6 @@ pub mod from_completions {
 			}
 		}
 
-		// additionalProperties is unsupported (boolean form and open-dict form alike).
-		map.remove("additionalProperties");
-
 		// Default any remaining typeless, non-union, non-enum node to an object.
 		if !map.contains_key("type") && !map.contains_key("anyOf") && !map.contains_key("enum") {
 			map.insert("type".to_string(), "object".into());
@@ -966,8 +1069,10 @@ pub mod from_completions {
 			map.remove("format");
 		}
 
-		for_each_child_schema(map, clean_schema_node);
-		map.retain(|k, _| ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()));
+		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
+		map.retain(|k, _| {
+			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
+		});
 	}
 
 	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
@@ -1021,7 +1126,7 @@ pub mod to_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
 
-	use axum_core::body::Body;
+	use agent_http::Body;
 	use serde_json::Value;
 
 	use super::*;
@@ -1129,6 +1234,7 @@ pub mod to_completions {
 				completions::FinishReason::Stop
 			};
 			vec![completions::ChatChoice {
+				rest: Default::default(),
 				index: 0,
 				message: assistant_message(Some(String::new()), None, None),
 				finish_reason: Some(finish),
@@ -1196,6 +1302,7 @@ pub mod to_completions {
 		let tool_calls = has_tool_calls.then_some(tool_calls);
 
 		completions::ChatChoice {
+			rest: Default::default(),
 			index,
 			message: assistant_message(content, reasoning, tool_calls),
 			finish_reason: Some(finish),
@@ -1357,6 +1464,7 @@ pub mod to_completions {
 				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
+					rest: Default::default(),
 					index: 0,
 					delta,
 					finish_reason: finish,
@@ -1394,6 +1502,7 @@ pub mod to_completions {
 	) -> Body {
 		let mut state = StreamState::new();
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let body = parse::sse::json_transform_multi::<
@@ -1412,9 +1521,14 @@ pub mod to_completions {
 				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
 
+			let now = Instant::now();
 			if !saw_token {
 				saw_token = true;
-				log.update(|r| r.response.first_token = Some(Instant::now()));
+				last_token_at = Some(now);
+				log.update(|r| r.response.first_token = Some(now));
+			} else if let Some(prev) = last_token_at.replace(now) {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
 			}
 			if let Some(m) = &chunk.model_version {
 				log.update(|r| {

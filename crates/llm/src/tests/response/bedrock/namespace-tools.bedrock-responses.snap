@@ -1,0 +1,94 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/namespace-tools.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - toolUse:
+            toolUseId: call_1
+            name: mcp__node_repl__js
+            input:
+              code: 1 + 1
+        - toolUse:
+            toolUseId: call_2
+            name: other_kernel__js
+            input:
+              code: 1 + 1
+        - toolUse:
+            toolUseId: call_3
+            name: finish
+            input: {}
+  stopReason: tool_use
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "function_call",
+        "arguments": "{\"code\":\"1 + 1\"}",
+        "call_id": "call_1",
+        "namespace": "mcp__node_repl",
+        "name": "js",
+        "id": "[id]",
+        "status": "completed"
+      },
+      {
+        "type": "function_call",
+        "arguments": "{\"code\":\"1 + 1\"}",
+        "call_id": "call_2",
+        "namespace": "other_kernel",
+        "name": "js",
+        "id": "[id]",
+        "status": "completed"
+      },
+      {
+        "type": "function_call",
+        "arguments": "{}",
+        "call_id": "call_3",
+        "name": "finish",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "provider_model": "input-model",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_1",
+            "name": "mcp__node_repl__js",
+            "arguments": {
+              "code": "1 + 1"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "call_2",
+            "name": "other_kernel__js",
+            "arguments": {
+              "code": "1 + 1"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "call_3",
+            "name": "finish",
+            "arguments": {}
+          }
+        ],
+        "finish_reason": "completed"
+      }
+    ]
+  }
+}

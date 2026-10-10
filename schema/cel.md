@@ -15,6 +15,8 @@
 |`request.bodyPrefix`|string|The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
+|`request.agent`|object|The agent harness that sent the request.|
+|`request.agent.session`|string|The agent session the request belongs to, from `standardAttributes.session` or detected from<br>well-known agent headers such as `x-claude-code-session-id`.|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
@@ -22,6 +24,9 @@
 |`response.body`|string|The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
 |`response.bodyPrefix`|string|The response body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.error`|object|The final gateway error when the response was synthesized from a failed request.|
+|`proxy.error.reason`|string|Broad classification of the failure, such as `UpstreamFailure` or `Timeout`.|
+|`proxy.error.message`|string|Human-readable failure detail. Exact message is subject to change.|
 |`proxy.bind`|string|The bind that accepted the request.|
 |`proxy.gateway`|object|The selected Gateway.|
 |`proxy.gateway.namespace`|string|The namespace of the selected Gateway.|
@@ -42,8 +47,10 @@
 |`env.gateway`|string|The Gateway we are running as (when running on Kubernetes)|
 |`jwt`|object|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
 |`jwt.rawToken`|string|The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.|
-|`apiKey`|object|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
+|`jwt.*`|any||
+|`apiKey`|object|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.<br>In addition to `key`, user-supplied metadata fields are flattened into this object; for example,<br>`apiKey.group`. Metadata values are plain JSON and are not treated as secrets.|
 |`apiKey.key`|string|The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.|
+|`apiKey.*`|any||
 |`basicAuth`|object|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
@@ -95,6 +102,7 @@
 |`llm.cost.reasoning`|number||
 |`llm.cost.inputAudio`|number||
 |`llm.cost.outputAudio`|number||
+|`llm.cost.pages`|number||
 |`llm.costRates`|object|Effective model catalog rates in USD per 1M tokens after tier selection.<br>Unset when the model could not be priced.|
 |`llm.costRates.input`|number||
 |`llm.costRates.output`|number||
@@ -103,6 +111,7 @@
 |`llm.costRates.reasoning`|number||
 |`llm.costRates.inputAudio`|number||
 |`llm.costRates.outputAudio`|number||
+|`llm.costRates.perPage`|number||
 |`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
@@ -128,13 +137,16 @@
 |`destination.address`|string|The IP address of the downstream request destination at agentgateway.|
 |`destination.port`|integer|The port of the downstream request destination at agentgateway.|
 |`destination.hostname`|string|The requested destination hostname, when known. For TLS connections this is the sniffed SNI.|
-|`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
+|`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL includes identity fields (`tool`, `prompt`, `resource`,<br>`task`) plus `methodName`. Post-request CEL may also include fields like<br>`sessionId`, tool payloads, and list results.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
+|`mcp.target`|object||
+|`mcp.target.name`|string|The MCP target for the current target-scoped operation.|
 |`mcp.tool`|object||
 |`mcp.tool.target`|string|The target handling the tool call after multiplexing resolution.|
 |`mcp.tool.name`|string|The resolved tool name sent to the upstream target.|
 |`mcp.tool.arguments`|object|The JSON arguments passed to the tool call.|
+|`mcp.tool.arguments.*`|any||
 |`mcp.tool.result`|any|The terminal tool result payload, if available.|
 |`mcp.tool.error`|any|The terminal JSON-RPC error payload, if available.|
 |`mcp.prompt`|object||
@@ -146,11 +158,30 @@
 |`mcp.task`|object||
 |`mcp.task.target`|string|The target handling the task.|
 |`mcp.task.name`|string|The task ID.|
+|`mcp.toolsList`|any|The terminal tools/list result returned to the client, if available.|
+|`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
+|`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
+|`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
+|`mcp.params`|any|Current request parameters, with the same structure as the `params` object in an MCP request.<br>Available only during request-phase CEL guardrails.|
+|`mcp.result`|any|Current response result, with the same structure as the `result` object in an MCP response.<br>Available only during response-phase CEL guardrails.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
+|`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
+|`extauthz.*`|any||
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
+|`extproc.*`|any||
 |`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
+|`mcpGuardrails.*`|any||
+|`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
+|`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
+|`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
+|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
+|`guardrails[].guardrailId`|string|The configured guardrail identifier.|
+|`guardrails[].guardrailVersion`|string|The configured guardrail version.|
+|`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|
+|`guardrails[].assessments`|array|Assessment detail reported by the guardrail provider, redacted to metadata<br>only. Content-bearing fields (such as the matched text) are never included.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|
+|`metadata.*`|any||

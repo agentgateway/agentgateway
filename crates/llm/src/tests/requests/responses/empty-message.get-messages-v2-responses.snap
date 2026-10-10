@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/empty-message.json
+info:
+  model: gpt-5.6-luna
+  input:
+    - type: message
+      role: developer
+      content: []
+    - type: message
+      role: user
+      content:
+        - type: input_text
+          text: hello
+---
+[
+  {
+    "role": "user",
+    "parts": [
+      {
+        "type": "text",
+        "text": "hello"
+      }
+    ]
+  }
+]

@@ -26,14 +26,43 @@ pub trait Key: Display + Clone + Hash + Debug + PartialEq + Eq + Send + Sync + '
 	fn dest(&self) -> SocketAddr;
 }
 
+/// Settings shared by HTTP/2 CONNECT clients and servers.
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Config {
+pub struct H2Config {
 	pub window_size: u32,
 	pub connection_window_size: u32,
 	pub frame_size: u32,
-	pub pool_max_streams_per_conn: u16,
+	#[serde(rename = "poolMaxStreamsPerConn")]
+	pub max_streams_per_conn: u16,
+}
+
+impl Default for H2Config {
+	fn default() -> Self {
+		Self {
+			window_size: 4 * 1024 * 1024,
+			connection_window_size: 16 * 1024 * 1024,
+			frame_size: 1024 * 1024,
+			max_streams_per_conn: 100,
+		}
+	}
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Config {
+	#[serde(flatten)]
+	pub h2: H2Config,
 	pub pool_unused_release_timeout: Duration,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self {
+			h2: H2Config::default(),
+			pool_unused_release_timeout: Duration::from_secs(5 * 60),
+		}
+	}
 }
 
 async fn do_ping_pong(

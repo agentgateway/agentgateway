@@ -3,14 +3,17 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-use hashbrown::Equivalent;
+use indexmap::Equivalent;
 
 use crate::Value;
 use crate::objects::StringValue;
 
+/// Insertion-ordered maps using the same hasher as hashbrown maps.
+pub type IndexMap<K, V> = indexmap::IndexMap<K, V, hashbrown::DefaultHashBuilder>;
+
 #[derive(Debug, Clone)]
 pub enum MapValue<'a> {
-	Owned(Arc<hashbrown::HashMap<Key, Value<'static>>>),
+	Owned(Arc<IndexMap<Key, Value<'static>>>),
 	Borrow(vector_map::VecMap<KeyRef<'a>, Value<'a>>),
 }
 
@@ -93,7 +96,7 @@ impl PartialEq for MapValue<'_> {
 
 impl<K: Into<Key>, V: Into<Value<'static>>> From<HashMap<K, V>> for MapValue<'static> {
 	fn from(map: HashMap<K, V>) -> Self {
-		let mut new_map = hashbrown::HashMap::with_capacity(map.len());
+		let mut new_map = IndexMap::with_capacity_and_hasher(map.len(), Default::default());
 		for (k, v) in map {
 			new_map.insert(k.into(), v.into());
 		}
@@ -103,11 +106,29 @@ impl<K: Into<Key>, V: Into<Value<'static>>> From<HashMap<K, V>> for MapValue<'st
 
 impl<K: Into<Key>, V: Into<Value<'static>>> From<hashbrown::HashMap<K, V>> for MapValue<'static> {
 	fn from(map: hashbrown::HashMap<K, V>) -> Self {
-		let mut new_map = hashbrown::HashMap::with_capacity(map.len());
+		let mut new_map = IndexMap::with_capacity_and_hasher(map.len(), Default::default());
 		for (k, v) in map {
 			new_map.insert(k.into(), v.into());
 		}
 		MapValue::Owned(Arc::new(new_map))
+	}
+}
+
+impl<K: Into<Key>, V: Into<Value<'static>>, S> From<indexmap::IndexMap<K, V, S>>
+	for MapValue<'static>
+{
+	fn from(map: indexmap::IndexMap<K, V, S>) -> Self {
+		MapValue::Owned(Arc::new(
+			map.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
+		))
+	}
+}
+
+impl<K: Into<Key>, V: Into<Value<'static>>, S> From<indexmap::IndexMap<K, V, S>>
+	for Value<'static>
+{
+	fn from(map: indexmap::IndexMap<K, V, S>) -> Self {
+		Value::Map(map.into())
 	}
 }
 

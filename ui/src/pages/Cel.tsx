@@ -180,7 +180,7 @@ export function CelPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="CEL Playground"
-				description="Evaluate policy expressions against sample or custom request context using the gateway CEL endpoint."
+				description="Evaluate policy expressions against a sample or custom request."
 				actions={
 					<>
 						<a

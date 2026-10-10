@@ -1,6 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { mcpSettingsFields } from '../../src/config';
+import type { DumpModel, StoresDump } from '../../src/gateway-admin';
 
 export type TestConfig = Record<string, unknown>;
 
@@ -247,6 +248,165 @@ export function implicitDefaultGatewayConfig(): TestConfig {
 	return config;
 }
 
+// Key formats follow the controller golden files in
+// controller/pkg/agentgateway/translator/testdata/models/.
+export function xdsDumpModels(): DumpModel[] {
+	const listenerKey = 'default/model-gateway.llm';
+	return [
+		{
+			listenerKey,
+			key: 'default/gpt-4o.llm',
+			name: 'gpt-4o',
+			routerKey: '',
+			kind: {
+				concrete: {
+					name: 'gpt-4o',
+					created: 1783641600,
+					visibility: 'public',
+					headerMatches: [],
+					backend: { weight: 1, backend: 'default/gpt-4o/backend.llm' },
+					policies: { llm: {} },
+					backendPolicies: []
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/llama.llm',
+			name: 'llama',
+			routerKey: '',
+			kind: {
+				concrete: {
+					name: 'llama',
+					created: 1783641600,
+					visibility: 'internal',
+					headerMatches: [],
+					backend: { weight: 1, backend: 'default/llama/backend.llm' },
+					policies: { llm: {} },
+					backendPolicies: []
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/smart.llm',
+			name: 'smart',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'smart',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						weighted: [
+							{ model: 'gpt-4o', weight: 80 },
+							{ model: 'does-not-exist', weight: 20, invalid: true }
+						]
+					}
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/tiered.llm',
+			name: 'tiered',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'tiered',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						conditional: [
+							{ model: 'gpt-4o', when: 'request.headers["x-tier"] == "premium"' },
+							{ model: 'llama', when: null }
+						]
+					}
+				}
+			}
+		},
+		{
+			listenerKey,
+			key: 'default/resilient.llm',
+			name: 'resilient',
+			routerKey: '',
+			kind: {
+				virtual: {
+					name: 'resilient',
+					created: 1783641600,
+					llmPolicy: {},
+					routing: {
+						failover: { backend: { weight: 1, backend: 'default/resilient/backend.llm' } }
+					}
+				}
+			}
+		}
+	];
+}
+
+// `match.model` may be a wildcard (`gpt-*`, `*-latest`, `*`) and visibility defaults to Public,
+// so a public pattern is a normal dump entry.
+export function xdsWildcardModel(): DumpModel {
+	return {
+		listenerKey: 'default/model-gateway.llm',
+		key: 'default/gpt-5-any.llm',
+		name: 'gpt-5-*',
+		routerKey: '',
+		kind: {
+			concrete: {
+				name: 'gpt-5-*',
+				created: 1783641600,
+				visibility: 'public',
+				headerMatches: [],
+				backend: { weight: 1, backend: 'default/gpt-5-any/backend.llm' },
+				policies: { llm: {} },
+				backendPolicies: []
+			}
+		}
+	};
+}
+
+export function xdsDump(models: DumpModel[] = xdsDumpModels()): StoresDump {
+	return {
+		workloads: [],
+		services: [],
+		binds: [],
+		routes: { httpMesh: {}, tcpMesh: {}, routeGroups: {} },
+		policies: [],
+		backends: [],
+		models
+	};
+}
+
+export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
+	const writeRequests: string[] = [];
+	page.on('request', request => {
+		if (request.method() !== 'GET' && request.method() !== 'HEAD') {
+			writeRequests.push(`${request.method()} ${new URL(request.url()).pathname}`);
+		}
+	});
+
+	await page.route('**/api/runtime', async route => {
+		await json(route, {
+			build: {
+				version: 'test',
+				gitRevision: 'test',
+				rustVersion: 'test',
+				buildProfile: 'test',
+				buildTarget: 'test'
+			},
+			ui: { gatewayMode: 'xds', configStoreMode: 'file' },
+			configReload: { synchronized: true, lastError: null }
+		});
+	});
+
+	await page.route('**/config_dump', async route => {
+		await json(route, dump);
+	});
+
+	return { writeRequests };
+}
+
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {
 	let config = structuredClone(initialConfig);
 	const postedConfigs: TestConfig[] = [];
@@ -265,7 +425,8 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 				buildProfile: 'test',
 				buildTarget: 'test'
 			},
-			ui: { gatewayMode: 'standalone', configStoreMode: 'file' }
+			ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+			configReload: { synchronized: true, lastError: null }
 		});
 	});
 
@@ -329,6 +490,8 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 					spanId: 'span-1',
 					httpStatus: 200,
 					error: null,
+					promptPreview: 'Summarize the result.',
+					turn: { input: 'toolResult', output: 'assistant' },
 					genAi: {
 						providerName: 'anthropic',
 						requestModel: 'resilient',
@@ -358,6 +521,7 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 				spanId: 'span-1',
 				httpStatus: 200,
 				error: null,
+				turn: { input: 'toolResult', output: 'assistant' },
 				genAi: {
 					providerName: 'anthropic',
 					requestModel: 'resilient',
@@ -371,8 +535,58 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 				cost: 0.0005,
 				hasPayload: true,
 				payload: {
-					requestPrompt: [{ role: 'user', content: 'ping' }],
-					responseCompletion: 'pong'
+					requestPrompt: [
+						{
+							role: 'system',
+							parts: [
+								{
+									type: 'text',
+									text: `# Instructions
+
+${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join('\n')}
+
+[docs](https://example.invalid/docs) ![probe](https://example.invalid/pixel)`
+								}
+							]
+						},
+						{ role: 'user', parts: [{ type: 'text', text: 'Summarize the result.' }] },
+						{
+							role: 'assistant',
+							parts: [
+								{ type: 'text', text: 'I’ll look that up.' },
+								{
+									type: 'toolCall',
+									id: 'call-1',
+									name: 'lookup',
+									arguments: 'line one\nline two'
+								},
+								{
+									type: 'reasoning',
+									content: {
+										summary: [{ type: 'summary_text', text: 'Checking the source' }],
+										encrypted_content: 'ignored-when-summary-is-present'
+									}
+								},
+								{
+									type: 'reasoning',
+									content: { summary: [], encrypted_content: 'AQIDBA' }
+								}
+							]
+						},
+						{
+							role: 'user',
+							parts: [
+								{
+									type: 'toolResult',
+									id: 'call-1',
+									name: 'lookup',
+									content: { answer: 'ok' },
+									isError: false
+								}
+							]
+						}
+					],
+					responseCompletion: [{ role: 'assistant', parts: [{ type: 'text', text: '**pong**' }] }]
 				}
 			}
 		});
@@ -580,13 +794,17 @@ function upsertFileConfigResource(
 		const index = previousId
 			? keys.findIndex((key, keyIndex) => {
 					const keyValue = record(key);
-					return (stringValue(record(keyValue.metadata).id) || `@index:${keyIndex}`) === previousId;
+					return (
+						(stringValue(record(keyValue.metadata)['agentgateway.dev/id']) ||
+							`@index:${keyIndex}`) === previousId
+					);
 				})
 			: -1;
-		if (!previousId || !previousId.startsWith('@index:')) {
+		if (!previousId?.startsWith('@index:')) {
 			value.metadata = {
 				...record(value.metadata),
-				id: previousId ?? `test-key-${keys.length + 1}`
+				'agentgateway.dev/id': previousId ?? `test-key-${keys.length + 1}`,
+				'agentgateway.dev/createdAt': 1783641600
 			};
 		}
 		if (index >= 0) keys[index] = value;
@@ -649,7 +867,9 @@ function deleteFileConfigResource(config: TestConfig, kind: string, id: string) 
 		const policy = record(record(record(config.llm).policies).apiKey);
 		policy.keys = array(policy.keys).filter((key, index) => {
 			const value = record(key);
-			return (stringValue(record(value.metadata).id) || `@index:${index}`) !== id;
+			return (
+				(stringValue(record(value.metadata)['agentgateway.dev/id']) || `@index:${index}`) !== id
+			);
 		});
 		return;
 	}

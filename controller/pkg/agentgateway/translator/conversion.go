@@ -2,7 +2,6 @@ package translator
 
 import (
 	"cmp"
-	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -171,6 +170,17 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1.TCPRouteRule,
 	return res, backendErr
 }
 
+// trimRegexAnchors strips a leading ^ and trailing $ from a field regex. The service and method regexes are
+// anchored to their own field, but are embedded in a larger path regex where the anchors would never match.
+// The path regex is already full-match, so the anchors are redundant.
+func trimRegexAnchors(re string) string {
+	re = strings.TrimPrefix(re, "^")
+	if strings.HasSuffix(re, "$") && !strings.HasSuffix(re, `\$`) {
+		re = strings.TrimSuffix(re, "$")
+	}
+	return re
+}
+
 // ConvertGRPCRouteToAgw converts a GRPCRouteRule to an agentgateway HTTPRoute
 func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 	obj *gwv1.GRPCRoute, pos int,
@@ -194,12 +204,22 @@ func ConvertGRPCRouteToAgw(ctx RouteContext, r gwv1.GRPCRouteRule,
 		var path *api.PathMatch
 		if match.Method != nil {
 			// Convert GRPC method to path for routing purposes
-			if match.Method.Service != nil && match.Method.Method != nil {
+			if ptr.OrEmpty(match.Method.Type) == gwv1.GRPCMethodMatchRegularExpression {
+				// An omitted service or method matches any single path segment
+				service, method := "[^/]+", "[^/]+"
+				if match.Method.Service != nil {
+					service = "(?:" + trimRegexAnchors(*match.Method.Service) + ")"
+				}
+				if match.Method.Method != nil {
+					method = "(?:" + trimRegexAnchors(*match.Method.Method) + ")"
+				}
+				path = &api.PathMatch{Kind: &api.PathMatch_Regex{Regex: "/" + service + "/" + method}}
+			} else if match.Method.Service != nil && match.Method.Method != nil {
 				pathStr := fmt.Sprintf("/%s/%s", *match.Method.Service, *match.Method.Method)
 				path = &api.PathMatch{Kind: &api.PathMatch_Exact{Exact: pathStr}}
 			} else if match.Method.Service != nil {
 				pathStr := fmt.Sprintf("/%s/", *match.Method.Service)
-				path = &api.PathMatch{Kind: &api.PathMatch_Exact{Exact: pathStr}}
+				path = &api.PathMatch{Kind: &api.PathMatch_PathPrefix{PathPrefix: pathStr}}
 			} else if match.Method.Method != nil {
 				// Convert wildcard to regex: "/*/{method}" becomes "/[^/]+/{method}"
 				pathStr := fmt.Sprintf("/[^/]+/%s", *match.Method.Method)
@@ -400,7 +420,7 @@ func BuildAgwTrafficPolicyFilters(
 			if h == nil {
 				continue
 			}
-			policies = append(policies, h)
+			policies = append(policies, &api.TrafficPolicySpec{Kind: &api.TrafficPolicySpec_UrlRewrite{UrlRewrite: h}})
 		case gwv1.HTTPRouteFilterCORS:
 			h := createAgwCorsFilter(filter.CORS)
 			if h == nil {
@@ -500,6 +520,12 @@ func BuildAgwBackendPolicyFilters(
 			} else {
 				mergedMirror = append(mergedMirror, h)
 			}
+		case gwv1.HTTPRouteFilterURLRewrite:
+			h := CreateAgwRewriteFilter(filter.URLRewrite)
+			if h == nil {
+				continue
+			}
+			policies = append(policies, &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_UrlRewrite{UrlRewrite: h}})
 		default:
 			return nil, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionAccepted,
@@ -907,8 +933,13 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 		}
 	}
 	// Ensure stable order
-	slices.SortBy(parentRefs, func(a RouteParentReference) string {
-		return ParentRefString(a.OriginalReference)
+	slices.SortFunc(parentRefs, func(a, b RouteParentReference) int {
+		return cmp.Or(
+			strings.Compare(ParentRefString(a.OriginalReference), ParentRefString(b.OriginalReference)),
+			strings.Compare(a.ListenerKey, b.ListenerKey),
+			strings.Compare(ptr.OrEmpty(a.ServiceKey).String(), ptr.OrEmpty(b.ServiceKey).String()),
+			strings.Compare(a.Hostname, b.Hostname),
+		)
 	})
 	return parentRefs
 }
@@ -1219,6 +1250,100 @@ func listenerProtocolToAgw(p gwv1.ProtocolType) (string, error) {
 	return "", fmt.Errorf("protocol %q is unsupported", p)
 }
 
+// ListenerProtocolAndTLSConfig maps a Gateway listener to its agentgateway protocol and
+// TLS configuration. The final return is false when the listener cannot be programmed,
+// either because the protocol is unsupported or because it requires TLS that is missing.
+func ListenerProtocolAndTLSConfig(obj *GatewayListener) (api.Protocol, *api.TLSConfig, bool) {
+	var tlsConfig *api.TLSConfig
+
+	// Build TLS config if needed
+	if obj.TLSInfo != nil {
+		tlsConfig = &api.TLSConfig{
+			Cert:       obj.TLSInfo.Cert,
+			PrivateKey: obj.TLSInfo.Key,
+		}
+		if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
+		} else if obj.TLSInfo.DynamicCA {
+			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
+		}
+		if len(obj.TLSInfo.CaCert) > 0 {
+			tlsConfig.Root = obj.TLSInfo.CaCert
+		}
+		if obj.TLSInfo.IstioMutual {
+			tlsConfig.Root = nil
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
+		} else if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
+		} else if obj.TLSInfo.MtlsFallbackEnabled {
+			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
+		}
+	}
+
+	switch obj.ParentInfo.Protocol {
+	case gwv1.HTTPProtocolType:
+		return api.Protocol_HTTP, nil, true
+	case gwv1.HTTPSProtocolType:
+		if tlsConfig == nil {
+			return api.Protocol_HTTPS, nil, false // TLS required but not configured
+		}
+		return api.Protocol_HTTPS, tlsConfig, true
+	case gwv1.TLSProtocolType:
+		if tlsConfig == nil {
+			if obj.ParentInfo.TLSPassthrough {
+				// For passthrough, we don't want TLS config
+				return api.Protocol_TLS, nil, true
+			} else {
+				// TLS required but not configured
+				return api.Protocol_TLS, nil, false
+			}
+		}
+		return api.Protocol_TLS, tlsConfig, true
+	case gwv1.TCPProtocolType:
+		return api.Protocol_TCP, nil, true
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Protocol_HBONE, nil, true
+	default:
+		return api.Protocol_HTTP, nil, false // Unsupported protocol
+	}
+}
+
+// BindProtocol maps a Gateway listener protocol to the protocol of the bind it shares
+// with the other listeners on its port.
+func BindProtocol(p gwv1.ProtocolType) api.Bind_Protocol {
+	switch p {
+	case gwv1.HTTPProtocolType:
+		return api.Bind_HTTP
+	case gwv1.HTTPSProtocolType, gwv1.TLSProtocolType:
+		return api.Bind_TLS
+	case gwv1.TCPProtocolType:
+		return api.Bind_TCP
+	case gwv1.ProtocolType(protocol.HBONE):
+		// The bind protocol is not used for HBONE_GATEWAY in the data plane;
+		// the actual inner protocol is determined at runtime from the other
+		// listeners on the same port. Return HTTP as a placeholder.
+		return api.Bind_HTTP
+	default:
+		return api.Bind_HTTP
+	}
+}
+
+// TunnelProtocol maps a Gateway listener protocol to its tunnel protocol.
+// HBONE listeners use HBONE_GATEWAY mode: the proxy terminates inbound HBONE
+// and routes CONNECT requests to local binds.
+func TunnelProtocol(p gwv1.ProtocolType) api.Bind_TunnelProtocol {
+	switch p {
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Bind_HBONE_GATEWAY
+	default:
+		return api.Bind_DIRECT
+	}
+}
+
 // dummyTls is a sentinel value to send to agentgateway to signal that it should reject TLS connects due to invalid config
 var dummyTls = &TLSInfo{
 	Cert: []byte("invalid"),
@@ -1229,27 +1354,6 @@ const (
 	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
 	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
 )
-
-func validateTLS(certInfo *TLSInfo) *ConfigError {
-	if certInfo.IstioWorkloadCert || certInfo.Spiffe {
-		return nil
-	}
-	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
-		return &ConfigError{
-			Reason:  InvalidTLS,
-			Message: fmt.Sprintf("invalid certificate reference, the certificate is malformed: %v", err),
-		}
-	}
-	if certInfo.CaCert != nil {
-		if !x509.NewCertPool().AppendCertsFromPEM(certInfo.Cert) {
-			return &ConfigError{
-				Reason:  InvalidTLSCA,
-				Message: fmt.Sprintf("invalid CA certificate reference, the bundle is malformed"),
-			}
-		}
-	}
-	return nil
-}
 
 func updateError(statusErr *ConfigError, newErr *ConfigError) *ConfigError {
 	if statusErr == nil {
@@ -1362,21 +1466,25 @@ func buildTLS(
 			// This is required in the API, should be rejected in validation
 			return dummyTls, &ConfigError{Reason: InvalidTLS, Message: "exactly 1 certificateRefs should be present for TLS termination"}
 		}
-		tlsRes, err := buildSecretReference(ctx, tls.CertificateRefs[0], gw, secrets)
-		if err != nil {
-			return dummyTls, err
+		secretRef := types.NamespacedName{
+			Name:      string(tls.CertificateRefs[0].Name),
+			Namespace: ptr.OrDefault((*string)(tls.CertificateRefs[0].Namespace), namespace),
 		}
 		// If we are going to send a cert, validate we can access it
-		sameNamespace := tlsRes.Source.Namespace == namespace
+		sameNamespace := secretRef.Namespace == namespace
 		objectKind := GvkFromObject(gw)
-		if !sameNamespace && !grants.SecretAllowed(ctx, objectKind, tlsRes.Source, namespace) {
+		if !sameNamespace && !grants.SecretAllowed(ctx, objectKind, secretRef, namespace) {
 			return dummyTls, &ConfigError{
 				Reason: InvalidListenerRefNotPermitted,
 				Message: fmt.Sprintf(
 					"certificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
-					tls.CertificateRefs[0].Name, tlsRes.Source.Namespace, namespace,
+					tls.CertificateRefs[0].Name, secretRef.Namespace, namespace,
 				),
 			}
+		}
+		tlsRes, err := buildSecretReference(ctx, tls.CertificateRefs[0], gw, secrets)
+		if err != nil {
+			return dummyTls, err
 		}
 
 		dynamicCA := tls.Options != nil && tls.Options[agentgatewayTLSCertificateSourceKey] == "DYNAMIC_CA"

@@ -463,6 +463,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
+								ProviderOverride: new("team-a"),
 								Formats: []agentgateway.ProviderFormatConfig{
 									{Type: agentgateway.ProviderFormatCompletions},
 									{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},
@@ -557,6 +558,76 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid Bedrock backend with MantleOnly endpoint preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "bedrock-mantle-only",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceMantleOnly,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Bedrock backend with MantlePreferred endpoint preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "bedrock-mantle-preferred",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceMantlePreferred,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Bedrock backend with RuntimeOnly endpoint preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "bedrock-runtime-only",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								EndpointPreference: agentgateway.BedrockEndpointPreferenceRuntimeOnly,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Bedrock backend with default endpoint preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "bedrock-default",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model: new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "OpenAI backend with secret reference auth",
 			backend: &agentgateway.AgentgatewayBackend{
 				Name:      "openai-secret-backend",
@@ -596,6 +667,11 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "openai",
 										Policies: &agentgateway.BackendWithAI{
 											Auth: &agentgateway.BackendAuth{InlineKey: new("first-token")},
+											Authorization: &agentgateway.Authorization{
+												Policy: agentgateway.AuthorizationPolicy{
+													MatchExpressions: []agentgateway.CELExpression{`request.headers["x-tenant"] == "acme"`},
+												},
+											},
 										},
 										OpenAI: &agentgateway.OpenAIConfig{
 											Model: new("gpt-4"),
@@ -803,7 +879,7 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 }
 
 func shortStringPtr(s string) *agentgateway.ShortString {
-	v := agentgateway.ShortString(s)
+	v := s
 	return &v
 }
 
@@ -851,7 +927,7 @@ func createMockInferencePool(namespace, poolName string, port int32) *inf.Infere
 			TargetPorts: []inf.Port{
 				{Number: inf.PortNumber(port)},
 			},
-			EndpointPickerRef: inf.EndpointPickerRef{
+			EndpointPickerRef: &inf.EndpointPickerRef{
 				Name: "epp",
 				Port: &inf.Port{Number: 9002},
 			},

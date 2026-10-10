@@ -7,14 +7,15 @@ use crate::{InputFormat, RouteType, apply};
 #[cfg_attr(feature = "schema", schemars(rename = "CustomProvider"))]
 pub struct Provider {
 	/// Model ID to send to the provider, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 	/// Provider identity for cost-catalog lookup and telemetry. Built-in named providers
 	/// (cohere, mistral, ...) set this so their cost resolves under the right catalog key;
 	/// a bare custom provider may set it to match a catalog entry. Falls back to "custom".
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub provider_override: Option<Strng>,
 	/// Supported API payload formats and optional path overrides for this provider.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub formats: Vec<ProviderFormatConfig>,
 }
 
@@ -64,6 +65,9 @@ pub enum ProviderPreset {
 	#[serde(rename = "xai")]
 	XAI,
 	Fireworks,
+	Meta,
+	Perplexity,
+	Typesafe,
 }
 
 impl ProviderPreset {
@@ -82,6 +86,9 @@ impl ProviderPreset {
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
+			Self::Meta => "https://api.meta.ai/v1",
+			Self::Perplexity => "https://api.perplexity.ai/v1",
+			Self::Typesafe => "https://api.typesafe.ai/v1",
 		}
 	}
 
@@ -177,9 +184,19 @@ impl ProviderPreset {
 					format(Rerank, None),
 				],
 			),
+			Self::Meta => (
+				"meta",
+				vec![
+					format(Completions, None),
+					format(Messages, None),
+					format(Responses, None),
+				],
+			),
+			Self::Perplexity => ("perplexity", vec![format(Responses, None)]),
+			Self::Typesafe => ("typesafe", vec![format(SystemOne, None)]),
 		};
 		Provider {
-			model,
+			model_override: model,
 			provider_override: Some(strng::new(provider_override)),
 			formats,
 		}
@@ -213,6 +230,8 @@ pub enum ProviderFormat {
 	GeminiCountTokens,
 	Realtime,
 	Rerank,
+	Decisions,
+	SystemOne,
 }
 
 impl ProviderFormat {
@@ -227,6 +246,8 @@ impl ProviderFormat {
 			RouteType::GeminiCountTokens => Self::GeminiCountTokens,
 			RouteType::Realtime => Self::Realtime,
 			RouteType::Rerank => Self::Rerank,
+			RouteType::Decisions => Self::Decisions,
+			RouteType::SystemOne => Self::SystemOne,
 			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
 		})
 	}
@@ -242,6 +263,8 @@ impl ProviderFormat {
 			Self::GeminiCountTokens => InputFormat::GeminiCountTokens,
 			Self::Realtime => InputFormat::Realtime,
 			Self::Rerank => InputFormat::Rerank,
+			// SystemOne serves decisions requests.
+			Self::Decisions | Self::SystemOne => InputFormat::Decisions,
 		}
 	}
 
@@ -256,6 +279,8 @@ impl ProviderFormat {
 			Self::GeminiCountTokens => RouteType::GeminiCountTokens,
 			Self::Realtime => RouteType::Realtime,
 			Self::Rerank => RouteType::Rerank,
+			Self::Decisions => RouteType::Decisions,
+			Self::SystemOne => RouteType::SystemOne,
 		}
 	}
 }
@@ -267,7 +292,7 @@ mod tests {
 	#[test]
 	fn path_for_returns_format_path() {
 		let provider = Provider {
-			model: None,
+			model_override: None,
 			provider_override: None,
 			formats: vec![
 				ProviderFormatConfig {

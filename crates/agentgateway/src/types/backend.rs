@@ -18,6 +18,16 @@ pub struct HTTP {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub request_timeout: Option<Duration>,
+	/// Maximum time a connection to the backend may stay open. A connection past this duration is
+	/// not reused for new requests; a fresh connection is established instead, while in-flight
+	/// requests are not interrupted.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_connection_duration: Option<Duration>,
 }
 
 impl HTTP {
@@ -63,10 +73,23 @@ impl HTTP {
 	}
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum TunnelMode {
+	/// Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	#[default]
+	Auto,
+	/// Use CONNECT for all transports, including plaintext HTTP.
+	Connect,
+}
+
 #[apply(schema!)]
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
+	/// How requests are sent through the proxy.
+	#[serde(default)]
+	pub mode: TunnelMode,
 	/// Policies to connect to the proxy backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
@@ -78,30 +101,17 @@ pub struct Tunnel {
 }
 
 #[apply(schema!)]
+#[derive(Default, Hash, PartialEq, Eq)]
 pub struct TCP {
 	/// TCP keepalive settings for backend connections.
-	pub keepalives: super::agent::KeepaliveConfig,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub keepalives: Option<super::agent::KeepaliveConfig>,
 	/// Maximum time allowed to establish a backend TCP connection.
-	#[serde(with = "crate::serdes::serde_dur")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	pub connect_timeout: Duration,
-}
-
-impl Default for TCP {
-	fn default() -> Self {
-		Self {
-			keepalives: Default::default(),
-			connect_timeout: defaults::connect_timeout(),
-		}
-	}
-}
-
-pub mod defaults {
-	use std::time::Duration;
-
-	pub fn connect_timeout() -> Duration {
-		// We would pick 10, but everyone picks 10! If we pick 11, and we see timeouts at exactly
-		// 11s, we can have more confidence this is caused by this default, and not someone else's 10s timer
-		Duration::from_secs(11)
-	}
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "crate::serdes::serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub connect_timeout: Option<Duration>,
 }

@@ -1,0 +1,96 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/codex-assistant-history.json
+info:
+  model: us.openai.gpt-5.6-luna
+  input:
+    - type: message
+      id: msg_developer
+      role: developer
+      content:
+        - type: input_text
+          text: Be helpful.
+    - type: message
+      id: msg_user
+      role: user
+      content:
+        - type: input_text
+          text: hi
+    - type: message
+      id: msg_a6d26cf93d34d4eb
+      role: assistant
+      content:
+        - type: output_text
+          text: Hi! How can I help you today?
+    - type: message
+      id: msg_followup
+      role: user
+      content:
+        - type: input_text
+          text: hello
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "developer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Be helpful."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hi"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "Hi! How can I help you today?"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "model": "us.openai.gpt-5.6-luna",
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "us.openai.gpt-5.6-luna",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "developer",
+        "content": "Be helpful."
+      },
+      {
+        "role": "user",
+        "content": "hi"
+      },
+      {
+        "role": "assistant",
+        "content": "Hi! How can I help you today?"
+      },
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ]
+  }
+}

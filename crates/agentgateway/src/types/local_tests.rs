@@ -8,11 +8,31 @@ use secrecy::SecretString;
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, ListenerTarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
-	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
+	Backend, BackendTrafficPolicy, BindProtocol, ListenerTarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
+
+#[test]
+fn merged_prompt_guards_validate_streaming_scopes() {
+	let streaming: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"streaming": "Enabled", "response": [{"regex": {"rules": []}}]
+	}))
+	.unwrap();
+	let tools: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"response": [{"regex": {"rules": []}, "scope": ["toolInput"]}]
+	}))
+	.unwrap();
+	for (shared, model) in [(streaming.clone(), tools.clone()), (tools, streaming)] {
+		let err = super::merge_prompt_guards(Some(shared), Some(model)).unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("streaming response guards only support the messages scope")
+		);
+	}
+}
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
@@ -111,6 +131,9 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			client_secret: SecretString::new("client-secret".into()),
 			redirect_uri: "http://localhost:3000/oauth/callback".into(),
 			scopes: vec![],
+			login: None,
+			logout: None,
+			credentials: Default::default(),
 		}),
 		..Default::default()
 	}
@@ -168,7 +191,8 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
 	let resources = crate::resource_manager::ResourceFetcher::direct(client);
-	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	let mut config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
+	config.oidc_cookie_encoder = test_config().oidc_cookie_encoder;
 
 	NormalizedLocalConfig::from(
 		&config,
@@ -301,13 +325,36 @@ binds:
 	assert_eq!(expr.original_expression, "extproc.workerTarget");
 }
 
+#[tokio::test]
+async fn test_named_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: worker
+  dynamic:
+    target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("named dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => expr.as_ref(),
+			_ => None,
+		})
+		.expect("named dynamic backend target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
+}
+
 #[test]
 fn test_local_backend_policies_reject_unknown_fields() {
 	// serde(flatten) disables deny_unknown_fields on the outer struct, but the
 	// flattened SimpleLocalBackendPolicies still rejects leftover unknown keys.
-	let err =
-		crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
-			.unwrap_err();
+	let err = crate::serdes::yaml::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
+		.unwrap_err();
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
@@ -334,6 +381,34 @@ binds:
 		err.to_string().contains("at most one wildcard bind"),
 		"{err:?}"
 	);
+}
+
+#[tokio::test]
+async fn test_auto_bind_allows_tls_routes_and_one_explicit_tcp_listener() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  protocol: AUTO
+  listeners:
+  - protocol: HTTP
+    routes:
+    - backends:
+      - dynamic: {}
+  - protocol: TLS
+    hostname: "*"
+    tcpRoutes:
+    - backends:
+      - host: "127.0.0.1:1"
+  - protocol: TCP
+    tcpRoutes:
+    - backends:
+      - host: "127.0.0.1:2"
+"#,
+	)
+	.await
+	.expect("TLS passthrough and explicit TCP listener should normalize");
+	assert_eq!(normalized.binds[0].protocol, BindProtocol::auto);
 }
 
 #[tokio::test]
@@ -437,6 +512,11 @@ async fn test_config_parsing(test_name: &str) {
 #[tokio::test]
 async fn test_basic_config() {
 	test_config_parsing("basic").await;
+}
+
+#[tokio::test]
+async fn test_ui_oidc_config() {
+	test_config_parsing("ui_oidc").await;
 }
 
 #[tokio::test]
@@ -613,6 +693,11 @@ async fn test_llm_provider_reference_config() {
 }
 
 #[tokio::test]
+async fn test_keyed_rate_limit_config() {
+	test_config_parsing("keyed_rate_limit").await;
+}
+
+#[tokio::test]
 async fn test_llm_virtual_model_config() {
 	test_config_parsing("llm_virtual_model").await;
 }
@@ -625,40 +710,6 @@ async fn test_llm_virtual_model_failover_config() {
 #[tokio::test]
 async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
-}
-
-#[test]
-fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
-	let default_routes = super::llm_route_types(None);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"default route table should include explicit message endpoint"
-	);
-	assert!(
-		default_routes
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "*"
-				&& *route_type == crate::llm::RouteType::Passthrough),
-		"default route table should include passthrough wildcard"
-	);
-
-	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
-	assert!(
-		detect_passthrough
-			.iter()
-			.any(|(path, route_type)| path.as_str() == "/v1/messages"
-				&& *route_type == crate::llm::RouteType::Messages),
-		"passthrough override should preserve explicit route defaults"
-	);
-	assert!(
-		detect_passthrough.iter().any(
-			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
-		),
-		"passthrough override should replace wildcard fallback"
-	);
 }
 
 #[tokio::test]
@@ -985,7 +1036,11 @@ llm:
 	let AIProvider::Custom(custom_provider) = &provider.provider else {
 		panic!("expected custom provider");
 	};
-	assert_eq!(custom_provider.model.as_deref(), Some("upstream-custom"));
+	assert_eq!(
+		custom_provider.model_override.as_deref(),
+		Some("upstream-custom")
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/"));
 	assert!(custom_provider.formats.iter().any(|format| format.format
 		== crate::llm::custom::ProviderFormat::Messages
 		&& format.path.as_deref() == Some("/api/messages")));
@@ -1167,6 +1222,51 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_gateway_bind_address_is_per_gateway() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  private:
+    port: 3000
+    bindAddress: 127.0.0.1
+  shared:
+    port: 4000
+    bindAddress: 0.0.0.0
+    listeners:
+    - name: first
+      hostname: first.example.com
+    - name: second
+      hostname: second.example.com
+"#,
+	)
+	.await
+	.expect("gateways with different bind addresses should normalize");
+	assert_eq!(normalized.binds.len(), 2);
+	let private = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 3000)
+		.unwrap();
+	let shared = normalized
+		.binds
+		.iter()
+		.find(|b| b.address.port() == 4000)
+		.unwrap();
+	assert_eq!(private.address, "127.0.0.1:3000".parse().unwrap());
+	assert_eq!(shared.address, "0.0.0.0:4000".parse().unwrap());
+	assert_eq!(shared.listeners.iter().count(), 2);
+}
+
+#[tokio::test]
+async fn test_gateway_bind_address_rejects_invalid_ip() {
+	let err =
+		normalize_test_yaml("gateways:\n  private:\n    port: 3000\n    bindAddress: localhost\n")
+			.await
+			.expect_err("bindAddress must be an IP address");
+	assert!(err.to_string().contains("IP address"), "{err:?}");
+}
+
+#[tokio::test]
 async fn test_gateways_attach_llm_mcp_and_ui_to_one_listener() {
 	let normalized = normalize_test_yaml(&format!(
 		r#"
@@ -1246,6 +1346,9 @@ ui:
 	));
 	assert!(ui_route.matches.iter().any(
 		|route_match| matches!(&route_match.path, PathMatch::PathPrefix(path) if path.as_str() == "/ui")
+	));
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::PathPrefix(path) if path.as_str() == "/api/budgets")
 	));
 	assert!(ui_route.matches.iter().any(
 		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
@@ -1465,6 +1568,28 @@ mcp:
 	normalize_test_yaml(yaml)
 		.await
 		.expect_err("MCP target name containing '_' should be rejected");
+}
+
+#[tokio::test]
+async fn test_local_mcp_target_condition_requires_multiplexing() {
+	let err = normalize_test_yaml(
+		r#"
+mcp:
+  targets:
+  - name: only
+    condition: 'true'
+    stdio:
+      cmd: echo
+"#,
+	)
+	.await
+	.expect_err("a condition on a single MCP target should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("mcp target condition requires at least two configured targets"),
+		"{err:?}"
+	);
 }
 
 #[tokio::test]
@@ -1983,7 +2108,8 @@ binds:
 #[test]
 fn test_migrate_deprecated_local_config_moves_fields() {
 	let _env = ClearTracingEnv::new();
-	let input = r#"
+	let input = r#"# yaml-language-server: $schema=./config.schema.json
+# Gateway settings
 config:
   logging:
     level: info
@@ -1998,9 +2124,27 @@ config:
     headers:
       authorization: token
     otlpProtocol: http
+
+# Public listeners
+binds:
+  - port: 8080 # keep this port
+    listeners: []
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	assert!(
+		out.starts_with("# yaml-language-server: $schema=./config.schema.json\n# Gateway settings\n")
+	);
+	assert!(
+		out
+			.contains("# Public listeners\nbinds:\n  - port: 8080 # keep this port\n    listeners: []\n"),
+		"{out}"
+	);
+	let unchanged = "# Current config\nbinds: [] # no listeners\n";
+	assert_eq!(
+		super::migrate_deprecated_local_config(unchanged).unwrap(),
+		unchanged
+	);
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let cfg = v.get("config").unwrap();
 	let logging = cfg.get("logging").unwrap();
 	assert_eq!(logging.get("level").unwrap(), "info");
@@ -2037,7 +2181,7 @@ config:
     otlpProtocol: http
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	let policies = tracing
 		.get("policies")
@@ -2065,7 +2209,7 @@ config:
     otlpProtocol: http
 "#;
 	let out = super::migrate_deprecated_local_config(input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	assert_eq!(
 		tracing.get("inlineBackend").unwrap(),
@@ -2088,7 +2232,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
 	let out = super::migrate_deprecated_local_config(&input).unwrap();
-	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let v: serde_json::Value = crate::serdes::yaml::from_str(&out).unwrap();
 	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
 	assert_eq!(tracing.get("inlineBackend").unwrap(), expected);
 }
@@ -2230,7 +2374,7 @@ binds:
 	};
 	assert_eq!(
 		target_spec.backend,
-		crate::types::agent::SimpleBackendReference::Backend("shared-upstream".into())
+		crate::types::agent::SimpleBackendReference::Backend("/shared-upstream".into())
 	);
 	assert_eq!(target_spec.path, "/mcp");
 }
@@ -2263,6 +2407,93 @@ binds:
 			.contains("path is required when backend is set"),
 		"{err}"
 	);
+}
+
+// A route referencing a top-level backend by its bare name must resolve to the
+// backend's store key (`/name` for the empty local namespace), otherwise the
+// lookup at request time fails with a misleading `service not found`.
+// See https://github.com/agentgateway/agentgateway/issues/3662.
+#[tokio::test]
+async fn test_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: upstream
+    - backends:
+      - backend: /upstream
+"#,
+	)
+	.await
+	.expect("bare and qualified named backend references should normalize");
+
+	let routes = &normalized.listener_routes[0].1;
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	for route in routes {
+		let RouteBackendTarget::Backend(reference) = &route.backends[0].target else {
+			panic!("expected backend reference target");
+		};
+		// Both spellings must resolve to the exact key the backend is registered under.
+		assert_eq!(
+			reference.as_str(),
+			backend_name.as_str(),
+			"reference must match registered key"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_tcp_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  protocol: AUTO
+  listeners:
+  - protocol: TCP
+    tcpRoutes:
+    - backends:
+      - backend: upstream
+"#,
+	)
+	.await
+	.expect("bare TCP named backend reference should normalize");
+
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	let tcp_route = &normalized.listener_tcp_routes[0].1[0];
+	let crate::types::agent::BackendReference::Backend(tcp_reference) =
+		&tcp_route.backends[0].backend
+	else {
+		panic!("expected TCP backend reference");
+	};
+	assert_eq!(tcp_reference.as_str(), backend_name.as_str());
 }
 
 #[test]
@@ -2443,6 +2674,16 @@ fn test_de_backend_auth_accepts_each_shape() {
 	));
 	assert!(full_key.credentials.is_empty());
 
+	let expression_key = parse(serde_json::json!({"key": {"expression": "jwt.sub"}}));
+	assert!(matches!(
+		expression_key.kind,
+		Some(super::LocalBackendAuthKind::Key {
+			value: None,
+			expression: Some(_),
+			..
+		})
+	));
+
 	let full_with_credentials = parse(serde_json::json!({
 		"key": {"value": "explicit-secret"},
 		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
@@ -2458,4 +2699,112 @@ fn test_de_backend_auth_accepts_each_shape() {
 	}));
 	assert!(credentials_only.kind.is_none());
 	assert_eq!(credentials_only.credentials.len(), 1);
+}
+
+/// A file-backed `backendAuth` key has to participate in config reloads, the
+/// same way `backendTLS` files and `jwtSign.signingKey` already do. Before this
+/// was resolved through the resource manager, the path was consumed during
+/// deserialization: the value was correct at startup and then frozen, so a
+/// rotated Kubernetes Secret was never picked up and the gateway kept
+/// presenting a retired credential until something else forced a reload.
+#[tokio::test]
+async fn backend_auth_key_file_is_a_tracked_resource() {
+	let dir = tempfile::tempdir().unwrap();
+	let token = dir.path().join("token");
+	// Trailing newline on purpose: `echo` and Kubernetes Secrets both add one,
+	// and the value must still be trimmed.
+	fs::write(&token, "first-token\n").unwrap();
+
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let mut changes = manager.subscribe_changes();
+
+	let yaml = format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: {}
+"#,
+		token.display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.expect("config with a file-backed backendAuth key should load");
+
+	// Mark whatever the initial fetch produced as seen, so the assertion below
+	// can only pass on a notification caused by the rewrite.
+	let _ = changes.borrow_and_update();
+
+	// Rewriting the file must reach the manager, which is what triggers a
+	// reload and re-reads the credential.
+	fs::write(&token, "second-token\n").unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a change to the key file should notify the resource manager")
+		.expect("resource change channel should stay open");
+}
+
+/// A backend TLS file resolved by a serde hook during the parse is watched like a
+/// file the load fetched itself.
+#[tokio::test]
+async fn parse_time_backend_tls_files_become_managed_dependencies() {
+	let root = tempfile::NamedTempFile::new().unwrap();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../tests/common/testdata/root-cert.pem"),
+	)
+	.unwrap();
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let yaml = format!(
+		r#"
+frontendPolicies:
+  substrateEgressActorResolution:
+    host: 127.0.0.1:6443
+    policies:
+      backendTLS:
+        root: {}
+"#,
+		root.path().display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.unwrap();
+	let mut changes = manager.subscribe_changes();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../../../examples/mcp-tls/certs/cert.pem"),
+	)
+	.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a rotation of the root certificate is published")
+		.unwrap();
 }

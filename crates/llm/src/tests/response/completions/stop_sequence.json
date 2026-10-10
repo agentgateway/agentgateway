@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-stop-sequence",
+  "object": "chat.completion",
+  "created": 1772656915,
+  "model": "test-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "before stop"
+      },
+      "finish_reason": "stop",
+      "stop_reason": "STOPPROBE"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 4,
+    "completion_tokens": 2,
+    "total_tokens": 6
+  }
+}

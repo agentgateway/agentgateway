@@ -1,0 +1,4 @@
+data: {"id":"chatcmpl_filtered","object":"chat.completion.chunk","created":123,"model":"gpt-5.6-luna","choices":[{"index":0,"finish_reason":"content_filter","delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":10,"completion_tokens":0,"total_tokens":10}}
+
+data: [DONE]
+

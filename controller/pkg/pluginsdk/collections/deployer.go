@@ -49,7 +49,14 @@ func GatewaysForDeployerTransformationFunc(
 			ports.Insert(l.Port)
 		}
 
-		lsets := krt.Fetch(kctx, listenerSets, krt.FilterIndex(byParentRefIndex, TargetRefIndexKey{
+		// Track spec and internal-port changes through generation and the annotation.
+		lsets := krt.PartialFetch(kctx, listenerSets, func(ls *gwv1.ListenerSet) *gwv1.ListenerSet {
+			return ls
+		}, func(a, b *gwv1.ListenerSet) bool {
+			return a.Name == b.Name && a.Namespace == b.Namespace && a.UID == b.UID &&
+				a.Generation == b.Generation && a.CreationTimestamp.Equal(&b.CreationTimestamp) &&
+				a.Annotations[annotations.InternalPorts] == b.Annotations[annotations.InternalPorts]
+		}, krt.FilterIndex(byParentRefIndex, TargetRefIndexKey{
 			Group:     wellknown.GatewayGroup,
 			Kind:      wellknown.GatewayKind,
 			Name:      gw.GetName(),
@@ -91,13 +98,26 @@ func GatewaysForDeployerTransformationFunc(
 // A lower-precedence listener with a different mode is rejected by translation and
 // cannot change Service/container exposure here.
 func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
+	if gw.GetAnnotations()[annotations.InternalPorts] == "" {
+		// Fastpath: no internal ports. Avoids expensive sort of the LS collection
+		hasInternalPorts := false
+		for _, ls := range lsets {
+			if ls.GetAnnotations()[annotations.InternalPorts] != "" {
+				hasInternalPorts = true
+				break
+			}
+		}
+		if !hasInternalPorts {
+			return smallset.New[int32]()
+		}
+	}
 	portModes := map[int32]bool{}
 
 	gwInternal, _ := annotations.ParseInternalPorts(
 		gw.GetAnnotations()[annotations.InternalPorts],
 		func(p int32) bool {
 			for _, l := range gw.Spec.Listeners {
-				if int32(l.Port) == p {
+				if l.Port == p {
 					return true
 				}
 			}
@@ -105,7 +125,7 @@ func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.
 		},
 	)
 	for _, l := range gw.Spec.Listeners {
-		portModes[int32(l.Port)] = gwInternal.Has(l.Port)
+		portModes[l.Port] = gwInternal.Has(l.Port)
 	}
 
 	slices.SortFunc(lsets, func(a, b *gwv1.ListenerSet) int {

@@ -2,11 +2,10 @@ use std::collections::HashSet;
 
 use divan::Bencher;
 use http::Method;
-use http_body_util::BodyExt;
 use serde_json::json;
 
-use crate::cel::{BufferedBody, Expression};
-use crate::http::{Body, Request, jwt};
+use crate::cel::Expression;
+use crate::http::{Body, jwt};
 
 // Test case structure with name for benchmark identification
 struct TestCase {
@@ -17,7 +16,15 @@ struct TestCase {
 }
 
 // keep in sync with test_cases
-const TEST_CASE_NAMES: &[&str] = &["simple_access", "header", "bbr", "jwt", "cidr", "regex"];
+const TEST_CASE_NAMES: &[&str] = &[
+	"simple_access",
+	"header",
+	"bbr",
+	"json_merge",
+	"jwt",
+	"cidr",
+	"regex",
+];
 
 // Comprehensive test cases to be used across multiple tests
 fn test_cases() -> Vec<TestCase> {
@@ -52,18 +59,39 @@ fn test_cases() -> Vec<TestCase> {
 			// expression: r#"jsonField(request.body, "model")"#,
 			expression: r#"json(request.body).model"#,
 			request_builder: || {
-				with_body(
-					::http::Request::builder()
-						.method(Method::POST)
-						.uri("http://example.com")
-						.header("content-type", "application/json")
-						.body(Body::from(
-							include_bytes!("../../../llm/src/tests/requests/completions/full.json").to_vec(),
-						))
-						.unwrap(),
-				)
+				::http::Request::builder()
+					.method(Method::POST)
+					.uri("http://example.com")
+					.header("content-type", "application/json")
+					.body(Body::from(
+						include_bytes!("../../../llm/src/tests/requests/completions/full.json").to_vec(),
+					))
+					.unwrap()
 			},
 			expected: json!("gpt-4-turbo-preview"),
+		},
+		TestCase {
+			name: "json_merge",
+			expression: r#"json(request.body).with(b,
+				toJson(b.merge({"max_tokens": has(b.max_tokens) ? min(b.max_tokens, 128000) : 128000})))"#,
+			request_builder: || {
+				::http::Request::builder()
+					.method(Method::POST)
+					.uri("http://example.com")
+					.header("content-type", "application/json")
+					.body(Body::from(
+						include_bytes!("../../../llm/src/tests/requests/completions/full.json").to_vec(),
+					))
+					.unwrap()
+			},
+			expected: {
+				let mut body: serde_json::Value = serde_json::from_slice(include_bytes!(
+					"../../../llm/src/tests/requests/completions/full.json"
+				))
+				.unwrap();
+				body["max_tokens"] = json!(body["max_tokens"].as_u64().unwrap_or(128000).min(128000));
+				json!(body.to_string())
+			},
 		},
 		TestCase {
 			name: "cidr",
@@ -177,7 +205,7 @@ fn test_benchmark_cases_snapshot() {
 			.unwrap_or_else(|e| panic!("Failed to compile expression '{}': {}", tc.expression, e));
 		let mut req = (tc.request_builder)();
 		let ss = crate::cel::snapshot_request(&mut req, true);
-		let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None, None, None);
+		let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None, None, None, None);
 		let result = exec
 			.eval(&expr)
 			.unwrap_or_else(|e| panic!("Failed to eval expression '{}': {}", tc.expression, e));
@@ -205,14 +233,6 @@ fn bench_compile(b: Bencher, case_name: &str) {
 	});
 }
 
-fn with_body(req: crate::http::Request) -> crate::http::Request {
-	let rt = &tokio::runtime::Runtime::new().unwrap();
-	let (mut head, body) = req.into_parts();
-	let b = rt.block_on(async move { body.collect().await.unwrap().to_bytes() });
-	head.extensions.insert(BufferedBody::complete(b));
-	Request::from_parts(head, Body::empty())
-}
-
 #[divan::bench(args = TEST_CASE_NAMES)]
 fn bench_execute_snapshot(b: Bencher, case_name: &str) {
 	let tc = get_test_case(case_name);
@@ -220,7 +240,7 @@ fn bench_execute_snapshot(b: Bencher, case_name: &str) {
 	let expr = Expression::new_strict(tc.expression).unwrap();
 	let mut req = (tc.request_builder)();
 	let ss = crate::cel::snapshot_request(&mut req, true);
-	let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None, None, None);
+	let exec = crate::cel::Executor::new_logger(Some(&ss), None, None, None, None, None, None);
 
 	b.bench(|| {
 		let _ = divan::black_box(exec.eval(&expr).unwrap());

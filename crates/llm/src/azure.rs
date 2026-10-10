@@ -18,8 +18,8 @@ pub enum AzureResourceType {
 #[cfg_attr(feature = "schema", schemars(rename = "AzureProviderConfig"))]
 pub struct Provider {
 	/// Model ID to send to Azure, overriding the model in the client request.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub model: Option<Strng>,
+	#[serde(default, rename = "model", skip_serializing_if = "Option::is_none")]
+	pub model_override: Option<Strng>,
 	/// The Azure resource name used to construct the endpoint host.
 	pub resource_name: Strng,
 	/// The type of Azure endpoint. Determines the host suffix.
@@ -39,11 +39,10 @@ impl super::Provider for Provider {
 }
 
 impl Provider {
-	/// Returns true if `model` (or the provider's configured default model) is a Claude model.
+	/// Returns true if the resolved `model` is a Claude model.
 	/// Used to select between Foundry's Anthropic-native and OpenAI-compatible endpoints.
-	pub fn is_anthropic_model(&self, model: Option<&str>) -> bool {
-		let effective = self.model.as_deref().or(model).unwrap_or_default();
-		effective.to_ascii_lowercase().starts_with("claude")
+	pub fn is_anthropic_model(&self, model: &str) -> bool {
+		model.to_ascii_lowercase().starts_with("claude")
 	}
 
 	pub fn get_path_for_model(&self, route: RouteType, model: &str) -> Strng {
@@ -54,7 +53,7 @@ impl Provider {
 	}
 
 	fn foundry_path(&self, route: RouteType, model: &str) -> Strng {
-		if self.is_anthropic_model(Some(model)) {
+		if self.is_anthropic_model(model) {
 			match route {
 				RouteType::Messages => return strng::literal!("/anthropic/v1/messages"),
 				RouteType::AnthropicTokenCount => {
@@ -80,7 +79,6 @@ impl Provider {
 				strng::format!("/openai/responses?api-version={version}")
 			},
 			version => {
-				let model = self.model.as_deref().unwrap_or(model);
 				strng::format!("/openai/deployments/{model}/{suffix}?api-version={version}")
 			},
 		}
@@ -116,7 +114,7 @@ mod tests {
 
 	fn make_provider(resource_name: &str, resource_type: AzureResourceType) -> Provider {
 		Provider {
-			model: None,
+			model_override: None,
 			resource_name: strng::new(resource_name),
 			resource_type,
 			api_version: None,
@@ -261,6 +259,7 @@ mod tests {
 	) {
 		let mut p = make_provider("my-resource", AzureResourceType::OpenAI);
 		p.api_version = Some(strng::new(api_version));
+		p.model_override = Some(strng::new("configured-model-before-transformation"));
 		assert_eq!(p.get_path_for_model(route, model).as_str(), expected);
 	}
 }

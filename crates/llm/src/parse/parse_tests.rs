@@ -4,7 +4,7 @@ use std::io;
 use std::sync::{Arc, Mutex};
 
 use ::http::HeaderMap;
-use axum_core::body::Body;
+use agent_http::Body;
 use bytes::{Bytes, BytesMut};
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};

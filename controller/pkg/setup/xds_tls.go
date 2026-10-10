@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/fips140"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/subtle"
@@ -14,6 +15,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"net"
@@ -30,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 )
 
 const (
@@ -41,6 +44,33 @@ const (
 	xdsCACertLifetime      = 10 * 365 * 24 * time.Hour
 	xdsLeafCertLifetime    = 24 * time.Hour
 	xdsLeafCertRenewBefore = 12 * time.Hour
+
+	// xdsLeafCertWarnBefore is the remaining-lifetime threshold at which a
+	// warning log is emitted. It is intentionally shorter than the renewal
+	// window so the warning only fires when rotation has fallen behind
+	// schedule — most useful for externally-provided certificates where the
+	// operator is responsible for rotation.
+	xdsLeafCertWarnBefore = 6 * time.Hour
+)
+
+var (
+	xdsCertExpiry = metrics.NewGauge(metrics.GaugeOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_expiry_seconds",
+		Help:      "Expiry timestamp (Unix seconds) of the current xDS serving certificate",
+	}, nil)
+
+	xdsCertRotationTotal = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_rotation_total",
+		Help:      "Total number of successful xDS certificate rotations",
+	}, nil)
+
+	xdsCertRotationErrors = metrics.NewCounter(metrics.CounterOpts{
+		Subsystem: xdsSubsystem,
+		Name:      "cert_rotation_errors_total",
+		Help:      "Total number of failed xDS certificate rotations",
+	}, nil)
 )
 
 type xdsTLSMaterial struct {
@@ -125,19 +155,47 @@ func (s *xdsTLSMaterialSyncer) refreshSecret(secret *corev1.Secret, force bool) 
 	}
 	certPEM, keyPEM, err := extractServingMaterial(secret, s.hosts)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
 	}
 	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
 	}
 	cert.Leaf, err = parseCertificate(certPEM)
 	if err != nil {
+		xdsCertRotationErrors.Inc()
 		return err
+	}
+	if err := checkFIPSRSAKeyParameters(cert.Leaf.PublicKey); err != nil {
+		return fmt.Errorf("xDS serving key: %w", err)
 	}
 	s.material.setCertificate(cert)
 	s.lastRV = secret.ResourceVersion
 	s.scheduleRenewal(secret, cert)
+
+	// Surface the current certificate's expiry via a Prometheus gauge and bump
+	// the rotation counter. The counter fires on every successful refresh; for
+	// auto-generated leaves this matches the rotation cadence.
+	xdsCertExpiry.Set(float64(cert.Leaf.NotAfter.Unix()))
+	xdsCertRotationTotal.Inc()
+
+	// If the serving certificate is nearing expiry faster than the renewal
+	// window expected, log a warning so operators can notice. This is most
+	// useful for externally-provided certificates where the operator is
+	// responsible for rotation; for auto-generated leaves the renewal
+	// mechanism is expected to keep the remaining lifetime well above this
+	// threshold.
+	if time.Until(cert.Leaf.NotAfter) <= xdsLeafCertWarnBefore {
+		slog.Warn("xDS serving certificate is expiring soon",
+			"not_after", cert.Leaf.NotAfter.Format(time.RFC3339),
+			"remaining", time.Until(cert.Leaf.NotAfter).Round(time.Second))
+	} else {
+		slog.Info("xDS serving certificate refreshed",
+			"not_after", cert.Leaf.NotAfter.Format(time.RFC3339))
+	}
+
 	return nil
 }
 
@@ -334,6 +392,9 @@ func generateLeafFromCA(caPEM, caKeyPEM []byte, hosts []string) ([]byte, []byte,
 	if !publicKeysEqual(caCert.PublicKey, caKey.Public()) {
 		return nil, nil, fmt.Errorf("CA certificate and key do not match")
 	}
+	if err := checkFIPSRSAKeyParameters(caKey.Public()); err != nil {
+		return nil, nil, fmt.Errorf("xDS CA key: %w", err)
+	}
 	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, nil, err
@@ -366,6 +427,32 @@ func generateLeafFromCA(caPEM, caKeyPEM []byte, hosts []string) ([]byte, []byte,
 		return nil, nil, err
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM, nil
+}
+
+// checkFIPSRSAKeyParameters validates the RSA modulus and public exponent of
+// keys the controller uses to sign or serve xDS TLS material. It does not
+// validate non-RSA keys, certificate chains, or peer certificates. The fips140=on
+// setting restricts TLS algorithms but, unlike fips140=only, does not enforce
+// RSA key parameters itself. Keep standard builds backward compatible.
+func checkFIPSRSAKeyParameters(key crypto.PublicKey) error {
+	if !fips140.Enabled() {
+		return nil
+	}
+	rsaKey, ok := key.(*rsa.PublicKey)
+	if !ok {
+		return nil
+	}
+	bits := rsaKey.N.BitLen()
+	if bits < 2048 {
+		return fmt.Errorf("RSA modulus is %d bits; FIPS mode requires at least 2048 bits", bits)
+	}
+	if bits%2 != 0 {
+		return fmt.Errorf("RSA modulus is %d bits; FIPS mode requires an even modulus size", bits)
+	}
+	if rsaKey.E <= 1<<16 {
+		return fmt.Errorf("RSA public exponent is %d; FIPS mode requires an exponent greater than 2^16", rsaKey.E)
+	}
+	return nil
 }
 
 func parsePrivateKey(keyPEM []byte) (crypto.Signer, error) {

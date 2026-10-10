@@ -38,9 +38,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.98.0"
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.0"
+  GO_VERSION: "1.27.1"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
   VEX_FILE: .github/vex/openvex.json
@@ -82,9 +81,9 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: blacksmith-4vcpu-ubuntu-2404
+            os: blacksmith-8vcpu-ubuntu-2404
           - platform: linux/arm64
-            os: blacksmith-4vcpu-ubuntu-2404-arm
+            os: blacksmith-8vcpu-ubuntu-2404-arm
     env:
       VERSION: ${{ needs.setup.outputs.version }}
     steps:
@@ -212,10 +211,10 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
-            os: ubuntu-24.04
+            os: blacksmith-8vcpu-ubuntu-2404
             goarch: amd64
           - platform: linux/arm64
-            os: blacksmith-4vcpu-ubuntu-2404-arm
+            os: blacksmith-8vcpu-ubuntu-2404-arm
             goarch: arm64
     defaults:
       run:
@@ -248,7 +247,7 @@ jobs:
 
     - name: Build controller binary
       run: |
-        CGO_ENABLED=0 GOARCH=${{ matrix.goarch }} GOOS=linux go build \
+        CGO_ENABLED=0 GOARCH=${{ matrix.goarch }} GOOS=linux go build -trimpath -tags=disable_pgv,agent \
           -ldflags="-X github.com/agentgateway/agentgateway/controller/pkg/version.Version=${{ env.VERSION }} -s -w" \
           -o _output/pkg/agentgateway/agentgateway-linux-${{ matrix.goarch }} \
           ./cmd/agentgateway
@@ -406,10 +405,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: blacksmith-4vcpu-ubuntu-2404
+          - os: blacksmith-8vcpu-ubuntu-2404
             target: x86_64-unknown-linux-musl
             name: linux
-          - os: blacksmith-4vcpu-ubuntu-2404-arm
+          - os: blacksmith-8vcpu-ubuntu-2404-arm
             target: aarch64-unknown-linux-musl
             # arm64 musl fails with jemalloc: https://github.com/tikv/jemallocator/issues/146
             extra_cargo_args: "--no-default-features --features agentgateway-app/mimalloc,agentgateway-app/crypto-aws-lc"
@@ -429,9 +428,8 @@ jobs:
       with:
         node-version-file: ui/.nvmrc
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+      uses: ./.github/actions/setup-rust
       with:
-        toolchain: "${{ env.RUST_VERSION }}"
         targets: ${{ matrix.target }}
     - name: Prepare Linux target
       if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' }}
@@ -541,6 +539,7 @@ jobs:
           outputs/agentgateway-*
           outputs/agctl-*
         tag_name: ${{ github.ref_name }}
+        prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
         generate_release_notes: true
         body: |
           🎉 Welcome to the ${{ env.VERSION }} release of the agentgateway project!
@@ -560,7 +559,7 @@ jobs:
 
           ## Quick Start
 
-          Follow the [Kubernetes](https://agentgateway.dev/docs/kubernetes/latest/quickstart/) or [Standalone](https://agentgateway.dev/docs/standalone/latest/quickstart/) quick start guide to get started!
+          Follow the [Kubernetes](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart/) or [Standalone](https://agentgateway.dev/docs/standalone/latest/documentation/quickstart/) quick start guide to get started!
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: startsWith(github.ref, 'refs/tags/')

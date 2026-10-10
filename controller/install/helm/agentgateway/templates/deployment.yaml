@@ -175,8 +175,10 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
-            {{- if .Values.agentgatewayModels.enabled }}
             - name: AGW_ENABLE_AGENTGATEWAY_MODELS
+              value: {{ .Values.agentgatewayModels.enabled | quote }}
+            {{- if .Values.xBackend.enabled }}
+            - name: AGW_ENABLE_X_BACKEND
               value: "true"
             {{- end }}
             - name: AGW_XDS_MODE
@@ -222,6 +224,10 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.dnsConfig }}

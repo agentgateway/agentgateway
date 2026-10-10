@@ -11,7 +11,7 @@ use prost_types::Timestamp;
 use quick_cache::sync::Cache;
 use serde_json::Value as JsonValue;
 
-use crate::cel::{BufferedBody, Expression, Value};
+use crate::cel::{Expression, Value};
 use crate::http::ext_authz::proto::attribute_context::HttpRequest;
 use crate::http::ext_authz::proto::authorization_client::AuthorizationClient;
 use crate::http::ext_authz::proto::check_response::HttpResponse;
@@ -158,14 +158,29 @@ impl Default for Protocol {
 pub struct CacheConfig {
 	/// CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.
 	pub key: Vec<Arc<cel::Expression>>,
-	/// CEL expression that returns how long cached authorization results are reused.
-	/// The expression is evaluated after the authorization response has been applied
-	/// to the request, and must return either a duration or timestamp.
+	/// CEL expression that returns how long cached results are reused.
+	/// Must return either a duration or timestamp.
 	#[serde(deserialize_with = "crate::cel::de_duration_or_expression")]
 	pub ttl: Arc<cel::Expression>,
-	/// Maximum number of authorization results to keep in the cache.
+	/// Maximum number of results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
+}
+
+impl CacheConfig {
+	pub(crate) fn evaluate_ttl(&self, exec: &cel::Executor<'_>) -> Option<Duration> {
+		match exec.eval(&self.ttl).ok()? {
+			Value::Duration(ttl) => ttl.to_std().ok(),
+			Value::Timestamp(expires_at) => expires_at
+				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
+				.to_std()
+				.ok(),
+			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
+			_ => None,
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -190,6 +205,7 @@ pub struct ExtAuthz {
 	/// Warning: the safety of this feature depends on the cache key accurately capturing the fields
 	/// the server operates on. For example, if you return a different result based on header A but only
 	/// cache header B, users may get incorrect cache hits.
+	/// The TTL is evaluated after the authorization response has been applied to the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cache: Option<CacheConfig>,
 	#[serde(skip, default = "default_cache_store")]
@@ -236,19 +252,8 @@ impl ExtAuthz {
 		if cache.key.is_empty() {
 			return Err(CacheMissReason::EmptyKey);
 		}
-		let exec = cel::Executor::new_request(req);
-		let values = cache
-			.key
-			.iter()
-			.enumerate()
-			.map(|(index, expr)| {
-				exec
-					.eval(expr)
-					.and_then(CacheKeyValue::try_from_cel)
-					.map_err(|_| CacheMissReason::KeyEvaluationFailed { index })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(CacheKey(values))
+		CacheKey::evaluate(&cel::Executor::new_request(req), &cache.key)
+			.map_err(|index| CacheMissReason::KeyEvaluationFailed { index })
 	}
 
 	fn lookup_cache(
@@ -292,7 +297,9 @@ impl ExtAuthz {
 	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
 		let max_size = body_opts.max_request_bytes as usize;
 
-		let inspection = crate::http::inspect_body_with_limit(req.body_mut(), max_size)
+		let inspection = req
+			.body_mut()
+			.inspect(max_size)
 			.await
 			.map_err(BufferRequestBodyError::Read)?;
 		let (body, is_partial) = match inspection {
@@ -561,6 +568,10 @@ impl ExtAuthz {
 			}),
 		};
 		let mut authz_req = tonic::Request::new(authz_req);
+		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
+		authz_req
+			.extensions_mut()
+			.insert(BackendRequestTimeout(Duration::from_secs(2)));
 		copy_span_writer(req.extensions(), authz_req.extensions_mut());
 		let mut span = policy_client.start_grpc_span(
 			&mut authz_req,
@@ -716,19 +727,7 @@ impl ExtAuthz {
 	}
 
 	fn cache_ttl(&self, req: &Request, cache: &CacheConfig) -> Option<Duration> {
-		let exec = cel::Executor::new_request(req);
-		let value = exec.eval(&cache.ttl).ok()?;
-		match value {
-			Value::Duration(ttl) => ttl.to_std().ok(),
-			Value::Timestamp(expires_at) => expires_at
-				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
-				.to_std()
-				.ok(),
-			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
-			_ => None,
-		}
+		cache.evaluate_ttl(&cel::Executor::new_request(req))
 	}
 
 	pub async fn check_http(
@@ -880,9 +879,13 @@ impl ExtAuthz {
 			}
 			let mut dynamic_metadata = None;
 			if !metadata.is_empty() {
-				if let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
-					resp.extensions_mut().insert(BufferedBody::from(body));
-				};
+				// Like `ContextBuilder::maybe_buffer_response_body`, make the response body
+				// available to CEL before evaluating expressions. This internal ext-authz
+				// response does not pass through the normal proxy response buffering hook,
+				// so inspect it whenever response metadata expressions are configured.
+				if let Err(e) = http::inspect_response_body(&mut resp).await {
+					return self.handle_auth_failure(&e.to_string());
+				}
 				let m = metadata
 					.iter()
 					.filter_map(|(k, v)| match Self::eval_to_json(req, &resp, v) {
@@ -965,7 +968,7 @@ impl ExtAuthz {
 				response_headers: None,
 			});
 		}
-		let (parts, body) = crate::http::read_response_body(resp)
+		let (parts, body) = http::read_response_body(resp)
 			.await
 			.map_err(|e| ProxyError::Processing(e.into()))?;
 		let cached = CachedHttpPolicyResponse::DirectResponse {
@@ -1110,6 +1113,26 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct CacheKey(Vec<CacheKeyValue>);
+
+impl CacheKey {
+	/// Evaluates each key expression, returning the index of the first expression that fails.
+	pub(crate) fn evaluate(
+		exec: &cel::Executor<'_>,
+		keys: &[Arc<cel::Expression>],
+	) -> Result<Self, usize> {
+		keys
+			.iter()
+			.enumerate()
+			.map(|(index, expr)| {
+				exec
+					.eval(expr)
+					.and_then(CacheKeyValue::try_from_cel)
+					.map_err(|_| index)
+			})
+			.collect::<Result<Vec<_>, _>>()
+			.map(CacheKey)
+	}
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CacheLookup {

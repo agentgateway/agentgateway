@@ -7,7 +7,12 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), None).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), true).expect("translate ok");
+	serde_json::from_slice(&bytes).expect("valid json")
+}
+
+fn to_gemini_api(v: Value) -> Value {
+	let bytes = from_completions::translate(&req(v), false).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -70,7 +75,7 @@ fn gs_url_without_extension_or_hint_is_rejected() {
 				{ "type": "image_url", "image_url": { "url": "gs://bucket/object" } }
 			]}]
 		})),
-		None,
+		true,
 	);
 	assert!(
 		err.is_err(),
@@ -90,6 +95,146 @@ fn gs_url_uses_explicit_mime_hint() {
 	assert_eq!(
 		g["contents"][0]["parts"][0]["fileData"]["mimeType"],
 		"image/webp"
+	);
+}
+
+// ---------- Request: content parts / files ----------
+
+fn file_content(file: Value) -> Value {
+	json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": [
+			{ "type": "text", "text": "What is this document about?" },
+			{ "type": "file", "file": file }
+		]}]
+	})
+}
+
+#[test]
+fn file_data_url_becomes_inline_data() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "data:application/pdf;base64,JVBERi0xLjQK"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["inlineData"]["mimeType"], "application/pdf");
+	assert_eq!(part["inlineData"]["data"], "JVBERi0xLjQK");
+}
+
+#[test]
+fn file_gs_uri_takes_mime_from_filename() {
+	// The gs:// object has no extension, so the mime can only come from `filename`.
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "gs://bucket/object"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "gs://bucket/object");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn file_gs_uri_without_extension_or_hint_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({
+			"file_data": "gs://bucket/object"
+		}))),
+		true,
+	);
+	assert!(
+		err.is_err(),
+		"extension-less gs:// file with no MIME hint must be rejected before egress"
+	);
+}
+
+#[test]
+fn data_url_without_media_type_falls_back_to_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "data:;base64,JVBERi0xLjQK"
+	})));
+	assert_eq!(
+		g["contents"][0]["parts"][1]["inlineData"]["mimeType"],
+		"application/pdf"
+	);
+}
+
+#[test]
+fn data_url_without_media_type_or_filename_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(
+			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
+		)),
+		true,
+	);
+	assert!(
+		err.is_err(),
+		"an empty mimeType is rejected by Vertex, so it must not be sent"
+	);
+}
+
+#[test]
+fn raw_base64_file_data_takes_mime_from_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "JVBERi0xLjQK"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["inlineData"]["mimeType"], "application/pdf");
+	assert_eq!(part["inlineData"]["data"], "JVBERi0xLjQK");
+}
+
+#[test]
+fn raw_base64_file_data_without_a_mime_source_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
+		true,
+	);
+	assert!(
+		err.is_err(),
+		"raw base64 with no filename or hint cannot yield the mimeType Vertex requires"
+	);
+}
+
+#[test]
+fn file_id_holding_a_gs_uri_becomes_file_data() {
+	// Some clients put a bucket URI in `file_id` rather than `file_data`; Vertex can fetch
+	// that directly, so it is honoured instead of being treated as an opaque OpenAI id.
+	let g = to_gemini(file_content(json!({ "file_id": "gs://bucket/report.pdf" })));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "gs://bucket/report.pdf");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn file_id_is_rejected_rather_than_dropped() {
+	// Vertex has no OpenAI Files store, so an opaque file_id cannot be resolved. It must
+	// error rather than silently vanish from the request (#3117).
+	let err = from_completions::translate(
+		&req(file_content(json!({ "file_id": "file-abc123" }))),
+		true,
+	);
+	let err = err.expect_err("opaque file_id must be rejected");
+	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
+	assert!(
+		matches!(err, crate::AIError::UnsupportedConversion(_)),
+		"bad client input must be a request error, got {err:?}"
+	);
+	assert!(
+		format!("{err:?}").contains("file_id"),
+		"error should name the field: {err:?}"
+	);
+}
+
+#[test]
+fn file_part_without_data_or_id_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({ "filename": "report.pdf" }))),
+		true,
+	);
+	assert!(
+		err.is_err(),
+		"a file part carrying no payload must be rejected"
 	);
 }
 
@@ -113,7 +258,7 @@ fn http_image_url_is_rejected() {
 				{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
 			]}]
 		})),
-		None,
+		true,
 	);
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
@@ -406,8 +551,8 @@ fn response_format_json_object_sets_mime_only() {
 	assert!(g["generationConfig"].get("responseSchema").is_none());
 }
 
-/// Gemini's responseSchema subset rejects $defs/$ref/additionalProperties,
-/// so the translator must inline the $ref, drop $defs, and strip additionalProperties before egress.
+/// Gemini's responseSchema subset rejects $defs/$ref, so the translator must inline the $ref and
+/// drop $defs before egress. additionalProperties is supported and must be preserved.
 #[test]
 fn response_format_inlines_pydantic_defs_and_refs() {
 	let g = to_gemini(json!({
@@ -452,10 +597,6 @@ fn response_format_inlines_pydantic_defs_and_refs() {
 	assert!(
 		!s.contains("$defs"),
 		"Vertex rejects $defs in responseSchema: {s}"
-	);
-	assert!(
-		!s.contains("additionalProperties"),
-		"Gemini rejects additionalProperties: {s}"
 	);
 	// The referenced CalendarEvent must be inlined where the $ref was.
 	assert_eq!(schema["properties"]["events"]["items"]["type"], "object");
@@ -535,10 +676,6 @@ fn response_format_inlines_real_dialog_question_schema() {
 	);
 	assert!(!s.contains("$defs"), "Vertex rejects $defs: {s}");
 	assert!(
-		!s.contains("additionalProperties"),
-		"Gemini rejects additionalProperties: {s}"
-	);
-	assert!(
 		!s.contains("\"type\":\"null\""),
 		"anyOf null branches must collapse to nullable; Gemini has no null type: {s}"
 	);
@@ -562,9 +699,9 @@ fn response_schema(schema: Value) -> Value {
 	g["generationConfig"]["responseSchema"].clone()
 }
 
-// Case 1: additionalProperties must be dropped at every level, not just the top.
+// Case 1: additionalProperties: false must be preserved at every level (Gemini supports it).
 #[test]
-fn gemini_schema_drops_nested_additional_properties() {
+fn gemini_schema_preserves_additional_properties_false() {
 	let s = response_schema(json!({
 		"type": "object",
 		"additionalProperties": false,
@@ -576,10 +713,13 @@ fn gemini_schema_drops_nested_additional_properties() {
 			}
 		}
 	}));
-	let txt = serde_json::to_string(&s).unwrap();
-	assert!(
-		!txt.contains("additionalProperties"),
-		"additionalProperties must be stripped everywhere: {txt}"
+	assert_eq!(
+		s["additionalProperties"], false,
+		"top-level additionalProperties: false must be preserved: {s}"
+	);
+	assert_eq!(
+		s["properties"]["inner"]["additionalProperties"], false,
+		"nested additionalProperties: false must be preserved: {s}"
 	);
 }
 
@@ -623,6 +763,7 @@ fn tool_parameters_inline_defs_and_refs() {
 		!txt.contains("$defs"),
 		"tool parameters must drop $defs: {txt}"
 	);
+	// Unlike responseSchema on Vertex, the tool path strips additionalProperties (preserve_ap=false).
 	assert!(
 		!txt.contains("additionalProperties"),
 		"tool parameters must drop additionalProperties: {txt}"
@@ -794,10 +935,66 @@ fn gemini_schema_array_without_items_gets_items() {
 	);
 }
 
-// Case 8: Dict[str, X] emits a typed `additionalProperties` schema. Gemini does not support it, so
-// it must be dropped (the open value typing is lost; that is the documented trade-off).
+// Case 8: minItems/maxItems on array types must be preserved so callers can enforce response
+// length constraints (e.g. "return exactly 3 items"). They were previously stripped because they
+// were absent from ALLOWED_SCHEMA_FIELDS.
 #[test]
-fn gemini_schema_drops_open_dict_additional_properties() {
+fn gemini_schema_preserves_array_length_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": {
+			"tags": {
+				"type": "array",
+				"items": { "type": "string" },
+				"minItems": 2,
+				"maxItems": 5
+			}
+		}
+	}));
+	assert_eq!(
+		s["properties"]["tags"]["minItems"], 2,
+		"minItems must be preserved: {s}"
+	);
+	assert_eq!(
+		s["properties"]["tags"]["maxItems"], 5,
+		"maxItems must be preserved: {s}"
+	);
+}
+
+// Case 9: minProperties/maxProperties constrain the number of keys on an object. Like minItems/
+// maxItems they were absent from ALLOWED_SCHEMA_FIELDS and were silently stripped.
+#[test]
+fn gemini_schema_preserves_object_property_count_constraints() {
+	let s = response_schema(json!({
+		"type": "object",
+		"minProperties": 1,
+		"maxProperties": 4,
+		"properties": { "a": { "type": "string" } }
+	}));
+	assert_eq!(
+		s["minProperties"], 1,
+		"minProperties must be preserved: {s}"
+	);
+	assert_eq!(
+		s["maxProperties"], 4,
+		"maxProperties must be preserved: {s}"
+	);
+}
+
+// Case 10: example provides a sample value for a schema node and is passed through to Gemini.
+#[test]
+fn gemini_schema_preserves_example() {
+	let s = response_schema(json!({
+		"type": "string",
+		"example": "hello"
+	}));
+	assert_eq!(s["example"], "hello", "example must be preserved: {s}");
+}
+
+// Case 11: Dict[str, X] emits a typed `additionalProperties` schema. Gemini supports it, so both
+// the boolean false form and the Schema-object form must be preserved.
+#[test]
+fn gemini_schema_preserves_open_dict_additional_properties() {
 	let s = response_schema(json!({
 		"type": "object",
 		"additionalProperties": false,
@@ -805,10 +1002,101 @@ fn gemini_schema_drops_open_dict_additional_properties() {
 			"meta": { "type": "object", "additionalProperties": { "type": "string" } }
 		}
 	}));
+	assert_eq!(
+		s["additionalProperties"], false,
+		"top-level additionalProperties: false must be preserved: {s}"
+	);
+	assert_eq!(
+		s["properties"]["meta"]["additionalProperties"]["type"], "string",
+		"Schema-object form of additionalProperties must be preserved: {s}"
+	);
+}
+
+// Case 11b: Dict[str, Model] puts a $ref under additionalProperties. Now that the key survives,
+// the subtree must be normalized too — $defs is stripped at the root, so an un-inlined $ref here
+// would egress dangling and Vertex 400s.
+#[test]
+fn gemini_schema_inlines_ref_under_additional_properties() {
+	let s = response_schema(json!({
+		"$defs": {
+			"Person": {
+				"type": "object",
+				"properties": { "name": { "type": "string" } },
+				"required": ["name"]
+			}
+		},
+		"type": "object",
+		"properties": {
+			"people": { "type": "object", "additionalProperties": { "$ref": "#/$defs/Person" } }
+		}
+	}));
 	let txt = serde_json::to_string(&s).unwrap();
 	assert!(
-		!txt.contains("additionalProperties"),
-		"typed additionalProperties (open dict) must be dropped: {txt}"
+		!txt.contains("$ref"),
+		"$ref under additionalProperties must be inlined: {txt}"
+	);
+	assert_eq!(
+		s["properties"]["people"]["additionalProperties"]["properties"]["name"]["type"], "string",
+		"the inlined Person must keep its properties: {s}"
+	);
+}
+
+// Case 11c: Dict[str, Optional[str]] puts an anyOf null branch under additionalProperties. It must
+// collapse to nullable like anywhere else; Gemini has no null type.
+#[test]
+fn gemini_schema_normalizes_nullable_under_additional_properties() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": {
+			"meta": {
+				"type": "object",
+				"additionalProperties": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(
+		!txt.contains("\"type\":\"null\""),
+		"null branch under additionalProperties must collapse to nullable: {txt}"
+	);
+}
+
+// Case 11d: an empty-object additionalProperties means "anything goes" and must stay empty — the
+// typeless default must not rewrite it into {"type":"object"}.
+#[test]
+fn gemini_schema_leaves_empty_additional_properties_alone() {
+	let s = response_schema(json!({
+		"type": "object",
+		"properties": { "meta": { "type": "object", "additionalProperties": {} } }
+	}));
+	assert_eq!(
+		s["properties"]["meta"]["additionalProperties"],
+		json!({}),
+		"empty additionalProperties must stay empty: {s}"
+	);
+}
+
+// Case 11e: the Gemini API (generativelanguage.googleapis.com) rejects additionalProperties in
+// responseSchema, unlike Vertex AI. With is_vertex=false the key must be stripped.
+#[test]
+fn gemini_api_response_schema_strips_additional_properties() {
+	let g = to_gemini_api(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"response_format": {
+			"type": "json_schema",
+			"json_schema": { "name": "T", "strict": true, "schema": {
+				"type": "object",
+				"properties": { "answer": { "type": "string", "additionalProperties": false } },
+				"required": ["answer"],
+				"additionalProperties": false
+			}}
+		}
+	}));
+	let s = serde_json::to_string(&g["generationConfig"]["responseSchema"]).unwrap();
+	assert!(
+		!s.contains("additionalProperties"),
+		"Gemini API responseSchema must not contain additionalProperties: {s}"
 	);
 }
 
@@ -1387,7 +1675,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields {
@@ -1435,7 +1723,7 @@ mod passthrough {
 		);
 		let captured = captured_info();
 		let out = passthrough_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 			LogContentFields::default(),
@@ -1456,18 +1744,15 @@ mod passthrough {
 		);
 	}
 
-	fn body_from_frames(frames: &[&str]) -> axum_core::body::Body {
+	fn body_from_frames(frames: &[&str]) -> agent_http::Body {
 		let frames: Vec<Result<bytes::Bytes, std::convert::Infallible>> = frames
 			.iter()
 			.map(|f| Ok(bytes::Bytes::copy_from_slice(f.as_bytes())))
 			.collect();
-		axum_core::body::Body::from_stream(futures_util::stream::iter(frames))
+		agent_http::Body::from_stream(futures_util::stream::iter(frames))
 	}
 
-	async fn run_passthrough(
-		body: axum_core::body::Body,
-		captured: &Arc<Mutex<LLMInfo>>,
-	) -> bytes::Bytes {
+	async fn run_passthrough(body: agent_http::Body, captured: &Arc<Mutex<LLMInfo>>) -> bytes::Bytes {
 		passthrough_stream(
 			body,
 			1024 * 1024,
@@ -1518,7 +1803,7 @@ mod passthrough {
 			"\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n",
 		);
 		let captured = captured_info();
-		let out = run_passthrough(axum_core::body::Body::from(input), &captured).await;
+		let out = run_passthrough(agent_http::Body::from(input), &captured).await;
 
 		assert_eq!(out.as_ref(), input.as_bytes());
 		let info = captured.lock().unwrap();
@@ -1538,7 +1823,7 @@ mod passthrough {
 		for input in [non_sse, truncated] {
 			let captured = captured_info();
 			let err = passthrough_stream(
-				axum_core::body::Body::from(input),
+				agent_http::Body::from(input),
 				1024 * 1024,
 				StreamingUsageGuard::new(Box::new(Capture(captured.clone()))),
 				LogContentFields::default(),

@@ -5,6 +5,20 @@
 Agentgateway handles traffic from a single downstream client to N upstream servers.
 We call this "multiplexing" if N>1.
 
+## Target conditions
+
+Each target of a virtual MCP may set `condition` to a boolean CEL expression. The condition is evaluated
+when Agentgateway selects the upstream targets for a virtual MCP request, with the authenticated request context and
+`mcp.target.name` available. A target whose expression evaluates to `false` is excluded before
+it is initialized or contacted; omitting `condition` allows the target. A condition requires at
+least two configured targets.
+
+This is distinct from `mcpAuthorization`: target conditions choose which upstream servers participate
+in the virtual MCP request, while `mcpAuthorization` evaluates individual returned tools and other
+MCP resources after an upstream has responded.
+
+When every configured target's condition is false, Agentgateway presents an empty virtual MCP.
+
 Version negotiation is how we handle the disparate protocol versions between the clients and servers, and Agentgateway itself.
 This is particularly important for 2026-07-28+, which has a very different protocol than the other versions (which are all much more incremental differences).
 We will call "Old" before 2026-07-28 and "New" after.

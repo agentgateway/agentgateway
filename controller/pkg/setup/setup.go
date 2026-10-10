@@ -20,7 +20,6 @@ import (
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -44,7 +43,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	pluginsdkcol "github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
-	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
+	_ "github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
@@ -151,7 +150,7 @@ func New(opts Options) (*setup, error) {
 		s.CtrlMgrOptions = func(ctx context.Context) *ctrl.Options {
 			return &ctrl.Options{
 				BaseContext:      func() context.Context { return ctx },
-				Scheme:           runtime.NewScheme(),
+				Scheme:           kube.IstioScheme,
 				PprofBindAddress: "",
 				// if you change the port here, also change the port "health" in the helmchart.
 				HealthProbeBindAddress: ":9093",
@@ -191,11 +190,6 @@ func (s *setup) Start(ctx context.Context) error {
 
 	mgr, err := ctrl.NewManager(s.RestConfig, *mgrOpts)
 	if err != nil {
-		return err
-	}
-
-	if err := schemes.AddToScheme(mgr.GetScheme()); err != nil {
-		slog.Error("unable to extend scheme", "error", err)
 		return err
 	}
 
@@ -260,7 +254,13 @@ func (s *setup) Start(ctx context.Context) error {
 		krtOpts.WithPrefix("jwks"),
 	))
 	jwksResolver := jwks.NewResolver(resolver, refGrants, agwCollections.Settings.BackendRefGrantMode)
-	jwksLookup := jwks.NewLookup(persistedJWKS, jwksResolver)
+	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
+		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
+		Backends:             agwCollections.Backends,
+		Resolver:             jwksResolver,
+		KrtOpts:              agwCollections.KrtOpts,
+	})
+	jwksLookup := jwks.NewLookup(persistedJWKS, jwksCollections.ResolvedOwners)
 
 	for _, mgrCfgFunc := range s.ExtraManagerConfig {
 		err := mgrCfgFunc(mgr)
@@ -285,7 +285,7 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// build jwks store if it doesn't exist
 	if !runnablesRegistry.Contains(jwks.RunnableName) {
-		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections, persistedJWKS, jwksResolver); err != nil {
+		if err := buildJwksStore(ctx, mgr, s.APIClient, persistedJWKS, jwksCollections); err != nil {
 			return fmt.Errorf("error creating jwks store %w", err)
 		}
 	}
@@ -469,17 +469,9 @@ func buildJwksStore(
 	ctx context.Context,
 	mgr manager.Manager,
 	apiClient apiclient.Client,
-	agwCollections *agwplugins.AgwCollections,
 	persistedJWKS *jwks.PersistedEntries,
-	resolver jwks.Resolver,
+	jwksCollections jwks.Collections,
 ) error {
-	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
-		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
-		Backends:             agwCollections.Backends,
-		Resolver:             resolver,
-		KrtOpts:              agwCollections.KrtOpts,
-	})
-
 	jwksStore := jwks.NewStore(jwksCollections.SharedRequests, persistedJWKS, jwks.DefaultJwksStorePrefix)
 	if err := mgr.Add(jwksStore); err != nil {
 		return err

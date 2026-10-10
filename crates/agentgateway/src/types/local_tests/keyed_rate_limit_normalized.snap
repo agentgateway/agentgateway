@@ -1,0 +1,89 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for keyed_rate_limit: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            weight: 1
+        inlinePolicies:
+          - localRateLimit:
+              - fillInterval: 1m0s
+                key: jwt.sub
+                maxTokens: 60
+                tokensPerFill: 60
+                type: requests
+              - fillInterval: 1h0m0s
+                key: jwt.team
+                maxTokens: 100000
+                tokensPerFill: 100000
+                type: tokens
+              - fillInterval: 1h0m0s
+                key: "jwt.sub + \"/\" + llm.requestModel"
+                maxTokens: 20000
+                tokensPerFill: 20000
+                type: tokens
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+      - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route1/backend0
+            weight: 1
+        inlinePolicies:
+          - localRateLimit:
+              - pol:
+                  - fillInterval: 1m0s
+                    key: jwt.sub
+                    maxTokens: 600
+                    tokensPerFill: 600
+                    type: requests
+                condition: "jwt.tier == \"gold\""
+              - pol:
+                  - fillInterval: 1m0s
+                    key: jwt.sub
+                    maxTokens: 60
+                    tokensPerFill: 60
+                    type: requests
+                condition: ~
+        key: ns/name/bind/3000/listener0/default/route1
+        matches:
+          - path:
+              pathPrefix: /
+        name: route1
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
+policies: []
+backends:
+  - backend:
+      host:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target: "127.0.0.1:8000"
+  - backend:
+      host:
+        name: ns/name/bind/3000/listener0/default/route1/backend0
+        namespace: ""
+        target: "127.0.0.1:8000"
+route_groups: []
+workloads: []
+services: []

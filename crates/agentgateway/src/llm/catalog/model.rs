@@ -2,26 +2,73 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::{apply, schema};
+use crate::llm::{Provider as _, vertex};
+
+// Unknown fields are captured rather than denied by serde, so catalogs from newer versions can be
+// loaded leniently. `validate` rejects them for catalogs written for this version.
+pub type Unknown = BTreeMap<String, serde_json::Value>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 pub struct Catalog {
+	/// Identifies a generated base catalog and when its contents last changed.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<CatalogMetadata>,
 	/// Map of provider name to its supported models and pricing.
 	#[serde(default)]
 	pub providers: BTreeMap<String, Provider>,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
 impl Catalog {
 	pub fn validate(&self) -> anyhow::Result<()> {
+		self.check(true)
+	}
+
+	/// Validates a catalog that may come from a newer version. Unknown fields are ignored, except that
+	/// tiers with unknown conditions are dropped since they cannot be applied correctly.
+	pub fn validate_newer(&mut self) -> anyhow::Result<()> {
+		for m in self
+			.providers
+			.values_mut()
+			.flat_map(|p| p.models.values_mut())
+		{
+			m.tiers.retain(|t| t.unknown.is_empty());
+		}
+		self.check(false)
+	}
+
+	fn check(&self, strict: bool) -> anyhow::Result<()> {
+		let reject_unknown = |path: &dyn fmt::Display, unknown: &Unknown| {
+			if strict && let Some(k) = unknown.keys().next() {
+				anyhow::bail!("{path}: unknown field {k:?}");
+			}
+			Ok(())
+		};
+		reject_unknown(&"catalog", &self.unknown)?;
+		if let Some(metadata) = &self.metadata {
+			reject_unknown(&"metadata", &metadata.unknown)?;
+		}
 		for (pid, p) in &self.providers {
+			reject_unknown(pid, &p.unknown)?;
 			for (mid, m) in &p.models {
+				reject_unknown(&format_args!("{pid}/{mid}"), &m.unknown)?;
+				reject_unknown(&format_args!("{pid}/{mid} rates"), &m.rates.unknown)?;
 				let mut prev: Option<u64> = None;
 				for (i, t) in m.tiers.iter().enumerate() {
+					reject_unknown(&format_args!("{pid}/{mid} tier {i}"), &t.unknown)?;
+					reject_unknown(
+						&format_args!("{pid}/{mid} tier {i} rates"),
+						&t.rates.unknown,
+					)?;
 					if prev.is_some_and(|p| t.context_over <= p) {
 						anyhow::bail!(
 							"{pid}/{mid}: tier {i} threshold {} not strictly greater than previous",
@@ -58,8 +105,30 @@ impl Catalog {
 	}
 
 	pub fn resolve(&self, provider: &str, model: &str) -> Option<&Model> {
-		self.providers.get(provider)?.models.get(model)
+		let models = &self.providers.get(provider)?.models;
+		models.get(model).or_else(|| {
+			if provider != vertex::Provider::NAME.as_str() {
+				return None;
+			}
+			models.get(vertex::Provider::canonical_model(model).as_str())
+		})
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogMetadata {
+	/// Legacy provenance field retained for compatibility with older generated catalogs.
+	#[serde(default, skip_serializing)]
+	pub source: Option<String>,
+	/// Time the generated catalog contents last changed.
+	pub generated_at: DateTime<Utc>,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
 pub fn from_json(s: &str) -> anyhow::Result<Catalog> {
@@ -70,15 +139,21 @@ pub fn from_json(s: &str) -> anyhow::Result<Catalog> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 pub struct Provider {
 	/// Map of model ID to its pricing rates and tiers.
 	#[serde(default)]
 	pub models: BTreeMap<String, Model>,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
-#[apply(schema!)]
-#[derive(PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[serde(rename_all = "camelCase")]
 pub struct Model {
 	/// Base pricing rates for this model.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
@@ -89,10 +164,16 @@ pub struct Model {
 	/// Freeform capability/routing tags for this model.
 	#[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
 	pub tags: BTreeSet<String>,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
-#[apply(schema!)]
-#[derive(PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[serde(rename_all = "camelCase")]
 pub struct Rates {
 	/// Cost per 1M input (prompt) tokens.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -115,6 +196,13 @@ pub struct Rates {
 	/// Cost per 1M output audio tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub output_audio: Option<Money>,
+	/// Cost per page, for document/OCR models.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub per_page: Option<Money>,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
 impl Rates {
@@ -132,17 +220,25 @@ impl Rates {
 			reasoning: pick(&self.reasoning, &delta.reasoning),
 			input_audio: pick(&self.input_audio, &delta.input_audio),
 			output_audio: pick(&self.output_audio, &delta.output_audio),
+			per_page: pick(&self.per_page, &delta.per_page),
+			unknown: Unknown::new(),
 		}
 	}
 }
 
-#[apply(schema!)]
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[serde(rename_all = "camelCase")]
 pub struct Tier {
 	/// Context-token threshold above which this tier's rates apply.
 	pub context_over: u64,
 	/// Pricing rates for this tier, overlaid on the base model rates.
 	pub rates: Rates,
+	/// Fields not understood by this version.
+	#[serde(flatten, skip_serializing)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub unknown: Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -203,6 +299,7 @@ pub struct Usage {
 	pub reasoning: u64,
 	pub input_audio: u64,
 	pub output_audio: u64,
+	pub pages: u64,
 }
 
 impl Usage {
@@ -224,6 +321,7 @@ pub struct Breakdown {
 	pub reasoning: Decimal,
 	pub input_audio: Decimal,
 	pub output_audio: Decimal,
+	pub pages: Decimal,
 }
 
 impl Breakdown {
@@ -235,6 +333,7 @@ impl Breakdown {
 			+ self.reasoning
 			+ self.input_audio
 			+ self.output_audio
+			+ self.pages
 	}
 }
 
@@ -254,6 +353,7 @@ impl Rates {
 			reasoning: line(usage.reasoning, reasoning_rate) / unit,
 			input_audio: line(usage.input_audio, input_audio_rate) / unit,
 			output_audio: line(usage.output_audio, output_audio_rate) / unit,
+			pages: line(usage.pages, self.per_page.as_ref()),
 		}
 	}
 }
@@ -284,9 +384,10 @@ impl Model {
 	}
 }
 
-fn line(tokens: u64, rate: Option<&Money>) -> Decimal {
+// count: [tokens|pages] and rate: [per n tokens|per page].
+fn line(count: u64, rate: Option<&Money>) -> Decimal {
 	match rate {
-		Some(Money(r)) => Decimal::from(tokens) * *r,
+		Some(Money(r)) => Decimal::from(count) * *r,
 		None => Decimal::ZERO,
 	}
 }
@@ -315,6 +416,7 @@ mod tests {
 		Tier {
 			context_over,
 			rates,
+			unknown: Unknown::new(),
 		}
 	}
 
@@ -401,6 +503,34 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_vertex_aliases() {
+		let catalog = from_json(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{
+					"gemini-x":{"rates":{"input":"1"}},
+					"claude-x@20250929":{"rates":{"input":"2"}},
+					"google/pinned":{"rates":{"input":"3"}},
+					"pinned":{"rates":{"input":"4"}}
+				}},
+				"openai":{"models":{"gemini-x":{"rates":{"input":"1"}}}}
+			}}"#,
+		)
+		.unwrap();
+		let input = |p, m| catalog.resolve(p, m).and_then(|m| m.rates.input.clone());
+		assert_eq!(input("gcp.vertex_ai", "google/gemini-x"), Some(m("1")));
+		assert_eq!(
+			input("gcp.vertex_ai", "publishers/google/models/gemini-x"),
+			Some(m("1"))
+		);
+		assert_eq!(
+			input("gcp.vertex_ai", "anthropic/claude-x-20250929"),
+			Some(m("2"))
+		);
+		assert_eq!(input("gcp.vertex_ai", "google/pinned"), Some(m("3")));
+		assert_eq!(input("openai", "google/gemini-x"), None);
+	}
+
+	#[test]
 	fn money_is_a_string_not_a_number() {
 		assert_eq!(serde_json::to_string(&m("0.175")).unwrap(), "\"0.175\"");
 		let ok: Rates = serde_json::from_str(r#"{"input": "0.175"}"#).unwrap();
@@ -418,9 +548,24 @@ mod tests {
 	}
 
 	#[test]
-	fn unknown_field_is_rejected() {
-		let err = serde_json::from_str::<Rates>(r#"{"inputCacheRead": "1"}"#).unwrap_err();
-		assert!(err.to_string().contains("unknown field"), "{err}");
+	fn newer_catalog_ignores_unknown_fields() {
+		let json = r#"{"future":1,"providers":{"openai":{"models":{"m":{
+			"rates":{"input":"1","future":"2"},
+			"tiers":[
+				{"contextOver":100,"rates":{"input":"3","future":"4"}},
+				{"contextOver":100,"serviceTier":"priority","rates":{"input":"5"}}
+			]}}}}}"#;
+		assert!(from_json(json).is_err());
+		let mut catalog: Catalog = serde_json::from_str(json).unwrap();
+		catalog.validate_newer().unwrap();
+		let expected = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"1"},"tiers":[{"contextOver":100,"rates":{"input":"3"}}]}}}}}"#,
+		)
+		.unwrap();
+		assert_eq!(
+			serde_json::to_value(&catalog).unwrap(),
+			serde_json::to_value(&expected).unwrap()
+		);
 	}
 
 	#[test]
@@ -482,6 +627,8 @@ mod tests {
 				reasoning: Some(m("15")),
 				input_audio: Some(m("40")),
 				output_audio: Some(m("80")),
+				per_page: None,
+				unknown: Unknown::new(),
 			},
 			vec![],
 		);
@@ -493,6 +640,7 @@ mod tests {
 			reasoning: 100,
 			input_audio: 50,
 			output_audio: 25,
+			pages: 0,
 		};
 		let b = e.breakdown(&u);
 		assert_eq!(b.input, d("0.003"));
@@ -667,5 +815,60 @@ mod tests {
 			..Default::default()
 		};
 		assert_eq!(e.price(&u), d("0.000024975"));
+	}
+
+	fn page_rate(price: &str) -> Rates {
+		Rates {
+			per_page: Some(m(price)),
+			..Default::default()
+		}
+	}
+
+	#[test]
+	fn page_rate_is_priced_per_page_not_per_million() {
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&Usage {
+			pages: 4,
+			..Default::default()
+		});
+		assert_eq!(b.pages, d("0.02"), "a perPage rate is not divided by 1M");
+		assert_eq!(b.total(), d("0.02"));
+	}
+
+	#[test]
+	fn page_and_token_pricing_do_not_leak_into_each_other() {
+		// A token-priced model is unaffected by a page count it has no rate for.
+		let b = entry(rates("3", "15"), vec![]).breakdown(&Usage {
+			input: 1000,
+			pages: 4,
+			..Default::default()
+		});
+		assert_eq!(b.pages, Decimal::ZERO, "no page rate -> pages not billed");
+		assert_eq!(b.total(), d("0.003"), "token cost unchanged by page count");
+
+		// And a page-priced model does not bill tokens.
+		let b = entry(page_rate("0.005"), vec![]).breakdown(&Usage {
+			input: 1000,
+			output: 500,
+			..Default::default()
+		});
+		assert_eq!(b.total(), Decimal::ZERO);
+	}
+
+	#[test]
+	fn per_page_rate_round_trips_through_json() {
+		let json = r#"{"providers":{"mistral":{"models":{"ocr":{"rates":{"perPage":"0.005"}}}}}}"#;
+		let c = super::from_json(json).unwrap();
+		let model = &c.providers["mistral"].models["ocr"];
+		assert_eq!(model.rates.per_page, Some(m("0.005")));
+		assert_eq!(serde_json::to_string(&c).unwrap(), json);
+	}
+
+	#[test]
+	fn tier_can_override_the_page_rate() {
+		let overlaid = page_rate("0.005").overlay(&page_rate("0.004"));
+		assert_eq!(overlaid.per_page, Some(m("0.004")));
+		// An overlay that sets no page rate keeps the base one.
+		let kept = page_rate("0.005").overlay(&rates("3", "15"));
+		assert_eq!(kept.per_page, Some(m("0.005")));
 	}
 }

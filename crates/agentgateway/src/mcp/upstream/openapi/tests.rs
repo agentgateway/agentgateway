@@ -56,6 +56,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		spiffe: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());
@@ -97,6 +98,36 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
+		content_type: None,
+	};
+	let test_tool_doc = Tool::new(
+		Cow::Borrowed("get_doc"),
+		Cow::Borrowed("Get an internal document"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"path": {
+						"type": "object",
+						"properties": {
+							"tenant": {"type": "string"},
+							"kind": {"type": "string"},
+							"id": {"type": "string"}
+						},
+						"required": ["tenant", "kind", "id"]
+					}
+				},
+				"required": ["path"]
+			})
+			.as_object()
+			.unwrap()
+			.clone(),
+		),
+	);
+	let upstream_call_doc = UpstreamOpenAPICall {
+		method: "GET".to_string(),
+		path: "/v1/{tenant}/{kind}/{id}".to_string(),
+		allowed_headers: HashSet::new(),
 		content_type: None,
 	};
 
@@ -160,6 +191,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		upstream_client,
 		vec![
 			(test_tool_get, upstream_call_get),
+			(test_tool_doc, upstream_call_doc),
 			(test_tool_post, upstream_call_post),
 		],
 		prefix.to_string(),
@@ -241,7 +273,10 @@ async fn test_call_tool_full_url_server_prefix() {
 		result.is_ok(),
 		"full-URL server prefix should not cause invalid authority"
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -274,7 +309,10 @@ async fn test_call_tool_path_prefix_server() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -300,7 +338,10 @@ async fn test_call_tool_get_simple_success() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -329,7 +370,10 @@ async fn test_call_tool_get_with_query() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -357,7 +401,10 @@ async fn test_call_tool_get_with_header() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -384,7 +431,10 @@ async fn test_call_tool_post_with_body() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -419,7 +469,10 @@ async fn test_call_tool_post_all_params() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -467,7 +520,7 @@ async fn test_call_tool_upstream_error() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), error_response);
+	assert_eq!(result.unwrap().structured_content.unwrap(), error_response);
 }
 
 #[tokio::test]
@@ -529,7 +582,10 @@ async fn test_call_tool_invalid_header_value() {
 		)
 		.await;
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[tokio::test]
@@ -560,51 +616,30 @@ async fn test_call_tool_invalid_query_param_value() {
 		)
 		.await;
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[tokio::test]
 async fn test_call_tool_invalid_path_param_value() {
 	let (server, handler) = setup().await;
-
-	let invalid_user_id = json!(12345); // Not a string
-	// Mock is set up for the *literal* path, as substitution will fail
-	Mock::given(method("GET"))
-		.and(path("/users/{user_id}")) // Path doesn't get substituted
-		.respond_with(
-			ResponseTemplate::new(404) // Or whatever the server does with a literal {user_id}
-				.set_body_string("Not Found - Literal Path"),
-		)
-		.mount(&server)
-		.await;
-
 	let args = json!({
-			"path": { "user_id": invalid_user_id }
+		"path": { "user_id": true }
 	});
 
-	// The call might succeed at the HTTP level but might return an error from the server,
-	// or potentially fail if the path is fundamentally invalid after non-substitution.
-	// Here we assume the server returns 404 for the literal path.
-	let result = handler
+	let error = handler
 		.call_tool(
 			"get_user",
 			Some(args.as_object().unwrap().clone()),
 			&IncomingRequestContext::empty(),
 		)
-		.await;
+		.await
+		.unwrap_err();
 
-	// Depending on server behavior for the literal path, this might be Ok or Err.
-	// If server returns 404 for the literal path:
-	assert!(result.is_ok());
-	// assert!(
-	// 	result.unwrap()
-	// 		.contains("failed with status 404 Not Found"),
-	// 	"{}",
-	// 	result.unwrap_err().to_string()
-	// );
-
-	// If the request *itself* failed before sending (e.g., invalid URL formed),
-	// the error might be different.
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -640,7 +675,10 @@ async fn test_call_tool_with_compressed_response() {
 		.await;
 
 	assert!(result.is_ok());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -659,11 +697,6 @@ async fn test_call_tool_response_wrapping() {
 			true,
 			br#"[{"id":1,"name":"1"},{"id":2,"name":"2"},{"id":3,"name":"3"}]"#,
 			json!([ { "id": 1, "name": "1" }, { "id": 2, "name": "2" }, { "id": 3, "name": "3" }]),
-		),
-		(
-			false,
-			b"plain text response",
-			json!({"code": 200, "message": "plain text response"}),
 		),
 		(true, b"42", json!(42)),
 		(true, b"true", json!(true)),
@@ -695,8 +728,242 @@ async fn test_call_tool_response_wrapping() {
 		} else {
 			response.clone()
 		};
-		assert_eq!(result.unwrap(), expected);
+		assert_eq!(result.unwrap().structured_content.unwrap(), expected);
 	}
+}
+
+#[tokio::test]
+async fn test_call_tool_image_response() {
+	let (server, handler) = setup().await;
+
+	// PNG signature followed by bytes that are not valid UTF-8
+	let png: &[u8] = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\xff\xfe";
+
+	Mock::given(method("GET"))
+		.and(path("/users/img"))
+		.respond_with(
+			ResponseTemplate::new(200)
+				.insert_header("content-type", "image/png; charset=binary")
+				.set_body_bytes(png.to_vec()),
+		)
+		.mount(&server)
+		.await;
+
+	let args = json!({ "path": { "user_id": "img" } });
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+
+	assert!(result.structured_content.is_none());
+	assert_eq!(result.content.len(), 1);
+	let rmcp::model::ContentBlock::Image(image) = &result.content[0] else {
+		panic!("expected image content, got {:?}", result.content[0]);
+	};
+	use base64::Engine;
+	assert_eq!(image.mime_type, "image/png");
+	assert_eq!(
+		image.data,
+		base64::engine::general_purpose::STANDARD.encode(png)
+	);
+}
+
+async fn mount_body(server: &MockServer, user_id: &str, content_type: Option<&str>, body: &[u8]) {
+	let mut resp = ResponseTemplate::new(200).set_body_bytes(body.to_vec());
+	if let Some(ct) = content_type {
+		resp = resp.insert_header("content-type", ct);
+	}
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.respond_with(resp)
+		.mount(server)
+		.await;
+}
+
+async fn call_get_user(handler: &Handler, user_id: &str) -> CallToolResult {
+	let args = json!({ "path": { "user_id": user_id } });
+	handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap()
+}
+
+#[tokio::test]
+async fn test_call_tool_non_json_text_returns_text_block() {
+	let (server, handler) = setup().await;
+	let body = "<html><body>not json</body></html>";
+
+	for (id, content_type) in [
+		("html", Some("text/html; charset=utf-8")),
+		("xhtml", Some("application/xhtml+xml")),
+		("svg", Some("image/svg+xml")),
+		("js", Some("application/javascript")),
+		("form", Some("application/x-www-form-urlencoded")),
+		("sql", Some("application/sql")),
+		("eml", Some("message/rfc822")),
+		("none", None),
+	] {
+		mount_body(&server, id, content_type, body.as_bytes()).await;
+		let result = call_get_user(&handler, id).await;
+
+		assert!(result.structured_content.is_none(), "{id}");
+		assert_eq!(result.content.len(), 1, "{id}");
+		let rmcp::model::ContentBlock::Text(text) = &result.content[0] else {
+			panic!(
+				"expected text content for {id}, got {:?}",
+				result.content[0]
+			);
+		};
+		assert_eq!(text.text, body, "{id}");
+	}
+}
+
+#[tokio::test]
+async fn test_call_tool_json_in_text_content_type_is_parsed() {
+	let (server, handler) = setup().await;
+	mount_body(&server, "mislabelled", Some("text/plain"), br#"{"id":"x"}"#).await;
+
+	let result = call_get_user(&handler, "mislabelled").await;
+
+	assert_eq!(result.structured_content, Some(json!({ "id": "x" })));
+	let rmcp::model::ContentBlock::Text(text) = &result.content[0] else {
+		panic!("expected text content, got {:?}", result.content[0]);
+	};
+	assert_eq!(
+		serde_json::from_str::<Value>(&text.text).unwrap(),
+		json!({ "id": "x" })
+	);
+}
+
+#[tokio::test]
+async fn test_call_tool_audio_response() {
+	let (server, handler) = setup().await;
+	let mp3: &[u8] = b"ID3\x04\x00\x00\x00\x00\x00\x00\xff\xfb";
+	mount_body(&server, "audio", Some("audio/mpeg"), mp3).await;
+
+	let result = call_get_user(&handler, "audio").await;
+
+	assert!(result.structured_content.is_none());
+	assert_eq!(result.content.len(), 1);
+	let rmcp::model::ContentBlock::Audio(audio) = &result.content[0] else {
+		panic!("expected audio content, got {:?}", result.content[0]);
+	};
+	use base64::Engine;
+	assert_eq!(audio.mime_type, "audio/mpeg");
+	assert_eq!(
+		audio.data,
+		base64::engine::general_purpose::STANDARD.encode(mp3)
+	);
+}
+
+#[tokio::test]
+async fn test_call_tool_binary_response_is_blob_resource() {
+	let (server, handler) = setup().await;
+	let bytes: &[u8] = b"%PDF-1.7\n\xff\xfe\x00\x80binary";
+
+	for (id, content_type) in [
+		("octet", "application/octet-stream"),
+		("pdf", "application/pdf"),
+		("multipart", "multipart/form-data"),
+		("proto", "application/x-protobuf"),
+	] {
+		mount_body(&server, id, Some(content_type), bytes).await;
+		let result = call_get_user(&handler, id).await;
+
+		assert!(result.structured_content.is_none(), "{id}");
+		assert_eq!(result.content.len(), 1, "{id}");
+		let rmcp::model::ContentBlock::Resource(res) = &result.content[0] else {
+			panic!(
+				"expected resource content for {id}, got {:?}",
+				result.content[0]
+			);
+		};
+		let ResourceContents::BlobResourceContents {
+			uri,
+			mime_type,
+			blob,
+			..
+		} = &res.resource
+		else {
+			panic!("expected blob resource for {id}, got {:?}", res.resource);
+		};
+		use base64::Engine;
+		assert_eq!(uri, "tool://get_user");
+		assert_eq!(mime_type.as_deref(), Some(content_type), "{id}");
+		assert_eq!(
+			*blob,
+			base64::engine::general_purpose::STANDARD.encode(bytes),
+			"{id}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_call_tool_octet_stream_ascii_body_is_text() {
+	let (server, handler) = setup().await;
+	mount_body(
+		&server,
+		"ascii",
+		Some("application/octet-stream"),
+		b"id,name\n1,ascii\n",
+	)
+	.await;
+
+	let result = call_get_user(&handler, "ascii").await;
+
+	let rmcp::model::ContentBlock::Text(text) = &result.content[0] else {
+		panic!("expected text content, got {:?}", result.content[0]);
+	};
+	assert_eq!(text.text, "id,name\n1,ascii\n");
+}
+
+#[tokio::test]
+async fn test_call_tool_untyped_binary_body_is_blob_resource() {
+	let (server, handler) = setup().await;
+	let bytes: &[u8] = b"\x89PNG\r\n\x1a\n\xff\xfe";
+	mount_body(&server, "untyped", None, bytes).await;
+
+	let result = call_get_user(&handler, "untyped").await;
+
+	assert!(result.structured_content.is_none());
+	let rmcp::model::ContentBlock::Resource(res) = &result.content[0] else {
+		panic!("expected resource content, got {:?}", result.content[0]);
+	};
+	let rmcp::model::ResourceContents::BlobResourceContents {
+		uri,
+		mime_type,
+		blob,
+		..
+	} = &res.resource
+	else {
+		panic!("expected blob resource, got {:?}", res.resource);
+	};
+	use base64::Engine;
+	assert_eq!(uri, "tool://get_user");
+	assert_eq!(mime_type.as_deref(), Some("application/octet-stream"));
+	assert_eq!(
+		*blob,
+		base64::engine::general_purpose::STANDARD.encode(bytes)
+	);
+}
+
+#[tokio::test]
+async fn test_call_tool_empty_body_returns_no_content() {
+	let (server, handler) = setup().await;
+	mount_body(&server, "empty", Some("image/png"), b"").await;
+
+	let result = call_get_user(&handler, "empty").await;
+
+	assert!(result.content.is_empty());
+	assert!(result.structured_content.is_none());
 }
 
 #[tokio::test]
@@ -851,21 +1118,28 @@ fn test_parse_openapi_schema_maps_summary_to_tool_title() {
 	assert_eq!(without_summary.title, None);
 }
 
-#[test]
-fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
-	let raw = r#"{
+#[rstest]
+#[case::required_true(Some(true))]
+#[case::required_omitted(None)]
+#[case::required_false(Some(false))]
+fn test_parse_openapi_schema_requires_path_item_parameters(#[case] required: Option<bool>) {
+	let mut parameter = json!({
+		"name": "workspace_gid",
+		"in": "path",
+		"schema": {"type": "string"}
+	});
+	if let Some(required) = required {
+		parameter
+			.as_object_mut()
+			.unwrap()
+			.insert("required".to_string(), json!(required));
+	}
+	let open_api: OpenAPI = serde_json::from_value(json!({
 		"openapi": "3.0.0",
 		"info": {"title": "Path Params", "version": "1.0.0"},
 		"paths": {
 			"/workspaces/{workspace_gid}/tags": {
-				"parameters": [
-					{
-						"name": "workspace_gid",
-						"in": "path",
-						"required": true,
-						"schema": {"type": "string"}
-					}
-				],
+				"parameters": [parameter],
 				"get": {
 					"operationId": "getTagsForWorkspace",
 					"summary": "Get tags in a workspace",
@@ -875,8 +1149,8 @@ fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 				}
 			}
 		}
-	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	}))
+	.expect("parseable OpenAPI schema");
 	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
 	let (_tool, upstream) = tools
 		.iter()
@@ -886,6 +1160,14 @@ fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 	assert_eq!(upstream.path, "/workspaces/{workspace_gid}/tags");
 
 	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
+	let required = schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("tool schema should include required array");
+	assert!(
+		required.iter().any(|value| value == "path"),
+		"path should be required in the tool schema"
+	);
 	let path_schema = nested_schema(schema, "path");
 	let properties = path_schema
 		.get("properties")
@@ -933,7 +1215,6 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 						{
 							"name": "workspace_gid",
 							"in": "path",
-							"required": true,
 							"description": "operation-level parameter",
 							"schema": {"type": "string", "pattern": "^ws_"}
 						}
@@ -945,7 +1226,7 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 			}
 		}
 	}"#;
-	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("parseable OpenAPI schema");
 	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
 
 	let schema = tool_schema_for(&tools, "getWorkspaceTag");
@@ -1097,6 +1378,117 @@ fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
 	assert!(path_properties.contains_key("workspace_gid"));
 }
 
+#[test]
+fn test_parse_openapi_schema_bundles_recursive_component_schemas() {
+	let raw = r##"{
+		"openapi": "3.0.0",
+		"info": {"title": "Recursive schemas", "version": "1.0.0"},
+		"paths": {
+			"/nodes": {
+				"post": {
+					"operationId": "createNode",
+					"parameters": [{
+						"name": "root",
+						"in": "query",
+						"required": true,
+						"schema": {"$ref": "#/components/schemas/A"}
+					}],
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {"$ref": "#/components/schemas/Node"}
+							}
+						}
+					},
+					"responses": {"200": {"description": "ok"}}
+				}
+			}
+		},
+		"components": {
+			"schemas": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/components/schemas/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/components/schemas/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/components/schemas/A"}}
+				},
+				"Unused": {"type": "string"}
+			}
+		}
+	}"##;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("recursive schemas should parse");
+
+	assert_eq!(
+		Value::Object(tool_schema_for(&tools, "createNode").clone()),
+		json!({
+			"type": "object",
+			"required": ["body", "query"],
+			"properties": {
+				"body": {"$ref": "#/$defs/Node"},
+				"query": {
+					"type": "object",
+					"required": ["root"],
+					"properties": {"root": {"$ref": "#/$defs/A"}}
+				}
+			},
+			"$defs": {
+				"Node": {
+					"type": "object",
+					"properties": {
+						"children": {
+							"type": "array",
+							"items": {"$ref": "#/$defs/Node"}
+						}
+					}
+				},
+				"A": {
+					"type": "object",
+					"properties": {"b": {"$ref": "#/$defs/B"}}
+				},
+				"B": {
+					"type": "object",
+					"properties": {"a": {"$ref": "#/$defs/A"}}
+				}
+			}
+		})
+	);
+}
+
+#[test]
+fn test_bundle_component_schema_refs_rejects_other_component_refs() {
+	let open_api: OpenAPI = serde_json::from_value(json!({
+		"openapi": "3.0.0",
+		"info": {"title": "Invalid schema ref", "version": "1.0.0"},
+		"paths": {},
+		"components": {
+			"schemas": {
+				"A": {"$ref": "#/components/parameters/not-a-schema"}
+			}
+		}
+	}))
+	.expect("valid OpenAPI document");
+	let mut schema = json!({"$ref": "#/components/schemas/A"});
+
+	assert!(matches!(
+		super::bundle_component_schema_refs(&mut schema, &open_api),
+		Err(ParseError::UnsupportedReference(reference))
+			if reference == "#/components/parameters/not-a-schema"
+	));
+}
+
 #[rstest]
 #[case::empty_string(json!({"verbose": ""}), vec![("verbose", "")])]
 #[case::string_value(json!({"verbose": "true"}), vec![("verbose", "true")])]
@@ -1142,7 +1534,10 @@ async fn test_query_param_types(
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
 }
 
 #[rstest]
@@ -1150,8 +1545,9 @@ async fn test_query_param_types(
 #[case::numeric_id("456", "/users/456")]
 #[case::spaces("user name", "/users/user%20name")]
 #[case::unicode("user\u{00e9}", "/users/user%C3%A9")]
-#[case::path_traversal("../admin", "/users/..%2Fadmin")]
+#[case::dotted_value("v1.2-file..name", "/users/v1.2-file..name")]
 #[case::embedded_slashes("user-1/o/er-1001", "/users/user-1%2Fo%2Fer-1001")]
+#[case::encoded_project_path("group/project", "/users/group%2Fproject")]
 #[case::query_injection("123?admin=true", "/users/123%3Fadmin%3Dtrue")]
 #[case::query_with_ampersand("123?a=1&b=2", "/users/123%3Fa%3D1%26b%3D2")]
 #[case::hash_fragment("user#section", "/users/user%23section")]
@@ -1178,7 +1574,101 @@ async fn test_path_param_encoding(#[case] user_id: &str, #[case] expected_path: 
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), json!({ "id": user_id }));
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		json!({ "id": user_id })
+	);
+}
+
+#[rstest]
+#[case::empty("")]
+#[case::dot(".")]
+#[case::dot_dot("..")]
+#[case::leading_parent("../admin")]
+#[case::leading_current("./profile")]
+#[case::embedded_parent("user/../admin")]
+#[case::repeated_separator("user//../admin")]
+#[case::backslash_parent("..\\admin")]
+#[case::embedded_backslash_parent("user\\..\\admin")]
+fn rejects_unsafe_path_params(#[case] value: &str) {
+	let params = json!({ "user_id": value }).as_object().unwrap().clone();
+	assert!(substitute_path_params("/users/{user_id}", &params).is_err());
+}
+
+#[tokio::test]
+async fn rejects_traversal_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({ "path": { "user_id": "../admin" } });
+
+	let error = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn rejects_segment_injection_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({ "path": { "user_id": "123/../admin" } });
+
+	let error = handler
+		.call_tool(
+			"get_user",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+#[rstest]
+#[case::missing(json!({}), "path parameter 'user_id' is missing")]
+#[case::null(json!({"user_id": null}), "path parameter 'user_id' must be a string or number")]
+#[case::boolean(json!({"user_id": true}), "path parameter 'user_id' must be a string or number")]
+#[case::array(json!({"user_id": []}), "path parameter 'user_id' must be a string or number")]
+#[case::object(json!({"user_id": {}}), "path parameter 'user_id' must be a string or number")]
+fn rejects_missing_or_unsupported_path_params(#[case] params: Value, #[case] expected_error: &str) {
+	let error = substitute_path_params("/users/{user_id}", params.as_object().unwrap()).unwrap_err();
+	assert_eq!(error.to_string(), expected_error);
+}
+
+#[test]
+fn accepts_numeric_path_params() {
+	let params = json!({ "user_id": 123 }).as_object().unwrap().clone();
+	assert_eq!(
+		substitute_path_params("/users/{user_id}", &params).unwrap(),
+		"/users/123"
+	);
+}
+
+#[tokio::test]
+async fn rejects_multi_parameter_dot_segment_traversal_before_sending() {
+	let (server, handler) = setup().await;
+	let args = json!({
+		"path": {"tenant": "..", "kind": "..", "id": "internal"}
+	});
+
+	let error = handler
+		.call_tool(
+			"get_doc",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(error, UpstreamError::InvalidRequest(_)));
+	assert!(server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -1217,7 +1707,10 @@ async fn test_schema_defined_headers_work() {
 		"Schema-defined headers should work: {:?}",
 		result.err()
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 // Custom matcher to verify a header is NOT present
@@ -1277,7 +1770,10 @@ async fn test_blocked_headers_are_ignored() {
 
 	// The request should succeed with the correct headers (blocked headers ignored)
 	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -1318,7 +1814,10 @@ async fn test_headers_not_in_schema_are_ignored() {
 		"Request should succeed with schema-defined headers: {:?}",
 		result.err()
 	);
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }
 
 #[tokio::test]
@@ -1552,13 +2051,16 @@ async fn test_openapi_from_url() {
 	let local_backend = LocalBackend::MCP(LocalMcpBackend {
 		targets: vec![Arc::new(LocalMcpTarget {
 			name: "users-api".into(),
+			condition: None,
 			spec: local_target_spec,
 			policies: None,
 		})],
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,
 		failure_mode: None,
+		sse_keep_alive: None,
 		dns_rebinding_protection: false,
+		server: None,
 	});
 
 	// Convert to runtime backends
@@ -1840,6 +2342,7 @@ async fn test_call_tool_with_binary_body() {
 		ca: None,
 		spiffe: None,
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		admission: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());
@@ -1916,5 +2419,8 @@ async fn test_call_tool_with_binary_body() {
 		.await;
 
 	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
-	assert_eq!(result.unwrap(), expected_response);
+	assert_eq!(
+		result.unwrap().structured_content.unwrap(),
+		expected_response
+	);
 }

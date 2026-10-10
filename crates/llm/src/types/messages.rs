@@ -4,8 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
-	SimpleChatCompletionMessage, visit_json_at,
+	ContentScope, NormalizedMessage, NormalizedMessagePart, OutputMessage, OutputMessagePart,
+	RequestType, ResponseType, SimpleChatCompletionMessage, visit_json_at,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -86,7 +86,14 @@ impl TextPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			TextPart::Text { text, .. } => Some(text),
+			TextPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
+		}
+	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			TextPart::Text { rest, .. } => Some(rest),
 			TextPart::Unknown(_) => None,
 		}
 	}
@@ -102,7 +109,14 @@ impl ContentPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			ContentPart::Text { text, .. } => Some(text),
+			ContentPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
+		}
+	}
+
+	fn rest_mut(&mut self) -> Option<&mut serde_json::Value> {
+		match self {
+			ContentPart::Text { rest, .. } => Some(rest),
 			ContentPart::Unknown(_) => None,
 		}
 	}
@@ -187,7 +201,16 @@ pub fn get_messages_helper(
 	out
 }
 
+/// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
+const PRESERVED_REST_KEYS: &[&str] = &[
+	// Anthropic prompt-cache breakpoint
+	"cache_control",
+];
+
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Messages
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -244,6 +267,41 @@ impl RequestType for Request {
 		get_messages_helper(&self.messages, &self.system)
 	}
 
+	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
+		let mut messages = self
+			.system
+			.as_ref()
+			.map(|system| NormalizedMessage {
+				role: strng::literal!("system"),
+				parts: match system {
+					TextBlock::Text(text) => {
+						vec![NormalizedMessagePart::text(strng::new(text))]
+					},
+					TextBlock::Array(parts) => parts
+						.iter()
+						.filter_map(TextPart::text)
+						.map(|text| NormalizedMessagePart::text(strng::new(text)))
+						.collect(),
+				},
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
+			role: strng::new(&message.role),
+			parts: match &message.content {
+				Some(ContentBlock::Text(text)) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				Some(ContentBlock::Array(parts)) => {
+					parts.iter().filter_map(normalized_anthropic_part).collect()
+				},
+				None => Vec::new(),
+			},
+		}));
+		crate::types::attach_tool_result_names(&mut messages);
+		messages
+	}
+
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		let (system_prompts, message_prompts): (Vec<_>, Vec<_>) = messages
 			.into_iter()
@@ -270,9 +328,14 @@ impl RequestType for Request {
 		match &mut self.system {
 			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
 			Some(TextBlock::Array(parts)) => {
-				crate::types::scan_text_runs(parts, "\n", TextPart::text_mut, &mut |text| {
-					f(ContentScope::SystemPrompt, text)
-				});
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					TextPart::text_mut,
+					TextPart::rest_mut,
+					PRESERVED_REST_KEYS,
+					&mut |text| f(ContentScope::SystemPrompt, text),
+				);
 			},
 			None => {},
 		}
@@ -285,13 +348,51 @@ impl RequestType for Request {
 							visit_tool_part_text(value, f);
 						}
 					}
-					crate::types::scan_text_runs(parts, " ", ContentPart::text_mut, &mut |text| {
-						f(ContentScope::Messages, text)
-					});
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						ContentPart::text_mut,
+						ContentPart::rest_mut,
+						PRESERVED_REST_KEYS,
+						&mut |text| f(ContentScope::Messages, text),
+					);
 				},
 				None => {},
 			}
 		}
+	}
+}
+
+fn normalized_anthropic_part(part: &ContentPart) -> Option<NormalizedMessagePart> {
+	match part {
+		ContentPart::Text { text, .. } => Some(NormalizedMessagePart::text(strng::new(text))),
+		ContentPart::Unknown(value) => match value.get("type").and_then(serde_json::Value::as_str) {
+			Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
+				crate::types::normalized_tool_call(value)
+			},
+			Some(item_type) if item_type == "tool_result" || item_type.ends_with("_tool_result") => {
+				Some(NormalizedMessagePart::tool_result(
+					value
+						.get("tool_use_id")
+						.or_else(|| value.get("id"))
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("name")
+						.and_then(serde_json::Value::as_str)
+						.map(strng::new),
+					value
+						.get("content")
+						.cloned()
+						.unwrap_or_else(|| serde_json::Value::Null),
+					value.get("is_error").and_then(serde_json::Value::as_bool),
+				))
+			},
+			Some("thinking" | "redacted_thinking") => {
+				Some(NormalizedMessagePart::reasoning(value.clone()))
+			},
+			_ => None,
+		},
 	}
 }
 
@@ -304,6 +405,12 @@ fn visit_tool_part_text(
 	value: &mut serde_json::Value,
 	f: &mut dyn FnMut(ContentScope, &mut String),
 ) {
+	if !crate::types::has_signature(value) {
+		visit_part_text(value, f);
+	}
+}
+
+fn visit_part_text(value: &mut serde_json::Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
 	match value.get("type").and_then(|t| t.as_str()) {
 		Some(
 			"tool_result"
@@ -313,41 +420,133 @@ fn visit_tool_part_text(
 			| "text_editor_code_execution_tool_result"
 			| "tool_search_tool_result"
 			| "web_fetch_tool_result"
-			| "advisor_tool_result",
+			| "advisor_tool_result"
+			| "web_search_tool_result",
 		) => {
-			visit_json_at(value, &["content"], ContentScope::ToolOutput, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::ToolOutput, f);
+			}
+		},
+		Some("mcp_tool_listing") => {
+			if let Some(serde_json::Value::Array(tools)) = value.get_mut("tools") {
+				for tool in tools {
+					visit_json_at(tool, &["description"], ContentScope::ToolOutput, f);
+					if let Some(schema) = tool.get_mut("input_schema") {
+						crate::types::visit_json_schema_text(schema, &mut |text| {
+							f(ContentScope::ToolOutput, text)
+						});
+					}
+				}
+			}
 		},
 		Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
 			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
 		},
 		// User-provided context blocks: message content, not tool traffic.
-		Some("document") => {
-			visit_json_at(value, &["source"], ContentScope::Messages, f);
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["context"], ContentScope::Messages, f);
-		},
-		Some("search_result") => {
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
-		},
+		Some("document" | "search_result") => visit_content_text(value, ContentScope::Messages, f),
 		// Replayed conversation summary.
 		Some("compaction") => {
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
+			if value
+				.get("encrypted_content")
+				.is_none_or(serde_json::Value::is_null)
+			{
+				visit_json_at(value, &["content"], ContentScope::Messages, f);
+			}
 		},
+		Some("thinking") => visit_json_at(value, &["thinking"], ContentScope::Messages, f),
 		// Mid-conversation system instructions: text blocks under `content`.
 		Some("mid_conv_system") => {
-			visit_json_at(value, &["content"], ContentScope::SystemPrompt, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::SystemPrompt, f);
+			}
 		},
 		// No readable text: base64 payloads and file/tool references.
 		Some("image" | "container_upload" | "tool_addition" | "tool_removal" | "fallback") => {},
 		// Signature/encrypted content the API integrity-checks on replay; a mask would 400.
-		Some("thinking" | "redacted_thinking" | "web_search_tool_result") => {},
+		Some("redacted_thinking") => {},
 		other => {
 			tracing::debug!(
 				block_type = other.unwrap_or("<none>"),
 				"unrecognized content block; not scanned by prompt guards"
 			);
 		},
+	}
+}
+
+fn visit_content_text(
+	value: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	use serde_json::Value;
+	if crate::types::has_signature(value) {
+		return;
+	}
+	match value {
+		Value::String(text) => f(scope, text),
+		Value::Array(parts) => {
+			for part in parts {
+				visit_content_text(part, scope, f);
+			}
+		},
+		Value::Object(_) => match value.get("type").and_then(Value::as_str) {
+			Some("text" | "advisor_result") => visit_json_at(value, &["text"], scope, f),
+			Some("document") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["context"], scope, f);
+				if let Some(source) = value.get_mut("source") {
+					visit_document_source(source, scope, f);
+				}
+			},
+			Some("search_result" | "web_fetch_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["source"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+				if let Some(content) = value.get_mut("content") {
+					visit_content_text(content, scope, f);
+				}
+			},
+			Some("web_search_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+			},
+			Some(
+				"code_execution_result" | "bash_code_execution_result" | "encrypted_code_execution_result",
+			) => {
+				visit_json_at(value, &["stdout"], scope, f);
+				visit_json_at(value, &["stderr"], scope, f);
+			},
+			Some("text_editor_code_execution_view_result") => {
+				if value.get("file_type").and_then(Value::as_str) == Some("text") {
+					visit_json_at(value, &["content"], scope, f);
+				}
+			},
+			Some("text_editor_code_execution_str_replace_result") => {
+				visit_json_at(value, &["lines"], scope, f)
+			},
+			Some("text_editor_code_execution_tool_result_error" | "tool_search_tool_result_error") => {
+				visit_json_at(value, &["error_message"], scope, f);
+			},
+			// Other result variants carry IDs, status codes, media, or encrypted data.
+			_ => {},
+		},
+		_ => {},
+	}
+}
+
+fn visit_document_source(
+	source: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	match source.get("type").and_then(serde_json::Value::as_str) {
+		Some("text") => visit_json_at(source, &["data"], scope, f),
+		Some("content") => {
+			if let Some(content) = source.get_mut("content") {
+				visit_content_text(content, scope, f);
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -482,6 +681,7 @@ impl ResponseType for Response {
 			output_text_tokens: None,
 			output_audio_tokens: self.output_audio_tokens,
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
+			pages: None,
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
@@ -501,6 +701,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_chunk_latencies: Default::default(),
 		}
 	}
 
@@ -534,10 +736,14 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.content {
-			if let Some(text) = &mut c.text {
-				f(text);
+			let signed = crate::types::has_signature(&c.rest);
+			let mut visit =
+				|scope, text: &mut String| f(crate::types::ResponseText { scope, signed }, text);
+			match &mut c.text {
+				Some(text) => visit(ContentScope::Messages, text),
+				None => visit_part_text(&mut c.rest, &mut visit),
 			}
 		}
 	}
@@ -697,6 +903,14 @@ pub mod typed {
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
+		ToolReference {
+			tool_name: String,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			cache_control: Option<CacheControlEphemeral>,
+		},
+		// Same tolerance as ContentBlock: an unrecognized part must not reject the whole request
+		#[serde(other)]
+		Unknown,
 	}
 
 	#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
@@ -765,7 +979,7 @@ pub mod typed {
 	impl From<CacheControlEphemeral> for super::super::completions::typed::PromptCacheBreakpointParam {
 		fn from(_: CacheControlEphemeral) -> Self {
 			PromptCacheBreakpointParam {
-				mode: super::super::completions::typed::PromptCacheBreakpointMode::Explicit,
+				mode: super::super::completions::typed::PromptCacheBreakpointParamMode::Explicit,
 			}
 		}
 	}
@@ -1123,6 +1337,9 @@ pub mod typed {
 		pub description: Option<String>,
 		/// JSON schema for tool input
 		pub input_schema: serde_json::Value,
+		/// Enforce the tool input schema strictly.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub strict: Option<bool>,
 		/// Create a cache control breakpoint at this content block
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
@@ -1245,6 +1462,7 @@ pub mod typed {
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				pages: None,
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
@@ -1267,6 +1485,8 @@ pub mod typed {
 				},
 				output_messages,
 				first_token: Default::default(),
+				last_token_at: Default::default(),
+				inter_chunk_latencies: Default::default(),
 			}
 		}
 
@@ -1308,10 +1528,76 @@ pub mod typed {
 			serde_json::to_vec(&self)
 		}
 
-		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 			for block in &mut self.content {
-				if let ContentBlock::Text(t) = block {
-					f(&mut t.text);
+				if let ContentBlock::Thinking {
+					thinking,
+					signature,
+				} = block
+				{
+					f(
+						crate::types::ResponseText {
+							scope: crate::types::ContentScope::Messages,
+							signed: !signature.is_empty(),
+						},
+						thinking,
+					);
+					continue;
+				}
+				let mut plain =
+					|scope: crate::types::ContentScope, text: &mut String| f(scope.into(), text);
+				let f = &mut plain;
+				match block {
+					ContentBlock::Text(t) => f(crate::types::ContentScope::Messages, &mut t.text),
+					ContentBlock::ToolUse { input, .. } | ContentBlock::ServerToolUse { input, .. } => {
+						crate::types::visit_json_strings(input, &mut |text| {
+							f(crate::types::ContentScope::ToolInput, text)
+						});
+					},
+					ContentBlock::ToolResult { content, .. } => {
+						let scope = crate::types::ContentScope::ToolOutput;
+						match content {
+							ToolResultContent::Text(text) => f(scope, text),
+							ToolResultContent::Array(parts) => {
+								for part in parts {
+									match part {
+										ToolResultContentPart::Text { text, .. } => f(scope, text),
+										ToolResultContentPart::Document {
+											source,
+											title,
+											context,
+											..
+										} => {
+											super::visit_document_source(source, scope, f);
+											for text in title.iter_mut().chain(context.iter_mut()) {
+												f(scope, text);
+											}
+										},
+										ToolResultContentPart::SearchResult {
+											content,
+											source,
+											title,
+											..
+										} => {
+											f(scope, source);
+											f(scope, title);
+											for part in content {
+												super::visit_content_text(part, scope, f);
+											}
+										},
+										_ => {},
+									}
+								}
+							},
+						}
+					},
+					ContentBlock::WebSearchToolResult {
+						content: Some(content),
+						..
+					} => {
+						super::visit_content_text(content, crate::types::ContentScope::ToolOutput, f);
+					},
+					_ => {},
 				}
 			}
 		}
@@ -1322,6 +1608,23 @@ pub mod typed {
 mod tests {
 	use super::*;
 	use crate::types::ResponseType;
+
+	#[test]
+	fn tool_result_parts_accept_tool_reference_and_unknown_types() {
+		let parsed: typed::ToolResultContent = serde_json::from_value(serde_json::json!([
+			{"type": "tool_reference", "tool_name": "mcp__example__list_widgets"},
+			{"type": "future_block", "foo": 1}
+		]))
+		.expect("unrecognized tool_result parts must not fail parsing");
+		let typed::ToolResultContent::Array(parts) = parsed else {
+			panic!("expected array content");
+		};
+		assert!(matches!(
+			&parts[0],
+			typed::ToolResultContentPart::ToolReference { tool_name, .. } if tool_name == "mcp__example__list_widgets"
+		));
+		assert!(matches!(parts[1], typed::ToolResultContentPart::Unknown));
+	}
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {

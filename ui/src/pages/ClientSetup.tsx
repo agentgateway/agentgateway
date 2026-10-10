@@ -8,10 +8,12 @@ import curlIcon from '@/assets/curl.svg';
 import cursorIcon from '@/assets/cursor.svg';
 import gooseIcon from '@/assets/goose.svg';
 import opencodeIcon from '@/assets/opencode.svg';
+import piIcon from '@/assets/pi.svg';
 import githubCopilotIcon from '@/assets/providers/copilot.svg';
 import windsurfIcon from '@/assets/windsurf.svg';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
+import { FreeformCombobox } from '@/components/FreeformCombobox';
 import {
 	Dropdown,
 	Field,
@@ -24,7 +26,7 @@ import { ProviderIcon } from '@/components/ProviderIcon';
 import { providerLabel } from '@/config';
 import { hasKeyValue, keyLabel, maskKey } from '@/credentialDisplay';
 import { llmGatewayOrigin } from '@/gatewayUrls';
-import { useLlmConfigData } from '@/hooks';
+import { useConfigDumpMode, useLlmConfigData } from '@/hooks';
 import {
 	isWildcardModelName,
 	modelProviderLabel,
@@ -32,13 +34,23 @@ import {
 	wildcardModelPrefix,
 	wildcardResolvedSuffix
 } from '@/modelResolution';
+import { requestableDumpModelNames } from '@/pages/models/dumpModels';
 import type { LlmModel, LlmProvider, ProviderName } from '@/types';
 
 type ClientRecipe = {
 	id: string;
 	title: string;
 	description: string;
-	icon: 'claude' | 'codex' | 'curl' | 'cursor' | 'copilot' | 'goose' | 'opencode' | 'windsurf';
+	icon:
+		| 'claude'
+		| 'codex'
+		| 'curl'
+		| 'cursor'
+		| 'copilot'
+		| 'goose'
+		| 'opencode'
+		| 'pi'
+		| 'windsurf';
 	provider?: ProviderName;
 	steps?: ReactNode[];
 	language: string;
@@ -56,6 +68,9 @@ type RequestModelOption =
 	| { kind: 'virtual'; name: string; icon: ReactNode; searchText: string };
 
 export function ClientSetupPage() {
+	const mode = useConfigDumpMode();
+	// XDS mode has no local LLM config: models come from the config dump instead.
+	const dumpMode = mode.data?.mode === 'dump';
 	const {
 		config,
 		models,
@@ -64,7 +79,11 @@ export function ClientSetupPage() {
 		apiKeys,
 		isLoading: modelsLoading,
 		error: configDataError
-	} = useLlmConfigData();
+	} = useLlmConfigData({ enabled: !dumpMode });
+	const dumpModelNames = useMemo(
+		() => (dumpMode ? requestableDumpModelNames(mode.data?.dump?.models ?? []) : []),
+		[dumpMode, mode.data]
+	);
 	const modelOptions = useMemo(
 		() => [
 			...models.map(item => ({
@@ -84,19 +103,26 @@ export function ClientSetupPage() {
 		[models, providers, virtualModels]
 	);
 	const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
-	const derivedBaseUrl = llmGatewayOrigin(config.data);
+	// The proxy does not know its externally reachable URL in XDS mode, so there is nothing to derive.
+	const derivedBaseUrl = dumpMode ? '' : llmGatewayOrigin(config.data);
 	const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
 	const [baseUrlTouched, setBaseUrlTouched] = useState(false);
 	const [model, setModel] = useState('');
+	const [modelTouched, setModelTouched] = useState(false);
 	const [specificModel, setSpecificModel] = useState('');
 	const [apiKeyMode, setApiKeyMode] = useState<'saved' | 'raw'>('saved');
 	const [selectedKey, setSelectedKey] = useState('');
 	const [rawKey, setRawKey] = useState('');
 	const [selectedIntegration, setSelectedIntegration] = useState('curl');
 
-	const selectedModel = modelOptions.some(item => item.name === model)
-		? model
-		: (modelOptions[0]?.name ?? '');
+	const selectedModel = dumpMode
+		? // An edited field keeps what was typed, including an empty value.
+			modelTouched
+			? model
+			: (dumpModelNames[0] ?? '')
+		: modelOptions.some(item => item.name === model)
+			? model
+			: (modelOptions[0]?.name ?? '');
 	const selectedModelOption = modelOptions.find(item => item.name === selectedModel);
 	const selectedModelConfig =
 		selectedModelOption?.kind === 'model' ? selectedModelOption.config : undefined;
@@ -116,12 +142,10 @@ export function ClientSetupPage() {
 			: undefined;
 	const apiKey = selectedVirtualKey?.key ?? rawKey;
 	const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
-	const requestModel = clientSetupRequestModel(
-		selectedModelOption,
-		selectedModel,
-		specificModel,
-		providers
-	);
+	// In XDS mode the name is typed or picked directly, so there is no model config to resolve.
+	const requestModel = dumpMode
+		? dumpRequestModel(selectedModel, specificModel)
+		: clientSetupRequestModel(selectedModelOption, selectedModel, specificModel, providers);
 	const recipes = clientRecipes({
 		baseUrl: effectiveBaseUrl,
 		model: requestModel || 'model',
@@ -140,7 +164,19 @@ export function ClientSetupPage() {
 					{configDataError.message}
 				</StatusBanner>
 			) : null}
-			{modelOptions.length === 0 && !modelsLoading ? (
+			{dumpMode ? (
+				<StatusBanner state="info" title="This page configures the client only">
+					Nothing here is written to the gateway. It does not create or change Gateway, HTTPRoute,
+					AgentgatewayBackend, AgentgatewayPolicy or Secret resources.
+				</StatusBanner>
+			) : null}
+			{dumpMode && !dumpModelNames.length && !mode.isLoading ? (
+				<StatusBanner state="warn" title="No models in the gateway dump">
+					No public model is present in the active dump. Type the model name the client should
+					request.
+				</StatusBanner>
+			) : null}
+			{!dumpMode && modelOptions.length === 0 && !modelsLoading ? (
 				<StatusBanner state="warn" title="No models configured">
 					Create an LLM model before wiring clients to the gateway.
 				</StatusBanner>
@@ -156,32 +192,71 @@ export function ClientSetupPage() {
 					<div className="section-heading">
 						<h3>Connection</h3>
 					</div>
-					<Field label="Gateway base URL" hint="SDK snippets use this URL with /v1 appended.">
+					<Field
+						label="Gateway base URL"
+						hint={
+							dumpMode
+								? 'The gateway cannot know its external URL. Enter the one clients use, including any route prefix.'
+								: 'SDK snippets use this URL with /v1 appended.'
+						}
+					>
 						<input
 							value={effectiveBaseUrl}
 							onChange={event => {
 								setBaseUrlTouched(true);
 								setBaseUrl(event.target.value);
 							}}
-							placeholder={derivedBaseUrl}
+							placeholder={dumpMode ? 'https://gateway.example.com' : derivedBaseUrl}
 						/>
 					</Field>
 					<FieldGroup label="Model">
-						<Dropdown
-							ariaLabel="Model"
-							value={selectedModel}
-							placeholder="No models"
-							searchable
-							options={modelOptions.map(item => ({
-								value: item.name,
-								label: item.name,
-								description: item.kind === 'virtual' ? 'Virtual model' : undefined,
-								icon: item.icon,
-								searchText: item.searchText
-							}))}
-							onChange={setModel}
-						/>
+						{dumpMode ? (
+							<FreeformCombobox
+								ariaLabel="Model"
+								value={selectedModel}
+								options={dumpModelNames}
+								onChange={value => {
+									setModelTouched(true);
+									setModel(value);
+								}}
+								placeholder="Select or type a model"
+								emptyText="No models in the dump"
+							/>
+						) : (
+							<Dropdown
+								ariaLabel="Model"
+								value={selectedModel}
+								placeholder="No models"
+								searchable
+								options={modelOptions.map(item => ({
+									value: item.name,
+									label: item.name,
+									description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+									icon: item.icon,
+									searchText: item.searchText
+								}))}
+								onChange={setModel}
+							/>
+						)}
 					</FieldGroup>
+					{dumpMode && isWildcardModelName(selectedModel) ? (
+						<Field
+							label="Specific model"
+							hint="The dump lists a pattern; clients have to request a concrete model."
+						>
+							<div className="target-resolved-composite">
+								{wildcardModelPrefix(selectedModel) ? (
+									<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
+								) : null}
+								<input
+									aria-label="Specific model"
+									value={specificModel}
+									onChange={event => setSpecificModel(event.target.value)}
+									placeholder="Model name"
+								/>
+							</div>
+						</Field>
+					) : null}
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
 							<div className="target-resolved-composite">
@@ -236,7 +311,9 @@ export function ClientSetupPage() {
 					<div className="client-setup-summary">
 						<div>
 							<span>Base URL</span>
-							<code>{effectiveBaseUrl.replace(/\/$/, '')}/v1</code>
+							<code>
+								{effectiveBaseUrl.trim() ? `${effectiveBaseUrl.replace(/\/$/, '')}/v1` : 'Not set'}
+							</code>
 						</div>
 						<div>
 							<span>Model</span>
@@ -249,15 +326,35 @@ export function ClientSetupPage() {
 					</div>
 				</Panel>
 
-				<ClientRecipeCard
-					recipe={activeRecipe}
-					recipes={recipes}
-					selectedIntegration={activeRecipe.id}
-					onSelectIntegration={setSelectedIntegration}
-				/>
+				{effectiveBaseUrl.trim() ? (
+					<ClientRecipeCard
+						recipe={activeRecipe}
+						recipes={recipes}
+						selectedIntegration={activeRecipe.id}
+						onSelectIntegration={setSelectedIntegration}
+					/>
+				) : (
+					<Panel>
+						<StatusBanner state="info" title="Enter the gateway base URL">
+							Client snippets appear once the URL is set, so they never carry a placeholder host.
+						</StatusBanner>
+					</Panel>
+				)}
 			</section>
 		</div>
 	);
+}
+
+/**
+ * XDS mode has no model config to resolve against. A dump name can be a pattern
+ * (`gpt-*`, `*-latest` or `*`), and a client cannot request a pattern, so the
+ * concrete part is typed in and appended to the prefix, as in standalone mode.
+ */
+function dumpRequestModel(selectedModel: string, specificModel: string) {
+	if (!isWildcardModelName(selectedModel)) return selectedModel.trim();
+	const prefix = wildcardModelPrefix(selectedModel);
+	const suffix = specificModel.trim();
+	return suffix ? `${prefix}${suffix}` : `${prefix}<model>`;
 }
 
 function clientSetupRequestModel(
@@ -320,6 +417,7 @@ function ClientRecipeCard(props: {
 			{props.recipe.steps?.length ? (
 				<ol className="client-recipe-steps">
 					{props.recipe.steps.map((step, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
 						<li key={index}>{step}</li>
 					))}
 				</ol>
@@ -369,7 +467,7 @@ export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, typ
 		{
 			id: 'curl',
 			title: 'curl',
-			description: 'Minimal raw HTTP request for debugging client connectivity.',
+			description: 'Send a chat completion request to agentgateway with curl.',
 			icon: 'curl',
 			language: 'bash',
 			code: `curl ${JSON.stringify(completions)} ${continuation}
@@ -384,8 +482,7 @@ ${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
 		{
 			id: 'claude-code',
 			title: 'Claude Code',
-			description:
-				'Use the gateway URL and key with Claude-compatible model routes when configured.',
+			description: 'Connect Claude Code to agentgateway using the Anthropic Messages API.',
 			icon: 'claude',
 			language: 'bash',
 			code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
@@ -396,7 +493,7 @@ claude --model ${JSON.stringify(args.model)}`
 		{
 			id: 'claude-desktop',
 			title: 'Claude Desktop',
-			description: 'Route Claude Desktop third-party inference through the gateway.',
+			description: 'Connect Claude Desktop to agentgateway using third-party inference settings.',
 			icon: 'claude',
 			steps: [
 				<>
@@ -420,8 +517,7 @@ API Key: ${requiredApiKey}`
 		{
 			id: 'codex',
 			title: 'Codex CLI',
-			description:
-				'Use OpenAI-compatible environment variables when running Codex against the gateway.',
+			description: 'Connect Codex CLI to agentgateway with a custom model provider.',
 			icon: 'codex',
 			language: 'bash',
 			code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
@@ -438,7 +534,7 @@ codex --model "${args.model}" \\
 		{
 			id: 'opencode',
 			title: 'OpenCode',
-			description: 'Configure OpenCode with an OpenAI-compatible gateway provider.',
+			description: 'Connect OpenCode to agentgateway.',
 			icon: 'opencode',
 			steps: [
 				<>
@@ -474,9 +570,40 @@ ${openCodeApiKeyExport}
 opencode`
 		},
 		{
+			id: 'pi',
+			title: 'Pi',
+			description: 'Connect Pi to agentgateway using the Responses API.',
+			icon: 'pi',
+			steps: [
+				<>
+					Add this configuration to <code>~/.pi/agent/models.json</code>. If the file exists, merge
+					the <code>agentgateway</code> entry into its <code>providers</code> object.
+				</>,
+				<>
+					Start <code>pi</code>, then use <code>/model</code> to select <code>{args.model}</code>{' '}
+					under <code>agentgateway</code>.
+				</>
+			],
+			language: 'json',
+			code: JSON.stringify(
+				{
+					providers: {
+						agentgateway: {
+							baseUrl: v1,
+							api: 'openai-responses',
+							apiKey: requiredApiKey,
+							models: [{ id: args.model }]
+						}
+					}
+				},
+				null,
+				2
+			)
+		},
+		{
 			id: 'goose',
 			title: 'Goose',
-			description: "Point Goose's OpenAI provider at the gateway host and chat completions path.",
+			description: 'Connect Goose to agentgateway using its OpenAI provider.',
 			icon: 'goose',
 			steps: [
 				<>
@@ -504,7 +631,7 @@ goose session`
 		{
 			id: 'cursor',
 			title: 'Cursor',
-			description: "Use Cursor's OpenAI base URL override with a gateway model.",
+			description: 'Connect Cursor to agentgateway using the OpenAI base URL override.',
 			icon: 'cursor',
 			steps: [
 				<>
@@ -526,7 +653,7 @@ Custom model: ${args.model}`
 		{
 			id: 'github-copilot',
 			title: 'GitHub Copilot',
-			description: 'Configure VS Code Copilot Business or Enterprise to use the gateway proxy.',
+			description: 'Connect VS Code Copilot Business or Enterprise to agentgateway.',
 			icon: 'copilot',
 			steps: [
 				<>
@@ -547,7 +674,7 @@ Custom model: ${args.model}`
 		{
 			id: 'windsurf',
 			title: 'Windsurf',
-			description: 'Route Windsurf traffic through the gateway HTTP proxy setting.',
+			description: 'Connect Windsurf to agentgateway using its HTTP proxy setting.',
 			icon: 'windsurf',
 			steps: [
 				<>
@@ -566,7 +693,7 @@ Custom model: ${args.model}`
 		{
 			id: 'openai-js',
 			title: 'OpenAI JavaScript SDK',
-			description: 'Use the gateway as an OpenAI-compatible chat completions endpoint.',
+			description: 'Call agentgateway using the OpenAI JavaScript SDK.',
 			icon: 'codex',
 			provider: 'openai',
 			language: 'ts',
@@ -587,7 +714,7 @@ console.log(response.choices[0]?.message?.content);`
 		{
 			id: 'openai-python',
 			title: 'OpenAI Python SDK',
-			description: 'Point the Python SDK at the gateway listener.',
+			description: 'Call agentgateway using the OpenAI Python SDK.',
 			icon: 'codex',
 			provider: 'openai',
 			language: 'python',
@@ -666,6 +793,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
 			</span>
 		);
 	}
+	if (props.recipe.icon === 'pi') {
+		return (
+			<span className={className}>
+				<img src={piIcon} alt="" aria-hidden="true" />
+			</span>
+		);
+	}
 	if (props.recipe.icon === 'windsurf') {
 		return (
 			<span className={className}>
@@ -690,7 +824,13 @@ function HighlightedCode(props: { code: string; language: string }) {
 
 function highlightCode(code: string, language: string) {
 	return code.split('\n').flatMap((line, lineIndex, lines) => [
-		<span className="code-line" key={`line-${lineIndex}`}>
+		<span
+			className="code-line"
+			key={`line-${
+				// biome-ignore lint/suspicious/noArrayIndexKey: Existing lint violation; remove this suppression when the underlying issue is fixed.
+				lineIndex
+			}`}
+		>
 			{highlightLine(line, language, lineIndex)}
 		</span>,
 		lineIndex < lines.length - 1 ? '\n' : null

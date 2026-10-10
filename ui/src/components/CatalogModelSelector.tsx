@@ -58,7 +58,8 @@ function catalogProviderKeys(provider: string | null | undefined) {
 		openai_legacy: ['openai'],
 		anthropic: ['anthropic'],
 		azure: ['azure'],
-		copilot: ['copilot']
+		copilot: ['copilot'],
+		typesafe: ['typesafe']
 	};
 	return [normalized, ...(aliases[normalized] ?? [])]
 		.filter(Boolean)

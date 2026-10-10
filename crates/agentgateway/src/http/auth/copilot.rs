@@ -124,7 +124,7 @@ fn extract_json_oauth_token(contents: &str, domain: &str) -> Option<String> {
 }
 
 fn extract_yaml_oauth_token(contents: &str, domain: &str) -> Option<String> {
-	let value: serde_yaml::Value = serde_yaml::from_str(contents).ok()?;
+	let value: serde_norway::Value = serde_norway::from_str(contents).ok()?;
 	value.as_mapping()?.iter().find_map(|(key, value)| {
 		if key.as_str().is_some_and(|key| key.starts_with(domain)) {
 			value["oauth_token"]

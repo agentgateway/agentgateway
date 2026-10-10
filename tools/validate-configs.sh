@@ -48,6 +48,7 @@ export OPENAI_API_KEY=dummy
 export ANTHROPIC_API_KEY=dummy
 export SPARK_API_PASSWORD=dummy
 export ASTRON_API_KEY=dummy
+export TYPESAFE_API_KEY=dummy
 
 for config_file in "${config_files[@]}"; do
   echo "Validating $config_file"

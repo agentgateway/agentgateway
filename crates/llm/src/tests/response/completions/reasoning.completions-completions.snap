@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/reasoning.json
+info:
+  id: chatcmpl-C3kBOLGARFj2WJrm5MRyuTiK4u6eG
+  object: chat.completion
+  created: 1755008546
+  model: qwen3
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: Two plus two is 4.
+        reasoning_content: The user is asking for a sum.
+        reasoning_signature: SIG-response==
+        refusal: ~
+      logprobs: ~
+      finish_reason: stop
+  usage:
+    prompt_tokens: 17
+    completion_tokens: 23
+    total_tokens: 40
+    completion_tokens_details:
+      reasoning_tokens: 12
+---
+{
+  "response": {
+    "model": "qwen3",
+    "usage": {
+      "prompt_tokens": 17,
+      "completion_tokens": 23,
+      "total_tokens": 40,
+      "completion_tokens_details": {
+        "reasoning_tokens": 12
+      }
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "Two plus two is 4.",
+          "role": "assistant",
+          "reasoning_content": "The user is asking for a sum.",
+          "reasoning_signature": "SIG-response==",
+          "refusal": null
+        },
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ],
+    "id": "[id]",
+    "object": "chat.completion",
+    "created": "[date]"
+  },
+  "parsed": {
+    "input_tokens": 17,
+    "output_tokens": 23,
+    "total_tokens": 40,
+    "reasoning_tokens": 12,
+    "provider_model": "qwen3"
+  }
+}

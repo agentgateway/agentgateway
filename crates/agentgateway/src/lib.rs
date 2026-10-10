@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::fs::File;
@@ -76,6 +78,11 @@ pub struct RawStandardAttributes {
 	/// CEL expression used to populate the `agentgateway.group` request log attribute.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub group: Option<String>,
+	/// CEL expression identifying the session a request belongs to, exposed to CEL as `request.agent.session`.
+	/// If unset, or if the expression fails, the session is detected from well-known agent headers
+	/// such as `x-claude-code-session-id`. Return `null` to mark the request as having no session.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub session: Option<String>,
 }
 
 /// Controls which IP address families the DNS resolver will query for
@@ -249,6 +256,11 @@ pub struct RawConfig {
 	#[serde(default)]
 	backend: BackendConfig,
 
+	/// Configuration for calls the gateway makes on its own behalf, such as cloud provider credential
+	/// fetches, JWKS fetches, OIDC discovery, and external authorization.
+	#[serde(default)]
+	callouts: CalloutConfig,
+
 	#[serde(
 		default,
 		rename = "listener",
@@ -278,7 +290,7 @@ pub struct BackendConfig {
 	/// TCP keepalive configuration for upstream connections.
 	#[serde(default)]
 	keepalives: types::agent::KeepaliveConfig,
-	/// Maximum time to wait when establishing a connection to an upstream. Defaults to 10 seconds.
+	/// Maximum time to wait when establishing a connection to an upstream. Defaults to 11 seconds.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::connect_timeout")]
@@ -294,6 +306,41 @@ pub struct BackendConfig {
 	/// If unset, there is no limit
 	#[serde(default)]
 	pool_max_size: Option<usize>,
+	/// Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.
+	/// PINGs are sent even on idle connections to proactively evict dead connections from the pool.
+	/// Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval
+	/// and will reject connections that ping more frequently.
+	#[serde(default, with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	h2_keepalive_interval: Duration,
+	/// Timeout waiting for a PING ACK before considering the connection dead and closing it.
+	/// Only applies when h2_keepalive_interval is set. Defaults to 5s.
+	#[serde(default = "defaults::h2_keepalive_timeout", with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	h2_keepalive_timeout: Duration,
+}
+
+#[apply(schema!)]
+#[derive(Default)]
+pub struct CalloutConfig {
+	/// HTTP proxy to tunnel callouts through. If unset, the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+	/// and `NO_PROXY` environment variables are used.
+	/// Callouts to backends with their own tunnel policy, Kubernetes services, and loopback or
+	/// link-local addresses (such as cloud metadata servers) are sent directly.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tunnel: Option<CalloutTunnel>,
+}
+
+#[apply(schema!)]
+pub struct CalloutTunnel {
+	/// URL of the proxy, for example `http://proxy.example.com:3128`.
+	#[serde(with = "http_serde::uri")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub url: ::http::Uri,
+	/// Destinations that bypass the proxy, using `NO_PROXY` syntax: hostnames (matching subdomains),
+	/// IP addresses, CIDRs, or `*`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub no_proxy: Vec<String>,
 }
 
 #[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
@@ -320,6 +367,8 @@ impl Default for BackendConfig {
 			connect_timeout: defaults::connect_timeout(),
 			pool_idle_timeout: defaults::pool_idle_timeout(),
 			pool_max_size: None,
+			h2_keepalive_interval: Duration::ZERO,
+			h2_keepalive_timeout: defaults::h2_keepalive_timeout(),
 		}
 	}
 }
@@ -328,10 +377,15 @@ mod defaults {
 	use std::time::Duration;
 
 	pub fn connect_timeout() -> Duration {
-		Duration::from_secs(10)
+		// Most systems use 10s. Using 11s makes timeouts from this setting distinguishable
+		// from another layer's 10s timeout.
+		Duration::from_secs(11)
 	}
 	pub fn pool_idle_timeout() -> Duration {
 		Duration::from_secs(90)
+	}
+	pub fn h2_keepalive_timeout() -> Duration {
+		Duration::from_secs(5)
 	}
 
 	pub fn max_buffer_size() -> usize {
@@ -672,8 +726,17 @@ pub struct Config {
 	/// Handle for tasks/spans emitted on the admin runtime.
 	#[serde(skip)]
 	pub admin_runtime_handle: Option<tokio::runtime::Handle>,
+	/// Process-wide budget policy used by standalone configuration.
+	#[serde(skip)]
+	pub budget_policy: Arc<http::budget::BudgetPolicy>,
+	/// Tracks standalone config reload outcomes so the admin API can report the
+	/// configuration the runtime is actually running, even when a newer config
+	/// was rejected.
+	#[serde(skip)]
+	pub config_reload_status: Arc<ConfigReloadStatus>,
 
 	pub backend: BackendConfig,
+	pub callouts: CalloutConfig,
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
 	pub model_catalog: ModelCatalogConfig,
@@ -689,6 +752,30 @@ pub struct ModelCatalogConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StorageConfig {
 	pub mode: ConfigStoreMode,
+}
+
+/// Outcome of standalone configuration reloads. `Config` carries this so the
+/// admin API (`/api/runtime`) can report whether the on-disk configuration
+/// was rejected during a reload, mirroring the `config_synchronized` metric.
+#[derive(Debug, Default)]
+pub struct ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	last_error: std::sync::RwLock<Option<String>>,
+}
+
+impl ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	pub fn last_error(&self) -> Option<String> {
+		self.last_error.read().unwrap().clone()
+	}
+
+	fn record_success(&self) {
+		*self.last_error.write().unwrap() = None;
+	}
+
+	fn record_failure(&self, error: String) {
+		*self.last_error.write().unwrap() = Some(error);
+	}
 }
 
 /// A source of model cost catalog data.
@@ -749,6 +836,8 @@ impl Config {
 		Some(local::AttachedPolicyContext {
 			oidc_policy_id: crate::http::oidc::PolicyId::policy(&policy_key),
 			oidc_cookie_encoder: self.oidc_cookie_encoder.as_ref(),
+			budget_policy: &self.budget_policy,
+			database_configured: self.database.is_some(),
 		})
 	}
 }
@@ -803,12 +892,6 @@ impl ConfigSource {
 			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
 		})
 	}
-	pub fn read_to_string_sync(&self) -> anyhow::Result<String> {
-		Ok(match self {
-			ConfigSource::File(path) => fs_err::read_to_string(path)?,
-			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
-		})
-	}
 }
 
 #[derive(Debug, Clone)]
@@ -825,6 +908,7 @@ pub struct ProxyInputs {
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
+	pub admission: Arc<proxy::admission::AdmissionRegistry>,
 }
 
 impl ProxyInputs {
@@ -854,6 +938,7 @@ impl ProxyInputs {
 			mcp_state,
 			ca,
 			spiffe,
+			admission: Default::default(),
 		}
 	}
 }

@@ -1,10 +1,12 @@
 import {
+	Activity,
 	Braces,
 	CircuitBoard,
 	FileKey2,
 	Fingerprint,
 	KeyRound,
 	LockKeyhole,
+	ScrollText,
 	Shield,
 	ShieldCheck,
 	SlidersHorizontal,
@@ -22,6 +24,7 @@ export const policyUi: Partial<
 			title: string;
 			icon: ComponentType<{ size?: number }>;
 			customEditor?:
+				| 'accessLog'
 				| 'authorization'
 				| 'backendAuth'
 				| 'cors'
@@ -34,10 +37,12 @@ export const policyUi: Partial<
 				| 'mcpGuardrails'
 				| 'oidc'
 				| 'remoteRateLimit'
+				| 'tracing'
 				| 'transformations';
 		}
 	>
 > = {
+	accessLog: { title: 'Access logs', icon: ScrollText, customEditor: 'accessLog' },
 	apiKey: { title: 'API keys', icon: KeyRound },
 	authorization: {
 		title: 'Authorization',
@@ -88,6 +93,7 @@ export const policyUi: Partial<
 		icon: Braces,
 		customEditor: 'remoteRateLimit'
 	},
+	tracing: { title: 'Tracing', icon: Activity, customEditor: 'tracing' },
 	transformations: {
 		title: 'Transformations',
 		icon: Shield,

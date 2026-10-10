@@ -190,26 +190,10 @@ mod functions {
 	use std::str::FromStr;
 
 	use cel::Value;
-	use cel::context::VariableResolver;
+	use cel::context::{SingleVarResolver, VariableResolver};
 	use cel::objects::{OpaqueValue, StringValue};
 	use cel::parser::Expression;
 	use cel::test::data;
-
-	struct CompositeResolver<'a, 'rf> {
-		base: &'rf dyn VariableResolver<'a>,
-		name: &'a str,
-		val: Value<'a>,
-	}
-
-	impl<'a, 'rf> VariableResolver<'a> for CompositeResolver<'a, 'rf> {
-		fn resolve(&self, expr: &str) -> Option<Value<'a>> {
-			if expr == self.name {
-				Some(self.val.clone())
-			} else {
-				self.base.resolve(expr)
-			}
-		}
-	}
 
 	pub fn with<'a, 'rf, 'b>(
 		ftx: &'b mut crate::FunctionContext<'a, 'rf>,
@@ -218,11 +202,7 @@ mod functions {
 		let ident = ftx.ident(0)?;
 		let expr: &'a Expression = ftx.expr(1)?;
 		let x: &'rf dyn VariableResolver<'a> = ftx.vars();
-		let resolver = CompositeResolver::<'a, 'rf> {
-			base: x,
-			name: ident,
-			val: this.clone(),
-		};
+		let resolver = SingleVarResolver::new(x, ident, this.clone());
 		let v = Value::resolve(expr, ftx.ptx, &resolver)?;
 		Ok(v)
 	}

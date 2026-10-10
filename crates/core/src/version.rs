@@ -14,6 +14,10 @@ pub struct BuildInfo {
 	pub rust_version: &'static str,
 	pub build_profile: &'static str,
 	pub build_target: &'static str,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub crypto_backend: Option<&'static str>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub crypto_fips: Option<bool>,
 }
 
 impl BuildInfo {
@@ -24,7 +28,15 @@ impl BuildInfo {
 			rust_version: BUILD_RUST_VERSION,
 			build_profile: BUILD_RUST_PROFILE,
 			build_target: BUILD_RUST_TARGET,
+			crypto_backend: None,
+			crypto_fips: None,
 		}
+	}
+
+	pub const fn with_crypto(mut self, backend: &'static str, fips: bool) -> Self {
+		self.crypto_backend = Some(backend);
+		self.crypto_fips = Some(fips);
+		self
 	}
 }
 

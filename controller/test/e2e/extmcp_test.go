@@ -46,10 +46,8 @@ func testExtMcpRequestDeniesForbiddenTool(t base.Test) {
 	// allowed/mutate cases. Without it, the first extmcp call in the suite can hang on
 	// connect until curl's timeout.
 	//
-	// A request-phase guardrail denial rides on HTTP 200: it is an application-level
-	// per-call refusal (JSON-RPC error in the body), not a transport failure. This
-	// matches the response-phase guardrail path and keeps MCP clients from tearing
-	// down the session on a non-2xx status.
+	// A request-phase guardrail denial of a toolcall rides on HTTP 200: it is a
+	// per-call content refusal, reported as a tool-execution error (isError: true)
 	sendMCP(t, &testmatchers.HttpResponse{StatusCode: http.StatusOK}, headers, body)
 	resp, raw, err := execCurlMCP(t, headers, body)
 	if err != nil {
@@ -61,21 +59,30 @@ func testExtMcpRequestDeniesForbiddenTool(t base.Test) {
 	if !strings.Contains(strings.ToLower(raw), "forbidden-tool") {
 		t.Fatalf("deny response should name the forbidden tool: %s", raw)
 	}
-	// Confirm the 200 carries a JSON-RPC error, not a success result.
-	// Guardrail rejections are plain application/json (not SSE), so fall back
-	// to parsing raw directly when SSE unwrapping finds no data frame.
+	// Confirm the 200 carries a tool error result (isError: true)
 	var rpcResp struct {
-		Error *struct {
-			Message string `json:"message"`
-		} `json:"error,omitempty"`
+		Result *struct {
+			IsError bool `json:"isError"`
+			Content []struct {
+				Type  string `json:"type"`
+				Text  string `json:"text"`
+				Title string `json:"title,omitempty"`
+			} `json:"content"`
+		} `json:"result,omitempty"`
 	}
 	payload, ok := FirstSSEDataPayload(raw)
 	if !ok {
 		payload = raw
 	}
 	_ = json.Unmarshal([]byte(payload), &rpcResp)
-	if rpcResp.Error == nil {
-		t.Fatalf("expected JSON-RPC error in deny response, got: %s", raw)
+	if rpcResp.Result == nil {
+		t.Fatalf("expected isError result in deny response, got: %s", raw)
+	}
+	if !rpcResp.Result.IsError {
+		t.Fatalf("expected isError=true in deny response, got: %s", raw)
+	}
+	if len(rpcResp.Result.Content) == 0 {
+		t.Fatalf("expected content in deny response, got: %s", raw)
 	}
 }
 

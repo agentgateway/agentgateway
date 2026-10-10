@@ -1,0 +1,147 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/systemone/decisions.json
+info:
+  model: jev-1.13.0
+  answers:
+    refund:
+      type: noul
+      noul: 0.93
+    1_:
+      type: noul
+      noul: 0.81
+    category:
+      type: choice
+      choice: damage
+      probabilities:
+        damage: 0.88
+        shipping: 0.12
+      confidence: 0.88
+    repeat:
+      type: choice
+      choice: "true"
+      probabilities:
+        "true": 0.77
+        "false": 0.2
+        unsure: 0.03
+      confidence: 0.77
+    urgency:
+      type: score
+      score: 2
+      legend:
+        "0": Low
+        "1": Medium
+        "2": High
+      probabilities:
+        "0": 0.05
+        "1": 0.25
+        "2": 0.7
+      confidence: 0.7
+    "1":
+      type: noul
+      noul: 0.12
+  usage:
+    input_tokens: 212
+    output_tokens: 0
+---
+{
+  "response": {
+    "model": "jev-1.13.0",
+    "usage": {
+      "input_tokens": 212,
+      "output_tokens": 0,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 212
+    },
+    "answers": [
+      {
+        "type": "predicate",
+        "name": "refund",
+        "probability": 0.93
+      },
+      {
+        "type": "predicate",
+        "probability": 0.81
+      },
+      {
+        "type": "choice",
+        "name": "category",
+        "choice": "damage",
+        "probabilities": [
+          {
+            "value": "damage",
+            "probability": 0.88
+          },
+          {
+            "value": "shipping",
+            "probability": 0.12
+          }
+        ],
+        "confidence": 0.88
+      },
+      {
+        "type": "choice",
+        "name": "repeat",
+        "choice": true,
+        "probabilities": [
+          {
+            "value": true,
+            "probability": 0.77
+          },
+          {
+            "value": false,
+            "probability": 0.2
+          },
+          {
+            "value": "unsure",
+            "probability": 0.03
+          }
+        ],
+        "confidence": 0.77
+      },
+      {
+        "type": "score",
+        "name": "urgency",
+        "score": 2.0,
+        "probabilities": [
+          {
+            "value": 0,
+            "label": "Low",
+            "probability": 0.05
+          },
+          {
+            "value": 1,
+            "label": "Medium",
+            "probability": 0.25
+          },
+          {
+            "value": 2,
+            "label": "High",
+            "probability": 0.7
+          }
+        ],
+        "confidence": 0.7
+      },
+      {
+        "type": "predicate",
+        "name": "1",
+        "probability": 0.12
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 212,
+    "output_tokens": 0,
+    "total_tokens": 212,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "jev-1.13.0"
+  }
+}

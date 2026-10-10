@@ -165,6 +165,53 @@ func TestDeployObjs(t *testing.T) {
 		assert.Equal(t, true, patched)
 	})
 
+	t.Run("rejects an existing object not owned by the Gateway", func(t *testing.T) {
+		gw := &gwv1.Gateway{Name: "test-gw", Namespace: ns, UID: "gateway-uid"}
+		cm := &corev1.ConfigMap{
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+		}
+		fc := fake.NewClient(t, cm.DeepCopy())
+		d := getDeployer(t, fc, func(client apiclient.Client, fieldManager string, gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
+			t.Fatal("patch should not be called")
+			return nil
+		})
+		fc.RunAndWait(context.Background().Done())
+
+		err := d.DeployObjsWithSource(ctx, []client.Object{cm}, gw)
+		if err == nil || !strings.Contains(err.Error(), "resource already exists and is not controlled by Gateway test-ns/test-gw") {
+			t.Fatalf("expected ownership collision, got %v", err)
+		}
+	})
+
+	t.Run("allows resources from a recreated Gateway", func(t *testing.T) {
+		gw := &gwv1.Gateway{Name: "test-gw", Namespace: ns, UID: "new-gateway-uid"}
+		cm := &corev1.ConfigMap{
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "gateway.networking.k8s.io/v1beta1",
+				Kind:       "Gateway",
+				Name:       gw.Name,
+				UID:        "old-gateway-uid",
+				Controller: new(true),
+			}},
+		}
+		fc := fake.NewClient(t, cm.DeepCopy())
+		cm.OwnerReferences[0].APIVersion = wellknown.GatewayGVK.GroupVersion().String()
+		cm.OwnerReferences[0].UID = gw.UID
+		patched := false
+		d := getDeployer(t, fc, func(client apiclient.Client, fieldManager string, gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
+			patched = true
+			return nil
+		})
+		fc.RunAndWait(context.Background().Done())
+
+		err := d.DeployObjsWithSource(ctx, []client.Object{cm}, gw)
+		assert.NoError(t, err)
+		assert.Equal(t, true, patched)
+	})
+
 	t.Run("patches if object does not exist (IsNotFound error)", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
 			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),

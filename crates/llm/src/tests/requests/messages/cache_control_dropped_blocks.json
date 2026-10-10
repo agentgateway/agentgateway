@@ -1,0 +1,140 @@
+{
+  "model": "gpt-5.6",
+  "max_tokens": 64,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "No preceding content to cache"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
+          },
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "search_result",
+          "source": "https://example.com",
+          "title": "Result",
+          "content": [
+            {
+              "type": "text",
+              "text": "omitted"
+            }
+          ],
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Before search result"
+        },
+        {
+          "type": "search_result",
+          "source": "https://example.com",
+          "title": "Result",
+          "content": [
+            {
+              "type": "text",
+              "text": "omitted"
+            }
+          ],
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "web_search_tool_result",
+          "tool_use_id": "srv_1",
+          "content": [],
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "After search result"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "Before server tool"
+        },
+        {
+          "type": "thinking",
+          "thinking": "reasoning",
+          "signature": "signature"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "srv_1",
+          "name": "web_search",
+          "input": {},
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "lookup",
+      "input_schema": {
+        "type": "object"
+      }
+    },
+    {
+      "type": "web_search_20250305",
+      "name": "web_search",
+      "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+      }
+    },
+    {
+      "name": "over_limit",
+      "input_schema": {
+        "type": "object"
+      },
+      "cache_control": {
+        "type": "ephemeral"
+      }
+    }
+  ]
+}

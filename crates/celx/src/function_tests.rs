@@ -433,11 +433,79 @@ fn regex_replace() {
 }
 
 #[test]
+fn regex_replace_all() {
+	assert(
+		json!("[EMAIL], [EMAIL]"),
+		r#""alice@example.com, bob@example.org".regexReplaceAll("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}", "[EMAIL]")"#,
+	);
+	assert(
+		json!("[123] [456]"),
+		r#""id=123 id=456".regexReplaceAll("id=([0-9]+)", "[$1]")"#,
+	);
+	assert(
+		json!("unchanged"),
+		r#""unchanged".regexReplaceAll("[0-9]+", "x")"#,
+	);
+	assert!(eval(r#""text".regexReplaceAll("[", "x")"#).is_err());
+	// The existing function continues to replace only the first match.
+	assert(json!("x 456"), r#""123 456".regexReplace("[0-9]+", "x")"#);
+}
+
+#[test]
 fn merge_maps() {
 	let expr = r#"{"a":2}.merge({"b":3})"#;
 	assert(json!({"a":2, "b":3}), expr);
 	let expr = r#"{"a":2}.merge({"a":3})"#;
 	assert(json!({"a":3}), expr);
+}
+
+#[test]
+fn json_merge_preserves_key_order() {
+	let body = r#"{
+		"model": "random",
+		"max_tokens": 10240000,
+		"messages": [{"role": "user", "content": "What is the weather like in San Francisco?"}],
+		"tools": [{"type": "function", "function": {
+			"name": "get_weather",
+			"description": "Get the current weather in a given location",
+			"parameters": {
+				"type": "object",
+				"properties": {
+					"location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
+					"unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "description": "The unit of temperature"}
+				},
+				"required": ["location"]
+			}
+		}}]
+	}"#;
+	let expr = r#"json(request.body).with(b,
+		toJson(b.merge({"max_tokens": has(b.max_tokens) ? min(b.max_tokens, 128000) : 128000})))"#;
+	let mut ctx = Context::default();
+	insert_all(&mut ctx);
+	for has_max_tokens in [true, false] {
+		let mut body: serde_json::Value = serde_json::from_str(body).unwrap();
+		if !has_max_tokens {
+			body.as_object_mut().unwrap().shift_remove("max_tokens");
+		}
+		let request = cel::to_value(json!({"body": body.to_string()})).unwrap();
+		body["max_tokens"] = json!(128000);
+		let expected = body.to_string();
+		for program in [
+			Program::compile(expr).unwrap(),
+			Program::compile_with_optimizer(expr, crate::DefaultOptimizer).unwrap(),
+		] {
+			let resolver = context::SingleVarResolver::new(
+				&context::DefaultVariableResolver,
+				"request",
+				request.clone(),
+			);
+			for _ in 0..16 {
+				let result = Value::resolve(program.expression(), &ctx, &resolver).unwrap();
+				// Compare serialized strings: JSON object equality ignores key order.
+				assert_eq!(result, Value::from(expected.clone()));
+			}
+		}
+	}
 }
 
 #[test]

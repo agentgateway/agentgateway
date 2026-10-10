@@ -334,6 +334,8 @@ fn svid_identity(
 // The SPIFFE Workload API is a Unix-domain-socket protocol, limited to unix.
 #[cfg(all(test, target_family = "unix"))]
 mod tests {
+	use std::sync::atomic::{AtomicU32, Ordering};
+
 	use futures::StreamExt;
 	use protos::spiffe_workload_api::spiffe_workload_api_server::{
 		SpiffeWorkloadApi, SpiffeWorkloadApiServer,
@@ -484,9 +486,14 @@ mod tests {
 	/// `unimplemented`); it streams the initial response, then any responses pushed through
 	/// `rotations` (for the rotation test), and finally holds the stream open so the `X509Source`
 	/// treats the SVID as live rather than reconnecting.
+	///
+	/// The spiffe crate opens two separate streams: the first for initial sync (reads one item and
+	/// drops the stream) and the second for ongoing supervisor updates. The `rotations` receiver is
+	/// therefore given to the **second** connection so the supervisor can receive rotations.
 	struct FakeWorkloadApi {
 		resp: X509svidResponse,
 		rotations: Mutex<Option<mpsc::Receiver<X509svidResponse>>>,
+		connection_count: AtomicU32,
 	}
 
 	#[tonic::async_trait]
@@ -497,13 +504,20 @@ mod tests {
 			_request: Request<X509svidRequest>,
 		) -> Result<Response<Self::FetchX509SVIDStream>, Status> {
 			let resp = self.resp.clone();
-			// After the initial response, deliver any pushed rotations, then hold the stream open.
-			let tail: RespStream<X509svidResponse> = match self.rotations.lock().unwrap().take() {
-				Some(rx) => tokio_stream::wrappers::ReceiverStream::new(rx)
-					.map(Ok::<_, Status>)
-					.chain(futures::stream::pending())
-					.boxed(),
-				None => futures::stream::pending().boxed(),
+			// The spiffe crate opens two streams: the first for initial sync (reads one item and
+			// closes), the second for the ongoing supervisor. Only give rotations to the second
+			// connection so they reach the supervisor rather than the short-lived initial-sync stream.
+			let conn = self.connection_count.fetch_add(1, Ordering::SeqCst);
+			let tail: RespStream<X509svidResponse> = if conn >= 1 {
+				match self.rotations.lock().unwrap().take() {
+					Some(rx) => tokio_stream::wrappers::ReceiverStream::new(rx)
+						.map(Ok::<_, Status>)
+						.chain(futures::stream::pending())
+						.boxed(),
+					None => futures::stream::pending().boxed(),
+				}
+			} else {
+				futures::stream::pending().boxed()
 			};
 			let stream = futures::stream::once(async move { Ok::<_, Status>(resp) }).chain(tail);
 			Ok(Response::new(stream.boxed()))
@@ -556,6 +570,7 @@ mod tests {
 			.add_service(SpiffeWorkloadApiServer::new(FakeWorkloadApi {
 				resp: initial_response,
 				rotations: Mutex::new(rotations),
+				connection_count: AtomicU32::new(0),
 			}))
 			.serve_with_incoming(incoming);
 		let endpoint = format!("unix://{}", sock.display());

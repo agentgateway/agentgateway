@@ -15,7 +15,16 @@ pub async fn run(
 	config: Arc<Config>,
 	config_resource_store: Option<config_store::ConfigResourceStore>,
 ) -> anyhow::Result<Bound> {
+	run_with_ui_assets(config, config_resource_store, &crate::ui::EMPTY_ASSETS_DIR).await
+}
+
+pub async fn run_with_ui_assets(
+	config: Arc<Config>,
+	config_resource_store: Option<config_store::ConfigResourceStore>,
+	ui_assets: &'static include_dir::Dir<'static>,
+) -> anyhow::Result<Bound> {
 	crate::transport::tls::warn_if_key_log_enabled();
+	crate::proxy::policy_host::install_policy_trace();
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
@@ -57,7 +66,9 @@ pub async fn run(
 	pprof_alloc::stats::smaps::PrometheusCollector::register(sub_registry);
 
 	// TODO: use for XDS
-	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);
+	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None)
+		.with_callouts(&config.callouts)
+		.context("invalid callouts config")?;
 	let ca = if let Some(cfg) = &config.ca {
 		Some(Arc::new(caclient::CaClient::new(
 			control_client.clone(),
@@ -87,12 +98,15 @@ pub async fn run(
 		config.metrics.excluded_metrics.clone(),
 		config.histograms,
 	));
-	let client = client::Client::new(
+	let client = client::Client::new_with_h2_config(
 		&config.dns,
 		pool,
+		Arc::new(config.hbone.h2.clone()),
 		config.backend.clone(),
 		Some(metrics_handle.clone()),
-	);
+	)
+	.with_callouts(&config.callouts)
+	.context("invalid callouts config")?;
 
 	let model_catalog_sources = if let Some(store) = &config_resource_store {
 		config_store::merge_model_catalog_sources(
@@ -139,6 +153,7 @@ pub async fn run(
 		shutdown.trigger(),
 		drain_rx.clone(),
 		data_plane_handle.clone(),
+		ui_assets,
 	)
 	.await
 	.context("admin server starts")?;
@@ -157,6 +172,7 @@ pub async fn run(
 		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
+		admission: Default::default(),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());
@@ -205,7 +221,7 @@ async fn ui_url(config: &Config) -> String {
 	let Ok(contents) = local_config.read_to_string().await else {
 		return admin_url();
 	};
-	let Ok(local) = crate::serdes::yamlviajson::from_str::<serde_json::Value>(&contents) else {
+	let Ok(local) = crate::serdes::yaml::from_str::<serde_json::Value>(&contents) else {
 		return admin_url();
 	};
 	let gateway_ref = match local.pointer("/ui/gateways") {

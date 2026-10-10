@@ -67,12 +67,9 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 	}
 	pub fn this_or_arg<T: FromValue<'a>>(&self) -> Result<T> {
 		match self.this() {
-			Ok(val) => Ok(val),
-			Err(_e) => self.arg(0),
+			Err(ExecutionError::MissingArgumentOrTarget) => self.arg(0),
+			other => other,
 		}
-	}
-	pub fn this_value(&self) -> Result<Value<'a>> {
-		self.this::<Value>().map(|v| v.always_materialize_owned())
 	}
 	pub fn this_or_arg_value(&self) -> Result<Value<'a>> {
 		self
@@ -1110,6 +1107,27 @@ mod tests {
 		for (name, script) in tests {
 			assert_eq!(test_script(script, None), Ok(true.into()), "{name}");
 		}
+	}
+
+	#[test]
+	fn test_wrong_typed_receiver_does_not_fall_back() {
+		for script in [
+			"[1, 2].startsWith('zzz')",
+			"[1, 2].endsWith('zzz')",
+			"[1, 2].matches('zzz')",
+			"{'k': 1}.startsWith('zzz')",
+			"[1, 2].getFullYear()",
+		] {
+			assert!(
+				test_script(script, None).is_err(),
+				"{script} must not substitute its argument for the receiver"
+			);
+		}
+
+		assert_script(&(
+			"bare call still falls back for a typed receiver",
+			"getFullYear(timestamp('2023-05-29T00:00:00Z')) == 2023",
+		));
 	}
 
 	#[test]

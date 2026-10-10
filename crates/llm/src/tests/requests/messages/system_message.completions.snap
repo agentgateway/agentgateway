@@ -2,7 +2,7 @@
 source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/messages/system_message.json
 info:
-  model: claude-opus-4-8
+  model: gpt-5.6-terra
   max_tokens: 1024
   messages:
     - role: user
@@ -28,7 +28,10 @@ info:
           },
           {
             "type": "text",
-            "text": "hola"
+            "text": "hola",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
         ]
       },
@@ -42,14 +45,14 @@ info:
         ]
       }
     ],
-    "model": "claude-opus-4-8",
+    "model": "gpt-5.6-terra",
     "max_completion_tokens": 1024,
     "stream": false
   },
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
-    "request_model": "claude-opus-4-8",
+    "request_model": "gpt-5.6-terra",
     "provider": "openai",
     "streaming": false,
     "params": {

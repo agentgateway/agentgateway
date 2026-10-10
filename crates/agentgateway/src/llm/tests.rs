@@ -6,7 +6,63 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 
 use super::*;
+use crate::http::RequestBodyExt;
 use crate::http::x_headers::TRACEPARENT;
+
+#[tokio::test]
+async fn retry_replays_input_and_records_each_rendered_llm_attempt() {
+	use crate::http::retry::ReplayBody;
+	let original = Bytes::from_static(
+		br#"{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hello"}]}"#,
+	);
+	let mut body = Body::from(original.clone());
+	body.record(4096);
+	let (content, state) = body.into_replay_parts();
+	let replay = ReplayBody::try_new(content, 4096).unwrap();
+	let retry = replay.clone();
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+	let mut recordings = Vec::new();
+	for replay in [replay, retry] {
+		let body = state.wrap(http::RawBody::new(replay));
+		assert_eq!(body.known_bytes(), Some(&original));
+		let recording = body.recorded().unwrap().clone();
+		let req = ::http::Request::builder()
+			.uri("/v1/chat/completions")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(body)
+			.unwrap();
+		let RequestResult::Success { request, .. } = provider
+			.process_completions_request(
+				&openai_test_backend_info(),
+				None,
+				req,
+				false,
+				&mut None,
+				None,
+			)
+			.await
+			.unwrap()
+		else {
+			panic!("expected forwarded request")
+		};
+		// Parsing input is not forwarding: only the translated payload is recorded.
+		assert!(recording.bytes().is_empty());
+		let sent = request.into_body().collect().await.unwrap().to_bytes();
+		assert_ne!(sent, original);
+		assert!(
+			serde_json::from_slice::<Value>(&sent)
+				.unwrap()
+				.get("contents")
+				.is_some()
+		);
+		assert!(recording.is_complete());
+		assert_eq!(recording.bytes(), sent);
+		recordings.push((recording, sent));
+	}
+	for (recording, sent) in recordings {
+		assert_eq!(recording.bytes(), sent);
+	}
+}
 
 fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
@@ -26,10 +82,10 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
-	let model = Some("google/gemini-2.5-flash-lite");
+	let model = "google/gemini-2.5-flash-lite";
 
 	assert_eq!(
 		provider
@@ -50,15 +106,189 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 }
 
 #[test]
+fn bedrock_chat_translation_follows_endpoint_selection() {
+	fn bedrock(pref: bedrock::BedrockEndpointPreference) -> AIProvider {
+		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model_override: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: pref,
+		}))
+	}
+
+	let runtime = bedrock(bedrock::BedrockEndpointPreference::RuntimeOnly);
+	for input in [
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses,
+	] {
+		assert_eq!(
+			runtime
+				.chat_translation(input, "anthropic.claude-3-5-sonnet-20241022-v2:0", None)
+				.unwrap()
+				.output,
+			ChatFormat::BedrockConverse,
+			"{input:?} must render Converse on the Runtime endpoint"
+		);
+	}
+
+	let catalog = crate::llm::catalog::ModelCatalog::from_json(
+		r#"{"providers":{"aws.bedrock":{"models":{
+			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]},
+			"openai.gpt-oss-120b":{"tags":["mantle","openai_completions","openai_responses"]}
+		}}}}"#,
+	);
+	let catalog = Some(catalog.as_handle());
+	let mantle = bedrock(bedrock::BedrockEndpointPreference::MantleOnly);
+	// gpt-oss-120b serves the two OpenAI-compatible formats on Mantle.
+	for (input, expected) in [
+		(InputFormat::Completions, ChatFormat::OpenAICompletions),
+		(InputFormat::Responses, ChatFormat::OpenAIResponses),
+	] {
+		assert_eq!(
+			mantle
+				.chat_translation(input, "openai.gpt-oss-120b", catalog)
+				.unwrap()
+				.output,
+			expected,
+			"{input:?} must pass through natively on the Mantle endpoint"
+		);
+	}
+	// Claude serves the native Messages API on Mantle.
+	assert_eq!(
+		mantle
+			.chat_translation(InputFormat::Messages, "anthropic.claude-sonnet-5", catalog)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"Messages must pass through natively for a Claude model on Mantle"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_chat_cache_convention_follows_upstream_format() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("localhost", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	};
+	for (model, input, expected) in [
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Completions,
+			CacheTokenConvention::InputIncludesCache,
+		),
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Responses,
+			CacheTokenConvention::InputIncludesCache,
+		),
+		(
+			"openai.gpt-oss-120b",
+			InputFormat::Messages,
+			CacheTokenConvention::InputIncludesCache,
+		),
+	] {
+		let provider = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model_override: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		}));
+		let body = if input == InputFormat::Responses {
+			json!({"model": model, "input": "hello"})
+		} else {
+			json!({"model": model, "max_tokens": 64, "messages": [{"role": "user", "content": "hello"}]})
+		};
+		let req = ::http::Request::builder()
+			.body(Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap();
+		let result = match input {
+			InputFormat::Completions => {
+				provider
+					.process_completions_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			InputFormat::Responses => {
+				provider
+					.process_responses_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			InputFormat::Messages => {
+				provider
+					.process_messages_request(&backend_info, None, req, false, &mut None, None)
+					.await
+			},
+			_ => unreachable!(),
+		};
+		let RequestResult::Success { llm_request, .. } = result.unwrap() else {
+			panic!("expected forwarded request");
+		};
+		assert_eq!(llm_request.cache_convention, expected, "{model} {input:?}");
+	}
+}
+
+// A Claude model only speaks the Anthropic Messages API on Mantle, so an inbound Chat Completions
+// request must be translated to Messages, never sent to Mantle as OpenAI Chat Completions.
+#[test]
+fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
+	fn mantle_provider() -> AIProvider {
+		AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+			model_override: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+		}))
+	}
+	let mantle = mantle_provider();
+
+	// Tag-driven: the imported catalog tags Claude with anthropic_messages only.
+	let catalog = crate::llm::catalog::ModelCatalog::from_json(
+		r#"{"providers":{"aws.bedrock":{"models":{
+			"anthropic.claude-sonnet-5":{"tags":["mantle","anthropic_messages"]}
+		}}}}"#,
+	);
+	assert_eq!(
+		mantle
+			.chat_translation(
+				InputFormat::Completions,
+				"anthropic.claude-sonnet-5",
+				Some(catalog.as_handle()),
+			)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"a Completions request to a tagged Claude model must translate to Messages, not completions"
+	);
+
+	// Untagged fallback: the is_anthropic_model heuristic must also keep Completions off completions.
+	assert_eq!(
+		mantle
+			.chat_translation(InputFormat::Completions, "anthropic.claude-opus-4-8", None)
+			.unwrap()
+			.output,
+		ChatFormat::AnthropicMessages,
+		"an untagged Claude model must still translate Completions to Messages"
+	);
+}
+
+#[test]
 fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	let vertex = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
 	assert_eq!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -66,14 +296,16 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// Vertex with a non-Gemini model has no Gemini-input translation.
 	assert!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
+			.chat_translation(InputFormat::Gemini, "claude-sonnet-4-5", None)
 			.is_err()
 	);
 
-	let gemini = AIProvider::Gemini(gemini::Provider { model: None });
+	let gemini = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -82,7 +314,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// OpenAI-compat shim, matching Vertex with a Gemini model.
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -92,7 +324,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
 			gemini
-				.chat_translation(input, Some("gemini-2.5-flash"), None)
+				.chat_translation(input, "gemini-2.5-flash", None)
 				.unwrap()
 				.output,
 			ChatFormat::OpenAICompletions
@@ -102,9 +334,10 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 
 #[test]
 fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
-	let anthropic = AIProvider::Anthropic(anthropic::Provider { model: None });
-	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4"), None)
-	else {
+	let anthropic = AIProvider::Anthropic(anthropic::Provider {
+		model_override: None,
+	});
+	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, "claude-opus-4", None) else {
 		panic!("expected unsupported conversion");
 	};
 	assert!(matches!(err, AIError::UnsupportedConversion(_)));
@@ -113,11 +346,10 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 
 	let vertex = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
-	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
-	else {
+	let Err(err) = vertex.chat_translation(InputFormat::Gemini, "claude-sonnet-4-5", None) else {
 		panic!("expected unsupported conversion");
 	};
 	let msg = err.to_string();
@@ -131,7 +363,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Native Gemini input takes the direct passthrough.
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -140,7 +372,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Vertex with a Gemini model (the CHAT_TRANSLATIONS quirk).
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -150,7 +382,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	let undeclared = custom_provider(custom::ProviderFormat::Completions);
 	assert!(
 		undeclared
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 			.is_err()
 	);
 }
@@ -203,6 +435,8 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(
@@ -243,11 +477,11 @@ fn custom_provider_declaring_gemini_count_tokens_renders_passthrough() {
 fn gemini_render_is_passthrough_with_unknown_fields() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+		.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 		.unwrap();
 
 	let raw = json!({
@@ -287,6 +521,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		.render_request(
 			types::ChatRequest::Gemini(inner),
 			&ChatRequestContext {
+				catalog: None,
 				provider: &provider,
 				headers: &HeaderMap::new(),
 				prompt_caching: None,
@@ -308,14 +543,14 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 fn gemini_error_passes_google_shape_through() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
-		model: None,
+		model_override: None,
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
+		.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
 		.unwrap();
 	assert!(matches!(
-		provider.chat_error_format(translation, Some("gemini-2.5-flash")),
+		provider.chat_error_format(translation, "gemini-2.5-flash"),
 		ChatErrorFormat::Google
 	));
 
@@ -367,6 +602,7 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 			tokens_per_fill: 10,
 			fill_interval: std::time::Duration::from_secs(60),
 			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+			key: None,
 		})
 		.unwrap();
 	let log = AsyncLog::default();
@@ -382,7 +618,7 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 	let mut amend = AmendOnDrop::new(
 		log,
 		LLMResponsePolicies {
-			local_rate_limit: vec![rate_limit.clone()],
+			local_rate_limit: vec![rate_limit.shared_bucket()],
 			..Default::default()
 		},
 		None,
@@ -390,16 +626,12 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 	);
 	amend.report_usage();
 
-	assert!(
-		rate_limit
-			.check_llm_request(&llm_request_with_tokens(Some(7)))
-			.is_err()
-	);
-	assert!(
-		rate_limit
-			.check_llm_request(&llm_request_with_tokens(Some(6)))
-			.is_ok()
-	);
+	let plain = ::http::Request::builder()
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let exec = cel::Executor::new_request(&plain);
+	assert!(rate_limit.charge_tokens(Some(7), &exec).is_err());
+	assert!(rate_limit.charge_tokens(Some(6), &exec).is_ok());
 }
 
 #[test]
@@ -410,6 +642,7 @@ fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
 			tokens_per_fill: 10,
 			fill_interval: std::time::Duration::from_secs(60),
 			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+			key: None,
 		})
 		.unwrap();
 	let mut request = llm_request_with_tokens(Some(5));
@@ -429,7 +662,7 @@ fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
 	let mut amend = AmendOnDrop::new(
 		log,
 		LLMResponsePolicies {
-			local_rate_limit: vec![rate_limit.clone()],
+			local_rate_limit: vec![rate_limit.shared_bucket()],
 			..Default::default()
 		},
 		None,
@@ -437,16 +670,12 @@ fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
 	);
 	amend.report_usage();
 
-	assert!(
-		rate_limit
-			.check_llm_request(&llm_request_with_tokens(Some(7)))
-			.is_err()
-	);
-	assert!(
-		rate_limit
-			.check_llm_request(&llm_request_with_tokens(Some(6)))
-			.is_ok()
-	);
+	let plain = ::http::Request::builder()
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let exec = cel::Executor::new_request(&plain);
+	assert!(rate_limit.charge_tokens(Some(7), &exec).is_err());
+	assert!(rate_limit.charge_tokens(Some(6), &exec).is_ok());
 }
 
 fn test_root() -> &'static Path {
@@ -554,7 +783,7 @@ fn openai_test_backend_info() -> crate::http::auth::BackendInfo {
 #[tokio::test]
 async fn openai_inline_moderation_injected_for_completions() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: Some(openai_inline_moderation_param()),
 	});
 	let backend_info = openai_test_backend_info();
@@ -596,7 +825,7 @@ async fn openai_inline_moderation_injected_for_completions() {
 #[tokio::test]
 async fn openai_inline_moderation_overrides_client_value_for_completions() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: Some(openai_inline_moderation_param()),
 	});
 	let backend_info = openai_test_backend_info();
@@ -642,7 +871,7 @@ async fn openai_inline_moderation_overrides_client_value_for_completions() {
 #[tokio::test]
 async fn openai_client_moderation_passthrough_without_config() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let backend_info = openai_test_backend_info();
@@ -705,7 +934,7 @@ async fn openai_client_moderation_passthrough_without_config() {
 #[tokio::test]
 async fn openai_inline_moderation_injected_for_responses() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: Some(openai_inline_moderation_param()),
 	});
 	let backend_info = openai_test_backend_info();
@@ -744,47 +973,88 @@ async fn openai_inline_moderation_injected_for_responses() {
 	);
 }
 
-#[tokio::test]
-async fn openai_inline_moderation_injected_after_messages_translation() {
-	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
-		moderation: Some(openai_inline_moderation_param()),
-	});
-	let backend_info = openai_test_backend_info();
-	let req = ::http::Request::builder()
-		.uri("/v1/messages")
-		.header(::http::header::CONTENT_TYPE, "application/json")
-		.body(Body::from(
-			br#"{
+#[test]
+fn openai_inline_moderation_injected_after_messages_translation() {
+	let mut cases = Vec::new();
+	for moderation in [None, Some(openai_inline_moderation_param())] {
+		let configured = moderation.is_some();
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation,
+		});
+		for output in [ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses] {
+			let request = serde_json::from_value(json!({
 				"model": "gpt-5",
 				"max_tokens": 64,
 				"messages": [{"role": "user", "content": "hello"}]
-			}"#
-				.to_vec(),
-		))
-		.unwrap();
-
-	let RequestResult::Success {
-		request: forwarded,
-		upstream_route_type,
-		..
-	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None, None)
-		.await
-		.expect("Anthropic messages request should translate to OpenAI completions")
-	else {
-		panic!("expected forwarded request");
-	};
-
-	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
-	let forwarded_json: Value =
-		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
-
-	assert_eq!(upstream_route_type, RouteType::Completions);
-	assert_eq!(
-		forwarded_json["moderation"],
-		openai_inline_moderation_value()
-	);
+			}))
+			.unwrap();
+			let rendered = ChatTranslation {
+				input: InputFormat::Messages,
+				output,
+			}
+			.render_request(
+				types::ChatRequest::Messages(request),
+				&ChatRequestContext {
+					provider: &provider,
+					headers: &HeaderMap::new(),
+					prompt_caching: None,
+					catalog: None,
+				},
+			)
+			.unwrap();
+			let forwarded: Value = serde_json::from_slice(&rendered.body).unwrap();
+			cases.push(json!({
+				"format": format!("{output:?}"),
+				"moderation_configured": configured,
+				"moderation": forwarded.get("moderation"),
+			}));
+		}
+	}
+	insta::assert_json_snapshot!(cases, @r#"
+[
+  {
+    "format": "OpenAICompletions",
+    "moderation_configured": false,
+    "moderation": null
+  },
+  {
+    "format": "OpenAIResponses",
+    "moderation_configured": false,
+    "moderation": null
+  },
+  {
+    "format": "OpenAICompletions",
+    "moderation_configured": true,
+    "moderation": {
+      "model": "omni-moderation-latest",
+      "policy": {
+        "input": {
+          "mode": "block"
+        },
+        "output": {
+          "mode": "score"
+        }
+      }
+    }
+  },
+  {
+    "format": "OpenAIResponses",
+    "moderation_configured": true,
+    "moderation": {
+      "model": "omni-moderation-latest",
+      "policy": {
+        "input": {
+          "mode": "block"
+        },
+        "output": {
+          "mode": "score"
+        }
+      }
+    }
+  }
+]
+"#);
 }
 
 #[test]
@@ -838,7 +1108,7 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
@@ -889,7 +1159,7 @@ async fn openai_provider_normalizes_max_tokens_after_model_alias() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
@@ -948,7 +1218,7 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
@@ -998,7 +1268,9 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider {
+		model_override: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -1029,7 +1301,7 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 		llm_request,
 		..
 	} = provider
-		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
 		.await
 		.expect("count_tokens request should process")
 	else {
@@ -1052,7 +1324,7 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: None,
 		project_id: strng::new("test-project"),
 	});
@@ -1087,7 +1359,7 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None, None)
 		.await
 		.expect("count_tokens request should process")
 	else {
@@ -1130,7 +1402,7 @@ fn vertex_backend_info() -> crate::http::auth::BackendInfo {
 #[tokio::test]
 async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: None,
 		project_id: strng::new("test-project"),
 	});
@@ -1166,7 +1438,7 @@ async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 #[tokio::test]
 async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: None,
 		project_id: strng::new("test-project"),
 	});
@@ -1224,7 +1496,7 @@ async fn gemini_count_tokens_passes_body_through_on_vertex() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: None,
 		project_id: strng::new("test-project"),
 	});
@@ -1273,7 +1545,9 @@ async fn gemini_count_tokens_applies_model_alias_and_rewrites_upstream_path() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -1311,6 +1585,8 @@ async fn gemini_count_tokens_applies_model_alias_and_rewrites_upstream_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(
@@ -1330,7 +1606,9 @@ async fn gemini_count_tokens_on_non_gemini_upstream_is_unsupported() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider {
+		model_override: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -1349,7 +1627,9 @@ async fn gemini_count_tokens_on_non_gemini_upstream_is_unsupported() {
 
 #[test]
 fn gemini_count_tokens_response_reports_total_tokens() {
-	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::GeminiCountTokens,
@@ -1363,6 +1643,7 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 	};
 	let body = br#"{"totalTokens":31,"promptTokensDetails":[{"modality":"TEXT","tokenCount":31}]}"#;
 	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
 		parts: ::http::Response::new(()).into_parts().0,
 		bytes: bytes::Bytes::from_static(body),
 	};
@@ -1379,13 +1660,50 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 }
 
 #[tokio::test]
+async fn anthropic_count_tokens_preserves_upstream_errors() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	});
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::CountTokens,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+		provider: "aws.bedrock".into(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let body =
+		bytes::Bytes::from_static(br#"{"message":"The provided model does not support CountTokens"}"#);
+	let mut parts = ::http::Response::new(()).into_parts().0;
+	parts.status = ::http::StatusCode::BAD_REQUEST;
+	let buffered = BufferedResponse {
+		managed_body: Body::empty(),
+		parts,
+		bytes: body.clone(),
+	};
+
+	let resp = provider
+		.process_count_tokens_response(req, buffered, None, &Default::default())
+		.expect("error response should process");
+	assert_eq!(resp.status(), ::http::StatusCode::BAD_REQUEST);
+	assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), body);
+}
+
+#[tokio::test]
 async fn vertex_anthropic_messages_prepares_vertex_body() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::Vertex(vertex::Provider {
-		model: None,
+		model_override: None,
 		region: Some(strng::new("us-central1")),
 		project_id: strng::new("test-project"),
 	});
@@ -1440,7 +1758,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: Some("gcp/failover-model".into()),
+		model_override: Some("gcp/failover-model".into()),
 		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
@@ -1499,10 +1817,7 @@ async fn messages_to_completions_final_transformation() {
 	use crate::llm::policy::Policy;
 
 	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
-		let provider = AIProvider::OpenAI(openai::Provider {
-			model: None,
-			moderation: None,
-		});
+		let provider = custom_provider(custom::ProviderFormat::Completions);
 		let backend_info = openai_test_backend_info();
 		let req = ::http::Request::builder()
 			.uri("/v1/messages")
@@ -1543,7 +1858,7 @@ async fn messages_to_completions_final_transformation() {
 	};
 
 	let vec_body = br#"{
-				"model": "gpt-4o",
+				"model": "gpt-5.6",
 				"max_tokens": 64,
 				"system": "be brief",
 				"messages": [{"role": "user", "content": "hello"}],
@@ -1588,10 +1903,7 @@ async fn messages_to_completions_final_transformation() {
 	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
 	// Indexing returns Null for a missing key too, so assert on key presence.
 	let reasoning_effort = forwarded_json.get("reasoning_effort");
-	assert!(
-		reasoning_effort.is_some(),
-		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
-	);
+	assert_eq!(reasoning_effort, Some(&json!("none")));
 }
 
 #[tokio::test]
@@ -1604,7 +1916,7 @@ async fn detect_final_transformations_skip_opaque_bodies() {
 		policy: Option<&Policy>,
 	) -> (Request, RouteType) {
 		let provider = AIProvider::OpenAI(openai::Provider {
-			model: None,
+			model_override: None,
 			moderation: None,
 		});
 		let backend_info = openai_test_backend_info();
@@ -1693,12 +2005,13 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::bedrock(bedrock::Provider {
-		model: Some(strng::new(
+		model_override: Some(strng::new(
 			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
 		)),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -1758,6 +2071,8 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("Bedrock upstream request should be finalized");
 	assert_eq!(
@@ -1774,10 +2089,11 @@ async fn bedrock_provider_model_overrides_client_model() {
 
 	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
 	let provider = AIProvider::bedrock(bedrock::Provider {
-		model: Some(strng::new(configured_model)),
+		model_override: Some(strng::new(configured_model)),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -1818,6 +2134,8 @@ async fn bedrock_provider_model_overrides_client_model() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("Bedrock upstream request should be finalized");
 	assert_eq!(
@@ -1834,7 +2152,7 @@ async fn llm_transformations_can_set_missing_model() {
 	use crate::types::agent::BackendTarget;
 
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
@@ -1891,7 +2209,9 @@ async fn copilot_anthropic_model_uses_messages_route() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -1939,6 +2259,8 @@ async fn copilot_anthropic_model_uses_messages_route() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(setup_req.uri().path(), "/v1/messages");
@@ -1952,7 +2274,9 @@ async fn copilot_anthropic_model_uses_messages_route() {
 
 #[test]
 fn copilot_embeddings_response_adds_missing_openai_fields() {
-	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
 	let mut request = llm_request_with_tokens(None);
 	request.input_format = InputFormat::Embeddings;
 	request.request_model = "text-embedding-3-small".into();
@@ -1974,7 +2298,9 @@ fn copilot_embeddings_response_adds_missing_openai_fields() {
 
 #[test]
 fn copilot_embeddings_response_preserves_missing_usage() {
-	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
 	let mut request = llm_request_with_tokens(None);
 	request.input_format = InputFormat::Embeddings;
 	request.request_model = "text-embedding-3-small".into();
@@ -1991,7 +2317,9 @@ fn copilot_embeddings_response_preserves_missing_usage() {
 
 #[test]
 fn copilot_embeddings_response_preserves_explicit_openai_fields() {
-	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
 	let mut request = llm_request_with_tokens(None);
 	request.input_format = InputFormat::Embeddings;
 	request.request_model = "requested-model".into();
@@ -2033,7 +2361,9 @@ fn copilot_embeddings_parse_error_logs_normalized_response() {
 		.finish();
 
 	tracing::subscriber::with_default(subscriber, || {
-		let provider = AIProvider::Copilot(copilot::Provider { model: None });
+		let provider = AIProvider::Copilot(copilot::Provider {
+			model_override: None,
+		});
 		let mut request = llm_request_with_tokens(None);
 		request.input_format = InputFormat::Embeddings;
 		request.request_model = "text-embedding-3-small".into();
@@ -2057,7 +2387,7 @@ fn copilot_embeddings_parse_error_logs_normalized_response() {
 #[test]
 fn non_copilot_embeddings_response_still_requires_openai_fields() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let mut request = llm_request_with_tokens(None);
@@ -2125,7 +2455,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request)
+	let translated = conversion::messages::from_completions::translate(&request, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");
@@ -2162,7 +2492,7 @@ fn test_completions_json_schema_response_format_maps_to_anthropic_output_config(
 	}))
 	.expect("valid completions request");
 
-	let translated = conversion::messages::from_completions::translate(&request)
+	let translated = conversion::messages::from_completions::translate(&request, None)
 		.expect("completions->messages translation");
 	let translated: Value =
 		serde_json::from_slice(&translated).expect("translated request should be valid json");
@@ -2239,10 +2569,11 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
 	let bedrock = AIProvider::bedrock(bedrock::Provider {
-		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+		model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -2275,8 +2606,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2309,10 +2639,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
-	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
-		moderation: None,
-	});
+	let provider = custom_provider(custom::ProviderFormat::Completions);
 	let mut req = llm_request_with_tokens(None);
 	req.input_format = InputFormat::Messages;
 	req.request_model = "gpt-4o".into();
@@ -2333,8 +2660,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 			req,
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			upstream,
 		)
@@ -2383,10 +2709,7 @@ async fn upstream_encoding_is_applied_after_messages_response_translation() {
 
 #[test]
 fn openai_completions_error_translates_to_messages_client() {
-	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
-		moderation: None,
-	});
+	let provider = custom_provider(custom::ProviderFormat::Completions);
 	let mut req = llm_request_with_tokens(None);
 	req.input_format = InputFormat::Messages;
 	req.request_model = "gpt-4o".into();
@@ -2402,6 +2725,76 @@ fn openai_completions_error_translates_to_messages_client() {
 	assert_eq!(body["type"], json!("error"));
 	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
 	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[tokio::test]
+async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	for (provider, model, format, error, expected_message) in [
+		(
+			AIProvider::Copilot(copilot::Provider {
+				model_override: None,
+			}),
+			"gpt-6-astra",
+			ChatFormat::OpenAIResponses,
+			json!({"message": "Your input exceeds the context window of this model. Please adjust your input and try again."}),
+			"capability_rejected: prompt_too_long Your input exceeds the context window of this model. Please adjust your input and try again.",
+		),
+		(
+			custom_provider(custom::ProviderFormat::Completions),
+			"gpt-4o",
+			ChatFormat::OpenAICompletions,
+			json!({"type": "invalid_request_error", "code": "context_length_exceeded", "message": "input rejected"}),
+			"capability_rejected: prompt_too_long input rejected",
+		),
+	] {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Messages, model, None)
+				.unwrap()
+				.output,
+			format,
+		);
+		for streaming in [false, true] {
+			let mut req = llm_request_with_tokens(None);
+			req.input_format = InputFormat::Messages;
+			req.request_model = model.into();
+			req.streaming = streaming;
+			let upstream = ::http::Response::builder()
+				.status(::http::StatusCode::BAD_REQUEST)
+				.header(::http::header::CONTENT_TYPE, "application/json")
+				.header("x-request-id", "overflow-regression")
+				.body(Body::from(
+					serde_json::to_vec(&json!({"error": error})).unwrap(),
+				))
+				.unwrap();
+			let response = provider
+				.process_response(
+					PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+					req,
+					LLMResponsePolicies::default(),
+					None,
+					Default::default(),
+					None,
+					upstream,
+				)
+				.await
+				.unwrap();
+			assert_eq!(response.status(), ::http::StatusCode::BAD_REQUEST);
+			assert_eq!(response.headers()["x-request-id"], "overflow-regression");
+			let body: Value =
+				serde_json::from_slice(&response.collect().await.unwrap().to_bytes()).unwrap();
+			assert_eq!(
+				body,
+				json!({
+					"type": "error",
+					"error": {"type": "invalid_request_error", "message": expected_message}
+				})
+			);
+		}
+	}
 }
 
 #[test]
@@ -2426,7 +2819,7 @@ fn custom_messages_error_translates_to_completions_client() {
 #[test]
 fn foundry_claude_messages_error_uses_anthropic_shape() {
 	let provider = AIProvider::azure(azure::Provider {
-		model: None,
+		model_override: None,
 		resource_name: strng::new("example"),
 		resource_type: azure::AzureResourceType::Foundry,
 		api_version: None,
@@ -2454,10 +2847,11 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	let bedrock = AIProvider::bedrock(bedrock::Provider {
-		model: Some(strng::new("openai.gpt-oss-120b-1:0")),
+		model_override: Some(strng::new("openai.gpt-oss-120b-1:0")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		endpoint_preference: Default::default(),
 	});
 
 	let body = Body::from(
@@ -2491,8 +2885,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			},
 			LLMResponsePolicies::default(),
 			None,
-			AsyncLog::default(),
-			llm::LogContentFields::default(),
+			Default::default(),
 			None,
 			resp,
 		)
@@ -2519,7 +2912,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let mut req = crate::http::tests_common::request(
@@ -2536,6 +2929,8 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 			None,
 			Some("/v1/custom"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2547,10 +2942,41 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
 
+#[rstest::rstest]
+#[case::v1("/v1", "/v1/systemone")]
+#[case::nested("/openai/v1", "/openai/v1/systemone")]
+#[case::root("/", "/v1/systemone")]
+fn setup_request_custom_detect_replaces_v1_with_path_prefix(
+	#[case] path_prefix: &str,
+	#[case] expected_path: &str,
+) {
+	let mut req =
+		crate::http::tests_common::request("https://example.com/v1/systemone", http::Method::POST, &[]);
+
+	AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: vec![],
+	})
+	.setup_request(
+		&mut req,
+		RouteType::Detect,
+		None,
+		None,
+		Some(path_prefix),
+		true,
+		None,
+		None,
+	)
+	.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), expected_path);
+}
+
 #[test]
 fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	let provider = AIProvider::OpenAI(openai::Provider {
-		model: None,
+		model_override: None,
 		moderation: None,
 	});
 	let mut req = crate::http::tests_common::request(
@@ -2567,6 +2993,8 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 			None,
 			Some("/v1/custom/"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2577,7 +3005,7 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 #[test]
 fn setup_request_custom_path_override_wins_over_format_path() {
 	let provider = AIProvider::Custom(custom::Provider {
-		model: None,
+		model_override: None,
 		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig {
 			format: custom::ProviderFormat::Messages,
@@ -2609,11 +3037,74 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 			Some("/override/messages"),
 			None,
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
 	assert_eq!(req.uri().path(), "/override/messages");
 	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
+fn setup_request_drops_inbound_query_only_when_translated() {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	for (provider, route_type, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			RouteType::Completions,
+			None,
+		),
+		(
+			AIProvider::Anthropic(anthropic::Provider {
+				model_override: None,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+		(
+			AIProvider::bedrock(bedrock::Provider {
+				model_override: None,
+				region: strng::new("us-east-1"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+	] {
+		let mut req = crate::http::tests_common::request(
+			"https://example.com/v1/messages?beta=true",
+			http::Method::POST,
+			&[],
+		);
+		provider
+			.setup_request(
+				&mut req,
+				route_type,
+				Some(&llm_request),
+				None,
+				None,
+				false,
+				None,
+				None,
+			)
+			.expect("setup_request should succeed");
+		assert_eq!(req.uri().query(), expected_query, "{route_type:?}");
+	}
 }
 
 #[test]
@@ -2658,6 +3149,8 @@ fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 				None,
 				None,
 				false,
+				None,
+				None,
 			)
 			.expect("setup_request should succeed");
 
@@ -2696,6 +3189,8 @@ fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2741,6 +3236,8 @@ fn assert_prefixed_host_override_path(
 			None,
 			Some("/proxy/"),
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2764,7 +3261,9 @@ fn native_gemini_llm_request(request_model: &str, streaming: bool) -> LLMRequest
 
 #[test]
 fn setup_request_gemini_native_builds_generate_content_path() {
-	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
 	let llm_request = native_gemini_llm_request("gemini-2.5-flash", false);
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
@@ -2780,6 +3279,8 @@ fn setup_request_gemini_native_builds_generate_content_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2795,25 +3296,29 @@ fn setup_request_gemini_native_builds_generate_content_path() {
 }
 
 #[test]
-fn setup_request_gemini_native_streaming_adds_alt_sse_and_keeps_client_query() {
-	let provider = AIProvider::Gemini(gemini::Provider { model: None });
-	// The client's own alt=sse is dropped in favour of the path-provided one, while any other
-	// parameter such as key survives.
+fn setup_request_gemini_native_streaming_adds_alt_sse_and_strips_client_api_keys() {
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	// The client's own alt=sse is dropped in favour of the path-provided one. Credential query
+	// parameters are stripped while unrelated parameters survive.
 	let llm_request = native_gemini_llm_request("models/gemini-2.5-flash", true);
 	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc",
+		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc&%24key=def&keep=yes",
 		http::Method::POST,
-		&[],
+		&[("authorization", "Bearer AIzaOperatorKey")],
 	);
 
 	provider
 		.setup_request(
 			&mut req,
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			Some(&llm_request),
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2821,26 +3326,32 @@ fn setup_request_gemini_native_streaming_adds_alt_sse_and_keeps_client_query() {
 		req.uri().path(),
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
 	);
-	assert_eq!(req.uri().query(), Some("alt=sse&key=abc"));
+	assert_eq!(req.uri().query(), Some("alt=sse&keep=yes"));
 }
 
 #[test]
-fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
-	// hostOverride without pathPrefix forwards the client's URI verbatim, so alt=sse must
-	// still be there: the upstream would otherwise answer with the JSON-array variant.
-	for provider in [
-		AIProvider::Gemini(gemini::Provider { model: None }),
-		AIProvider::Vertex(vertex::Provider {
-			model: None,
-			region: None,
-			project_id: strng::new("test-project"),
-		}),
+fn setup_request_strips_query_api_keys_only_for_native_gemini() {
+	for (provider, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			"alt=sse&keep=yes",
+		),
+		(
+			AIProvider::Vertex(vertex::Provider {
+				model_override: None,
+				region: None,
+				project_id: strng::new("test-project"),
+			}),
+			"alt=sse&key=abc&%24key=def&keep=yes",
+		),
 	] {
 		let llm_request = native_gemini_llm_request("gemini-2.5-flash", true);
 		let mut req = crate::http::tests_common::request(
-			"https://proxy.example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+			"https://proxy.example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc&%24key=def&keep=yes",
 			http::Method::POST,
-			&[],
+			&[("authorization", "Bearer ya29.operator-token")],
 		);
 
 		provider
@@ -2851,6 +3362,8 @@ fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
 				None,
 				None,
 				true,
+				None,
+				None,
 			)
 			.expect("setup_request should succeed");
 
@@ -2858,21 +3371,24 @@ fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
 			req.uri().path(),
 			"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
 		);
-		assert_eq!(req.uri().query(), Some("alt=sse"));
+		assert_eq!(req.uri().query(), Some(expected_query));
 	}
 }
 
 #[test]
 fn setup_request_gemini_without_native_state_keeps_compat_path() {
-	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
 	let llm_request = LLMRequest {
+		input_format: InputFormat::Completions,
 		provider_state: None,
 		..native_gemini_llm_request("gemini-2.5-flash", false)
 	};
 	let mut req = crate::http::tests_common::request(
-		"https://example.com/v1/chat/completions",
+		"https://example.com/v1/chat/completions?key=abc&%24key=def",
 		http::Method::POST,
-		&[],
+		&[("authorization", "Bearer AIzaOperatorKey")],
 	);
 
 	provider
@@ -2883,16 +3399,21 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
 	assert_eq!(req.uri().path(), "/v1beta/openai/chat/completions");
+	assert_eq!(req.uri().query(), Some("key=abc&%24key=def"));
 }
 
 #[test]
 fn setup_request_gemini_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Gemini(gemini::Provider { model: None }),
+		AIProvider::Gemini(gemini::Provider {
+			model_override: None,
+		}),
 		"gemini-2.5-pro",
 		"/proxy/v1beta/openai/chat/completions",
 		Some("trace=repro"),
@@ -2903,7 +3424,7 @@ fn setup_request_gemini_applies_path_prefix_with_host_override() {
 fn setup_request_vertex_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
 		AIProvider::Vertex(vertex::Provider {
-			model: None,
+			model_override: None,
 			region: Some(strng::new("us-central1")),
 			project_id: strng::new("example-project"),
 		}),
@@ -2917,14 +3438,56 @@ fn setup_request_vertex_applies_path_prefix_with_host_override() {
 fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
 		AIProvider::bedrock(bedrock::Provider {
-			model: None,
+			model_override: None,
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			endpoint_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		Some("trace=repro"),
+		None,
+	);
+}
+
+#[test]
+fn setup_request_bedrock_sets_signing_region_with_host_override() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model_override: None,
+		region: strng::new("ca-central-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	});
+	let mut req = crate::http::tests_common::request(
+		"https://bedrock-vpce.example.com/model/example/converse",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			None,
+			None,
+			None,
+			true,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|authority| authority.as_str()),
+		Some("bedrock-vpce.example.com")
+	);
+	assert_eq!(
+		req
+			.extensions()
+			.get::<bedrock::AwsRegion>()
+			.map(|region| region.region.as_str()),
+		Some("ca-central-1")
 	);
 }
 
@@ -2932,7 +3495,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
 		AIProvider::azure(azure::Provider {
-			model: None,
+			model_override: None,
 			resource_name: strng::new("example"),
 			resource_type: azure::AzureResourceType::OpenAI,
 			api_version: Some(strng::new("2024-02-15-preview")),
@@ -3441,7 +4004,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 
 fn vertex_provider(model: &str) -> AIProvider {
 	AIProvider::Vertex(vertex::Provider {
-		model: Some(strng::new(model)),
+		model_override: Some(strng::new(model)),
 		region: None,
 		project_id: strng::new("test-project"),
 	})
@@ -3449,7 +4012,7 @@ fn vertex_provider(model: &str) -> AIProvider {
 
 fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
 	AIProvider::Custom(custom::Provider {
-		model: None,
+		model_override: None,
 		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig { format, path: None }],
 	})
@@ -3480,7 +4043,7 @@ async fn read_body_decodes_gzip_request_before_json_parse() {
 		.body(Body::from(gz.to_vec()))
 		.unwrap();
 
-	let (parts, parsed) = provider
+	let (parts, _body, parsed) = provider
 		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
 		.await
 		.expect("gzip request body should decode and parse as JSON");
@@ -3496,26 +4059,79 @@ async fn read_body_decodes_gzip_request_before_json_parse() {
 }
 
 #[tokio::test]
-async fn read_body_still_parses_plaintext_request() {
-	// A plaintext (unencoded) request body must continue to parse unchanged — the
-	// decompression path is a no-op when no Content-Encoding is present.
+async fn read_body_cached_json_respects_mutations_and_limits() {
 	let provider = custom_provider(custom::ProviderFormat::Messages);
-
-	let req = ::http::Request::builder()
-		.uri("/v1/messages")
-		.header(::http::header::CONTENT_TYPE, "application/json")
-		.body(Body::from(
-			br#"{"model":"claude-sonnet-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#
-				.to_vec(),
-		))
-		.unwrap();
-
-	let (_parts, parsed) = provider
-		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
-		.await
-		.expect("plaintext request body should parse as JSON");
-
-	assert_eq!(parsed.model.as_deref(), Some("claude-sonnet-4-5"));
+	let original = json!({
+		"model": "claude-sonnet-4-5",
+		"max_tokens": 8,
+		"messages": [{"role": "user", "content": "hi"}],
+	});
+	for case in [
+		"uncached",
+		"cached",
+		"policy",
+		"replacement",
+		"limit",
+		"encoding",
+	] {
+		let mut req = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(serde_json::to_vec(&original).unwrap()))
+			.unwrap();
+		if case != "uncached" {
+			req
+				.body_mut()
+				.insert_extension(json::ParsedJson(original.clone()));
+		}
+		let mut policy = None;
+		match case {
+			"policy" => {
+				policy = Some(Policy {
+					overrides: Some(HashMap::from([("model".to_string(), json!("overridden"))])),
+					..Default::default()
+				})
+			},
+			"replacement" => {
+				let mut replacement = original.clone();
+				replacement["model"] = json!("replaced");
+				req.replace_body_bytes(serde_json::to_vec(&replacement).unwrap().into());
+			},
+			"limit" => {
+				req.extensions_mut().insert(http::BufferLimit(1));
+			},
+			"encoding" => {
+				req
+					.headers_mut()
+					.insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+			},
+			_ => {},
+		}
+		let result = provider
+			.read_body_and_default_model::<types::messages::Request>(policy.as_ref(), req, &mut None)
+			.await;
+		if case == "limit" {
+			assert!(matches!(result, Err(AIError::RequestTooLarge)));
+			continue;
+		}
+		if case == "encoding" {
+			assert!(
+				result.is_err(),
+				"cached JSON must not bypass decoding errors"
+			);
+			continue;
+		}
+		let (_, body, parsed) = result.unwrap();
+		assert!(body.extension::<json::ParsedJson>().is_none());
+		assert_eq!(
+			parsed.model.as_deref(),
+			Some(match case {
+				"policy" => "overridden",
+				"replacement" => "replaced",
+				_ => "claude-sonnet-4-5",
+			})
+		);
+	}
 }
 
 #[test]
@@ -3527,7 +4143,7 @@ fn custom_provider_name_falls_back_to_custom() {
 #[test]
 fn custom_provider_override_drives_provider_name() {
 	let provider = AIProvider::Custom(custom::Provider {
-		model: None,
+		model_override: None,
 		provider_override: Some(strng::literal!("cohere")),
 		formats: vec![custom::ProviderFormatConfig {
 			format: custom::ProviderFormat::Rerank,
@@ -3541,7 +4157,7 @@ fn custom_provider_override_drives_provider_name() {
 fn vertex_anthropic_model_uses_exclusive_convention() {
 	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
 	assert_eq!(
-		cache_convention_for(&provider, None, "anthropic/claude-sonnet-4-5"),
+		cache_convention_for(&provider, None, None, "anthropic/claude-sonnet-4-5", ""),
 		CacheTokenConvention::InputExcludesCache,
 	);
 }
@@ -3550,7 +4166,7 @@ fn vertex_anthropic_model_uses_exclusive_convention() {
 fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	assert_eq!(
-		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		cache_convention_for(&provider, None, None, "gemini-2.0-flash", ""),
 		CacheTokenConvention::InputIncludesCache,
 	);
 }
@@ -3562,7 +4178,9 @@ fn custom_messages_backend_uses_exclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Messages),
-			"some-model"
+			None,
+			"some-model",
+			""
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -3575,7 +4193,9 @@ fn custom_completions_backend_uses_inclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Completions),
-			"some-model"
+			None,
+			"some-model",
+			""
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -3585,23 +4205,57 @@ fn custom_completions_backend_uses_inclusive_convention() {
 fn fixed_providers_classify_by_family() {
 	assert_eq!(
 		cache_convention_for(
-			&AIProvider::Anthropic(anthropic::Provider { model: None }),
+			&AIProvider::Anthropic(anthropic::Provider {
+				model_override: None
+			}),
 			None,
-			"claude-sonnet-4-5"
+			None,
+			"claude-sonnet-4-5",
+			""
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
 	assert_eq!(
 		cache_convention_for(
 			&AIProvider::OpenAI(openai::Provider {
-				model: None,
+				model_override: None,
 				moderation: None,
 			}),
 			Some(custom::ProviderFormat::Completions),
-			"gpt-4o"
+			None,
+			"gpt-4o",
+			""
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
+	let bedrock = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+	}));
+	for (path, expected) in [
+		(
+			"/v1/chat/completions",
+			CacheTokenConvention::InputIncludesCache,
+		),
+		("/v1/responses", CacheTokenConvention::InputIncludesCache),
+		(
+			"/anthropic/v1/messages",
+			CacheTokenConvention::InputExcludesCache,
+		),
+		(
+			"/model/m/converse",
+			CacheTokenConvention::InputExcludesCache,
+		),
+	] {
+		assert_eq!(
+			cache_convention_for(&bedrock, None, None, "m", path),
+			expected,
+			"{path}"
+		);
+	}
 }
 
 #[test]

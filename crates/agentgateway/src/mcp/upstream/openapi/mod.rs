@@ -1,19 +1,22 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
 use agent_core::version::BuildInfo;
+use base64::Engine;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
 use once_cell::sync::Lazy;
-use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
+use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody};
 use percent_encoding::{AsciiSet, utf8_percent_encode};
-use regex::{Captures, Regex, Replacer};
-use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use regex::Regex;
+use rmcp::model::{
+	CallToolResult, ClientRequest, ContentBlock, JsonObject, JsonRpcRequest, ResourceContents, Tool,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -37,8 +40,6 @@ pub struct UpstreamOpenAPICall {
 pub enum ParseError {
 	#[error("missing components")]
 	MissingComponents,
-	#[error("invalid reference: {0}")]
-	InvalidReference(String),
 	#[error("missing reference")]
 	MissingReference(String),
 	#[error("unsupported reference")]
@@ -51,6 +52,16 @@ pub enum ParseError {
 	IoError(#[from] std::io::Error),
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(#[from] url::ParseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+enum PathParamError {
+	#[error("path parameter '{0}' is missing")]
+	Missing(String),
+	#[error("path parameter '{0}' must be a string or number")]
+	UnsupportedType(String),
+	#[error("path parameter '{0}' must not be empty or contain a dot segment")]
+	UnsafeSegment(String),
 }
 
 pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> {
@@ -100,138 +111,71 @@ pub(crate) fn get_server_prefix(server: &OpenAPI) -> Result<String, ParseError> 
 	}
 }
 
-fn resolve_schema<'a>(
-	reference: &'a ReferenceOr<Schema>,
-	doc: &'a OpenAPI,
-) -> Result<&'a Schema, ParseError> {
-	match reference {
-		ReferenceOr::Reference { reference } => {
-			let reference = reference
-				.strip_prefix("#/components/schemas/")
-				.ok_or(ParseError::InvalidReference(reference.to_string()))?;
-			let components: &openapiv3::Components = doc
-				.components
-				.as_ref()
-				.ok_or(ParseError::MissingComponents)?;
-			let schema = components
-				.schemas
-				.get(reference)
-				.ok_or(ParseError::MissingReference(reference.to_string()))?;
-			resolve_schema(schema, doc)
-		},
-		ReferenceOr::Item(schema) => Ok(schema),
-	}
-}
+const COMPONENT_SCHEMA_PREFIX: &str = "#/components/schemas/";
+const JSON_SCHEMA_DEFS_PREFIX: &str = "#/$defs/";
 
-/// Recursively resolves all nested schema references (`$ref`) within a given schema,
-/// returning a new `Schema` object with all references replaced by their corresponding items.
-fn resolve_nested_schema<'a>(
-	reference: &'a ReferenceOr<Schema>,
-	doc: &'a OpenAPI,
-) -> Result<Schema, ParseError> {
-	// 1. Resolve the initial reference to get the base Schema object (immutable borrow)
-	let base_schema = resolve_schema(reference, doc)?;
-
-	// 2. Clone the base schema to create a mutable owned version we can modify
-	let mut resolved_schema = base_schema.clone();
-
-	// 3. Match on the kind and recursively resolve + update the mutable clone
-	match &mut resolved_schema.schema_kind {
-		SchemaKind::Type(Type::Object(obj)) => {
-			for prop_ref_box in obj.properties.values_mut() {
-				let owned_prop_ref_or_box = prop_ref_box.clone();
-				let temp_prop_ref = match owned_prop_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_prop = resolve_nested_schema(&temp_prop_ref, doc)?;
-				*prop_ref_box = ReferenceOr::Item(Box::new(resolved_prop));
-			}
-		},
-		SchemaKind::Type(Type::Array(arr)) => {
-			if let Some(items_ref_box) = arr.items.as_mut() {
-				let owned_items_ref_or_box = items_ref_box.clone();
-				let temp_items_ref = match owned_items_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_items = resolve_nested_schema(&temp_items_ref, doc)?;
-				*items_ref_box = ReferenceOr::Item(Box::new(resolved_items));
-			}
-		},
-		// Handle combiners (OneOf, AllOf, AnyOf) with separate arms
-		SchemaKind::OneOf { one_of } => {
-			for ref_or_schema in one_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::AllOf { all_of } => {
-			for ref_or_schema in all_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::AnyOf { any_of } => {
-			for ref_or_schema in any_of.iter_mut() {
-				let temp_ref = ref_or_schema.clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				*ref_or_schema = ReferenceOr::Item(resolved);
-			}
-		},
-		SchemaKind::Not { not } => {
-			let temp_ref = (**not).clone();
-			let resolved = resolve_nested_schema(&temp_ref, doc)?;
-			**not = ReferenceOr::Item(resolved);
-		},
-		SchemaKind::Any(any_schema) => {
-			// Properties
-			for prop_ref_box in any_schema.properties.values_mut() {
-				let owned_prop_ref_or_box = prop_ref_box.clone();
-				let temp_prop_ref = match owned_prop_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_prop = resolve_nested_schema(&temp_prop_ref, doc)?;
-				*prop_ref_box = ReferenceOr::Item(Box::new(resolved_prop));
-			}
-			// Items
-			if let Some(items_ref_box) = any_schema.items.as_mut() {
-				let owned_items_ref_or_box = items_ref_box.clone();
-				let temp_items_ref = match owned_items_ref_or_box {
-					ReferenceOr::Reference { reference } => ReferenceOr::Reference { reference },
-					ReferenceOr::Item(boxed_item) => ReferenceOr::Item((*boxed_item).clone()),
-				};
-				let resolved_items = resolve_nested_schema(&temp_items_ref, doc)?;
-				*items_ref_box = ReferenceOr::Item(Box::new(resolved_items));
-			}
-			// oneOf, allOf, anyOf
-			for vec_ref in [
-				&mut any_schema.one_of,
-				&mut any_schema.all_of,
-				&mut any_schema.any_of,
-			] {
-				for ref_or_schema in vec_ref.iter_mut() {
-					let temp_ref = ref_or_schema.clone();
-					let resolved = resolve_nested_schema(&temp_ref, doc)?;
-					*ref_or_schema = ReferenceOr::Item(resolved);
+fn visit_component_schema_refs(
+	value: &mut Value,
+	refs: &mut BTreeSet<String>,
+) -> Result<(), ParseError> {
+	match value {
+		Value::Object(object) => {
+			if let Some(Value::String(reference)) = object.get_mut("$ref") {
+				if let Some(name) = reference.strip_prefix(COMPONENT_SCHEMA_PREFIX) {
+					refs.insert(name.to_string());
+					*reference = format!("{JSON_SCHEMA_DEFS_PREFIX}{name}");
+				} else if reference.starts_with("#/components/") {
+					return Err(ParseError::UnsupportedReference(reference.clone()));
 				}
 			}
-			// not
-			if let Some(not_box) = any_schema.not.as_mut() {
-				let temp_ref = (**not_box).clone();
-				let resolved = resolve_nested_schema(&temp_ref, doc)?;
-				**not_box = ReferenceOr::Item(resolved);
+			for value in object.values_mut() {
+				visit_component_schema_refs(value, refs)?;
 			}
 		},
-		// Base types (String, Number, Integer, Boolean) - no nested schemas to resolve further
-		SchemaKind::Type(_) => {}, // Do nothing, already resolved.
+		Value::Array(array) => {
+			for value in array {
+				visit_component_schema_refs(value, refs)?;
+			}
+		},
+		_ => {},
+	}
+	Ok(())
+}
+
+fn bundle_component_schema_refs(value: &mut Value, doc: &OpenAPI) -> Result<(), ParseError> {
+	let mut referenced = BTreeSet::new();
+	visit_component_schema_refs(value, &mut referenced)?;
+	if referenced.is_empty() {
+		return Ok(());
 	}
 
-	// 4. Return the modified owned schema
-	Ok(resolved_schema)
+	let components = doc
+		.components
+		.as_ref()
+		.ok_or(ParseError::MissingComponents)?;
+	let mut pending: VecDeque<_> = referenced.into_iter().collect();
+	let mut defs = JsonObject::new();
+
+	while let Some(name) = pending.pop_front() {
+		if defs.contains_key(&name) {
+			continue;
+		}
+		let schema = components
+			.schemas
+			.get(&name)
+			.ok_or_else(|| ParseError::MissingReference(name.clone()))?;
+		let mut schema = serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
+		let mut referenced = BTreeSet::new();
+		visit_component_schema_refs(&mut schema, &mut referenced)?;
+		pending.extend(referenced);
+		defs.insert(name, schema);
+	}
+
+	value
+		.as_object_mut()
+		.ok_or_else(|| ParseError::UnsupportedReference("final schema is not an object".to_string()))?
+		.insert("$defs".to_string(), Value::Object(defs));
+	Ok(())
 }
 
 fn resolve_parameter<'a>(
@@ -343,12 +287,8 @@ pub(crate) fn parse_openapi_schema(
 											.schema
 											.as_ref()
 											.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-										let schema = resolve_nested_schema(schema_ref, open_api)?;
 										let body_schema =
-											serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-										final_schema
-											.properties
-											.insert(BODY_NAME.clone(), body_schema.clone());
+											serde_json::to_value(schema_ref).map_err(ParseError::SerdeError)?;
 										Some((BODY_NAME.clone(), body_schema, body.required))
 									} else if body.content.contains_key("application/octet-stream") {
 										request_content_type = Some("application/octet-stream".to_string());
@@ -357,9 +297,6 @@ pub(crate) fn parse_openapi_schema(
 											"format": "byte",
 											"description": "Base64-encoded binary content"
 										});
-										final_schema
-											.properties
-											.insert(BODY_NAME.clone(), body_schema.clone());
 										Some((BODY_NAME.clone(), body_schema, body.required))
 									} else {
 										None
@@ -408,7 +345,7 @@ pub(crate) fn parse_openapi_schema(
 							parameters
 								.iter()
 								.try_for_each(|parameter| -> Result<(), ParseError> {
-									let (name, schema, required) = build_schema_property(open_api, parameter)?;
+									let (name, schema, required) = build_schema_property(parameter)?;
 									param_schemas
 										.entry(parameter_type(parameter)?)
 										.or_insert_with(Vec::new)
@@ -443,8 +380,9 @@ pub(crate) fn parse_openapi_schema(
 									.insert(param_type.to_string(), json!(sub_schema));
 							}
 
-							let final_json =
+							let mut final_json =
 								serde_json::to_value(final_schema).map_err(ParseError::SerdeError)?;
+							bundle_component_schema_refs(&mut final_json, open_api)?;
 							let final_json = final_json
 								.as_object()
 								.ok_or(ParseError::UnsupportedReference(
@@ -518,23 +456,17 @@ impl std::fmt::Display for ParameterType {
 	}
 }
 
-fn build_schema_property(
-	open_api: &OpenAPI,
-	item: &Parameter,
-) -> Result<(String, JsonObject, bool), ParseError> {
+fn build_schema_property(item: &Parameter) -> Result<(String, JsonObject, bool), ParseError> {
 	let p = item.parameter_data_ref();
 	let mut schema = match &p.format {
-		openapiv3::ParameterSchemaOrContent::Schema(reference) => {
-			let resolved_schema = resolve_schema(reference, open_api)?;
-			serde_json::to_value(resolved_schema)
-				.map_err(ParseError::SerdeError)?
-				.as_object()
-				.ok_or(ParseError::UnsupportedReference(format!(
-					"parameter {} is not an object",
-					p.name
-				)))?
-				.clone()
-		},
+		openapiv3::ParameterSchemaOrContent::Schema(reference) => serde_json::to_value(reference)
+			.map_err(ParseError::SerdeError)?
+			.as_object()
+			.ok_or(ParseError::UnsupportedReference(format!(
+				"parameter {} is not an object",
+				p.name
+			)))?
+			.clone(),
 		openapiv3::ParameterSchemaOrContent::Content(content) => {
 			return Err(ParseError::UnsupportedReference(format!(
 				"content is not supported for parameters: {content:?}"
@@ -546,7 +478,10 @@ fn build_schema_property(
 		schema.insert("description".to_string(), json!(desc));
 	}
 
-	Ok((p.name.clone(), schema, p.required))
+	// OpenAPI requires path parameters to set `required: true`; openapiv3 tolerates the field
+	// being omitted and defaults it to false, so enforce the specification here
+	let required = matches!(item, Parameter::Path { .. }) || p.required;
+	Ok((p.name.clone(), schema, required))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -567,7 +502,7 @@ impl Default for JsonSchema {
 }
 
 /// Regex to match path template parameters like `{param_name}`.
-static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
+static PATH_PARAM_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{[^}]+\}").unwrap());
 
 /// Characters that are safe in path segments (RFC 3986 unreserved characters).
 /// All other characters will be percent-encoded to prevent path traversal/injection.
@@ -577,26 +512,37 @@ const PATH_SEGMENT_SAFE: &AsciiSet = &percent_encoding::NON_ALPHANUMERIC
 	.remove(b'_')
 	.remove(b'~');
 
-/// Replaces path template parameters.
-struct PathParamReplacer(serde_json::Map<String, Value>);
-
-impl Replacer for PathParamReplacer {
-	fn replace_append(&mut self, caps: &Captures<'_>, dst: &mut String) {
-		let param = &caps[1];
-		match self.0.get(param) {
-			Some(Value::Number(n_val)) => return dst.push_str(&n_val.to_string()),
-			Some(Value::String(s_val)) => {
-				return dst.extend(utf8_percent_encode(s_val, PATH_SEGMENT_SAFE));
+fn substitute_path_params(
+	template: &str,
+	params: &serde_json::Map<String, Value>,
+) -> Result<String, PathParamError> {
+	let mut path = String::with_capacity(template.len());
+	let mut last_end = 0;
+	for placeholder in PATH_PARAM_RE.find_iter(template) {
+		path.push_str(&template[last_end..placeholder.start()]);
+		let matched = placeholder.as_str();
+		// The regex guarantees ASCII braces at both ends
+		let param = &matched[1..matched.len() - 1];
+		match params.get(param) {
+			Some(Value::Number(value)) => path.push_str(&value.to_string()),
+			// `.` is unreserved so percent-encoding leaves dot segments intact; reject them per
+			// decoded segment so upstreams that resolve `%2F` before the path still cannot traverse
+			Some(Value::String(value))
+				if value
+					.split(['/', '\\'])
+					.any(|segment| matches!(segment, "" | "." | "..")) =>
+			{
+				return Err(PathParamError::UnsafeSegment(param.to_string()));
 			},
-			Some(unexpected) => warn!(
-				"Unexpected parameter '{param}' (value: {:?}), leaving path param",
-				unexpected
-			),
-			_ => {},
-		};
-		// fallback to use path parm
-		dst.push_str(&caps[0]);
+			Some(Value::String(value)) => path.extend(utf8_percent_encode(value, PATH_SEGMENT_SAFE)),
+			Some(_) => return Err(PathParamError::UnsupportedType(param.to_string())),
+			None => return Err(PathParamError::Missing(param.to_string())),
+		}
+		last_end = placeholder.end();
 	}
+	path.push_str(&template[last_end..]);
+
+	Ok(path)
 }
 
 /// Normalizes URL path construction to avoid double slashes
@@ -629,6 +575,23 @@ pub struct Handler {
 	pub prefix: String,
 	pub http_client: super::McpHttpClient,
 	pub tools: Vec<(Tool, UpstreamOpenAPICall)>,
+}
+
+/// Media types whose body may be JSON or human-readable text and should be parsed as such.
+fn is_text_like(m: &headers::Mime) -> bool {
+	// The suffix carries the format for types like application/ld+json, otherwise the subtype does.
+	let format = m.suffix().unwrap_or(m.subtype());
+	m.type_() == "text"
+		|| matches!(format.as_str(), "json" | "xml" | "yaml")
+		|| matches!(
+			m.subtype().as_str(),
+			"javascript" | "x-www-form-urlencoded" | "x-ndjson"
+		)
+}
+
+/// Bytes that can be shown to a model without loss: valid UTF-8 and no NUL, which text formats never contain.
+fn looks_like_text(b: &[u8]) -> bool {
+	!b.contains(&0) && std::str::from_utf8(b).is_ok()
 }
 
 impl Handler {
@@ -669,7 +632,7 @@ impl Handler {
 		let res = match request.request {
 			ClientRequest::InitializeRequest(_) => Messages::from_result(
 				id,
-				ServerInfo::new(ServerCapabilities::builder().enable_tools().build()),
+				ServerConfig::new(ServerCapabilities::builder().enable_tools().build()),
 			),
 			ClientRequest::GetPromptRequest(_) => Messages::from_result(id, GetPromptResult::new(vec![])),
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
@@ -744,17 +707,7 @@ impl Handler {
 				let res = self
 					.call_tool(ctr.params.name.as_ref(), ctr.params.arguments, ctx)
 					.await?;
-
-				// Serialize structured content to JSON string for backwards compatibility
-				// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
-				//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
-				// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
-				let serialized_content = serde_json::to_string(&res)
-					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
-
-				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
-				result.structured_content = Some(res);
-				Messages::from_result(id, result)
+				Messages::from_result(id, res)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
@@ -784,7 +737,7 @@ impl Handler {
 		name: &str,
 		args: Option<JsonObject>,
 		ctx: &IncomingRequestContext,
-	) -> Result<serde_json::Value, UpstreamError> {
+	) -> Result<CallToolResult, UpstreamError> {
 		let (_tool, info) = self
 			.tools
 			.iter()
@@ -813,7 +766,8 @@ impl Handler {
 
 		// --- URL Construction ---
 		// Substitute path parameters into the path template in a single pass
-		let path = PATH_PARAM_RE.replace_all(&info.path, PathParamReplacer(path_params));
+		let path = substitute_path_params(&info.path, &path_params)
+			.map_err(|error| UpstreamError::InvalidRequest(error.to_string()))?;
 
 		// Use normalize_url_path to avoid double slashes
 		let normalized_path = normalize_url_path(&self.prefix, &path);
@@ -888,7 +842,6 @@ impl Handler {
 						HeaderValue::from_static("application/octet-stream"),
 					);
 					let s = body_val.as_str().unwrap_or_default();
-					use base64::Engine;
 					base64::engine::general_purpose::STANDARD
 						.decode(s)
 						.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
@@ -973,6 +926,10 @@ impl Handler {
 		if !status.is_server_error() {
 			let lim = crate::http::response_buffer_limit(&response);
 			let content_encoding = response.headers().typed_get::<headers::ContentEncoding>();
+			let content_type = response
+				.headers()
+				.typed_get::<headers::ContentType>()
+				.map(headers::Mime::from);
 			let body_bytes = crate::http::compression::to_bytes_with_decompression(
 				response.into_body(),
 				content_encoding.as_ref(),
@@ -981,17 +938,40 @@ impl Handler {
 			.await
 			.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
 			.1;
-			match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-				Ok(Value::Object(obj)) => Ok(Value::Object(obj)),
-				Ok(Value::Null) => Ok(Value::Null),
-				Ok(data) => Ok(json!({ "data": data })),
-				Err(_) => {
-					// We should probably record a metric here as this means despite requesting json we got back non-json
-					// This would be fine if it was a 5XX but its not so we help a little.
-					// There is a consideration that we could put is_error in here based on the status but dont know if that makes sense for now
-					Ok(json!({ "code": status.as_u16(), "message": String::from_utf8_lossy(&body_bytes) }))
-				},
+
+			if body_bytes.is_empty() {
+				return Ok(CallToolResult::success(vec![]));
 			}
+			let encode = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+			// The bytes decide for anything not declared text-like so text formats missing from is_text_like still arrive as text.
+			if !content_type.as_ref().is_some_and(is_text_like) && !looks_like_text(&body_bytes) {
+				let data = encode(&body_bytes);
+				let mime = content_type
+					.as_ref()
+					.map_or("application/octet-stream", |m| m.essence_str());
+				let block = match content_type.as_ref().map(|m| m.type_().as_str()) {
+					Some("image") => ContentBlock::image(data, mime),
+					Some("audio") => ContentBlock::audio(data, mime),
+					_ => ContentBlock::resource(
+						ResourceContents::blob(data, format!("tool://{name}")).with_mime_type(mime),
+					),
+				};
+				return Ok(CallToolResult::success(vec![block]));
+			}
+
+			// JSON is attempted first even for text types because some upstreams mislabel JSON bodies.
+			// Per MCP spec https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content:
+			//   "a tool that returns structured content SHOULD also return the serialized JSON in a TextContent block"
+			// Note: This part of the spec is in flux, see https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1624
+			Ok(
+				match serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+					Ok(val @ (Value::Object(_) | Value::Null)) => CallToolResult::structured(val),
+					Ok(data) => CallToolResult::structured(json!({ "data": data })),
+					Err(_) => CallToolResult::success(vec![ContentBlock::text(String::from_utf8_lossy(
+						&body_bytes,
+					))]),
+				},
+			)
 		} else {
 			let lim = crate::http::response_buffer_limit(&response);
 			let body = String::from_utf8(

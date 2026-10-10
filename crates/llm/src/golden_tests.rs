@@ -31,17 +31,22 @@ fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, Strin
 
 const ANTHROPIC: &str = "anthropic";
 const BEDROCK: &str = "bedrock";
+const BEDROCK_OPENAI: &str = "bedrock-openai";
+const BEDROCK_OPENAI_GPT: &str = "bedrock-openai-gpt";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
 const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
+const VERTEX_EMBED_CONTENT: &str = "vertex-embed-content";
+const SYSTEMONE: &str = "systemone";
 
 mod requests {
 	use super::*;
@@ -57,13 +62,14 @@ mod requests {
 		let input_str = fs::read_to_string(&input_path).expect("failed to read input file");
 		let input_raw: Value = serde_json::from_str(&input_str).expect("failed to parse input JSON");
 		let mut input_typed: I = serde_json::from_str(&input_str).expect("failed to parse input JSON");
-		let provider_response =
-			xlate(&mut input_typed).expect("failed to translate input format to provider request");
+		let provider_response = xlate(&mut input_typed);
 		let mut llm_request = input_typed
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => BEDROCK,
+					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
+						BEDROCK
+					},
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -74,16 +80,18 @@ mod requests {
 			llm_request.prompt = Some(input_typed.get_messages().into());
 		}
 
-		let provider_value =
-			serde_json::from_slice::<Value>(&provider_response).expect("failed to parse provider JSON");
-		let report = json!({
-			"request": provider_value,
-			"parsed": llm_request,
-		});
+		let report = match provider_response {
+			Ok(body) => json!({
+				"request": serde_json::from_slice::<Value>(&body).expect("failed to parse provider JSON"),
+				"parsed": llm_request,
+			}),
+			Err(error) => json!({"error": error.to_string(), "parsed": llm_request}),
+		};
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
 			info => &input_raw,
+			filters => vec![(r#""id": "msg_[0-9a-f]{16}""#, r#""id": "msg_redacted""#)],
 			description => input_path.to_string_lossy().to_string(),
 			omit_expression => true,
 			prepend_module_to_snapshot => false,
@@ -136,16 +144,20 @@ mod requests {
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
+		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
 		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
+		("reasoning-adaptive", &[ANTHROPIC, BEDROCK]),
 		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
-		("reasoning_replay", &[BEDROCK]),
-		("reasoning_replay_unsigned", &[BEDROCK]),
+		("reasoning_replay", &[ANTHROPIC, BEDROCK]),
+		("reasoning_replay_unsigned", &[ANTHROPIC, BEDROCK]),
 		("image-url", &[ANTHROPIC]),
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
+		("file-inline", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
@@ -156,32 +168,72 @@ mod requests {
 			"basic",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
 		),
-		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"system_message",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		(
 			"tools",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
 		),
-		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"server_tools",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
+		(
+			"reasoning",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
+		(
+			"metadata",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		(
 			"structured-output",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX],
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
 		),
-		("cache_control", &[COMPLETIONS]),
+		(
+			"cache_control",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
+		),
+		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_reasoning_prefix", &[BEDROCK]),
+		("cache_control_responses", &[RESPONSES]),
+		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
+		("cache_control_dropped_server_tools", &[BEDROCK]),
+		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
-		("reasoning_replay", &[BEDROCK]),
-		("tool_history_without_tools", &[BEDROCK]),
+		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
+		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
+		(
+			"tool_history_without_tools",
+			&[BEDROCK, COMPLETIONS, RESPONSES],
+		),
+		("tool_reference", &[COMPLETIONS, BEDROCK, RESPONSES]),
+		(
+			"tool_result_unknown_part",
+			&[COMPLETIONS, BEDROCK, RESPONSES],
+		),
 		("responses_agent_subset", &[RESPONSES]),
+		("tool_result_error", &[COMPLETIONS, RESPONSES]),
+		("citations", &[COMPLETIONS, RESPONSES]),
+		("unknown_content", &[COMPLETIONS, RESPONSES]),
+		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
+		("stop_sequences", &[COMPLETIONS, RESPONSES]),
+		("tool_result_empty", &[COMPLETIONS, RESPONSES]),
+		("tool_result_image", &[COMPLETIONS, RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
+		("namespace-tools", &[BEDROCK, GEMINI]),
+		("namespace-tools-long", &[BEDROCK]),
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
+		("codex-assistant-history", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
-		("cache_control", &[GEMINI]),
+		("cache_control", &[BEDROCK, GEMINI]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -195,6 +247,7 @@ mod requests {
 		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
+		("embed-content", &[VERTEX]),
 	];
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
@@ -214,26 +267,52 @@ mod requests {
 
 	#[test]
 	fn from_completions() {
+		let catalog = model_catalog::TestCatalog::new([
+			(
+				"custom-adaptive-model",
+				&[model_catalog::tags::ADAPTIVE_THINKING][..],
+			),
+			(
+				"claude-opus-4-6",
+				&[
+					model_catalog::tags::ADAPTIVE_THINKING,
+					model_catalog::tags::LEGACY_THINKING,
+				][..],
+			),
+		]);
 		let bedrock = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			endpoint_preference: Default::default(),
 		};
 		for (name, providers) in COMPLETION_REQUESTS {
 			let path = format!("requests/completions/{name}.json");
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i)
+						conversion::messages::from_completions::translate(i, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_completions::translate(i, &bedrock, None, None)
-							.map(|r| r.body)
+						conversion::bedrock::from_completions::translate(
+							i,
+							&bedrock,
+							None,
+							None,
+							Some(&catalog),
+						)
+						.map(|r| r.body)
 					}),
-					VERTEX_GEMINI => test_request(VERTEX_GEMINI, &path, |i| {
-						conversion::vertex_gemini::from_completions::translate(i, Some("gemini-2.5-pro"))
-					}),
+					VERTEX_GEMINI => test_request(
+						VERTEX_GEMINI,
+						&path,
+						|i: &mut types::completions::Request| {
+							let mut resolved = i.clone();
+							resolved.model = Some("gemini-2.5-pro".into());
+							conversion::vertex_gemini::from_completions::translate(&resolved, true)
+						},
+					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}
 			}
@@ -241,15 +320,46 @@ mod requests {
 	}
 
 	#[test]
+	fn from_completions_bedrock_reasoning() {
+		// Rendering must use the resolved request model, even when configuration differs.
+		for (model, provider) in [
+			("openai.gpt-oss-120b-1:0", BEDROCK_OPENAI),
+			("us.openai.gpt-5.6-luna", BEDROCK_OPENAI_GPT),
+			("us.openai.gpt-5.6-sol", BEDROCK_OPENAI_GPT),
+			("deepseek.v3.2", BEDROCK_OPENAI),
+			("us.amazon.nova-2-lite-v1:0", BEDROCK_NOVA),
+		] {
+			let bedrock = bedrock::Provider {
+				model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+				region: strng::new("us-west-2"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+				endpoint_preference: Default::default(),
+			};
+			test_request(
+				provider,
+				"requests/completions/reasoning.json",
+				|i: &mut types::completions::Request| {
+					let mut resolved = i.clone();
+					resolved.model = Some(model.into());
+					conversion::bedrock::from_completions::translate(&resolved, &bedrock, None, None, None)
+						.map(|r| r.body)
+				},
+			);
+		}
+	}
+
+	#[test]
 	fn from_messages() {
 		let bedrock = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			endpoint_preference: Default::default(),
 		};
 		let vertex = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+			model_override: Some(strng::new("anthropic/claude-sonnet-4-5")),
 			region: Some(strng::new("us-central1")),
 			project_id: strng::new("test-project-123"),
 		};
@@ -264,7 +374,7 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
@@ -282,17 +392,19 @@ mod requests {
 	#[test]
 	fn from_responses() {
 		let bedrock = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			endpoint_preference: Default::default(),
 		};
 		for (name, providers) in RESPONSES_REQUESTS {
 			let path = format!("requests/responses/{name}.json");
 			for provider in *providers {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_responses::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_responses::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
@@ -305,29 +417,14 @@ mod requests {
 
 	#[test]
 	fn embeddings() {
-		let titan = bedrock::Provider {
-			model: Some(strng::new("amazon.titan-embed-text-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-		};
-		let cohere = bedrock::Provider {
-			model: Some(strng::new("cohere.embed-english-v3")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-		};
-		let cohere_v4 = bedrock::Provider {
-			model: Some(strng::new("cohere.embed-v4:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-		};
-		let nova = bedrock::Provider {
-			model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
-			region: strng::new("us-east-1"),
-			guardrail_identifier: None,
-			guardrail_version: None,
+		let titan = "amazon.titan-embed-text-v2:0";
+		let cohere = "cohere.embed-english-v3";
+		let cohere_v4 = "cohere.embed-v4:0";
+		let nova = "amazon.nova-2-multimodal-embeddings-v1:0";
+		let vertex = vertex::Provider {
+			model_override: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
 		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
@@ -336,22 +433,38 @@ mod requests {
 					OPENAI => test_request(OPENAI, &path, |i: &mut types::embeddings::Request| {
 						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
-					BEDROCK_TITAN => test_request(BEDROCK_TITAN, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(i, &titan)
-					}),
-					BEDROCK_COHERE => test_request(BEDROCK_COHERE, &path, |i| {
-						let provider = if *name == "cohere-v4" {
-							&cohere_v4
-						} else {
-							&cohere
-						};
-						conversion::bedrock::from_embeddings::translate(i, provider)
-					}),
-					BEDROCK_NOVA => test_request(BEDROCK_NOVA, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(i, &nova)
-					}),
+					BEDROCK_TITAN => test_request(
+						BEDROCK_TITAN,
+						&path,
+						|i: &mut types::embeddings::Request| {
+							let mut resolved = i.clone();
+							resolved.model = Some(titan.into());
+							conversion::bedrock::from_embeddings::translate(&resolved)
+						},
+					),
+					BEDROCK_COHERE => test_request(
+						BEDROCK_COHERE,
+						&path,
+						|i: &mut types::embeddings::Request| {
+							let provider = if *name == "cohere-v4" {
+								cohere_v4
+							} else {
+								cohere
+							};
+							let mut resolved = i.clone();
+							resolved.model = Some(provider.into());
+							conversion::bedrock::from_embeddings::translate(&resolved)
+						},
+					),
+					BEDROCK_NOVA => {
+						test_request(BEDROCK_NOVA, &path, |i: &mut types::embeddings::Request| {
+							let mut resolved = i.clone();
+							resolved.model = Some(nova.into());
+							conversion::bedrock::from_embeddings::translate(&resolved)
+						})
+					},
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
-						conversion::vertex::from_embeddings::translate(i)
+						conversion::vertex::from_embeddings::translate(i, &vertex)
 					}),
 					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
 				}
@@ -362,13 +475,14 @@ mod requests {
 	#[test]
 	fn rerank() {
 		let bedrock = bedrock::Provider {
-			model: Some(strng::new("cohere.rerank-v3-5:0")),
+			model_override: Some(strng::new("configured-model-before-transformation")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			endpoint_preference: Default::default(),
 		};
 		let vertex = vertex::Provider {
-			model: Some(strng::new("semantic-ranker-default@latest")),
+			model_override: Some(strng::new("semantic-ranker-default@latest")),
 			region: Some(strng::new("global")),
 			project_id: strng::new("test-project-123"),
 		};
@@ -380,7 +494,9 @@ mod requests {
 						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i: &mut types::rerank::Request| {
-						conversion::bedrock::from_rerank::translate(i, &bedrock)
+						let mut resolved = i.clone();
+						resolved.model = Some("cohere.rerank-v3-5:0".into());
+						conversion::bedrock::from_rerank::translate(&resolved, &bedrock)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::rerank::Request| {
 						conversion::vertex::from_rerank::translate(i, &vertex)
@@ -392,11 +508,24 @@ mod requests {
 	}
 
 	#[test]
+	fn decisions() {
+		for name in ["basic", "full"] {
+			let path = format!("requests/decisions/{name}.json");
+			test_request(OPENAI, &path, |i: &mut types::decisions::Request| {
+				serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+			});
+			test_request(SYSTEMONE, &path, |i: &mut types::decisions::Request| {
+				conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
+			});
+		}
+	}
+
+	#[test]
 	fn count_tokens() {
 		let mut headers = http::HeaderMap::new();
 		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
 		let vertex = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
+			model_override: Some(strng::new("configured-model-before-transformation")),
 			region: Some(strng::new("us-central1")),
 			project_id: strng::new("test-project-123"),
 		};
@@ -411,7 +540,9 @@ mod requests {
 						conversion::bedrock::from_anthropic_token_count::translate(i, &headers)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::count_tokens::Request| {
-						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
+						let mut resolved = i.clone();
+						resolved.model = Some("anthropic/claude-sonnet-4-5".into());
+						let body = serde_json::to_vec(&resolved).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_count_tokens_body(body)
 					}),
 					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),
@@ -554,6 +685,45 @@ mod requests {
 		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-gemini");
 		extract::<types::gemini::Request>("requests/gemini/image-inline.json", "get-messages-gemini");
 	}
+
+	#[test]
+	fn get_messages_v2() {
+		fn extract<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
+			let path = fixture_path(fixture);
+			let input_str = fs::read_to_string(&path).expect("failed to read input file");
+			let raw: Value = serde_json::from_str(&input_str).expect("failed to parse input JSON");
+			let request: R = serde_json::from_str(&input_str).expect("failed to parse JSON");
+
+			let (snapshot_path, snapshot_name) = snapshot_path_and_name(fixture, provider);
+			insta::with_settings!({
+				info => &raw,
+				description => path.to_string_lossy().to_string(),
+				omit_expression => true,
+				prepend_module_to_snapshot => false,
+				snapshot_path => snapshot_path,
+			}, {
+				insta::assert_json_snapshot!(snapshot_name, request.get_messages_v2());
+			});
+		}
+
+		extract::<types::completions::Request>(
+			"requests/completions/tool-call.json",
+			"get-messages-v2-completions",
+		);
+		extract::<types::messages::Request>(
+			"requests/messages/tool_result_error.json",
+			"get-messages-v2-messages",
+		);
+		extract::<types::responses::Request>(
+			"requests/responses/parallel-tool-call.json",
+			"get-messages-v2-responses",
+		);
+		extract::<types::responses::Request>(
+			"requests/responses/empty-message.json",
+			"get-messages-v2-responses",
+		);
+		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-v2-gemini");
+	}
 }
 
 mod responses {
@@ -573,22 +743,25 @@ mod responses {
 			*raw = raw.replace("\r\n", "\n");
 		}
 
-		let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
-			.expect("failed to translate provider response to expected format");
-		let llm_response = resp.to_llm_response(crate::LogContentFields {
-			completion: false,
-			tool_calls: true,
-		});
-		let raw = resp.serialize().expect("failed to serialize response");
-		let mut resp_val = serde_json::from_slice::<Value>(&raw)
-			.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
-		if let Value::String(raw) = &mut resp_val {
-			*raw = raw.replace("\r\n", "\n");
-		}
-		let report = json!({
-			"response": resp_val,
-			"parsed": llm_response,
-		});
+		let report = match xlate(Bytes::copy_from_slice(&provider_bytes)) {
+			Ok(resp) => {
+				let llm_response = resp.to_llm_response(crate::LogContentFields {
+					completion: false,
+					tool_calls: true,
+				});
+				let raw = resp.serialize().expect("failed to serialize response");
+				let mut resp_val = serde_json::from_slice::<Value>(&raw)
+					.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
+				if let Value::String(raw) = &mut resp_val {
+					*raw = raw.replace("\r\n", "\n");
+				}
+				json!({
+					"response": resp_val,
+					"parsed": llm_response,
+				})
+			},
+			Err(error) => json!({ "error": error.to_string() }),
+		};
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
@@ -624,9 +797,9 @@ mod responses {
 		provider: &str,
 		relative_path: &str,
 		xlate: impl FnOnce(
-			http::Response<axum_core::body::Body>,
+			http::Response<agent_http::Body>,
 			StreamingUsageGuard,
-		) -> http::Response<axum_core::body::Body>,
+		) -> http::Response<agent_http::Body>,
 	) {
 		let input_path = fixture_path(relative_path);
 		let input_bytes = fs::read(&input_path)
@@ -646,7 +819,7 @@ mod responses {
 			LLMResponse::default(),
 		)));
 		let reporter = TestStreamingReporter { info: info.clone() };
-		let mut response = http::Response::new(axum_core::body::Body::from(input_bytes));
+		let mut response = http::Response::new(agent_http::Body::from(input_bytes));
 		response
 			.headers_mut()
 			.insert("x-amzn-requestid", "request_id".parse().unwrap());
@@ -686,7 +859,9 @@ mod responses {
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
 				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
+				(r#""id":"rs_[0-9a-f]{16}""#, r#""id":"rs_xxx""#),
 				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""item_id":"rs_[0-9a-f]{16}""#, r#""item_id":"rs_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
 		}, {
@@ -720,11 +895,9 @@ mod responses {
 		("max_tokens", &[BEDROCK_TO_RESPONSES]),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		(
-			"cache_write",
-			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
-		),
+		("cache_write", ALL_BEDROCK),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -744,15 +917,30 @@ mod responses {
 		COMPLETIONS_TO_DETECT,
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
+		("content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("basic", ALL_COMPLETIONS),
+		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
 		(
 			"cache_write",
 			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
 		),
 		("openrouter_reasoning", ALL_COMPLETIONS),
+		(
+			"reasoning",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_MESSAGES],
+		),
+		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
@@ -775,13 +963,27 @@ mod responses {
 		("tool", &[RESPONSES_TO_MESSAGES]),
 		("reasoning", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
-		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
+		(
+			"truncated_tool_call",
+			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_MESSAGES],
+		),
+		("max_tokens", &[RESPONSES_TO_MESSAGES]),
+		("incomplete_no_details", &[RESPONSES_TO_MESSAGES]),
+		("content_filter", &[RESPONSES_TO_MESSAGES]),
+		("context_window", &[RESPONSES_TO_MESSAGES]),
+		("failed", &[RESPONSES_TO_MESSAGES]),
+		("empty_tool_call", &[RESPONSES_TO_MESSAGES]),
 	];
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
+		(
+			"response/bedrock-cohere-v4/embeddings.json",
+			BEDROCK_COHERE_V4,
+		),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
+		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),
 		("response/openai/gemini-embeddings.json", OPENAI),
 	];
@@ -807,6 +1009,7 @@ mod responses {
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
@@ -825,21 +1028,153 @@ mod responses {
 		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
+		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("stream", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
+		(
+			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		(
+			"stream",
+			&[
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+				RESPONSES_TO_MESSAGES,
+			],
+		),
 		("stream-custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
 			"stream-image",
-			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT],
+			&[
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+				RESPONSES_TO_MESSAGES,
+			],
 		),
+		("stream-refusal", &[RESPONSES_TO_MESSAGES]),
+		("stream-refusal-final-only", &[RESPONSES_TO_MESSAGES]),
+		("stream-error", &[RESPONSES_TO_MESSAGES]),
+		("stream-max_tokens", &[RESPONSES_TO_MESSAGES]),
+		("stream-incomplete_no_details", &[RESPONSES_TO_MESSAGES]),
+		("stream-content_filter", &[RESPONSES_TO_MESSAGES]),
+		("stream-context_window", &[RESPONSES_TO_MESSAGES]),
+		("stream-failed", &[RESPONSES_TO_MESSAGES]),
 	];
+
+	#[tokio::test]
+	async fn namespace_tools_round_trip() {
+		let request: types::responses::Request = serde_json::from_str(include_str!(
+			"tests/requests/responses/namespace-tools.json"
+		))
+		.unwrap();
+		let provider = bedrock::Provider {
+			model_override: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			endpoint_preference: Default::default(),
+		};
+		let bedrock =
+			conversion::bedrock::from_responses::translate(&request, &provider, None, None, None)
+				.unwrap();
+		let translated =
+			conversion::openai_compat::from_responses::translate_request(&request).unwrap();
+		test_response(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools.json",
+			|bytes| {
+				conversion::bedrock::from_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&bedrock.tool_name_map),
+					Some(&bedrock.namespaces),
+				)
+			},
+		);
+		test_response(
+			COMPLETIONS_TO_RESPONSES,
+			"response/completions/namespace-tools.json",
+			|bytes| {
+				conversion::openai_compat::to_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&translated.namespaces),
+				)
+			},
+		);
+		test_streaming(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools-stream.bin",
+			|response, reporter| {
+				response.map(|body| {
+					conversion::bedrock::from_responses::translate_stream(
+						body,
+						1024 * 1024,
+						reporter,
+						"input-model",
+						"message-id",
+						LogContentFields {
+							completion: true,
+							tool_calls: true,
+						},
+						Some(bedrock.tool_name_map),
+						Some(Arc::new(bedrock.namespaces)),
+					)
+				})
+			},
+		)
+		.await;
+		test_streaming(
+			COMPLETIONS_TO_RESPONSES,
+			"response/completions/namespace-tools-stream.json",
+			|response, reporter| {
+				response.map(|body| {
+					conversion::openai_compat::to_responses::translate_stream(
+						body,
+						1024 * 1024,
+						reporter,
+						LogContentFields {
+							completion: true,
+							tool_calls: true,
+						},
+						Some(Arc::new(translated.namespaces)),
+					)
+				})
+			},
+		)
+		.await;
+		// Exercise namespace restoration after Bedrock truncates/sanitizes a history-only name.
+		let request = serde_json::from_str(include_str!(
+			"tests/requests/responses/namespace-tools-long.json"
+		))
+		.unwrap();
+		let translated =
+			conversion::bedrock::from_responses::translate(&request, &provider, None, None, None)
+				.unwrap();
+		test_response(
+			BEDROCK_TO_RESPONSES,
+			"response/bedrock/namespace-tools-long.json",
+			|bytes| {
+				conversion::bedrock::from_responses::translate_response(
+					&bytes,
+					"input-model",
+					Some(&translated.tool_name_map),
+					Some(&translated.namespaces),
+				)
+			},
+		);
+	}
 
 	#[test]
 	fn buffered_chat() {
@@ -854,7 +1189,7 @@ mod responses {
 						conversion::bedrock::from_completions::translate_response(&i, "input-model", None)
 					}),
 					BEDROCK_TO_RESPONSES => test_response(provider, &path, |i| {
-						conversion::bedrock::from_responses::translate_response(&i, "input-model", None)
+						conversion::bedrock::from_responses::translate_response(&i, "input-model", None, None)
 					}),
 					other => panic!("unsupported provider in BEDROCK_RESPONSES: {other}"),
 				}
@@ -897,7 +1232,7 @@ mod responses {
 						conversion::completions::from_messages::translate_response(&i)
 					}),
 					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
-						conversion::openai_compat::to_responses::translate_response(&i, "input-model")
+						conversion::openai_compat::to_responses::translate_response(&i, "input-model", None)
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(
@@ -986,12 +1321,18 @@ mod responses {
 
 	#[test]
 	fn embeddings() {
+		let vertex = vertex::Provider {
+			model_override: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
-				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
+				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_COHERE_V4 | BEDROCK_NOVA => {
 					let model = match *provider {
 						BEDROCK_TITAN => "amazon.titan-embed-text-v2:0",
 						BEDROCK_COHERE => "cohere.embed-english-v3",
+						BEDROCK_COHERE_V4 => "cohere.embed-v4:0",
 						_ => "amazon.nova-2-multimodal-embeddings-v1:0",
 					};
 					test_response(provider, path, |i| {
@@ -1003,7 +1344,10 @@ mod responses {
 					});
 				},
 				VERTEX => test_response(provider, path, |i| {
-					conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004")
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "text-embedding-004")
+				}),
+				VERTEX_EMBED_CONTENT => test_response(provider, path, |i| {
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "gemini-embedding-2")
 				}),
 				OPENAI => test_response(provider, path, |i| {
 					serde_json::from_slice::<types::embeddings::Response>(&i)
@@ -1033,6 +1377,25 @@ mod responses {
 				other => panic!("unsupported provider in RERANK_RESPONSES: {other}"),
 			}
 		}
+	}
+
+	#[test]
+	fn decisions() {
+		let parse = |bytes: &[u8]| {
+			serde_json::from_slice::<types::decisions::Response>(bytes)
+				.map(|r| Box::new(r) as Box<dyn ResponseType>)
+				.map_err(AIError::ResponseParsing)
+		};
+		test_response(OPENAI, "response/openai/decisions.json", |i| parse(&i));
+		let req: types::decisions::Request =
+			serde_json::from_slice(&fs::read(fixture_path("requests/decisions/full.json")).unwrap())
+				.unwrap();
+		let (_, state) = conversion::systemone::from_decisions::translate(&req).unwrap();
+		test_response(SYSTEMONE, "response/systemone/decisions.json", |i| {
+			parse(&conversion::systemone::from_decisions::translate_response(
+				&i, &state,
+			)?)
+		});
 	}
 
 	#[test]
@@ -1120,6 +1483,7 @@ mod responses {
 								&message_id,
 								LOG_CONTENT,
 								None,
+								None,
 							)
 						}),
 						_ => unreachable!(),
@@ -1172,6 +1536,7 @@ mod responses {
 							BUFFER_LIMIT,
 							reporter,
 							LOG_CONTENT,
+							None,
 						)
 					}),
 					COMPLETIONS_TO_DETECT => types::detect::passthrough_stream(reporter, response),
@@ -1205,6 +1570,14 @@ mod responses {
 						conversion::responses::passthrough_stream(body, BUFFER_LIMIT, reporter, LOG_CONTENT)
 					}),
 					RESPONSES_TO_DETECT => types::detect::passthrough_stream(reporter, response),
+					RESPONSES_TO_MESSAGES => response.map(|body| {
+						conversion::responses::from_messages::translate_stream(
+							body,
+							BUFFER_LIMIT,
+							reporter,
+							LOG_CONTENT,
+						)
+					}),
 					_ => unreachable!(),
 				})
 				.await;
@@ -1229,7 +1602,7 @@ data: [DONE]
 
 "#;
 		let output = conversion::completions::from_messages::translate_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::default(),
 			LogContentFields::default(),
@@ -1257,6 +1630,42 @@ data: [DONE]
 		);
 	}
 
+	#[tokio::test]
+	async fn completions_to_messages_stream_reports_matched_stop_sequence() {
+		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop","matched_stop":"STOPPROBE"}],"model":"gpt-5","usage":null}
+
+data: {"id":"chunk","choices":[],"model":"gpt-5","usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}
+
+data: [DONE]
+
+"#;
+		let output = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let delta = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+			.find(|event| event["type"] == "message_delta")
+			.unwrap();
+
+		assert_eq!(
+			delta["delta"],
+			json!({
+				"stop_reason": "stop_sequence",
+				"stop_sequence": "STOPPROBE",
+			})
+		);
+	}
+
 	/// Anthropic streams a single empty `input_json_delta` for a tool call with no arguments.
 	/// OpenAI clients concatenate the deltas and parse the result, so the concatenation has to be
 	/// a JSON object: forwarding `""` verbatim makes the client's *next* request fail upstream with
@@ -1277,7 +1686,7 @@ data: {"type":"message_stop"}
 
 "#;
 		let output = conversion::messages::from_completions::translate_stream(
-			axum_core::body::Body::from(input),
+			agent_http::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::default(),
 			LogContentFields::default(),
@@ -1347,78 +1756,76 @@ data: {"type":"message_stop"}
 			None
 		);
 	}
-}
 
-async fn test_stream(provider: &str, relative_path: &str) {
-	let input_path = fixture_path(relative_path);
-	let provider_bytes = fs::read(&input_path).expect("failed to read stream input file");
-	let input_str = String::from_utf8_lossy(&provider_bytes).to_string();
+	#[tokio::test]
+	async fn passthrough_stream_records_inter_chunk_latencies() {
+		let input_bytes = fs::read(fixture_path("response/completions/stream.json"))
+			.expect("failed to read streaming input file");
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Detect,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("input-model"),
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		let reporter = TestStreamingReporter { info: info.clone() };
+		let response = http::Response::new(agent_http::Body::from(input_bytes));
+		let response = crate::conversion::completions::passthrough_stream(
+			StreamingUsageGuard::new(Box::new(reporter)),
+			crate::LogContentFields::default(),
+			response,
+		);
+		// Drain the body so the passthrough closures actually run.
+		let _ = response.collect().await.unwrap().to_bytes();
 
-	let output = conversion::responses::from_messages::translate_stream(
-		axum_core::body::Body::from(provider_bytes),
-		1024 * 1024,
-		StreamingUsageGuard::default(),
-		crate::LogContentFields {
-			completion: true,
-			tool_calls: true,
-		},
-	)
-	.collect()
-	.await
-	.unwrap()
-	.to_bytes();
-	let output_str = String::from_utf8_lossy(&output).to_string();
-	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
+		let llm_response = info.lock().unwrap().response.clone();
+		// The fixture has many content-bearing chunks; every one after the first
+		// token should record a gap.
+		assert!(!llm_response.inter_chunk_latencies.is_empty());
+		assert!(llm_response.first_token.is_some());
+	}
 
-	insta::with_settings!({
-		info => &input_str,
-		description => input_path.to_string_lossy().to_string(),
-		omit_expression => true,
-		prepend_module_to_snapshot => false,
-		snapshot_path => snapshot_path,
-	}, {
-		insta::assert_snapshot!(snapshot_name, output_str);
-	});
-}
+	#[tokio::test]
+	async fn responses_translation_records_inter_chunk_latencies() {
+		let input_bytes = fs::read(fixture_path("response/responses/stream.json"))
+			.expect("failed to read streaming input file");
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Detect,
+				cache_convention: CacheTokenConvention::pending(),
+				request_model: strng::literal!("input-model"),
+				provider: Default::default(),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		let reporter = TestStreamingReporter { info: info.clone() };
+		let response = crate::conversion::responses::from_messages::translate_stream(
+			agent_http::Body::from(input_bytes),
+			1024 * 1024,
+			StreamingUsageGuard::new(Box::new(reporter)),
+			crate::LogContentFields::default(),
+		);
+		// Drain the body so the translation closures actually run.
+		let _ = response.collect().await.unwrap().to_bytes();
 
-#[tokio::test]
-async fn responses_to_messages_stream_translates_text_tool_and_usage() {
-	test_stream(
-		"responses-messages-streaming",
-		"response/responses/stream.json",
-	)
-	.await;
-}
-
-#[tokio::test]
-async fn responses_to_messages_stream_translates_image() {
-	test_stream(
-		"responses-messages-streaming",
-		"response/responses/stream-image.json",
-	)
-	.await;
-}
-
-#[tokio::test]
-async fn responses_to_messages_stream_translates_refusal() {
-	test_stream(
-		"responses-messages-streaming",
-		"response/responses/stream-refusal.json",
-	)
-	.await;
-}
-
-#[test]
-fn messages_to_responses_rejects_unsupported_features() {
-	let path = "requests/messages/reasoning_replay.json";
-	let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
-	let input: types::messages::Request =
-		serde_json::from_str(&input_str).expect("failed to parse fixture");
-	let err = conversion::responses::from_messages::translate(&input).unwrap_err();
-	assert!(
-		matches!(err, AIError::UnsupportedConversion(_)),
-		"expected UnsupportedConversion for {path}, got {err:?}"
-	);
+		let llm_response = info.lock().unwrap().response.clone();
+		// The fixture has many content-bearing chunks; every one after the first
+		// token should record a gap.
+		assert!(!llm_response.inter_chunk_latencies.is_empty());
+		assert!(llm_response.first_token.is_some());
+	}
 }
 
 #[test]
@@ -1440,30 +1847,6 @@ fn messages_to_responses_accepts_and_drops_unrepresentable_fields() {
 	assert!(body.get("stop").is_none());
 	assert!(body.get("top_k").is_none());
 	assert_eq!(body["input"][0]["content"][0]["text"], "hello");
-}
-
-#[test]
-fn messages_to_responses_maps_tool_result_is_error_to_incomplete() {
-	let input_str = fs::read_to_string(fixture_path("requests/messages/tool_result_error.json"))
-		.expect("failed to read fixture");
-	let input: types::messages::Request =
-		serde_json::from_str(&input_str).expect("failed to parse fixture");
-	let body = conversion::responses::from_messages::translate(&input)
-		.expect("tool_result is_error should be mapped, not rejected");
-	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
-	let call_outputs = body["input"]
-		.as_array()
-		.expect("input should be an array")
-		.iter()
-		.filter(|item| item["type"] == "function_call_output")
-		.collect::<Vec<_>>();
-	assert_eq!(
-		call_outputs.len(),
-		1,
-		"expected one function_call_output: {body}"
-	);
-	assert_eq!(call_outputs[0]["call_id"], "toolu_01");
-	assert_eq!(call_outputs[0]["status"], "incomplete");
 }
 
 #[test]
@@ -1501,7 +1884,7 @@ fn messages_to_responses_rejects_malformed_image_source() {
 #[test]
 fn messages_to_responses_maps_anthropic_runtime_features() {
 	let input: types::messages::Request = serde_json::from_value(json!({
-		"model": "claude-sonnet-4-20250514",
+		"model": "gpt-5.6-terra",
 		"max_tokens": 1024,
 		"context_management": {
 			"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]
@@ -1530,7 +1913,7 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
 
 	assert!(body.get("context_management").is_none());
-	assert_eq!(body["reasoning"]["effort"], "high");
+	assert_eq!(body["reasoning"]["effort"], "medium");
 	assert_eq!(body["input"][0]["role"], "system");
 	assert_eq!(
 		body["input"][0]["content"][1]["prompt_cache_breakpoint"]["mode"],
@@ -1540,4 +1923,56 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
 		"explicit"
 	);
+}
+
+mod response_guardrails {
+	use super::*;
+
+	fn test_scopes<T: ResponseType + DeserializeOwned>(path: &str) {
+		let input = fs::read_to_string(fixture_path(path)).unwrap();
+		let mut response: T = serde_json::from_str(&input).unwrap();
+		let mut scanned = Vec::new();
+		response.visit_text_mut(&mut |content, text| {
+			scanned.push(json!({"scope": content.scope, "signed": content.signed, "text": text}));
+		});
+		scanned.sort_by_cached_key(Value::to_string);
+		let mut masked = serde_json::Map::new();
+		for scope in [
+			ContentScope::Messages,
+			ContentScope::ToolInput,
+			ContentScope::ToolOutput,
+		] {
+			let mut response: T = serde_json::from_str(&input).unwrap();
+			response.visit_text_mut(&mut |content, text| {
+				if content.scope == scope && !content.signed {
+					*text = "<masked>".into();
+				}
+			});
+			let name = serde_json::to_value(scope)
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.to_owned();
+			masked.insert(
+				name,
+				serde_json::from_slice(&response.serialize().unwrap()).unwrap(),
+			);
+		}
+		let (snapshot_path, snapshot_name) = snapshot_path_and_name(path, "guardrails");
+		insta::with_settings!({
+			snapshot_path => snapshot_path,
+			prepend_module_to_snapshot => false,
+			omit_expression => true,
+		}, {
+			insta::assert_json_snapshot!(snapshot_name, json!({"scanned": scanned, "masked": masked}));
+		});
+	}
+
+	#[test]
+	fn response_scopes() {
+		test_scopes::<types::completions::Response>("response/completions/guardrails.json");
+		test_scopes::<types::messages::Response>("response/anthropic/guardrails.json");
+		test_scopes::<types::gemini::Response>("response/vertex-gemini/guardrails.json");
+		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
+	}
 }

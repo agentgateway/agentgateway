@@ -60,6 +60,7 @@ output:
           audiences:
           - api://test
           issuer: https://sts.windows.net/test-path/
+          jwksInline: '{"keys":[]}'
           mode: STRICT
           resourceMetadata: {}
       key: default/mcp-auth-missing-persisted-keyset:mcp-authentication:default/be

@@ -1,0 +1,18 @@
+# Snapshot the public login/assets route separately from protected UI pages and APIs.
+# Authorization must remain on the app route, while OIDC skips only the public paths.
+gateways:
+  default:
+    port: 3000
+ui:
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+    authorization:
+      rules:
+      - 'jwt.email.endsWith("@example.com")'

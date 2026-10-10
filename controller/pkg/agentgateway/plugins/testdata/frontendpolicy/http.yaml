@@ -26,6 +26,7 @@ spec:
       http2FrameSize: 16384
       http2MaxHeaderSize: 16Ki
       maxBufferSize: 2Ki
+      maxConcurrentRequests: 100
 ---
 # Output
 output:
@@ -40,6 +41,7 @@ output:
           http2FrameSize: 16384
           http2MaxHeaderSize: 16384
           maxBufferSize: 2048
+          maxConcurrentRequests: 100
       key: frontend/default/http-policy:frontend-http:default/test
       name:
         kind: AgentgatewayPolicy

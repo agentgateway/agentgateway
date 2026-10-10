@@ -33,6 +33,9 @@ func TestBackendAuth(tt *testing.T) {
 			testInvalidJwtSign(t)
 		})
 	})
+	t.Run("InvalidGcpCredential", func(t base.Test) {
+		testInvalidGcpCredential(t)
+	})
 }
 
 func testBackendAuthCredentials(t base.Test) {
@@ -73,9 +76,9 @@ func testInvalidJwtSign(t base.Test) {
 	assertions.EventuallyAgwPolicyStatus(t, "backendauth-invalid-jwt-sign", base.Namespace, func(status gwv1.PolicyStatus) error {
 		for _, ancestor := range status.Ancestors {
 			for _, condition := range ancestor.Conditions {
-				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
+				if condition.Type == agentgateway.PolicyConditionAccepted &&
 					condition.Status == metav1.ConditionTrue &&
-					condition.Reason == string(agentgateway.PolicyReasonPartiallyValid) &&
+					condition.Reason == agentgateway.PolicyReasonPartiallyValid &&
 					strings.Contains(condition.Message, missingKeyRef) {
 					return nil
 				}
@@ -89,6 +92,24 @@ func testInvalidJwtSign(t base.Test) {
 		Body: gomega.And(
 			gomega.ContainSubstring("backend authentication failed: jwtSign configuration is invalid"),
 			gomega.Not(gomega.ContainSubstring(missingKeyRef)),
+		),
+	})
+}
+
+func testInvalidGcpCredential(t base.Test) {
+	t.Apply(manifest("backendauth", "invalid-gcp-credential.yaml"))
+	t.HTTPRouteAccepted("route-backendauth-invalid-gcp-credential", base.Namespace)
+	t.HTTPRouteAccepted("route-backendauth-healthy-alongside-invalid-gcp-credential", base.Namespace)
+
+	t.Send("healthy-alongside-invalid-gcp-credential.example.com", &testmatchers.HttpResponse{
+		StatusCode: http.StatusOK,
+	})
+
+	t.Send("invalid-gcp-credential.example.com", &testmatchers.HttpResponse{
+		StatusCode: http.StatusInternalServerError,
+		Body: gomega.And(
+			gomega.ContainSubstring("backend authentication failed: GCP credential configuration is invalid"),
+			gomega.Not(gomega.ContainSubstring("PRIVATE_KEY")),
 		),
 	})
 }
