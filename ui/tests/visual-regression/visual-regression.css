@@ -1,0 +1,6 @@
+.monaco-editor .cursors-layer,
+.monaco-editor .decorationsOverviewRuler,
+.monaco-editor .squiggly-error,
+.monaco-editor .scrollbar {
+	display: none !important;
+}
