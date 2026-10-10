@@ -739,6 +739,98 @@ async fn multiplex_never_prefix_drops_ambiguous_names() {
 }
 
 #[tokio::test]
+async fn multiplex_never_prefix_renames_colliding_tools_via_overrides() {
+	use rmcp::model::{ListToolsResult, ServerResult, Tool};
+
+	let backend = McpBackendGroup {
+		targets: vec![
+			fake_streamable_target("a", SocketAddr::from(([127, 0, 0, 1], 30501))),
+			fake_streamable_target("b", SocketAddr::from(([127, 0, 0, 1], 30502))),
+		],
+		prefix_mode: crate::types::agent::McpPrefixMode::Never,
+		tool_name_overrides: vec![
+			crate::types::agent::McpToolNameOverride {
+				target: "a".into(),
+				source: "echo".into(),
+				name: "a_echo".into(),
+			},
+			crate::types::agent::McpToolNameOverride {
+				target: "b".into(),
+				source: "echo".into(),
+				name: "b_echo".into(),
+			},
+		],
+		..Default::default()
+	};
+	let relay = Relay::new_for_request(
+		backend,
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
+	)
+	.unwrap();
+	let merge = relay.merge_tools();
+
+	let schema = Arc::new(serde_json::json!({ "type": "object" }).as_object().cloned().unwrap());
+	let listed = |target: &str| -> (Strng, ServerResult) {
+		(
+			strng::new(target),
+			ServerResult::ListToolsResult(ListToolsResult::with_all_items(vec![Tool::new(
+				"echo",
+				"colliding tool",
+				schema.clone(),
+			)])),
+		)
+	};
+
+	let out = merge(vec![listed("a"), listed("b")], &empty_cel()).unwrap();
+	let ServerResult::ListToolsResult(ltr) = out else {
+		panic!("expected a tools/list result, got {out:?}")
+	};
+	let names = ltr
+		.tools
+		.iter()
+		.map(|t| t.name.to_string())
+		.sorted()
+		.collect_vec();
+	assert_eq!(names, vec!["a_echo".to_string(), "b_echo".to_string()]);
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_routes_override_to_source() {
+	use crate::mcp::handler::ResolveKind;
+
+	let backend = McpBackendGroup {
+		targets: vec![
+			fake_streamable_target("a", SocketAddr::from(([127, 0, 0, 1], 30503))),
+			fake_streamable_target("b", SocketAddr::from(([127, 0, 0, 1], 30504))),
+		],
+		prefix_mode: crate::types::agent::McpPrefixMode::Never,
+		tool_name_overrides: vec![crate::types::agent::McpToolNameOverride {
+			target: "b".into(),
+			source: "echo".into(),
+			name: "b_echo".into(),
+		}],
+		..Default::default()
+	};
+	let relay = Relay::new_for_request(
+		backend,
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		&crate::mcp::upstream::IncomingRequestContext::empty(),
+	)
+	.unwrap();
+
+	let ctx = crate::mcp::upstream::IncomingRequestContext::empty();
+	let (target, source) = relay
+		.resolve_resource_name(ResolveKind::Tool, "b_echo", &ctx, None)
+		.await
+		.unwrap();
+	assert_eq!(target.as_ref(), "b");
+	assert_eq!(source.as_ref(), "echo");
+}
+
+#[tokio::test]
 async fn list_tools_follows_gateway_cursor() {
 	let paging = mock_paging_streamable_http_server().await;
 	let other = mock_streamable_http_server(true).await;

@@ -682,6 +682,10 @@
 |`binds[].listeners[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`binds[].listeners[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`binds[].listeners[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.toolNameOverrides`|[]object|Declarative tool renames, applied before collision handling. Only valid with<br>`prefix_mode: never`.|
+|`binds[].listeners[].routes[].backends[].mcp.toolNameOverrides[].target`|string|Target this override applies to (same namespace as `mcp.targets[].name`).|
+|`binds[].listeners[].routes[].backends[].mcp.toolNameOverrides[].source`|string|Tool name as served by the upstream.|
+|`binds[].listeners[].routes[].backends[].mcp.toolNameOverrides[].name`|string|Client-facing tool name.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -2237,6 +2241,10 @@
 |`backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`backends[].mcp.toolNameOverrides`|[]object|Declarative tool renames, applied before collision handling. Only valid with<br>`prefix_mode: never`.|
+|`backends[].mcp.toolNameOverrides[].target`|string|Target this override applies to (same namespace as `mcp.targets[].name`).|
+|`backends[].mcp.toolNameOverrides[].source`|string|Tool name as served by the upstream.|
+|`backends[].mcp.toolNameOverrides[].name`|string|Client-facing tool name.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -3371,6 +3379,10 @@
 |`routeGroups[].routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routeGroups[].routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routeGroups[].routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`routeGroups[].routes[].backends[].mcp.toolNameOverrides`|[]object|Declarative tool renames, applied before collision handling. Only valid with<br>`prefix_mode: never`.|
+|`routeGroups[].routes[].backends[].mcp.toolNameOverrides[].target`|string|Target this override applies to (same namespace as `mcp.targets[].name`).|
+|`routeGroups[].routes[].backends[].mcp.toolNameOverrides[].source`|string|Tool name as served by the upstream.|
+|`routeGroups[].routes[].backends[].mcp.toolNameOverrides[].name`|string|Client-facing tool name.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routeGroups[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -4994,6 +5006,10 @@
 |`routes[].backends[].mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`routes[].backends[].mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`routes[].backends[].mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`routes[].backends[].mcp.toolNameOverrides`|[]object|Declarative tool renames, applied before collision handling. Only valid with<br>`prefix_mode: never`.|
+|`routes[].backends[].mcp.toolNameOverrides[].target`|string|Target this override applies to (same namespace as `mcp.targets[].name`).|
+|`routes[].backends[].mcp.toolNameOverrides[].source`|string|Tool name as served by the upstream.|
+|`routes[].backends[].mcp.toolNameOverrides[].name`|string|Client-facing tool name.|
 |`routes[].backends[].ai`|object||
 |`routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -6184,6 +6200,10 @@
 |`mcp.server.version`|string|Overrides `serverInfo.version`. Must be set together with `name`, for the same reason.<br>Defaults to the build version when unset.|
 |`mcp.server.title`|string|Overrides `serverInfo.title`. Unset by default.|
 |`mcp.server.instructions`|string|Overrides the gateway preamble prepended to merged upstream instructions.<br>Defaults to a generic gateway description when unset.|
+|`mcp.toolNameOverrides`|[]object|Declarative tool renames, applied before collision handling. Only valid with<br>`prefix_mode: never`.|
+|`mcp.toolNameOverrides[].target`|string|Target this override applies to (same namespace as `mcp.targets[].name`).|
+|`mcp.toolNameOverrides[].source`|string|Tool name as served by the upstream.|
+|`mcp.toolNameOverrides[].name`|string|Client-facing tool name.|
 |`mcp.policies`|object|Policies applied to MCP requests.|
 |`mcp.policies.requestHeaderModifier`|object|Modify request headers before forwarding.|
 |`mcp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|

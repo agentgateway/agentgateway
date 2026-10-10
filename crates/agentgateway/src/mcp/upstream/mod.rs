@@ -29,7 +29,7 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponseReason};
 use crate::telemetry::log::{SpanWriteOnDrop, SpanWriter};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
-use crate::types::agent::{McpPrefixMode, McpServerOverrides, McpTargetSpec};
+use crate::types::agent::{McpPrefixMode, McpServerOverrides, McpTargetSpec, McpToolNameOverride};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -473,6 +473,50 @@ pub(crate) struct UpstreamGroup {
 	all_targets_conditioned_out: bool,
 	pub failure_mode: FailureMode,
 	pub sse_keep_alive: Option<Duration>,
+	/// Two-way index built from `mcp.tool_name_overrides`; empty when multiplexing is
+	/// configured for exact names (`prefixMode` other than `never`).
+	pub tool_name_overrides: Arc<ToolNameOverrides>,
+}
+
+/// Two-way index built from `mcp.tool_name_overrides`: `(target, source) -> public` for
+/// `tools/list`, and `public -> (target, source)` for `tools/call`.
+#[derive(Debug, Default)]
+pub struct ToolNameOverrides {
+	by_source: HashMap<(String, String), String>,
+	by_public: HashMap<String, (String, String)>,
+}
+
+impl ToolNameOverrides {
+	pub fn build(overrides: &[McpToolNameOverride]) -> Self {
+		let mut t = Self::default();
+		for o in overrides {
+			t.by_source.insert(
+				(o.target.to_string(), o.source.to_string()),
+				o.name.to_string(),
+			);
+			t.by_public.insert(
+				o.name.to_string(),
+				(o.target.to_string(), o.source.to_string()),
+			);
+		}
+		t
+	}
+
+	/// Client-facing name for a tool served by `target` under `source`, if overridden.
+	pub fn public_name(&self, target: &str, source: &str) -> Option<&str> {
+		self
+			.by_source
+			.get(&(target.to_string(), source.to_string()))
+			.map(String::as_str)
+	}
+
+	/// `(target, source)` for a client-facing name, if overridden.
+	pub fn source_of(&self, public: &str) -> Option<(&str, &str)> {
+		self
+			.by_public
+			.get(public)
+			.map(|(t, s)| (t.as_str(), s.as_str()))
+	}
 }
 
 impl UpstreamGroup {
@@ -510,6 +554,7 @@ impl UpstreamGroup {
 			failure_mode: backend.failure_mode,
 			prefix_mode: backend.prefix_mode,
 			sse_keep_alive: backend.sse_keep_alive,
+			tool_name_overrides: Arc::new(ToolNameOverrides::build(&backend.tool_name_overrides)),
 			backend,
 			client,
 			by_name: IndexMap::new(),

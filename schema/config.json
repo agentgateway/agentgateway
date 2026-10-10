@@ -8666,6 +8666,13 @@
               "type": "null"
             }
           ]
+        },
+        "toolNameOverrides": {
+          "description": "Declarative tool renames, applied before collision handling. Only valid with\n`prefix_mode: never`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/McpToolNameOverride"
+          }
         }
       },
       "additionalProperties": false
@@ -9030,6 +9037,30 @@
         }
       },
       "additionalProperties": false
+    },
+    "McpToolNameOverride": {
+      "description": "Declarative rename of a single tool served by one target.\n\nOnly meaningful with `prefixMode: never`, where client-facing names carry no target\nprefix and calls are routed by looking up the owning target. Without an override, a tool\nname served by more than one target is dropped as ambiguous.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Target this override applies to (same namespace as `mcp.targets[].name`).",
+          "type": "string"
+        },
+        "source": {
+          "description": "Tool name as served by the upstream.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Client-facing tool name.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "source",
+        "name"
+      ]
     },
     "LocalAIBackend": {
       "anyOf": [
@@ -13327,6 +13358,13 @@
               "type": "null"
             }
           ]
+        },
+        "toolNameOverrides": {
+          "description": "Declarative tool renames, applied before collision handling. Only valid with\n`prefix_mode: never`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/McpToolNameOverride"
+          }
         },
         "policies": {
           "description": "Policies applied to MCP requests.",

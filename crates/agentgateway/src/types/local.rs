@@ -29,7 +29,7 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindMode, BindProtocol, BindSnapshot, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
-	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode, McpToolNameOverride,
 	McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
 	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
 	RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig, SimpleBackend,
@@ -1841,15 +1841,19 @@ impl LocalBackend {
 				if let Some(server) = &tgt.server {
 					server.validate().map_err(Error::msg)?;
 				}
+				let prefix_mode = tgt.prefix_mode.unwrap_or_default();
+				validate_tool_name_overrides(prefix_mode, &tgt.tool_name_overrides, &targets)
+					.map_err(Error::msg)?;
 				let m = McpBackend {
 					targets,
 					stateful,
-					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
+					prefix_mode,
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
 					sse_keep_alive: tgt.sse_keep_alive,
 					dns_rebinding_protection: tgt.dns_rebinding_protection,
 					server: tgt.server.clone(),
+					tool_name_overrides: tgt.tool_name_overrides.clone(),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1894,6 +1898,48 @@ impl SimpleLocalBackend {
 	}
 }
 
+/// Validate `tool_name_overrides`: allowed only with `prefixMode: never`, must reference an
+/// existing target, and both the client-facing names and `(target, source)` pairs must be unique.
+fn validate_tool_name_overrides(
+	prefix_mode: McpPrefixMode,
+	overrides: &[McpToolNameOverride],
+	targets: &[Arc<McpTarget>],
+) -> Result<(), String> {
+	if overrides.is_empty() {
+		return Ok(());
+	}
+	if prefix_mode != McpPrefixMode::Never {
+		return Err(
+			"mcp tool_name_overrides requires `prefixMode: never`; with `conditional`/`always` \
+			 names are prefixed automatically and cannot collide"
+				.to_string(),
+		);
+	}
+	let mut public = HashSet::new();
+	let mut pairs = HashSet::new();
+	for o in overrides {
+		if !targets.iter().any(|t| t.name.as_str() == o.target.as_str()) {
+			return Err(format!(
+				"mcp tool_name_overrides: unknown target `{}`",
+				o.target
+			));
+		}
+		if !public.insert(o.name.as_str()) {
+			return Err(format!(
+				"mcp tool_name_overrides: duplicate client-facing name `{}`",
+				o.name
+			));
+		}
+		if !pairs.insert((o.target.as_str(), o.source.as_str())) {
+			return Err(format!(
+				"mcp tool_name_overrides: duplicate source `{}` for target `{}`",
+				o.source, o.target
+			));
+		}
+	}
+	Ok(())
+}
+
 /// Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).
 #[apply(schema_de!)]
 #[derive(Default)]
@@ -1936,6 +1982,10 @@ pub struct LocalMcpBackend {
 	/// back to the normal defaults.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub server: Option<McpServerOverrides>,
+	/// Declarative tool renames, applied before collision handling. Only valid with
+	/// `prefix_mode: never`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub tool_name_overrides: Vec<McpToolNameOverride>,
 }
 
 #[apply(schema_de!)]
