@@ -22,8 +22,10 @@ Each example focuses on a different production use case.
 | Kubernetes | [Cost-based routing](k8s/cost-based/) | Route requests to lower-cost or higher-capability models based on semantic classification. | Cost optimization while maintaining response quality. |
 | Kubernetes | [Tier-aware routing with CRDs](k8s/tier-aware/) | Select a tier-specific vSR runtime configured by `IntelligentPool` and `IntelligentRoute`. | Kubernetes-native pool/route management and separate runtimes per tier. |
 | Kubernetes | [Tier-aware routing with one runtime](k8s/tier-aware-single-runtime/) | Combine tier and semantic signals in a single vSR runtime using the [v0.3 Unified Config Contract](https://vllm-sr.ai/docs/proposals/unified-config-contract-v0-3). | This example **does not** use the vSR `IntelligentPool` and `IntelligentRoute` CRDs. |
-| Kubernetes | [Semantic caching](k8s/semantic-cache/) | Cache semantically equivalent requests in Redis Open Source and optionally share entries across vSR replicas. | Product support, documentation assistants, FAQ chatbots, and other workloads with many repeated questions. |
+| Kubernetes | [Response caching](response-cache/kubernetes/) | Cache semantically equivalent requests in Redis Open Source and optionally share entries across vSR replicas. | Product support, documentation assistants, FAQ chatbots, and other workloads with many repeated questions. |
 | Standalone | [Tier-aware routing](standalone/tier-aware-single-runtime/) | Use one YAML-configured vSR runtime with standalone agentgateway in Docker Compose. | Local development and deployments without Kubernetes. |
+| Standalone | [Response caching](response-cache/standalone/) | Run agentgateway, vSR, Redis, and the HomeHub Python backend with Docker Compose. | Local response-cache evaluation without Kubernetes or provider credentials. |
+
 
 ## Choosing an example
 
@@ -68,28 +70,15 @@ agentgateway for provider-based routing.
 
 ---
 
-### Semantic caching
+### Response caching
 
-Use this example when many users ask **the same question in different ways**.
+Use this example when users ask the same question in different ways. vSR
+reuses responses from Redis, reducing calls to the backend. A deterministic
+HomeHub Python backend makes cache hits easy to verify without LLM credentials.
 
-Instead of generating a new response for every request, vSR recognizes
-semantically equivalent prompts and returns a previously generated response from
-a Redis Open Source cache.
+The example checks identical and paraphrased requests, cache sharing across
+vSR instances, and persistence across Redis restarts.
 
-The example demonstrates:
-
-- local kind deployment
-- Redis Open Source 8 with vector search
-- Redis-backed semantic cache
-- semantic cache hits for paraphrased requests
-- optional cache sharing across vSR replicas
-- cache persistence across Redis pod restarts
-
-vSR supports multiple cache backends, including a default in-memory store.
-Redis is used here as a production-oriented backend because it allows vSR
-replicas to share cache entries and persist them across process restarts. Redis
-also backs other agentgateway-related services, such as [global rate
-limiting](https://agentgateway.dev/docs/kubernetes/main/documentation/security/rate-limit-global/).
-The example enables Redis persistence on a local persistent volume.
-
-See: `k8s/semantic-cache`
+Choose [Kubernetes](response-cache/kubernetes/) or
+[standalone Docker Compose](response-cache/standalone/). See the
+[response-cache overview](response-cache/README.md) for the request flow.
