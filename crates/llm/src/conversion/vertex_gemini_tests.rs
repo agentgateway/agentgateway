@@ -239,6 +239,178 @@ fn file_part_without_data_or_id_is_rejected() {
 }
 
 #[test]
+fn file_data_https_uri_becomes_file_data() {
+	// When file_data holds an https:// URI (rather than inline base64 or a data URL),
+	// Vertex can fetch it directly via fileData.
+	let g = to_gemini(file_content(json!({
+		"file_data": "https://example.com/document.pdf"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(
+		part["fileData"]["fileUri"],
+		"https://example.com/document.pdf"
+	);
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn https_uri_without_extension_uses_filename_hint() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_id": "https://example.com/document"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "https://example.com/document");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn signed_https_url_resolves_mime_from_extension() {
+	// The main reason to reference a file by https rather than gs:// is a signed URL, where the
+	// extension sits before the query string. Reading `pdf?X-Goog-Algorithm=...` as the
+	// extension would reject exactly the case this path exists to serve.
+	let uri = "https://storage.googleapis.com/bucket/report.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=deadbeef";
+	let g = to_gemini(file_content(json!({ "file_id": uri })));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], uri);
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn https_url_with_fragment_resolves_mime_from_extension() {
+	let g = to_gemini(file_content(json!({
+		"file_id": "https://example.com/document.pdf#page=2"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn plain_http_uri_becomes_file_data() {
+	// http:// is forwarded like https:// rather than pre-rejected. Google's own validator
+	// message labels the case "HTTPS" but illustrates it with `http://path/to/file`, so
+	// Vertex is left to be the authority instead of this hop guessing at the scheme.
+	let g = to_gemini(file_content(json!({
+		"file_id": "http://example.com/document.pdf"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(
+		part["fileData"]["fileUri"],
+		"http://example.com/document.pdf"
+	);
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn a_url_field_is_not_read_as_a_reference() {
+	// `url` and `file_url` are not fields of the OpenAI chat completions `file` part. Reading
+	// them would invent gateway-only request shapes, so a link parked there is rejected — and
+	// the message has to say where the link belongs, since it is all the caller gets.
+	for field in ["url", "file_url"] {
+		let err = from_completions::translate(
+			&req(file_content(
+				json!({ field: "https://example.com/document.pdf" }),
+			)),
+			true,
+		)
+		.expect_err("a link outside file_data/file_id must be rejected, not forwarded");
+		let msg = err.to_string();
+		assert!(
+			msg.contains("file.file_data") && msg.contains("file.file_id"),
+			"rejecting file.{field} must name the fields that are read, got: {msg}"
+		);
+	}
+}
+
+#[test]
+fn file_id_holding_an_https_uri_becomes_file_data() {
+	// http(s) URIs ride in `file_id`, which the gs:// branch has always read the same way: a
+	// caller with no OpenAI Files store to name has that field free to carry the URI.
+	let g = to_gemini(file_content(json!({
+		"file_id": "https://example.com/report.pdf"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(
+		part["fileData"]["fileUri"],
+		"https://example.com/report.pdf"
+	);
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn a_remote_uri_wins_over_inline_bytes_in_the_same_part() {
+	// Precedence is the one gs:// has always had: the URI branches run before raw base64, so
+	// a part carrying both a payload and a link resolves to the link. Sending both is an odd
+	// request either way; what matters is that http(s) does not disagree with gs://.
+	for file in [
+		// mime resolvable from the filename, so the bytes were usable and still lose
+		json!({ "filename": "report.pdf", "file_data": "JVBERi0xLjQK",
+		        "file_id": "https://example.com/other.pdf" }),
+		// no hint at all: the URI's own extension is the only mime source
+		json!({ "file_data": "JVBERi0xLjQK", "file_id": "https://example.com/other.pdf" }),
+	] {
+		let g = to_gemini(file_content(file));
+		let part = &g["contents"][0]["parts"][1];
+		assert_eq!(part["fileData"]["fileUri"], "https://example.com/other.pdf");
+		assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+	}
+}
+
+#[test]
+fn filename_overrides_a_misleading_uri_extension() {
+	// An object named .txt that is really a PDF. `mime_type`/`content_type`/`format` are not
+	// OpenAI fields, so `filename` is the only spec-compliant way a client can correct the
+	// type — it has to beat the extension in the URI, or the request is unfixable from a
+	// stock OpenAI SDK. Vertex trusts the mimeType it is given and does not sniff.
+	let g = to_gemini(file_content(json!({
+		"file_id": "https://example.com/file.txt",
+		"filename": "report.pdf"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["fileData"]["fileUri"], "https://example.com/file.txt");
+	assert_eq!(part["fileData"]["mimeType"], "application/pdf");
+}
+
+#[test]
+fn https_uri_without_mime_hint_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({
+			"file_id": "https://example.com/document"
+		}))),
+		true,
+	);
+	assert!(
+		err.is_err(),
+		"https:// URL with no extension or MIME hint must be rejected"
+	);
+}
+
+#[test]
+fn rejected_signed_url_does_not_leak_its_signature_into_the_error() {
+	// The rejection message names the URL so the caller can tell which file part failed, but a
+	// signed URL's query string is a credential and the message reaches both the client and the
+	// logs. Name the object, drop the signature. All major providers (GCS X-Goog-Signature,
+	// S3 X-Amz-Signature, Azure sig=) put the credential in the query string, so stripping
+	// at '?' covers all of them.
+	let err = from_completions::translate(
+		&req(file_content(json!({
+			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=deadbeef"
+		}))),
+		true,
+	)
+	.expect_err("extension-less https URL must be rejected");
+	let msg = err.to_string();
+	assert!(
+		!msg.contains("deadbeef") && !msg.contains("X-Goog-Signature"),
+		"signed URL query string must not appear in the error, got: {msg}"
+	);
+	assert!(
+		msg.contains("https://storage.googleapis.com/bucket/object"),
+		"the error must still name the offending object, got: {msg}"
+	);
+}
+
+#[test]
 fn empty_string_user_content_is_preserved() {
 	let g = to_gemini(json!({
 		"model": "gemini-2.5-flash",

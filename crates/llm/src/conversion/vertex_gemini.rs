@@ -133,6 +133,30 @@ pub mod from_completions {
 		})
 	}
 
+	fn is_http_uri(uri: &str) -> bool {
+		uri.starts_with("https://") || uri.starts_with("http://")
+	}
+
+	/// An http(s) URI with its query string and fragment cut off, everything else untouched.
+	///
+	/// Two callers, one rule. Reading an extension: signed URLs carry it before the query, so
+	/// `report.pdf?X-Goog-...` must not be read as the extension `pdf?X-Goog-...`. Naming a URI
+	/// in an error: that same query holds the signature (GCS `X-Goog-Signature`, S3
+	/// `X-Amz-Signature`, Azure `sig=`), and errors reach the client and the logs, so the
+	/// credential must not ride along.
+	///
+	/// Applied at the call site rather than inside `mime_from_extension`, which stays as it was:
+	/// gs:// object names may contain `?` and `#` literally, and cutting there would discard an
+	/// extension that was never a query string. The `is_http_uri` guard keeps that true for
+	/// callers that may pass either scheme.
+	fn uri_without_query(uri: &str) -> &str {
+		if is_http_uri(uri) {
+			uri.split(['?', '#']).next().unwrap_or(uri)
+		} else {
+			uri
+		}
+	}
+
 	fn mime_from_extension(uri: &str) -> Option<&'static str> {
 		let (_, ext) = uri.rsplit('/').next()?.rsplit_once('.')?;
 		mime_from_ext_token(ext)
@@ -454,9 +478,17 @@ pub mod from_completions {
 
 	/// Convert an OpenAI `file` content part into a Gemini part.
 	///
-	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
-	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
-	/// than dropped.
+	/// Inline `data:` payloads and raw base64 become `inlineData`; `gs://` objects and
+	/// public http(s) URLs become `fileData`; anything Vertex cannot resolve is rejected
+	/// rather than dropped. Unlike [`image_part`], http(s) references are forwarded —
+	/// Vertex fetches documents by URL, and rejecting them here would drop a working input.
+	///
+	/// Gap vs OpenAI: the OpenAI chat completions `file` part does not require `mime_type`
+	/// because OpenAI infers it from uploaded file metadata or from the URL's Content-Type
+	/// header. Vertex requires an explicit `mimeType` in `fileData`, so this gateway derives
+	/// it from the file extension or a client-supplied hint. A URL with no recognisable
+	/// extension and no hint is rejected here rather than at Vertex. Closing this gap would
+	/// require the gateway to HEAD the URL and read the Content-Type response header.
 	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
 		let field = |k: &str| {
 			file
@@ -466,15 +498,18 @@ pub mod from_completions {
 		};
 		let file_data = field("file_data");
 		let file_id = field("file_id");
+		// The client-supplied hints, in precedence order; identical for every branch below.
+		let hinted_mime = || {
+			explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+		};
 
 		if let Some((mime, data)) = parse_data_url(file_data) {
 			if !mime.is_empty() {
 				return Ok(inline_data_part(mime, data));
 			}
 			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
-			else {
+			let Some(mime) = hinted_mime() else {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
 				)));
@@ -487,9 +522,7 @@ pub mod from_completions {
 			.into_iter()
 			.find(|u| u.starts_with("gs://"))
 		{
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
-				.or_else(|| mime_from_extension(uri).map(str::to_string))
+			let Some(mime) = hinted_mime().or_else(|| mime_from_extension(uri).map(str::to_string))
 			else {
 				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
@@ -498,12 +531,32 @@ pub mod from_completions {
 			return Ok(file_data_part(&mime, uri));
 		}
 
-		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
-		// A malformed `data:` value must not reach here, or its header becomes payload.
-		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+		// Vertex fileData also fetches public http(s) URIs directly. Field order matches the
+		// gs:// branch above. Plain http:// is passed
+		// through rather than pre-rejected: Google's own validator is ambiguous about it, so
+		// Vertex is left to be the authority instead of this hop guessing.
+		if let Some(uri) = [file_data, file_id].into_iter().find(|u| is_http_uri(u)) {
+			// Strip before reading the extension: a signed URL carries it before the query, so
+			// `report.pdf?X-Goog-...` must not be read as the extension `pdf?X-Goog-...`.
+			let Some(mime) =
+				hinted_mime().or_else(|| mime_from_extension(uri_without_query(uri)).map(str::to_string))
 			else {
+				// Named without its query string: the URL that lands here is most often a signed
+				// one, and the signature must not reach the client or the logs.
+				let named = uri_without_query(uri);
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
+					"http(s) file ({named}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use a URL with a known extension"
+				))));
+			};
+			return Ok(file_data_part(&mime, uri));
+		}
+
+		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
+		// Tried after the URI branches, which is the order gs:// has always had: a link in the
+		// same part wins over inline bytes. A malformed `data:` value must not reach here, or
+		// its header becomes payload.
+		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
+			let Some(mime) = hinted_mime() else {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
 				)));
@@ -513,12 +566,12 @@ pub mod from_completions {
 
 		if !file_id.is_empty() {
 			return Err(AIError::UnsupportedConversion(strng::new(format!(
-				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
+				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or put a gs:// or http(s) URI in file.file_data or file.file_id"
 			))));
 		}
 
 		Err(AIError::UnsupportedConversion(strng::new(
-			"file content part has neither an inline data: file_data nor a gs:// reference",
+			"file content part carries no payload; send inline bytes in file.file_data, or a gs:// or http(s) URI in file.file_data or file.file_id",
 		)))
 	}
 
