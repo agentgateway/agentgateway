@@ -1,0 +1,200 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pool-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - backendRefs:
+        - name: ordered-pool
+          kind: InferencePool
+          group: inference.networking.k8s.io
+---
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: ordered-pool
+  namespace: default
+spec:
+  endpointPickerRef:
+    group: ""
+    kind: Service
+    name: ordered-pool-epp
+    port:
+      number: 9002
+  selector:
+    matchLabels:
+      app: gateway
+  targetPorts:
+    - number: 8080
+status:
+  parents:
+    # Our entry comes first and is refreshed in place.
+    - parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+      conditions:
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: stale
+          reason: Pending
+          status: "False"
+          type: Accepted
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: stale
+          reason: Pending
+          status: "False"
+          type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+    # Another controller's entry that sorts before ours; it must keep its position.
+    - parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: a-other-gw
+        namespace: default
+      conditions:
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: Accepted by fake controller
+          reason: Accepted
+          status: "True"
+          type: Accepted
+      controllerName: other-controller.example.com/controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ordered-pool-epp
+  namespace: default
+spec:
+  ports:
+    - port: 9002
+      protocol: TCP
+  selector:
+    app: gateway
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        inferenceRouting:
+          endpointPicker:
+            port: 9002
+            service:
+              hostname: ordered-pool-epp.default.svc.cluster.local
+              namespace: default
+          failureMode: FAIL_CLOSED
+      key: default/ordered-pool:inference
+      name:
+        kind: InferencePool
+        name: ordered-pool
+        namespace: default
+      target:
+        service:
+          hostname: ordered-pool.default.inference.cluster.local
+          namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        backendTls:
+          verification: INSECURE_ALL
+      key: default/ordered-pool:inferencetls
+      name:
+        kind: InferencePool
+        name: ordered-pool
+        namespace: default
+      target:
+        service:
+          hostname: ordered-pool-epp.default.svc.cluster.local
+          namespace: default
+          port: 9002
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: ordered-pool.default.inference.cluster.local
+            namespace: default
+        weight: 1
+      key: default/pool-route.00.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: pool-route
+        namespace: default
+status:
+- apiVersion: inference.networking.k8s.io/v1
+  kind: InferencePool
+  metadata:
+    name: ordered-pool
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: InferencePool has been accepted by controller agentgateway.dev/agentgateway
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: All InferencePool references have been resolved
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+    - conditions:
+      - lastTransitionTime: fake
+        message: Accepted by fake controller
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      controllerName: other-controller.example.com/controller
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: a-other-gw
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: pool-route
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

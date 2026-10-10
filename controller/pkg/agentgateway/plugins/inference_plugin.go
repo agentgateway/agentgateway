@@ -18,6 +18,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -235,13 +236,10 @@ func buildInferencePoolStatus(
 	}
 
 	existingOurs := make(map[string]inf.ParentStatus)
-	mergedParents := make([]inf.ParentStatus, 0, len(status.Parents)+len(attachedGateways)+1)
 	for _, p := range status.Parents {
-		if string(p.ControllerName) != controllerName {
-			mergedParents = append(mergedParents, p)
-			continue
+		if string(p.ControllerName) == controllerName {
+			existingOurs[inferencePoolParentMergeKey(p.ParentRef)] = p
 		}
-		existingOurs[inferencePoolParentMergeKey(p.ParentRef)] = p
 	}
 
 	conditions := inferencePoolConditionMap(controllerName, validationErr)
@@ -251,19 +249,29 @@ func buildInferencePoolStatus(
 			Message: "endpointPickerRef must be specified",
 		}
 	}
+	ours := make([]inf.ParentStatus, 0, len(attachedGateways)+1)
 	for _, ref := range desiredInferencePoolParentRefs(attachedGateways, validationErr) {
 		existingConds := []metav1.Condition(nil)
 		if existing, found := existingOurs[inferencePoolParentMergeKey(ref)]; found {
 			existingConds = existing.Conditions
 		}
-		mergedParents = append(mergedParents, inf.ParentStatus{
+		ours = append(ours, inf.ParentStatus{
 			ParentRef:      ref,
 			ControllerName: inf.ControllerName(controllerName),
 			Conditions:     setConditions(pool.Generation, existingConds, conditions),
 		})
 	}
 
-	status.Parents = mergedParents
+	// Keep existing entries in place so the desired order matches what the status syncer writes.
+	status.Parents = reports.MergeOwnedStatuses(status.Parents, ours,
+		func(p inf.ParentStatus) bool { return string(p.ControllerName) == controllerName },
+		func(a, b inf.ParentStatus) bool {
+			return inferencePoolParentMergeKey(a.ParentRef) == inferencePoolParentMergeKey(b.ParentRef)
+		},
+		func(a, b inf.ParentStatus) int {
+			return reports.CompareInferencePoolParentReference(a.ParentRef, b.ParentRef)
+		},
+	)
 	return status
 }
 
