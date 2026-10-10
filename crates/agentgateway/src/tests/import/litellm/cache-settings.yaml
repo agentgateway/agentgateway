@@ -1,0 +1,19 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+litellm_settings:
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    password: os.environ/REDIS_PASSWORD
+    ttl: 300
+    namespace: responses
+    future_setting:
+      nested: not-copied
+router_settings:
+  redis_url: os.environ/ROUTER_REDIS_URL
+  cache_responses: false
+  caching_groups:
+  - [chat, chat-alias]
