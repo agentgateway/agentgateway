@@ -1,0 +1,38 @@
+model_list:
+- model_name: single
+  litellm_params:
+    model: openai/gpt-4o-mini
+- model_name: weighted
+  litellm_params:
+    model: openai/gpt-4o
+- model_name: weighted
+  litellm_params:
+    model: anthropic/claude-sonnet-4
+- model_name: primary
+  litellm_params:
+    model: openai/gpt-4o
+- model_name: backup
+  litellm_params:
+    model: anthropic/claude-haiku-4
+router_settings:
+  fallbacks:
+  - primary: [backup]
+  model_group_alias:
+    single-alias: single
+    weighted-alias:
+      model: weighted
+      hidden: false
+    failover-alias: primary
+    hidden-alias:
+      model: single
+      hidden: true
+    unknown-field-alias:
+      model: single
+      description: ignored
+    missing-alias: missing
+    single: weighted
+    weighted: weighted
+    chain-alias: chain-link
+    chain-link: weighted
+    cycle-a: cycle-b
+    cycle-b: cycle-a
