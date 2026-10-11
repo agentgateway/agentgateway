@@ -1147,12 +1147,10 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		(output === 'assistant' || output === 'toolCall');
 	return (
 		<Tooltip content={label}>
-			<span
+			<button
+				type="button"
 				className={`log-turn-badge ${common ? variant : 'other'}`}
-				role="img"
 				aria-label={label}
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				tabIndex={0}
 			>
 				{common ? (
 					<>
@@ -1163,7 +1161,7 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 				) : (
 					<Ellipsis size={15} />
 				)}
-			</span>
+			</button>
 		</Tooltip>
 	);
 }
