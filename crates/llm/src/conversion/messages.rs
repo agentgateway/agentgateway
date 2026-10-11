@@ -145,8 +145,45 @@ pub mod from_completions {
 								cache_control: cache_control(&image.prompt_cache_breakpoint),
 							}));
 						},
-						completions::RequestUserMessageContentPart::InputAudio(_)
-						| completions::RequestUserMessageContentPart::File(_) => {},
+						completions::RequestUserMessageContentPart::File(file) => {
+							// FileObject's fields are private in the async-openai fork,
+							// so read them through the serialized form.
+							let Ok(value) = serde_json::to_value(&file.file) else {
+								continue;
+							};
+							let file_data = value.get("file_data").and_then(serde_json::Value::as_str);
+							let file_id = value.get("file_id").and_then(serde_json::Value::as_str);
+							if file_id.is_some() {
+								// A Files API reference; the content is not inline, so
+								// there is nothing to translate to a document block.
+								continue;
+							}
+							let Some(data_url) = file_data else {
+								continue;
+							};
+							let source = if let Some((media_type, data)) = parse_data_url(data_url) {
+								serde_json::json!({
+									"type": "base64",
+									"media_type": media_type,
+									"data": data
+								})
+							} else {
+								serde_json::json!({
+									"type": "url",
+									"url": data_url
+								})
+							};
+							out.push(messages::ContentBlock::Document(
+								messages::ContentDocumentBlock {
+									source,
+									cache_control: cache_control(&file.prompt_cache_breakpoint),
+									citations: None,
+									context: None,
+									title: None,
+								},
+							));
+						},
+						completions::RequestUserMessageContentPart::InputAudio(_) => {},
 					}
 				}
 			},
