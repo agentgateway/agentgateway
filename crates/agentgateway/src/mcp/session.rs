@@ -502,6 +502,7 @@ impl Session {
 					l.session_id = session_id;
 				});
 				self.strip_unsupported_client_capabilities_from_meta(&mut r.request, &ctx);
+				let request_id = r.id.clone();
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities, &ctx);
@@ -536,12 +537,21 @@ impl Session {
 						.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
-						Box::pin(
-							self
-								.relay
-								.send_list(r, ctx, self.relay.merge_tools(), self.encoder.clone()),
-						)
-						.await
+						if self.relay.lazy_tools() {
+							Box::pin(
+								self
+									.relay
+									.send_fanout(r, ctx, self.relay.merge_tools_lazy()),
+							)
+							.await
+						} else {
+							Box::pin(
+								self
+									.relay
+									.send_list(r, ctx, self.relay.merge_tools(), self.encoder.clone()),
+							)
+							.await
+						}
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
 					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
@@ -602,7 +612,45 @@ impl Session {
 						.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
-						let name = ctr.params.name.clone();
+						let mut name = ctr.params.name.clone();
+						if self.relay.lazy_tools() {
+							if name.as_ref() == crate::mcp::handler::LAZY_SEARCH_TOOL {
+								let args = ctr.params.arguments.clone();
+								let search_meta = ctr
+									.extensions
+									.get::<RequestMetaObject>()
+									.and_then(non_empty_meta)
+									.cloned();
+								return Box::pin(
+									self
+										.relay
+										.send_lazy_search(request_id, ctx, args, search_meta),
+								)
+								.await;
+							}
+							if name.as_ref() == crate::mcp::handler::LAZY_CALL_TOOL {
+								let args = ctr.params.arguments.clone().unwrap_or_default();
+								let inner = args
+									.get("name")
+									.and_then(|v| v.as_str())
+									.map(str::to_string)
+									.ok_or_else(|| {
+										UpstreamError::InvalidRequest(
+											"mcp_call requires a string `name` argument".to_string(),
+										)
+									})?;
+								if inner == crate::mcp::handler::LAZY_SEARCH_TOOL
+									|| inner == crate::mcp::handler::LAZY_CALL_TOOL
+								{
+									return Err(UpstreamError::InvalidRequest(
+										"mcp_call cannot invoke the gateway search/call tools".to_string(),
+									));
+								}
+								ctr.params.arguments = args.get("arguments").and_then(|v| v.as_object()).cloned();
+								name = Cow::Owned(inner);
+								ctr.params.name = name.clone();
+							}
+						}
 						// Propagate the client's `_meta` to the resolve list request so modern
 						// (2026-07-28) upstreams that require the per-request envelope accept it.
 						let resolve_meta = ctr

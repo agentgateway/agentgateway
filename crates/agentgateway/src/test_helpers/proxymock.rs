@@ -773,6 +773,7 @@ impl TestBind {
 				sse_keep_alive: None,
 				dns_rebinding_protection,
 				server: None,
+				lazy_tools: false,
 			},
 		);
 		{
@@ -918,6 +919,7 @@ impl TestBind {
 				sse_keep_alive: None,
 				dns_rebinding_protection: false,
 				server: None,
+				lazy_tools: false,
 			},
 		);
 		{
