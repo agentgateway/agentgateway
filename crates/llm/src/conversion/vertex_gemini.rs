@@ -820,7 +820,7 @@ pub mod from_completions {
 				f(v);
 			}
 		}
-		for key in ["anyOf", "allOf"] {
+		for key in ["anyOf", "oneOf", "allOf"] {
 			if let Some(Value::Array(arr)) = map.get_mut(key) {
 				for v in arr.iter_mut() {
 					f(v);
@@ -933,6 +933,20 @@ pub mod from_completions {
 			let ty = const_value_type(&c);
 			map.insert("enum".to_string(), Value::Array(vec![c]));
 			map.entry("type".to_string()).or_insert_with(|| ty.into());
+		}
+
+		// oneOf -> anyOf. Gemini's Schema proto has any_of only and Vertex silently ignores oneOf, which
+		// leaves the node typeless and defaults it to an empty object. "Exactly one" and "at least one"
+		// only differ for overlapping members, and anyOf is the closest Gemini can express. A node that
+		// already carries an anyOf gets the members appended (best-effort, as with allOf).
+		if let Some(Value::Array(members)) = map.remove("oneOf") {
+			changed = true;
+			match map.get_mut("anyOf") {
+				Some(Value::Array(existing)) => existing.extend(members),
+				_ => {
+					map.insert("anyOf".to_string(), Value::Array(members));
+				},
+			}
 		}
 
 		if let Some(Value::Array(types)) = map.get("type").cloned() {

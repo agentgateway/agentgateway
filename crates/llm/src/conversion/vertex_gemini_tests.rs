@@ -864,6 +864,179 @@ fn gemini_schema_converts_const_to_enum() {
 	);
 }
 
+// Case 4b: JSON Schema `oneOf` is how tagged unions are expressed (zod, TypeBox, OpenAPI). Gemini's
+// Schema proto only has `any_of`; it silently ignores `oneOf` rather than rejecting it, and the
+// normalizer used to strip it, so the node lost its type and Gemini returned empty objects.
+// `oneOf` must be rewritten to `anyOf` with every member intact.
+#[test]
+fn gemini_schema_rewrites_oneof_to_anyof() {
+	let s = response_schema(json!({
+		"type": "object",
+		"required": ["events"],
+		"properties": {
+			"events": {
+				"type": "array",
+				"items": {
+					"oneOf": [
+						{
+							"type": "object",
+							"required": ["kind", "x", "y"],
+							"properties": {
+								"kind": { "type": "string", "enum": ["click"] },
+								"x": { "type": "integer" },
+								"y": { "type": "integer" }
+							}
+						},
+						{
+							"type": "object",
+							"required": ["kind", "key"],
+							"properties": {
+								"kind": { "type": "string", "enum": ["keypress"] },
+								"key": { "type": "string" }
+							}
+						}
+					]
+				}
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(!txt.contains("oneOf"), "oneOf must be rewritten: {txt}");
+	let items = &s["properties"]["events"]["items"];
+	let any_of = items["anyOf"]
+		.as_array()
+		.unwrap_or_else(|| panic!("oneOf must become anyOf, not be dropped: {txt}"));
+	assert_eq!(any_of.len(), 2, "both branches must survive: {txt}");
+	assert_eq!(any_of[0]["properties"]["kind"]["enum"][0], "click", "{txt}");
+	assert_eq!(any_of[0]["properties"]["x"]["type"], "integer", "{txt}");
+	assert_eq!(
+		any_of[1]["properties"]["kind"]["enum"][0], "keypress",
+		"{txt}"
+	);
+	assert_eq!(any_of[1]["properties"]["key"]["type"], "string", "{txt}");
+}
+
+// Case 4c: the same rewrite must apply on the tool-parameters path. This is the exact payload from
+// agentgateway/agentgateway#3880, where Gemini answered `{"events":[{},{}]}`.
+#[test]
+fn tool_parameters_rewrite_oneof_to_anyof() {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"tool_choice": "required",
+		"messages": [{
+			"role": "user",
+			"content": "The user clicked at (10, 20), then pressed Enter. Record both events."
+		}],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "record_events",
+				"parameters": {
+					"type": "object",
+					"required": ["events"],
+					"properties": {
+						"events": {
+							"type": "array",
+							"items": {
+								"oneOf": [
+									{
+										"type": "object",
+										"required": ["kind", "x", "y"],
+										"properties": {
+											"kind": { "type": "string", "enum": ["click"] },
+											"x": { "type": "integer" },
+											"y": { "type": "integer" }
+										}
+									},
+									{
+										"type": "object",
+										"required": ["kind", "key"],
+										"properties": {
+											"kind": { "type": "string", "enum": ["keypress"] },
+											"key": { "type": "string" }
+										}
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		}]
+	}));
+	let params = &g["tools"][0]["functionDeclarations"][0]["parameters"];
+	let txt = serde_json::to_string(params).unwrap();
+	assert!(!txt.contains("oneOf"), "oneOf must be rewritten: {txt}");
+	let items = &params["properties"]["events"]["items"];
+	assert_ne!(
+		items,
+		&json!({}),
+		"items must not collapse to an empty schema: {txt}"
+	);
+	let any_of = items["anyOf"]
+		.as_array()
+		.unwrap_or_else(|| panic!("oneOf must become anyOf, not be dropped: {txt}"));
+	assert_eq!(any_of.len(), 2, "both branches must survive: {txt}");
+	assert_eq!(any_of[0]["type"], "object", "{txt}");
+	assert_eq!(any_of[1]["type"], "object", "{txt}");
+}
+
+// Case 4d: Pydantic emits a discriminated union as `{oneOf: [{$ref}, {$ref}], discriminator: {...}}`.
+// The refs inside the rewritten members must still be inlined, the sibling description kept, and
+// the unsupported `discriminator` dropped.
+#[test]
+fn gemini_schema_rewrites_oneof_of_refs() {
+	let s = response_schema(json!({
+		"$defs": {
+			"Click": {
+				"type": "object",
+				"properties": { "kind": { "const": "click" }, "x": { "type": "integer" } },
+				"required": ["kind", "x"]
+			},
+			"Keypress": {
+				"type": "object",
+				"properties": { "kind": { "const": "keypress" }, "key": { "type": "string" } },
+				"required": ["kind", "key"]
+			}
+		},
+		"type": "object",
+		"properties": {
+			"event": {
+				"oneOf": [{ "$ref": "#/$defs/Click" }, { "$ref": "#/$defs/Keypress" }],
+				"discriminator": { "propertyName": "kind" },
+				"description": "what happened"
+			}
+		}
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(!txt.contains("oneOf"), "oneOf must be rewritten: {txt}");
+	assert!(
+		!txt.contains("$ref"),
+		"refs inside oneOf must be inlined: {txt}"
+	);
+	assert!(!txt.contains("$defs"), "must drop $defs: {txt}");
+	assert!(
+		!txt.contains("discriminator"),
+		"Gemini has no discriminator: {txt}"
+	);
+	let event = &s["properties"]["event"];
+	assert_eq!(
+		event["description"], "what happened",
+		"sibling description must be preserved: {txt}"
+	);
+	let any_of = event["anyOf"]
+		.as_array()
+		.unwrap_or_else(|| panic!("oneOf must become anyOf, not be dropped: {txt}"));
+	assert_eq!(any_of.len(), 2, "both branches must survive: {txt}");
+	assert_eq!(any_of[0]["properties"]["kind"]["enum"][0], "click", "{txt}");
+	assert_eq!(any_of[0]["properties"]["x"]["type"], "integer", "{txt}");
+	assert_eq!(
+		any_of[1]["properties"]["kind"]["enum"][0], "keypress",
+		"{txt}"
+	);
+	assert_eq!(any_of[1]["properties"]["key"]["type"], "string", "{txt}");
+}
+
 // Case 5: only `enum` and `date-time` string formats are safe; others (uri, email, int64, uuid, ...)
 // must be stripped.
 #[test]
