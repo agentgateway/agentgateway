@@ -11,11 +11,12 @@ import {
 } from 'lucide-react';
 import type {
 	CSSProperties,
+	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
 	ReactNode
 } from 'react';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 const drawerStack: symbol[] = [];
 
@@ -71,6 +72,7 @@ export function Dropdown(props: {
 		searchText?: string;
 	}>;
 	onChange: (value: string) => void;
+	id?: string;
 	ariaLabel: string;
 	placeholder?: ReactNode;
 	searchable?: boolean;
@@ -249,6 +251,7 @@ export function Dropdown(props: {
 				type="button"
 				role="combobox"
 				ref={triggerRef}
+				id={props.id}
 				aria-haspopup="listbox"
 				aria-expanded={open}
 				aria-controls={`${id}-listbox`}
@@ -809,14 +812,16 @@ export function EmptyState(props: { title: string; description: string; action?:
 
 export function Field(props: {
 	label: string;
-	children: ReactNode;
+	children: ReactElement<{ id?: string }> | ((id: string) => ReactNode);
 	hint?: string;
 	className?: string;
 	tooltip?: string;
 }) {
+	const generatedId = useId();
+	const id =
+		typeof props.children === 'function' ? generatedId : (props.children.props.id ?? generatedId);
 	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<label className={props.className ? `field ${props.className}` : 'field'}>
+		<label className={props.className ? `field ${props.className}` : 'field'} htmlFor={id}>
 			<span className="field-label">
 				{props.label}
 				{props.tooltip ? (
@@ -828,7 +833,9 @@ export function Field(props: {
 					</Tooltip>
 				) : null}
 			</span>
-			{props.children}
+			{typeof props.children === 'function'
+				? props.children(id)
+				: cloneElement(props.children, { id })}
 			{props.hint ? <small>{props.hint}</small> : null}
 		</label>
 	);

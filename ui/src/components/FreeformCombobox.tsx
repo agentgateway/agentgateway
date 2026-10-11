@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDismissiblePopover } from '@/components/Primitives';
 
 export function FreeformCombobox(props: {
+	id?: string;
 	ariaLabel: string;
 	value: string;
 	options: string[];
@@ -84,6 +85,7 @@ export function FreeformCombobox(props: {
 			<div className="freeform-combobox-input-wrap">
 				<input
 					ref={inputRef}
+					id={props.id}
 					aria-label={props.ariaLabel}
 					value={props.value}
 					onChange={event => {
