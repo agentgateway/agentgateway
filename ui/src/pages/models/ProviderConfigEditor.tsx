@@ -141,7 +141,7 @@ export function ProviderConfigEditor(props: {
 							onApiKeyChange={apiKey => patchParams({ apiKey })}
 						/>
 					) : (
-						<Field
+						<FieldGroup
 							label="Provider API key"
 							tooltip={props.help.field<LlmParams>('LocalLLMParams', 'apiKey')}
 							className={props.apiKeyError ? 'invalid' : undefined}
@@ -151,7 +151,7 @@ export function ProviderConfigEditor(props: {
 								value={props.params?.apiKey}
 								onChange={apiKey => patchParams({ apiKey })}
 							/>
-						</Field>
+						</FieldGroup>
 					)}
 
 					{provider === 'vertex' ? (

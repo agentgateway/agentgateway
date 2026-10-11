@@ -186,30 +186,35 @@ export function OidcPolicyEditor(props: {
 					className={fieldErrors.issuer ? 'invalid' : undefined}
 					hint={fieldErrors.issuer}
 				>
-					<input
-						value={issuer}
-						aria-invalid={Boolean(fieldErrors.issuer)}
-						onChange={event => {
-							setIssuer(event.target.value);
-							clearFieldError('issuer');
-						}}
-						placeholder="https://issuer.example.com"
-					/>
-					<div className="suggestion-row">
-						{issuerSuggestions.map(suggestion => (
-							<button
-								className="table-action"
-								type="button"
-								key={suggestion.label}
-								onClick={() => {
-									setIssuer(suggestion.value);
+					{id => (
+						<>
+							<input
+								id={id}
+								value={issuer}
+								aria-invalid={Boolean(fieldErrors.issuer)}
+								onChange={event => {
+									setIssuer(event.target.value);
 									clearFieldError('issuer');
 								}}
-							>
-								{suggestion.label}
-							</button>
-						))}
-					</div>
+								placeholder="https://issuer.example.com"
+							/>
+							<div className="suggestion-row">
+								{issuerSuggestions.map(suggestion => (
+									<button
+										className="table-action"
+										type="button"
+										key={suggestion.label}
+										onClick={() => {
+											setIssuer(suggestion.value);
+											clearFieldError('issuer');
+										}}
+									>
+										{suggestion.label}
+									</button>
+								))}
+							</div>
+						</>
+					)}
 				</Field>
 
 				<FieldGroup

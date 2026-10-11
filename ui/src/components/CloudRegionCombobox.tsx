@@ -84,6 +84,7 @@ const googleCloudRegions = [
 ];
 
 export function CloudRegionCombobox(props: {
+	id?: string;
 	cloud: 'aws' | 'google';
 	ariaLabel: string;
 	value: string;
@@ -92,6 +93,7 @@ export function CloudRegionCombobox(props: {
 }) {
 	return (
 		<FreeformCombobox
+			id={props.id}
 			ariaLabel={props.ariaLabel}
 			value={props.value}
 			options={props.cloud === 'aws' ? awsRegions : googleCloudRegions}

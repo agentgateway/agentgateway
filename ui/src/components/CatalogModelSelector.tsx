@@ -5,6 +5,7 @@ import { listCostModels } from '@/api/costsApi';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 
 export function CatalogModelSelector(props: {
+	id?: string;
 	ariaLabel: string;
 	value: string;
 	onChange: (value: string) => void;
@@ -31,6 +32,7 @@ export function CatalogModelSelector(props: {
 
 	return (
 		<FreeformCombobox
+			id={props.id}
 			ariaLabel={props.ariaLabel}
 			value={props.value}
 			options={options}

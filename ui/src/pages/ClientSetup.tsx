@@ -244,31 +244,37 @@ export function ClientSetupPage() {
 							label="Specific model"
 							hint="The dump lists a pattern; clients have to request a concrete model."
 						>
-							<div className="target-resolved-composite">
-								{wildcardModelPrefix(selectedModel) ? (
-									<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
-								) : null}
-								<input
-									aria-label="Specific model"
-									value={specificModel}
-									onChange={event => setSpecificModel(event.target.value)}
-									placeholder="Model name"
-								/>
-							</div>
+							{id => (
+								<div className="target-resolved-composite">
+									{wildcardModelPrefix(selectedModel) ? (
+										<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
+									) : null}
+									<input
+										id={id}
+										aria-label="Specific model"
+										value={specificModel}
+										onChange={event => setSpecificModel(event.target.value)}
+										placeholder="Model name"
+									/>
+								</div>
+							)}
 						</Field>
 					) : null}
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
-							<div className="target-resolved-composite">
-								{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
-								<CatalogModelSelector
-									ariaLabel="Specific model"
-									value={specificModelSuffix}
-									provider={selectedCatalogProvider}
-									onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
-									placeholder="Select or type a model"
-								/>
-							</div>
+							{id => (
+								<div className="target-resolved-composite">
+									{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
+									<CatalogModelSelector
+										id={id}
+										ariaLabel="Specific model"
+										value={specificModelSuffix}
+										provider={selectedCatalogProvider}
+										onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
+										placeholder="Select or type a model"
+									/>
+								</div>
+							)}
 						</Field>
 					) : null}
 					<FieldGroup label="Virtual API key">
