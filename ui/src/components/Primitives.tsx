@@ -814,23 +814,25 @@ export function Field(props: {
 	className?: string;
 	tooltip?: string;
 }) {
-	return (
+	const className = props.className ? `field ${props.className}` : 'field';
+	const control = (
 		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<label className={props.className ? `field ${props.className}` : 'field'}>
-			<span className="field-label">
-				{props.label}
-				{props.tooltip ? (
-					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
-							<HelpCircle size={13} aria-hidden="true" />
-						</span>
-					</Tooltip>
-				) : null}
-			</span>
+		<label className={props.tooltip ? 'field field-control' : className}>
+			<span className="field-label">{props.label}</span>
 			{props.children}
 			{props.hint ? <small>{props.hint}</small> : null}
 		</label>
+	);
+	if (!props.tooltip) return control;
+	return (
+		<div className={`${className} field-with-help`}>
+			<Tooltip content={props.tooltip} side="right">
+				<button className="help-icon" type="button" aria-label={props.tooltip}>
+					<HelpCircle size={13} aria-hidden="true" />
+				</button>
+			</Tooltip>
+			{control}
+		</div>
 	);
 }
 
@@ -847,10 +849,9 @@ export function FieldGroup(props: {
 				{props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
+						<button className="help-icon" type="button" aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
-						</span>
+						</button>
 					</Tooltip>
 				) : null}
 			</span>
