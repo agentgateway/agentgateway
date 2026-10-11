@@ -158,6 +158,8 @@ export interface LogFilters {
 	responseModel?: string[];
 	traceId?: string | null;
 	hasPayload?: boolean | null;
+	/** Case-insensitive substring matched against the user and group of a request. */
+	search?: string | null;
 	attributes?: Record<string, unknown>;
 }
 

@@ -447,6 +447,11 @@ pub struct LogFilters {
 	pub trace_id: Option<String>,
 	#[serde(default)]
 	pub has_payload: Option<bool>,
+	/// Case-insensitive substring matched against the user and group of a request. Unlike
+	/// `attributes`, which selects an exact value of a named attribute, this matches anywhere in
+	/// either value, so a partial name finds a request whose full value is not known yet.
+	#[serde(default)]
+	pub search: Option<String>,
 	#[serde(default)]
 	pub attributes: BTreeMap<String, Value>,
 }

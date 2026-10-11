@@ -354,6 +354,28 @@ fn push_filter_option(
 	}
 }
 
+/// The free-text search term, or `None` when it is empty or only whitespace.
+fn search_term(filters: &LogFilters) -> Option<&str> {
+	filters
+		.search
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+}
+
+/// Escapes the characters that `LIKE` treats as wildcards so a search for `50%` or `a_b` matches
+/// those characters literally. The caller appends the `%` wildcards around the result.
+fn escape_like(term: &str) -> String {
+	let mut escaped = String::with_capacity(term.len());
+	for character in term.chars() {
+		if matches!(character, '\\' | '%' | '_') {
+			escaped.push('\\');
+		}
+		escaped.push(character);
+	}
+	escaped
+}
+
 fn push_filters(
 	qb: &mut QueryBuilder<Sqlite>,
 	time_range: Option<&TimeRange>,
@@ -378,6 +400,14 @@ fn push_filters(
 	if let Some(has_payload) = filters.has_payload {
 		qb.push(" AND has_payload = ");
 		qb.push_bind(has_payload);
+	}
+	if let Some(search) = search_term(filters) {
+		let pattern = format!("%{}%", escape_like(search));
+		qb.push(" AND (agentgateway_user LIKE ");
+		qb.push_bind(pattern.clone());
+		qb.push(" ESCAPE '\\' OR agentgateway_group LIKE ");
+		qb.push_bind(pattern);
+		qb.push(" ESCAPE '\\')");
 	}
 	for (key, value) in &filters.attributes {
 		let Some(values) = attr_filter_values(value) else {
@@ -628,3 +658,118 @@ FROM request_logs
 LEFT JOIN request_log_payloads ON request_logs.id = request_log_payloads.log_id
 WHERE request_logs.id = ?
 "#;
+
+#[cfg(test)]
+mod tests {
+	use chrono::DateTime;
+
+	use super::*;
+
+	/// A log row carrying only the identity fields, which are what the search filter reads.
+	fn log_with_identity(id: &str, user: Option<&str>, group: Option<&str>) -> StoredRequestLog {
+		StoredRequestLog {
+			id: id.to_string(),
+			started_at: DateTime::from_timestamp(1_700_000_000, 0).expect("valid timestamp"),
+			completed_at: DateTime::from_timestamp(1_700_000_000, 0).expect("valid timestamp"),
+			duration_ms: 1,
+			trace_id: None,
+			span_id: None,
+			http_status: None,
+			error: None,
+			gen_ai_operation_name: None,
+			gen_ai_provider_name: None,
+			gen_ai_request_model: None,
+			gen_ai_response_model: None,
+			input_tokens: None,
+			output_tokens: None,
+			total_tokens: None,
+			cost: None,
+			agentgateway_user: user.map(str::to_string),
+			agentgateway_group: group.map(str::to_string),
+			user_agent_name: None,
+			has_payload: false,
+			attributes_json: "{}".into(),
+			payload: None,
+		}
+	}
+
+	async fn search_ids(store: &SqliteLogStore, search: Option<&str>) -> Vec<String> {
+		let response = store
+			.search(SearchRequest {
+				limit: None,
+				cursor: None,
+				time_range: None,
+				filters: LogFilters {
+					search: search.map(str::to_string),
+					..LogFilters::default()
+				},
+				include_attributes: false,
+			})
+			.await
+			.expect("search request logs");
+		let mut ids = response
+			.logs
+			.into_iter()
+			.map(|log| log.id)
+			.collect::<Vec<_>>();
+		ids.sort();
+		ids
+	}
+
+	#[tokio::test]
+	async fn search_matches_partial_user_and_group_names() {
+		let store = SqliteLogStore::from_pool(
+			SqlitePool::connect("sqlite::memory:")
+				.await
+				.expect("open in-memory sqlite"),
+		)
+		.await
+		.expect("create log store");
+
+		store
+			.insert_batch(&[
+				log_with_identity("alice", Some("alice@example.com"), Some("platform")),
+				log_with_identity("bob", Some("bob@example.com"), Some("data-eng")),
+				log_with_identity("anon", None, None),
+			])
+			.await
+			.expect("insert logs");
+
+		// A user is found by any part of the name, not only the exact value.
+		assert_eq!(search_ids(&store, Some("alice")).await, vec!["alice"]);
+		assert_eq!(
+			search_ids(&store, Some("example.com")).await,
+			vec!["alice".to_string(), "bob".to_string()]
+		);
+		// The same text also matches the group column.
+		assert_eq!(search_ids(&store, Some("data")).await, vec!["bob"]);
+		// SQLite `LIKE` compares ASCII case-insensitively.
+		assert_eq!(search_ids(&store, Some("ALICE")).await, vec!["alice"]);
+		// A term that matches nothing returns nothing, and no term returns everything.
+		assert!(search_ids(&store, Some("nobody")).await.is_empty());
+		assert_eq!(search_ids(&store, None).await.len(), 3);
+		// Rows without an identity never match a search.
+		assert_eq!(search_ids(&store, Some("anon")).await, Vec::<String>::new());
+	}
+
+	#[test]
+	fn like_pattern_escapes_wildcards_the_user_typed() {
+		assert_eq!(escape_like("alice"), "alice");
+		assert_eq!(escape_like("50%"), "50\\%");
+		assert_eq!(escape_like("a_b"), "a\\_b");
+		assert_eq!(escape_like("a\\b"), "a\\\\b");
+	}
+
+	#[test]
+	fn search_term_is_trimmed_and_empty_values_are_ignored() {
+		let with = |search: Option<&str>| LogFilters {
+			search: search.map(str::to_string),
+			..LogFilters::default()
+		};
+
+		assert_eq!(search_term(&with(None)), None);
+		assert_eq!(search_term(&with(Some(""))), None);
+		assert_eq!(search_term(&with(Some("   "))), None);
+		assert_eq!(search_term(&with(Some("  alice  "))), Some("alice"));
+	}
+}

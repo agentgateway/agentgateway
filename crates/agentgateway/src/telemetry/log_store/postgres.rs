@@ -427,6 +427,28 @@ fn push_filter_option(
 	}
 }
 
+/// The free-text search term, or `None` when it is empty or only whitespace.
+fn search_term(filters: &LogFilters) -> Option<&str> {
+	filters
+		.search
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+}
+
+/// Escapes the characters that `ILIKE` treats as wildcards so a search for `50%` or `a_b` matches
+/// those characters literally. The caller appends the `%` wildcards around the result.
+fn escape_like(term: &str) -> String {
+	let mut escaped = String::with_capacity(term.len());
+	for character in term.chars() {
+		if matches!(character, '\\' | '%' | '_') {
+			escaped.push('\\');
+		}
+		escaped.push(character);
+	}
+	escaped
+}
+
 fn push_filters(
 	qb: &mut QueryBuilder<Postgres>,
 	time_range: Option<&TimeRange>,
@@ -451,6 +473,14 @@ fn push_filters(
 	if let Some(has_payload) = filters.has_payload {
 		qb.push(" AND has_payload = ");
 		qb.push_bind(has_payload);
+	}
+	if let Some(search) = search_term(filters) {
+		let pattern = format!("%{}%", escape_like(search));
+		qb.push(" AND (agentgateway_user ILIKE ");
+		qb.push_bind(pattern.clone());
+		qb.push(" ESCAPE '\\' OR agentgateway_group ILIKE ");
+		qb.push_bind(pattern);
+		qb.push(" ESCAPE '\\')");
 	}
 	for (key, value) in &filters.attributes {
 		let Some(values) = attr_filter_values(value) else {

@@ -600,6 +600,13 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 				to: now.toISOString()
 			},
 			bucketSeconds: 900,
+			filterOptions: {
+				requestModel: ['resilient'],
+				provider: ['anthropic'],
+				'agentgateway.user': ['alice', 'bob'],
+				'agentgateway.group': ['platform'],
+				'user_agent.name': ['curl']
+			},
 			buckets: [
 				{
 					start: new Date(now.getTime() - 15 * 60 * 1000).toISOString(),
@@ -619,6 +626,30 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 					totalTokens: 340,
 					cost: 0.0042,
 					requests: 7
+				},
+				{
+					group: { requestModel: 'resilient', 'agentgateway.user': 'alice' },
+					inputTokens: 12,
+					outputTokens: 18,
+					totalTokens: 30,
+					cost: 0.0005,
+					requests: 1
+				},
+				{
+					group: { requestModel: 'resilient', 'agentgateway.user': 'bob' },
+					inputTokens: 8,
+					outputTokens: 11,
+					totalTokens: 19,
+					cost: 0.0003,
+					requests: 1
+				},
+				{
+					group: { requestModel: 'resilient', 'agentgateway.group': 'platform' },
+					inputTokens: 21,
+					outputTokens: 34,
+					totalTokens: 55,
+					cost: 0.0009,
+					requests: 2
 				}
 			]
 		});

@@ -1,7 +1,20 @@
-import { ChevronDown, Funnel, Layers3 } from 'lucide-react';
+import { ChevronDown, Funnel, Layers3, Search } from 'lucide-react';
 import { useState } from 'react';
 
 import { useDismissiblePopover } from '@/components/Primitives';
+
+/**
+ * Ranks a label against the typed term so the closest matches are read first: an exact value,
+ * then values that start with the term, then values that only contain it. Values that do not
+ * match are dropped.
+ */
+function matchRank(label: string, term: string) {
+	const value = label.toLowerCase();
+	if (value === term) return 0;
+	if (value.startsWith(term)) return 1;
+	if (value.includes(term)) return 2;
+	return -1;
+}
 
 export function MultiCheckboxDropdown(props: {
 	kind: 'group' | 'filter';
@@ -10,10 +23,26 @@ export function MultiCheckboxDropdown(props: {
 	values: string[];
 	placeholder?: string;
 	allLabel?: string;
+	/** Adds a free-text box to the popover that narrows the options and is reported back to the page. */
+	searchLabel?: string;
+	searchText?: string;
+	onSearchChange?: (value: string) => void;
 	onChange: (values: string[]) => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const ref = useDismissiblePopover<HTMLDivElement>(open, () => setOpen(false));
+	const search = props.onSearchChange ? (props.searchText ?? '').trim().toLowerCase() : '';
+	const shownOptions = search
+		? props.options
+				.map(option => ({ option, rank: matchRank(option.label, search) }))
+				.filter(entry => entry.rank >= 0)
+				.sort(
+					(left, right) =>
+						left.rank - right.rank || left.option.label.localeCompare(right.option.label)
+				)
+				.map(entry => entry.option)
+		: props.options;
+	// The summary must not depend on the typed term, or a search could hide the current selection.
 	const selected = props.options.filter(option => props.values.includes(option.value));
 	const summary = selected.length ? selected[0].label : (props.placeholder ?? 'Select');
 	const hasExplicitSelection = selected.length > 0 && summary !== props.placeholder;
@@ -50,6 +79,18 @@ export function MultiCheckboxDropdown(props: {
 			</button>
 			{open ? (
 				<div className="multi-check-popover">
+					{props.onSearchChange ? (
+						<label className="multi-check-search">
+							<Search size={14} />
+							<input
+								type="text"
+								value={props.searchText ?? ''}
+								placeholder={props.searchLabel ?? 'Search'}
+								aria-label={props.searchLabel ?? `Search ${props.label}`}
+								onChange={event => props.onSearchChange?.(event.target.value)}
+							/>
+						</label>
+					) : null}
 					{props.allLabel ? (
 						<label className="multi-check-option all">
 							<input
@@ -60,8 +101,8 @@ export function MultiCheckboxDropdown(props: {
 							<span>{props.allLabel}</span>
 						</label>
 					) : null}
-					{props.options.length ? (
-						props.options.map(option => (
+					{shownOptions.length ? (
+						shownOptions.map(option => (
 							<label className="multi-check-option" key={option.value}>
 								<input
 									type="checkbox"
@@ -72,7 +113,9 @@ export function MultiCheckboxDropdown(props: {
 							</label>
 						))
 					) : (
-						<p className="muted-copy">No values found.</p>
+						<p className="muted-copy">
+							{search && props.options.length ? 'No matching values.' : 'No values found.'}
+						</p>
 					)}
 				</div>
 			) : null}

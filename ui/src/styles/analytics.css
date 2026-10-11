@@ -106,6 +106,39 @@
 	padding: 0 10px;
 }
 
+.multi-check-search {
+	position: sticky;
+	top: -8px;
+	z-index: 1;
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1fr);
+	gap: 8px;
+	align-items: center;
+	margin: -8px -8px 4px;
+	border-bottom: 1px solid var(--line);
+	background: var(--surface);
+	padding: 8px;
+}
+
+.multi-check-search svg {
+	color: var(--muted);
+}
+
+.multi-check-search input {
+	min-width: 0;
+	border: 1px solid var(--line-strong);
+	border-radius: 6px;
+	background: var(--surface);
+	color: var(--text);
+	font-size: 13px;
+	padding: 6px 8px;
+}
+
+.multi-check-search input:focus-visible {
+	border-color: var(--primary);
+	outline: none;
+}
+
 .multi-check-option input[type='checkbox'] {
 	margin: 0;
 }

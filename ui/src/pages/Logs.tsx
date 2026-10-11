@@ -117,6 +117,7 @@ export function LogsPage() {
 		emptyAnalyticsFilterOptions
 	);
 	const [status, setStatus] = useState('');
+	const [search, setSearch] = useState('');
 	const [stream, setStream] = useState(false);
 	const [response, setResponse] = useState<SearchLogsResponse>({ logs: [] });
 	const [expanded, setExpanded] = useState<LogEntry | null>(null);
@@ -130,19 +131,27 @@ export function LogsPage() {
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
 	const logFiltersKey = analyticsFiltersKey(logFilters);
+	const searchKey = search.trim();
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const filters = useMemo(
 		() => ({
 			...analyticsLogFilters(logFilters),
-			httpStatus: status ? [Number(status)] : []
+			httpStatus: status ? [Number(status)] : [],
+			...(searchKey ? { search: searchKey } : {})
 		}),
-		[logFiltersKey, status]
+		[logFiltersKey, status, searchKey]
 	);
 	const visibleLogs = useMemo(() => {
 		if (!expanded || !expandedId || response.logs.some(entry => entry.id === expandedId))
 			return response.logs;
 		return [expanded, ...response.logs];
 	}, [expanded, expandedId, response.logs]);
+
+	function handleIdentitySearch(value: string) {
+		// The term is ANDed with the selected values, so both are kept: dropping the values would
+		// discard a choice the user made explicitly, in a control that still shows it as selected.
+		setSearch(value);
+	}
 
 	async function load() {
 		const loadSeq = loadSeqRef.current + 1;
@@ -345,7 +354,7 @@ export function LogsPage() {
 			) : null}
 			<Panel>
 				<div className="logs-filter-bar">
-					{ANALYTICS_DIMENSIONS.map(meta => {
+					{ANALYTICS_DIMENSIONS.filter(meta => !identityFields(meta.value)).map(meta => {
 						const dimension = meta.value;
 						return (
 							<MultiCheckboxDropdown
@@ -385,6 +394,27 @@ export function LogsPage() {
 						allLabel="Any status"
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
+					{IDENTITY_DIMENSIONS.map(dimension => (
+						<MultiCheckboxDropdown
+							kind="filter"
+							key={`search-${dimension}`}
+							label={dimensionLabel(dimension)}
+							options={filterOptionMap[dimension].map(value => ({
+								value,
+								label: value
+							}))}
+							values={logFilters[dimension]}
+							placeholder={`Any ${dimensionLabel(dimension).toLowerCase()}`}
+							allLabel={`Any ${dimensionLabel(dimension)}`}
+							searchLabel={`Search ${dimensionLabel(dimension).toLowerCase()}`}
+							searchText={search}
+							onSearchChange={handleIdentitySearch}
+							onChange={values => {
+								setSearch('');
+								setLogFilters(current => ({ ...current, [dimension]: values }));
+							}}
+						/>
+					))}
 					<label className="toggle-row logs-stream-toggle">
 						<input
 							type="checkbox"
@@ -393,13 +423,14 @@ export function LogsPage() {
 						/>
 						Stream
 					</label>
-					{hasAnalyticsFilters(logFilters) || status ? (
+					{hasAnalyticsFilters(logFilters) || status || searchKey ? (
 						<button
 							className="button"
 							type="button"
 							onClick={() => {
 								setLogFilters(emptyAnalyticsFilterOptions());
 								setStatus('');
+								setSearch('');
 							}}
 						>
 							Clear filters
@@ -607,11 +638,24 @@ function hasAnalyticsFilters(filters: Record<AnalyticsDimension, string[]>) {
 	return ANALYTICS_DIMENSIONS.some(item => filters[item.value].length > 0);
 }
 
+const IDENTITY_DIMENSIONS = ANALYTICS_DIMENSIONS.map(item => item.value).filter(dimension =>
+	identityFields(dimension)
+);
+
+function dimensionLabel(dimension: AnalyticsDimension) {
+	return ANALYTICS_DIMENSIONS.find(item => item.value === dimension)?.filterLabel ?? dimension;
+}
+
+function identityFields(dimension: AnalyticsDimension) {
+	return dimension === 'user' || dimension === 'group';
+}
+
 type AnalyticsUrlState = {
 	timeRange: LogTimeRange;
 	groupBy: AnalyticsDimension[];
 	filters: Record<AnalyticsDimension, string[]>;
 	metric: AnalyticsMetric;
+	search: string;
 };
 
 type AnalyticsMetric = AnalyticsMeasure;
@@ -633,7 +677,8 @@ function readAnalyticsUrlState(): AnalyticsUrlState {
 			provider: readRepeatedParam(params, 'provider'),
 			userAgent: readRepeatedParam(params, 'userAgent')
 		},
-		metric: readAnalyticsMetric(params)
+		metric: readAnalyticsMetric(params),
+		search: params.get('search') ?? ''
 	};
 }
 
@@ -651,6 +696,7 @@ function writeAnalyticsUrlState(state: AnalyticsUrlState) {
 	}
 	if (state.groupBy.length > 0) params.set('groupBy', state.groupBy.join(','));
 	if (state.metric !== 'tokens') params.set('metric', state.metric);
+	if (state.search.trim()) params.set('search', state.search);
 	for (const dimension of ANALYTICS_DIMENSIONS.map(item => item.value)) {
 		for (const value of state.filters[dimension]) {
 			params.append(dimension, value);
@@ -714,6 +760,7 @@ export function AnalyticsPage() {
 		initialUrlState.filters
 	);
 	const [metric, setMetric] = useState<AnalyticsMetric>(initialUrlState.metric);
+	const [search, setSearch] = useState(initialUrlState.search);
 	const [buckets, setBuckets] = useState<AnalyticsTimeBucket[]>([]);
 	const [summaryRange, setSummaryRange] = useState<TimeRange | null>(null);
 	const [bucketSeconds, setBucketSeconds] = useState<number | null>(null);
@@ -727,15 +774,17 @@ export function AnalyticsPage() {
 	const selectedGroupBy: AnalyticsDimension[] = groupBy;
 	const groupByKey = selectedGroupBy.join(',');
 	const filtersKey = analyticsFiltersKey(filters);
+	const searchKey = search.trim();
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const analyticsState = useMemo(
 		() => ({
 			timeRange,
 			groupBy: selectedGroupBy,
 			filters,
-			metric
+			metric,
+			search: searchKey
 		}),
-		[timeRange, groupByKey, filtersKey, metric]
+		[timeRange, groupByKey, filtersKey, metric, searchKey]
 	);
 
 	useEffect(() => {
@@ -749,10 +798,17 @@ export function AnalyticsPage() {
 			setGroupBy(next.groupBy);
 			setFilters(next.filters);
 			setMetric(next.metric);
+			setSearch(next.search);
 		}
 		window.addEventListener('popstate', onPopState);
 		return () => window.removeEventListener('popstate', onPopState);
 	}, []);
+
+	function handleIdentitySearch(value: string) {
+		// The term is ANDed with the selected values, so both are kept: dropping the values would
+		// discard a choice the user made explicitly, in a control that still shows it as selected.
+		setSearch(value);
+	}
 
 	async function load() {
 		const loadSeq = loadSeqRef.current + 1;
@@ -761,7 +817,10 @@ export function AnalyticsPage() {
 		setLoading(true);
 		try {
 			const apiTimeRange = logTimeRangeToApi(timeRange);
-			const logFilters = analyticsLogFilters(filters);
+			const logFilters = {
+				...analyticsLogFilters(filters),
+				...(searchKey ? { search: searchKey } : {})
+			};
 			const analytics = await analyticsSummary({
 				timeRange: apiTimeRange,
 				filters: logFilters,
@@ -791,7 +850,7 @@ export function AnalyticsPage() {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
-	}, [timeRange, groupByKey, filtersKey]);
+	}, [timeRange, groupByKey, filtersKey, searchKey]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
@@ -876,7 +935,28 @@ export function AnalyticsPage() {
 							allLabel="Total"
 							onChange={updateGroupBy}
 						/>
-						{ANALYTICS_DIMENSIONS.map(meta => {
+						{IDENTITY_DIMENSIONS.map(dimension => (
+							<MultiCheckboxDropdown
+								kind="filter"
+								key={dimension}
+								label={dimensionLabel(dimension)}
+								options={filterOptionMap[dimension].map(value => ({
+									value,
+									label: value
+								}))}
+								values={filters[dimension]}
+								placeholder={`Any ${dimensionLabel(dimension).toLowerCase()}`}
+								allLabel={`Any ${dimensionLabel(dimension)}`}
+								searchLabel={`Search ${dimensionLabel(dimension).toLowerCase()}`}
+								searchText={search}
+								onSearchChange={handleIdentitySearch}
+								onChange={values => {
+									setSearch('');
+									updateFilter(dimension, values);
+								}}
+							/>
+						))}
+						{ANALYTICS_DIMENSIONS.filter(meta => !identityFields(meta.value)).map(meta => {
 							const dimension = meta.value;
 							return (
 								<MultiCheckboxDropdown
