@@ -3,7 +3,6 @@ package jwks
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -101,8 +100,8 @@ func TestRetireKeysetKeepsCacheThenSweptOnSuccessfulFetch(t *testing.T) {
 	assert.True(t, inCache, "retired key should remain in cache")
 
 	// A successful fetch of a new key sweeps the retired entry.
-	expectedJwks := jose.JSONWebKeySet{}
-	assert.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
+	assert.NoError(t, err)
 	f.defaultJwksClient = stubJwksClient{
 		t:           t,
 		expectedReq: newSource.Target,
@@ -217,8 +216,7 @@ func TestSuccessfulJwksFetch(t *testing.T) {
 	assert.NoError(t, f.AddOrUpdateKeyset(source))
 	updates := f.SubscribeToUpdates()
 
-	expectedJwks := jose.JSONWebKeySet{}
-	err := json.Unmarshal([]byte(sampleJWKS), &expectedJwks)
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
 	assert.NoError(t, err)
 
 	f.defaultJwksClient = stubJwksClient{
@@ -271,8 +269,7 @@ func TestFetcherDiscardedFetchDoesNotRepopulateRemovedKeyset(t *testing.T) {
 	source := testSource()
 	assert.NoError(t, f.AddOrUpdateKeyset(source))
 
-	expectedJwks := jose.JSONWebKeySet{}
-	err := json.Unmarshal([]byte(sampleJWKS), &expectedJwks)
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
 	assert.NoError(t, err)
 
 	started := make(chan struct{})
@@ -490,8 +487,8 @@ func TestParallelFetchMultipleSourcesAllSucceed(t *testing.T) {
 		require.NoError(t, f.AddOrUpdateKeyset(s))
 	}
 
-	expectedJwks := jose.JSONWebKeySet{}
-	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
+	require.NoError(t, err)
 
 	f.defaultJwksClient = multiStubJwksClient{result: expectedJwks}
 
@@ -528,8 +525,8 @@ func TestParallelFetchPartialError(t *testing.T) {
 	require.NoError(t, f.AddOrUpdateKeyset(successSource))
 	require.NoError(t, f.AddOrUpdateKeyset(errorSource))
 
-	expectedJwks := jose.JSONWebKeySet{}
-	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
+	require.NoError(t, err)
 
 	f.defaultJwksClient = selectiveStubJwksClient{
 		results: map[string]stubFetchResult{
@@ -577,8 +574,8 @@ func TestParallelFetchContextCancellation(t *testing.T) {
 		require.NoError(t, f.AddOrUpdateKeyset(s))
 	}
 
-	expectedJwks := jose.JSONWebKeySet{}
-	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
+	require.NoError(t, err)
 
 	// Block all fetches until release is closed.
 	release := make(chan struct{})
@@ -633,8 +630,8 @@ func TestParallelFetchConcurrencyBounded(t *testing.T) {
 		require.NoError(t, f.AddOrUpdateKeyset(s))
 	}
 
-	expectedJwks := jose.JSONWebKeySet{}
-	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+	expectedJwks, err := ParseKeySet([]byte(sampleJWKS))
+	require.NoError(t, err)
 
 	client := &concurrentCountingClient{
 		delay:      100 * time.Millisecond,

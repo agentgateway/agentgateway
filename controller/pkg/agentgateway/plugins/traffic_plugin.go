@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -808,8 +807,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
 		if i := pp.JWKS.Inline; i != nil {
-			var ks jose.JSONWebKeySet
-			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+			if _, err := jwks.ParseKeySet([]byte(*i)); err != nil {
 				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
 			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
