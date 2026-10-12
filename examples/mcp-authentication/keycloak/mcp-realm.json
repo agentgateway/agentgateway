@@ -55,7 +55,36 @@
   "webAuthnPolicyAvoidSameAuthenticatorRegister": false,
   "scopeMappings": [],
   "clientScopeMappings": {},
-  "clients": [],
+  "clients": [
+    {
+      "clientId": "mcp-gateway-public",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:3000/.well-known/oauth-authorization-server/keycloak-public/mcp/callback",
+        "http://localhost:33418/callback",
+        "http://localhost:6274/oauth/callback/debug"
+      ]
+    },
+    {
+      "clientId": "mcp-gateway-confidential",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "mcp-gateway-confidential-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/.well-known/oauth-authorization-server/keycloak-confidential/mcp/callback",
+        "http://localhost:33418/callback",
+        "http://localhost:6274/oauth/callback/debug"
+      ]
+    }
+  ],
   "clientScopes": [
     {
       "name": "profile",

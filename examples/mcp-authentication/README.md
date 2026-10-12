@@ -186,6 +186,33 @@ Auth0-specific notes:
 Keycloak-specific notes:
 - No RFC 8707 support; use a fixed audience in config.
 - Client registration is proxied by the gateway at `.../client-registration` to forward to Keycloak’s `clients-registrations/openid-connect`.
+- Keycloak stamps its own `iss` on the authorization response per RFC 9207. When clientId is configured, the gateway terminates the authorization-code flow so it can rewrite that iss to its own issuer before returning the response to the client. This requires `relaySigningKey`, which is used to encrypt and decrypt the relay-state token.
+- clientSecret is independent of the relay mechanism. It is only used for a confidential Keycloak client during the token exchange. A public Keycloak client therefore needs `clientId` and `relaySigningKey`, but not clientSecret.
+- Without `clientId`, the gateway does not terminate the authorization-code flow. Per-client dynamic registration is handled directly by Keycloak, and the gateway advertises Keycloak's authorization_endpoint and token_endpoint unchanged.
+
+
+#### Scenario C2: Keycloak with a public client + relaySigningKey
+For a pre-registered public Keycloak client, configure `clientId` and `relaySigningKey`, with no `clientSecret`:
+
+```
+clientId: mcp-gateway-public
+relaySigningKey: "REPLACE_WITH_64_HEX_CHARACTERS"
+```
+
+The corresponding Keycloak client is configured as a public client with PKCE required. Its redirect URIs include the gateway's `/callback` endpoint, which the gateway uses when terminating the authorization-code flow.
+
+`relaySigningKey` is a dedicated AES key (hex-encoded 32 bytes) used only for relay-state encryption/decryption. It is not derived from or related to clientSecret.
+
+#### Scenario C3: Keycloak with a confidential client
+For a pre-registered confidential Keycloak client, configure `clientId`, `clientSecret`, and `relaySigningKey`:
+
+```
+clientId: mcp-gateway-confidential
+clientSecret: mcp-gateway-confidential-secret
+relaySigningKey: "REPLACE_WITH_64_HEX_CHARACTERS"
+```
+
+The authorization and relay behavior is the same as Scenario C2. `clientSecret` is additionally used during the token exchange to authenticate the confidential Keycloak client.
 
 Okta-specific notes:
 - Okta supports RFC 8414 (like Auth0), so the gateway uses standard AS metadata discovery.
