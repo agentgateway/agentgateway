@@ -31,12 +31,8 @@ func TestKeySetWithCertificateChainRoundTrips(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, in, out)
 
-	decoded, err := DecodeKeySet(bytes.NewReader(data))
-	require.NoError(t, err)
-	require.Equal(t, in, decoded)
-
 	// The exemption must preserve go-jose's certificate/thumbprint consistency
-	// checks on both parsing paths and on serialization.
+	// checks during parsing and serialization.
 	badThumbprint := bytes.Repeat([]byte{0xff}, 20)
 	var document map[string]any
 	require.NoError(t, json.Unmarshal(data, &document))
@@ -44,8 +40,6 @@ func TestKeySetWithCertificateChainRoundTrips(t *testing.T) {
 	badData, err := json.Marshal(document)
 	require.NoError(t, err)
 	_, err = ParseKeySet(badData)
-	require.ErrorContains(t, err, "x5c thumbprint does not match x5t")
-	_, err = DecodeKeySet(bytes.NewReader(badData))
 	require.ErrorContains(t, err, "x5c thumbprint does not match x5t")
 	in.Keys[0].CertificateThumbprintSHA1 = badThumbprint
 	_, err = MarshalKeySet(in)

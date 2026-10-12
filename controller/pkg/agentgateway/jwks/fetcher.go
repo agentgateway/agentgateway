@@ -554,7 +554,12 @@ func (c *jwksHttpClientImpl) FetchJwks(ctx context.Context, target remotehttp.Fe
 		return jose.JSONWebKeySet{}, fmt.Errorf("unexpected status code from jwks endpoint at %s: %d", target.URL, response.StatusCode)
 	}
 
-	jwks, err := DecodeKeySet(io.LimitReader(response.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return jose.JSONWebKeySet{}, fmt.Errorf("could not read jwks: %w", err)
+	}
+
+	jwks, err := ParseKeySet(body)
 	if err != nil {
 		return jose.JSONWebKeySet{}, fmt.Errorf("could not decode jwks: %w", err)
 	}
