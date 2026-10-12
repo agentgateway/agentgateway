@@ -28,7 +28,7 @@ deployment.
 
 ## Versions
 
-`versions.env` pins the versions used to test this example. The OpenShell chart
+`versions.env` pins the OpenShell chart, image, and tested CLI version. The chart
 is an official immutable development build containing
 [OpenShell PR #4345](https://github.com/NVIDIA/OpenShell/pull/4345).
 
@@ -37,14 +37,16 @@ release that contains PR #4345.
 
 ## Prerequisites
 
-- A Kubernetes cluster whose CNI enforces both ingress and egress Kubernetes
-  `NetworkPolicy`. OpenShell creates policies for sandbox workloads, but the
-  Kubernetes API accepts them even when the CNI does not enforce them.
+- An existing Kubernetes cluster whose CNI enforces ingress and egress
+  `NetworkPolicy`. For local testing, see the [Kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/).
+  Kind's default CNI does not enforce NetworkPolicy; use a CNI that does.
+- [agentgateway installed](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart/install/)
+  with GatewayClass `agentgateway` and Gateway API CRDs, including `GRPCRoute`.
+  This example was tested with agentgateway v1.6.0.
+- [Agent Sandbox installed](https://github.com/kubernetes-sigs/agent-sandbox#installation)
+  with its CRDs and controller. This example was tested with Agent Sandbox v1.0.6.
 - `kubectl`, Helm, and a compatible OpenShell CLI. The tested CLI version is
   pinned in `versions.env`.
-- [Kind](https://kind.sigs.k8s.io/) at the version pinned in `versions.env` and
-  Docker when following the local cluster steps. Older Kind releases cannot
-  create the pinned Kubernetes 1.37 cluster.
 - Available loopback port `18080` for the temporary port forward.
 - Network access to pull images, manifests, and Helm charts.
 
@@ -57,74 +59,7 @@ source versions.env
 set +a
 ```
 
-## Create a Kind cluster with Calico
-
-Skip this section when using an existing cluster with a NetworkPolicy-enforcing
-CNI. Kind's default CNI does not enforce `NetworkPolicy`, so the supplied Kind
-configuration disables it and the following commands install Calico.
-
-```bash
-kind create cluster \
-  --name agentgateway-openshell \
-  --image "${KIND_NODE_IMAGE}" \
-  --config kind-config.yaml
-
-kubectl create \
-  -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/v3_projectcalico_org.yaml"
-kubectl create \
-  -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
-kubectl create \
-  -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml"
-
-kubectl rollout status deployment/tigera-operator \
-  --namespace tigera-operator --timeout=5m
-kubectl wait --for=create namespace/calico-system --timeout=5m
-kubectl wait --for=create deployment/calico-kube-controllers \
-  --namespace calico-system --timeout=5m
-kubectl wait --for=create daemonset/calico-node \
-  --namespace calico-system --timeout=5m
-kubectl rollout status deployment/calico-kube-controllers \
-  --namespace calico-system --timeout=5m
-kubectl rollout status daemonset/calico-node \
-  --namespace calico-system --timeout=5m
-```
-
-## Install agentgateway
-
-Install the Gateway API CRDs and the pinned agentgateway controller:
-
-```bash
-kubectl apply --server-side --force-conflicts \
-  -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
-
-helm upgrade --install agentgateway-crds \
-  oci://cr.agentgateway.dev/charts/agentgateway-crds \
-  --create-namespace \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}"
-
-helm upgrade --install agentgateway \
-  oci://cr.agentgateway.dev/charts/agentgateway \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}" \
-  --wait \
-  --timeout 5m
-
-kubectl wait --for=condition=Accepted gatewayclass/agentgateway --timeout=5m
-```
-
-## Install Agent Sandbox and OpenShell
-
-OpenShell uses the Kubernetes Agent Sandbox API for its sandbox workloads.
-Install the pinned controller before installing OpenShell:
-
-```bash
-kubectl apply \
-  -f "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${AGENT_SANDBOX_VERSION}/sandbox.yaml"
-kubectl rollout status deployment/agent-sandbox-controller \
-  --namespace agent-sandbox-system \
-  --timeout 5m
-```
+## Configure OpenShell
 
 Install the immutable OpenShell development chart with the example values:
 
@@ -201,17 +136,10 @@ Control-C when testing is complete.
 
 ## Clean up
 
-Remove the OpenShell release and namespace:
+Remove the OpenShell release and dedicated namespace only if this example
+created them. For an existing OpenShell deployment, restore its previous values:
 
 ```bash
 helm uninstall openshell --namespace openshell --ignore-not-found
 kubectl delete namespace openshell --ignore-not-found
-```
-
-The agentgateway, Gateway API, Agent Sandbox, and Calico installations remain
-available for other examples. Delete the disposable Kind cluster to remove
-everything:
-
-```bash
-kind delete cluster --name agentgateway-openshell
 ```
