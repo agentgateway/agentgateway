@@ -3,11 +3,12 @@
 Collect agentgateway metrics with Datadog OpenMetrics and send OpenTelemetry
 traces directly to the Datadog Agent. Choose a deployment:
 
-- [Standalone](standalone/README.md): Docker Compose.
-- [Kubernetes](kubernetes/README.md): controller-provisioned proxy and
+- [Standalone](standalone/README.md): an existing gateway with HomeHub and
+  Datadog supplied by Docker Compose.
+- [Kubernetes](kubernetes/README.md): an installed controller and proxy, with
   OpenMetrics Autodiscovery for both proxy and controller.
 
-Both use agentgateway v1.6.0 and the public
+Both were tested with agentgateway v1.6.0 and use the public
 [HomeHub demo](https://github.com/solo-io/homehub-support-demo) image, pinned to
 `sha-fd19c81`. HomeHub returns fixed OpenAI-compatible responses without an LLM
 API key. A Datadog organization, API key, and site are required. Enable Agent

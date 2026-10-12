@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 frontendPolicies:
   tracing:
-    host: datadog:4318
+    host: localhost:4318
     protocol: http
     randomSampling: true
     attributes:
@@ -12,4 +12,4 @@ llm:
   - name: homehub-support
     provider: openAI
     params:
-      baseUrl: http://homehub:8080/v1
+      baseUrl: http://localhost:18080/v1

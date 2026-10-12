@@ -1,27 +1,32 @@
 # Datadog observability on Kubernetes
 
-Run the agentgateway controller, its proxy, HomeHub, and a Datadog Agent on
-each node. Autodiscovery collects proxy and controller metrics. The proxy sends
-OTLP/HTTP traces directly to the node-local Datadog Agent. See the
-[overview](../README.md) for the manual verification and dashboard.
+Configure an existing agentgateway controller and proxy to export metrics and
+traces to Datadog. Autodiscovery collects proxy and controller metrics; the
+proxy sends OTLP/HTTP traces to the node-local Datadog Agent. See the
+[overview](../README.md) for manual verification and the dashboard.
 
-## Before you begin
+## Prerequisites
 
-Install Docker, kind 0.29.0 or later, kubectl, Helm, and curl. You need a Datadog
-organization, its ingestion API key and site, and Agent Observability enabled
-to inspect LLM traces. Set `DD_API_KEY` and `DD_SITE` in your shell.
+- An existing Kubernetes cluster. For local testing, see the
+  [Kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/).
+- [agentgateway installed](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart/install/),
+  including its CRDs, controller, and GatewayClass `agentgateway`.
+  This example was tested with agentgateway v1.6.0.
+- kubectl, Helm, curl, a Datadog ingestion API key and site, and Agent
+  Observability enabled to inspect LLM traces.
 
-Run the following commands in the same shell from this directory:
+The files assume namespace `agentgateway-system`, Deployment `agentgateway`,
+and controller container `controller`. Adjust these for your installation.
+Select your kubectl context and set `DD_API_KEY` and `DD_SITE`. Run commands in
+the same shell:
 
 ```sh
 cd examples/datadog/kubernetes
 source versions.env
-kind create cluster --name agentgateway-datadog --image "${KIND_NODE_IMAGE}"
 ```
 
-[`versions.env`](versions.env) pins the versions used by the installation
-commands. Skip cluster creation when using an existing cluster and select its
-kubectl context. HomeHub's image is pinned in `homehub.yaml`.
+[`versions.env`](versions.env) pins the Datadog chart and Agent. HomeHub's image
+is pinned in `homehub.yaml`.
 
 ## Install Datadog
 
@@ -41,30 +46,30 @@ helm upgrade --install datadog datadog/datadog \
   --wait --timeout 10m
 ```
 
-The values disable unrelated products and kubelet TLS verification for kind's
-certificate. Set `datadog.kubelet.tlsVerify=true` when the Agent trusts your
-cluster's kubelet certificate.
+The values disable unrelated Datadog products. For local Kind testing, set
+`datadog.kubelet.tlsVerify=false` if required for its kubelet certificate.
 
 The chart's OTLP Service uses `internalTrafficPolicy: Local`. Run an Agent on
 every node hosting an agentgateway proxy so traces reach an Agent on the same
 node.
 
-## Install agentgateway and HomeHub
+## Configure agentgateway and HomeHub
+
+Apply the controller's OpenMetrics annotation to its existing Deployment:
 
 ```sh
-kubectl apply --server-side --force-conflicts \
-  -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
+kubectl patch deployment agentgateway --namespace agentgateway-system \
+  --type merge --patch-file controller-annotations.yaml
+```
 
-helm upgrade --install agentgateway-crds \
-  oci://cr.agentgateway.dev/charts/agentgateway-crds \
-  --create-namespace --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}"
-helm upgrade --install agentgateway \
-  oci://cr.agentgateway.dev/charts/agentgateway \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}" \
-  --values controller-values.yaml --wait --timeout 5m
+If that container already has Datadog checks, merge the OpenMetrics instance
+into its existing annotation instead. Helm upgrades can replace this annotation;
+retain it in your installation's values when adapting the example.
 
+Apply the example Gateway and telemetry configuration. If reusing an existing
+Gateway, adjust references and omit `gateway.yaml`'s Gateway definition:
+
+```sh
 kubectl apply -f homehub.yaml -f proxy-parameters.yaml -f gateway.yaml
 kubectl rollout status deployment/homehub-support \
   --namespace agentgateway-system --timeout=5m
@@ -74,7 +79,7 @@ kubectl rollout status deployment/agentgateway-proxy \
   --namespace agentgateway-system --timeout=5m
 ```
 
-`controller-values.yaml` enables controller metric collection.
+`controller-annotations.yaml` enables controller metric collection.
 `proxy-parameters.yaml` attaches the proxy OpenMetrics check to the
 controller-provisioned Deployment.
 
@@ -111,9 +116,9 @@ kubectl exec --namespace datadog "${DD_AGENT_POD}" -- \
   --discovery-min-instances 2 --discovery-timeout 30
 ```
 
-On the single-node kind cluster, the output should include instances tagged
-`component:proxy` and `component:controller`. On multiple nodes, run the check
-on the Agent hosting each component. Confirm metrics and LLM traces in Datadog,
+The output should include instances tagged `component:proxy` and
+`component:controller` when both run on the same node. On multiple nodes, run
+the check on the Agent hosting each component, using `--discovery-min-instances 1`. Confirm metrics and LLM traces in Datadog,
 then stop the port-forwards with Control-C.
 
 ## Troubleshoot
@@ -131,17 +136,21 @@ Agent health, and OTLP receiver. The Datadog Agent must be on the proxy's node.
 
 ## Cleanup
 
-Delete the disposable cluster:
+Remove the integration resources and restore any Gateway settings you changed.
+Restore the controller's previous Datadog annotation if you merged with existing
+checks; otherwise remove the example annotation:
 
 ```sh
-kind delete cluster --name agentgateway-datadog
-```
-
-On an existing cluster, remove this example's resources:
-
-```sh
-kubectl delete -f gateway.yaml -f proxy-parameters.yaml -f homehub.yaml
-helm uninstall agentgateway agentgateway-crds --namespace agentgateway-system
+kubectl delete agentgatewaypolicy datadog-tracing --namespace agentgateway-system
+kubectl delete httproute homehub-support --namespace agentgateway-system
+kubectl delete agentgatewaybackend homehub-support datadog-otlp --namespace agentgateway-system
+kubectl delete -f proxy-parameters.yaml -f homehub.yaml
+kubectl patch deployment agentgateway --namespace agentgateway-system \
+  --type merge -p '{"spec":{"template":{"metadata":{"annotations":{"ad.datadoghq.com/controller.checks":null}}}}}'
 helm uninstall datadog --namespace datadog
 kubectl delete secret datadog-api-key --namespace datadog
 ```
+
+Only uninstall Datadog and delete its secret if this example created them.
+Delete `gateway/agentgateway-proxy` separately only if you created it for this
+example; keep any existing Gateway.

@@ -3,27 +3,20 @@ services:
   homehub:
     image: ghcr.io/solo-io/homehub-support-demo:${HOMEHUB_TAG:?Load versions.env}
     read_only: true
-  gateway:
-    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:?Load versions.env}
-    command: [-f, /example/config.yaml]
-    volumes:
-      - ./config.yaml:/example/config.yaml:ro
     ports:
-      - "127.0.0.1:13000:3000"
-      - "127.0.0.1:18520:15020"
-    depends_on:
-      homehub:
-        condition: service_healthy
-      datadog:
-        condition: service_started
+      - "127.0.0.1:18080:8080"
   datadog:
     image: registry.datadoghq.com/agent:${DATADOG_AGENT_VERSION:?Load versions.env}
+    ports:
+      - "127.0.0.1:4318:4318"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DD_API_KEY: ${DD_API_KEY:?Set DD_API_KEY in .env}
       DD_SITE: ${DD_SITE:?Set DD_SITE in .env}
       DD_HOSTNAME: agentgateway-datadog-demo
       DD_ENV: datadog-dev
-      DD_TAGS: "env:datadog-dev service:agentgateway version:${AGENTGATEWAY_VERSION}"
+      DD_TAGS: "env:datadog-dev service:agentgateway component:proxy"
       DD_APM_ENABLED: "true"
       DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
       DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED: "false"
