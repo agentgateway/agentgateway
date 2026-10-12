@@ -235,13 +235,6 @@ func buildInferencePoolStatus(
 		status = &inf.InferencePoolStatus{}
 	}
 
-	existingOurs := make(map[string]inf.ParentStatus)
-	for _, p := range status.Parents {
-		if string(p.ControllerName) == controllerName {
-			existingOurs[inferencePoolParentMergeKey(p.ParentRef)] = p
-		}
-	}
-
 	conditions := inferencePoolConditionMap(controllerName, validationErr)
 	if pool.Spec.EndpointPickerRef == nil {
 		conditions[string(inf.InferencePoolConditionAccepted)].Error = &ConfigError{
@@ -249,11 +242,19 @@ func buildInferencePoolStatus(
 			Message: "endpointPickerRef must be specified",
 		}
 	}
+	owned := func(p inf.ParentStatus) bool { return string(p.ControllerName) == controllerName }
+	sameRef := func(a, b inf.ParentStatus) bool {
+		return reports.CompareInferencePoolParentReference(a.ParentRef, b.ParentRef) == 0
+	}
 	ours := make([]inf.ParentStatus, 0, len(attachedGateways)+1)
 	for _, ref := range desiredInferencePoolParentRefs(attachedGateways, validationErr) {
 		existingConds := []metav1.Condition(nil)
-		if existing, found := existingOurs[inferencePoolParentMergeKey(ref)]; found {
-			existingConds = existing.Conditions
+		// Keep the stored ref on a match: the API server defaults its group and kind, so the computed one would differ.
+		if i := slices.IndexFunc(status.Parents, func(p inf.ParentStatus) bool {
+			return owned(p) && sameRef(p, inf.ParentStatus{ParentRef: ref})
+		}); i != -1 {
+			existingConds = status.Parents[i].Conditions
+			ref = status.Parents[i].ParentRef
 		}
 		ours = append(ours, inf.ParentStatus{
 			ParentRef:      ref,
@@ -263,11 +264,7 @@ func buildInferencePoolStatus(
 	}
 
 	// Keep existing entries in place so the desired order matches what the status syncer writes.
-	status.Parents = reports.MergeOwnedStatuses(status.Parents, ours,
-		func(p inf.ParentStatus) bool { return string(p.ControllerName) == controllerName },
-		func(a, b inf.ParentStatus) bool {
-			return inferencePoolParentMergeKey(a.ParentRef) == inferencePoolParentMergeKey(b.ParentRef)
-		},
+	status.Parents = reports.MergeOwnedStatuses(status.Parents, ours, owned, sameRef,
 		func(a, b inf.ParentStatus) int {
 			return reports.CompareInferencePoolParentReference(a.ParentRef, b.ParentRef)
 		},
@@ -332,20 +329,4 @@ func inferencePoolConditionMap(controllerName string, validationErr error) map[s
 		}
 	}
 	return conds
-}
-
-func inferencePoolParentMergeKey(ref inf.ParentReference) string {
-	kind := string(ref.Kind)
-	if kind == "" {
-		kind = wellknown.GatewayKind
-	}
-
-	group := ""
-	if ref.Group != nil && *ref.Group != "" {
-		group = string(*ref.Group)
-	} else if kind == wellknown.GatewayKind {
-		// For Gateway parent refs, API defaulting implies gateway.networking.k8s.io.
-		group = wellknown.GatewayGroup
-	}
-	return fmt.Sprintf("%s/%s/%s/%s", group, kind, ref.Namespace, ref.Name)
 }
