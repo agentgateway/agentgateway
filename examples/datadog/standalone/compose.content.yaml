@@ -1,4 +1,0 @@
-# When explicitly included, captures only the synthetic provider example's prompt/response bodies.
-services:
-  gateway:
-    command: [-f, /example/config-content.yaml]
