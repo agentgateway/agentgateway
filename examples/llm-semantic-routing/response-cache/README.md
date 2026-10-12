@@ -51,14 +51,50 @@ vSR instances and restarts.
 > vSR also supports an in-memory cache. Its entries belong to one vSR process
 > and are lost when that process restarts.
 
-Both verification scripts check an initial miss, an identical request hit,
-a paraphrase hit, and an uncached question. Backend invocation counts confirm
-that cache hits bypass HomeHub. Optional checks verify reuse from a fresh vSR
-instance and persistence across a Redis restart.
-
 The [shared backend](shared/support-backend.py) uses only Python's standard
 library. Kubernetes loads it from a ConfigMap and Docker Compose mounts it into
 the Python image.
+
+## Verify the cache
+
+After following either deployment guide, use its gateway URL and backend-count
+command for these four requests. The table assumes a fresh cache and backend:
+
+| Request | Prompt | Expected cache result | Backend count |
+| --- | --- | --- | ---: |
+| Initial request | How do I factory-reset my HomeHub X2? | Miss | 1 |
+| Exact repeat | How do I factory-reset my HomeHub X2? | Hit | 1 |
+| Paraphrase | What is the procedure for restoring a HomeHub X2 to factory settings? | Hit | 1 |
+| Uncached question | Can a HomeHub be used outdoors in freezing rain? | Miss | 2 |
+
+Send the first request, then repeat the command with `PROMPT` set to each of
+the remaining prompts:
+
+```bash
+PROMPT='How do I factory-reset my HomeHub X2?'
+jq -n --arg prompt "${PROMPT}" '{
+  model: "auto",
+  stream: false,
+  messages: [{role: "user", content: $prompt}],
+  max_tokens: 96
+}' | curl -sS -i "${GATEWAY_URL}/v1/chat/completions" \
+  -H 'Content-Type: application/json' \
+  -H 'X-VSR-Debug: true' \
+  -H "X-Request-ID: $(uuidgen)" \
+  --data-binary @-
+```
+
+On a hit, the response includes `x-vsr-cache-hit: true`. With the debug header,
+vSR also exposes the cache similarity when available. Check the backend count
+after each request: it increases on a miss and stays unchanged on a hit.
+
+The request ID lets vSR correlate the request-side cache entry with the
+completed response that it stores. Use a unique `X-Request-ID` for each request.
+
+If reusing an existing cache, the first request may already hit. Compare counts
+before and after requests instead of expecting the absolute values above.
+Optionally restart vSR or Redis, wait for readiness, and repeat the cached
+request to check reuse across restarts.
 
 ## Using your own data
 

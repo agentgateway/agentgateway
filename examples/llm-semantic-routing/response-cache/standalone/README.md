@@ -13,6 +13,7 @@ Install these tools:
 - Docker with Compose v2
 - curl
 - jq
+- uuidgen
 
 vSR downloads an embedding model on first startup, so allocate at least 6 CPUs,
 10 GiB of memory, and 15 GiB of free disk space to Docker for the model and the
@@ -43,26 +44,18 @@ Compose network. The shared Python script is mounted read-only into
 
 ## Verify
 
+Set the gateway URL and follow the
+[shared four-request walkthrough](../README.md#verify-the-cache):
+
 ```bash
-./verify.sh
-./verify.sh --shared-vsr --redis-restart
+export GATEWAY_URL="http://127.0.0.1:${PORT:-3000}"
 ```
 
-The script resets the example cache and backend counter, then checks an
-initial miss, identical and paraphrased cache hits, and an uncached question.
-It checks vSR's debug headers and the backend counter to confirm that hits
-bypass HomeHub.
-
-`--shared-vsr` recreates vSR and checks that the new instance reuses Redis
-entries. `--redis-restart` restarts Redis and checks that the cache survives.
-
-Send a request manually:
+Check the backend count before and after requests:
 
 ```bash
-curl -i "http://127.0.0.1:${PORT:-3000}/v1/chat/completions" \
-  -H 'Content-Type: application/json' \
-  -H 'X-VSR-Debug: true' \
-  -d '{"model":"auto","stream":false,"messages":[{"role":"user","content":"How do I factory-reset my HomeHub X2?"}],"max_tokens":96}'
+docker compose --env-file versions.env exec support-backend python -c \
+  'import urllib.request; print(urllib.request.urlopen("http://localhost:8080/stats").read().decode())'
 ```
 
 ## Troubleshoot
@@ -71,8 +64,6 @@ curl -i "http://127.0.0.1:${PORT:-3000}/v1/chat/completions" \
 docker compose --env-file versions.env ps -a
 docker compose --env-file versions.env logs --tail=100 semantic-router agentgateway
 docker compose --env-file versions.env exec redis redis-cli --raw FT._LIST
-docker compose --env-file versions.env exec support-backend python -c \
-  'import urllib.request; print(urllib.request.urlopen("http://localhost:8080/stats").read().decode())'
 ```
 
 If vSR exits or startup times out, check its logs for model-download or

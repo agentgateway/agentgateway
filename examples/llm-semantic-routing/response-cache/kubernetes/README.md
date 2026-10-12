@@ -16,6 +16,7 @@ Install these tools:
 - Helm
 - curl
 - jq
+- uuidgen
 
 The example uses Kubernetes 1.36, agentgateway 1.5.0, the current vSR chart and
 image, and Redis Open Source 8.10.0. vSR downloads an embedding model on first
@@ -171,90 +172,29 @@ kubectl describe agentgatewaypolicy semantic-cache-extproc \
   -n agentgateway-system
 ```
 
-## Run the Verification
+## Verify the Cache
 
-Run the automated verification from the repository root:
-
-```bash
-"${RESPONSE_CACHE_DIR}/verify.sh"
-```
-
-The script resets the backend counter and the example's Redis cache, then
-checks:
-
-| Request | Expected cache result | Expected backend count |
-| --- | --- | ---: |
-| X2 factory-reset request | Miss | 1 |
-| Exact repeat | Hit | 1 |
-| X2 factory-reset paraphrase | Hit | 1 |
-| HomeHub outdoor-use request | Miss | 2 |
-
-The script checks `x-vsr-cache-hit`, backend counts, and Redis Search indexes.
-
-> [!NOTE]
-> vSR derives index names from the embedding model, so the names can differ
-> from the configured `semantic_cache_idx`.
-
-### Inspect a Request Manually
-
-Port-forward the gateway:
+In one terminal, port-forward the gateway:
 
 ```bash
-kubectl port-forward \
-  -n agentgateway-system \
-  service/agentgateway-proxy 8080:80
+kubectl port-forward -n agentgateway-system service/agentgateway-proxy 8080:80
 ```
 
-In another terminal:
+In another terminal, set the gateway URL and follow the
+[shared four-request walkthrough](../README.md#verify-the-cache):
 
 ```bash
-curl -sS -i http://127.0.0.1:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -H 'X-VSR-Debug: true' \
-  -H 'X-Request-ID: semantic-cache-manual-1' \
-  -d '{
-    "model": "auto",
-    "stream": false,
-    "messages": [
-      {"role": "user", "content": "How do I factory-reset my HomeHub X2?"}
-    ],
-    "max_tokens": 96
-  }'
+export GATEWAY_URL=http://127.0.0.1:8080
 ```
 
-On a hit, the response includes `x-vsr-cache-hit: true`. With the debug header,
-vSR also exposes the cache similarity when available.
-
-The request ID lets vSR correlate the request-side cache entry with the
-completed response that it stores. Use a unique `X-Request-ID` for each request.
-
-## Optional: Share the Cache Across vSR Replicas
-
-This test caches a response, starts a second vSR replica, and removes the
-original pod. It then checks that a new pod can return the cached response:
+Check the backend count before and after requests:
 
 ```bash
-"${RESPONSE_CACHE_DIR}/verify.sh" --shared-vsr
+kubectl exec -n homehub deployment/support-backend -- python -c \
+  'import urllib.request; print(urllib.request.urlopen("http://localhost:8080/stats").read().decode())'
 ```
 
-The script restores the Deployment to one replica when it exits.
-
-## Optional: Restart Redis
-
-The Redis manifest enables AOF persistence on a PVC. Verify recovery after a
-Redis pod restart:
-
-```bash
-"${RESPONSE_CACHE_DIR}/verify.sh" --redis-restart
-```
-
-Both optional checks can run together:
-
-```bash
-"${RESPONSE_CACHE_DIR}/verify.sh" \
-  --shared-vsr \
-  --redis-restart
-```
+Stop the port-forward with Control-C when finished.
 
 ## Troubleshooting
 
@@ -290,15 +230,6 @@ The configured vector dimension, `768`, must match the embedding model.
 Inspect the debug response headers and vSR logs. Similarity thresholds are
 model and workload-specific. See the [cache correctness guidance](https://agentgateway.dev/docs/kubernetes/main/integrations/llm/routing/vllm-semantic-router/#response-caching-in-production)
 before adjusting the threshold.
-
-### The Backend Count Is Unexpected
-
-Inspect the backend history:
-
-```bash
-kubectl port-forward -n homehub service/support-backend 18081:8080
-curl -sS http://127.0.0.1:18081/stats | jq
-```
 
 ## Cleanup
 

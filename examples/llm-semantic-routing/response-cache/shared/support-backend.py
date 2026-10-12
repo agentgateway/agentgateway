@@ -3,7 +3,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 lock = threading.Lock()
-state = {"invocations": 0, "prompts": []}
+state = {"invocations": 0}
 
 def support_answer(prompt):
     text = prompt.lower()
@@ -12,25 +12,10 @@ def support_answer(prompt):
             "To factory-reset a HomeHub X2, hold the recessed Reset button "
             "for 10 seconds until the status ring flashes amber, then release it."
         )
-    if "firmware" in text or "software update" in text:
-        return (
-            "Open the HomeHub app, select the device, and choose Settings > "
-            "Device update to install the latest firmware."
-        )
-    if "warranty" in text:
-        return (
-            "HomeHub devices include a one-year limited hardware warranty; "
-            "accidental damage is not covered."
-        )
     if "outdoor" in text or "freezing" in text:
         return (
             "HomeHub devices are rated for indoor use only and should not "
             "be exposed to rain or freezing temperatures."
-        )
-    if "x3" in text and any(word in text for word in ("factory", "reset", "restore")):
-        return (
-            "To factory-reset a HomeHub X3, hold both side buttons for "
-            "15 seconds until the display shows Resetting."
         )
     return "Contact HomeHub support with the product model and diagnostic code."
 
@@ -40,13 +25,11 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
-    def write_json(self, status, payload, headers=None):
+    def write_json(self, status, payload):
         body = json.dumps(payload, separators=(",", ":")).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
-        for name, value in (headers or {}).items():
-            self.send_header(name, str(value))
         self.end_headers()
         self.wfile.write(body)
 
@@ -62,19 +45,12 @@ class Handler(BaseHTTPRequestHandler):
             with lock:
                 payload = {
                     "invocations": state["invocations"],
-                    "prompts": list(state["prompts"]),
                 }
             self.write_json(200, payload)
             return
         self.write_json(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path == "/admin/reset":
-            with lock:
-                state["invocations"] = 0
-                state["prompts"].clear()
-            self.write_json(200, {"status": "reset"})
-            return
         if self.path != "/v1/chat/completions":
             self.write_json(404, {"error": "not found"})
             return
@@ -90,8 +66,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         with lock:
             state["invocations"] += 1
-            invocation = state["invocations"]
-            state["prompts"].append(prompt)
         response = {
             "id": "chatcmpl-homehub-support",
             "object": "chat.completion",
@@ -111,10 +85,6 @@ class Handler(BaseHTTPRequestHandler):
                 "total_tokens": 36,
             },
         }
-        self.write_json(
-            200,
-            response,
-            {"X-Support-Backend-Invocation": invocation},
-        )
+        self.write_json(200, response)
 
 ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
