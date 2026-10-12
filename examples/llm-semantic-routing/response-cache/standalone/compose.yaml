@@ -1,20 +1,10 @@
 name: response-cache
 services:
-  agentgateway:
-    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.6.0}
-    command: ["-f", "/etc/agentgateway/config.yaml"]
-    ports:
-      - "127.0.0.1:${PORT:-3000}:3000"
-    volumes:
-      - ./agentgateway.yaml:/etc/agentgateway/config.yaml:ro
-    depends_on:
-      semantic-router:
-        condition: service_healthy
-      support-backend:
-        condition: service_healthy
   semantic-router:
     image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG:-v0.4.0}
     command: ["/app/config/config.yaml"]
+    ports:
+      - "127.0.0.1:50051:50051"
     volumes:
       - ./semantic-router-config.yaml:/app/config/config.yaml:ro
       - models:/app/models
@@ -41,8 +31,8 @@ services:
     image: ghcr.io/solo-io/homehub-support-demo:${HOMEHUB_TAG:-sha-fd19c81}
     user: "65532:65532"
     read_only: true
-    expose:
-      - "8080"
+    ports:
+      - "127.0.0.1:18080:8080"
 
 volumes:
   models:

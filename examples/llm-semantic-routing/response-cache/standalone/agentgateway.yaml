@@ -1,11 +1,9 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-config:
-  readinessAddr: 0.0.0.0:15021
 llm:
   port: 3000
   policies:
     extProc:
-      host: semantic-router:50051
+      host: localhost:50051
       failureMode: failClosed
       processingOptions:
         requestHeaderMode: send
@@ -21,4 +19,4 @@ llm:
   - name: homehub-support
     provider: openAI
     params:
-      baseUrl: http://support-backend:8080/v1
+      baseUrl: http://localhost:18080/v1

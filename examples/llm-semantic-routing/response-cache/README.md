@@ -8,12 +8,12 @@ provider, so no LLM credentials are needed.
 
 ## Choose a deployment
 
-- [Kubernetes](kubernetes/README.md): local kind cluster with the agentgateway
-  controller, vSR, Redis, and the HomeHub Python backend.
-- [Standalone](standalone/README.md): Docker Compose with standalone
-  agentgateway, vSR, Redis, and the HomeHub Python backend.
+- [Kubernetes](kubernetes/README.md): configure an existing controller-managed
+  agentgateway proxy with vSR, Redis, and HomeHub.
+- [Standalone](standalone/README.md): configure an existing standalone gateway,
+  with vSR, Redis, and HomeHub supplied by Docker Compose.
 
-Each deployment pins agentgateway v1.6.0 and vSR v0.4.0. Kubernetes uses
+Both examples were tested with agentgateway v1.6.0 and pin vSR v0.4.0. Kubernetes uses
 vSR chart 0.4.0. Both deployments pin the public HomeHub image to commit `fd19c81`.
 
 ## How it works

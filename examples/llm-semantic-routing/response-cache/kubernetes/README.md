@@ -1,79 +1,38 @@
 # Kubernetes Response Cache
 
-Run agentgateway v1.6.0, vSR, Redis Open Source, and the HomeHub Python backend
-in a local kind cluster. No LLM credentials are required because HomeHub
-returns fixed answers without calling an LLM provider. See the
-[overview](../README.md) for the cache policy and request flow, or use the
-[standalone example](../standalone/README.md) to run with Docker Compose.
+Configure response caching on an existing agentgateway installation using vSR,
+Redis, and HomeHub. See the [overview](../README.md) or the
+[standalone example](../standalone/README.md).
 
-## Before You Begin
+## Prerequisites
 
-Install these tools:
+- An existing Kubernetes cluster. For local testing, see the
+  [Kind quick start](https://kind.sigs.k8s.io/docs/user/quick-start/).
+- [agentgateway installed](https://agentgateway.dev/docs/kubernetes/latest/documentation/quickstart/install/),
+  including its controller, CRDs, and GatewayClass `agentgateway`.
+  This example was tested with agentgateway v1.6.0.
+- kubectl, Helm, curl, jq, and uuidgen, with your kubectl context selected.
+- A default StorageClass for Redis and enough capacity for vSR's embedding
+  model (the tested local environment had 6 CPUs, 10 GiB RAM, and 15 GiB disk).
 
-- Docker
-- kind 0.29.0 or later
-- kubectl
-- Helm
-- curl
-- jq
-- uuidgen
-
-The example uses Kubernetes 1.36, agentgateway 1.6.0, vSR v0.4.0,
-and Redis Open Source 8.10.0. vSR downloads an embedding model on first
-startup, so allocate at least 6 CPUs, 10 GiB of memory, and 15 GiB of free disk
-space to Docker for the model and the other services.
-
-## Create the Cluster
-
-Run the commands below from the repository root.
+The manifests use `agentgateway-system` and deploy HomeHub in a dedicated
+`homehub` namespace. Adjust names and references for your existing installation.
+Run commands from the repository root in the same shell:
 
 ```bash
 export RESPONSE_CACHE_DIR=examples/llm-semantic-routing/response-cache/kubernetes
 source "${RESPONSE_CACHE_DIR}/versions.env"
-
-kind create cluster \
-  --config "${RESPONSE_CACHE_DIR}/kind-config.yaml"
 ```
 
-The kind context is `kind-semantic-cache`:
+## Configure the Gateway
+
+Apply the example Gateway configuration. To use an existing Gateway instead,
+update the route's parent reference and omit `gateway.yaml`:
 
 ```bash
-kubectl config use-context kind-semantic-cache
-```
-
-## Install agentgateway
-
-Install the Gateway API and agentgateway 1.6.0:
-
-```bash
-kubectl apply --server-side --force-conflicts \
-  -f https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml
-
-helm upgrade -i agentgateway-crds \
-  oci://cr.agentgateway.dev/charts/agentgateway-crds \
-  --create-namespace \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}"
-
-helm upgrade -i agentgateway \
-  oci://cr.agentgateway.dev/charts/agentgateway \
-  --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}" \
-  --wait
-```
-
-Create the proxy used by this example:
-
-```bash
-kubectl apply \
-  -f "${RESPONSE_CACHE_DIR}/gateway.yaml"
-
+kubectl apply -f "${RESPONSE_CACHE_DIR}/gateway.yaml"
 kubectl wait --for=condition=Programmed gateway/agentgateway-proxy \
-  -n agentgateway-system \
-  --timeout=300s
-kubectl rollout status deployment/agentgateway-proxy \
-  -n agentgateway-system \
-  --timeout=300s
+  -n agentgateway-system --timeout=300s
 ```
 
 ## Deploy Redis Open Source
@@ -227,13 +186,8 @@ before adjusting the threshold.
 
 ## Cleanup
 
-Remove the example cluster:
-
-```bash
-kind delete cluster --name semantic-cache
-```
-
-To retain the cluster, delete resources in dependency order:
+Remove the integration resources in dependency order. Keep the existing
+Gateway and agentgateway installation.
 
 ```bash
 kubectl delete \
@@ -243,11 +197,10 @@ kubectl delete \
   -f "${RESPONSE_CACHE_DIR}/support-backend.yaml"
 kubectl delete \
   -f "${RESPONSE_CACHE_DIR}/redis.yaml"
-kubectl delete \
-  -f "${RESPONSE_CACHE_DIR}/gateway.yaml"
-helm uninstall agentgateway -n agentgateway-system
-helm uninstall agentgateway-crds -n agentgateway-system
 ```
+
+If you created `gateway/agentgateway-proxy` for this example, delete it
+separately after removing the routes.
 
 Deleting `redis.yaml` also deletes its StatefulSet but might retain its PVC,
 depending on the Kubernetes StatefulSet retention policy. Inspect and delete
