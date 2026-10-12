@@ -14,7 +14,7 @@ provider, so no LLM credentials are needed.
   agentgateway, vSR, Redis, and the HomeHub Python backend.
 
 Each deployment pins agentgateway v1.6.0 and vSR v0.4.0. Kubernetes uses
-vSR chart 0.4.0. Both deployments use the public HomeHub 0.1.1 image.
+vSR chart 0.4.0. Both deployments use the public HomeHub 0.1.2 image.
 
 ## How it works
 
@@ -50,8 +50,8 @@ vSR instances and restarts.
 > vSR also supports an in-memory cache. Its entries belong to one vSR process
 > and are lost when that process restarts.
 
-The [HomeHub demo](https://github.com/danehans/homehub-support-demo) is maintained
-separately and published as `ghcr.io/danehans/homehub-support-demo`. Neither
+The [HomeHub demo](https://github.com/solo-io/homehub-support-demo) is maintained
+separately and published as `ghcr.io/solo-io/homehub-support-demo`. Neither
 deployment requires a local backend source file or image build.
 
 ## Verify the cache

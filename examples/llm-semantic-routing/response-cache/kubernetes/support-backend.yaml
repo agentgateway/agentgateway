@@ -26,7 +26,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/danehans/homehub-support-demo:0.1.1
+        image: ghcr.io/solo-io/homehub-support-demo:0.1.2
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

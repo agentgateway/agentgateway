@@ -38,7 +38,7 @@ services:
       timeout: 3s
       retries: 20
   support-backend:
-    image: ghcr.io/danehans/homehub-support-demo:${HOMEHUB_VERSION:-0.1.1}
+    image: ghcr.io/solo-io/homehub-support-demo:${HOMEHUB_VERSION:-0.1.2}
     user: "65532:65532"
     read_only: true
     expose:

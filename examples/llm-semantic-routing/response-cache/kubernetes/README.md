@@ -107,7 +107,7 @@ The commands should report `PONG` and information about `FT.SEARCH`.
 
 ## Deploy the Support Backend
 
-Deploy the [HomeHub demo image](https://github.com/danehans/homehub-support-demo)
+Deploy the [HomeHub demo image](https://github.com/solo-io/homehub-support-demo)
 in the `homehub` namespace. It returns fixed OpenAI Chat Completions responses
 and counts requests so you can verify cache hits.
 
