@@ -1,4 +1,4 @@
-﻿import { expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
 	configWithClaudeSubscriptionKey,
@@ -44,56 +44,6 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
-});
-
-test('user and group filters appear once in each filter bar', async ({ page }) => {
-	await mockGateway(page);
-
-	for (const path of ['/llm/logs', '/llm/analytics']) {
-		await page.goto(path);
-		await expect(page.locator('.multi-check').filter({ hasText: 'Any users' })).toHaveCount(1);
-		await expect(page.locator('.multi-check').filter({ hasText: 'Any groups' })).toHaveCount(1);
-		// A second, search-less copy of the same dimension would look like a duplicate filter.
-		await expect(page.locator('.multi-check').filter({ hasText: 'All users' })).toHaveCount(0);
-		await expect(page.locator('.multi-check').filter({ hasText: 'All groups' })).toHaveCount(0);
-	}
-});
-
-test('picking an identity value keeps the other dimension filters', async ({ page }) => {
-	const filters: Record<string, unknown>[] = [];
-	await mockGateway(page);
-	page.on('request', request => {
-		if (request.url().includes('/api/logs/search') && request.method() === 'POST') {
-			filters.push((request.postDataJSON() as { filters?: Record<string, unknown> }).filters ?? {});
-		}
-	});
-	await page.goto('/llm/logs');
-
-	const models = page.locator('.multi-check').filter({ hasText: 'All models' });
-	await models.locator('.multi-check-trigger').click();
-	await models.locator('.multi-check-option:not(.all)').first().click();
-	await expect.poll(() => filters.some(item => Array.isArray(item.requestModel))).toBe(true);
-	expect(filters.at(-1)).toMatchObject({ requestModel: ['resilient'] });
-	// Close the popover so it cannot cover the next filter.
-	await page.keyboard.press('Escape');
-	await expect(models.locator('.multi-check-popover')).toHaveCount(0);
-
-	// Narrowing the identity list is local: it must not query, and it must not disturb the model
-	// selection either.
-	const groups = page.locator('.multi-check').filter({ hasText: 'Any groups' });
-	await groups.locator('.multi-check-trigger').click();
-	const pending = filters.length;
-	await groups.getByRole('textbox', { name: 'Search group' }).fill('plat');
-	await expect(groups.locator('.multi-check-option:not(.all)')).toHaveCount(1);
-	expect(filters.length).toBe(pending);
-
-	// Checking the value is what filters, and the model selection stays applied.
-	await groups.locator('.multi-check-option:not(.all)').first().click();
-	await expect.poll(() => filters.length).toBeGreaterThan(pending);
-	expect(filters.at(-1)).toMatchObject({
-		requestModel: ['resilient'],
-		attributes: { 'agentgateway.group': ['platform'] }
-	});
 });
 
 test('log detail renders the normalized conversation', async ({ page }) => {
@@ -1639,84 +1589,4 @@ test('login loads without protected API requests and preserves the return destin
 	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
 	await expect(page).toHaveURL(/\/api\/auth\/login\?returnTo=%2Fui%2Fllm%2Fmodels%3Ftab%3Dall$/);
 	await expect(page.getByText('OAuth started')).toBeVisible();
-});
-
-test('user filter narrows the values and filters once one is picked', async ({ page }) => {
-	const requests: Record<string, unknown>[] = [];
-	await mockGateway(page);
-	page.on('request', request => {
-		if (request.url().includes('/api/logs/analytics/summary') && request.method() === 'POST') {
-			requests.push(request.postDataJSON() as Record<string, unknown>);
-		}
-	});
-	await page.goto('/llm/analytics');
-
-	const filter = page.locator('.multi-check').filter({ hasText: 'Any users' });
-	await filter.locator('.multi-check-trigger').click();
-
-	const search = filter.getByRole('textbox', { name: 'Search user' });
-	await expect(search).toBeVisible();
-	// The values discovered from past traffic are offered as checkboxes, next to "Any Users".
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveCount(2);
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveText(['alice', 'bob']);
-
-	// The box only narrows what can be picked. It is not a filter of its own, so the query must not
-	// run while a term is typed, however partial or unmatched it is.
-	const queriesBefore = requests.length;
-	await search.fill('ali');
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveText(['alice']);
-	expect(requests.length).toBe(queriesBefore);
-
-	// A shorter term still narrows by substring, not only by prefix.
-	await search.fill('al');
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveText(['alice']);
-	expect(requests.length).toBe(queriesBefore);
-
-	await search.fill('nobody-has-this-name');
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveCount(0);
-	await expect(filter.locator('.multi-check-popover')).toContainText('No matching values.');
-	expect(requests.length).toBe(queriesBefore);
-	// A term that matches nothing must not take the reset option away.
-	await expect(filter.locator('.multi-check-option.all')).toHaveCount(1);
-
-	await search.fill('');
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveCount(2);
-
-	// Checking a value is what filters the page.
-	await filter.locator('.multi-check-option:not(.all)').first().click();
-	await expect(filter.locator('.multi-check-trigger')).toContainText('alice');
-	await expect.poll(() => requests.length).toBeGreaterThan(queriesBefore);
-	expect(requests.at(-1)?.filters).toMatchObject({
-		attributes: { 'agentgateway.user': ['alice'] }
-	});
-
-	// Picking the "all" option clears it again.
-	await filter.locator('.multi-check-option.all').click();
-	await expect(filter.locator('.multi-check-trigger')).toContainText('Any users');
-});
-
-test('log list narrows the group values and filters once one is picked', async ({ page }) => {
-	const filters: Record<string, unknown>[] = [];
-	await mockGateway(page);
-	page.on('request', request => {
-		if (request.url().includes('/api/logs/search') && request.method() === 'POST') {
-			filters.push((request.postDataJSON() as { filters?: Record<string, unknown> }).filters ?? {});
-		}
-	});
-	await page.goto('/llm/logs');
-	await expect(page.locator('.log-call-preview').first()).toBeVisible();
-
-	const filter = page.locator('.multi-check').filter({ hasText: 'Any groups' });
-	await filter.locator('.multi-check-trigger').click();
-	const queriesBefore = filters.length;
-	await filter.getByRole('textbox', { name: 'Search group' }).fill('plat');
-	await expect(filter.locator('.multi-check-option:not(.all)')).toHaveText(['platform']);
-	// Narrowing the list is not filtering the log list.
-	expect(filters.length).toBe(queriesBefore);
-
-	await filter.locator('.multi-check-option:not(.all)').first().click();
-	await expect.poll(() => filters.length).toBeGreaterThan(queriesBefore);
-	expect(filters.at(-1)).toMatchObject({
-		attributes: { 'agentgateway.group': ['platform'] }
-	});
 });

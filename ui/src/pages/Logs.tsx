@@ -345,7 +345,7 @@ export function LogsPage() {
 			) : null}
 			<Panel>
 				<div className="logs-filter-bar">
-					{ANALYTICS_DIMENSIONS.filter(meta => !identityFields(meta.value)).map(meta => {
+					{ANALYTICS_DIMENSIONS.map(meta => {
 						const dimension = meta.value;
 						return (
 							<MultiCheckboxDropdown
@@ -359,6 +359,7 @@ export function LogsPage() {
 								values={logFilters[dimension]}
 								placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 								allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+								searchLabel={`Search ${meta.label.toLowerCase()}`}
 								onChange={values =>
 									setLogFilters(current => ({
 										...current,
@@ -385,24 +386,6 @@ export function LogsPage() {
 						allLabel="Any status"
 						onChange={values => setStatus(values.at(-1) ?? '')}
 					/>
-					{IDENTITY_DIMENSIONS.map(dimension => (
-						<MultiCheckboxDropdown
-							kind="filter"
-							key={dimension}
-							label={dimensionLabel(dimension)}
-							options={filterOptionMap[dimension].map(value => ({
-								value,
-								label: value
-							}))}
-							values={logFilters[dimension]}
-							placeholder={`Any ${dimensionLabel(dimension).toLowerCase()}`}
-							allLabel={`Any ${dimensionLabel(dimension)}`}
-							searchLabel={searchLabelFor(dimension)}
-							onChange={values => {
-								setLogFilters(current => ({ ...current, [dimension]: values }));
-							}}
-						/>
-					))}
 					<label className="toggle-row logs-stream-toggle">
 						<input
 							type="checkbox"
@@ -623,23 +606,6 @@ function LogsSettingsDrawer(props: {
 
 function hasAnalyticsFilters(filters: Record<AnalyticsDimension, string[]>) {
 	return ANALYTICS_DIMENSIONS.some(item => filters[item.value].length > 0);
-}
-
-const IDENTITY_DIMENSIONS = ANALYTICS_DIMENSIONS.map(item => item.value).filter(dimension =>
-	identityFields(dimension)
-);
-
-function dimensionLabel(dimension: AnalyticsDimension) {
-	return ANALYTICS_DIMENSIONS.find(item => item.value === dimension)?.filterLabel ?? dimension;
-}
-
-function identityFields(dimension: AnalyticsDimension) {
-	return dimension === 'user' || dimension === 'group';
-}
-
-/** Only the identity dimensions render a search box, so the label is limited to those two. */
-function searchLabelFor(dimension: AnalyticsDimension) {
-	return dimension === 'group' ? 'Search group' : 'Search user';
 }
 
 type AnalyticsUrlState = {
@@ -911,25 +877,7 @@ export function AnalyticsPage() {
 							allLabel="Total"
 							onChange={updateGroupBy}
 						/>
-						{IDENTITY_DIMENSIONS.map(dimension => (
-							<MultiCheckboxDropdown
-								kind="filter"
-								key={dimension}
-								label={dimensionLabel(dimension)}
-								options={filterOptionMap[dimension].map(value => ({
-									value,
-									label: value
-								}))}
-								values={filters[dimension]}
-								placeholder={`Any ${dimensionLabel(dimension).toLowerCase()}`}
-								allLabel={`Any ${dimensionLabel(dimension)}`}
-								searchLabel={searchLabelFor(dimension)}
-								onChange={values => {
-									updateFilter(dimension, values);
-								}}
-							/>
-						))}
-						{ANALYTICS_DIMENSIONS.filter(meta => !identityFields(meta.value)).map(meta => {
+						{ANALYTICS_DIMENSIONS.map(meta => {
 							const dimension = meta.value;
 							return (
 								<MultiCheckboxDropdown
@@ -943,6 +891,7 @@ export function AnalyticsPage() {
 									values={filters[dimension]}
 									placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 									allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+									searchLabel={`Search ${meta.label.toLowerCase()}`}
 									onChange={values => updateFilter(dimension, values)}
 								/>
 							);
