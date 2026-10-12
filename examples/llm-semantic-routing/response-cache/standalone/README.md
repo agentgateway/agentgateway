@@ -28,7 +28,7 @@ cd examples/llm-semantic-routing/response-cache/standalone
 docker compose --env-file versions.env up -d --wait --wait-timeout 650
 ```
 
-`versions.env` pins agentgateway v1.6.0, vSR v0.4.0, and HomeHub 0.1.2.
+`versions.env` pins agentgateway v1.6.0, vSR v0.4.0, and HomeHub commit `fd19c81`.
 
 The agentgateway proxy listens on `127.0.0.1:3000`. To use another port, export `PORT`
 before starting and verifying. Redis, HomeHub, and vSR are internal to the

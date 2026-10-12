@@ -14,7 +14,7 @@ provider, so no LLM credentials are needed.
   agentgateway, vSR, Redis, and the HomeHub Python backend.
 
 Each deployment pins agentgateway v1.6.0 and vSR v0.4.0. Kubernetes uses
-vSR chart 0.4.0. Both deployments use the public HomeHub 0.1.2 image.
+vSR chart 0.4.0. Both deployments pin the public HomeHub image to commit `fd19c81`.
 
 ## How it works
 
