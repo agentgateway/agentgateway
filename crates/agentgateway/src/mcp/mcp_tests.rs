@@ -24,7 +24,8 @@ use crate::test_helpers::proxymock::{
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
-	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+	BackendTrafficPolicy, FrontendPolicy, McpAuthenticationMode, McpServerOverrides, PolicyTarget,
+	TargetedPolicy,
 };
 use crate::*;
 
@@ -4013,11 +4014,13 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 }
 
 #[rstest::rstest]
-#[case::preserved(true, &["gateway", "mcp"], reqwest::StatusCode::OK)]
-#[case::wrong_audience(true, &["gateway"], reqwest::StatusCode::UNAUTHORIZED)]
-#[case::stripped(false, &["gateway", "mcp"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::preserved(McpAuthenticationMode::Strict, true, &["gateway", "mcp"], reqwest::StatusCode::OK)]
+#[case::wrong_audience(McpAuthenticationMode::Strict, true, &["gateway"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::stripped(McpAuthenticationMode::Strict, false, &["gateway", "mcp"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::permissive_stripped(McpAuthenticationMode::Permissive, false, &["gateway", "mcp"], reqwest::StatusCode::OK)]
 #[tokio::test]
 async fn mcp_authentication_after_route_jwt(
+	#[case] mode: McpAuthenticationMode,
 	#[case] preserve_token: bool,
 	#[case] audiences: &[&str],
 	#[case] expected_status: reqwest::StatusCode,
@@ -4063,11 +4066,11 @@ async fn mcp_authentication_after_route_jwt(
 		},
 		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
 			vec![provider],
-			crate::http::jwt::Mode::Strict,
+			mode.into(),
 			crate::http::auth::AuthorizationLocation::bearer_header(),
 			false,
 		)),
-		mode: crate::types::agent::McpAuthenticationMode::Strict,
+		mode,
 		client_id: None,
 		client_secret: None,
 	};

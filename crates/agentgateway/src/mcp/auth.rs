@@ -14,6 +14,7 @@ use crate::http::*;
 use crate::json;
 use crate::json::from_body_with_limit;
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
@@ -35,6 +36,15 @@ pub(super) async fn apply_token_validation(
 	}
 	// If a previous JWT policy stripped the token, we cannot validate MCP-specific auth requirements.
 	if req.extensions().get::<Claims>().is_some() && !auth.jwt_validator.has_token(req) {
+		if auth.mode == crate::types::agent::McpAuthenticationMode::Permissive {
+			dtrace::pol_result!(
+				"jwt",
+				dtrace::Warn,
+				Skip,
+				"MCP JWT validation skipped in permissive mode: token removed by a Gateway or Route level JWT policy; set preserveToken on that policy"
+			);
+			return Ok(());
+		}
 		let err = ProxyError::ProcessingString(
 			"MCP backend authentication configured but the token was removed by a Gateway or Route level JWT policy; set preserveToken on that policy".to_string(),
 		);
