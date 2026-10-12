@@ -374,7 +374,8 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
