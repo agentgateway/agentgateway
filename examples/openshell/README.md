@@ -89,9 +89,6 @@ kubectl rollout status daemonset/calico-node \
   --namespace calico-system --timeout=5m
 ```
 
-The verification script runs live ingress and egress policy probes. It stops
-before testing OpenShell if the cluster CNI does not enforce either direction.
-
 ## Install agentgateway
 
 Install the Gateway API CRDs and the pinned agentgateway controller:
@@ -160,84 +157,6 @@ grpcRoute:
 
 ## Verify the integration
 
-### Manual verification
-
-First, confirm that the cluster CNI enforces both ingress and egress
-`NetworkPolicy`. Create two temporary pods and verify connectivity before
-applying a policy:
-
-```bash
-kubectl create namespace openshell-policy-probe
-kubectl run policy-server -n openshell-policy-probe \
-  --image=busybox:1.37.0 --labels=app=policy-server \
-  --command -- sh -c \
-  'mkdir -p /www && echo ready >/www/index.html && httpd -f -p 8080 -h /www'
-kubectl run policy-client -n openshell-policy-probe \
-  --image=busybox:1.37.0 --labels=app=policy-client \
-  --command -- sleep 3600
-kubectl expose pod policy-server -n openshell-policy-probe \
-  --port=8080 --target-port=8080
-kubectl wait --for=condition=Ready pod/policy-server pod/policy-client \
-  -n openshell-policy-probe --timeout=120s
-kubectl exec -n openshell-policy-probe policy-client -- \
-  wget -q -T 5 -O - http://policy-server:8080
-```
-
-The final command prints `ready`. Apply an ingress-deny policy:
-
-```bash
-kubectl apply -n openshell-policy-probe -f - <<'EOF'
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-server-ingress
-spec:
-  podSelector:
-    matchLabels:
-      app: policy-server
-  policyTypes:
-    - Ingress
-EOF
-
-sleep 5
-kubectl exec -n openshell-policy-probe policy-client -- \
-  wget -q -T 5 -O - http://policy-server:8080
-```
-
-The request must time out or otherwise fail. Remove the ingress policy and
-confirm that connectivity recovers before testing egress:
-
-```bash
-kubectl delete networkpolicy deny-server-ingress -n openshell-policy-probe
-sleep 5
-kubectl exec -n openshell-policy-probe policy-client -- \
-  wget -q -T 5 -O - http://policy-server:8080
-
-kubectl apply -n openshell-policy-probe -f - <<'EOF'
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-client-egress
-spec:
-  podSelector:
-    matchLabels:
-      app: policy-client
-  policyTypes:
-    - Egress
-EOF
-
-sleep 5
-kubectl exec -n openshell-policy-probe policy-client -- \
-  wget -q -T 5 -O - http://policy-server:8080
-```
-
-The first request prints `ready`; the request after applying the egress policy
-must fail. Remove the probe namespace:
-
-```bash
-kubectl delete namespace openshell-policy-probe
-```
-
 Wait for the OpenShell Gateway API resources and workloads:
 
 ```bash
@@ -280,32 +199,13 @@ openshell sandbox delete agw-example
 The exec command prints `agentgateway-openshell`. Stop the port-forward with
 Control-C when testing is complete.
 
-### Automated verification
-
-Run the smoke test with the matching OpenShell CLI on `PATH`:
-
-```bash
-./verify.sh
-```
-
-Set `OPENSHELL_BIN` when the CLI is installed elsewhere:
-
-```bash
-OPENSHELL_BIN=/path/to/openshell ./verify.sh
-```
-
-The script verifies NetworkPolicy enforcement, waits for the `Gateway` and
-`GRPCRoute`, connects the CLI through the agentgateway proxy, creates a sandbox,
-executes a deterministic command, and deletes the sandbox. It uses a temporary
-OpenShell configuration directory and does not change the user's registered
-gateways.
-
 ## Clean up
 
 Remove the OpenShell release and namespace:
 
 ```bash
-./cleanup.sh
+helm uninstall openshell --namespace openshell --ignore-not-found
+kubectl delete namespace openshell --ignore-not-found
 ```
 
 The agentgateway, Gateway API, Agent Sandbox, and Calico installations remain
