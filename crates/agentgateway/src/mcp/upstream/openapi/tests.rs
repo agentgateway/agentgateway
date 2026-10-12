@@ -36,6 +36,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
 			resolver_opts: ResolverOpts::default(),
+			deny_dynamic_loopback: true,
 		},
 		None,
 		BackendConfig::default(),
@@ -2025,6 +2026,7 @@ async fn test_openapi_from_url() {
 		&client::Config {
 			resolver_cfg: ResolverConfig::default(),
 			resolver_opts: ResolverOpts::default(),
+			deny_dynamic_loopback: true,
 		},
 		None,
 		BackendConfig::default(),
@@ -2323,6 +2325,7 @@ async fn test_call_tool_with_binary_body() {
 		&client::Config {
 			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			deny_dynamic_loopback: true,
 		},
 		None,
 		BackendConfig::default(),

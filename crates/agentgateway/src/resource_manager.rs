@@ -829,6 +829,7 @@ mod tests {
 			&crate::client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				deny_dynamic_loopback: true,
 			},
 			None,
 			crate::BackendConfig::default(),

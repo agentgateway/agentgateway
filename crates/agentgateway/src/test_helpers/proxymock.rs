@@ -1485,9 +1485,11 @@ pub fn setup_proxy_test_with_spiffe(
 }
 
 pub fn setup_proxy_test_with_config_and_spiffe(
-	config: crate::Config,
+	mut config: crate::Config,
 	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
 ) -> TestBind {
+	// Mock backends listen on loopback.
+	config.dns.deny_dynamic_loopback = false;
 	agent_core::telemetry::testing::setup_test_logging();
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();

@@ -29,6 +29,7 @@ pub struct Client {
 	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
 	callout_proxy: Option<Arc<callout::Proxy>>,
+	deny_dynamic_loopback: bool,
 }
 
 impl Debug for Client {
@@ -45,12 +46,14 @@ pub struct Call {
 	pub req: http::Request,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	pub deny_loopback: bool,
 }
 
 pub struct TCPCall {
 	pub source: Socket,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	pub deny_loopback: bool,
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
@@ -539,6 +542,21 @@ impl tower::Service<::http::Extensions> for Connector {
 pub struct Config {
 	pub resolver_cfg: ResolverConfig,
 	pub resolver_opts: ResolverOpts,
+	/// Reject dynamic backends that resolve to loopback or link-local addresses.
+	pub deny_dynamic_loopback: bool,
+}
+
+/// Rejects loopback and link-local destinations, checked after DNS resolution.
+fn check_not_loopback(dest: SocketAddr) -> Result<(), ProxyError> {
+	let ip = dest.ip().to_canonical();
+	let link_local = match ip {
+		std::net::IpAddr::V4(ip) => ip.is_link_local(),
+		std::net::IpAddr::V6(ip) => ip.is_unicast_link_local(),
+	};
+	if ip.is_loopback() || link_local || (ip.is_unspecified() && dest.port() != 0) {
+		return Err(ProxyError::DynamicBackendLoopback);
+	}
+	Ok(())
 }
 
 impl Client {
@@ -590,6 +608,7 @@ impl Client {
 			client,
 			connector,
 			callout_proxy: None,
+			deny_dynamic_loopback: cfg.deny_dynamic_loopback,
 		}
 	}
 
@@ -630,6 +649,7 @@ impl Client {
 					tcp,
 					max_connection_duration: None,
 				},
+				deny_loopback: false,
 			})
 			.await
 	}
@@ -640,12 +660,16 @@ impl Client {
 			source,
 			target,
 			connection,
+			deny_loopback,
 		} = call;
 
 		let dest = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
+		if deny_loopback && self.deny_dynamic_loopback {
+			check_not_loopback(dest)?;
+		}
 
 		let transport_name = connection.transport.name();
 		let target_name = target.to_string();
@@ -712,16 +736,21 @@ impl Client {
 	) -> impl std::future::Future<Output = Result<http::Response, ProxyError>> + '_ {
 		let client = &self.client;
 		let connector = &self.connector;
+		let deny_loopback = call.deny_loopback && self.deny_dynamic_loopback;
 		let start = std::time::Instant::now();
 		let Call {
 			mut req,
 			target,
 			connection,
+			..
 		} = call;
 		async move {
 			let dest = connector
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await?;
+			if deny_loopback {
+				check_not_loopback(dest)?;
+			}
 			http::modify_req_uri(&mut req, |uri| {
 				let scheme = connection.transport.scheme();
 				// Strip the port from the hostname if its the default already
@@ -885,6 +914,7 @@ mod tests {
 			&Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				deny_dynamic_loopback: true,
 			},
 			None,
 			crate::BackendConfig::default(),
@@ -944,6 +974,7 @@ mod tests {
 			&Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
 				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+				deny_dynamic_loopback: true,
 			},
 			None,
 			crate::BackendConfig::default(),

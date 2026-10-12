@@ -251,6 +251,7 @@ impl TCPProxy {
 					tcp: backend_call.backend_policies.tcp.clone(),
 					max_connection_duration: None,
 				},
+				deny_loopback: matches!(selected_backend.backend.backend, Backend::Dynamic(_, _)),
 			})
 			.await?;
 		Ok(())
@@ -1036,6 +1037,7 @@ mod tests {
 			&client::Config {
 				resolver_cfg: ResolverConfig::default(),
 				resolver_opts: ResolverOpts::default(),
+				deny_dynamic_loopback: true,
 			},
 			None,
 			BackendConfig::default(),
