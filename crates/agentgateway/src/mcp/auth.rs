@@ -13,9 +13,8 @@ use crate::http::oauth::{
 use crate::http::*;
 use crate::json;
 use crate::json::from_body_with_limit;
-use crate::proxy::ProxyError;
-use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::proxy::{ProxyError, dtrace};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
 
