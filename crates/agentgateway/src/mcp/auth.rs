@@ -33,13 +33,10 @@ pub(super) async fn apply_token_validation(
 	if is_well_known_endpoint(req.uri().path()) {
 		return Ok(());
 	}
-	let has_claims = req.extensions().get::<Claims>().is_some();
-
-	if has_claims {
-		// if mcp authn is configured but JWT already validated (claims exist from previous layer),
-		// reject because we cannot validate MCP-specific auth requirements
+	// If a previous JWT policy stripped the token, we cannot validate MCP-specific auth requirements.
+	if req.extensions().get::<Claims>().is_some() && !auth.jwt_validator.has_token(req) {
 		let err = ProxyError::ProcessingString(
-			"MCP backend authentication configured but JWT token already validated and stripped by Gateway or Route level policy".to_string(),
+			"MCP backend authentication configured but the token was removed by a Gateway or Route level JWT policy; set preserveToken on that policy".to_string(),
 		);
 		return Err(create_auth_required_response(err, req, auth));
 	}

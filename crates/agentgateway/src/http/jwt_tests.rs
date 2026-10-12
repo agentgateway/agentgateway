@@ -396,7 +396,7 @@ fn build_signed_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
 	build_signed_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
 }
 
-fn build_signed_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
+pub(crate) fn build_signed_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
 	// Test key matching the P-256 public coordinates in the JWKS fixtures.
 	const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
