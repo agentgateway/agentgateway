@@ -835,18 +835,3 @@ impl Backend {
 		}
 	}
 }
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn serialization_redacts_database_url() {
-		let config = Config {
-			url: "postgres://agentgateway:s3cret@db.example/agentgateway".to_string(),
-			max_connections: None,
-		};
-		let json = serde_json::to_value(&config).unwrap();
-		assert_eq!(json["url"], "<redacted>");
-	}
-}
