@@ -6230,6 +6230,7 @@ mod tests {
 				name: Some(proto::agent::ResourceName {
 					name: "copilot".into(),
 					namespace: "test-ns".into(),
+					kind: None,
 				}),
 				kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
 					provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
