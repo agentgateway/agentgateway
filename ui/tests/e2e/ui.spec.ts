@@ -863,14 +863,21 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 	await page.getByRole('button', { name: 'Add server' }).first().click();
 	await page.getByLabel('Server name').fill('weather');
 	await page.getByRole('radio', { name: 'OpenAPI' }).click();
-	await page
-		.locator('label.field', { hasText: 'URL' })
-		.getByRole('textbox')
-		.fill('http://localhost:8101/mcp');
-	await page
-		.locator('label.field', { hasText: 'Schema' })
-		.getByRole('textbox')
-		.fill('https://example.com/weather-openapi.json');
+	for (const name of ['URL', 'Schema']) {
+		const formControls = await page.evaluate(text => {
+			const span = [...document.querySelectorAll('.field-label')].find(
+				el => el.textContent?.trim() === text
+			);
+			const label = span?.querySelector('label') ?? span?.closest('label');
+			return (
+				label?.querySelectorAll('button, input, meter, output, progress, select, textarea')
+					.length ?? -1
+			);
+		}, name);
+		expect(formControls, `${name} visible label contains no form controls`).toBe(0);
+	}
+	await page.getByLabel('URL', { exact: true }).fill('http://localhost:8101/mcp');
+	await page.getByLabel('Schema', { exact: true }).fill('https://example.com/weather-openapi.json');
 	await page.getByRole('button', { name: 'Save server' }).click();
 
 	await expect.poll(() => gateway.postedConfigs.length).toBe(1);

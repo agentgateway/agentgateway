@@ -822,13 +822,15 @@ export function Field(props: {
 		typeof props.children === 'function' ? generatedId : (props.children.props.id ?? generatedId);
 	const className = props.className ? `field ${props.className}` : 'field';
 	const control = (
-		<label className={props.tooltip ? 'field field-control' : className} htmlFor={id}>
-			<span className="field-label">{props.label}</span>
+		<div className={props.tooltip ? 'field field-control' : className}>
+			<span className="field-label">
+				<label htmlFor={id}>{props.label}</label>
+			</span>
 			{typeof props.children === 'function'
 				? props.children(id)
 				: cloneElement(props.children, { id })}
 			{props.hint ? <small>{props.hint}</small> : null}
-		</label>
+		</div>
 	);
 	if (!props.tooltip) return control;
 	return (
