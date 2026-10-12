@@ -601,7 +601,7 @@ function KeyEditor(props: {
 	const [key, setKey] = useState(isNew || !hasKeyValue(props.initial) ? '' : props.initial.key);
 	const [replaceKey, setReplaceKey] = useState(false);
 	const [storeRaw, setStoreRaw] = useState(!keyHashSupported);
-	const [generatedKey] = useState(() => `agw_sk_${randomKey(32)}`);
+	const [generatedKey] = useState(newGeneratedKey);
 	const [hashed, setHashed] = useState<{ key: string; hash: string } | null>(null);
 	const [metadataValues, setMetadataValues] = useState(() =>
 		stringMetadata(withoutManagedMetadata(initialMetadata))
@@ -808,21 +808,28 @@ function KeyEditor(props: {
 			)}
 			{(isNew && keyMode === 'custom') || (!isNew && replaceKey) ? (
 				<Field label="Key value" tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}>
-					<input
-						value={key}
-						type="text"
-						className="masked-secret-input"
-						autoComplete="off"
-						autoCorrect="off"
-						autoCapitalize="none"
-						data-1p-ignore="true"
-						data-lpignore="true"
-						data-form-type="other"
-						name="agw-virtual-api-key"
-						spellCheck={false}
-						onChange={event => setKey(event.target.value)}
-						placeholder="agw_sk_..."
-					/>
+					<div className="key-editor-value-row">
+						<input
+							value={key}
+							type="text"
+							className="masked-secret-input"
+							autoComplete="off"
+							autoCorrect="off"
+							autoCapitalize="none"
+							data-1p-ignore="true"
+							data-lpignore="true"
+							data-form-type="other"
+							name="agw-virtual-api-key"
+							spellCheck={false}
+							onChange={event => setKey(event.target.value)}
+							placeholder="agw_sk_..."
+						/>
+						{!isNew ? (
+							<button className="button" type="button" onClick={() => setKey(newGeneratedKey())}>
+								Auto generate
+							</button>
+						) : null}
+					</div>
 				</Field>
 			) : null}
 			{replacing ? (
@@ -1181,6 +1188,10 @@ function newVirtualKey(): VirtualApiKey {
 async function sha256KeyHash(value: string) {
 	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
 	return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function newGeneratedKey() {
+	return `agw_sk_${randomKey(32)}`;
 }
 
 function randomKey(length: number) {
