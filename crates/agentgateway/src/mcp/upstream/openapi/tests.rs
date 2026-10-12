@@ -1096,7 +1096,8 @@ fn test_parse_openapi_schema_maps_summary_to_tool_title() {
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let (with_summary, _) = tools
 		.iter()
@@ -1151,7 +1152,8 @@ fn test_parse_openapi_schema_requires_path_item_parameters(#[case] required: Opt
 		}
 	}))
 	.expect("parseable OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 	let (_tool, upstream) = tools
 		.iter()
 		.find(|(tool, _)| tool.name == "getTagsForWorkspace")
@@ -1227,7 +1229,8 @@ fn test_parse_openapi_schema_operation_level_parameter_overrides_path_level_para
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("parseable OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let schema = tool_schema_for(&tools, "getWorkspaceTag");
 	let path_schema = nested_schema(schema, "path");
@@ -1292,7 +1295,8 @@ fn test_parse_openapi_schema_operation_level_header_override_is_case_insensitive
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 	let (tool, upstream) = tools
 		.iter()
 		.find(|(tool, _)| tool.name == "listWorkspaces")
@@ -1358,7 +1362,8 @@ fn test_parse_openapi_schema_ignores_path_level_cookie_parameters() {
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let schema = tool_schema_for(&tools, "getTagsForWorkspace");
 	let properties = schema
@@ -1429,7 +1434,8 @@ fn test_parse_openapi_schema_bundles_recursive_component_schemas() {
 		}
 	}"##;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("recursive schemas should parse");
+	let tools = super::parse_openapi_schema(&open_api, true, Default::default())
+		.expect("recursive schemas should parse");
 
 	assert_eq!(
 		Value::Object(tool_schema_for(&tools, "createNode").clone()),
@@ -2045,6 +2051,8 @@ async fn test_openapi_from_url() {
 		schema: FileInlineOrRemote::Remote {
 			url: schema_url.parse().unwrap(),
 		},
+		derive_missing_operation_ids: true,
+		name_scheme: Default::default(),
 	};
 
 	// Create a LocalBackend::MCP to test the full conversion pipeline
@@ -2173,7 +2181,8 @@ fn test_parse_openapi_schema_octet_stream_body() {
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let (tool, upstream) = tools
 		.iter()
@@ -2245,7 +2254,8 @@ fn test_parse_openapi_schema_json_preferred_over_octet_stream() {
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let (_tool, upstream) = tools
 		.iter()
@@ -2283,7 +2293,8 @@ fn test_parse_openapi_schema_unsupported_content_type_no_body_param() {
 		}
 	}"#;
 	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
-	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+	let tools =
+		super::parse_openapi_schema(&open_api, true, Default::default()).expect("schema should parse");
 
 	let (tool, _upstream) = tools
 		.iter()
@@ -2423,4 +2434,187 @@ async fn test_call_tool_with_binary_body() {
 		result.unwrap().structured_content.unwrap(),
 		expected_response
 	);
+}
+
+mod derived_operation_names {
+	use openapiv3::OpenAPI;
+	use rmcp::model::Tool;
+	use rstest::rstest;
+
+	use super::super::parse_openapi_schema;
+	use crate::types::agent::OpenApiNameScheme;
+
+	fn parse(
+		raw: &str,
+		derive: bool,
+		scheme: OpenApiNameScheme,
+	) -> Result<Vec<(Tool, super::super::UpstreamOpenAPICall)>, super::super::ParseError> {
+		let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+		parse_openapi_schema(&open_api, derive, scheme)
+	}
+
+	fn spec_without_operation_ids() -> &'static str {
+		r#"{
+			"openapi": "3.0.0",
+			"info": {"title": "NoIds", "version": "1.0.0"},
+			"paths": {
+				"/v1/products/{productId}": {
+					"get": {
+						"description": "Returns a product",
+						"responses": {"200": {"description": "ok"}}
+					}
+				}
+			}
+		}"#
+	}
+
+	#[rstest]
+	#[case::method_path(OpenApiNameScheme::MethodPath, "getV1ProductsProductId")]
+	#[case::paths_by(OpenApiNameScheme::PathsBy, "getV1ProductsByProductId")]
+	#[case::path_method(OpenApiNameScheme::PathMethod, "v1ProductsProductIdGet")]
+	fn derives_a_name_per_scheme(#[case] scheme: OpenApiNameScheme, #[case] expected: &str) {
+		let tools = parse(spec_without_operation_ids(), true, scheme).expect("schema should parse");
+		assert_eq!(tools.len(), 1);
+		assert!(tools[0].0.name == expected, "got {}", tools[0].0.name);
+	}
+
+	#[test]
+	fn multiple_parameters_are_joined_with_and() {
+		let tools = parse(
+			r#"{
+				"openapi": "3.0.0",
+				"info": {"title": "t", "version": "1.0.0"},
+				"paths": {
+					"/users/{userId}/posts/{postId}": {
+						"get": {"responses": {"200": {"description": "ok"}}}
+					}
+				}
+			}"#,
+			true,
+			OpenApiNameScheme::PathsBy,
+		)
+		.expect("schema should parse");
+		assert!(
+			tools[0].0.name == "getUsersPostsByUserIdAndPostId",
+			"got {}",
+			tools[0].0.name
+		);
+	}
+
+	#[test]
+	fn derivation_can_be_disabled_to_keep_failing_fast() {
+		let err = parse(
+			spec_without_operation_ids(),
+			false,
+			OpenApiNameScheme::default(),
+		)
+		.expect_err("missing operationId should fail");
+		assert!(
+			err
+				.to_string()
+				.contains("operation_id is required for /v1/products/{productId}"),
+			"got: {err}"
+		);
+	}
+
+	#[test]
+	fn explicit_operation_ids_are_untouched_and_win_over_derived_names() {
+		let tools = parse(
+			r#"{
+				"openapi": "3.0.0",
+				"info": {"title": "t", "version": "1.0.0"},
+				"paths": {
+					"/x/{id}": {
+						"get": {"responses": {"200": {"description": "ok"}}}
+					},
+					"/x/id": {
+						"get": {
+							"operationId": "getXId",
+							"responses": {"200": {"description": "ok"}}
+						}
+					}
+				}
+			}"#,
+			true,
+			OpenApiNameScheme::MethodPath,
+		)
+		.expect("schema should parse");
+		// `/x/{id}` derives `getXId`, which collides with the explicit
+		// `operationId` of `/x/id`; the explicit one wins, the derived one is
+		// suffixed.
+		assert_eq!(tools.len(), 2);
+		assert!(tools.iter().any(|(tool, _)| tool.name == "getXId"));
+		assert!(tools.iter().any(|(tool, _)| tool.name == "getXId-2"));
+	}
+
+	#[test]
+	fn derived_collisions_get_numeric_suffixes_in_document_order() {
+		let tools = parse(
+			r#"{
+				"openapi": "3.0.0",
+				"info": {"title": "t", "version": "1.0.0"},
+				"paths": {
+					"/y/{id}": {
+						"get": {"responses": {"200": {"description": "ok"}}},
+						"post": {"responses": {"200": {"description": "ok"}}}
+					},
+					"/y/id": {
+						"get": {"responses": {"200": {"description": "ok"}}}
+					}
+				}
+			}"#,
+			true,
+			OpenApiNameScheme::MethodPath,
+		)
+		.expect("schema should parse");
+		let names: Vec<&str> = tools.iter().map(|(tool, _)| &*tool.name).collect();
+		assert!(names.contains(&"getYId"), "got {names:?}");
+		assert!(names.contains(&"postYId"), "got {names:?}");
+		assert!(names.contains(&"getYId-2"), "got {names:?}");
+	}
+
+	#[test]
+	fn names_are_sanitized_to_the_tool_charset() {
+		// `.` is not valid in an MCP tool name.
+		let tools = parse(
+			r#"{
+				"openapi": "3.0.0",
+				"info": {"title": "t", "version": "1.0.0"},
+				"paths": {
+					"/v1.0/reports": {
+						"get": {"responses": {"200": {"description": "ok"}}}
+					}
+				}
+			}"#,
+			true,
+			OpenApiNameScheme::default(),
+		)
+		.expect("schema should parse");
+		assert!(
+			tools[0].0.name == "getV1_0Reports",
+			"got {}",
+			tools[0].0.name
+		);
+	}
+
+	#[test]
+	fn derived_names_are_capped_at_128_chars() {
+		let long_segment = "a".repeat(200);
+		let tools = parse(
+			&serde_json::json!({
+				"openapi": "3.0.0",
+				"info": {"title": "t", "version": "1.0.0"},
+				"paths": {
+					format!("/{long_segment}"): {
+						"get": {"responses": {"200": {"description": "ok"}}}
+					}
+				}
+			})
+			.to_string(),
+			true,
+			OpenApiNameScheme::default(),
+		)
+		.expect("schema should parse");
+		assert_eq!(tools[0].0.name.len(), 128);
+	}
 }

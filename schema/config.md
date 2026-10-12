@@ -669,6 +669,8 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.deriveMissingOperationIds`|boolean|Derive a deterministic tool name from the method and path when an<br>operation has no `operationId` (optional in the OpenAPI specification;<br>common toolchains omit it). Defaults to true; set to false to keep the<br>historical fail-fast behaviour.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.nameScheme`|enum|Naming scheme used for derived tool names. Defaults to `pathsBy`.<br>Possible values: `pathsBy`, `methodPath`, `pathMethod`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].condition`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
@@ -2224,6 +2226,8 @@
 |`backends[].mcp.targets[].openapi.schema`|object||
 |`backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`backends[].mcp.targets[].openapi.schema.url`|string||
+|`backends[].mcp.targets[].openapi.deriveMissingOperationIds`|boolean|Derive a deterministic tool name from the method and path when an<br>operation has no `operationId` (optional in the OpenAPI specification;<br>common toolchains omit it). Defaults to true; set to false to keep the<br>historical fail-fast behaviour.|
+|`backends[].mcp.targets[].openapi.nameScheme`|enum|Naming scheme used for derived tool names. Defaults to `pathsBy`.<br>Possible values: `pathsBy`, `methodPath`, `pathMethod`.|
 |`backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`backends[].mcp.targets[].condition`|string||
 |`backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
@@ -3358,6 +3362,8 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.deriveMissingOperationIds`|boolean|Derive a deterministic tool name from the method and path when an<br>operation has no `operationId` (optional in the OpenAPI specification;<br>common toolchains omit it). Defaults to true; set to false to keep the<br>historical fail-fast behaviour.|
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.nameScheme`|enum|Naming scheme used for derived tool names. Defaults to `pathsBy`.<br>Possible values: `pathsBy`, `methodPath`, `pathMethod`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routeGroups[].routes[].backends[].mcp.targets[].condition`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
@@ -4981,6 +4987,8 @@
 |`routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`routes[].backends[].mcp.targets[].openapi.deriveMissingOperationIds`|boolean|Derive a deterministic tool name from the method and path when an<br>operation has no `operationId` (optional in the OpenAPI specification;<br>common toolchains omit it). Defaults to true; set to false to keep the<br>historical fail-fast behaviour.|
+|`routes[].backends[].mcp.targets[].openapi.nameScheme`|enum|Naming scheme used for derived tool names. Defaults to `pathsBy`.<br>Possible values: `pathsBy`, `methodPath`, `pathMethod`.|
 |`routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routes[].backends[].mcp.targets[].condition`|string||
 |`routes[].backends[].mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
@@ -6171,6 +6179,8 @@
 |`mcp.targets[].openapi.schema`|object||
 |`mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`mcp.targets[].openapi.schema.url`|string||
+|`mcp.targets[].openapi.deriveMissingOperationIds`|boolean|Derive a deterministic tool name from the method and path when an<br>operation has no `operationId` (optional in the OpenAPI specification;<br>common toolchains omit it). Defaults to true; set to false to keep the<br>historical fail-fast behaviour.|
+|`mcp.targets[].openapi.nameScheme`|enum|Naming scheme used for derived tool names. Defaults to `pathsBy`.<br>Possible values: `pathsBy`, `methodPath`, `pathMethod`.|
 |`mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`mcp.targets[].condition`|string||
 |`mcp.targets[].policies`|[`<BackendPolicies>`](#backendpolicies)|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|

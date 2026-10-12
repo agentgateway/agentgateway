@@ -30,8 +30,8 @@ use crate::types::agent::{
 	BackendWithPolicies, Bind, BindMode, BindProtocol, BindSnapshot, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
 	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode,
-	McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch,
-	PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
+	McpServerOverrides, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, OpenApiNameScheme,
+	PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference,
 	RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig, SimpleBackend,
 	SimpleBackendReference, SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies,
 	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
@@ -1808,7 +1808,12 @@ impl LocalBackend {
 								clear_env,
 							}
 						},
-						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
+						LocalMcpTargetSpec::OpenAPI {
+							backend,
+							schema,
+							derive_missing_operation_ids,
+							name_scheme,
+						} => {
 							let (bref, _, be) = Self::process_mcp_backend(
 								local_name(name.clone()),
 								backend,
@@ -1824,6 +1829,8 @@ impl LocalBackend {
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
 								schema: openapi_schema.into(),
+								derive_missing_operation_ids,
+								name_scheme,
 							})
 						},
 					};
@@ -2112,7 +2119,23 @@ pub enum LocalMcpTargetSpec {
 		#[serde(flatten)]
 		backend: McpBackendHost,
 		schema: serdes::FileInlineOrRemote,
+		/// Derive a deterministic tool name from the method and path when an
+		/// operation has no `operationId` (optional in the OpenAPI specification;
+		/// common toolchains omit it). Defaults to true; set to false to keep the
+		/// historical fail-fast behaviour.
+		#[serde(
+			rename = "deriveMissingOperationIds",
+			default = "derive_missing_operation_ids_default"
+		)]
+		derive_missing_operation_ids: bool,
+		/// Naming scheme used for derived tool names. Defaults to `pathsBy`.
+		#[serde(rename = "nameScheme", default)]
+		name_scheme: OpenApiNameScheme,
 	},
+}
+
+fn derive_missing_operation_ids_default() -> bool {
+	true
 }
 
 fn default_matches() -> Vec<RouteMatch> {
