@@ -445,10 +445,7 @@ async fn apply_backend_policies(
 	if llm_provider
 		.as_ref()
 		.is_some_and(|provider| matches!(provider.provider, llm::AIProvider::Copilot(_)))
-		&& !matches!(
-			backend_auth.as_ref().and_then(|auth| auth.kind.as_ref()),
-			Some(auth::BackendAuthKind::Copilot)
-		) {
+	{
 		// Explicit credential locations override defaults. Copilot auth inserts its own defaults.
 		auth::copilot::insert_protocol_headers(req);
 	}
