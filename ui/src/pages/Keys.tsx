@@ -8,6 +8,7 @@ import {
 	KeyRound,
 	Pencil,
 	Plus,
+	RefreshCw,
 	SlidersHorizontal,
 	Tags,
 	Trash2,
@@ -620,6 +621,7 @@ function KeyEditor(props: {
 	);
 	const [submitted, setSubmitted] = useState(false);
 	const replacing = isNew || replaceKey;
+	const generatedFormat = !isNew && keyDisplay(props.initial).startsWith('agw_sk_');
 	const rawKey = isNew && keyMode === 'auto' ? generatedKey : key;
 	const hashPending = replacing && !storeRaw && hashed?.key !== rawKey;
 	useEffect(() => {
@@ -715,8 +717,26 @@ function KeyEditor(props: {
 	function save() {
 		const virtualKey = nextVirtualKey();
 		if (!virtualKey) return;
-		props.onSave(virtualKey, props.previousKey, isNew && !storeRaw ? rawKey : undefined);
+		props.onSave(virtualKey, props.previousKey, replacing && !storeRaw ? rawKey : undefined);
 	}
+
+	const keyInput = (
+		<input
+			value={key}
+			type="text"
+			className="masked-secret-input"
+			autoComplete="off"
+			autoCorrect="off"
+			autoCapitalize="none"
+			data-1p-ignore="true"
+			data-lpignore="true"
+			data-form-type="other"
+			name="agw-virtual-api-key"
+			spellCheck={false}
+			onChange={event => setKey(event.target.value)}
+			placeholder="agw_sk_..."
+		/>
+	);
 
 	return (
 		<Drawer
@@ -795,41 +815,40 @@ function KeyEditor(props: {
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
 				>
 					<div className="key-editor-value-row">
-						<VirtualKeyValue apiKey={props.initial} />
-						<button
-							className="button"
-							type="button"
-							onClick={() => setReplaceKey(current => !current)}
-						>
-							{replaceKey ? 'Keep existing' : 'Replace key'}
-						</button>
+						{generatedFormat ? (
+							<>
+								<VirtualKeyValue apiKey={replaceKey ? { key } : props.initial} />
+								<button
+									className="table-action"
+									type="button"
+									onClick={() => {
+										setKey(newGeneratedKey());
+										setReplaceKey(true);
+									}}
+								>
+									<RefreshCw size={14} />
+									Regenerate
+								</button>
+							</>
+						) : (
+							<>
+								{replaceKey ? keyInput : <VirtualKeyValue apiKey={props.initial} />}
+								<button
+									className="table-action"
+									type="button"
+									onClick={() => setReplaceKey(current => !current)}
+								>
+									{replaceKey ? <X size={14} /> : <Pencil size={14} />}
+									{replaceKey ? 'Keep existing' : 'Edit'}
+								</button>
+							</>
+						)}
 					</div>
 				</FieldGroup>
 			)}
-			{(isNew && keyMode === 'custom') || (!isNew && replaceKey) ? (
+			{isNew && keyMode === 'custom' ? (
 				<Field label="Key value" tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}>
-					<div className="key-editor-value-row">
-						<input
-							value={key}
-							type="text"
-							className="masked-secret-input"
-							autoComplete="off"
-							autoCorrect="off"
-							autoCapitalize="none"
-							data-1p-ignore="true"
-							data-lpignore="true"
-							data-form-type="other"
-							name="agw-virtual-api-key"
-							spellCheck={false}
-							onChange={event => setKey(event.target.value)}
-							placeholder="agw_sk_..."
-						/>
-						{!isNew ? (
-							<button className="button" type="button" onClick={() => setKey(newGeneratedKey())}>
-								Auto generate
-							</button>
-						) : null}
-					</div>
+					{keyInput}
 				</Field>
 			) : null}
 			{replacing ? (
