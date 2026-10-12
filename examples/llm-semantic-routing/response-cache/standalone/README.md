@@ -1,6 +1,6 @@
 # Standalone Response Cache
 
-Run agentgateway v1.5.0, vSR, Redis Open Source, and the HomeHub Python backend
+Run agentgateway v1.6.0, vSR, Redis Open Source, and the HomeHub Python backend
 with Docker Compose. No LLM credentials are required because HomeHub returns
 fixed answers without calling an LLM provider. See the
 [overview](../README.md) for the cache policy and request flow, or use the
@@ -28,14 +28,12 @@ cd examples/llm-semantic-routing/response-cache/standalone
 docker compose --env-file versions.env up -d --wait --wait-timeout 650
 ```
 
-`versions.env` selects agentgateway v1.5.0 and vSR `latest`. Docker Compose
-pulls the current vSR image on startup. The [overview](../README.md) explains
-why the example uses `latest`.
+`versions.env` pins agentgateway v1.6.0, vSR v0.4.0, and HomeHub 0.1.1.
 
 The agentgateway proxy listens on `127.0.0.1:3000`. To use another port, export `PORT`
 before starting and verifying. Redis, HomeHub, and vSR are internal to the
-Compose network. The shared Python script is mounted read-only into
-`python:3.12-alpine` and served as `support-backend:8080`.
+Compose network. The [HomeHub demo image](https://github.com/danehans/homehub-support-demo)
+is served as `support-backend:8080`.
 
 > [!NOTE]
 > HomeHub does not stream responses, so ExtProc streaming is disabled and

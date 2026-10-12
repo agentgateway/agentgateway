@@ -26,9 +26,8 @@ spec:
     spec:
       containers:
       - name: backend
-        image: python:3.12-alpine
+        image: ghcr.io/danehans/homehub-support-demo:0.1.1
         imagePullPolicy: IfNotPresent
-        command: [python, /app/server.py]
         ports:
         - name: http
           containerPort: 8080
@@ -58,14 +57,6 @@ spec:
           readOnlyRootFilesystem: true
           runAsNonRoot: true
           runAsUser: 65532
-        volumeMounts:
-        - name: application
-          mountPath: /app
-          readOnly: true
-      volumes:
-      - name: application
-        configMap:
-          name: support-backend
 ---
 apiVersion: v1
 kind: Service

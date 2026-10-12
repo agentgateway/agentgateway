@@ -1,6 +1,6 @@
 # Response Cache with Redis Open Source
 
-These examples combine agentgateway v1.5.0, [vLLM Semantic Router
+These examples combine agentgateway v1.6.0, [vLLM Semantic Router
 (vSR)](https://vllm-sr.ai/), and Redis Open Source to reuse responses to
 semantically equivalent product-support questions. Both run a deterministic
 HomeHub Python backend that returns fixed answers without calling an LLM
@@ -13,9 +13,8 @@ provider, so no LLM credentials are needed.
 - [Standalone](standalone/README.md): Docker Compose with standalone
   agentgateway, vSR, Redis, and the HomeHub Python backend.
 
-Each deployment has its own `versions.env`. vSR intentionally uses `latest`
-(and chart `0.0.0-latest` on Kubernetes) because the v0.3.0 release lacks the
-required ExtProc streaming changes.
+Each deployment pins agentgateway v1.6.0 and vSR v0.4.0. Kubernetes uses
+vSR chart 0.4.0. Both deployments use the public HomeHub 0.1.1 image.
 
 ## How it works
 
@@ -51,9 +50,9 @@ vSR instances and restarts.
 > vSR also supports an in-memory cache. Its entries belong to one vSR process
 > and are lost when that process restarts.
 
-The [shared backend](shared/support-backend.py) uses only Python's standard
-library. Kubernetes loads it from a ConfigMap and Docker Compose mounts it into
-the Python image.
+The [HomeHub demo](https://github.com/danehans/homehub-support-demo) is maintained
+separately and published as `ghcr.io/danehans/homehub-support-demo`. Neither
+deployment requires a local backend source file or image build.
 
 ## Verify the cache
 

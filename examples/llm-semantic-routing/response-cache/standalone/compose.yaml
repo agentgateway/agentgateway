@@ -1,7 +1,7 @@
 name: response-cache
 services:
   agentgateway:
-    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.5.0}
+    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.6.0}
     command: ["-f", "/etc/agentgateway/config.yaml"]
     ports:
       - "127.0.0.1:${PORT:-3000}:3000"
@@ -13,8 +13,7 @@ services:
       support-backend:
         condition: service_healthy
   semantic-router:
-    image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG:-latest}
-    pull_policy: always
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:${VSR_IMAGE_TAG:-v0.4.0}
     command: ["/app/config/config.yaml"]
     volumes:
       - ./semantic-router-config.yaml:/app/config/config.yaml:ro
@@ -39,19 +38,12 @@ services:
       timeout: 3s
       retries: 20
   support-backend:
-    image: python:${PYTHON_VERSION:-3.12-alpine}
-    command: ["python", "-u", "/app/server.py"]
+    image: ghcr.io/danehans/homehub-support-demo:${HOMEHUB_VERSION:-0.1.1}
     user: "65532:65532"
     read_only: true
-    volumes:
-      - ../shared/support-backend.py:/app/server.py:ro
     expose:
       - "8080"
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
+
 volumes:
   models:
   redis-data:

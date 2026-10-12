@@ -1,6 +1,6 @@
 # Kubernetes Response Cache
 
-Run agentgateway v1.5.0, vSR, Redis Open Source, and the HomeHub Python backend
+Run agentgateway v1.6.0, vSR, Redis Open Source, and the HomeHub Python backend
 in a local kind cluster. No LLM credentials are required because HomeHub
 returns fixed answers without calling an LLM provider. See the
 [overview](../README.md) for the cache policy and request flow, or use the
@@ -18,8 +18,8 @@ Install these tools:
 - jq
 - uuidgen
 
-The example uses Kubernetes 1.36, agentgateway 1.5.0, the current vSR chart and
-image, and Redis Open Source 8.10.0. vSR downloads an embedding model on first
+The example uses Kubernetes 1.36, agentgateway 1.6.0, vSR v0.4.0,
+and Redis Open Source 8.10.0. vSR downloads an embedding model on first
 startup, so allocate at least 6 CPUs, 10 GiB of memory, and 15 GiB of free disk
 space to Docker for the model and the other services.
 
@@ -43,7 +43,7 @@ kubectl config use-context kind-semantic-cache
 
 ## Install agentgateway
 
-Install the Gateway API and agentgateway 1.5.0:
+Install the Gateway API and agentgateway 1.6.0:
 
 ```bash
 kubectl apply --server-side --force-conflicts \
@@ -107,16 +107,12 @@ The commands should report `PONG` and information about `FT.SEARCH`.
 
 ## Deploy the Support Backend
 
-Deploy the backend in the `homehub` namespace and create a ConfigMap from the
-[shared Python backend](../shared/support-backend.py). It returns fixed OpenAI
-Chat Completions responses and counts requests so you can verify cache hits.
+Deploy the [HomeHub demo image](https://github.com/danehans/homehub-support-demo)
+in the `homehub` namespace. It returns fixed OpenAI Chat Completions responses
+and counts requests so you can verify cache hits.
 
 ```bash
 kubectl apply -f "${RESPONSE_CACHE_DIR}/support-backend.yaml"
-kubectl create configmap support-backend -n homehub \
-  --from-file="server.py=${RESPONSE_CACHE_DIR}/../shared/support-backend.py" \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deployment/support-backend -n homehub
 kubectl rollout status deployment/support-backend -n homehub --timeout=120s
 ```
 
@@ -130,16 +126,14 @@ helm upgrade -i semantic-router \
   --version "${VSR_CHART_VERSION}" \
   --namespace agentgateway-system \
   -f "${RESPONSE_CACHE_DIR}/semantic-router-values.yaml" \
-  --set-string "image.tag=${VSR_IMAGE_TAG}" \
-  --set "image.pullPolicy=Always"
+  --set-string "image.tag=${VSR_IMAGE_TAG}"
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
   --timeout=600s
 ```
 
-The version settings keep vSR on `latest` and its chart on `0.0.0-latest`,
-as explained in the [overview](../README.md).
+The version settings pin the vSR v0.4.0 image and chart 0.4.0.
 
 Confirm that vSR connected to Redis and initialized its index:
 
