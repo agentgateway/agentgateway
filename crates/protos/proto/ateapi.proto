@@ -122,6 +122,7 @@ message ActorJwtSource {
 
 message GetActorEgressPolicyRequest {
   ObjectRef actor = 1;
+  string name = 2;
 }
 
 message MintActorJwtRequest {

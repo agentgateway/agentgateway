@@ -90,6 +90,9 @@ impl ateapimock::Handler for CredentialEgressHandler {
 		&mut self,
 		request: &protos::ateapi::GetActorEgressPolicyRequest,
 	) -> Result<EgressPolicy, tonic::Status> {
+		if request.name != "default" {
+			return Err(tonic::Status::invalid_argument("name must be default"));
+		}
 		let actor = request.actor.as_ref().unwrap();
 		assert_eq!(
 			(actor.atespace.as_str(), actor.name.as_str()),

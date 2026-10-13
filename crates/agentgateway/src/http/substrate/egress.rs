@@ -415,6 +415,7 @@ async fn fetch_policy(
 	let channel = target.grpc_channel(policy_client.clone());
 	let mut control = protos::ateapi::control_client::ControlClient::new(channel);
 	let mut request = tonic::Request::new(protos::ateapi::GetActorEgressPolicyRequest {
+		name: "default".to_owned(),
 		actor: Some(protos::ateapi::ObjectRef {
 			atespace: identity.atespace.clone(),
 			name: identity.actor_name.clone(),
