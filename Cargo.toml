@@ -214,7 +214,7 @@ sha1 = "0.11"
 sha2 = "0.11"
 shellexpand = "3.1"
 socket2 = "0.6"
-spiffe = { version = "0.16", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
+spiffe = { version = "0.17", default-features = false, features = ["workload-api", "x509-source", "x509", "transport-grpc", "tracing"] }
 split-iter = "0.1"
 sse-stream = "0.3"
 sqlx = { version = "0.9", default-features = false, features = [
