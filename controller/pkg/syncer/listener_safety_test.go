@@ -104,6 +104,63 @@ func TestListenerSafetyDistinctHostnames(t *testing.T) {
 	assert.ElementsMatch(t, []string{"default/example.http", "tenant/wildcard.http", "tenant/exact.http"}, listenerKeys(s))
 }
 
+func TestListenerSafetyGatewayConflictStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason string
+		protocol     gwv1.ProtocolType
+	}{
+		{name: "hostname", reason: "HostnameConflict", protocol: gwv1.HTTPProtocolType},
+		{name: "protocol", reason: "ProtocolConflict", protocol: gwv1.TCPProtocolType},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := safetyGateway("")
+			gw.Spec.Listeners = append(gw.Spec.Listeners, gw.Spec.Listeners[0])
+			gw.Spec.Listeners[1].Name = "second"
+			gw.Spec.Listeners[1].Protocol = tc.protocol
+			ctx := testutils.BuildMockPolicyContext(t, safetyInputs(gw))
+			gateways := krt.NewMutableCollection(nil, []*gwv1.Gateway{gw})
+			ctx.Collections.Gateways = gateways.AsCollection()
+			sq, s := testutils.Syncer(t, ctx, "Gateway")
+			assert.Equal(t, []string{"default/example.http"}, listenerKeys(s))
+			readStatus := func() gwv1.GatewayStatus {
+				dump, err := json.Marshal(sq.Dump())
+				require.NoError(t, err)
+				var statuses []struct {
+					Status gwv1.GatewayStatus `json:"status"`
+				}
+				require.NoError(t, json.Unmarshal(dump, &statuses))
+				require.Len(t, statuses, 1)
+				return statuses[0].Status
+			}
+			status := readStatus()
+			require.Len(t, status.Listeners, 2)
+			for _, condition := range []string{"Conflicted", "Accepted", "Programmed"} {
+				got := meta.FindStatusCondition(status.Listeners[1].Conditions, condition)
+				require.NotNil(t, got)
+				assert.Equal(t, tc.reason, got.Reason)
+				want := metav1.ConditionFalse
+				if condition == "Conflicted" {
+					want = metav1.ConditionTrue
+				}
+				assert.Equal(t, want, got.Status)
+			}
+			assert.Equal(t, metav1.ConditionFalse, meta.FindStatusCondition(status.Listeners[0].Conditions, "Conflicted").Status)
+			edit := gw.DeepCopy()
+			edit.Generation++
+			edit.Spec.Listeners[1].Port = 8081
+			gateways.UpdateObject(edit)
+			require.Eventually(t, func() bool {
+				status := readStatus()
+				conflicted := meta.FindStatusCondition(status.Listeners[1].Conditions, "Conflicted")
+				return len(listenerKeys(s)) == 2 && conflicted.Status == metav1.ConditionFalse && conflicted.ObservedGeneration == edit.Generation
+			}, 5*time.Second, 10*time.Millisecond)
+			for _, condition := range []string{"Accepted", "Programmed"} {
+				assert.Equal(t, metav1.ConditionTrue, meta.FindStatusCondition(readStatus().Listeners[1].Conditions, condition).Status)
+			}
+		})
+	}
+}
+
 func TestListenerSafetySetTies(t *testing.T) {
 	gw := safetyGateway("owner.example.com")
 	a := safetyListenerSet("default", "a", "shared.example.com")

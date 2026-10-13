@@ -384,6 +384,30 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			result = append(result, &ls.GatewayListener)
 		}
 		validateListenerConflicts(result)
+		for i, listener := range result[:len(kgw.Listeners)] {
+			var reason gwv1.ListenerConditionReason
+			var message string
+			switch listener.Conflict {
+			case ListenerConflictHostname:
+				reason = gwv1.ListenerReasonHostnameConflict
+				message = "Found conflicting hostnames on listeners, all listeners on a single port must have unique hostnames"
+			case ListenerConflictProtocol:
+				reason = gwv1.ListenerReasonProtocolConflict
+				message = "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
+			default:
+				continue
+			}
+			listenerReporter := gwReporter.Listener(&kgw.Listeners[i])
+			for _, condition := range []reporter.ListenerCondition{
+				{Type: gwv1.ListenerConditionConflicted, Status: metav1.ConditionTrue},
+				{Type: gwv1.ListenerConditionAccepted, Status: metav1.ConditionFalse},
+				{Type: gwv1.ListenerConditionProgrammed, Status: metav1.ConditionFalse},
+			} {
+				condition.Reason = reason
+				condition.Message = message
+				listenerReporter.SetCondition(condition)
+			}
+		}
 		// Precedence sorting groups listeners from each ListenerSet together. Count
 		// a parent once when its first valid, non-conflicting listener is encountered.
 		var attachedListenerSets int32
