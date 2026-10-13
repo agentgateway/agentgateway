@@ -348,12 +348,8 @@ impl OidcPolicy {
 			.login
 			.as_ref()
 			.and_then(|login| login.redirect.as_deref());
-		let mut response = if permissive
-			&& !is_login_path
-			&& (req.headers().contains_key(header::AUTHORIZATION) || !is_browser(req))
-		{
-			// Permissive mode: a credential for a later policy, or a non-browser client with no
-			// credential, continues unauthenticated. Browsers still get the 401 or login below.
+		let mut response = if permissive && !is_login_path && !is_browser_navigation(req) {
+			// Only browser navigations enter login; other requests continue to later policies.
 			PolicyResponse::default()
 		} else if non_navigation {
 			if !clear_refresh_cookie && login_redirect.is_none() {
@@ -467,15 +463,16 @@ impl crate::store::RequestPolicyTrait for OidcPolicy {
 	}
 }
 
-/// Whether the request looks like it came from a browser: either it carries `Sec-Fetch-Mode`
-/// (sent by browsers to secure contexts only) or it accepts HTML (the plain-HTTP fallback).
-fn is_browser(req: &Request) -> bool {
-	req.headers().contains_key("sec-fetch-mode")
-		|| req
+/// Detects browser navigation. Fetch metadata is authoritative; `Accept` is the fallback when absent.
+fn is_browser_navigation(req: &Request) -> bool {
+	match req.headers().get("sec-fetch-mode") {
+		Some(mode) => mode == "navigate",
+		None => req
 			.headers()
 			.get(header::ACCEPT)
 			.and_then(|accept| accept.to_str().ok())
-			.is_some_and(|accept| accept.contains("text/html"))
+			.is_some_and(|accept| accept.contains("text/html")),
+	}
 }
 
 fn is_cors_preflight(req: &Request) -> bool {

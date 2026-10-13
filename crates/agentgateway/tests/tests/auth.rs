@@ -495,7 +495,7 @@ async fn permissive_oidc_route_accepts_session_or_second_issuer_jwt() {
 	let res = send_request(io.clone(), Method::GET, "http://lo/upstream").await;
 	assert_eq!(res.status(), 403);
 
-	// Browser requests without a credential keep the OIDC behavior.
+	// Browser navigations without a credential keep the OIDC behavior.
 	let res = send_request_headers(
 		io.clone(),
 		Method::GET,
@@ -505,13 +505,24 @@ async fn permissive_oidc_route_accepts_session_or_second_issuer_jwt() {
 	.await;
 	assert_oidc_login_redirect(&res);
 	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/upstream",
+		&[("sec-fetch-mode", "navigate"), ("accept", "text/html")],
+	)
+	.await;
+	assert_oidc_login_redirect(&res);
+
+	// Fetches continue to authorization instead of getting OIDC's 401.
+	let res = send_request_headers(
 		io,
 		Method::GET,
 		"http://lo/upstream",
 		&[("sec-fetch-mode", "cors")],
 	)
 	.await;
-	assert_eq!(res.status(), 401);
+	assert_eq!(res.status(), 403);
+	assert!(res.headers().get(header::LOCATION).is_none());
 }
 
 #[tokio::test]
@@ -553,6 +564,26 @@ async fn permissive_oidc_route_lets_mcp_authentication_answer_clients() {
 			.contains("/.well-known/oauth-protected-resource/mcp")
 	);
 	assert!(res.headers().get(header::LOCATION).is_none());
+
+	// Node fetch sends `Sec-Fetch-Mode: cors`; MCP auth must still provide the challenge.
+	let res = send_request_headers(
+		io.clone(),
+		Method::POST,
+		"http://lo/mcp",
+		&[
+			("content-type", "application/json"),
+			("accept", "*/*"),
+			("sec-fetch-mode", "cors"),
+			("user-agent", "node"),
+		],
+	)
+	.await;
+	assert_eq!(res.status(), 401);
+	assert!(
+		res
+			.hdr(header::WWW_AUTHENTICATE)
+			.contains("/.well-known/oauth-protected-resource/mcp")
+	);
 
 	// A valid MCP token is accepted by mcpAuthentication.
 	let token = signed_cli_token();

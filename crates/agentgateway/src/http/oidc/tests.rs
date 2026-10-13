@@ -1052,16 +1052,7 @@ async fn apply_session_with_bearer() {
 async fn apply_permissive_decides_by_browser_signals() {
 	let valid_bearer = format!("Bearer {}", signed_id_token(TEST_NONCE));
 	for (name, credentials, uri, fetch_mode, accept, authorization, expected) in [
-		// Browser requests keep today's behavior.
-		(
-			"fetch without credential",
-			OidcCredentials::Permissive,
-			"https://app.example.com/private",
-			Some("cors"),
-			None,
-			None,
-			Outcome::Rejected,
-		),
+		// Browser navigations keep today's behavior.
 		(
 			"navigation without credential",
 			OidcCredentials::Permissive,
@@ -1071,13 +1062,12 @@ async fn apply_permissive_decides_by_browser_signals() {
 			None,
 			Outcome::Login,
 		),
-		// Only the known fetch modes get the 401; any other value is treated as a navigation.
 		(
-			"unknown fetch mode without credential",
+			"navigation accepting anything",
 			OidcCredentials::Permissive,
 			"https://app.example.com/private",
-			Some("nested-navigate"),
-			None,
+			Some("navigate"),
+			Some("*/*"),
 			None,
 			Outcome::Login,
 		),
@@ -1089,6 +1079,44 @@ async fn apply_permissive_decides_by_browser_signals() {
 			Some("text/html,application/xhtml+xml"),
 			None,
 			Outcome::Login,
+		),
+		// `fetch()` cannot complete login, and Node's `fetch()` sends `Sec-Fetch-Mode: cors` too,
+		// so any mode other than `navigate` continues for a later policy to decide.
+		(
+			"fetch without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("cors"),
+			None,
+			None,
+			Outcome::Continue,
+		),
+		(
+			"node fetch without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("cors"),
+			Some("*/*"),
+			None,
+			Outcome::Continue,
+		),
+		(
+			"fetch accepting html",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("cors"),
+			Some("text/html"),
+			None,
+			Outcome::Continue,
+		),
+		(
+			"unknown fetch mode without credential",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			Some("nested-navigate"),
+			None,
+			None,
+			Outcome::Continue,
 		),
 		// Non-browser clients continue so a later policy can decide.
 		(
@@ -1109,7 +1137,8 @@ async fn apply_permissive_decides_by_browser_signals() {
 			None,
 			Outcome::Continue,
 		),
-		// Any credential continues, even from a browser, so a later policy can validate it.
+		// Credentials the policy does not recognize stay on the request for a later policy; they
+		// do not change the decision, which depends only on whether this is a navigation.
 		(
 			"fetch with foreign bearer",
 			OidcCredentials::Permissive,
@@ -1120,13 +1149,22 @@ async fn apply_permissive_decides_by_browser_signals() {
 			Outcome::Continue,
 		),
 		(
+			"client with foreign bearer",
+			OidcCredentials::Permissive,
+			"https://app.example.com/private",
+			None,
+			Some("*/*"),
+			Some("Bearer not-for-oidc"),
+			Outcome::Continue,
+		),
+		(
 			"navigation with basic credential",
 			OidcCredentials::Permissive,
 			"https://app.example.com/private",
 			Some("navigate"),
 			Some("text/html"),
 			Some("Basic dXNlcjpwYXNz"),
-			Outcome::Continue,
+			Outcome::Login,
 		),
 		// The login path always starts login, even with a credential.
 		(
@@ -1204,8 +1242,9 @@ async fn apply_permissive_decides_by_browser_signals() {
 	}
 }
 
+/// Permissive fetches continue even when a login redirect is configured.
 #[tokio::test]
-async fn apply_permissive_fetch_gets_login_redirect_location() {
+async fn apply_permissive_fetch_continues_despite_login_redirect() {
 	let mut policy = test_policy();
 	policy.credentials = OidcCredentials::Permissive;
 	policy.login = Some(OidcLogin {
@@ -1217,6 +1256,15 @@ async fn apply_permissive_fetch_gets_login_redirect_location() {
 		.headers_mut()
 		.insert("sec-fetch-mode", "cors".parse().unwrap());
 
+	let result = test_helpers::test_policy(&policy, &mut req).await;
+	assert_outcome("fetch", result, &req, Outcome::Continue);
+
+	// The same request in the other modes still gets the 401 with `Location`.
+	policy.credentials = OidcCredentials::SessionOrBearer;
+	let mut req = request(Method::GET, "https://app.example.com/private", None);
+	req
+		.headers_mut()
+		.insert("sec-fetch-mode", "cors".parse().unwrap());
 	let response = test_helpers::test_policy(&policy, &mut req)
 		.await
 		.expect("fetch gets a direct response")

@@ -52,12 +52,10 @@ pub enum OidcCredentials {
 	/// Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.
 	/// This lets non-browser clients authenticate with a token obtained from the provider directly.
 	SessionOrBearer,
-	/// Like `sessionOrBearer`, but leaves unrecognized `Authorization` credentials and
-	/// non-browser requests without credentials for later policies. Unauthenticated browser
-	/// requests still enter the login flow or receive 401.
+	/// Like `sessionOrBearer`, but lets unauthenticated non-navigation requests continue to later
+	/// policies with their credentials intact. Browser navigations retain the normal login behavior.
 	///
-	/// **Warning:** Some requests continue unauthenticated. Pair this mode with an
-	/// `authorization` policy or another enforcement point.
+	/// **Warning:** Pair this mode with `authorization` or another enforcement point.
 	Permissive,
 }
 

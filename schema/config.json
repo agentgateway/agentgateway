@@ -6854,7 +6854,7 @@
           "const": "sessionOrBearer"
         },
         {
-          "description": "Like `sessionOrBearer`, but leaves unrecognized `Authorization` credentials and\nnon-browser requests without credentials for later policies. Unauthenticated browser\nrequests still enter the login flow or receive 401.\n\n**Warning:** Some requests continue unauthenticated. Pair this mode with an\n`authorization` policy or another enforcement point.",
+          "description": "Like `sessionOrBearer`, but lets unauthenticated non-navigation requests continue to later\npolicies with their credentials intact. Browser navigations retain the normal login behavior.\n\n**Warning:** Pair this mode with `authorization` or another enforcement point.",
           "type": "string",
           "const": "permissive"
         }
