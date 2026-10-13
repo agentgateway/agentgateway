@@ -1318,6 +1318,12 @@ h4.field-label {
 	height: 22px;
 }
 
+.provider-icon {
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
+}
+
 .client-svg-icon.compact svg,
 .client-svg-icon.compact img,
 .client-svg-icon.compact .provider-icon {
@@ -1325,7 +1331,6 @@ h4.field-label {
 	height: 16px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .client-svg-icon .provider-icon {
 	width: 22px;
 	height: 22px;
@@ -2983,7 +2988,6 @@ tbody tr:hover {
 	gap: 12px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-detail-title .provider-icon {
 	width: 26px;
 	height: 26px;
@@ -3852,7 +3856,6 @@ tbody tr:hover {
 	gap: 9px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-model-cell .provider-icon {
 	width: 16px;
 	height: 16px;
@@ -5270,13 +5273,6 @@ textarea {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-}
-
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.provider-icon {
-	width: 18px;
-	height: 18px;
-	object-fit: contain;
 }
 
 :root[data-theme='dark'] .provider-icon-mono {
