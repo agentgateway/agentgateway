@@ -1165,6 +1165,24 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn cel_playground_sample_context_evaluates() {
+		let data: Value =
+			serde_json::from_str(include_str!("../../../ui/src/pages/celSampleContext.json")).unwrap();
+		let resp = handle_cel(Json(CelRequest {
+			expression: "1 + 2".to_string(),
+			data: Some(data),
+		}))
+		.await;
+		let status = resp.status();
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+			.await
+			.unwrap();
+		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+		let body: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(body, serde_json::json!({"result": 3, "error": null}));
+	}
+
+	#[tokio::test]
 	async fn effective_config_reports_the_on_disk_file() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("config.yaml");
