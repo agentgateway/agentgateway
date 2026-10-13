@@ -135,7 +135,7 @@ func (r *gatewayClassReconciler) reconcile(req types.NamespacedName) (rErr error
 		status.SupportedFeatures = i.SupportedFeatures
 	}
 
-	_, err := r.gwClassClient.UpdateStatus(&gwv1.GatewayClass{
+	err := r.gwClassClient.UpdateStatusNoResponse(&gwv1.GatewayClass{
 		ObjectMeta: CloneObjectMetaForStatus(gwClass.ObjectMeta),
 		Status:     status,
 	})

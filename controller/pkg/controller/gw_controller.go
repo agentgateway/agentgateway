@@ -506,7 +506,7 @@ func updateGatewayStatusWithRetryFunc(
 		if !needsUpdate {
 			return nil
 		}
-		_, err := cli.UpdateStatus(&gwv1.Gateway{
+		err := cli.UpdateStatusNoResponse(&gwv1.Gateway{
 			ObjectMeta: pluginsdk.CloneObjectMetaForStatus(gw.ObjectMeta),
 			Status:     status,
 		})

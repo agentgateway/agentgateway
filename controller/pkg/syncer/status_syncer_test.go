@@ -226,9 +226,9 @@ func (c *inferencePoolStatusClient) Get(_, _ string) *inf.InferencePool {
 	return c.current.DeepCopy()
 }
 
-func (c *inferencePoolStatusClient) UpdateStatus(pool *inf.InferencePool) (*inf.InferencePool, error) {
+func (c *inferencePoolStatusClient) UpdateStatusNoResponse(pool *inf.InferencePool) error {
 	c.updated = pool.DeepCopy()
-	return pool, nil
+	return nil
 }
 
 func TestMergeXBackendAncestorStatuses_SortsOurEntriesOnly(t *testing.T) {

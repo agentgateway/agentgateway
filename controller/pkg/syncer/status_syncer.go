@@ -458,7 +458,7 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 		// Passing Spec is ignored by the API server but has costs.
 		// Passing ResourceVersion is important to ensure we are not writing stale data. The collection is responsible for
 		// re-enqueuing a resource if it ends up being rejected due to stale ResourceVersion.
-		_, err := s.Client.UpdateStatus(s.Build(metav1.ObjectMeta{
+		err := s.Client.UpdateStatusNoResponse(s.Build(metav1.ObjectMeta{
 			Name:            obj.Name,
 			Namespace:       obj.Namespace,
 			ResourceVersion: rv,

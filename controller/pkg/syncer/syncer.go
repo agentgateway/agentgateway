@@ -456,7 +456,7 @@ func (s *Syncer) joinExtraListenerSets(
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[*translator.ListenerSet], krt.Collection[RejectedListenerSet]) {
 	noRejections := func() krt.Collection[RejectedListenerSet] {
-		return krt.NewStaticCollection[RejectedListenerSet](nil, nil,
+		return krt.NewDisabledCollection[RejectedListenerSet](
 			krtopts.ToOptions("translator/RejectedExtraListenerSets")...)
 	}
 	if s.extraListenerSets == nil {
@@ -862,12 +862,12 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		meshConfig,
 		// Authz/Authn are not use for agentgateway, ignore
 		krt.NewIndex(
-			krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil, krtopts.ToOptions("addresses/DisabledWorkloadAuthorization")...),
+			krt.NewDisabledCollection[model.WorkloadAuthorization](krtopts.ToOptions("addresses/DisabledWorkloadAuthorization")...),
 			"byNS",
 			func(model.WorkloadAuthorization) []string { return nil },
 		),
 		krt.NewNamespaceIndex(
-			krt.NewStaticCollection[*securityclient.PeerAuthentication](nil, nil, krtopts.ToOptions("addresses/DisabledPeerAuthentication")...),
+			krt.NewDisabledCollection[*securityclient.PeerAuthentication](krtopts.ToOptions("addresses/DisabledPeerAuthentication")...),
 		),
 		waypoints,
 		services,

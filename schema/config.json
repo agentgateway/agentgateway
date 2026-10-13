@@ -7435,7 +7435,7 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
-          "default": 0
+          "default": 8192
         },
         "allowPartialMessage": {
           "description": "Whether to send a partial body when the request exceeds `maxRequestBytes`.",

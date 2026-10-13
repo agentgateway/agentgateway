@@ -70,7 +70,7 @@ pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
 #[apply(schema!)]
 pub struct BodyOptions {
 	/// Maximum request body size to send to the authorization service. Defaults to 8192 bytes.
-	#[serde(default)]
+	#[serde(default = "default_max_request_bytes")]
 	pub max_request_bytes: u32,
 	/// Whether to send a partial body when the request exceeds `maxRequestBytes`.
 	#[serde(default)]
@@ -83,7 +83,7 @@ pub struct BodyOptions {
 impl Default for BodyOptions {
 	fn default() -> Self {
 		Self {
-			max_request_bytes: 8192,
+			max_request_bytes: default_max_request_bytes(),
 			allow_partial_message: false,
 			pack_as_bytes: false,
 		}
@@ -1438,6 +1438,10 @@ fn cache_refresh_threshold(ttl: Duration) -> Duration {
 
 fn should_cache_http_direct_response(status: StatusCode) -> bool {
 	matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+}
+
+fn default_max_request_bytes() -> u32 {
+	8192
 }
 
 pub(crate) fn default_cache_entries() -> usize {
