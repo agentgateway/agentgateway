@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 
-import { sendChatCompletion, sendMcpJsonRpc } from '@/api/playgroundApi';
+import { sendMcpJsonRpc, streamChatCompletion } from '@/api/playgroundApi';
 import { claudeSubscriptionWarning } from '@/claudeSubscription';
 import { CatalogModelSelector } from '@/components/CatalogModelSelector';
 import {
@@ -56,6 +56,8 @@ type ChatMessage = {
 	arguments?: unknown;
 	meta?: MessageMeta;
 	raw?: unknown;
+	/** True while a streaming assistant response is still being appended. */
+	streaming?: boolean;
 };
 
 type MessageMeta = {
@@ -354,12 +356,46 @@ export function PlaygroundPage() {
 				{ label: 'Waiting for model response', state: 'pending' }
 			]);
 			const started = performance.now();
-			const response = await sendChatCompletion({
+			// Show the assistant reply as it streams in, then finalize it once the
+			// aggregated response (tool calls, usage) is available.
+			setRunSteps(current =>
+				current.map(step =>
+					step.label === 'Sending chat completion'
+						? { ...step, state: 'done' }
+						: step.label === 'Waiting for model response' ||
+								step.label === 'Waiting for final response'
+							? { ...step, state: 'active' }
+							: step
+				)
+			);
+			setMessages(current => [
+				...current,
+				userChatMessage,
+				{ role: 'assistant', content: '', streaming: true }
+			]);
+			const appendDelta = (delta: string) => {
+				setMessages(current =>
+					current.map((message, idx) =>
+						idx === current.length - 1 && message.streaming
+							? { ...message, content: message.content + delta }
+							: message
+					)
+				);
+			};
+			const finalizeAssistant = (final: ChatMessage) => {
+				setMessages(current =>
+					current.map((message, idx) =>
+						idx === current.length - 1 && message.streaming ? final : message
+					)
+				);
+			};
+			const response = await streamChatCompletion({
 				baseUrl: llmBaseUrl,
 				model: requestModel,
 				apiKey: selectedKeyValue,
 				messages: toOpenAiMessages(outboundMessages),
-				tools
+				tools,
+				onDelta: appendDelta
 			});
 			const firstLatencyMs = Math.round(performance.now() - started);
 			setRunSteps([
@@ -382,7 +418,7 @@ export function PlaygroundPage() {
 					),
 					raw: response
 				};
-				setMessages(current => [...current, userChatMessage, assistantMessage]);
+				finalizeAssistant(assistantMessage);
 				setPrompt('');
 				setRunSteps([
 					{ label: 'Preparing request', state: 'done' },
@@ -425,12 +461,14 @@ export function PlaygroundPage() {
 					{ label: 'Waiting for final response', state: 'pending' }
 				]);
 				const finalStarted = performance.now();
-				const finalResponse = await sendChatCompletion({
+				setMessages(current => [...current, { role: 'assistant', content: '', streaming: true }]);
+				const finalResponse = await streamChatCompletion({
 					baseUrl: llmBaseUrl,
 					model: requestModel,
 					apiKey: selectedKeyValue,
 					messages: toOpenAiMessages(followUpMessages),
-					tools
+					tools,
+					onDelta: appendDelta
 				});
 				const finalLatencyMs = Math.round(performance.now() - finalStarted);
 				setRunSteps([
@@ -444,39 +482,38 @@ export function PlaygroundPage() {
 					{ label: 'Sending tool results', state: 'done' },
 					{ label: 'Waiting for final response', state: 'done' }
 				]);
-				setMessages(current => [
-					...current,
-					{
-						role: 'assistant',
-						content: assistantText(finalResponse),
-						meta: responseMeta(
-							finalResponse,
-							requestModel,
-							selectedCatalogProvider ?? undefined,
-							finalLatencyMs
-						),
-						raw: finalResponse
-					}
-				]);
+				finalizeAssistant({
+					role: 'assistant',
+					content: assistantText(finalResponse),
+					meta: responseMeta(
+						finalResponse,
+						requestModel,
+						selectedCatalogProvider ?? undefined,
+						finalLatencyMs
+					),
+					raw: finalResponse
+				});
 			} else {
-				setMessages(current => [
-					...current,
-					userChatMessage,
-					{
-						role: 'assistant',
-						content: assistantText(response),
-						meta: responseMeta(
-							response,
-							requestModel,
-							selectedCatalogProvider ?? undefined,
-							firstLatencyMs
-						),
-						raw: response
-					}
-				]);
+				finalizeAssistant({
+					role: 'assistant',
+					content: assistantText(response),
+					meta: responseMeta(
+						response,
+						requestModel,
+						selectedCatalogProvider ?? undefined,
+						firstLatencyMs
+					),
+					raw: response
+				});
 				setPrompt('');
 			}
 		} catch (err) {
+			// A stream that failed mid-flight leaves a partial assistant message;
+			// keep what was received so the error context is visible.
+			setMessages(current => {
+				const last = current[current.length - 1];
+				return last?.streaming ? current.slice(0, -1) : current;
+			});
 			setRunSteps(current =>
 				current.map(step => (step.state === 'active' ? { ...step, state: 'error' } : step))
 			);
@@ -822,7 +859,10 @@ function ChatMessageView(props: { message: ChatMessage }) {
 				) : message.role === 'tool' ? (
 					<ToolResultSummary message={message} />
 				) : (
-					message.content
+					<>
+						{message.content}
+						{message.streaming ? <span className="chat-stream-cursor" aria-hidden /> : null}
+					</>
 				)}
 				{message.meta ? <MessageMetaChips meta={message.meta} /> : null}
 				<details className="message-inspector">
