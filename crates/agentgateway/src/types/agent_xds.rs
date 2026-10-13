@@ -1882,6 +1882,7 @@ impl ModelRoute {
 										.collect(),
 									ttl: permissive_cel_expression_arc(diagnostics, field("cache.ttl"), &cache.ttl),
 									max_entries: http::ext_authz::effective_cache_entries(cache.max_entries as usize),
+									background_refresh: cache.background_refresh,
 								})
 							})
 							.transpose()?;
@@ -3352,6 +3353,7 @@ fn external_auth_from_proto(
 				key,
 				ttl,
 				max_entries,
+				background_refresh: cache.background_refresh,
 			})
 		})
 		.transpose()?;

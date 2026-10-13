@@ -165,6 +165,11 @@ pub struct CacheConfig {
 	/// Maximum number of results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
+	/// Serve the cached response while a near-expiry entry is refreshed in the
+	/// background, so no request blocks on the refresh. Off by default: serving a
+	/// stale authorization decision is not safe for every workload, so it is opt-in.
+	#[serde(default)]
+	pub background_refresh: bool,
 }
 
 impl CacheConfig {
@@ -267,7 +272,7 @@ impl ExtAuthz {
 					let lookup = cached.lookup(now);
 					match lookup {
 						CacheLookup::Hit => (Some(cache_key), CacheLookup::Hit, Some(cached.response)),
-						CacheLookup::Refresh => (Some(cache_key), CacheLookup::Refresh, None),
+						CacheLookup::Refresh => (Some(cache_key), CacheLookup::Refresh, Some(cached.response)),
 						CacheLookup::Miss(CacheMissReason::ExpiredEntry) => {
 							self
 								.cache_store
@@ -730,12 +735,60 @@ impl ExtAuthz {
 		cache.evaluate_ttl(&cel::Executor::new_request(req))
 	}
 
+	/// Clear the in-flight refresh flag on a cached entry after a failed background
+	/// refresh, so the next request re-elects a refresher instead of waiting for the
+	/// entry to expire. The flag is an `Arc<AtomicBool>` shared with the stored entry,
+	/// so updating a `get` clone updates the entry.
+	fn clear_refreshing(&self, cache_key: &Option<CacheKey>) {
+		if let Some(key) = cache_key
+			&& let Some(cached) = self.cache_store.get(key)
+		{
+			cached.refreshing.store(false, Ordering::Release);
+		}
+	}
+
 	pub async fn check_http(
 		&self,
 		client: PolicyClient,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
 		let start = dtrace::timed_start();
+		let (cache_key, cache_lookup, cached_response) = self.lookup_cache(req);
+		match (&cache_lookup, cached_response) {
+			(CacheLookup::Hit, Some(cached_response)) => {
+				pol_result_timed!(start, Severity::Info, Apply, "{}", cache_lookup);
+				cached_response.apply(req)
+			},
+			// Opt-in background refresh: serve the still-valid cached response now
+			// and re-check out of band, so no request waits on the refresh. A failed
+			// re-check keeps the cached entry (it never overwrites a valid response
+			// with a denial) and clears the in-flight flag so the next request retries.
+			(CacheLookup::Refresh, Some(cached))
+				if self.cache.as_ref().is_some_and(|c| c.background_refresh) =>
+			{
+				pol_result_timed!(start, Severity::Info, Apply, "{}", cache_lookup);
+				let served = cached.apply(req)?;
+				let this = self.clone();
+				let mut bg_req = clone_request_head(req);
+				tokio::spawn(async move {
+					let _ = this.run_check(client, &mut bg_req, cache_key, true).await;
+				});
+				Ok(served)
+			},
+			(_, _) => {
+				pol_event!(Severity::Info, "{}", cache_lookup);
+				self.run_check(client, req, cache_key, false).await
+			},
+		}
+	}
+
+	async fn run_check(
+		&self,
+		client: PolicyClient,
+		req: &mut Request,
+		cache_key: Option<CacheKey>,
+		is_background: bool,
+	) -> Result<PolicyResponse, ProxyError> {
 		let Protocol::Http {
 			redirect,
 			include_response_headers,
@@ -747,13 +800,6 @@ impl ExtAuthz {
 		else {
 			unreachable!();
 		};
-
-		let (cache_key, cache_lookup, cached_response) = self.lookup_cache(req);
-		if let (CacheLookup::Hit, Some(cached_response)) = (&cache_lookup, cached_response) {
-			pol_result_timed!(start, Severity::Info, Apply, "{}", cache_lookup);
-			return cached_response.apply(req);
-		}
-		pol_event!(Severity::Info, "{}", cache_lookup);
 
 		let (body, is_partial_body, include_partial_body_header) = if let Some(body_expr) = body_expr {
 			match Self::eval_http_body(req, body_expr) {
@@ -865,6 +911,10 @@ impl ExtAuthz {
 			Ok(r) => r,
 			Err(e) => {
 				trace!("ext_authz failed {e}");
+				if is_background {
+					self.clear_refreshing(&cache_key);
+					return Ok(PolicyResponse::default());
+				}
 				return self.handle_auth_failure(&e.to_string());
 			},
 		};
@@ -884,6 +934,10 @@ impl ExtAuthz {
 				// response does not pass through the normal proxy response buffering hook,
 				// so inspect it whenever response metadata expressions are configured.
 				if let Err(e) = http::inspect_response_body(&mut resp).await {
+					if is_background {
+						self.clear_refreshing(&cache_key);
+						return Ok(PolicyResponse::default());
+					}
 					return self.handle_auth_failure(&e.to_string());
 				}
 				let m = metadata
@@ -910,6 +964,17 @@ impl ExtAuthz {
 					dynamic_metadata,
 				}),
 			);
+			return Ok(PolicyResponse::default());
+		}
+		// A background refresh never caches a denial over the still-valid entry; it
+		// clears the in-flight flag so the next request retries, and keeps serving the
+		// cached value until the entry finally expires.
+		if is_background {
+			trace!(
+				"ext_authz background refresh failed with code {}",
+				resp.status()
+			);
+			self.clear_refreshing(&cache_key);
 			return Ok(PolicyResponse::default());
 		}
 		if (resp.status() == StatusCode::FORBIDDEN || resp.status() == StatusCode::UNAUTHORIZED)
@@ -1438,6 +1503,22 @@ fn cache_refresh_threshold(ttl: Duration) -> Duration {
 
 fn should_cache_http_direct_response(status: StatusCode) -> bool {
 	matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+}
+
+/// Clone a request's head (method, URI, version, headers) with an empty body, for
+/// evaluating ext_authz CEL in a background refresh that outlives the original
+/// request. The body and extensions are not carried over, so background-refresh CEL
+/// sees only the request head -- sufficient for the token-mint use case, where the
+/// authorization request is built from static CEL and response-derived metadata.
+fn clone_request_head(req: &Request) -> Request {
+	let mut cloned = ::http::Request::builder()
+		.method(req.method().clone())
+		.uri(req.uri().clone())
+		.version(req.version())
+		.body(http::Body::empty())
+		.expect("a request head is always a valid request");
+	*cloned.headers_mut() = req.headers().clone();
+	cloned
 }
 
 pub(crate) fn default_cache_entries() -> usize {

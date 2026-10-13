@@ -1040,6 +1040,9 @@ message TrafficPolicySpec {
       repeated string key = 1;
       string ttl = 2; // CEL expr returning duration or timestamp
       uint32 max_entries = 3;
+      // Serve a near-expiry cached response while refreshing it in the background
+      // (opt-in; unsafe to serve a stale decision for some workloads).
+      bool background_refresh = 4;
     }
     message GRPCProtocol {
       map<string, string> context = 1;

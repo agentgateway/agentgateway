@@ -3430,13 +3430,19 @@
           "format": "uint",
           "minimum": 0,
           "default": 10000
+        },
+        "backgroundRefresh": {
+          "description": "Serve the cached response while a near-expiry entry is refreshed in the\nbackground, so no request blocks on the refresh. Off by default: serving a\nstale authorization decision is not safe for every workload, so it is opt-in.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
       "required": [
         "key",
         "ttl",
-        "maxEntries"
+        "maxEntries",
+        "backgroundRefresh"
       ]
     }
   }

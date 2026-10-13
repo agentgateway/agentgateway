@@ -481,6 +481,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`binds[].listeners[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -509,6 +510,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`binds[].listeners[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -829,6 +831,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1039,6 +1042,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1211,6 +1215,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1407,6 +1412,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`binds[].listeners[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -1435,6 +1441,7 @@
 |`binds[].listeners[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`binds[].listeners[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`binds[].listeners[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`binds[].listeners[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -1614,6 +1621,7 @@
 |`frontendPolicies.networkExtAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`frontendPolicies.networkExtAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`frontendPolicies.networkExtAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`frontendPolicies.networkExtAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`frontendPolicies.substrateEgressActorResolution`|object|Validate the originating actor before accepting a CONNECT tunnel.|
 |`frontendPolicies.substrateEgressActorResolution.service`|object|Service reference. Service must be defined in the top level services list.|
 |`frontendPolicies.substrateEgressActorResolution.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -2037,6 +2045,7 @@
 |`policies[].policy.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`policies[].policy.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`policies[].policy.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`policies[].policy.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`policies[].policy.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`policies[].policy.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -2065,6 +2074,7 @@
 |`policies[].policy.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`policies[].policy.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`policies[].policy.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`policies[].policy.extProc`|object|Send request and response data to an external processing service.|
 |`policies[].policy.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -2385,6 +2395,7 @@
 |`backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`backends[].ai.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -2595,6 +2606,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -2765,6 +2777,7 @@
 |`backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`backends[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3171,6 +3184,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routeGroups[].routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`routeGroups[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -3199,6 +3213,7 @@
 |`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routeGroups[].routes[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routeGroups[].routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`routeGroups[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3519,6 +3534,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3729,6 +3745,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3901,6 +3918,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routeGroups[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -4069,6 +4087,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`gateways.*.listeners[].extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`gateways.*.listeners[].extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`gateways.*.listeners[].extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`gateways.*.listeners[].extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`gateways.*.listeners[].extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`gateways.*.listeners[].extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4097,6 +4116,7 @@
 |`gateways.*.listeners[].extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`gateways.*.listeners[].extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`gateways.*.listeners[].extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`gateways.*.listeners[].extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`gateways.*.listeners[].extProc`|object|Send request and response data to an external processing service.|
 |`gateways.*.listeners[].extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`gateways.*.listeners[].extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4309,6 +4329,7 @@
 |`gateways.*.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`gateways.*.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`gateways.*.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`gateways.*.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`gateways.*.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`gateways.*.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`gateways.*.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4337,6 +4358,7 @@
 |`gateways.*.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`gateways.*.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`gateways.*.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`gateways.*.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`gateways.*.extProc`|object|Send request and response data to an external processing service.|
 |`gateways.*.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`gateways.*.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4794,6 +4816,7 @@
 |`routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routes[].policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4822,6 +4845,7 @@
 |`routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routes[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -5142,6 +5166,7 @@
 |`routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routes[].backends[].ai.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5352,6 +5377,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5524,6 +5550,7 @@
 |`routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`routes[].backends[].policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5884,6 +5911,7 @@
 |`llm.virtualModels[].routing.callout.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`llm.virtualModels[].routing.callout.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`llm.virtualModels[].routing.callout.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`llm.virtualModels[].routing.callout.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`llm.policies`|object|policies defines policies for handling incoming requests, before a model is selected|
 |`llm.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`llm.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
@@ -5970,6 +5998,7 @@
 |`llm.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`llm.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`llm.policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`llm.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`llm.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -5998,6 +6027,7 @@
 |`llm.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`llm.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`llm.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`llm.policies.extProc`|object|Send request and response data to an external processing service.|
 |`llm.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6506,6 +6536,7 @@
 |`mcp.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`mcp.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`mcp.policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`mcp.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`mcp.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`mcp.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -6534,6 +6565,7 @@
 |`mcp.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`mcp.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`mcp.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`mcp.policies.extProc`|object|Send request and response data to an external processing service.|
 |`mcp.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6750,6 +6782,7 @@
 |`ui.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`ui.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`ui.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`ui.policies.extAuthz.conditional[].cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`ui.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`ui.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`ui.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -6778,6 +6811,7 @@
 |`ui.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`ui.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
 |`ui.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
+|`ui.policies.extAuthz.cache.backgroundRefresh`|boolean|Serve the cached response while a near-expiry entry is refreshed in the<br>background, so no request blocks on the refresh. Off by default: serving a<br>stale authorization decision is not safe for every workload, so it is opt-in.|
 |`ui.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`ui.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`ui.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
