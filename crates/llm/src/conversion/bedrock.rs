@@ -4113,31 +4113,24 @@ mod helpers {
 		if !supports_caching {
 			return;
 		}
-		let mut cache_points_used = count_cache_points(req);
+		// Client cache points take precedence over the policy.
+		if count_cache_points(req) > 0 {
+			return;
+		}
 		if caching.cache_system
-			&& cache_points_used < 4
 			&& let Some(system) = &mut req.system
-			&& !system
-				.iter()
-				.any(|b| matches!(b, bedrock::SystemContentBlock::CachePoint { .. }))
 			&& caching
 				.min_tokens
 				.is_none_or(|min| estimate_system_tokens(system) >= min)
 		{
 			system.push_cache_point(create_cache_point());
-			cache_points_used += 1;
 		}
-		if caching.cache_messages
-			&& cache_points_used < 4
-			&& insert_message_cache_point(&mut req.messages, caching.cache_message_offset)
-		{
-			cache_points_used += 1;
+		if caching.cache_messages {
+			insert_message_cache_point(&mut req.messages, caching.cache_message_offset);
 		}
 		if caching.cache_tools
-			&& cache_points_used < 4
 			&& let Some(tool_config) = &mut req.tool_config
 			&& !tool_config.tools.is_empty()
-			&& !matches!(tool_config.tools.last(), Some(bedrock::Tool::CachePoint(_)))
 		{
 			tool_config.tools.push_cache_point(create_cache_point());
 		}

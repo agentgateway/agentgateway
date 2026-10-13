@@ -21,29 +21,25 @@ fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> O
 	Some(budget_tokens.min(max_tokens - 1))
 }
 
+/// Client cache marks take precedence: when the request already has any, the policy adds none, so
+/// it can never place a default TTL mark ahead of a longer client TTL.
 pub fn apply_prompt_caching(
 	req: &mut types::messages::Request,
 	caching: &crate::PromptCachingConfig,
 ) {
-	let mut cache_points_used = count_cache_control(req);
-	if cache_points_used >= 4 {
+	if has_cache_control(req) {
 		return;
 	}
-	let mut mark = |block: Option<&mut serde_json::Value>| {
-		if let Some(block) = block
-			&& cache_points_used < 4
-			&& !has_cache_control(block)
-		{
+	let mark = |block: Option<&mut serde_json::Value>| {
+		if let Some(block) = block {
 			if !block.is_object() {
 				*block = serde_json::Value::Object(Default::default());
 			}
 			block["cache_control"] = serde_json::json!({"type": "ephemeral"});
-			cache_points_used += 1;
 		}
 	};
 	if caching.cache_system
 		&& let Some(system) = &mut req.system
-		&& system_marks(system) == 0
 		&& caching
 			.min_tokens
 			.is_none_or(|min| system_tokens(system) >= min)
@@ -87,11 +83,17 @@ pub fn apply_prompt_caching(
 	}
 }
 
-/// Counts cache_control marks only where the API accepts them, so a key with the same name inside
-/// tool inputs or schemas is not mistaken for one.
-fn count_cache_control(req: &types::messages::Request) -> usize {
-	let marks = |blocks: &[serde_json::Value]| blocks.iter().filter(|b| has_cache_control(b)).count();
-	let content: usize = req
+/// Looks for cache_control only where the API accepts it, so a key with the same name inside tool
+/// inputs or schemas is not mistaken for a mark.
+fn has_cache_control(req: &types::messages::Request) -> bool {
+	let marked = |block: &serde_json::Value| block.get("cache_control").is_some_and(|c| !c.is_null());
+	let system = match &req.system {
+		Some(types::messages::TextBlock::Array(parts)) => {
+			parts.iter().any(|part| marked(part.fields()))
+		},
+		_ => false,
+	};
+	let content = req
 		.messages
 		.iter()
 		.filter_map(|message| match &message.content {
@@ -99,38 +101,20 @@ fn count_cache_control(req: &types::messages::Request) -> usize {
 			_ => None,
 		})
 		.flatten()
-		.map(|part| {
+		.any(|part| {
 			let block = part.fields();
-			let nested = match block["content"].as_array() {
-				Some(parts) if block["type"] == "tool_result" => marks(parts),
-				_ => 0,
-			};
-			usize::from(has_cache_control(block)) + nested
-		})
-		.sum();
+			marked(block)
+				|| (block["type"] == "tool_result"
+					&& block["content"]
+						.as_array()
+						.is_some_and(|parts| parts.iter().any(marked)))
+		});
 	let tools = req
 		.rest
 		.get("tools")
 		.and_then(serde_json::Value::as_array)
-		.map_or(0, |tools| marks(tools));
-	usize::from(has_cache_control(&req.rest))
-		+ req.system.as_ref().map_or(0, system_marks)
-		+ content
-		+ tools
-}
-
-fn has_cache_control(block: &serde_json::Value) -> bool {
-	block.get("cache_control").is_some_and(|c| !c.is_null())
-}
-
-fn system_marks(system: &types::messages::TextBlock) -> usize {
-	match system {
-		types::messages::TextBlock::Array(parts) => parts
-			.iter()
-			.filter(|part| has_cache_control(part.fields()))
-			.count(),
-		types::messages::TextBlock::Text(_) => 0,
-	}
+		.is_some_and(|tools| tools.iter().any(marked));
+	marked(&req.rest) || system || content || tools
 }
 
 fn system_tokens(system: &types::messages::TextBlock) -> usize {
@@ -221,30 +205,38 @@ mod tests {
 	}
 
 	#[test]
-	fn apply_prompt_caching_keeps_client_marks_within_limit() {
-		// The cache_control key in the tool input is tool data, not a mark, so one slot is left.
-		let out = apply(
+	fn apply_prompt_caching_defers_to_client_marks() {
+		let request = |system_mark: serde_json::Value| {
 			serde_json::json!({
-				"system": [{"type": "text", "text": "a", "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
+				"system": [{"type": "text", "text": "a", "cache_control": system_mark}],
 				"messages": [
-					{"role": "user", "content": [
-						{"type": "text", "text": "b", "cache_control": {"type": "ephemeral"}},
-						{"type": "text", "text": "c", "cache_control": {"type": "ephemeral"}}
-					]},
 					{"role": "assistant", "content": [
 						{"type": "tool_use", "id": "t1", "name": "set", "input": {"cache_control": "on"}}
 					]},
 					{"role": "user", "content": "How are you?"}
 				]
-			}),
-			&crate::PromptCachingConfig::default(),
+			})
+		};
+		let caching = crate::PromptCachingConfig {
+			min_tokens: None,
+			..Default::default()
+		};
+		let out = apply(
+			request(serde_json::json!({"type": "ephemeral", "ttl": "1h"})),
+			&caching,
 		);
 		assert_eq!(out["system"][0]["cache_control"]["ttl"], "1h");
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
+		// The cache_control key in the tool input is tool data, not a client mark.
+		let out = apply(request(serde_json::Value::Null), &caching);
 		assert_eq!(
-			out["messages"][1]["content"][0]["cache_control"],
+			out["messages"][0]["content"][0]["cache_control"],
 			serde_json::json!({"type": "ephemeral"})
 		);
-		assert!(out["messages"][2]["content"].is_string());
 	}
 }
 
@@ -496,18 +488,14 @@ pub mod from_completions {
 	}
 
 	fn apply_prompt_caching(req: &mut messages::Request, caching: &crate::PromptCachingConfig) {
-		let mut cache_points_used = count_cache_control(req);
-		let mut mark = |slot: Option<&mut Option<messages::CacheControlEphemeral>>| {
-			if let Some(slot) = slot
-				&& slot.is_none()
-				&& cache_points_used < 4
-			{
+		if has_cache_control(req) {
+			return;
+		}
+		let mark = |slot: Option<&mut Option<messages::CacheControlEphemeral>>| {
+			if let Some(slot) = slot {
 				*slot = Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
-				cache_points_used += 1;
 			}
 		};
-		// translate_internal only emits system blocks when the client marked one, so a string system
-		// prompt is unmarked.
 		if caching.cache_system
 			&& let Some(messages::SystemPrompt::Text(text)) = &mut req.system
 			&& !text.is_empty()
@@ -548,48 +536,30 @@ pub mod from_completions {
 		}
 	}
 
-	fn count_cache_control(req: &mut messages::Request) -> usize {
-		let system = match &req.system {
-			Some(messages::SystemPrompt::Blocks(blocks)) => blocks
-				.iter()
-				.filter(|messages::SystemContentBlock::Text { cache_control, .. }| cache_control.is_some())
-				.count(),
-			_ => 0,
-		};
-		let content: usize = req
+	fn has_cache_control(req: &mut messages::Request) -> bool {
+		let system = matches!(&req.system, Some(messages::SystemPrompt::Blocks(blocks))
+			if blocks.iter().any(|messages::SystemContentBlock::Text { cache_control, .. }| cache_control.is_some()));
+		let content = req
 			.messages
 			.iter_mut()
 			.flat_map(|message| &mut message.content)
-			.map(|block| {
+			.any(|block| {
 				// Tool results translated from Completions only hold text parts.
-				let nested = match block {
-					messages::ContentBlock::ToolResult {
-						content: messages::ToolResultContent::Array(parts),
-						..
-					} => parts
-						.iter()
-						.filter(|part| {
-							matches!(
-								part,
-								messages::ToolResultContentPart::Text {
-									cache_control: Some(_),
-									..
-								}
-							)
-						})
-						.count(),
-					_ => 0,
-				};
-				nested + usize::from(content_cache_control(block).is_some_and(|c| c.is_some()))
-			})
-			.sum();
+				let nested = matches!(block, messages::ContentBlock::ToolResult {
+					content: messages::ToolResultContent::Array(parts),
+					..
+				} if parts.iter().any(|part| matches!(part, messages::ToolResultContentPart::Text {
+					cache_control: Some(_),
+					..
+				})));
+				nested || content_cache_control(block).is_some_and(|c| c.is_some())
+			});
 		let tools = req
 			.tools
 			.iter()
 			.flatten()
-			.filter(|tool| tool.cache_control().is_some())
-			.count();
-		system + content + tools
+			.any(|tool| tool.cache_control().is_some());
+		system || content || tools
 	}
 
 	fn content_cache_control(

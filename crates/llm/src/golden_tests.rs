@@ -206,10 +206,7 @@ mod requests {
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("cache_control_dropped_server_tools", &[BEDROCK]),
-		(
-			"system_message_mid_conversation",
-			&[BEDROCK, BEDROCK_PROMPT_CACHING],
-		),
+		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
@@ -223,7 +220,10 @@ mod requests {
 			&[COMPLETIONS, BEDROCK, RESPONSES],
 		),
 		("responses_agent_subset", &[RESPONSES]),
-		("tool_result_error", &[COMPLETIONS, RESPONSES]),
+		(
+			"tool_result_error",
+			&[COMPLETIONS, RESPONSES, BEDROCK_PROMPT_CACHING],
+		),
 		("citations", &[COMPLETIONS, RESPONSES]),
 		("unknown_content", &[COMPLETIONS, RESPONSES]),
 		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
