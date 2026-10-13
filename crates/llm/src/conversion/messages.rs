@@ -31,11 +31,11 @@ pub fn apply_prompt_caching(
 		return;
 	}
 	let mark = |block: Option<&mut serde_json::Value>| {
-		if let Some(block) = block {
-			if !block.is_object() {
-				*block = serde_json::Value::Object(Default::default());
-			}
-			block["cache_control"] = serde_json::json!({"type": "ephemeral"});
+		if let Some(block) = block.and_then(serde_json::Value::as_object_mut) {
+			block.insert(
+				"cache_control".into(),
+				serde_json::json!({"type": "ephemeral"}),
+			);
 		}
 	};
 	if caching.cache_system
@@ -491,48 +491,39 @@ pub mod from_completions {
 		if has_cache_control(req) {
 			return;
 		}
-		let mark = |slot: Option<&mut Option<messages::CacheControlEphemeral>>| {
-			if let Some(slot) = slot {
-				*slot = Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
-			}
-		};
+		let mark = || Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
 		if caching.cache_system
 			&& let Some(messages::SystemPrompt::Text(text)) = &mut req.system
-			&& !text.is_empty()
 			&& caching
 				.min_tokens
 				.is_none_or(|min| crate::conversion::estimate_tokens([text.as_str()]) >= min)
 		{
 			let text = std::mem::take(text);
-			let system = req.system.insert(messages::SystemPrompt::Blocks(vec![
+			req.system = Some(messages::SystemPrompt::Blocks(vec![
 				messages::SystemContentBlock::Text {
 					text,
-					cache_control: None,
+					cache_control: mark(),
 				},
 			]));
-			if let messages::SystemPrompt::Blocks(blocks) = system
-				&& let Some(messages::SystemContentBlock::Text { cache_control, .. }) = blocks.last_mut()
-			{
-				mark(Some(cache_control));
-			}
 		}
 		if caching.cache_messages && req.messages.len() >= 2 {
 			let idx = (req.messages.len() - 2).saturating_sub(caching.cache_message_offset);
-			mark(
-				req.messages[idx]
-					.content
-					.iter_mut()
-					.rev()
-					.find_map(content_cache_control),
-			);
+			if let Some(cache_control) = req.messages[idx]
+				.content
+				.iter_mut()
+				.rev()
+				.find_map(content_cache_control)
+			{
+				*cache_control = mark();
+			}
 		}
 		if caching.cache_tools
 			&& let Some(tool) = req.tools.as_mut().and_then(|tools| tools.last_mut())
 		{
-			mark(Some(match tool {
-				messages::Tool::Custom(tool) => &mut tool.cache_control,
-				messages::Tool::Server(tool) => &mut tool.cache_control,
-			}));
+			match tool {
+				messages::Tool::Custom(tool) => tool.cache_control = mark(),
+				messages::Tool::Server(tool) => tool.cache_control = mark(),
+			}
 		}
 	}
 
