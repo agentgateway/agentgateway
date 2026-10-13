@@ -498,7 +498,9 @@ impl Relay {
 				},
 				Ok(false) => {},
 				Err(e) => {
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
+					if self.upstreams.failure_mode == FailureMode::FailOpen
+						&& !e.is_client_authentication_failure()
+					{
 						warn!(
 							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
 							kind.as_str()
@@ -1241,8 +1243,10 @@ impl Relay {
 						));
 						continue;
 					}
-					// FailOpen skips pre-stream failures. FailClosed fails before any frame streams.
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
+					// Credential rejections must reach the client even when unavailable targets are skipped.
+					if self.upstreams.failure_mode == FailureMode::FailOpen
+						&& !e.is_client_authentication_failure()
+					{
 						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
 						last_error = Some(e);
 					} else {
@@ -1481,7 +1485,9 @@ impl Relay {
 						unsupported_get_streams += 1;
 						continue;
 					}
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
+					if self.upstreams.failure_mode == FailureMode::FailOpen
+						&& !e.is_client_authentication_failure()
+					{
 						if !is_405 {
 							// per spec, a 405 is a valid response to say a GET stream is not supported so avoid log spam.
 							warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
@@ -1728,7 +1734,9 @@ impl Relay {
 			match result {
 				Ok(_) => {},
 				Err(e) => {
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
+					if self.upstreams.failure_mode == FailureMode::FailOpen
+						&& !e.is_client_authentication_failure()
+					{
 						warn!(
 							"upstream '{}' failed during notification, skipping: {}",
 							name, e

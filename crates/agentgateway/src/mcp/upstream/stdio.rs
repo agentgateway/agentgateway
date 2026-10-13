@@ -19,7 +19,7 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 
 pub struct Process {
-	sender: mpsc::Sender<(ClientJsonRpcMessage, IncomingRequestContext)>,
+	sender: mpsc::Sender<QueuedMessage>,
 	shutdown_tx: agent_core::responsechannel::Sender<(), Option<UpstreamError>>,
 	event_stream: AtomicOption<mpsc::Sender<ServerJsonRpcMessage>>,
 	pending_requests: Arc<Mutex<HashMap<RequestId, oneshot::Sender<ServerJsonRpcMessage>>>>,
@@ -63,14 +63,9 @@ impl Process {
 			.unwrap()
 			.insert(req_id.clone(), sender);
 
-		if self
-			.sender
-			.send((JsonRpcMessage::Request(req), ctx.clone()))
-			.await
-			.is_err()
-		{
+		if let Err(e) = self.queue(JsonRpcMessage::Request(req), ctx).await {
 			self.pending_requests.lock().unwrap().remove(&req_id);
-			return Err(UpstreamError::Send);
+			return Err(e);
 		}
 
 		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
@@ -96,12 +91,7 @@ impl Process {
 		if !self.is_alive() {
 			return Err(UpstreamError::Send);
 		}
-		self
-			.sender
-			.send((JsonRpcMessage::notification(req), ctx.clone()))
-			.await
-			.map_err(|_| UpstreamError::Send)?;
-		Ok(())
+		self.queue(JsonRpcMessage::notification(req), ctx).await
 	}
 
 	pub async fn send_client_message(
@@ -112,19 +102,38 @@ impl Process {
 		if !self.is_alive() {
 			return Err(UpstreamError::Send);
 		}
+		self.queue(msg, ctx).await
+	}
+
+	/// Waits until the message is sent. Only a rejected client credential is returned; other send
+	/// failures stop the transport, which fails pending requests.
+	async fn queue(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		let (rejected_tx, rejected_rx) = oneshot::channel();
 		self
 			.sender
-			.send((msg, ctx.clone()))
+			.send((msg, ctx.clone(), rejected_tx))
 			.await
 			.map_err(|_| UpstreamError::Send)?;
-		Ok(())
+		match rejected_rx.await {
+			Ok(rejection) => Err(rejection),
+			Err(_) => Ok(()),
+		}
 	}
 }
 
+type QueuedMessage = (
+	ClientJsonRpcMessage,
+	IncomingRequestContext,
+	oneshot::Sender<UpstreamError>,
+);
+
 impl Process {
 	pub fn new(mut proc: impl MCPTransport) -> Self {
-		let (sender_tx, mut sender_rx) =
-			mpsc::channel::<(ClientJsonRpcMessage, IncomingRequestContext)>(10);
+		let (sender_tx, mut sender_rx) = mpsc::channel::<QueuedMessage>(10);
 		let (shutdown_tx, mut shutdown_rx) =
 			agent_core::responsechannel::new::<(), Option<UpstreamError>>(10);
 		let pending_requests = Arc::new(Mutex::new(HashMap::<
@@ -143,12 +152,17 @@ impl Process {
 			loop {
 				tokio::select! {
 					req = sender_rx.recv() => match req {
-						Some((msg, ctx)) => {
-							if let Err(e) = proc.send(msg, &ctx).await {
+						Some((msg, ctx, rejected)) => match proc.send(msg, &ctx).await {
+							Ok(()) => {},
+							// Rejected before anything was sent, so the transport is still usable.
+							Err(e) if e.is_client_authentication_failure() => {
+								let _ = rejected.send(e);
+							},
+							Err(e) => {
 								error!("Error sending message to stdio process: {:?}", e);
 								terminal_err = Some(e);
 								break;
-							}
+							},
 						},
 						None => break,
 					},

@@ -9,9 +9,10 @@ use serde_json::{Map, Value};
 use tracing::{debug, trace, warn};
 
 use super::{AuthorizationLocation, BackendAuthError};
-use crate::http::Request;
 use crate::http::jwt::Claims;
 use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
+use crate::http::{Request, jwt};
+use crate::mcp::auth::McpResourceChallenge;
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
@@ -348,6 +349,18 @@ impl OAuthTokenExchangeAuth {
 				debug!(source=?self.subject_token.source, "oauth token exchange subject token missing");
 				ProxyError::InvalidRequest
 			})?;
+		// Reject known-expired credentials using claims verified for this token, despite ingress clock skew.
+		// Return a 401 so the client refreshes; RFC 8693's 400 `invalid_request` looks like misconfiguration.
+		if let Some(claims) = req.extensions().get::<Claims>()
+			&& claims.jwt.expose_secret() == subject_token
+			&& let Some(exp) = claims.inner.get("exp").and_then(Value::as_f64)
+			&& exp <= jsonwebtoken::get_current_timestamp() as f64
+		{
+			let err = ProxyError::JwtAuthenticationFailure(jwt::TokenError::Invalid(
+				jsonwebtoken::errors::ErrorKind::ExpiredSignature.into(),
+			));
+			return Err(McpResourceChallenge::wrap(req, err));
+		}
 		let actor = self
 			.actor_token
 			.as_ref()
