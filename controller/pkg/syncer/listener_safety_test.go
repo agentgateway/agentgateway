@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/annotations"
@@ -197,7 +198,8 @@ func TestListenerSafetyInvalidTLSWinner(t *testing.T) {
 }
 
 type testExtensionResolver struct {
-	parents translator.RouteParents
+	parents []*plugins.ParentInfo
+	kind    string
 }
 
 func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
@@ -212,14 +214,11 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 		},
 	}
 	ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), class, route))
-	var finalListeners krt.Collection[*translator.GatewayListener]
-	_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{}, map[string]*deployer.GatewayClassInfo{"additional": {}},
-		syncer.WithListenerParentResolver(func(listeners krt.Collection[*translator.GatewayListener], _ krtutil.KrtOptions) translator.ParentResolver {
-			finalListeners = listeners
-			return translator.BuildRouteParents(listeners)
-		}),
+	parent := &plugins.ParentInfo{ParentGateway: exampleGateway, ParentGatewayClassName: "additional", ListenerKey: "default/example.http"}
+	_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{
+		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{testExtensionResolver{parents: []*plugins.ParentInfo{parent}, kind: "Gateway"}}},
+	}, map[string]*deployer.GatewayClassInfo{"additional": {}},
 	)
-	require.NotNil(t, finalListeners.GetKey("default/example.http"))
 	assert.Empty(t, listenerKeys(s))
 	var routeKeys []string
 	for _, resource := range s.Outputs.Resources.List() {
@@ -230,12 +229,57 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 	assert.Equal(t, []string{"default/example.http"}, routeKeys)
 }
 
-func (r testExtensionResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*plugins.ParentInfo {
-	if pk.Kind != "TestListenerSet" {
+func (r testExtensionResolver) ParentsFor(_ krt.HandlerContext, pk utils.TypedNamespacedName) []*plugins.ParentInfo {
+	if pk.Kind != r.kind {
 		return nil
 	}
-	pk.Kind = "ListenerSet"
-	return r.parents.ParentsFor(ctx, pk)
+	return r.parents
+}
+
+func TestListenerSafetyServiceParentResolver(t *testing.T) {
+	gw := safetyGateway("")
+	service := &corev1.Service{Name: "service", Namespace: "default", Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 80}}}}
+	route := &gwv1.HTTPRoute{
+		Name: "service-route", Namespace: "default",
+		Spec: gwv1.HTTPRouteSpec{
+			CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Group: new(gwv1.Group("")), Kind: new(gwv1.Kind("Service")), Name: "service", Port: new(gwv1.PortNumber(80))}}},
+			Rules:           []gwv1.HTTPRouteRule{{}},
+		},
+	}
+	parent := &plugins.ParentInfo{
+		ParentGateway: exampleGateway,
+		ServiceKey:    &types.NamespacedName{Namespace: service.Namespace, Name: service.Name},
+		ServicePorts:  []gwv1.PortNumber{80},
+		Hostnames:     []string{"default/*"},
+		AllowedKinds:  []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
+	}
+	ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), service, route))
+	sq, s := testutils.SyncerWithExtensions(t, ctx, []string{"HTTPRoute"}, plugins.AgwPlugin{
+		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{testExtensionResolver{parents: []*plugins.ParentInfo{parent}, kind: "Service"}}},
+	}, nil, syncer.WithBuildReferenceTypes(func(_ *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes {
+		base.AllowedParentReferences.Insert(schema.GroupKind{Kind: "Service"})
+		return base
+	}))
+	var serviceRoutes int
+	for _, resource := range s.Outputs.Resources.List() {
+		if r := resource.Resource.GetRoute(); r != nil {
+			serviceRoutes++
+			assert.Empty(t, r.ListenerKey)
+			require.NotNil(t, r.ServiceKey)
+		}
+	}
+	assert.Equal(t, 1, serviceRoutes)
+	dump, err := json.Marshal(sq.Dump())
+	require.NoError(t, err)
+	var statuses []struct {
+		Status gwv1.HTTPRouteStatus `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(dump, &statuses))
+	require.Len(t, statuses, 1)
+	require.Len(t, statuses[0].Status.Parents, 1)
+	accepted := meta.FindStatusCondition(statuses[0].Status.Parents[0].Conditions, "Accepted")
+	require.NotNil(t, accepted)
+	assert.Equal(t, metav1.ConditionTrue, accepted.Status)
 }
 
 func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
@@ -252,8 +296,11 @@ func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
 	}
 	inputs := append(safetyInputs(gw), route)
 	ctx := testutils.BuildMockPolicyContext(t, inputs)
-	var finalListeners krt.Collection[*translator.GatewayListener]
-	sq, s := testutils.SyncerWithOptions(t, ctx, []string{"HTTPRoute"},
+	stale := ls.ParentInfo
+	stale.AllowedKinds = nil
+	sq, s := testutils.SyncerWithExtensions(t, ctx, []string{"HTTPRoute"}, plugins.AgwPlugin{
+		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{nil, testExtensionResolver{parents: []*plugins.ParentInfo{&stale}, kind: "TestListenerSet"}}},
+	}, nil,
 		syncer.WithExtraListenerSets(func(_ *plugins.AgwCollections, opts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
 			return krt.NewStaticCollection(nil, []*translator.ListenerSet{ls}, opts.ToOptions("test/ExtensionListeners")...)
 		}),
@@ -261,15 +308,7 @@ func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
 			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example.com", Kind: "TestListenerSet"})
 			return base
 		}),
-		syncer.WithListenerParentResolver(func(listeners krt.Collection[*translator.GatewayListener], _ krtutil.KrtOptions) translator.ParentResolver {
-			finalListeners = listeners
-			return testExtensionResolver{parents: translator.BuildRouteParents(listeners)}
-		}),
 	)
-	require.NotNil(t, finalListeners)
-	listener := finalListeners.GetKey(ls.Name)
-	require.NotNil(t, listener)
-	assert.Equal(t, translator.ListenerConflict(translator.ListenerConflictHostname), (*listener).Conflict)
 	assert.Empty(t, ls.Conflict)
 	assert.Equal(t, []string{"default/example.http"}, listenerKeys(s))
 	var routeKeys []string

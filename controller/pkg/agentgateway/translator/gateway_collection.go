@@ -645,7 +645,14 @@ func (p ArbitratedParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.Ty
 	var result []*ParentInfo
 	seen := sets.New[string]()
 	for _, parent := range p.Resolver.ParentsFor(ctx, pk) {
-		if parent == nil || parent.ListenerKey == "" || seen.Contains(parent.ListenerKey) {
+		if parent == nil {
+			continue
+		}
+		if parent.ListenerKey == "" {
+			result = append(result, parent)
+			continue
+		}
+		if seen.Contains(parent.ListenerKey) {
 			continue
 		}
 		listener := ptr.Flatten(krt.FetchOne(ctx, p.Listeners, krt.FilterKey(parent.ListenerKey)))

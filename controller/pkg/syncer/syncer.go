@@ -79,7 +79,6 @@ type Syncer struct {
 	buildReferenceTypesFunc     func(agw *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes
 	extraListenerSets           ExtraListenerSetsBuilderFunc
 	allowedListenersResolver    AllowedListenersResolver
-	listenerParentResolver      ListenerParentResolverBuilderFunc
 }
 
 func NewAgwSyncer(
@@ -109,7 +108,6 @@ func NewAgwSyncer(
 		buildReferenceTypesFunc:     cfg.BuildReferenceTypesFunc,
 		extraListenerSets:           cfg.ExtraListenerSets,
 		allowedListenersResolver:    cfg.AllowedListenersResolver,
-		listenerParentResolver:      cfg.ListenerParentResolver,
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
@@ -614,17 +612,11 @@ func (s *Syncer) buildAgwResources(
 	// Build routes
 	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways)
 	resolvers := []translator.ParentResolver{routeParents}
-	if s.listenerParentResolver != nil {
-		if resolver := s.listenerParentResolver(gateways, krtopts); resolver != nil {
-			resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: resolver, Listeners: gateways})
-		}
-	}
-
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil {
 		for _, r := range ext.ParentResolvers {
 			if r != nil {
-				resolvers = append(resolvers, r)
+				resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: r, Listeners: gateways})
 			}
 		}
 	}

@@ -59,10 +59,14 @@ func TestArbitratedParentResolver(t *testing.T) {
 	wrongGateway.ParentGateway.Name = "other"
 	unknown := stale
 	unknown.ListenerKey = "unknown"
-	p := ArbitratedParentResolver{Listeners: listeners, Resolver: fixedListenerParents{nil, &unknown, &wrongGateway, &stale, &stale}}
+	service := &ParentInfo{ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: "service"}, ServicePorts: []gwv1.PortNumber{80}}
+	listenerless := &ParentInfo{Hostnames: []string{"tenant/*"}}
+	p := ArbitratedParentResolver{Listeners: listeners, Resolver: fixedListenerParents{nil, service, listenerless, &unknown, &wrongGateway, &stale, &stale}}
 	got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "ExtensionListenerSet"})
-	assert.Equal(t, []*ParentInfo{&listener.ParentInfo}, got)
-	assert.Equal(t, []string{"tenant/*"}, got[0].Hostnames)
+	assert.Equal(t, []*ParentInfo{service, listenerless, &listener.ParentInfo}, got)
+	assert.Same(t, service, got[0])
+	assert.Same(t, listenerless, got[1])
+	assert.Equal(t, []string{"tenant/*"}, got[2].Hostnames)
 }
 
 func TestListenerConflictsUseServedHostname(t *testing.T) {
