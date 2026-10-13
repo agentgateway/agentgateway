@@ -454,39 +454,28 @@ async fn test_sse_json_transform_multi_propagates_decoder_error_after_output() {
 	assert!(*saw_error.lock().unwrap(), "decoder error was not observed");
 }
 
-// An unterminated final event (no blank line after `data: [DONE]`) makes the decoder
-// report `UnexpectedEof`; a passthrough must still forward the bytes unmodified.
 #[tokio::test]
-async fn test_parser_forwards_unterminated_final_event() {
-	let usage = "data: {\"id\":\"c\",\"choices\":[],\"usage\":{\"total_tokens\":1}}\n\n";
-	let done = "data: [DONE]";
+async fn test_sse_json_passthrough_unterminated_final_event() {
+	for done in ["data: [DONE]", "data: [DONE]\n", "data: [DONE]\r\n"] {
+		let input = format!("data: {{\"msg\":1}}\n\n{done}");
 
-	for body in [
-		format!("{usage}{done}"),
-		format!("{usage}{done}\n"),
-		format!("{usage}{done}\r\n"),
-	] {
-		let expected = body.clone();
-		let body = Body::from_stream(futures_util::stream::iter(vec![Ok::<_, Infallible>(
-			Bytes::copy_from_slice(body.as_bytes()),
-		)]));
-		let decoder = SseDecoder::<Bytes>::new();
-		let events = Arc::new(Mutex::new(Vec::new()));
-		let ec = events.clone();
-		let body = passthrough::parser(body, decoder, move |o| {
-			if let Frame::Event(Event::<Bytes> { data, .. }) = o {
-				ec.lock().unwrap().push(data);
-			}
+		let observed = Arc::new(Mutex::new(vec![]));
+		let obs = observed.clone();
+		let body = sse::json_passthrough::<Test>(Body::from(input.clone()), 1024, move |o| {
+			obs.lock().unwrap().push(o.map(|r| r.unwrap().msg));
 		});
-		let got = body
-			.collect()
-			.await
-			.expect("an unterminated final event must not fail the body")
-			.to_bytes();
+		let got = body.collect().await.unwrap().to_bytes();
 		assert_eq!(
 			got,
-			Bytes::copy_from_slice(expected.as_bytes()),
-			"bytes must be forwarded unmodified"
+			input.as_bytes(),
+			"passthrough must forward bytes unmodified"
 		);
+		assert_eq!(*observed.lock().unwrap(), [Some(1), None], "{done:?}");
 	}
+
+	let body = sse::json_passthrough::<Test>(Body::from("data: {\"msg\":1}"), 1024, |_| {});
+	body
+		.collect()
+		.await
+		.expect_err("an unterminated non-[DONE] event must still fail");
 }
