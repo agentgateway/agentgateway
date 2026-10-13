@@ -3858,7 +3858,7 @@ pub mod from_anthropic_token_count {
 		let anthropic_version = headers
 			.get("anthropic-version")
 			.and_then(|v| v.to_str().ok())
-			.unwrap_or("2023-06-01");
+			.unwrap_or(crate::anthropic::ANTHROPIC_VERSION);
 
 		let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
 		let mut body: serde_json::Map<String, serde_json::Value> =

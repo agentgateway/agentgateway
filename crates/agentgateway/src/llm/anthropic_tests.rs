@@ -179,3 +179,21 @@ fn set_required_fields_explicit_non_authorization_location_preserved() {
 	assert!(!req.headers().contains_key("x-api-key"));
 	assert!(req.headers().contains_key("anthropic-version"));
 }
+
+#[test]
+fn set_required_fields_keeps_client_anthropic_version() {
+	// A Messages client asking for a newer API version must not be downgraded.
+	let provider = AIProvider::Anthropic(anthropic::Provider {
+		model_override: None,
+	});
+	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
+	req
+		.headers_mut()
+		.insert("anthropic-version", "2099-01-01".parse().unwrap());
+
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None, None)
+		.unwrap();
+
+	assert_eq!(req.headers()["anthropic-version"], "2099-01-01");
+}
