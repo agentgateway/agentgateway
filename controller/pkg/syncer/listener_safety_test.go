@@ -20,6 +20,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 )
@@ -197,6 +198,36 @@ func TestListenerSafetyInvalidTLSWinner(t *testing.T) {
 
 type testExtensionResolver struct {
 	parents translator.RouteParents
+}
+
+func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
+	gw := safetyGateway("api.example.com")
+	gw.Spec.GatewayClassName = "additional"
+	class := &gwv1.GatewayClass{Name: "additional", Spec: gwv1.GatewayClassSpec{ControllerName: "agentgateway.dev/agentgateway"}}
+	route := &gwv1.HTTPRoute{
+		Name: "additional", Namespace: "default",
+		Spec: gwv1.HTTPRouteSpec{
+			CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Name: "example"}}},
+			Rules:           []gwv1.HTTPRouteRule{{}},
+		},
+	}
+	ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), class, route))
+	var finalListeners krt.Collection[*translator.GatewayListener]
+	_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{}, map[string]*deployer.GatewayClassInfo{"additional": {}},
+		syncer.WithListenerParentResolver(func(listeners krt.Collection[*translator.GatewayListener], _ krtutil.KrtOptions) translator.ParentResolver {
+			finalListeners = listeners
+			return translator.BuildRouteParents(listeners)
+		}),
+	)
+	require.NotNil(t, finalListeners.GetKey("default/example.http"))
+	assert.Empty(t, listenerKeys(s))
+	var routeKeys []string
+	for _, resource := range s.Outputs.Resources.List() {
+		if r := resource.Resource.GetRoute(); r != nil {
+			routeKeys = append(routeKeys, r.ListenerKey)
+		}
+	}
+	assert.Equal(t, []string{"default/example.http"}, routeKeys)
 }
 
 func (r testExtensionResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*plugins.ParentInfo {

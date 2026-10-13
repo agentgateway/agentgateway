@@ -615,8 +615,8 @@ func (s *Syncer) buildAgwResources(
 	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways)
 	resolvers := []translator.ParentResolver{routeParents}
 	if s.listenerParentResolver != nil {
-		if resolver := s.listenerParentResolver(routeGateways, krtopts); resolver != nil {
-			resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: resolver, Listeners: routeGateways})
+		if resolver := s.listenerParentResolver(gateways, krtopts); resolver != nil {
+			resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: resolver, Listeners: gateways})
 		}
 	}
 
