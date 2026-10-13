@@ -33,11 +33,12 @@ responds without calling HomeHub. On a miss, agentgateway calls HomeHub and
 passes the complete response through vSR to store it in Redis.
 
 > [!NOTE]
-> HomeHub returns complete JSON responses and does not support streaming
-> completions. Requests use `stream: false`. To keep this example simple,
-> agentgateway also buffers ExtProc request and response bodies, and vSR's
-> streamed request-body handling is disabled. ExtProc body processing and LLM
-> response streaming are separate settings.
+> Requests use `stream: false` because HomeHub returns JSON completions. This
+> is independent of ExtProc body processing: agentgateway uses
+> `FullDuplexStreamed` for requests, and vSR assembles the chunks for routing and
+> cache lookup. Responses remain `Buffered` because vSR v0.4.0's JSON cache
+> pipeline consumes a complete response and does not emit full-duplex response
+> body mutations.
 
 The example enables vSR's [response-cache plugin](https://vllm-sr.ai/docs/tutorials/plugin/response-cache/)
 for factory-reset questions. With `mode: semantic`, vSR uses semantic matching

@@ -7,10 +7,9 @@ llm:
       failureMode: failClosed
       processingOptions:
         requestHeaderMode: send
-        # HomeHub uses complete JSON requests and non-streaming responses.
-        requestBodyMode: buffered
+        requestBodyMode: fullDuplexStreamed
         responseHeaderMode: send
-        # vSR needs the complete response to populate Redis on a miss.
+        # vSR v0.4.0 caches complete JSON responses; response full-duplex is unsupported.
         responseBodyMode: buffered
         requestTrailerMode: send
         responseTrailerMode: send

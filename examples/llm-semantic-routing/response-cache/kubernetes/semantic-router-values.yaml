@@ -112,9 +112,10 @@ config:
       strategy: priority
       model_selection:
         enabled: false
-      # Agentgateway sends complete request bodies for this example.
       streamed_body:
-        enabled: false
+        enabled: true
+        max_bytes: 10485760
+        timeout_sec: 30
       skip_processing:
         enabled: true
     services:

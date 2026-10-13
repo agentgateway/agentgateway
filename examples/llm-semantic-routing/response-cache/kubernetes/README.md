@@ -108,11 +108,6 @@ kubectl exec -n agentgateway-system statefulset/redis-semantic-cache \
 
 Apply the HomeHub provider, route, and vSR ExtProc policy:
 
-> [!NOTE]
-> HomeHub does not stream responses, so ExtProc streaming is disabled and
-> requests use `stream: false`. Agentgateway sends complete request and response
-> bodies to vSR, which can cache the response in Redis.
-
 ```bash
 kubectl apply \
   -f "${RESPONSE_CACHE_DIR}/agentgateway-routing.yaml"
