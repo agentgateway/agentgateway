@@ -637,8 +637,10 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 type ParentResolver = plugins.ParentResolver
 
 type ArbitratedParentResolver struct {
-	Resolver  ParentResolver
-	Listeners krt.Collection[*GatewayListener]
+	Resolver                 ParentResolver
+	Listeners                krt.Collection[*GatewayListener]
+	Gateways                 krt.Collection[*gwv1.Gateway]
+	AdditionalGatewayClasses sets.Set[string]
 }
 
 func (p ArbitratedParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
@@ -648,7 +650,15 @@ func (p ArbitratedParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.Ty
 		if parent == nil {
 			continue
 		}
-		if parent.ListenerKey == "" {
+		if parent.ServiceKey != nil || parent.ListenerKey == "" {
+			result = append(result, parent)
+			continue
+		}
+		gateway := ptr.Flatten(krt.FetchOne(ctx, p.Gateways, krt.FilterKey(parent.ParentGateway.String())))
+		if gateway == nil {
+			continue
+		}
+		if p.AdditionalGatewayClasses.Contains(string(gateway.Spec.GatewayClassName)) {
 			result = append(result, parent)
 			continue
 		}

@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -614,9 +615,13 @@ func (s *Syncer) buildAgwResources(
 	resolvers := []translator.ParentResolver{routeParents}
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil {
+		additionalClasses := sets.New(maps.Keys(s.additionalGatewayClasses)...)
 		for _, r := range ext.ParentResolvers {
 			if r != nil {
-				resolvers = append(resolvers, translator.ArbitratedParentResolver{Resolver: r, Listeners: gateways})
+				resolvers = append(resolvers, translator.ArbitratedParentResolver{
+					Resolver: r, Listeners: gateways, Gateways: s.agwCollections.Gateways,
+					AdditionalGatewayClasses: additionalClasses,
+				})
 			}
 		}
 	}

@@ -214,7 +214,10 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 		},
 	}
 	ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), class, route))
-	parent := &plugins.ParentInfo{ParentGateway: exampleGateway, ParentGatewayClassName: "additional", ListenerKey: "default/example.http"}
+	parent := &plugins.ParentInfo{
+		ParentGateway: exampleGateway, ParentGatewayClassName: "additional", ListenerKey: "default/example.http",
+		Hostnames: []string{"default/*"}, AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
+	}
 	_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{
 		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{testExtensionResolver{parents: []*plugins.ParentInfo{parent}, kind: "Gateway"}}},
 	}, map[string]*deployer.GatewayClassInfo{"additional": {}},
@@ -229,6 +232,58 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 	assert.Equal(t, []string{"default/example.http"}, routeKeys)
 }
 
+func TestListenerSafetyDelegatedParentGatewayOwnership(t *testing.T) {
+	for _, returnedClass := range []string{"agentgateway", "additional"} {
+		t.Run(returnedClass, func(t *testing.T) {
+			testListenerSafetyDelegatedParentGatewayOwnership(t, returnedClass)
+		})
+	}
+}
+
+func testListenerSafetyDelegatedParentGatewayOwnership(t *testing.T, returnedClass string) {
+	gw := safetyGateway("")
+	gw.Spec.GatewayClassName = "additional"
+	gw.Spec.Listeners = nil
+	class := &gwv1.GatewayClass{Name: "additional", Spec: gwv1.GatewayClassSpec{ControllerName: "agentgateway.dev/agentgateway"}}
+	route := &gwv1.HTTPRoute{
+		Name: "delegated", Namespace: "default",
+		Spec: gwv1.HTTPRouteSpec{
+			CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Name: "example"}}},
+			Rules:           []gwv1.HTTPRouteRule{{}},
+		},
+	}
+	parent := &plugins.ParentInfo{
+		ParentGateway: exampleGateway, ParentGatewayClassName: returnedClass, ListenerKey: "plugin/listener",
+		Hostnames: []string{"default/*"}, AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
+	}
+	ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), class, route))
+	gateways := krt.NewMutableCollection(nil, []*gwv1.Gateway{gw})
+	ctx.Collections.Gateways = gateways.AsCollection()
+	_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{
+		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{testExtensionResolver{parents: []*plugins.ParentInfo{parent}, kind: "Gateway"}}},
+	}, map[string]*deployer.GatewayClassInfo{"additional": {}})
+	routeCount := func() int {
+		count := 0
+		for _, resource := range s.Outputs.Resources.List() {
+			if r := resource.Resource.GetRoute(); r != nil && r.ListenerKey == parent.ListenerKey {
+				count++
+			}
+		}
+		return count
+	}
+	require.Equal(t, 1, routeCount())
+	edit := gw.DeepCopy()
+	edit.Spec.GatewayClassName = "agentgateway"
+	gateways.UpdateObject(edit)
+	require.Eventually(t, func() bool { return routeCount() == 0 }, 5*time.Second, 10*time.Millisecond)
+	gateways.UpdateObject(gw)
+	require.Eventually(t, func() bool { return routeCount() == 1 }, 5*time.Second, 10*time.Millisecond)
+	gateways.DeleteObject("default/example")
+	require.Eventually(t, func() bool { return routeCount() == 0 }, 5*time.Second, 10*time.Millisecond)
+	gateways.UpdateObject(gw)
+	require.Eventually(t, func() bool { return routeCount() == 1 }, 5*time.Second, 10*time.Millisecond)
+}
+
 func (r testExtensionResolver) ParentsFor(_ krt.HandlerContext, pk utils.TypedNamespacedName) []*plugins.ParentInfo {
 	if pk.Kind != r.kind {
 		return nil
@@ -237,6 +292,14 @@ func (r testExtensionResolver) ParentsFor(_ krt.HandlerContext, pk utils.TypedNa
 }
 
 func TestListenerSafetyServiceParentResolver(t *testing.T) {
+	for _, key := range []string{"", "plugin/listener", "default/example.http"} {
+		t.Run(key, func(t *testing.T) {
+			testListenerSafetyServiceParentResolver(t, key)
+		})
+	}
+}
+
+func testListenerSafetyServiceParentResolver(t *testing.T, listenerKey string) {
 	gw := safetyGateway("")
 	service := &corev1.Service{Name: "service", Namespace: "default", Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 80}}}}
 	route := &gwv1.HTTPRoute{
@@ -248,6 +311,7 @@ func TestListenerSafetyServiceParentResolver(t *testing.T) {
 	}
 	parent := &plugins.ParentInfo{
 		ParentGateway: exampleGateway,
+		ListenerKey:   listenerKey,
 		ServiceKey:    &types.NamespacedName{Namespace: service.Namespace, Name: service.Name},
 		ServicePorts:  []gwv1.PortNumber{80},
 		Hostnames:     []string{"default/*"},
@@ -264,7 +328,7 @@ func TestListenerSafetyServiceParentResolver(t *testing.T) {
 	for _, resource := range s.Outputs.Resources.List() {
 		if r := resource.Resource.GetRoute(); r != nil {
 			serviceRoutes++
-			assert.Empty(t, r.ListenerKey)
+			assert.Equal(t, listenerKey, r.ListenerKey)
 			require.NotNil(t, r.ServiceKey)
 		}
 	}

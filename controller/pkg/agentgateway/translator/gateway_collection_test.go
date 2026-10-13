@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -50,23 +52,131 @@ func TestArbitratedParentResolver(t *testing.T) {
 	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
 	listener := &GatewayListener{
 		Name: "tenant/set.http", ParentGateway: gw, Conflict: ListenerConflictHostname,
-		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "tenant/set.http", Hostnames: []string{"tenant/*"}},
+		ParentInfo: ParentInfo{ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: "tenant/set.http", Hostnames: []string{"tenant/*"}},
 	}
 	listeners := krt.NewStaticCollection(nil, []*GatewayListener{listener})
 	stale := listener.ParentInfo
 	stale.Hostnames = []string{"*/*"}
+	stale.ParentGatewayClassName = "additional"
 	wrongGateway := stale
 	wrongGateway.ParentGateway.Name = "other"
 	unknown := stale
 	unknown.ListenerKey = "unknown"
 	service := &ParentInfo{ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: "service"}, ServicePorts: []gwv1.PortNumber{80}}
 	listenerless := &ParentInfo{Hostnames: []string{"tenant/*"}}
-	p := ArbitratedParentResolver{Listeners: listeners, Resolver: fixedListenerParents{nil, service, listenerless, &unknown, &wrongGateway, &stale, &stale}}
+	p := ArbitratedParentResolver{
+		Listeners: listeners, Resolver: fixedListenerParents{nil, service, listenerless, &unknown, &wrongGateway, &stale, &stale},
+		Gateways: krt.NewStaticCollection(nil, []*gwv1.Gateway{
+			{Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
+			{Name: "other", Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
+		}),
+		AdditionalGatewayClasses: sets.New("additional"),
+	}
 	got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "ExtensionListenerSet"})
 	assert.Equal(t, []*ParentInfo{service, listenerless, &listener.ParentInfo}, got)
 	assert.Same(t, service, got[0])
 	assert.Same(t, listenerless, got[1])
 	assert.Equal(t, []string{"tenant/*"}, got[2].Hostnames)
+}
+
+func TestArbitratedParentResolverServiceMetadata(t *testing.T) {
+	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
+	listener := &GatewayListener{
+		Name: "owner/gateway.http", ParentGateway: gw,
+		ParentInfo: ParentInfo{
+			ParentGateway: gw, ListenerKey: "owner/gateway.http",
+			Hostnames: []string{"owner/*"}, Port: 8080,
+			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "GRPCRoute"}},
+		},
+	}
+	for _, key := range []string{"", "plugin/listener", listener.Name} {
+		t.Run(key, func(t *testing.T) {
+			service := &ParentInfo{
+				ParentGateway: gw, ListenerKey: key,
+				ServiceKey:   &types.NamespacedName{Namespace: "tenant", Name: "service"},
+				ServicePorts: []gwv1.PortNumber{80, 443},
+				Hostnames:    []string{"tenant/api.example.com"},
+				AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
+			}
+			p := ArbitratedParentResolver{
+				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
+				Resolver:  fixedListenerParents{service},
+			}
+			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Service"})
+			require.Len(t, got, 1)
+			assert.Same(t, service, got[0])
+			assert.Equal(t, &types.NamespacedName{Namespace: "tenant", Name: "service"}, got[0].ServiceKey)
+			assert.Equal(t, []gwv1.PortNumber{80, 443}, got[0].ServicePorts)
+			assert.Equal(t, []string{"tenant/api.example.com"}, got[0].Hostnames)
+			assert.Equal(t, []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, got[0].AllowedKinds)
+		})
+	}
+}
+
+func TestArbitratedParentResolverDistinctServices(t *testing.T) {
+	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
+	listener := &GatewayListener{
+		Name: "owner/gateway.http", ParentGateway: gw,
+		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http"},
+	}
+	first := &ParentInfo{
+		ParentGateway: gw, ListenerKey: listener.Name,
+		ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: "first"}, ServicePorts: []gwv1.PortNumber{80},
+	}
+	second := *first
+	second.ServiceKey = &types.NamespacedName{Namespace: "tenant", Name: "second"}
+	p := ArbitratedParentResolver{
+		Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
+		Resolver:  fixedListenerParents{first, &second},
+	}
+	got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Service"})
+	assert.Equal(t, []*ParentInfo{first, &second}, got)
+}
+
+func TestArbitratedParentResolverDelegatedMetadata(t *testing.T) {
+	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
+	listener := &GatewayListener{
+		Name: "owner/gateway.http", ParentGateway: gw,
+		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http", Hostnames: []string{"owner/*"}},
+	}
+	for _, key := range []string{"plugin/listener", listener.Name} {
+		t.Run(key, func(t *testing.T) {
+			parent := &ParentInfo{
+				ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: key,
+				Hostnames: []string{"tenant/api.example.com"}, Port: 80,
+				AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, SectionName: "first",
+			}
+			second := *parent
+			second.SectionName = "second"
+			second.Hostnames = []string{"tenant/other.example.com"}
+			p := ArbitratedParentResolver{
+				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
+				Gateways: krt.NewStaticCollection(nil, []*gwv1.Gateway{{
+					Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "additional"},
+				}}),
+				AdditionalGatewayClasses: sets.New("additional"),
+				Resolver:                 fixedListenerParents{parent, &second},
+			}
+			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Gateway"})
+			require.Len(t, got, 2)
+			assert.Same(t, parent, got[0])
+			assert.Same(t, &second, got[1])
+		})
+	}
+}
+
+func TestArbitratedParentResolverMissingGateway(t *testing.T) {
+	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
+	listener := &GatewayListener{
+		Name: "owner/gateway.http", ParentGateway: gw,
+		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http"},
+	}
+	p := ArbitratedParentResolver{
+		Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
+		Gateways:  krt.NewStaticCollection[*gwv1.Gateway](nil, nil),
+		Resolver:  fixedListenerParents{&listener.ParentInfo},
+	}
+	assert.Empty(t, p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Gateway"}))
 }
 
 func TestListenerConflictsUseServedHostname(t *testing.T) {
