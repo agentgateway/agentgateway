@@ -2268,6 +2268,7 @@ fn disabled_cache_from_proto_disables_storage() {
 		in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
 			max_entries: Some(0),
 			default_ttl: None,
+			background_refresh: false,
 		}),
 	}))
 	.unwrap();
@@ -2280,6 +2281,7 @@ fn disabled_cache_from_proto_disables_storage() {
 				in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
 					max_entries: Some(0),
 					default_ttl: None,
+					background_refresh: false,
 				}),
 			}),
 			..Default::default()
@@ -2308,6 +2310,7 @@ fn in_memory_cache_from_proto_uses_default_ttl_and_capacity_defaults() {
 				seconds: 42,
 				nanos: 0,
 			}),
+			background_refresh: false,
 		}),
 	}))
 	.unwrap();
@@ -2325,6 +2328,7 @@ fn in_memory_cache_from_proto_uses_default_ttl_for_negative_default_ttl() {
 				seconds: -1,
 				nanos: 0,
 			}),
+			background_refresh: false,
 		}),
 	}))
 	.unwrap();
@@ -2341,6 +2345,7 @@ fn in_memory_cache_from_proto_accepts_large_default_ttl() {
 				seconds: i64::MAX,
 				nanos: 999_999_999,
 			}),
+			background_refresh: false,
 		}),
 	}))
 	.unwrap();

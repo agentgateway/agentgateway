@@ -17609,9 +17609,12 @@ type OAuthTokenExchange_TokenCache_InMemory struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	MaxEntries *uint32                `protobuf:"varint,1,opt,name=max_entries,json=maxEntries,proto3,oneof" json:"max_entries,omitempty"` // default 8192 (0 disables cache)
 	// TTL used when the token endpoint omits expires_in.
-	DefaultTtl    *durationpb.Duration `protobuf:"bytes,3,opt,name=default_ttl,json=defaultTtl,proto3,oneof" json:"default_ttl,omitempty"` // default 300s
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DefaultTtl *durationpb.Duration `protobuf:"bytes,3,opt,name=default_ttl,json=defaultTtl,proto3,oneof" json:"default_ttl,omitempty"` // default 300s
+	// Serve the cached token while a near-expiry entry is re-minted in the
+	// background, so no request blocks on the refresh (opt-in).
+	BackgroundRefresh bool `protobuf:"varint,4,opt,name=background_refresh,json=backgroundRefresh,proto3" json:"background_refresh,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OAuthTokenExchange_TokenCache_InMemory) Reset() {
@@ -17656,6 +17659,13 @@ func (x *OAuthTokenExchange_TokenCache_InMemory) GetDefaultTtl() *durationpb.Dur
 		return x.DefaultTtl
 	}
 	return nil
+}
+
+func (x *OAuthTokenExchange_TokenCache_InMemory) GetBackgroundRefresh() bool {
+	if x != nil {
+		return x.BackgroundRefresh
+	}
+	return false
 }
 
 type CrossAppAccessAuth_ScopeOverride struct {
@@ -19894,7 +19904,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x13CLIENT_SECRET_BASIC\x10\x01\x12\x16\n" +
 	"\x12CLIENT_SECRET_POST\x10\x02\x12\x13\n" +
 	"\x0fPRIVATE_KEY_JWT\x10\x03B\x10\n" +
-	"\x0e_client_secret\"\xb9\x0e\n" +
+	"\x0e_client_secret\"\xe8\x0e\n" +
 	"\x12OAuthTokenExchange\x12R\n" +
 	"\x0etoken_endpoint\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\rtokenEndpoint\x123\n" +
 	"\x13token_endpoint_path\x18\a \x01(\tH\x00R\x11tokenEndpointPath\x88\x01\x01\x12U\n" +
@@ -19927,15 +19937,16 @@ const file_resource_proto_rawDesc = "" +
 	"\x0fenforce_may_act\x18\x03 \x01(\bR\renforceMayAct\x1aC\n" +
 	"\x15AdditionalParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x80\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xaf\x02\n" +
 	"\n" +
 	"TokenCache\x12^\n" +
-	"\tin_memory\x18\x01 \x01(\v2A.agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemoryR\binMemory\x1a\x91\x01\n" +
+	"\tin_memory\x18\x01 \x01(\v2A.agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemoryR\binMemory\x1a\xc0\x01\n" +
 	"\bInMemory\x12$\n" +
 	"\vmax_entries\x18\x01 \x01(\rH\x00R\n" +
 	"maxEntries\x88\x01\x01\x12?\n" +
 	"\vdefault_ttl\x18\x03 \x01(\v2\x19.google.protobuf.DurationH\x01R\n" +
-	"defaultTtl\x88\x01\x01B\x0e\n" +
+	"defaultTtl\x88\x01\x01\x12-\n" +
+	"\x12background_refresh\x18\x04 \x01(\bR\x11backgroundRefreshB\x0e\n" +
 	"\f_max_entriesB\x0e\n" +
 	"\f_default_ttl\"X\n" +
 	"\tGrantType\x12\x0f\n" +

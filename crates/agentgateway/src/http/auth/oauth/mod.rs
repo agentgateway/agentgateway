@@ -549,6 +549,10 @@ struct TokenCacheConfig {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	default_ttl: Option<Duration>,
+	/// Serve the cached token while a near-expiry entry is re-minted in the background,
+	/// so no request blocks on the refresh. Off by default.
+	#[serde(default)]
+	background_refresh: bool,
 }
 
 impl TokenCacheConfig {
@@ -562,7 +566,11 @@ impl TokenCacheConfig {
 			.default_ttl
 			.filter(|d| !d.is_zero())
 			.unwrap_or(cache::DEFAULT_CACHE_TTL);
-		Some(InMemoryTokenCache::new(max_entries, default_ttl))
+		Some(InMemoryTokenCache::new(
+			max_entries,
+			default_ttl,
+			self.background_refresh,
+		))
 	}
 }
 
@@ -594,6 +602,7 @@ fn token_cache_config_from_proto(
 		default_ttl: in_memory
 			.default_ttl
 			.and_then(|d| Duration::try_from(d).ok()),
+		background_refresh: in_memory.background_refresh,
 	})
 }
 
@@ -897,9 +906,13 @@ async fn fetch_token(
 ) -> Result<SecretString, FetchError> {
 	let result = match auth.cache.as_ref() {
 		Some(cache) => {
-			cache
+			let (result, needs_refresh) = cache
 				.get_or_insert_with(&req, || fetch_token_uncached(client, auth, &req))
-				.await?
+				.await?;
+			if needs_refresh {
+				spawn_background_refresh(client.clone(), auth.clone(), req.clone(), cache.clone());
+			}
+			result
 		},
 		None => {
 			let transport::TokenEndpointResponse { access_token, .. } =
@@ -914,6 +927,27 @@ async fn fetch_token(
 		TokenCacheResult::Miss(_) => trace!("token exchange succeeded"),
 	}
 	Ok(result.into_token())
+}
+
+/// Re-mint a cached token out of band so no request blocks on the refresh. The cache
+/// already served the still-valid token and elected this one caller; on success we
+/// replace the entry, on failure we release the in-flight flag so a later request
+/// retries (the still-valid entry keeps being served until then).
+fn spawn_background_refresh(
+	client: PolicyClient,
+	auth: OAuthTokenExchangeAuth,
+	req: ExchangeRequest,
+	cache: InMemoryTokenCache,
+) {
+	tokio::spawn(async move {
+		match fetch_token_uncached(&client, &auth, &req).await {
+			Ok(response) => cache.store_refreshed(&req, response),
+			Err(e) => {
+				debug!("oauth background token refresh failed: {e}");
+				cache.clear_refreshing(&req);
+			},
+		}
+	});
 }
 
 async fn fetch_token_uncached(

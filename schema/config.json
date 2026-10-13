@@ -4344,6 +4344,11 @@
             "string",
             "null"
           ]
+        },
+        "backgroundRefresh": {
+          "description": "Serve the cached token while a near-expiry entry is re-minted in the background,\nso no request blocks on the refresh. Off by default.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false

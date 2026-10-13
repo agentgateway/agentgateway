@@ -1,6 +1,7 @@
 use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use quick_cache::sync::{Cache, EntryAction, EntryResult};
@@ -20,39 +21,72 @@ const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(15);
 pub(super) struct InMemoryTokenCache {
 	entries: Arc<Cache<TokenCacheKey, CachedToken>>,
 	default_ttl: Duration,
+	background_refresh: bool,
 }
 
 impl InMemoryTokenCache {
-	pub(super) fn new(max_entries: usize, default_ttl: Duration) -> Self {
+	pub(super) fn new(max_entries: usize, default_ttl: Duration, background_refresh: bool) -> Self {
 		Self {
 			entries: Arc::new(Cache::new(max_entries)),
 			default_ttl,
+			background_refresh,
 		}
 	}
 
+	/// Look up a cached token, or mint one via `fetch` on a miss.
+	///
+	/// Returns the token plus whether the caller should refresh it in the background:
+	/// with `background_refresh` on, a still-valid entry inside its refresh window is
+	/// served immediately and the caller spawns a re-mint (via `store_refreshed` /
+	/// `clear_refreshing`), so no request blocks on the refresh. Single-flight is
+	/// enforced by a per-entry flag shared across `get` clones.
 	pub(super) async fn get_or_insert_with<F, Fut, E>(
 		&self,
 		req: &ExchangeRequest,
 		fetch: F,
-	) -> Result<TokenCacheResult, E>
+	) -> Result<(TokenCacheResult, bool), E>
 	where
 		F: FnOnce() -> Fut,
 		Fut: Future<Output = Result<TokenEndpointResponse, E>>,
 	{
 		let now = SystemTime::now();
 		let cache_key = TokenCacheKey::from(req);
+		let needs_refresh = AtomicBool::new(false);
 		let guard = match self
 			.entries
 			.entry_async(&cache_key, |_key, cached| {
-				if is_fresh(cached.expires_at, now) {
-					EntryAction::Retain(cached.access_token.clone())
+				// Without background refresh, serve only while comfortably fresh and
+				// block to re-mint otherwise. With it, serve any still-valid token and
+				// re-mint in the background once inside the existing safety margin.
+				let serve = if self.background_refresh {
+					cached.expires_at > now
 				} else {
-					EntryAction::ReplaceWithGuard
+					is_fresh(cached.expires_at, now)
+				};
+				if !serve {
+					return EntryAction::ReplaceWithGuard;
 				}
+				// Inside the safety margin (but still valid), elect one request to
+				// re-mint in the background rather than blocking.
+				if self.background_refresh
+					&& !is_fresh(cached.expires_at, now)
+					&& cached
+						.refreshing
+						.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+						.is_ok()
+				{
+					needs_refresh.store(true, Ordering::Release);
+				}
+				EntryAction::Retain(cached.access_token.clone())
 			})
 			.await
 		{
-			EntryResult::Retained(access_token) => return Ok(TokenCacheResult::Hit(access_token)),
+			EntryResult::Retained(access_token) => {
+				return Ok((
+					TokenCacheResult::Hit(access_token),
+					needs_refresh.load(Ordering::Acquire),
+				));
+			},
 			EntryResult::Vacant(guard) | EntryResult::Replaced(guard, _) => guard,
 			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
 		};
@@ -68,15 +102,47 @@ impl InMemoryTokenCache {
 			let _ = guard.insert(CachedToken {
 				access_token: access_token.clone(),
 				expires_at,
+				refreshing: Arc::new(AtomicBool::new(false)),
 			});
 		}
-		Ok(TokenCacheResult::Miss(access_token))
+		Ok((TokenCacheResult::Miss(access_token), false))
+	}
+
+	/// Replace the entry a background refresh was serving with a freshly minted token.
+	/// Replacing the entry also resets its in-flight flag.
+	pub(super) fn store_refreshed(&self, req: &ExchangeRequest, response: TokenEndpointResponse) {
+		let subject_token = req.subject_token.expose_secret();
+		let Some(expires_at) = cache_expiry(response.expires_in, subject_token, self.default_ttl)
+		else {
+			// Not cacheable (e.g. too short-lived); just release the flag so a later
+			// request re-elects a refresher.
+			self.clear_refreshing(req);
+			return;
+		};
+		self.entries.insert(
+			TokenCacheKey::from(req),
+			CachedToken {
+				access_token: response.access_token,
+				expires_at,
+				refreshing: Arc::new(AtomicBool::new(false)),
+			},
+		);
+	}
+
+	/// Clear the in-flight flag after a failed background refresh, so the next request
+	/// re-elects a refresher rather than serving the valid-but-stale entry until it
+	/// expires. The flag is shared across `get` clones, so updating one updates the
+	/// stored entry.
+	pub(super) fn clear_refreshing(&self, req: &ExchangeRequest) {
+		if let Some(cached) = self.entries.get(&TokenCacheKey::from(req)) {
+			cached.refreshing.store(false, Ordering::Release);
+		}
 	}
 }
 
 impl Default for InMemoryTokenCache {
 	fn default() -> Self {
-		Self::new(DEFAULT_CACHE_CAPACITY, DEFAULT_CACHE_TTL)
+		Self::new(DEFAULT_CACHE_CAPACITY, DEFAULT_CACHE_TTL, false)
 	}
 }
 
@@ -142,6 +208,9 @@ impl CacheKeyDigest {
 struct CachedToken {
 	access_token: SecretString,
 	expires_at: SystemTime,
+	// Single-flight guard: set while one request re-mints in the background. Shared
+	// across `get` clones so the election is visible to every request.
+	refreshing: Arc<AtomicBool>,
 }
 
 pub enum TokenCacheResult {
@@ -246,6 +315,7 @@ mod tests {
 			})
 			.await
 			.unwrap()
+			.0
 			.into_token()
 	}
 
@@ -298,7 +368,7 @@ mod tests {
 	fn missing_expires_in_falls_back_to_default_ttl_case() -> CacheScenario {
 		let req = exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token");
 		CacheScenario {
-			cache: InMemoryTokenCache::new(DEFAULT_CACHE_CAPACITY, Duration::from_secs(120)),
+			cache: InMemoryTokenCache::new(DEFAULT_CACHE_CAPACITY, Duration::from_secs(120), false),
 			fetches: vec![
 				CacheFetch {
 					req: req.clone(),
@@ -447,5 +517,44 @@ mod tests {
 
 		assert_eq!(tokens, scenario.expected_tokens);
 		assert_eq!(calls.load(Ordering::Relaxed), scenario.expected_calls);
+	}
+
+	#[tokio::test]
+	async fn background_refresh_serves_cached_and_elects_one_refresher() {
+		let cache = InMemoryTokenCache::new(DEFAULT_CACHE_CAPACITY, DEFAULT_CACHE_TTL, true);
+		let req = exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token");
+		// An entry that has aged into the safety margin: still valid, but not "fresh".
+		cache.entries.insert(
+			TokenCacheKey::from(&req),
+			CachedToken {
+				access_token: "cached".to_string().into(),
+				expires_at: SystemTime::now() + Duration::from_secs(5),
+				refreshing: Arc::new(AtomicBool::new(false)),
+			},
+		);
+		// A fetch here would be a bug: the entry is served from cache, not re-minted
+		// inline. (If it ran, the served token would be "FETCHED", not "cached".)
+		let fetch = || {
+			std::future::ready(Ok::<_, Infallible>(TokenEndpointResponse {
+				access_token: "FETCHED".to_string().into(),
+				expires_in: Some(3600),
+			}))
+		};
+
+		// First request: served the cached token, and elected to refresh.
+		let (result, needs_refresh) = cache.get_or_insert_with(&req, &fetch).await.unwrap();
+		assert_eq!(result.into_token().expose_secret(), "cached");
+		assert!(needs_refresh);
+
+		// Second request: still served from cache, but single-flight means it is not
+		// elected again.
+		let (result, needs_refresh) = cache.get_or_insert_with(&req, &fetch).await.unwrap();
+		assert_eq!(result.into_token().expose_secret(), "cached");
+		assert!(!needs_refresh);
+
+		// Clearing the flag (as a failed background refresh does) re-opens election.
+		cache.clear_refreshing(&req);
+		let (_, needs_refresh) = cache.get_or_insert_with(&req, &fetch).await.unwrap();
+		assert!(needs_refresh);
 	}
 }
