@@ -35,11 +35,9 @@ export async function requestApi(path: string, init?: RequestInit): Promise<Resp
 }
 
 export async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-	const headers = new Headers(init?.headers);
-	if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 	const response = await requestApi(path, {
-		...init,
-		headers
+		headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+		...init
 	});
 	if (!response.ok) {
 		let message = `${response.status} ${response.statusText}`;

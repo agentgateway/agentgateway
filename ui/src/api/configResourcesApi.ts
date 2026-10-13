@@ -72,34 +72,17 @@ export interface ConfigResource<K extends ConfigResourceKind = ConfigResourceKin
 
 export interface ConfigResourcesResponse<K extends ConfigResourceKind = ConfigResourceKind> {
 	resources: ConfigResource<K>[];
-	generation?: number | null;
 }
 
-let observedGeneration: number | null = null;
-
-function rememberGeneration<T extends { generation?: number | null }>(response: T): T {
-	if (typeof response.generation === 'number') observedGeneration = response.generation;
-	return response;
-}
-
-async function writeConfig<T extends { generation?: number | null }>(
-	path: string,
-	init: RequestInit
-): Promise<T> {
-	const headers = new Headers(init.headers);
-	if (observedGeneration !== null) headers.set('If-Match', String(observedGeneration));
-	return rememberGeneration(await requestJson<T>(path, { ...init, headers }));
-}
-
-export async function listConfigResources() {
-	return rememberGeneration(await requestJson<ConfigResourcesResponse>('/api/config/resources'));
+export function listConfigResources() {
+	return requestJson<ConfigResourcesResponse>('/api/config/resources');
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(
 	kind: K,
 	resources: ConfigResourceValue<K>[]
 ) {
-	return writeConfig<ConfigResourcesResponse<K>>(
+	return requestJson<ConfigResourcesResponse<K>>(
 		`/api/config/resources/${encodeURIComponent(kind)}`,
 		{
 			method: 'PUT',
@@ -115,7 +98,7 @@ export function updateConfigResource<K extends ConfigResourceKind>(
 	id: string,
 	value: ConfigResourceValue<K>
 ) {
-	return writeConfig<ConfigResourcesResponse<K>>(
+	return requestJson<ConfigResourcesResponse<K>>(
 		`/api/config/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
 		{
 			method: 'PUT',
@@ -125,7 +108,7 @@ export function updateConfigResource<K extends ConfigResourceKind>(
 }
 
 export function deleteConfigResource(kind: ConfigResourceKind, id: string) {
-	return writeConfig<{ status: string; message: string; generation?: number | null }>(
+	return requestJson<{ status: string; message: string }>(
 		`/api/config/resources/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`,
 		{ method: 'DELETE' }
 	);
