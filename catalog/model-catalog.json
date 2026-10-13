@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-13T08:44:37Z"
+    "generatedAt": "2026-10-13T17:36:31Z"
   },
   "providers": {
     "anthropic": {
@@ -5356,6 +5356,14 @@
             "inputAudio": "0.75"
           }
         },
+        "gemini-4-argon": {
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          }
+        },
         "gemini-embedding-001": {
           "rates": {
             "input": "0.15",
@@ -5928,6 +5936,14 @@
               }
             }
           ]
+        },
+        "gemini-4-argon": {
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1",
+            "inputAudio": "2"
+          }
         },
         "gemini-embedding-001": {
           "rates": {
