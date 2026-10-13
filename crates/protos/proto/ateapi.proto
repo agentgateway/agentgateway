@@ -115,4 +115,5 @@ message CredentialHeader {
 
 message GetActorEgressPolicyRequest {
   ObjectRef actor = 1;
+  string name = 2;
 }
