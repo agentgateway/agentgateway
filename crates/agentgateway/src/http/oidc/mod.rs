@@ -467,12 +467,21 @@ impl crate::store::RequestPolicyTrait for OidcPolicy {
 fn is_browser_navigation(req: &Request) -> bool {
 	match req.headers().get("sec-fetch-mode") {
 		Some(mode) => mode == "navigate",
-		None => req
-			.headers()
-			.get(header::ACCEPT)
-			.and_then(|accept| accept.to_str().ok())
-			.is_some_and(|accept| accept.contains("text/html")),
+		None => accepts_html(req),
 	}
+}
+
+/// Whether any `Accept` media range is `text/html`, ignoring parameters and case, across every
+/// `Accept` header line.
+fn accepts_html(req: &Request) -> bool {
+	req
+		.headers()
+		.get_all(header::ACCEPT)
+		.iter()
+		.filter_map(|accept| accept.to_str().ok())
+		.flat_map(|accept| accept.split(','))
+		.filter_map(|range| range.split(';').next())
+		.any(|media_type| media_type.trim().eq_ignore_ascii_case("text/html"))
 }
 
 fn is_cors_preflight(req: &Request) -> bool {

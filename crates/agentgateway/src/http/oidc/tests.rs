@@ -1080,6 +1080,35 @@ async fn apply_permissive_decides_by_browser_signals() {
 			None,
 			Outcome::Login,
 		),
+		// `Accept` is matched as media ranges: case-insensitively, ignoring parameters, and not
+		// as a substring.
+		(
+			"plain-http navigation accepting html in upper case",
+			OidcCredentials::Permissive,
+			"http://app.example.com/private",
+			None,
+			Some("Text/HTML"),
+			None,
+			Outcome::Login,
+		),
+		(
+			"plain-http navigation accepting html with quality",
+			OidcCredentials::Permissive,
+			"http://app.example.com/private",
+			None,
+			Some("application/json, text/html; q=0.9, */*;q=0.8"),
+			None,
+			Outcome::Login,
+		),
+		(
+			"client accepting a subtype that starts with html",
+			OidcCredentials::Permissive,
+			"http://app.example.com/private",
+			None,
+			Some("text/htmlfoo"),
+			None,
+			Outcome::Continue,
+		),
 		// `fetch()` cannot complete login, and Node's `fetch()` sends `Sec-Fetch-Mode: cors` too,
 		// so any mode other than `navigate` continues for a later policy to decide.
 		(
@@ -1240,6 +1269,23 @@ async fn apply_permissive_decides_by_browser_signals() {
 			"{name}: credentials the policy did not consume stay on the request"
 		);
 	}
+}
+
+#[tokio::test]
+async fn apply_permissive_reads_every_accept_header_line() {
+	let mut policy = test_policy();
+	policy.credentials = OidcCredentials::Permissive;
+	let mut req = request(
+		Method::GET,
+		"http://app.example.com/private",
+		Some("application/json"),
+	);
+	req
+		.headers_mut()
+		.append(header::ACCEPT, "text/html".parse().unwrap());
+
+	let result = test_helpers::test_policy(&policy, &mut req).await;
+	assert_outcome("second accept line", result, &req, Outcome::Login);
 }
 
 /// Permissive fetches continue even when a login redirect is configured.
