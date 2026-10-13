@@ -19,13 +19,14 @@ use rmcp::model::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::client::ResolvedDestination;
 use crate::http::sessionpersistence;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::types::agent::OpenApiNameScheme;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -243,6 +244,114 @@ fn parameter_merge_name(parameter: &Parameter) -> String {
 	}
 }
 
+/// Maximum length of an MCP tool name.
+const MAX_TOOL_NAME_LEN: usize = 128;
+
+/// Derive a deterministic tool name for an operation without an `operationId`,
+/// from its HTTP method and path. `method + path` is unique within an OpenAPI
+/// document, so the scheme is well-defined; see [`OpenApiNameScheme`] for the
+/// shapes.
+fn derive_operation_name(method: &str, path: &str, scheme: OpenApiNameScheme) -> String {
+	let method_lower = method.to_lowercase();
+	// (segment text with braces stripped, whether it is a `{param}` template)
+	let mut segments: Vec<(&str, bool)> = Vec::new();
+	for segment in path.split('/').filter(|segment| !segment.is_empty()) {
+		// A `{param}` segment contributes the parameter name in place.
+		let param = segment
+			.strip_prefix('{')
+			.and_then(|segment| segment.strip_suffix('}'));
+		segments.push((param.unwrap_or(segment), param.is_some()));
+	}
+	let mut name = String::new();
+	match scheme {
+		OpenApiNameScheme::MethodPath | OpenApiNameScheme::PathsBy => {
+			name.push_str(&method_lower);
+			for (text, is_param) in &segments {
+				if scheme == OpenApiNameScheme::PathsBy && *is_param {
+					continue;
+				}
+				name.push_str(&pascal_case(text));
+			}
+			if scheme == OpenApiNameScheme::PathsBy {
+				let params: Vec<String> = segments
+					.iter()
+					.filter(|(_, is_param)| *is_param)
+					.map(|(text, _)| pascal_case(text))
+					.collect();
+				if !params.is_empty() {
+					name.push_str("By");
+					name.push_str(&params.join("And"));
+				}
+			}
+		},
+		// camelCase: the first segment keeps its casing, then the method
+		// capitalized last (mirrors OpenAPI Generator).
+		OpenApiNameScheme::PathMethod => {
+			for (i, (text, _)) in segments.iter().enumerate() {
+				if i == 0 {
+					name.push_str(text);
+				} else {
+					name.push_str(&pascal_case(text));
+				}
+			}
+			name.push_str(&pascal_case(&method_lower));
+		},
+	}
+	sanitize_tool_name(&name)
+}
+
+/// Uppercase the first character, leaving the rest untouched: `products` ->
+/// `Products`. Segments are not split on `-` or `_` — that would not be
+/// injective (`/payments` and `/_payments` would collapse into one name).
+fn pascal_case(segment: &str) -> String {
+	let mut chars = segment.chars();
+	match chars.next() {
+		Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+		None => String::new(),
+	}
+}
+
+/// Map a derived name onto the MCP tool-name charset (`[a-zA-Z0-9_-]`) and cap
+/// it at [`MAX_TOOL_NAME_LEN`] characters.
+fn sanitize_tool_name(name: &str) -> String {
+	name
+		.chars()
+		.map(|c| {
+			if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+				c
+			} else {
+				'_'
+			}
+		})
+		.take(MAX_TOOL_NAME_LEN)
+		.collect()
+}
+
+/// Claim `base` in `taken`, appending `-2`, `-3`, ... in document order when a
+/// derived name collides with a name already in use.
+fn unique_tool_name(base: &str, taken: &mut HashSet<String>) -> String {
+	let base = truncate_chars(base, MAX_TOOL_NAME_LEN);
+	if taken.insert(base.clone()) {
+		return base;
+	}
+	for n in 2.. {
+		let suffix = format!("-{n}");
+		let candidate = truncate_chars(&base, MAX_TOOL_NAME_LEN - suffix.len()) + &suffix;
+		if taken.insert(candidate.clone()) {
+			warn!(
+				name = %candidate,
+				"derived tool name collided with an existing name, appended a numeric suffix"
+			);
+			return candidate;
+		}
+	}
+	unreachable!("a numeric suffix always terminates the collision loop")
+}
+
+fn truncate_chars(value: &str, max: usize) -> String {
+	value.chars().take(max).collect()
+}
+
 /// We need to rework this and I don't want to forget.
 ///
 /// We need to be able to handle data which can end up in multiple destinations:
@@ -255,7 +364,19 @@ fn parameter_merge_name(parameter: &Parameter) -> String {
 /// That way the client code can properly separate the objects passed by the client.
 pub(crate) fn parse_openapi_schema(
 	open_api: &OpenAPI,
+	derive_missing_operation_ids: bool,
+	name_scheme: OpenApiNameScheme,
 ) -> Result<Vec<(Tool, UpstreamOpenAPICall)>, ParseError> {
+	// Operations that carry an explicit `operationId` keep it unchanged, so
+	// collect those names up front: a derived name never shadows an explicit
+	// one, and collisions between derived names get a numeric suffix.
+	let mut taken_names: HashSet<String> = open_api
+		.paths
+		.iter()
+		.filter_map(|(_, path_info)| path_info.as_item())
+		.flat_map(|item| item.iter())
+		.filter_map(|(_, op)| op.operation_id.clone())
+		.collect();
 	let tool_defs: Result<Vec<_>, _> = open_api
 		.paths
 		.iter()
@@ -268,12 +389,27 @@ pub(crate) fn parse_openapi_schema(
 					.iter()
 					.map(
 						|(method, op)| -> Result<(Tool, UpstreamOpenAPICall), ParseError> {
-							let name = op
-								.operation_id
-								.clone()
-								.ok_or(ParseError::InformationRequired(format!(
-									"operation_id is required for {path}"
-								)))?;
+							let name = match op.operation_id.clone() {
+								Some(name) => name,
+								None if !derive_missing_operation_ids => {
+									return Err(ParseError::InformationRequired(format!(
+										"operation_id is required for {path}"
+									)));
+								},
+								None => {
+									let name = unique_tool_name(
+										&derive_operation_name(method, path, name_scheme),
+										&mut taken_names,
+									);
+									info!(
+										method,
+										path,
+										name = %name,
+										"derived tool name for operation without operationId"
+									);
+									name
+								},
+							};
 
 							// Build the schema
 							let mut final_schema = JsonSchema::default();

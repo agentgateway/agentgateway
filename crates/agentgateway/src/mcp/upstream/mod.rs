@@ -695,7 +695,12 @@ impl UpstreamGroup {
 				// Renamed for clarity
 				debug!("starting OpenAPI transport for target: {}", target.name);
 
-				let tools = openapi::parse_openapi_schema(&open.schema).map_err(mcp::Error::OpenAPI)?;
+				let tools = openapi::parse_openapi_schema(
+					&open.schema,
+					open.derive_missing_operation_ids,
+					open.name_scheme,
+				)
+				.map_err(mcp::Error::OpenAPI)?;
 				let prefix = openapi::get_server_prefix(&open.schema).map_err(mcp::Error::OpenAPI)?;
 
 				let http_client = McpHttpClient::new(

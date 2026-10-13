@@ -8903,6 +8903,16 @@
               "properties": {
                 "schema": {
                   "$ref": "#/$defs/FileInlineOrRemote"
+                },
+                "deriveMissingOperationIds": {
+                  "description": "Derive a deterministic tool name from the method and path when an\noperation has no `operationId` (optional in the OpenAPI specification;\ncommon toolchains omit it). Defaults to true; set to false to keep the\nhistorical fail-fast behaviour.",
+                  "type": "boolean",
+                  "default": true
+                },
+                "nameScheme": {
+                  "description": "Naming scheme used for derived tool names. Defaults to `pathsBy`.",
+                  "$ref": "#/$defs/OpenApiNameScheme",
+                  "default": "pathsBy"
                 }
               },
               "unevaluatedProperties": false,
@@ -8970,6 +8980,26 @@
           "required": [
             "openapi"
           ]
+        }
+      ]
+    },
+    "OpenApiNameScheme": {
+      "description": "Naming scheme for tool names derived from `method + path` when an OpenAPI\noperation has no `operationId`. `operationId` is optional in the OpenAPI\nspecification and common toolchains (e.g. Swashbuckle) omit it by default.\n\nWith `GET /v1/products/{productId}` as the running example:",
+      "oneOf": [
+        {
+          "description": "Lowercased method, static segments PascalCased, then `By` + parameter\nnames joined with `And`: `getV1ProductsByProductId`.",
+          "type": "string",
+          "const": "pathsBy"
+        },
+        {
+          "description": "Lowercased method, then all path segments PascalCased with parameters\nin place: `getV1ProductsProductId`.",
+          "type": "string",
+          "const": "methodPath"
+        },
+        {
+          "description": "Path segments camelCased (first segment keeps its casing), then the\ncapitalized method last: `v1ProductsProductIdGet` (mirrors OpenAPI\nGenerator).",
+          "type": "string",
+          "const": "pathMethod"
         }
       ]
     },

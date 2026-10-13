@@ -2074,6 +2074,33 @@ pub struct OpenAPITarget {
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
+	/// Derive a deterministic tool name from the method and path when an
+	/// operation has no `operationId`. When false, a missing `operationId`
+	/// fails to load the target.
+	pub derive_missing_operation_ids: bool,
+	/// Naming scheme used for derived tool names.
+	pub name_scheme: OpenApiNameScheme,
+}
+
+/// Naming scheme for tool names derived from `method + path` when an OpenAPI
+/// operation has no `operationId`. `operationId` is optional in the OpenAPI
+/// specification and common toolchains (e.g. Swashbuckle) omit it by default.
+///
+/// With `GET /v1/products/{productId}` as the running example:
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum OpenApiNameScheme {
+	/// Lowercased method, static segments PascalCased, then `By` + parameter
+	/// names joined with `And`: `getV1ProductsByProductId`.
+	#[default]
+	PathsBy,
+	/// Lowercased method, then all path segments PascalCased with parameters
+	/// in place: `getV1ProductsProductId`.
+	MethodPath,
+	/// Path segments camelCased (first segment keeps its casing), then the
+	/// capitalized method last: `v1ProductsProductIdGet` (mirrors OpenAPI
+	/// Generator).
+	PathMethod,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]

@@ -521,3 +521,98 @@ mod usage_reporting_streaming {
 		assert_eq!(usage.total_tokens, 37075);
 	}
 }
+
+mod nonstandard_error_bodies {
+	use bytes::Bytes;
+	use http::StatusCode;
+	use serde_json::{Value, json};
+
+	use super::super::parse_chat_completion_error;
+
+	fn parse(body: serde_json::Value) -> Value {
+		let bytes = Bytes::from(serde_json::to_vec(&body).unwrap());
+		let parsed = parse_chat_completion_error(&bytes).expect("body should parse");
+		serde_json::to_value(&parsed).unwrap()
+	}
+
+	#[test]
+	fn mistral_validation_body_is_parsed_not_rejected() {
+		// Mistral answers schema violations with a FastAPI validation error that is
+		// not wrapped in an `error` object. Reported in #3835.
+		let detail = json!({"detail": [{
+			"type": "extra_forbidden",
+			"loc": ["body", "user"],
+			"msg": "Extra inputs are not permitted"
+		}]});
+		let parsed = parse(json!({
+			"object": "error",
+			"message": detail,
+			"type": "invalid_request_error",
+			"param": null,
+			"code": null,
+			"raw_status_code": 422
+		}));
+		let error = &parsed["error"];
+		assert_eq!(error["type"], "invalid_request_error");
+		assert_eq!(error["message"], detail.to_string());
+	}
+
+	#[test]
+	fn error_object_with_structured_message_is_stringified() {
+		let parsed =
+			parse(json!({"error": {"type": "invalid_request_error", "message": {"detail": ["x"]}}}));
+		assert_eq!(parsed["error"]["type"], "invalid_request_error");
+		assert_eq!(parsed["error"]["message"], "{\"detail\":[\"x\"]}");
+	}
+
+	#[test]
+	fn plain_string_error_is_used_as_the_message() {
+		// Some OpenAI-compatible servers return the reason as a bare string.
+		let parsed = parse(json!({"error": "boom"}));
+		assert_eq!(parsed["error"]["message"], "boom");
+	}
+
+	#[test]
+	fn body_without_any_known_fields_falls_back_to_the_whole_body() {
+		let parsed = parse(json!({"unparsed": "shape"}));
+		assert_eq!(parsed["error"]["message"], "{\"unparsed\":\"shape\"}");
+	}
+
+	#[test]
+	fn non_json_body_still_fails_to_parse() {
+		let bytes = Bytes::from_static(b"<html>502</html>");
+		assert!(parse_chat_completion_error(&bytes).is_err());
+	}
+
+	#[test]
+	fn translated_to_anthropic_shape_the_client_sees_the_upstream_reason() {
+		// End to end over the Messages conversion: the upstream 422 must reach the
+		// client as a proper error carrying Mistral's reason, not as a 502
+		// "failed to parse response".
+		let bytes = Bytes::from(
+			serde_json::to_vec(&json!({
+				"object": "error",
+				"message": {"detail": [{
+					"type": "extra_forbidden",
+					"loc": ["body", "user"],
+					"msg": "Extra inputs are not permitted"
+				}]},
+				"type": "invalid_request_error"
+			}))
+			.unwrap(),
+		);
+		let translated =
+			super::super::from_messages::translate_error(&bytes, StatusCode::UNPROCESSABLE_ENTITY)
+				.expect("translation should not fail");
+		let translated: Value = serde_json::from_slice(&translated).unwrap();
+		assert_eq!(translated["type"], "error");
+		assert!(
+			translated["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("extra_forbidden"),
+			"reason should survive translation: {}",
+			translated["error"]["message"]
+		);
+	}
+}

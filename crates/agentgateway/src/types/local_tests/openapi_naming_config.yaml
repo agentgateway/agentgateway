@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../../schema/local.json
+# OpenAPI targets exercising the derived tool-name knobs: one target opts out of
+# derivation and picks the methodPath scheme; the other relies on the defaults.
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: explicit-naming
+            openapi:
+              host: https://api.example.com
+              schema: |
+                {"openapi": "3.0.0", "info": {"title": "t", "version": "1"}, "paths": {"/v1/products/{productId}": {"get": {"responses": {"200": {"description": "ok"}}}}}}
+              deriveMissingOperationIds: false
+              nameScheme: methodPath
+          - name: default-naming
+            openapi:
+              host: https://api.example.com
+              schema: |
+                {"openapi": "3.0.0", "info": {"title": "t", "version": "1"}, "paths": {"/v1/products/{productId}": {"get": {"responses": {"200": {"description": "ok"}}}}}}

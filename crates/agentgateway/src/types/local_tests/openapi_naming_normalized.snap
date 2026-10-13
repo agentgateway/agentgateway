@@ -1,0 +1,75 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for openapi_naming: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/3000
+    address: "[::]:3000"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      ns/name/bind/3000/listener0:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: ""
+        key: ns/name/bind/3000/listener0
+        listenerName: listener0
+        protocol: HTTP
+listener_routes:
+  - - ns/name/bind/3000/listener0
+    - - backends:
+          - backend: /ns/name/bind/3000/listener0/default/route0/backend0
+            weight: 1
+        key: ns/name/bind/3000/listener0/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+listener_tcp_routes:
+  - - ns/name/bind/3000/listener0
+    - []
+policies: []
+backends:
+  - backend:
+      host:
+        name: mcp//ns/name/bind/3000/listener0/default/route0/backend0/0
+        namespace: ""
+        target: "api.example.com:443"
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+  - backend:
+      host:
+        name: mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+        namespace: ""
+        target: "api.example.com:443"
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+  - backend:
+      mcp:
+        name: ns/name/bind/3000/listener0/default/route0/backend0
+        namespace: ""
+        target:
+          targets:
+            - name: explicit-naming
+              openapi:
+                backend:
+                  backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/0
+                deriveMissingOperationIds: false
+                nameScheme: methodPath
+            - name: default-naming
+              openapi:
+                backend:
+                  backend: /mcp//ns/name/bind/3000/listener0/default/route0/backend0/1
+                deriveMissingOperationIds: true
+                nameScheme: pathsBy
+          stateful: true
+          prefixMode: conditional
+          failureMode: failClosed
+          sessionIdleTtl: 30m0s
+route_groups: []
+workloads: []
+services: []

@@ -515,6 +515,11 @@ async fn test_basic_config() {
 }
 
 #[tokio::test]
+async fn test_openapi_naming_config() {
+	test_config_parsing("openapi_naming").await;
+}
+
+#[tokio::test]
 async fn test_ui_oidc_config() {
 	test_config_parsing("ui_oidc").await;
 }

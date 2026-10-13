@@ -46,7 +46,51 @@ pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
 ) -> Result<types::completions::typed::ChatCompletionErrorResponse, crate::AIError> {
 	serde_json::from_slice::<types::completions::typed::ChatCompletionErrorResponse>(bytes)
-		.map_err(logged_response_parsing(bytes))
+		.or_else(|_| parse_nonstandard_chat_completion_error(bytes))
+}
+
+/// Parse an OpenAI-dialect error body that does not match the standard shape.
+///
+/// Some providers answer with errors that are not wrapped in an `error` object,
+/// or carry a structured (non-string) `message`. Mistral, for example, returns
+/// FastAPI validation errors as
+/// `{"object":"error","message":{"detail":[...]},"type":"invalid_request_error"}`.
+/// Rather than failing to parse and surfacing a 502, read the fields from
+/// wherever they actually are and stringify a structured `message`, so the
+/// client sees the real upstream status and reason.
+fn parse_nonstandard_chat_completion_error(
+	bytes: &Bytes,
+) -> Result<types::completions::typed::ChatCompletionErrorResponse, crate::AIError> {
+	let value: serde_json::Value =
+		serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+	let error = value.get("error");
+	let base = match error {
+		Some(error @ serde_json::Value::Object(_)) => error,
+		_ => &value,
+	};
+	let message = match base.get("message").or(error) {
+		Some(serde_json::Value::String(message)) => message.clone(),
+		// A structured message (e.g. Mistral's FastAPI validation detail) is
+		// stringified so the reason stays visible to the client.
+		Some(message) => message.to_string(),
+		None => value.to_string(),
+	};
+	Ok(types::completions::typed::ChatCompletionErrorResponse {
+		event_id: None,
+		error: types::completions::typed::ChatCompletionError {
+			r#type: base
+				.get("type")
+				.and_then(serde_json::Value::as_str)
+				.map(str::to_string),
+			message,
+			param: base
+				.get("param")
+				.and_then(serde_json::Value::as_str)
+				.map(str::to_string),
+			code: base.get("code").filter(|code| !code.is_null()).cloned(),
+			event_id: None,
+		},
+	})
 }
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
