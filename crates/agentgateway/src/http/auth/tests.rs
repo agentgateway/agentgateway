@@ -390,6 +390,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -422,6 +423,7 @@ async fn test_backend_auth_key() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -457,6 +459,7 @@ async fn test_backend_auth_key_query_parameter() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -488,6 +491,7 @@ async fn test_backend_auth_key_default_sets_non_explicit_extension() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -523,6 +527,7 @@ async fn test_backend_auth_key_explicit_location_sets_explicit_extension() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -926,6 +931,7 @@ async fn test_backend_auth_credentials_only_injects_all() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -969,6 +975,7 @@ async fn test_backend_auth_credential_with_prefix() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1003,6 +1010,7 @@ async fn test_backend_auth_credential_query_parameter() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1037,6 +1045,7 @@ async fn test_backend_auth_combined_key_and_credentials() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1075,6 +1084,7 @@ async fn test_backend_auth_credentials_invalid_value_is_local() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1110,6 +1120,7 @@ async fn test_invalid_backend_auth_rejects_without_changing_request() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs: t.inputs(),
 	};
@@ -1204,6 +1215,7 @@ async fn test_backend_auth_credential_authorization_marks_explicit() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1236,6 +1248,7 @@ async fn test_backend_auth_credential_other_header_keeps_primary_marker() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1348,6 +1361,7 @@ async fn test_backend_auth_jwt_sign() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1412,6 +1426,7 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1551,6 +1566,7 @@ async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1619,6 +1635,7 @@ async fn test_invalid_jwt_sign_rejects_before_request_mutation() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs: t.inputs(),
 	};
@@ -1685,6 +1702,7 @@ async fn test_backend_auth_jwt_sign_rsa() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};
@@ -1737,6 +1755,7 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 			name: Default::default(),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		},
 		inputs,
 	};

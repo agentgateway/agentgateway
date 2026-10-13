@@ -829,8 +829,8 @@ impl DropOnLog {
 
 	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
-	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
-	/// gRPC status as unhealthy.
+	/// When no CEL expression is set, the default treats 5xx, connection failures, or server-side
+	/// gRPC failures as unhealthy.
 	#[cfg(test)]
 	fn default_unhealthy(log: &RequestLog) -> bool {
 		Self::default_unhealthy_for_status(log, log.status)
@@ -841,7 +841,18 @@ impl DropOnLog {
 		status: Option<crate::http::StatusCode>,
 	) -> bool {
 		status.is_none_or(|s| s.is_server_error())
-			|| log.grpc_status.load().is_some_and(|status| status != 0)
+			|| log.grpc_status.load().is_some_and(|status| {
+				// Only codes indicating a backend failure; client-induced codes (INVALID_ARGUMENT,
+				// NOT_FOUND, UNIMPLEMENTED, etc.) must not degrade backend health.
+				matches!(
+					tonic::Code::from(status as i32),
+					tonic::Code::Unknown
+						| tonic::Code::DeadlineExceeded
+						| tonic::Code::Internal
+						| tonic::Code::Unavailable
+						| tonic::Code::DataLoss
+				)
+			})
 	}
 
 	fn eviction_unhealthy(
@@ -1152,7 +1163,7 @@ impl RequestLog {
 			original_model: None,
 			guardrails: Default::default(),
 			mcp_guardrails: Default::default(),
-			budgets: None,
+			budgets: Vec::new(),
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
@@ -1333,7 +1344,7 @@ pub struct RequestLog {
 	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
 	pub mcp_guardrails: McpGuardrailsLog,
-	pub budgets: Option<crate::http::budget::BudgetSettlement>,
+	pub budgets: Vec<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
@@ -1451,8 +1462,10 @@ impl Drop for DropOnLog {
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
-			if let (Some(budgets), Some(llm_response)) = (log.budgets.take(), llm_response.as_ref()) {
-				budgets.settle(llm_response);
+			if let Some(llm_response) = llm_response.as_ref() {
+				for budgets in std::mem::take(&mut log.budgets) {
+					budgets.settle(llm_response);
+				}
 			}
 
 			let mcp = log.mcp_status.take();
@@ -3078,6 +3091,33 @@ mod tests {
 	}
 
 	#[test]
+	fn grpc_refusal_by_the_proxy_logs_its_grpc_status() {
+		use crate::http::jwt::TokenError;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
+
+		let refusal = || {
+			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
+		};
+
+		let mut log = test_request_log();
+		let (mut response, reason) = resolve_response(refusal(), &mut log, true);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::OK);
+		assert_eq!(
+			log.grpc_status.load(),
+			Some(tonic::Code::Unauthenticated as u8)
+		);
+
+		let mut log = test_request_log();
+		log.grpc_status.store(Some(tonic::Code::Internal as u8));
+		let (mut response, reason) = resolve_response(refusal(), &mut log, false);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+		assert_eq!(log.grpc_status.load(), None);
+	}
+
+	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
@@ -3416,11 +3456,14 @@ mod tests {
 	}
 
 	#[test]
-	fn default_health_treats_non_zero_grpc_status_as_unhealthy() {
+	fn default_health_treats_server_grpc_status_as_unhealthy() {
 		let mut log = test_request_log();
 		log.status = Some(http::StatusCode::OK);
 		log.grpc_status.store(Some(13));
 		assert!(DropOnLog::default_unhealthy(&log));
+
+		log.grpc_status.store(Some(3));
+		assert!(!DropOnLog::default_unhealthy(&log));
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));

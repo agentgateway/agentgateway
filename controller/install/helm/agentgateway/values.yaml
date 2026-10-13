@@ -303,11 +303,11 @@ monitoring:
     scrapeNativeHistograms: false
       # -- Scrape classic (legacy bucket) histograms.
     scrapeClassicHistograms: true
-    # -- Relabeling rules applied to the scrape target before metrics are ingested
-    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    # -- Relabeling rules applied to the scrape target before metrics are ingested.
+    #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
     relabelings: []
-    # -- Relabeling rules applied to scraped metrics before ingestion
-    #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+    # -- Relabeling rules applied to scraped metrics before ingestion.
+    #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
     metricRelabelings: []
 
   proxy:
@@ -324,11 +324,11 @@ monitoring:
       scrapeNativeHistograms: false
       # -- Scrape classic (legacy bucket) histograms.
       scrapeClassicHistograms: true
-      # -- Relabeling rules applied to the scrape target before metrics are ingested
-      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+      # -- Relabeling rules applied to the scrape target before metrics are ingested.
+      #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
       relabelings: []
-      # -- Relabeling rules applied to scraped metrics before ingestion
-      #    (https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_config).
+      # -- Relabeling rules applied to scraped metrics before ingestion.
+      #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
       metricRelabelings: []
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:

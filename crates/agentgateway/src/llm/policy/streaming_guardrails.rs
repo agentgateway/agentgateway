@@ -117,9 +117,6 @@ pub fn make_evaluator(
 		original,
 		guardrail_log,
 		worst_action: GuardrailAction::Allow,
-		audit_recorded: false,
-		allow_recorded: false,
-		fail_open_recorded: false,
 	})
 }
 
@@ -131,11 +128,6 @@ struct ResponseGuardEvaluator {
 	guardrail_log: GuardrailLog,
 	// Fold window results into one metric for the stream.
 	worst_action: GuardrailAction,
-	// Only log the audit action once per stream, even if triggered by multiple windows.
-	audit_recorded: bool,
-	// Deduplicate passing windows
-	allow_recorded: bool,
-	fail_open_recorded: bool,
 }
 
 impl ResponseGuardEvaluator {
@@ -157,27 +149,20 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 	}
 
 	async fn evaluate(&mut self, window: &str) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
-		let log = if self.audit_recorded {
-			None
-		} else {
-			Some(&self.guardrail_log)
-		};
-
-		match PromptGuard::evaluate_streaming_response_window(
+		// Realtime reuses one evaluator for every response on a connection, so each window is
+		// folded into the log as the most severe action per guard.
+		let window_log = GuardrailLog::default();
+		let result = match PromptGuard::evaluate_streaming_response_window(
 			&self.guard,
 			window,
 			&self.client,
 			&self.http_headers,
 			self.original.as_deref(),
-			log,
-			&mut self.allow_recorded,
+			Some(&window_log),
 		)
 		.await
 		{
 			Ok((outcome, action)) => {
-				if action == GuardrailAction::Audit {
-					self.audit_recorded = true;
-				}
 				self.observe_action(action);
 				Ok(outcome)
 			},
@@ -186,20 +171,19 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 					FailureMode::FailClosed => GuardrailAction::Reject,
 					FailureMode::FailOpen => GuardrailAction::FailOpen,
 				};
-				if action != GuardrailAction::FailOpen || !self.fail_open_recorded {
-					super::record_guardrail(
-						Some(&self.guardrail_log),
-						GuardrailPhase::Response,
-						self.guard.kind.name(),
-						action,
-						None,
-					);
-					self.fail_open_recorded |= action == GuardrailAction::FailOpen;
-				}
+				super::record_guardrail(
+					Some(&window_log),
+					GuardrailPhase::Response,
+					self.guard.kind.name(),
+					action,
+					None,
+				);
 				self.observe_action(action);
 				Err(e)
 			},
-		}
+		};
+		super::merge_most_severe_guardrails(&self.guardrail_log, window_log);
+		result
 	}
 }
 

@@ -1,0 +1,84 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: shared
+  namespace: default
+spec:
+  static:
+    host: victim.example.com
+    port: 443
+---
+apiVersion: gateway.networking.x-k8s.io/v1alpha1
+kind: XBackend
+metadata:
+  name: shared
+  namespace: default
+spec:
+  type: ExternalHostname
+  port:
+    port: 443
+  externalHostname:
+    hostname: attacker.example.com
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/shared
+      name:
+        name: shared
+        namespace: default
+      static:
+        host: victim.example.com
+        port: 443
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: gateway.networking.x-k8s.io/XBackend/default/shared
+      name:
+        kind: XBackend
+        name: shared
+        namespace: default
+      static:
+        host: attacker.example.com
+        port: 443
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: shared
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: gateway.networking.x-k8s.io/v1alpha1
+  kind: XBackend
+  metadata:
+    name: shared
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Backend successfully accepted
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+        namespace: default

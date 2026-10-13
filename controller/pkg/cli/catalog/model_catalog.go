@@ -97,7 +97,11 @@ func (p *Provider) overlayWith(overlay Provider, addExactModels bool) {
 func (m *Model) overlayWith(overlay Model) {
 	m.Rates.overlayWith(overlay.Rates)
 	if len(overlay.Tiers) > 0 {
-		m.Tiers = overlay.Tiers
+		// Replace each supplied service tier while preserving other service tiers.
+		m.Tiers = slices.DeleteFunc(m.Tiers, func(t Tier) bool {
+			return slices.ContainsFunc(overlay.Tiers, func(o Tier) bool { return o.ServiceTier == t.ServiceTier })
+		})
+		m.Tiers = append(m.Tiers, overlay.Tiers...)
 	}
 	for _, tag := range overlay.Tags {
 		if !slices.Contains(m.Tags, tag) {
@@ -175,7 +179,8 @@ type Rates struct {
 }
 
 type Tier struct {
-	ContextOver uint64 `json:"contextOver"`
+	ContextOver uint64 `json:"contextOver,omitempty"`
+	ServiceTier string `json:"serviceTier,omitempty"`
 	Rates       Rates  `json:"rates,omitzero"`
 }
 
@@ -237,12 +242,17 @@ func (m *Model) validate() error {
 	if err := m.Rates.validate(); err != nil {
 		return err
 	}
-	var prev uint64
+	previous := make(map[string]uint64)
 	for i, t := range m.Tiers {
-		if i > 0 && t.ContextOver <= prev {
-			return fmt.Errorf("tier %d threshold %d not strictly greater than previous %d", i, t.ContextOver, prev)
+		switch t.ServiceTier {
+		case "", "standard", "flex", "priority", "reserved":
+		default:
+			return fmt.Errorf("tier %d has unsupported serviceTier %q", i, t.ServiceTier)
 		}
-		prev = t.ContextOver
+		if prior, ok := previous[t.ServiceTier]; ok && t.ContextOver <= prior {
+			return fmt.Errorf("tier %d contextOver must increase within its serviceTier", i)
+		}
+		previous[t.ServiceTier] = t.ContextOver
 		if err := t.Rates.validate(); err != nil {
 			return fmt.Errorf("tier %d: %w", i, err)
 		}

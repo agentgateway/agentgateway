@@ -939,6 +939,12 @@ td.row-actions > * + * {
 	gap: 5px;
 }
 
+h4.field-label {
+	margin: 0;
+	font-size: inherit;
+	font-weight: inherit;
+}
+
 /* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .field-label svg {
 	color: var(--muted);
@@ -955,7 +961,8 @@ td.row-actions > * + * {
 	background: color-mix(in srgb, var(--bad-bg) 48%, var(--surface));
 }
 
-.field.invalid > small {
+.field.invalid > small,
+.field.invalid > .field-control > small {
 	color: var(--bad);
 	font-weight: 600;
 }
@@ -963,6 +970,15 @@ td.row-actions > * + * {
 .help-icon {
 	display: inline-flex;
 	align-items: center;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	padding: 0;
+}
+
+.help-icon:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
 }
 
 .two-column {
@@ -1302,6 +1318,12 @@ td.row-actions > * + * {
 	height: 22px;
 }
 
+.provider-icon {
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
+}
+
 .client-svg-icon.compact svg,
 .client-svg-icon.compact img,
 .client-svg-icon.compact .provider-icon {
@@ -1309,7 +1331,6 @@ td.row-actions > * + * {
 	height: 16px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .client-svg-icon .provider-icon {
 	width: 22px;
 	height: 22px;
@@ -2967,7 +2988,6 @@ tbody tr:hover {
 	gap: 12px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-detail-title .provider-icon {
 	width: 26px;
 	height: 26px;
@@ -3836,7 +3856,6 @@ tbody tr:hover {
 	gap: 9px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .log-model-cell .provider-icon {
 	width: 16px;
 	height: 16px;
@@ -3915,6 +3934,11 @@ tbody tr:hover {
 	border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
 	border-radius: 7px;
 	padding: 0 7px;
+}
+
+.log-turn-badge:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
 }
 
 .log-turn-badge.user-assistant {
@@ -4244,6 +4268,31 @@ tbody tr:hover {
 	flex-direction: column;
 	gap: 7px;
 	margin-bottom: 14px;
+}
+
+.field-with-help {
+	display: grid;
+	grid-template-columns: minmax(0, max-content) minmax(13px, 1fr);
+	column-gap: 5px;
+}
+
+.field-control {
+	display: contents;
+}
+
+.field-control > .field-label {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+.field-control > :not(.field-label) {
+	grid-column: 1 / -1;
+}
+
+.field-with-help > .tooltip-wrap {
+	grid-column: 2;
+	grid-row: 1;
+	place-self: center start;
 }
 
 .target-list {
@@ -5224,13 +5273,6 @@ textarea {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-}
-
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.provider-icon {
-	width: 18px;
-	height: 18px;
-	object-fit: contain;
 }
 
 :root[data-theme='dark'] .provider-icon-mono {

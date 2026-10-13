@@ -359,6 +359,7 @@ export function LogsPage() {
 								values={logFilters[dimension]}
 								placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 								allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+								searchLabel={`Search ${meta.label.toLowerCase()}`}
 								onChange={values =>
 									setLogFilters(current => ({
 										...current,
@@ -890,6 +891,7 @@ export function AnalyticsPage() {
 									values={filters[dimension]}
 									placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 									allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+									searchLabel={`Search ${meta.label.toLowerCase()}`}
 									onChange={values => updateFilter(dimension, values)}
 								/>
 							);
@@ -1147,12 +1149,10 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		(output === 'assistant' || output === 'toolCall');
 	return (
 		<Tooltip content={label}>
-			<span
+			<button
+				type="button"
 				className={`log-turn-badge ${common ? variant : 'other'}`}
-				role="img"
 				aria-label={label}
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				tabIndex={0}
 			>
 				{common ? (
 					<>
@@ -1163,7 +1163,7 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 				) : (
 					<Ellipsis size={15} />
 				)}
-			</span>
+			</button>
 		</Tooltip>
 	);
 }

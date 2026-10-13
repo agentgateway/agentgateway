@@ -3592,9 +3592,11 @@ func (x *ListenerName) GetListenerSet() *ResourceName {
 }
 
 type ResourceName struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Namespace     string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Name      string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	// Resource kind, set when the same namespace/name can exist under multiple resource types.
+	Kind          *string `protobuf:"bytes,3,opt,name=kind,proto3,oneof" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3639,6 +3641,13 @@ func (x *ResourceName) GetName() string {
 func (x *ResourceName) GetNamespace() string {
 	if x != nil {
 		return x.Namespace
+	}
+	return ""
+}
+
+func (x *ResourceName) GetKind() string {
+	if x != nil && x.Kind != nil {
+		return *x.Kind
 	}
 	return ""
 }
@@ -10487,10 +10496,12 @@ func (x *PolicyTarget_ServiceTarget) GetPort() uint32 {
 }
 
 type PolicyTarget_BackendTarget struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Namespace     string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Section       *string                `protobuf:"bytes,3,opt,name=section,proto3,oneof" json:"section,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Name      string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Section   *string                `protobuf:"bytes,3,opt,name=section,proto3,oneof" json:"section,omitempty"`
+	// Resource kind, set when the same namespace/name can exist under multiple backend types.
+	Kind          *string `protobuf:"bytes,4,opt,name=kind,proto3,oneof" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10542,6 +10553,13 @@ func (x *PolicyTarget_BackendTarget) GetNamespace() string {
 func (x *PolicyTarget_BackendTarget) GetSection() string {
 	if x != nil && x.Section != nil {
 		return *x.Section
+	}
+	return ""
+}
+
+func (x *PolicyTarget_BackendTarget) GetKind() string {
+	if x != nil && x.Kind != nil {
+		return *x.Kind
 	}
 	return ""
 }
@@ -18489,10 +18507,12 @@ const file_resource_proto_rawDesc = "" +
 	"\fgateway_name\x18\x01 \x01(\tR\vgatewayName\x12+\n" +
 	"\x11gateway_namespace\x18\x02 \x01(\tR\x10gatewayNamespace\x12#\n" +
 	"\rlistener_name\x18\x03 \x01(\tR\flistenerName\x12J\n" +
-	"\flistener_set\x18\x04 \x01(\v2'.agentgateway.dev.resource.ResourceNameR\vlistenerSet\"@\n" +
+	"\flistener_set\x18\x04 \x01(\v2'.agentgateway.dev.resource.ResourceNameR\vlistenerSet\"b\n" +
 	"\fResourceName\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespace\"Y\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x17\n" +
+	"\x04kind\x18\x03 \x01(\tH\x00R\x04kind\x88\x01\x01B\a\n" +
+	"\x05_kind\"Y\n" +
 	"\x11TypedResourceName\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x12\n" +
@@ -18853,7 +18873,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0froute_group_key\x18\x06 \x01(\tH\x00R\rrouteGroupKey\x88\x01\x01\x12\x16\n" +
 	"\x06weight\x18\x02 \x01(\x05R\x06weight\x12W\n" +
 	"\x10backend_policies\x18\x05 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0fbackendPoliciesB\x12\n" +
-	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xa6\b\n" +
+	"\x10_route_group_keyJ\x04\b\x04\x10\x05\"\xc9\b\n" +
 	"\fPolicyTarget\x12Q\n" +
 	"\agateway\x18\x01 \x01(\v25.agentgateway.dev.resource.PolicyTarget.GatewayTargetH\x00R\agateway\x12K\n" +
 	"\x05route\x18\x02 \x01(\v23.agentgateway.dev.resource.PolicyTarget.RouteTargetH\x00R\x05route\x12Q\n" +
@@ -18864,13 +18884,15 @@ const file_resource_proto_rawDesc = "" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x17\n" +
 	"\x04port\x18\x03 \x01(\rH\x00R\x04port\x88\x01\x01B\a\n" +
-	"\x05_port\x1al\n" +
+	"\x05_port\x1a\x8e\x01\n" +
 	"\rBackendTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x1d\n" +
-	"\asection\x18\x03 \x01(\tH\x00R\asection\x88\x01\x01B\n" +
+	"\asection\x18\x03 \x01(\tH\x00R\asection\x88\x01\x01\x12\x17\n" +
+	"\x04kind\x18\x04 \x01(\tH\x01R\x04kind\x88\x01\x01B\n" +
 	"\n" +
-	"\b_section\x1a\x91\x01\n" +
+	"\b_sectionB\a\n" +
+	"\x05_kind\x1a\x91\x01\n" +
 	"\rGatewayTarget\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x1f\n" +
@@ -20788,6 +20810,7 @@ func file_resource_proto_init() {
 		(*Resource_ModelRoute)(nil),
 	}
 	file_resource_proto_msgTypes[2].OneofWrappers = []any{}
+	file_resource_proto_msgTypes[4].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[7].OneofWrappers = []any{}
 	file_resource_proto_msgTypes[11].OneofWrappers = []any{
 		(*ConditionalPolicy_Traffic)(nil),

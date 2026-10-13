@@ -86,8 +86,7 @@ pub fn router(
 		resource_manager,
 		model_catalog,
 	};
-	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
-	Router::new()
+	let router = Router::new()
 		// OIDC intercepts this path to start login; without OIDC, return to the UI.
 		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
 		.route("/api/runtime", get(get_runtime))
@@ -111,9 +110,16 @@ pub fn router(
 		.route("/api/logs/analytics/summary", post(analytics_summary))
 		.route("/api/costs/models", get(cost_models))
 		.route("/api/costs/refresh-base", post(refresh_base_costs))
-		.route("/api/budgets/status", get(budget_status))
-		.nest_service("/ui", ui_service)
-		.route("/", get(|| async { Redirect::permanent("/ui") }))
+		.route("/api/budgets/status", get(budget_status));
+	let router = if assets_dir.entries().is_empty() {
+		router.route("/", get(crate::management::admin::handle_dashboard))
+	} else {
+		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
+		router
+			.nest_service("/ui", ui_service)
+			.route("/", get(|| async { Redirect::permanent("/ui") }))
+	};
+	router
 		.layer(axum::middleware::from_fn_with_state(
 			app.clone(),
 			authorize_route,
@@ -479,10 +485,12 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 	let yaml_file_content = {
 		let mut document =
 			yaml_serde_edit::YamlObject::<Value>::parse(&current).map_err(anyhow::Error::from)?;
-		document
-			.set(config_json.clone())
-			.map_err(anyhow::Error::from)?;
-		let content = document.get_string();
+		// Attempt to edit it in place, or fallback to complete replacement
+		let content = match document.set(config_json.clone()) {
+			Ok(()) => document.get_string().to_owned(),
+			Err(yaml_serde_edit::Error::RoundTrip) => yaml::to_string(config_json)?,
+			Err(e) => return Err(anyhow::Error::from(e).into()),
+		};
 		if content
 			.lines()
 			.any(|line| line.trim_start().starts_with("# yaml-language-server:"))
@@ -1154,6 +1162,24 @@ mod tests {
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
 		}
+	}
+
+	#[tokio::test]
+	async fn cel_playground_sample_context_evaluates() {
+		let data: Value =
+			serde_json::from_str(include_str!("../../../ui/src/pages/celSampleContext.json")).unwrap();
+		let resp = handle_cel(Json(CelRequest {
+			expression: "1 + 2".to_string(),
+			data: Some(data),
+		}))
+		.await;
+		let status = resp.status();
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+			.await
+			.unwrap();
+		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+		let body: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(body, serde_json::json!({"result": 3, "error": null}));
 	}
 
 	#[tokio::test]

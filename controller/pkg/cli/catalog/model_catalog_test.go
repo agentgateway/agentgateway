@@ -61,14 +61,38 @@ func TestOverlayWithInsertsNewProviderAndFillsEmptyRates(t *testing.T) {
 
 func TestOverlayWithReplacesTiersWhenOverlayHasThem(t *testing.T) {
 	base := &ModelCatalog{Providers: map[string]Provider{
-		"p": {Models: map[string]Model{"m": {Tiers: []Tier{{ContextOver: 1000, Rates: Rates{Input: "1"}}}}}},
+		"p": {Models: map[string]Model{"m": {Tiers: []Tier{
+			{ContextOver: 1000, Rates: Rates{Input: "1"}},
+			{ServiceTier: "priority", Rates: Rates{Input: "3"}},
+		}}}},
 	}}
 	base.overlayWith(&ModelCatalog{Providers: map[string]Provider{
 		"p": {Models: map[string]Model{"m": {Tiers: []Tier{{ContextOver: 2000, Rates: Rates{Input: "2"}}}}}},
 	}})
 	tiers := base.Providers["p"].Models["m"].Tiers
-	if len(tiers) != 1 || tiers[0].ContextOver != 2000 {
-		t.Errorf("tiers = %+v, want single tier ContextOver=2000", tiers)
+	want := []Tier{{ServiceTier: "priority", Rates: Rates{Input: "3"}}, {ContextOver: 2000, Rates: Rates{Input: "2"}}}
+	if !slices.Equal(tiers, want) {
+		t.Errorf("tiers = %+v, want %+v", tiers, want)
+	}
+}
+
+func TestTierOrderValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		tiers []Tier
+		valid bool
+	}{
+		{"legacy ascending", []Tier{{ContextOver: 100}, {ContextOver: 200}}, true},
+		{"legacy descending", []Tier{{ContextOver: 200}, {ContextOver: 100}}, false},
+		{"ordered flex", []Tier{{ServiceTier: "flex"}, {ServiceTier: "flex", ContextOver: 200}}, true},
+		{"descending flex", []Tier{{ServiceTier: "flex", ContextOver: 200}, {ServiceTier: "flex"}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (&Model{Tiers: tc.tiers}).validate()
+			if (err == nil) != tc.valid {
+				t.Fatalf("validate() error = %v, want valid = %v", err, tc.valid)
+			}
+		})
 	}
 }
 

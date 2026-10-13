@@ -24,7 +24,8 @@ use crate::test_helpers::proxymock::{
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
-	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+	BackendTrafficPolicy, FrontendPolicy, McpAuthenticationMode, McpServerOverrides, PolicyTarget,
+	TargetedPolicy,
 };
 use crate::*;
 
@@ -4010,6 +4011,107 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			.and_then(|v| v.to_str().ok()),
 		Some("/.well-known/oauth-protected-resource/mcp")
 	);
+}
+
+#[rstest::rstest]
+#[case::preserved(McpAuthenticationMode::Strict, true, &["gateway", "mcp"], reqwest::StatusCode::OK)]
+#[case::wrong_audience(McpAuthenticationMode::Strict, true, &["gateway"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::stripped(McpAuthenticationMode::Strict, false, &["gateway", "mcp"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::permissive_stripped(McpAuthenticationMode::Permissive, false, &["gateway", "mcp"], reqwest::StatusCode::OK)]
+#[tokio::test]
+async fn mcp_authentication_after_route_jwt(
+	#[case] mode: McpAuthenticationMode,
+	#[case] preserve_token: bool,
+	#[case] audiences: &[&str],
+	#[case] expected_status: reqwest::StatusCode,
+) {
+	use crate::http::jwt::tests::build_signed_token_with_payload;
+
+	const KID: &str = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+	const ISSUER: &str = "https://issuer.example.com";
+	let jwks = serde_json::json!({
+		"keys": [{
+			"use": "sig",
+			"kty": "EC",
+			"kid": KID,
+			"crv": "P-256",
+			"alg": "ES256",
+			"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+			"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+		}]
+	});
+	let exp = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let token = build_signed_token_with_payload(
+		KID,
+		serde_json::json!({ "iss": ISSUER, "aud": audiences, "exp": exp }),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let provider = crate::http::jwt::Provider::from_jwks(
+		serde_json::from_value(jwks.clone()).unwrap(),
+		ISSUER.to_string(),
+		Some(vec!["mcp".to_string()]),
+		Default::default(),
+	)
+	.unwrap();
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: ISSUER.to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![provider],
+			mode.into(),
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+			false,
+		)),
+		mode,
+		client_id: None,
+		client_secret: None,
+	};
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"jwtAuth": {
+			"issuer": ISSUER,
+			"audiences": ["gateway"],
+			"jwks": jwks.to_string(),
+			"preserveToken": preserve_token,
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let response = reqwest::Client::new()
+		.post(format!("http://{io}/mcp"))
+		.bearer_auth(token)
+		.header("accept", "application/json, text/event-stream")
+		.json(&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "initialize",
+			"params": {
+				"protocolVersion": "2025-03-26",
+				"capabilities": {},
+				"clientInfo": {"name": "t", "version": "1"}
+			}
+		}))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), expected_status);
 }
 
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {

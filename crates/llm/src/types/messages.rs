@@ -201,6 +201,43 @@ pub fn get_messages_helper(
 	out
 }
 
+pub fn get_messages_v2_helper(
+	messages: &[RequestMessage],
+	system: &Option<TextBlock>,
+) -> Vec<NormalizedMessage> {
+	let mut out = system
+		.as_ref()
+		.map(|system| NormalizedMessage {
+			role: strng::literal!("system"),
+			parts: match system {
+				TextBlock::Text(text) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				TextBlock::Array(parts) => parts
+					.iter()
+					.filter_map(TextPart::text)
+					.map(|text| NormalizedMessagePart::text(strng::new(text)))
+					.collect(),
+			},
+		})
+		.into_iter()
+		.collect::<Vec<_>>();
+	out.extend(messages.iter().map(|message| NormalizedMessage {
+		role: strng::new(&message.role),
+		parts: match &message.content {
+			Some(ContentBlock::Text(text)) => {
+				vec![NormalizedMessagePart::text(strng::new(text))]
+			},
+			Some(ContentBlock::Array(parts)) => {
+				parts.iter().filter_map(normalized_anthropic_part).collect()
+			},
+			None => Vec::new(),
+		},
+	}));
+	crate::types::attach_tool_result_names(&mut out);
+	out
+}
+
 /// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
 const PRESERVED_REST_KEYS: &[&str] = &[
 	// Anthropic prompt-cache breakpoint
@@ -233,9 +270,16 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
-			Some(tokens)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self
+					.rest
+					.get("tools")
+					.and_then(serde_json::Value::as_array)
+					.into_iter()
+					.flatten(),
+			))
 		} else {
 			None
 		};
@@ -268,38 +312,7 @@ impl RequestType for Request {
 	}
 
 	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
-		let mut messages = self
-			.system
-			.as_ref()
-			.map(|system| NormalizedMessage {
-				role: strng::literal!("system"),
-				parts: match system {
-					TextBlock::Text(text) => {
-						vec![NormalizedMessagePart::text(strng::new(text))]
-					},
-					TextBlock::Array(parts) => parts
-						.iter()
-						.filter_map(TextPart::text)
-						.map(|text| NormalizedMessagePart::text(strng::new(text)))
-						.collect(),
-				},
-			})
-			.into_iter()
-			.collect::<Vec<_>>();
-		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
-			role: strng::new(&message.role),
-			parts: match &message.content {
-				Some(ContentBlock::Text(text)) => {
-					vec![NormalizedMessagePart::text(strng::new(text))]
-				},
-				Some(ContentBlock::Array(parts)) => {
-					parts.iter().filter_map(normalized_anthropic_part).collect()
-				},
-				None => Vec::new(),
-			},
-		}));
-		crate::types::attach_tool_result_names(&mut messages);
-		messages
+		get_messages_v2_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {

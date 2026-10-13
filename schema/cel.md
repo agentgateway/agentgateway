@@ -72,7 +72,7 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
 |`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
-|`llm.serviceTier`|string|The service tier the provider served the request under.|
+|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `null`.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
@@ -178,7 +178,7 @@
 |`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
 |`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
 |`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
-|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
+|`guardrails[].action`|enum|The action the guardrail took.<br>Possible values: `allow`, `failOpen`, `audit`, `mask`, `reject`.|
 |`guardrails[].guardrailId`|string|The configured guardrail identifier.|
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|

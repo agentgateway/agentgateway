@@ -759,10 +759,12 @@ pub struct PreviousState {
 	pub services: HashSet<NamespacedHostname>,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalWorkload {
 	#[serde(flatten)]
 	pub workload: Workload,
+	#[serde_as(as = "HashMap<_, HashMap<crate::types::discovery::PortKey, _>>")]
 	pub services: HashMap<String, HashMap<u16, u16>>,
 }

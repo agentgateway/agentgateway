@@ -4228,6 +4228,21 @@ fn fixed_providers_classify_by_family() {
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
+	let foundry = AIProvider::azure(azure::Provider {
+		model_override: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+	});
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "claude-haiku-4-5", ""),
+		CacheTokenConvention::InputExcludesCache,
+	);
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "gpt-4o", ""),
+		CacheTokenConvention::InputIncludesCache,
+	);
 	let bedrock = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
 		model_override: None,
 		region: strng::new("us-east-1"),

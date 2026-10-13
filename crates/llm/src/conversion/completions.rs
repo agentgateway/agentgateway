@@ -698,7 +698,9 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
-											entry.arguments.push_str(args);
+											if log_content.tool_calls {
+												entry.arguments.push_str(args);
+											}
 										}
 									}
 

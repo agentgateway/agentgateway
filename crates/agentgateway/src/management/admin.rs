@@ -200,17 +200,13 @@ fn admin_router(state: Arc<AdminState>, ui_assets: &'static include_dir::Dir<'st
 		.route("/logging", post(handle_logging))
 		.with_state(state.clone());
 
-	let router = if cfg!(feature = "ui") {
-		router.merge(crate::ui::router(
-			state.config.clone(),
-			state.model_catalog.clone(),
-			state.config_resource_store.clone(),
-			state.resource_manager.clone(),
-			ui_assets,
-		))
-	} else {
-		router.route("/", get(handle_dashboard))
-	};
+	let router = router.merge(crate::ui::router(
+		state.config.clone(),
+		state.model_catalog.clone(),
+		state.config_resource_store.clone(),
+		state.resource_manager.clone(),
+		ui_assets,
+	));
 
 	router.layer(add_cors_layer())
 }
@@ -245,7 +241,7 @@ fn add_cors_layer() -> CorsLayer {
 		.max_age(Duration::from_secs(3600))
 }
 
-async fn handle_dashboard(_req: Request) -> Response {
+pub(crate) async fn handle_dashboard(_req: Request) -> Response {
 	let apis = &[
 		(
 			"debug/pprof/profile",

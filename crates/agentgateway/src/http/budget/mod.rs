@@ -543,7 +543,7 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 			return Err(crate::proxy::ProxyError::BudgetExceeded(exceeded).into());
 		}
 
-		log.budgets = Some(BudgetSettlement {
+		log.budgets.push(BudgetSettlement {
 			policy: self.clone(),
 			budgets,
 		});

@@ -84,7 +84,7 @@ export function Dropdown(props: {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
-	const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
+	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 	const typeaheadRef = useRef('');
 	const typeaheadTimerRef = useRef<number | null>(null);
 	const selected =
@@ -288,8 +288,8 @@ export function Dropdown(props: {
 						/>
 					) : null}
 					{filteredOptions.map((option, index) => (
-						// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<div
+						<button
+							type="button"
 							className={[
 								'custom-select-option',
 								index === activeIndex ? 'active' : null,
@@ -310,7 +310,7 @@ export function Dropdown(props: {
 							onClick={() => selectOption(option)}
 						>
 							<DropdownOptionContent option={option} showDescription />
-						</div>
+						</button>
 					))}
 					{filteredOptions.length === 0 ? (
 						<div className="custom-select-empty">No matches</div>
@@ -814,23 +814,25 @@ export function Field(props: {
 	className?: string;
 	tooltip?: string;
 }) {
-	return (
+	const className = props.className ? `field ${props.className}` : 'field';
+	const control = (
 		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<label className={props.className ? `field ${props.className}` : 'field'}>
-			<span className="field-label">
-				{props.label}
-				{props.tooltip ? (
-					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
-							<HelpCircle size={13} aria-hidden="true" />
-						</span>
-					</Tooltip>
-				) : null}
-			</span>
+		<label className={props.tooltip ? 'field field-control' : className}>
+			<span className="field-label">{props.label}</span>
 			{props.children}
 			{props.hint ? <small>{props.hint}</small> : null}
 		</label>
+	);
+	if (!props.tooltip) return control;
+	return (
+		<div className={`${className} field-with-help`}>
+			<Tooltip content={props.tooltip} side="right">
+				<button className="help-icon" type="button" aria-label={props.tooltip}>
+					<HelpCircle size={13} aria-hidden="true" />
+				</button>
+			</Tooltip>
+			{control}
+		</div>
 	);
 }
 
@@ -847,10 +849,9 @@ export function FieldGroup(props: {
 				{props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
+						<button className="help-icon" type="button" aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
-						</span>
+						</button>
 					</Tooltip>
 				) : null}
 			</span>

@@ -199,11 +199,8 @@ async fn proxy(
 	cfg: Arc<Config>,
 	config_resource_store: Option<agentgateway::config_store::ConfigResourceStore>,
 ) -> anyhow::Result<()> {
-	#[cfg(feature = "ui")]
 	let bound =
 		agentgateway::app::run_with_ui_assets(cfg, config_resource_store, &crate::UI_ASSETS).await?;
-	#[cfg(not(feature = "ui"))]
-	let bound = agentgateway::app::run(cfg, config_resource_store).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await
 }

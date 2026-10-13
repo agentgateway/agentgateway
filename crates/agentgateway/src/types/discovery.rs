@@ -536,6 +536,7 @@ pub enum InboundProtocol {
 	LegacyIstioMtls,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Service {
@@ -543,8 +544,10 @@ pub struct Service {
 	pub namespace: Strng,
 	pub hostname: Strng,
 	pub vips: Vec<NetworkAddress>,
+	#[serde_as(as = "HashMap<PortKey, _>")]
 	pub ports: HashMap<u16, u16>,
 	#[serde(default)]
+	#[serde_as(as = "HashMap<PortKey, _>")]
 	pub app_protocols: HashMap<u16, AppProtocol>,
 
 	/// Maps endpoint UIDs to service [Endpoint]s.
@@ -749,6 +752,9 @@ impl From<workload::WorkloadStatus> for HealthStatus {
 		}
 	}
 }
+
+/// Port map keys accept both `8000` and `"8000"`.
+pub type PortKey = serde_with::PickFirst<(serde_with::Same, serde_with::DisplayFromStr)>;
 
 pub fn ports_from_xds(value: &PortList) -> HashMap<u16, u16> {
 	value

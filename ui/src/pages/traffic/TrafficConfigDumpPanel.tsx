@@ -337,8 +337,7 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
-				{/** biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-				<label className="field-label">Listener YAML</label>
+				<h4 className="field-label">Listener YAML</h4>
 				<YamlBlock value={listenerDumpForDisplay(listener)} />
 			</div>
 		</Drawer>
@@ -382,14 +381,12 @@ function RouteDumpDrawer(props: {
 				</div>
 			</div>
 			<div className="drawer-yaml-section">
-				{/** biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-				<label className="field-label">Route YAML</label>
+				<h4 className="field-label">Route YAML</h4>
 				<YamlBlock value={props.row.route} />
 			</div>
 			{resolvedBackends.length ? (
 				<div className="drawer-yaml-section">
-					{/** biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-					<label className="field-label">Backend YAML</label>
+					<h4 className="field-label">Backend YAML</h4>
 					<YamlBlock
 						value={resolvedBackends.length === 1 ? resolvedBackends[0] : resolvedBackends}
 					/>

@@ -92,6 +92,7 @@ impl App {
 						name: backend_group_name.name.as_ref(),
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
+						kind: backend_group_name.kind.as_deref(),
 					};
 					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
 					let backend_policies = backend_policies.clone().merge(target_policies);

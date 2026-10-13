@@ -3956,6 +3956,7 @@ fn policy_target_from_proto(t: &proto::agent::PolicyTarget) -> Result<PolicyTarg
 			name: strng::new(&b.name),
 			namespace: strng::new(&b.namespace),
 			section: b.section.as_ref().map(Into::into),
+			kind: b.kind.as_ref().map(Into::into),
 		})),
 		Some(tgt::Kind::Service(s)) => Ok(PolicyTarget::Backend(BackendTarget::Service {
 			hostname: strng::new(&s.hostname),
@@ -4174,6 +4175,7 @@ impl From<&proto::agent::ResourceName> for ResourceName {
 		ResourceName {
 			name: strng::new(&value.name),
 			namespace: strng::new(&value.namespace),
+			kind: value.kind.as_ref().map(Into::into),
 		}
 	}
 }
@@ -4878,6 +4880,7 @@ mod tests {
 						name: "mcp".to_string(),
 						namespace: "default".to_string(),
 						section,
+						kind: None,
 					},
 				)),
 			}),
@@ -6117,6 +6120,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "aws-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Aws(proto::agent::AwsBackend {
 				service: Some(Service::AgentCore(proto::agent::AwsAgentCoreBackend {
@@ -6150,6 +6154,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "mcp-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Mcp(proto::agent::McpBackend {
 				targets: vec![],
@@ -6199,6 +6204,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "vertex-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
 				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
@@ -6245,6 +6251,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "vertex-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
 				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
@@ -6292,6 +6299,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "custom-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
 				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
@@ -6374,6 +6382,7 @@ mod tests {
 			name: Some(proto::agent::ResourceName {
 				name: "ollama-backend".to_string(),
 				namespace: "test-ns".to_string(),
+				kind: None,
 			}),
 			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
 				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {

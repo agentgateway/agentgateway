@@ -27,7 +27,7 @@ output:
       inlinePolicies:
       - backendTls:
           hostname: mcp.example.com
-      key: default/external-mcp
+      key: gateway.networking.x-k8s.io/XBackend/default/external-mcp
       mcp:
         targets:
         - backend:
@@ -38,6 +38,7 @@ output:
           name: external-mcp
           protocol: STREAMABLE_HTTP
       name:
+        kind: XBackend
         name: external-mcp
         namespace: default
 status:

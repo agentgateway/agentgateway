@@ -157,7 +157,7 @@ pub async fn run_with_ui_assets(
 	)
 	.await
 	.context("admin server starts")?;
-	if cfg!(feature = "ui") {
+	if !ui_assets.entries().is_empty() {
 		info!("serving UI at {}", ui_url(config.as_ref()).await);
 	}
 

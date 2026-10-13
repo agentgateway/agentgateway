@@ -1,7 +1,6 @@
 package jwks
 
 import (
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -28,8 +27,7 @@ func (c *JwksCache) LoadJwksFromStores(stored []Keyset) error {
 	errs := make([]error, 0)
 
 	for _, keyset := range stored {
-		jwks := jose.JSONWebKeySet{}
-		if err := json.Unmarshal([]byte(keyset.JwksJSON), &jwks); err != nil {
+		if _, err := ParseKeySet([]byte(keyset.JwksJSON)); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -52,7 +50,7 @@ func (c *JwksCache) GetJwks(requestKey remotehttp.FetchKey) (Keyset, bool) {
 }
 
 func buildKeyset(requestKey remotehttp.FetchKey, requestURL string, jwks jose.JSONWebKeySet) (Keyset, error) {
-	serializedJwks, err := json.Marshal(jwks)
+	serializedJwks, err := MarshalKeySet(jwks)
 	if err != nil {
 		return Keyset{}, err
 	}

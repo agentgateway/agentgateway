@@ -2552,6 +2552,7 @@ mod tests {
 						.expect("key has namespace")
 						.0
 						.to_string(),
+					kind: None,
 				}),
 				kind: Some(backend::Kind::Static(StaticBackend {
 					host: "backend.example.com".to_string(),
@@ -4367,6 +4368,7 @@ mod tests {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
 				section: None,
+				kind: None,
 			}),
 			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
@@ -4389,6 +4391,7 @@ mod tests {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
 				section: Some(strng::new("target")),
+				kind: None,
 			}),
 			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
@@ -4416,6 +4419,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[&backend_inline_policies],
 			None,
@@ -4446,6 +4450,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: Some("target"),
+				kind: None,
 			},
 			&[&backend_inline_policies],
 			None,
@@ -4476,6 +4481,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[],
 			None,
@@ -4503,6 +4509,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: Some("target"),
+				kind: None,
 			},
 			&[],
 			None,
@@ -4568,6 +4575,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[&inline_policies],
 			None,
