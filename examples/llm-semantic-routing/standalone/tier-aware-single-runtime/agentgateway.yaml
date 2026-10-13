@@ -1,6 +1,4 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-config:
-  readinessAddr: 0.0.0.0:15021
 llm:
   port: 4000
   policies:
@@ -13,7 +11,7 @@ llm:
         request.headers["x-authz-user-id"] != "" &&
         !("x-vsr-skip-processing" in request.headers)
     extProc:
-      host: semantic-router:50051
+      host: localhost:50051
       failureMode: failClosed
       processingOptions:
         requestHeaderMode: send

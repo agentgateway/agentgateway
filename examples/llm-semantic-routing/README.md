@@ -23,7 +23,7 @@ Each example focuses on a different production use case.
 | Kubernetes | [Tier-aware routing with CRDs](k8s/tier-aware/) | Select a tier-specific vSR runtime configured by `IntelligentPool` and `IntelligentRoute`. | Kubernetes-native pool/route management and separate runtimes per tier. |
 | Kubernetes | [Tier-aware routing with one runtime](k8s/tier-aware-single-runtime/) | Combine tier and semantic signals in a single vSR runtime using the [v0.3 Unified Config Contract](https://vllm-sr.ai/docs/proposals/unified-config-contract-v0-3). | This example **does not** use the vSR `IntelligentPool` and `IntelligentRoute` CRDs. |
 | Kubernetes | [Semantic caching](k8s/semantic-cache/) | Cache semantically equivalent requests in Redis Open Source and optionally share entries across vSR replicas. | Product support, documentation assistants, FAQ chatbots, and other workloads with many repeated questions. |
-| Standalone | [Tier-aware routing](standalone/tier-aware-single-runtime/) | Use one YAML-configured vSR runtime with standalone agentgateway in Docker Compose. | Local development and deployments without Kubernetes. |
+| Standalone | [Tier-aware routing](standalone/tier-aware-single-runtime/) | Use one YAML-configured vSR runtime with an existing standalone agentgateway and a Compose-managed vSR. | Local development and deployments without Kubernetes. |
 
 ## Choosing an example
 
@@ -59,9 +59,9 @@ Choose a deployment pattern:
 - [Kubernetes with CRDs](k8s/tier-aware/): one vSR runtime per tier, with Kubernetes `IntelligentPool`
   and `IntelligentRoute` custom resources.
 - [Kubernetes with one runtime](k8s/tier-aware-single-runtime/): one shared vSR runtime,
-  with tier-aware decisions in a canonical YAML ConfigMap.
+  with tier-aware decisions in the [shared configuration](tier-aware-single-runtime/).
 - [Standalone with Docker Compose](standalone/tier-aware-single-runtime/): one shared
-  vSR runtime configured with canonical YAML.
+  vSR runtime using the same [configuration and manual checks](tier-aware-single-runtime/).
 
 All three examples demonstrate Basic, Standard, and Pro user entitlements and use
 agentgateway for provider-based routing.
