@@ -584,7 +584,7 @@ export function PlaygroundPage() {
 									label="Specific model"
 									hint="Model uses a wildcard; specify the specific model."
 								>
-									{id => (
+									{(id, hintId) => (
 										<div className="target-resolved-composite">
 											{wildcardPrefix ? (
 												<span className="target-prefix">{wildcardPrefix}</span>
@@ -592,6 +592,7 @@ export function PlaygroundPage() {
 											<CatalogModelSelector
 												id={id}
 												ariaLabel="Specific model"
+												aria-describedby={hintId}
 												value={specificModelSuffix}
 												provider={selectedCatalogProvider}
 												onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}

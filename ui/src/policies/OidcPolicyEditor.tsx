@@ -186,10 +186,11 @@ export function OidcPolicyEditor(props: {
 					className={fieldErrors.issuer ? 'invalid' : undefined}
 					hint={fieldErrors.issuer}
 				>
-					{id => (
+					{(id, hintId) => (
 						<>
 							<input
 								id={id}
+								aria-describedby={hintId}
 								value={issuer}
 								aria-invalid={Boolean(fieldErrors.issuer)}
 								onChange={event => {

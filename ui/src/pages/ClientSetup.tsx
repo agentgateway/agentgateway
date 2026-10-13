@@ -244,7 +244,7 @@ export function ClientSetupPage() {
 							label="Specific model"
 							hint="The dump lists a pattern; clients have to request a concrete model."
 						>
-							{id => (
+							{(id, hintId) => (
 								<div className="target-resolved-composite">
 									{wildcardModelPrefix(selectedModel) ? (
 										<span className="target-prefix">{wildcardModelPrefix(selectedModel)}</span>
@@ -252,6 +252,7 @@ export function ClientSetupPage() {
 									<input
 										id={id}
 										aria-label="Specific model"
+										aria-describedby={hintId}
 										value={specificModel}
 										onChange={event => setSpecificModel(event.target.value)}
 										placeholder="Model name"
@@ -262,12 +263,13 @@ export function ClientSetupPage() {
 					) : null}
 					{selectedModelConfig && isWildcardModelName(selectedModelConfig.name) ? (
 						<Field label="Specific model" hint="Model uses a wildcard; specify the specific model.">
-							{id => (
+							{(id, hintId) => (
 								<div className="target-resolved-composite">
 									{wildcardPrefix ? <span className="target-prefix">{wildcardPrefix}</span> : null}
 									<CatalogModelSelector
 										id={id}
 										ariaLabel="Specific model"
+										aria-describedby={hintId}
 										value={specificModelSuffix}
 										provider={selectedCatalogProvider}
 										onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}

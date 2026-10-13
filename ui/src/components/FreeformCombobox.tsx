@@ -7,6 +7,7 @@ import { useDismissiblePopover } from '@/components/Primitives';
 export function FreeformCombobox(props: {
 	id?: string;
 	ariaLabel: string;
+	'aria-describedby'?: string;
 	value: string;
 	options: string[];
 	onChange: (value: string) => void;
@@ -87,6 +88,7 @@ export function FreeformCombobox(props: {
 					ref={inputRef}
 					id={props.id}
 					aria-label={props.ariaLabel}
+					aria-describedby={props['aria-describedby']}
 					value={props.value}
 					onChange={event => {
 						setBrowseAll(false);

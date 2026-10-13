@@ -812,12 +812,16 @@ export function EmptyState(props: { title: string; description: string; action?:
 
 export function Field(props: {
 	label: string;
-	children: ReactElement<{ id?: string }> | ((id: string) => ReactNode);
+	children:
+		| ReactElement<{ id?: string; 'aria-describedby'?: string }>
+		| ((id: string, hintId?: string) => ReactNode);
 	hint?: string;
 	className?: string;
 	tooltip?: string;
 }) {
 	const generatedId = useId();
+	const hintId = useId();
+	const describedBy = props.hint ? hintId : undefined;
 	const id =
 		typeof props.children === 'function' ? generatedId : (props.children.props.id ?? generatedId);
 	const className = props.className ? `field ${props.className}` : 'field';
@@ -827,9 +831,14 @@ export function Field(props: {
 				<label htmlFor={id}>{props.label}</label>
 			</span>
 			{typeof props.children === 'function'
-				? props.children(id)
-				: cloneElement(props.children, { id })}
-			{props.hint ? <small>{props.hint}</small> : null}
+				? props.children(id, describedBy)
+				: cloneElement(props.children, {
+						id,
+						'aria-describedby':
+							[props.children.props['aria-describedby'], describedBy].filter(Boolean).join(' ') ||
+							undefined
+					})}
+			{props.hint ? <small id={hintId}>{props.hint}</small> : null}
 		</div>
 	);
 	if (!props.tooltip) return control;

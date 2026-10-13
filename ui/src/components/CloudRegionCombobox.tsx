@@ -87,6 +87,7 @@ export function CloudRegionCombobox(props: {
 	id?: string;
 	cloud: 'aws' | 'google';
 	ariaLabel: string;
+	'aria-describedby'?: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
@@ -95,6 +96,7 @@ export function CloudRegionCombobox(props: {
 		<FreeformCombobox
 			id={props.id}
 			ariaLabel={props.ariaLabel}
+			aria-describedby={props['aria-describedby']}
 			value={props.value}
 			options={props.cloud === 'aws' ? awsRegions : googleCloudRegions}
 			onChange={props.onChange}
