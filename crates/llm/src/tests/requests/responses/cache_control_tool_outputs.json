@@ -1,45 +1,17 @@
 {
   "model": "gpt-5",
   "input": [
-    {
-      "type": "message",
-      "role": "user",
-      "content": [{"type": "input_text", "text": "Weather in Paris, then list files"}]
-    },
-    {
-      "type": "function_call",
-      "call_id": "call_1",
-      "name": "get_weather",
-      "arguments": "{\"location\":\"Paris\"}"
-    },
+    {"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"},
     {
       "type": "function_call_output",
       "call_id": "call_1",
-      "output": [
-        {
-          "type": "input_text",
-          "text": "sunny",
-          "prompt_cache_breakpoint": {"mode": "explicit"}
-        }
-      ]
+      "output": [{"type": "input_text", "text": "sunny", "prompt_cache_breakpoint": {"mode": "explicit"}}]
     },
-    {
-      "type": "custom_tool_call",
-      "id": "ctc_1",
-      "call_id": "call_2",
-      "name": "shell",
-      "input": "ls"
-    },
+    {"type": "custom_tool_call", "id": "ctc_1", "call_id": "call_2", "name": "shell", "input": "ls"},
     {
       "type": "custom_tool_call_output",
       "call_id": "call_2",
-      "output": [
-        {
-          "type": "input_text",
-          "text": "notes.txt",
-          "prompt_cache_breakpoint": {"mode": "explicit"}
-        }
-      ]
+      "output": [{"type": "input_text", "text": "notes.txt", "prompt_cache_breakpoint": {"mode": "explicit"}}]
     }
   ]
 }

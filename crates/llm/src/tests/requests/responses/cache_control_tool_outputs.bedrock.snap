@@ -4,15 +4,10 @@ description: src/tests/requests/responses/cache_control_tool_outputs.json
 info:
   model: gpt-5
   input:
-    - type: message
-      role: user
-      content:
-        - type: input_text
-          text: "Weather in Paris, then list files"
     - type: function_call
       call_id: call_1
       name: get_weather
-      arguments: "{\"location\":\"Paris\"}"
+      arguments: "{}"
     - type: function_call_output
       call_id: call_1
       output:
@@ -37,23 +32,13 @@ info:
   "request": {
     "messages": [
       {
-        "role": "user",
-        "content": [
-          {
-            "text": "Weather in Paris, then list files"
-          }
-        ]
-      },
-      {
         "role": "assistant",
         "content": [
           {
             "toolUse": {
               "toolUseId": "call_1",
               "name": "get_weather",
-              "input": {
-                "location": "Paris"
-              }
+              "input": {}
             }
           }
         ]
@@ -141,11 +126,6 @@ info:
     "provider": "bedrock",
     "streaming": false,
     "params": {},
-    "prompt": [
-      {
-        "role": "user",
-        "content": "Weather in Paris, then list files"
-      }
-    ]
+    "prompt": []
   }
 }
