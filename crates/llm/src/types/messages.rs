@@ -76,8 +76,61 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+impl TextBlock {
+	/// The blocks of this prompt, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<TextPart>> {
+		if let TextBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = TextBlock::Array(vec![TextPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			TextBlock::Array(parts) => Some(parts),
+			TextBlock::Text(_) => None,
+		}
+	}
+}
+
+impl ContentBlock {
+	/// The blocks of this content, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<ContentPart>> {
+		if let ContentBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = ContentBlock::Array(vec![ContentPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			ContentBlock::Array(parts) => Some(parts),
+			ContentBlock::Text(_) => None,
+		}
+	}
+}
+
 impl TextPart {
-	fn text(&self) -> Option<&str> {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn text(&self) -> Option<&str> {
 		match self {
 			TextPart::Text { text, .. } => Some(text),
 			TextPart::Unknown(_) => None,
@@ -100,6 +153,21 @@ impl TextPart {
 }
 
 impl ContentPart {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
 	fn text(&self) -> Option<&str> {
 		match self {
 			ContentPart::Text { text, .. } => Some(text),

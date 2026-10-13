@@ -41,6 +41,7 @@ const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
+const BEDROCK_PROMPT_CACHING: &str = "bedrock-prompt-caching";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
@@ -67,9 +68,12 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
-						BEDROCK
-					},
+					BEDROCK_TITAN
+					| BEDROCK_COHERE
+					| BEDROCK_NOVA
+					| BEDROCK_OPENAI
+					| BEDROCK_OPENAI_GPT
+					| BEDROCK_PROMPT_CACHING => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -201,6 +205,8 @@ mod requests {
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("cache_control_dropped_server_tools", &[BEDROCK]),
+		("cache_control_automatic", &[BEDROCK]),
+		("prompt_caching", &[BEDROCK_PROMPT_CACHING]),
 		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
@@ -234,6 +240,7 @@ mod requests {
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
 		("cache_control", &[BEDROCK, GEMINI]),
+		("cache_control_tool_outputs", &[BEDROCK]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -292,7 +299,7 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i, Some(&catalog))
+						conversion::messages::from_completions::translate(i, None, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
 						conversion::bedrock::from_completions::translate(
@@ -375,6 +382,15 @@ mod requests {
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
 						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
+					}),
+					BEDROCK_PROMPT_CACHING => test_request(BEDROCK_PROMPT_CACHING, &path, |i| {
+						let caching = crate::PromptCachingConfig {
+							cache_tools: true,
+							min_tokens: None,
+							..Default::default()
+						};
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
 							.map(|r| r.body)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {

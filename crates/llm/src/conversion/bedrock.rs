@@ -1486,7 +1486,6 @@ pub mod from_messages {
 		let typed = json::convert::<_, messages::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let (mut xlated, tool_name_map) = translate_internal(typed, provider, headers, catalog)?;
-		// Automatic caching: a request-level cache_control caches up to the last cacheable block.
 		let automatic = req
 			.rest
 			.get("cache_control")
@@ -4021,8 +4020,6 @@ mod helpers {
 		system.count() + messages.count() + tools.count()
 	}
 
-	/// Places the cache point for a request-level cache_control after the last block that can
-	/// carry one, as Anthropic does for automatic caching.
 	pub fn insert_automatic_cache_point(
 		req: &mut bedrock::ConverseRequest,
 		breakpoint: Option<&CacheControlEphemeral>,
@@ -4039,8 +4036,6 @@ mod helpers {
 		}
 	}
 
-	/// Adds the promptCaching policy's cache points after any the client sent, within Bedrock's
-	/// limit of 4. The system prompt is skipped when the client already marked it.
 	pub fn apply_prompt_caching(
 		req: &mut bedrock::ConverseRequest,
 		caching: &crate::PromptCachingConfig,
@@ -4111,14 +4106,10 @@ mod helpers {
 	}
 
 	pub fn estimate_system_tokens(system: &[bedrock::SystemContentBlock]) -> usize {
-		let word_count: usize = system
-			.iter()
-			.filter_map(|block| match block {
-				bedrock::SystemContentBlock::Text { text } => Some(text.split_whitespace().count()),
-				bedrock::SystemContentBlock::CachePoint { .. } => None,
-			})
-			.sum();
-		(word_count * 13) / 10
+		crate::conversion::estimate_tokens(system.iter().filter_map(|block| match block {
+			bedrock::SystemContentBlock::Text { text } => Some(text.as_str()),
+			bedrock::SystemContentBlock::CachePoint { .. } => None,
+		}))
 	}
 
 	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) -> bool {

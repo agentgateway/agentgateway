@@ -275,28 +275,46 @@ fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
 	// output_config is intentionally preserved: Vertex supports it for structured outputs
 	// (format.json_schema) and for adaptive thinking depth control (effort).
 	body.remove("output_format");
-	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
-	for value in body.values_mut() {
-		remove_nested_field(value, "cache_control", "scope");
+	remove_cache_control_scope(body);
+}
+
+/// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
+/// Only fields where the API accepts cache_control are touched, so tool data is left as is.
+fn remove_cache_control_scope(body: &mut Map<String, Value>) {
+	if let Some(Value::Object(cache_control)) = body.get_mut("cache_control") {
+		cache_control.remove("scope");
+	}
+	for key in ["tools", "system"] {
+		body
+			.get_mut(key)
+			.and_then(Value::as_array_mut)
+			.into_iter()
+			.flatten()
+			.for_each(remove_block_scope);
+	}
+	let content = body
+		.get_mut("messages")
+		.and_then(Value::as_array_mut)
+		.into_iter()
+		.flatten()
+		.filter_map(|message| message.get_mut("content")?.as_array_mut())
+		.flatten();
+	for block in content {
+		if block["type"] == "tool_result" {
+			block
+				.get_mut("content")
+				.and_then(Value::as_array_mut)
+				.into_iter()
+				.flatten()
+				.for_each(remove_block_scope);
+		}
+		remove_block_scope(block);
 	}
 }
 
-fn remove_nested_field(value: &mut Value, key: &str, child: &str) {
-	match value {
-		Value::Object(map) => {
-			if let Some(Value::Object(nested)) = map.get_mut(key) {
-				nested.remove(child);
-			}
-			for v in map.values_mut() {
-				remove_nested_field(v, key, child);
-			}
-		},
-		Value::Array(arr) => {
-			for v in arr {
-				remove_nested_field(v, key, child);
-			}
-		},
-		_ => {},
+fn remove_block_scope(block: &mut Value) {
+	if let Some(Value::Object(cache_control)) = block.get_mut("cache_control") {
+		cache_control.remove("scope");
 	}
 }
 
@@ -672,7 +690,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_cache_control_scope_removed_recursively() {
+	fn test_cache_control_scope_removed() {
 		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
 			"system": [{
 				"type": "text",
@@ -685,6 +703,19 @@ mod tests {
 					"type": "text",
 					"text": "hello",
 					"cache_control": {"type": "ephemeral", "scope": "session"}
+				}, {
+					"type": "tool_result",
+					"tool_use_id": "t1",
+					"content": [{
+						"type": "text",
+						"text": "done",
+						"cache_control": {"type": "ephemeral", "scope": "turn"}
+					}]
+				}, {
+					"type": "tool_use",
+					"id": "t2",
+					"name": "set",
+					"input": {"cache_control": {"scope": "user data"}}
 				}]
 			}]
 		}))
@@ -693,11 +724,16 @@ mod tests {
 		let sys_cc = body["system"][0]["cache_control"].as_object().unwrap();
 		assert_eq!(sys_cc.get("type").unwrap(), "ephemeral");
 		assert!(!sys_cc.contains_key("scope"));
-		let msg_cc = body["messages"][0]["content"][0]["cache_control"]
-			.as_object()
-			.unwrap();
+		let content = &body["messages"][0]["content"];
+		let msg_cc = content[0]["cache_control"].as_object().unwrap();
 		assert_eq!(msg_cc.get("type").unwrap(), "ephemeral");
 		assert!(!msg_cc.contains_key("scope"));
+		assert!(
+			content[1]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
+		assert_eq!(content[2]["input"]["cache_control"]["scope"], "user data");
 	}
 
 	#[test]
