@@ -485,22 +485,22 @@ fn render_anthropic_messages(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
-	let catalog = ctx.catalog;
-	let body = match req {
+	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+			conversion::messages::from_completions::translate(&req, ctx.prompt_caching, ctx.catalog)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Messages(mut req) => {
+			if let Some(caching) = ctx.prompt_caching {
+				conversion::messages::apply_prompt_caching(&mut req, caching);
+			}
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
 		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"gemini to messages"
 		))),
-	}?;
-	match ctx.prompt_caching {
-		Some(caching) => conversion::messages::apply_prompt_caching(body, caching),
-		None => Ok(body),
 	}
 }
 
