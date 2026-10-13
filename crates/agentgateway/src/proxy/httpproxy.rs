@@ -3796,8 +3796,6 @@ pub(crate) fn resolve_response(
 		ProxyResponse::Error(error) => error.into_response_with_grpc(is_grpc_request),
 		ProxyResponse::DirectResponse(response) => *response,
 	});
-	// Trailers-only responses, including our own gRPC errors, carry grpc-status in the headers.
-	maybe_set_grpc_status(&log.grpc_status, response.headers());
 	if let Some(error) = error {
 		if let Some(context) = response.extensions_mut().get_mut::<cel::ProxyContext>() {
 			context.error = Some(error);
@@ -3818,6 +3816,7 @@ pub(crate) fn set_final_response_fields(
 ) {
 	log.status = Some(resp.status());
 	log.reason = Some(*reason);
+	log.grpc_status.store(parse_grpc_status(resp.headers()));
 	log.retry_after = http::outlierdetection::retry_after(resp.status(), resp.headers());
 	log.response_snapshot = log.cel.cel_context.maybe_snapshot_response(resp);
 }

@@ -3081,14 +3081,15 @@ mod tests {
 	fn grpc_refusal_by_the_proxy_logs_its_grpc_status() {
 		use crate::http::jwt::TokenError;
 		use crate::proxy::ProxyError;
-		use crate::proxy::httpproxy::resolve_response;
+		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
 
 		let refusal = || {
 			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
 		};
 
 		let mut log = test_request_log();
-		let (response, _) = resolve_response(refusal(), &mut log, true);
+		let (mut response, reason) = resolve_response(refusal(), &mut log, true);
+		set_final_response_fields(&mut log, &reason, &mut response);
 		assert_eq!(response.status(), http::StatusCode::OK);
 		assert_eq!(
 			log.grpc_status.load(),
@@ -3096,7 +3097,9 @@ mod tests {
 		);
 
 		let mut log = test_request_log();
-		let (response, _) = resolve_response(refusal(), &mut log, false);
+		log.grpc_status.store(Some(tonic::Code::Internal as u8));
+		let (mut response, reason) = resolve_response(refusal(), &mut log, false);
+		set_final_response_fields(&mut log, &reason, &mut response);
 		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
 		assert_eq!(log.grpc_status.load(), None);
 	}
