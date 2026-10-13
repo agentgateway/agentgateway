@@ -224,6 +224,7 @@ fn test_ext_authz_cache_key_evaluates_cel_values_in_order() {
 			],
 			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: super::default_cache_entries(),
+			background_refresh: false,
 		}),
 		..Default::default()
 	};
@@ -253,6 +254,7 @@ fn test_ext_authz_cache_store_uses_configured_capacity() {
 			)],
 			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: 7,
+			background_refresh: false,
 		}),
 		..Default::default()
 	}
@@ -270,6 +272,7 @@ fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
 			)],
 			ttl: Arc::new(cel::Expression::new_strict(r#"duration("300s")"#).unwrap()),
 			max_entries: 0,
+			background_refresh: false,
 		}),
 		..Default::default()
 	}
@@ -331,6 +334,34 @@ fn test_ext_authz_cache_lookup_misses_expired_entry() {
 	);
 }
 
+#[test]
+fn test_ext_authz_clear_refreshing_allows_reelection() {
+	// A failed background refresh clears the in-flight flag so the next request
+	// re-elects a refresher instead of waiting for the entry to expire.
+	let ea = ExtAuthz::default();
+	let key = || super::CacheKey(Vec::new());
+	ea.cache_store.insert(
+		key(),
+		test_cached_grpc_response(Duration::from_millis(50), Duration::from_secs(1)),
+	);
+	// Near expiry: the first lookup elects a refresher (sets the flag); the next,
+	// seeing the flag set, serves the cached value instead.
+	assert_eq!(
+		ea.cache_store.get(&key()).unwrap().lookup(Instant::now()),
+		super::CacheLookup::Refresh
+	);
+	assert_eq!(
+		ea.cache_store.get(&key()).unwrap().lookup(Instant::now()),
+		super::CacheLookup::Hit
+	);
+	// Clearing the flag (as a failed background refresh does) re-opens election.
+	ea.clear_refreshing(&Some(key()));
+	assert_eq!(
+		ea.cache_store.get(&key()).unwrap().lookup(Instant::now()),
+		super::CacheLookup::Refresh
+	);
+}
+
 fn test_cached_grpc_response(
 	expires_in: Duration,
 	original_ttl: Duration,
@@ -356,6 +387,7 @@ fn test_ext_authz_cache_ttl_evaluates_duration() {
 		)],
 		ttl: Arc::new(cel::Expression::new_strict(r#"duration("42s")"#).unwrap()),
 		max_entries: super::default_cache_entries(),
+		background_refresh: false,
 	};
 	let req = ::http::Request::builder()
 		.uri("http://example.com/admin")
@@ -378,6 +410,7 @@ fn test_ext_authz_cache_ttl_evaluates_unix_epoch_number() {
 		)],
 		ttl: Arc::new(cel::Expression::new_strict(expires_at.to_string()).unwrap()),
 		max_entries: super::default_cache_entries(),
+		background_refresh: false,
 	};
 	let req = ::http::Request::builder()
 		.uri("http://example.com/admin")
@@ -399,6 +432,7 @@ fn test_ext_authz_cache_ttl_skips_past_unix_epoch_number() {
 		)],
 		ttl: Arc::new(cel::Expression::new_strict("1").unwrap()),
 		max_entries: super::default_cache_entries(),
+		background_refresh: false,
 	};
 	let req = ::http::Request::builder()
 		.uri("http://example.com/admin")
@@ -419,6 +453,7 @@ fn test_ext_authz_cache_ttl_evaluates_after_response_is_applied() {
 			cel::Expression::new_strict(r#"duration(request.headers["x-cache-ttl"])"#).unwrap(),
 		),
 		max_entries: super::default_cache_entries(),
+		background_refresh: false,
 	};
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com/admin")
@@ -458,6 +493,7 @@ fn test_ext_authz_cache_ttl_skips_invalid_type() {
 		)],
 		ttl: Arc::new(cel::Expression::new_strict("request.path").unwrap()),
 		max_entries: super::default_cache_entries(),
+		background_refresh: false,
 	};
 	let req = ::http::Request::builder()
 		.uri("http://example.com/admin")
