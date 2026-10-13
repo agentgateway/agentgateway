@@ -280,6 +280,8 @@ pub struct Metrics {
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
+	pub gen_ai_cache_read_tokens: Family<GenAILabels, counter::Counter>,
+	pub gen_ai_cache_write_tokens: Family<GenAILabels, counter::Counter>,
 	pub gen_ai_cost: Family<GenAILabels, counter::Counter<f64>>,
 	pub gen_ai_request_duration: Histogram<GenAIRequestDurationLabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
@@ -490,6 +492,24 @@ impl Metrics {
 			),
 
 			gen_ai_token_usage,
+			gen_ai_cache_read_tokens: {
+				let m = Family::<GenAILabels, _>::default();
+				registry.register(
+					"gen_ai_client_cache_read_tokens",
+					"Total input tokens read from cache",
+					m.clone(),
+				);
+				m
+			},
+			gen_ai_cache_write_tokens: {
+				let m = Family::<GenAILabels, _>::default();
+				registry.register(
+					"gen_ai_client_cache_write_tokens",
+					"Total input tokens written to cache",
+					m.clone(),
+				);
+				m
+			},
 			gen_ai_cost,
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,

@@ -1001,22 +1001,16 @@ impl DropOnLog {
 			if let Some(crt) = llm_response.cached_input_tokens {
 				log
 					.metrics
-					.gen_ai_token_usage
-					.get_or_create(&GenAILabelsTokenUsage {
-						gen_ai_token_type: strng::literal!("input_cache_read").into(),
-						common: gen_ai_labels.clone().into(),
-					})
-					.observe(crt as f64)
+					.gen_ai_cache_read_tokens
+					.get_or_create(&gen_ai_labels)
+					.inc_by(crt);
 			}
 			if let Some(cwt) = llm_response.cache_creation_input_tokens {
 				log
 					.metrics
-					.gen_ai_token_usage
-					.get_or_create(&GenAILabelsTokenUsage {
-						gen_ai_token_type: strng::literal!("input_cache_write").into(),
-						common: gen_ai_labels.clone().into(),
-					})
-					.observe(cwt as f64)
+					.gen_ai_cache_write_tokens
+					.get_or_create(&gen_ai_labels)
+					.inc_by(cwt);
 			}
 			if let Some(ttft) = llm_response
 				.time_to_first_token
@@ -3341,6 +3335,122 @@ mod tests {
 				!token_line.contains("error_type="),
 				"token metric unexpectedly has error.type: {token_line}"
 			);
+		}
+	}
+
+	#[test]
+	fn gen_ai_token_metrics_separate_cache_detail_from_totals() {
+		for streaming in [false, true] {
+			for (convention, input_tokens) in [
+				(llm::CacheTokenConvention::InputIncludesCache, 100),
+				(llm::CacheTokenConvention::InputExcludesCache, 50),
+			] {
+				let (mut first, registry) = test_request_log_with_registry();
+				let metrics = first.metrics.clone();
+				let mut request = metric_test_llm_request();
+				request.streaming = streaming;
+				request.cache_convention = convention;
+				let response = llm::LLMResponse {
+					input_tokens: Some(input_tokens),
+					output_tokens: Some(20),
+					cached_input_tokens: Some(40),
+					cache_creation_input_tokens: Some(10),
+					..Default::default()
+				};
+				first.llm_request = Some(request.clone());
+				first
+					.llm_response
+					.store(Some(llm::LLMInfo::new(request.clone(), response.clone())));
+
+				let mut second = test_request_log();
+				second.metrics = metrics;
+				second.llm_request = Some(request.clone());
+				second
+					.llm_response
+					.store(Some(llm::LLMInfo::new(request, response)));
+
+				for (completed, log) in [first, second].into_iter().enumerate() {
+					drop(DropOnLog::from(log));
+					let requests = (completed + 1) as f64;
+					let encoded = encoded_metrics(&registry);
+					let sums: Vec<_> = encoded
+						.lines()
+						.filter(|line| line.starts_with("gen_ai_client_token_usage_sum{"))
+						.collect();
+					assert_eq!(sums.len(), 2, "{encoded}");
+					let total: f64 = sums
+						.iter()
+						.map(|line| line.rsplit_once(' ').unwrap().1.parse::<f64>().unwrap())
+						.sum();
+					assert_eq!(total, 120.0 * requests, "{encoded}");
+					for (token_type, per_request) in [("input", 100.0), ("output", 20.0)] {
+						let sum = sums
+							.iter()
+							.find(|line| line.contains(&format!("gen_ai_token_type=\"{token_type}\"")))
+							.unwrap();
+						assert_eq!(
+							sum.rsplit_once(' ').unwrap().1.parse::<f64>().unwrap(),
+							per_request * requests,
+						);
+					}
+					for (metric, per_request) in [
+						("gen_ai_client_cache_read_tokens_total", 40.0),
+						("gen_ai_client_cache_write_tokens_total", 10.0),
+					] {
+						let sample = encoded
+							.lines()
+							.find(|line| line.starts_with(&format!("{metric}{{")))
+							.unwrap();
+						assert_eq!(
+							sample.rsplit_once(' ').unwrap().1.parse::<f64>().unwrap(),
+							per_request * requests,
+						);
+						assert!(!sample.contains("gen_ai_token_type="));
+						assert!(!sample.contains("error_type="));
+					}
+					assert!(!encoded.contains("gen_ai_token_type=\"input_cache_"));
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn gen_ai_token_metrics_preserve_missing_and_zero_cache_usage() {
+		for (cache_read, cache_write) in [
+			(None, None),
+			(Some(0), Some(0)),
+			(Some(40), None),
+			(None, Some(10)),
+		] {
+			let (mut log, registry) = test_request_log_with_registry();
+			let request = metric_test_llm_request();
+			let response = llm::LLMResponse {
+				cached_input_tokens: cache_read,
+				cache_creation_input_tokens: cache_write,
+				..Default::default()
+			};
+			log.llm_request = Some(request.clone());
+			log
+				.llm_response
+				.store(Some(llm::LLMInfo::new(request, response)));
+			drop(DropOnLog::from(log));
+			let encoded = encoded_metrics(&registry);
+			assert!(
+				!encoded
+					.lines()
+					.any(|line| line.starts_with("gen_ai_client_token_usage_sum{")),
+				"{encoded}"
+			);
+			for (metric, expected) in [
+				("gen_ai_client_cache_read_tokens_total", cache_read),
+				("gen_ai_client_cache_write_tokens_total", cache_write),
+			] {
+				let sample = encoded
+					.lines()
+					.find(|line| line.starts_with(&format!("{metric}{{")))
+					.map(|line| line.rsplit_once(' ').unwrap().1.parse::<u64>().unwrap());
+				assert_eq!(sample, expected, "{encoded}");
+			}
 		}
 	}
 

@@ -42,6 +42,8 @@
 | Metric | Type | Unit | Description |
 | --- | --- | --- | --- |
 | `agentgateway_cost_catalog_lookups_total` | Counter | — | Total number of model cost catalog lookups by resolution status. |
+| `agentgateway_gen_ai_client_cache_read_tokens_total` | Counter | — | Total input tokens read from cache. |
+| `agentgateway_gen_ai_client_cache_write_tokens_total` | Counter | — | Total input tokens written to cache. |
 | `agentgateway_gen_ai_client_cost_usd_total` | Counter | usd | Cumulative USD cost of generative AI requests. |
 | `agentgateway_gen_ai_client_token_usage` | Histogram | — | Number of tokens used per request. |
 | `agentgateway_gen_ai_server_inter_chunk_latency` | Histogram | — | Time between consecutive output chunks for a given request. |
