@@ -1,9 +1,0 @@
-{
-  "model": "claude-sonnet-4-5",
-  "max_tokens": 1024,
-  "cache_control": {"type": "ephemeral", "ttl": "1h"},
-  "system": "You are helpful.",
-  "messages": [
-    {"role": "user", "content": "Hello"}
-  ]
-}

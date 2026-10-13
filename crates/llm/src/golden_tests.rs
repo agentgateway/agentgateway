@@ -205,9 +205,10 @@ mod requests {
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
 		("cache_control_dropped_server_tools", &[BEDROCK]),
-		("cache_control_automatic", &[BEDROCK]),
-		("prompt_caching", &[BEDROCK_PROMPT_CACHING]),
-		("system_message_mid_conversation", &[BEDROCK]),
+		(
+			"system_message_mid_conversation",
+			&[BEDROCK, BEDROCK_PROMPT_CACHING],
+		),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
@@ -384,15 +385,21 @@ mod requests {
 						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
 							.map(|r| r.body)
 					}),
-					BEDROCK_PROMPT_CACHING => test_request(BEDROCK_PROMPT_CACHING, &path, |i| {
-						let caching = crate::PromptCachingConfig {
-							cache_tools: true,
-							min_tokens: None,
-							..Default::default()
-						};
-						conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
-							.map(|r| r.body)
-					}),
+					BEDROCK_PROMPT_CACHING => test_request(
+						BEDROCK_PROMPT_CACHING,
+						&path,
+						|i: &mut types::messages::Request| {
+							// The policy only marks models known to support caching.
+							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
+							let caching = crate::PromptCachingConfig {
+								cache_tools: true,
+								min_tokens: None,
+								..Default::default()
+							};
+							conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
+								.map(|r| r.body)
+						},
+					),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
