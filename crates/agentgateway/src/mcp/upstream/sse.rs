@@ -93,7 +93,7 @@ impl ClientCore {
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
 
-		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));

@@ -202,6 +202,17 @@ pub enum UpstreamError {
 	Recv,
 }
 
+impl UpstreamError {
+	pub(super) fn is_client_authentication_failure(&self) -> bool {
+		match self {
+			Self::Proxy(err) | Self::Http(mcp::ClientError::Proxy(err)) => {
+				err.is_client_authentication_failure()
+			},
+			_ => false,
+		}
+	}
+}
+
 // UpstreamTarget defines a source for MCP information.
 #[derive(Debug)]
 pub(crate) enum Upstream {

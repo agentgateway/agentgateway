@@ -207,7 +207,7 @@ pub enum ProxyError {
 	#[error("oidc failure: {0}")]
 	OidcFailure(http::oidc::Error),
 	#[error("mcp authentication failure: {0}")]
-	McpJwtAuthenticationFailure(Box<ProxyError>, String),
+	McpJwtAuthenticationFailure(Box<ProxyError>, mcp::auth::McpResourceChallenge),
 	#[error("basic authentication failure: {0}")]
 	BasicAuthenticationFailure(http::basicauth::Error),
 	#[error("api key authentication failure: {0}")]
@@ -379,6 +379,16 @@ impl ProxyError {
 			_ => false,
 		}
 	}
+
+	pub fn is_client_authentication_failure(&self) -> bool {
+		let error = match self {
+			Self::McpJwtAuthenticationFailure(inner, _) => inner.as_ref(),
+			other => other,
+		};
+		matches!(error, Self::JwtAuthenticationFailure(error)
+			if !matches!(error, crate::http::jwt::TokenError::CredentialRemoval(_)))
+	}
+
 	fn http_status(&self) -> StatusCode {
 		match *self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
@@ -407,6 +417,9 @@ impl ProxyError {
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 			ProxyError::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
 
+			ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(_)) => {
+				StatusCode::INTERNAL_SERVER_ERROR
+			},
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
 				http::oidc::Error::AuthenticationRequired => StatusCode::UNAUTHORIZED,
@@ -435,6 +448,14 @@ impl ProxyError {
 				}
 			},
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::McpJwtAuthenticationFailure(ref inner, _)
+				if matches!(
+					inner.as_ref(),
+					ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(_))
+				) =>
+			{
+				StatusCode::INTERNAL_SERVER_ERROR
+			},
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 			ProxyError::SubstrateEgressDenied(_) => StatusCode::FORBIDDEN,
@@ -596,16 +617,44 @@ impl ProxyError {
 				.expect("budget exceeded response is valid");
 		}
 
-		// Add WWW-Authenticate header for MCP failures
-		if let ProxyError::McpJwtAuthenticationFailure(_, www) = &this {
+		if let ProxyError::JwtAuthenticationFailure(error) = &this
+			&& code == StatusCode::UNAUTHORIZED
+		{
+			rb = rb.header(
+				hyper::header::WWW_AUTHENTICATE,
+				bearer_challenge(None, Some(error)),
+			);
+		}
+
+		if let ProxyError::McpJwtAuthenticationFailure(inner, challenge) = &this
+			&& code == StatusCode::UNAUTHORIZED
+		{
+			let token_error = match inner.as_ref() {
+				ProxyError::JwtAuthenticationFailure(error) => Some(error),
+				_ => None,
+			};
+			let www = bearer_challenge(Some(challenge.metadata_url()), token_error);
 			if let Ok(hv) = HeaderValue::try_from(www) {
 				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
 			}
-			rb = rb.header("content-type", "application/json");
+			let (error, description) = match inner.as_ref() {
+				ProxyError::JwtAuthenticationFailure(error) => match invalid_token_description(error) {
+					Some(description) => ("invalid_token", description),
+					None if matches!(error, http::jwt::TokenError::Missing) => {
+						("unauthorized", "JWT token required")
+					},
+					None => ("unauthorized", "MCP authentication failed"),
+				},
+				_ => ("unauthorized", "MCP authentication failed"),
+			};
 			return rb
-				.body(http::Body::from(Bytes::from(
-					r#"{"error":"unauthorized","error_description":"JWT token required"}"#,
-				)))
+				.header("content-type", "application/json")
+				.body(http::Body::from(
+					serde_json::json!({
+						"error": error, "error_description": description,
+					})
+					.to_string(),
+				))
 				.unwrap();
 		}
 		if let ProxyError::MCP(e) = this
@@ -620,6 +669,41 @@ impl ProxyError {
 		rb.header(hyper::header::CONTENT_TYPE, "text/plain")
 			.body(http::Body::from(msg))
 			.unwrap()
+	}
+}
+
+fn bearer_challenge(
+	resource_metadata: Option<&str>,
+	error: Option<&http::jwt::TokenError>,
+) -> String {
+	let mut params = Vec::new();
+	if let Some(url) = resource_metadata {
+		params.push(format!("resource_metadata=\"{url}\""));
+	}
+	if let Some(description) = error.and_then(invalid_token_description) {
+		params.push("error=\"invalid_token\"".to_string());
+		params.push(format!("error_description=\"{description}\""));
+	}
+	if params.is_empty() {
+		"Bearer".to_string()
+	} else {
+		format!("Bearer {}", params.join(", "))
+	}
+}
+
+fn invalid_token_description(error: &http::jwt::TokenError) -> Option<&'static str> {
+	use crate::http::jwt::TokenError;
+	match error {
+		TokenError::Invalid(error)
+			if *error.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature =>
+		{
+			Some("The bearer token has expired")
+		},
+		TokenError::Invalid(_)
+		| TokenError::InvalidHeader(_)
+		| TokenError::MissingKeyId
+		| TokenError::UnknownKeyId(_) => Some("The bearer token is invalid"),
+		TokenError::Missing | TokenError::CredentialRemoval(_) => None,
 	}
 }
 
@@ -789,6 +873,20 @@ pub fn resolve_simple_backend_with_policies(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn credential_removal_failure_is_not_an_authentication_challenge() {
+		let response = ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(
+			"failed to update URI".into(),
+		))
+		.into_response_with_grpc(false);
+		assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+		assert!(
+			!response
+				.headers()
+				.contains_key(hyper::header::WWW_AUTHENTICATE)
+		);
+	}
 
 	#[test]
 	fn grpc_status_follows_the_gateway_grpc_mapping() {
