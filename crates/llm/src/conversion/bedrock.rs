@@ -1489,7 +1489,7 @@ pub mod from_messages {
 		let automatic = req
 			.rest
 			.get("cache_control")
-			.and_then(|v| serde_json::from_value::<messages::CacheControlEphemeral>(v.clone()).ok());
+			.and_then(|v| <messages::CacheControlEphemeral as serde::Deserialize>::deserialize(v).ok());
 		helpers::insert_automatic_cache_point(&mut xlated, automatic.as_ref());
 		if let Some(caching) = prompt_caching {
 			helpers::apply_prompt_caching(&mut xlated, caching);
@@ -2550,6 +2550,50 @@ pub mod from_responses {
 		})
 	}
 
+	/// Joins a tool output's text parts, returning the first cache breakpoint among them.
+	fn tool_output_text(
+		parts: &[responses::InputContent],
+	) -> (String, Option<responses::PromptCacheBreakpointConfig>) {
+		let texts = parts.iter().filter_map(|part| match part {
+			responses::InputContent::InputText(text) => Some(text),
+			_ => None,
+		});
+		let marked = texts
+			.clone()
+			.find_map(|text| text.prompt_cache_breakpoint.clone());
+		let text = texts
+			.map(|text| text.text.as_str())
+			.collect::<Vec<_>>()
+			.join("\n");
+		(text, marked)
+	}
+
+	fn push_tool_result(
+		messages: &mut Vec<bedrock::Message>,
+		call_id: String,
+		output_text: String,
+		marked: Option<&responses::PromptCacheBreakpointConfig>,
+		cache_points_used: &mut usize,
+	) {
+		let mut content = vec![bedrock::ContentBlock::ToolResult(
+			bedrock::ToolResultBlock {
+				tool_use_id: call_id,
+				content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
+				// Responses tool outputs do not carry explicit success/error metadata.
+				// Leave Bedrock status unset instead of assuming success.
+				status: None,
+			},
+		)];
+		maybe_insert_cache_point(&mut content, marked, cache_points_used);
+		push_or_merge_message(
+			messages,
+			bedrock::Message {
+				role: bedrock::Role::User,
+				content,
+			},
+		);
+	}
+
 	pub(super) fn translate_internal(
 		req: responses::CreateResponse,
 		explicit_thinking_budget: Option<u64>,
@@ -2955,38 +2999,16 @@ pub mod from_responses {
 					let Some(call_id) = output.call_id.filter(|call_id| !call_id.is_empty()) else {
 						continue;
 					};
-					let mut marked = None;
-					let output_text = match output.output {
-						FunctionCallOutput::Text(text) => text,
-						FunctionCallOutput::Content(parts) => parts
-							.iter()
-							.filter_map(|part| match part {
-								InputContent::InputText(input_text) => {
-									marked = marked.take().or(input_text.prompt_cache_breakpoint.clone());
-									Some(input_text.text.clone())
-								},
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n"),
+					let (output_text, marked) = match output.output {
+						FunctionCallOutput::Text(text) => (text, None),
+						FunctionCallOutput::Content(parts) => tool_output_text(&parts),
 					};
-
-					let mut content = vec![bedrock::ContentBlock::ToolResult(
-						bedrock::ToolResultBlock {
-							tool_use_id: call_id,
-							content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-							// Responses tool outputs do not carry explicit success/error metadata.
-							// Leave Bedrock status unset instead of assuming success.
-							status: None,
-						},
-					)];
-					maybe_insert_cache_point(&mut content, marked.as_ref(), &mut cache_points_used);
-					helpers::push_or_merge_message(
+					push_tool_result(
 						&mut messages,
-						bedrock::Message {
-							role: bedrock::Role::User,
-							content,
-						},
+						call_id,
+						output_text,
+						marked.as_ref(),
+						&mut cache_points_used,
 					);
 				},
 				InputItem::Item(Item::CustomToolCall(call)) => {
@@ -3007,38 +3029,16 @@ pub mod from_responses {
 					output,
 					..
 				})) => {
-					let mut marked = None;
-					let output_text = match output {
-						CustomToolCallOutputOutput::Text(text) => text,
-						CustomToolCallOutputOutput::List(parts) => parts
-							.iter()
-							.filter_map(|part| match part {
-								InputContent::InputText(input_text) => {
-									marked = marked.take().or(input_text.prompt_cache_breakpoint.clone());
-									Some(input_text.text.clone())
-								},
-								_ => None,
-							})
-							.collect::<Vec<_>>()
-							.join("\n"),
+					let (output_text, marked) = match output {
+						CustomToolCallOutputOutput::Text(text) => (text, None),
+						CustomToolCallOutputOutput::List(parts) => tool_output_text(&parts),
 					};
-
-					let mut content = vec![bedrock::ContentBlock::ToolResult(
-						bedrock::ToolResultBlock {
-							tool_use_id: call_id,
-							content: vec![bedrock::ToolResultContentBlock::Text(output_text)],
-							// Responses tool outputs do not carry explicit success/error metadata.
-							// Leave Bedrock status unset instead of assuming success.
-							status: None,
-						},
-					)];
-					maybe_insert_cache_point(&mut content, marked.as_ref(), &mut cache_points_used);
-					helpers::push_or_merge_message(
+					push_tool_result(
 						&mut messages,
-						bedrock::Message {
-							role: bedrock::Role::User,
-							content,
-						},
+						call_id,
+						output_text,
+						marked.as_ref(),
+						&mut cache_points_used,
 					);
 				},
 				_ => {
@@ -4077,7 +4077,7 @@ mod helpers {
 		}
 	}
 
-	pub fn supports_prompt_caching(model_id: &str) -> bool {
+	fn supports_prompt_caching(model_id: &str) -> bool {
 		let model_lower = model_id.to_lowercase();
 		if model_lower.contains("anthropic.claude") {
 			let excluded = ["claude-instant", "claude-v1", "claude-v2"];
@@ -4098,14 +4098,14 @@ mod helpers {
 		false
 	}
 
-	pub fn estimate_system_tokens(system: &[bedrock::SystemContentBlock]) -> usize {
+	fn estimate_system_tokens(system: &[bedrock::SystemContentBlock]) -> usize {
 		crate::conversion::estimate_tokens(system.iter().filter_map(|block| match block {
 			bedrock::SystemContentBlock::Text { text } => Some(text.as_str()),
 			bedrock::SystemContentBlock::CachePoint { .. } => None,
 		}))
 	}
 
-	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) -> bool {
+	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) {
 		// Strategy: Cache everything BEFORE the last message (not including it)
 		// This caches the conversation history but not the current turn's input
 		//
@@ -4125,7 +4125,7 @@ mod helpers {
 
 		// If we have 0-1 messages, no point caching (nothing to reuse yet)
 		if len < 2 {
-			return false;
+			return;
 		}
 
 		// Clamp so the index never goes below 0
@@ -4134,7 +4134,7 @@ mod helpers {
 			messages[target_idx].content.last(),
 			Some(bedrock::ContentBlock::CachePoint(_))
 		) {
-			return false;
+			return;
 		}
 		messages[target_idx]
 			.content
@@ -4145,7 +4145,6 @@ mod helpers {
 			target_idx,
 			offset
 		);
-		true
 	}
 
 	/// Extract metadata from x-bedrock-metadata header.
