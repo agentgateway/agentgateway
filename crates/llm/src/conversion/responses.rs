@@ -1420,8 +1420,6 @@ pub mod from_messages {
 							Some(delta.item_id),
 							None,
 						);
-						let block = state.tool_blocks.entry(delta.output_index).or_default();
-						block.arguments.push_str(&delta.delta);
 						if !delta.delta.is_empty() {
 							record_token(&mut state, &log);
 						}
@@ -1439,7 +1437,6 @@ pub mod from_messages {
 							record_token(&mut state, &log);
 						}
 						let block = state.tool_blocks.entry(done.output_index).or_default();
-						block.arguments = done.input.clone();
 						if !block.emitted_arguments {
 							block.emitted_arguments = true;
 							push_event(
@@ -1549,7 +1546,6 @@ pub mod from_messages {
 							}
 							let input = json!({"content": call.input});
 							let block = state.tool_blocks.entry(done.output_index).or_default();
-							block.arguments = call.input.clone();
 							if !block.emitted_arguments {
 								block.emitted_arguments = true;
 								push_event(
