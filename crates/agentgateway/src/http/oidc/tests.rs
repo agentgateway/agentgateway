@@ -1010,10 +1010,11 @@ enum Outcome {
 	Continue,
 }
 
-fn encoded_session_cookie(policy: &OidcPolicy) -> String {
+async fn encoded_session_cookie(policy: &OidcPolicy) -> String {
 	let encoded = policy
-		.session
-		.encode_browser_session(&browser_session(signed_id_token(TEST_NONCE)))
+		.browser_session_store
+		.save(&browser_session(signed_id_token(TEST_NONCE)))
+		.await
 		.expect("encode session");
 	format!("{}={encoded}", policy.session.cookie_name)
 }
@@ -1190,7 +1191,7 @@ async fn apply_session_with_bearer() {
 		req
 			.headers_mut()
 			.insert("sec-fetch-mode", "cors".parse().unwrap());
-		add_cookie(&mut req, encoded_session_cookie(&policy));
+		add_cookie(&mut req, encoded_session_cookie(&policy).await);
 		if let Some(bearer) = bearer {
 			req.headers_mut().insert(
 				header::AUTHORIZATION,
@@ -1488,13 +1489,14 @@ async fn apply_permissive_continue_still_clears_refresh_cookie() {
 	let mut policy = test_callback_policy(provider_endpoint(format!("{}/token", mock.uri())));
 	policy.credentials = OidcCredentials::Permissive;
 	let encoded_session = policy
-		.session
-		.encode_browser_session(&BrowserSession {
+		.browser_session_store
+		.save(&BrowserSession {
 			policy_id: policy.policy_id.clone(),
 			subject: Some("user-1".into()),
 			raw_id_token: SecretString::new(signed_id_token(TEST_NONCE).into()),
 			expires_at_unix: Some(now_unix().saturating_sub(1)),
 		})
+		.await
 		.expect("encode expired session");
 	let encoded_refresh = policy
 		.session
