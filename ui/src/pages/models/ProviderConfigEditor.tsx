@@ -90,12 +90,11 @@ export function ProviderConfigEditor(props: {
 		);
 	}
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		if (provider === 'azure' && !props.params?.azureResourceType) {
-			patchParams({ azureResourceType: 'openAI' });
+			props.onParamsChange({ ...(props.params ?? {}), azureResourceType: 'openAI' });
 		}
-	}, [provider, props.params?.azureResourceType]);
+	}, [props.onParamsChange, props.params, provider]);
 
 	function setProviderChoice(value: string) {
 		if (value.startsWith('provider:')) {

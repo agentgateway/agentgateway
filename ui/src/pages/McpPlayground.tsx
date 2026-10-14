@@ -73,14 +73,13 @@ export function McpPlaygroundPage() {
 		localStorage.removeItem('mcpPlaygroundArgs');
 	}, []);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		if (selectedTool?.inputSchema) {
-			setArgumentValues(defaultArgumentsFromSchema(selectedTool.inputSchema));
-		} else {
-			setArgumentValues({});
-		}
-	}, [selectedTool?.name, selectedTool?.inputSchema]);
+	const [argumentTool, setArgumentTool] = useState(selectedTool);
+	if (argumentTool !== selectedTool) {
+		setArgumentTool(selectedTool);
+		setArgumentValues(
+			selectedTool?.inputSchema ? defaultArgumentsFromSchema(selectedTool.inputSchema) : {}
+		);
+	}
 
 	async function initialize() {
 		setLoading('initialize');
