@@ -1592,6 +1592,31 @@ impl AIProvider {
 		bedrock_endpoint: Option<bedrock::BedrockEndpoint>,
 	) -> anyhow::Result<()> {
 		match self {
+			AIProvider::Copilot(_) => {
+				let headers = req.headers_mut();
+				headers.insert(
+					header::CONTENT_TYPE,
+					HeaderValue::from_static("application/json"),
+				);
+				headers.insert(
+					"editor-version",
+					HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
+				);
+				headers.insert(
+					"openai-intent",
+					HeaderValue::from_static("conversation-agent"),
+				);
+				headers.insert(
+					"x-github-api-version",
+					HeaderValue::from_static("2025-10-01"),
+				);
+				headers.insert("x-initiator", HeaderValue::from_static("agent"));
+				headers.insert(
+					"x-interaction-type",
+					HeaderValue::from_static("conversation-agent"),
+				);
+				Ok(())
+			},
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {

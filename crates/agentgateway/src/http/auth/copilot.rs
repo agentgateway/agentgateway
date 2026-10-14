@@ -16,32 +16,6 @@ pub(super) async fn insert_token(req: &mut Request) -> anyhow::Result<()> {
 	Ok(())
 }
 
-pub(crate) fn insert_protocol_headers(req: &mut Request) {
-	req.headers_mut().insert(
-		http::header::CONTENT_TYPE,
-		HeaderValue::from_static("application/json"),
-	);
-	req.headers_mut().insert(
-		"editor-version",
-		HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
-	);
-	req.headers_mut().insert(
-		"x-github-api-version",
-		HeaderValue::from_static("2025-10-01"),
-	);
-	req
-		.headers_mut()
-		.insert("x-initiator", HeaderValue::from_static("agent"));
-	req.headers_mut().insert(
-		"x-interaction-type",
-		HeaderValue::from_static("conversation-agent"),
-	);
-	req.headers_mut().insert(
-		"openai-intent",
-		HeaderValue::from_static("conversation-agent"),
-	);
-}
-
 async fn load_token() -> anyhow::Result<String> {
 	// Do not cache file-backed tokens here. GitHub/Copilot tooling may rotate them
 	// independently, and direct-token auth should pick up those changes.

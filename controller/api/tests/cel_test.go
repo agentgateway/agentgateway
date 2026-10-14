@@ -1,14 +1,19 @@
 package tests
 
 import (
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"istio.io/istio/pkg/test/util/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/fsutils"
 )
 
 // Split where the '---' appears at the very beginning of a line. This will avoid
@@ -33,28 +38,29 @@ type TestExpectation struct {
 	WantErr string `json:"_err,omitempty"`
 }
 
-func TestCopilotKubernetesExample(t *testing.T) {
-	v := NewAgentgatewayValidatorStrict(t)
-	content, err := os.ReadFile("../../../examples/llm-copilot/kubernetes.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	backends := 0
-	for _, item := range splitString(string(content)) {
-		obj := &unstructured.Unstructured{}
-		if err := yaml.Unmarshal([]byte(item), obj); err != nil {
-			t.Fatal(err)
+func TestExamples(t *testing.T) {
+	v := NewAgentgatewayValidatorSkipMissing(t)
+	root := filepath.Join(fsutils.GetModuleRoot(), "examples")
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
+			return err
 		}
-		if obj.GetKind() == "AgentgatewayBackend" {
-			backends++
-			if err := v.ValidateCustomResource(obj); err != nil {
-				t.Fatal(err)
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, item := range splitString(string(content)) {
+			obj := &unstructured.Unstructured{}
+			if err := yaml.Unmarshal([]byte(item), obj); err != nil || obj.GetKind() == "" {
+				continue
 			}
+			t.Run(fmt.Sprintf("%s/%s/%s", strings.TrimPrefix(path, root+"/"), obj.GetKind(), obj.GetName()), func(t *testing.T) {
+				assert.NoError(t, v.ValidateCustomResource(obj))
+			})
 		}
-	}
-	if backends != 1 {
-		t.Fatalf("validated %d Copilot backends, want one", backends)
-	}
+		return nil
+	})
+	assert.NoError(t, err)
 }
 
 func TestCRDs(t *testing.T) {

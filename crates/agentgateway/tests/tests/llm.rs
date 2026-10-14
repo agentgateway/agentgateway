@@ -1,4 +1,4 @@
-use agentgateway::llm::{AIProvider, custom, gemini, openai};
+use agentgateway::llm::{AIProvider, copilot, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
 use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
@@ -34,6 +34,48 @@ async fn llm_openai() {
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
+}
+
+#[rstest::rstest]
+#[case::configured_key("configured-token")]
+#[case::empty_key("")]
+#[tokio::test]
+async fn llm_copilot_explicit_auth(#[case] credential: &str) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Copilot(copilot::Provider {
+			model_override: None,
+		}),
+		false,
+	);
+	provider.policies =
+		Some(serde_json::from_value(json!({"backendAuth": {"key": credential}})).unwrap());
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let response = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		llm_body!("requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	read_body_raw(response.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.headers[header::AUTHORIZATION].to_str().unwrap(),
+		format!("Bearer {credential}").trim_end()
+	);
+	assert_eq!(request.headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		request.headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(request.headers["openai-intent"], "conversation-agent");
+	assert_eq!(request.headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(request.headers["x-initiator"], "agent");
+	assert_eq!(request.headers["x-interaction-type"], "conversation-agent");
 }
 
 #[tokio::test]

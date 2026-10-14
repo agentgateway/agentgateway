@@ -2203,6 +2203,38 @@ async fn llm_transformations_can_set_missing_model() {
 	assert_eq!(llm_request.request_model, "transformed-model");
 }
 
+#[test]
+fn copilot_required_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let mut authorization = HeaderValue::from_static("Bearer configured-token");
+	authorization.set_sensitive(true);
+	let mut req = ::http::Request::builder()
+		.header(header::AUTHORIZATION, authorization)
+		.header("editor-version", "custom-editor")
+		.header("x-initiator", "incoming")
+		.body(Body::empty())
+		.unwrap();
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None, None)
+		.unwrap();
+
+	let headers = req.headers();
+	assert_eq!(headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(headers["openai-intent"], "conversation-agent");
+	assert_eq!(headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(headers["x-initiator"], "agent");
+	assert_eq!(headers["x-interaction-type"], "conversation-agent");
+	assert_eq!(headers[header::AUTHORIZATION], "Bearer configured-token");
+	assert!(headers[header::AUTHORIZATION].is_sensitive());
+}
+
 #[tokio::test]
 async fn copilot_anthropic_model_uses_messages_route() {
 	use crate::http::auth::BackendInfo;

@@ -24,7 +24,7 @@ Send a model your account can use in the request body, and choose an API format 
 
 `copilot: {}` uses the request's model. Set `spec.ai.provider.copilot.model` to override it. Copilot also works in named provider groups and with `provider: Copilot` in `AgentgatewayModel`, using the existing model matching, selection and endpoint settings.
 
-The default upstream is `api.githubcopilot.com:443`, with TLS verification and the existing provider's request-path selection. Host, port and path overrides still apply. Backend transformations and request-header modifiers run after Copilot's protocol defaults and can override them.
+The default upstream is `api.githubcopilot.com:443`, with TLS verification and the existing provider's request-path selection. Host, port and path overrides still apply. The Copilot provider applies its required protocol headers after backend transformations and request-header modifiers.
 
 ## Replace or Revoke a Credential
 
