@@ -40,12 +40,16 @@ type TestExpectation struct {
 
 func TestExamples(t *testing.T) {
 	v := NewAgentgatewayValidatorSkipMissing(t)
-	root := filepath.Join(fsutils.GetModuleRoot(), "examples")
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	root, err := os.OpenRoot(filepath.Join(fsutils.GetModuleRoot(), "examples"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	err = fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".yaml" {
 			return err
 		}
-		content, err := os.ReadFile(path)
+		content, err := root.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -54,7 +58,7 @@ func TestExamples(t *testing.T) {
 			if err := yaml.Unmarshal([]byte(item), obj); err != nil || obj.GetKind() == "" {
 				continue
 			}
-			t.Run(fmt.Sprintf("%s/%s/%s", strings.TrimPrefix(path, root+"/"), obj.GetKind(), obj.GetName()), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s/%s", path, obj.GetKind(), obj.GetName()), func(t *testing.T) {
 				assert.NoError(t, v.ValidateCustomResource(obj))
 			})
 		}
