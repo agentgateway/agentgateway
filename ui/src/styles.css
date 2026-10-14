@@ -948,6 +948,20 @@ h4.field-label {
 	color: var(--bad);
 }
 
+.custom-select-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	width: 100%;
+	min-height: 40px;
+	border: 1px solid var(--line-strong);
+	border-radius: 6px;
+	background: var(--surface);
+	color: var(--text);
+	padding: 0 10px;
+}
+
 .field.invalid input,
 .field.invalid textarea,
 .field.invalid .custom-select-trigger {
@@ -1021,12 +1035,6 @@ h4.field-label {
 	height: 100%;
 }
 
-.playground-response-panel .json-block,
-.playground-response-panel .empty-state {
-	flex: 1;
-	min-height: 0;
-}
-
 .playground-response-panel .json-block {
 	max-height: none;
 	height: 100%;
@@ -1057,10 +1065,6 @@ h4.field-label {
 	background: var(--surface-2);
 	padding: 12px;
 	margin-bottom: 12px;
-}
-
-.playground-setup-bar .field {
-	margin-bottom: 0;
 }
 
 .system-prompt-details {
@@ -1111,11 +1115,6 @@ details summary {
 
 .system-prompt-details[open] > summary svg {
 	transform: rotate(180deg);
-}
-
-.system-prompt-details .field {
-	padding: 12px;
-	margin-bottom: 0;
 }
 
 .playground-run-timeline {
@@ -1233,10 +1232,6 @@ details summary {
 	align-items: end;
 	justify-content: space-between;
 	margin-bottom: 16px;
-}
-
-.client-recipe-select .custom-select-menu {
-	max-height: min(560px, calc(100vh - 220px));
 }
 
 .client-recipe-header {
@@ -1428,11 +1423,6 @@ details summary {
 	gap: 14px;
 }
 
-.tool-arguments-form .field,
-.tool-arguments-form .config-option-row {
-	margin-bottom: 0;
-}
-
 .mcp-call-actions {
 	margin-top: 18px;
 }
@@ -1450,6 +1440,12 @@ details summary {
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
+}
+
+.mono,
+.json-block,
+.mono-input {
+	font-family: var(--mono);
 }
 
 .mcp-result-status .mono {
@@ -1659,12 +1655,6 @@ details summary {
 	gap: 22px;
 }
 
-.policy-editor-stack > .field,
-.policy-editor-stack > .form-grid,
-.policy-editor-stack > .schema-details {
-	margin-bottom: 0;
-}
-
 .policy-form-section {
 	border: 1px solid var(--line);
 	border-radius: 8px;
@@ -1736,10 +1726,6 @@ details summary {
 .guardrail-summary-card h3 {
 	margin: 0 0 10px;
 	font-size: 14px;
-}
-
-.guardrail-summary-card .muted-copy {
-	margin: 8px 0 0;
 }
 
 .guardrail-rule-card {
@@ -1886,11 +1872,6 @@ details summary {
 	white-space: nowrap;
 }
 
-.location-override-panel .form-grid,
-.location-override-panel .field {
-	margin-bottom: 0;
-}
-
 .policy-controls .location-override-panel {
 	gap: 10px;
 }
@@ -1939,10 +1920,6 @@ details summary {
 	gap: 12px;
 	align-items: start;
 	margin-bottom: 14px;
-}
-
-.advanced-setting-panel .field {
-	margin-bottom: 0;
 }
 
 .oidc-source {
@@ -2037,7 +2014,6 @@ details summary {
 	width: 118px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .authz-effect-select .custom-select-trigger {
 	min-height: 30px;
 	padding: 0 8px;
@@ -2314,7 +2290,6 @@ details summary {
 	margin-top: 0;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .config-option-row {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
@@ -2551,12 +2526,15 @@ details summary {
 	margin-top: 4px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .muted-copy {
 	color: var(--muted);
 	font-size: 13px;
 	line-height: 1.6;
 	margin: 14px 0 0;
+}
+
+.guardrail-summary-card .muted-copy {
+	margin: 8px 0 0;
 }
 
 .startup-shell {
@@ -3446,6 +3424,24 @@ tbody tr:hover {
 	white-space: nowrap;
 }
 
+.copy-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	padding: 2px 4px;
+	border-radius: 4px;
+	font-size: 11px;
+	cursor: pointer;
+	transition:
+		color 0.1s,
+		background 0.1s;
+	vertical-align: middle;
+	margin-left: 4px;
+}
+
 .log-msg-header .copy-button {
 	margin-left: 0;
 }
@@ -3670,10 +3666,6 @@ tbody tr:hover {
 	min-width: 170px;
 }
 
-.logs-filter-bar .field {
-	min-width: 170px;
-}
-
 .analytics-controls {
 	display: flex;
 	align-items: flex-end;
@@ -3692,10 +3684,6 @@ tbody tr:hover {
 
 .analytics-controls-right {
 	flex: 0 0 180px;
-}
-
-.analytics-controls-right .field {
-	margin-bottom: 0;
 }
 
 .logs-stream-toggle {
@@ -4115,24 +4103,6 @@ tbody tr:hover {
 }
 
 /* Copy button */
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.copy-button {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	border: 0;
-	background: transparent;
-	color: var(--muted);
-	padding: 2px 4px;
-	border-radius: 4px;
-	font-size: 11px;
-	cursor: pointer;
-	transition:
-		color 0.1s,
-		background 0.1s;
-	vertical-align: middle;
-	margin-left: 4px;
-}
 .copy-button:hover {
 	color: var(--text);
 	background: var(--surface-3);
@@ -4143,13 +4113,6 @@ tbody tr:hover {
 
 .strong {
 	font-weight: 700;
-}
-
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.mono,
-.json-block,
-.mono-input {
-	font-family: var(--mono);
 }
 
 .badge {
@@ -4194,7 +4157,6 @@ tbody tr:hover {
 	color: var(--bad);
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .form-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4246,12 +4208,48 @@ tbody tr:hover {
 	overflow: auto;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .field {
 	display: flex;
 	flex-direction: column;
 	gap: 7px;
 	margin-bottom: 14px;
+}
+
+.playground-setup-bar .field {
+	margin-bottom: 0;
+}
+
+.system-prompt-details .field {
+	padding: 12px;
+	margin-bottom: 0;
+}
+
+.tool-arguments-form .field,
+.tool-arguments-form .config-option-row {
+	margin-bottom: 0;
+}
+
+.policy-editor-stack > .field,
+.policy-editor-stack > .form-grid,
+.policy-editor-stack > .schema-details {
+	margin-bottom: 0;
+}
+
+.location-override-panel .form-grid,
+.location-override-panel .field {
+	margin-bottom: 0;
+}
+
+.advanced-setting-panel .field {
+	margin-bottom: 0;
+}
+
+.logs-filter-bar .field {
+	min-width: 170px;
+}
+
+.analytics-controls-right .field {
+	margin-bottom: 0;
 }
 
 .field-with-help {
@@ -4347,10 +4345,6 @@ tbody tr:hover {
 	font-family: var(--mono);
 	font-weight: 425;
 	line-height: 1.4;
-}
-
-.target-resolved-composite .freeform-combobox {
-	min-width: 0;
 }
 
 .target-resolved-composite .freeform-combobox-input-wrap input {
@@ -4800,6 +4794,12 @@ textarea {
 	gap: 18px;
 }
 
+.traffic-policy-section {
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--surface);
+}
+
 .route-editor-stack > .form-grid,
 .route-editor-stack > .traffic-backend-editor,
 .route-editor-stack > .traffic-policy-section,
@@ -5144,9 +5144,12 @@ textarea {
 	padding-right: 42px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .freeform-combobox {
 	position: relative;
+	min-width: 0;
+}
+
+.target-resolved-composite .freeform-combobox {
 	min-width: 0;
 }
 
@@ -5288,21 +5291,6 @@ textarea {
 	position: relative;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.custom-select-trigger {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	width: 100%;
-	min-height: 40px;
-	border: 1px solid var(--line-strong);
-	border-radius: 6px;
-	background: var(--surface);
-	color: var(--text);
-	padding: 0 10px;
-}
-
 .custom-select-value {
 	display: inline-flex;
 	align-items: center;
@@ -5347,7 +5335,6 @@ textarea {
 	line-height: 1.3;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .custom-select-menu {
 	position: absolute;
 	top: calc(100% + 6px);
@@ -5361,6 +5348,10 @@ textarea {
 	background: var(--surface);
 	box-shadow: var(--shadow-popover);
 	padding: 4px;
+}
+
+.client-recipe-select .custom-select-menu {
+	max-height: min(560px, calc(100vh - 220px));
 }
 
 .custom-select-search {
@@ -5466,13 +5457,6 @@ textarea {
 	margin: 4px 0 0;
 	color: var(--muted);
 	font-size: 13px;
-}
-
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
-.traffic-policy-section {
-	border: 1px solid var(--line);
-	border-radius: 8px;
-	background: var(--surface);
 }
 
 .traffic-policy-summary {
@@ -6063,7 +6047,6 @@ textarea {
 	font-size: 11.5px;
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 .empty-state {
 	display: grid;
 	place-items: center;
@@ -6071,6 +6054,12 @@ textarea {
 	min-height: 230px;
 	padding: 24px;
 	text-align: center;
+}
+
+.playground-response-panel .json-block,
+.playground-response-panel .empty-state {
+	flex: 1;
+	min-height: 0;
 }
 
 .empty-state .button {
@@ -6179,7 +6168,6 @@ textarea {
 	.two-column.wide-left,
 	.playground-shell,
 	.client-setup-layout,
-	/* biome-ignore lint/style/noDescendingSpecificity: Existing lint violation; remove this suppression when the underlying issue is fixed. */
 	.form-grid,
 	.filter-bar,
 	.logs-filter-bar,
