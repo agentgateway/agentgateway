@@ -363,7 +363,7 @@ async fn apply_backend_auth_kind(
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
 		BackendAuthKind::Copilot => {
-			copilot::insert_token(req)
+			copilot::insert_headers(req)
 				.await
 				.map_err(BackendAuthError::local)?;
 		},
