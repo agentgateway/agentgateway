@@ -42,7 +42,7 @@ pub enum ParseError {
 	MissingComponents,
 	#[error("missing reference")]
 	MissingReference(String),
-	#[error("unsupported reference")]
+	#[error("unsupported reference: {0}")]
 	UnsupportedReference(String),
 	#[error("information required: {0}")]
 	InformationRequired(String),

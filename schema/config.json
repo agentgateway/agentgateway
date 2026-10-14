@@ -8901,6 +8901,7 @@
           ]
         },
         {
+          "description": "Expose the operations in an OpenAPI schema as MCP tools.\nA non-root path in `host` or `path` replaces the schema's server path.",
           "type": "object",
           "properties": {
             "openapi": {

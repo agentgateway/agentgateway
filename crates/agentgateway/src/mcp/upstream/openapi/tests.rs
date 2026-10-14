@@ -344,6 +344,36 @@ async fn test_call_tool_get_simple_success() {
 	);
 }
 
+#[rstest]
+#[case::replace("/api")]
+#[case::trailing_slash("/api/")]
+#[tokio::test]
+async fn test_call_tool_configured_path_prefix(#[case] prefix: &str) {
+	let (server, handler) = setup_with_prefix(prefix).await;
+	let expected_response = json!({ "id": "123", "name": "Test User" });
+	Mock::given(method("GET"))
+		.and(path("/api/users/123"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let result = handler
+		.call_tool(
+			"get_user",
+			Some(
+				json!({ "path": { "user_id": "123" } })
+					.as_object()
+					.unwrap()
+					.clone(),
+			),
+			&IncomingRequestContext::empty(),
+		)
+		.await
+		.unwrap();
+	assert_eq!(result.structured_content.unwrap(), expected_response);
+}
+
 #[tokio::test]
 async fn test_call_tool_get_with_query() {
 	let (server, handler) = setup().await;

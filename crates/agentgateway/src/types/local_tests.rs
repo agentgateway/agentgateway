@@ -2512,6 +2512,77 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 	);
 }
 
+#[rstest::rstest]
+#[case::host_only(serde_json::json!({ "host": "https://example.com" }), Ok("/from-spec"))]
+#[case::host_root(serde_json::json!({ "host": "https://example.com/" }), Ok("/from-spec"))]
+#[case::host_path(serde_json::json!({ "host": "https://example.com/api" }), Ok("/api"))]
+#[case::host_parts_root(serde_json::json!({ "host": "example.com", "port": 80, "path": "/" }), Ok("/from-spec"))]
+#[case::host_parts_path(serde_json::json!({ "host": "example.com", "port": 80, "path": "/api" }), Ok("/api"))]
+#[case::reference(serde_json::json!({ "backend": "example" }), Ok("/from-spec"))]
+#[case::reference_path(serde_json::json!({ "backend": "example", "path": "/api" }), Ok("/api"))]
+#[case::relative(serde_json::json!({ "backend": "example", "path": "api" }), Err("must start with"))]
+#[case::authority(serde_json::json!({ "backend": "example", "path": "//example.com/api" }), Err("must start with"))]
+#[case::query(serde_json::json!({ "backend": "example", "path": "/api?v=1" }), Err("must start with"))]
+#[case::backslash(serde_json::json!({ "backend": "example", "path": "/api\\v1" }), Err("must start with"))]
+#[case::space(serde_json::json!({ "backend": "example", "path": "/api v1" }), Err("must start with"))]
+#[tokio::test]
+async fn test_openapi_target_prefix(
+	#[case] mut target: serde_json::Value,
+	#[case] expected: Result<&str, &str>,
+	#[values(false, true)] multiple_servers: bool,
+) {
+	let servers = if multiple_servers {
+		serde_json::json!([{ "url": "https://example.com/v1" }, { "url": "https://example.com/v2" }])
+	} else {
+		serde_json::json!([{ "url": "https://example.com/from-spec" }])
+	};
+	target["schema"] = serde_json::json!(
+		serde_json::json!({
+			"openapi": "3.0.0",
+			"info": { "title": "Test", "version": "1.0.0" },
+			"servers": servers,
+			"paths": {}
+		})
+		.to_string()
+	);
+	let local: super::LocalBackend = serde_json::from_value(serde_json::json!({
+		"mcp": { "targets": [{ "name": "example", "openapi": target }] }
+	}))
+	.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
+	let result = local
+		.as_backends(
+			ResourceName::new("test-mcp".into(), "".into()),
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
+		.await;
+	let expected = match expected {
+		Ok("/from-spec") if multiple_servers => Err("multiple servers"),
+		e => e,
+	};
+	let backends = match (result, expected) {
+		(Err(err), Err(msg)) => {
+			let err = err.to_string();
+			assert!(err.contains("openapi MCP target 'example'"), "{err}");
+			assert!(err.contains(msg), "{err}");
+			return;
+		},
+		(result, _) => result.unwrap(),
+	};
+	let mcp = backends
+		.iter()
+		.find_map(|b| match &b.backend {
+			Backend::MCP(_, mcp) => Some(mcp),
+			_ => None,
+		})
+		.unwrap();
+	let crate::types::agent::McpTargetSpec::OpenAPI(target) = &mcp.targets[0].spec else {
+		panic!("expected OpenAPI target");
+	};
+	assert_eq!(Ok(target.prefix.as_str()), expected);
+}
+
 #[tokio::test]
 async fn test_top_level_backend_targeted_transformations_are_backend_policies() {
 	let normalized = normalize_test_yaml(

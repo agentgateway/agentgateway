@@ -1809,7 +1809,7 @@ impl LocalBackend {
 							}
 						},
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
-							let (bref, _, be) = Self::process_mcp_backend(
+							let (bref, path, be) = Self::process_mcp_backend(
 								local_name(name.clone()),
 								backend,
 								t.policies.clone(),
@@ -1821,9 +1821,17 @@ impl LocalBackend {
 							}
 
 							let openapi_schema = schema.load_openapi_schema(resources).await?;
+							// A root path is indistinguishable from an absent one in host URIs, so both use the schema.
+							let prefix = match path.as_deref().filter(|p| !p.is_empty() && *p != "/") {
+								Some(p) => validate_openapi_prefix(p)
+									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
+								None => crate::mcp::openapi_server_prefix(&openapi_schema)
+									.map_err(|e| anyhow!("openapi MCP target '{}': {e}", t.name))?,
+							};
 							McpTargetSpec::OpenAPI(OpenAPITarget {
 								backend: bref,
 								schema: openapi_schema.into(),
+								prefix,
 							})
 						},
 					};
@@ -2037,6 +2045,21 @@ impl<'de> serde::Deserialize<'de> for McpBackendHost {
 	}
 }
 
+// The prefix is formatted directly after the authority, so anything but a plain path could
+// rewrite the upstream URL.
+fn validate_openapi_prefix(prefix: &str) -> anyhow::Result<String> {
+	if !prefix.starts_with('/')
+		|| prefix.starts_with("//")
+		|| prefix.contains(['?', '#', '\\'])
+		|| prefix.parse::<::http::uri::PathAndQuery>().is_err()
+	{
+		anyhow::bail!(
+			"path must start with a single '/' and must not contain a query, fragment, or backslash"
+		);
+	}
+	Ok(prefix.to_string())
+}
+
 impl McpBackendHost {
 	pub fn process(&self) -> anyhow::Result<ProcessedMcpBackendHost> {
 		Ok(match self {
@@ -2107,6 +2130,8 @@ pub enum LocalMcpTargetSpec {
 		#[serde(default, skip_serializing_if = "std::ops::Not::not")]
 		clear_env: bool,
 	},
+	/// Expose the operations in an OpenAPI schema as MCP tools.
+	/// A non-root path in `host` or `path` replaces the schema's server path.
 	#[serde(rename = "openapi")]
 	OpenAPI {
 		#[serde(flatten)]

@@ -32,6 +32,7 @@ use rmcp::model::{
 };
 pub use router::App;
 use thiserror::Error;
+pub(crate) use upstream::openapi_server_prefix;
 
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;

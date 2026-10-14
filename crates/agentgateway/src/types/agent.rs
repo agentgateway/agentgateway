@@ -2074,6 +2074,8 @@ pub struct OpenAPITarget {
 	#[serde(skip_serializing)]
 	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
 	pub schema: Arc<OpenAPI>,
+	/// Path prepended to each operation path.
+	pub prefix: String,
 }
 
 #[derive(Debug, Clone, Default, Eq, PartialEq)]

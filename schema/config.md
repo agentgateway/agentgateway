@@ -660,7 +660,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -2216,7 +2216,7 @@
 |`backends[].mcp.targets[].stdio.args`|[]string||
 |`backends[].mcp.targets[].stdio.env`|object||
 |`backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`backends[].mcp.targets[].openapi`|object||
+|`backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -3350,7 +3350,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -4973,7 +4973,7 @@
 |`routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routes[].backends[].mcp.targets[].openapi`|object||
+|`routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -6163,7 +6163,7 @@
 |`mcp.targets[].stdio.args`|[]string||
 |`mcp.targets[].stdio.env`|object||
 |`mcp.targets[].stdio.clear_env`|boolean||
-|`mcp.targets[].openapi`|object||
+|`mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
