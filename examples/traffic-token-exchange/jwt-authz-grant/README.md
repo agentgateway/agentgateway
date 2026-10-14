@@ -1,10 +1,10 @@
-# RFC 7523 JWT bearer grant (`backendAuth.oauth`)
+# RFC 7523 JWT bearer grant (`backendAuth.oauthTokenExchange`)
 
-The `backendAuth.oauth` policy makes the gateway exchange the inbound user
-credential for a per-upstream token at an OAuth authorization server before
-forwarding the request. This example runs the **RFC 7523 JWT bearer** grant
-(`grantType: jwtBearer`): the inbound token is sent as the `assertion`. This is
-also the shape Microsoft Entra "on-behalf-of" uses.
+The `backendAuth.oauthTokenExchange` policy makes the gateway exchange the
+inbound user credential for a per-upstream token at an OAuth authorization
+server before forwarding the request. This example runs the **RFC 7523 JWT
+bearer** grant (`grantType: jwtBearer`): the inbound token is sent as the
+`assertion`. This is also the shape Microsoft Entra "on-behalf-of" uses.
 
 For the default **RFC 8693 token exchange** grant, see
 [`oauth-rfc8693`](../oauth-rfc8693/README.md); for the hand-written `extAuthz` +
