@@ -190,6 +190,7 @@ backends:
         name: "llm:router"
         namespace: ""
         target:
+          discovery: catalog
           models:
             - name: openai/gpt-5-mini
               created: 0
@@ -202,7 +203,11 @@ backends:
                 llm: {}
                 authorization: ~
               backendPolicies: []
-            - name: anthropic/*
+            - discovery:
+                provider: anthropic
+                transformation:
+                  prefix: anthropic/
+              name: anthropic/*
               created: 0
               visibility: internal
               headerMatches: []

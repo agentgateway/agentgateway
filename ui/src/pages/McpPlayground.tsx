@@ -168,7 +168,7 @@ export function McpPlaygroundPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="MCP Playground"
-				description="Initialize a gateway MCP session, list tools, and call a tool through the MCP listener."
+				description="List and call tools through the MCP gateway."
 			/>
 			{needsCors ? (
 				<StatusBanner

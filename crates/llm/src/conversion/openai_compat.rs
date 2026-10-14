@@ -20,13 +20,21 @@ pub mod from_responses {
 	}
 
 	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
-		let mut typed =
-			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let mut typed = json::convert::<_, responses::CreateResponse>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
 			request: translate_internal(typed),
 			namespaces,
+		})
+	}
+
+	fn cache_breakpoint(
+		breakpoint: Option<responses::PromptCacheBreakpointConfig>,
+	) -> Option<completions::PromptCacheBreakpointParam> {
+		breakpoint.map(|_| completions::PromptCacheBreakpointParam {
+			mode: completions::PromptCacheBreakpointParamMode::Explicit,
 		})
 	}
 
@@ -75,7 +83,7 @@ pub mod from_responses {
 												Some(completions::RequestUserMessageContentPart::Text(
 													completions::RequestMessageContentPartText {
 														text: text.text,
-														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
 													},
 												))
 											},
@@ -106,7 +114,7 @@ pub mod from_responses {
 												Some(completions::RequestAssistantMessageContentPart::Text(
 													completions::RequestMessageContentPartText {
 														text: text.text,
-														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
 													},
 												))
 											},
@@ -137,7 +145,7 @@ pub mod from_responses {
 												Some(completions::RequestDeveloperMessageContentPart::Text(
 													completions::RequestMessageContentPartText {
 														text: text.text,
-														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+														prompt_cache_breakpoint: cache_breakpoint(text.prompt_cache_breakpoint),
 													},
 												))
 											},
@@ -177,7 +185,9 @@ pub mod from_responses {
 														Some(completions::RequestUserMessageContentPart::Text(
 															completions::RequestMessageContentPartText {
 																text: text.text,
-																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+																prompt_cache_breakpoint: cache_breakpoint(
+																	text.prompt_cache_breakpoint,
+																),
 															},
 														))
 													},
@@ -201,7 +211,9 @@ pub mod from_responses {
 														Some(completions::RequestSystemMessageContentPart::Text(
 															completions::RequestMessageContentPartText {
 																text: text.text,
-																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+																prompt_cache_breakpoint: cache_breakpoint(
+																	text.prompt_cache_breakpoint,
+																),
 															},
 														))
 													},
@@ -225,7 +237,9 @@ pub mod from_responses {
 														Some(completions::RequestDeveloperMessageContentPart::Text(
 															completions::RequestMessageContentPartText {
 																text: text.text,
-																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+																prompt_cache_breakpoint: cache_breakpoint(
+																	text.prompt_cache_breakpoint,
+																),
 															},
 														))
 													},
@@ -365,13 +379,13 @@ pub mod from_responses {
 		let tool_choice = req.tool_choice.as_ref().and_then(|tc| {
 			use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
 			match tc {
-				ToolChoiceParam::Mode(ToolChoiceOptions::Auto) => Some(
+				ToolChoiceParam::Option(ToolChoiceOptions::Auto) => Some(
 					completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto),
 				),
-				ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(
+				ToolChoiceParam::Option(ToolChoiceOptions::Required) => Some(
 					completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required),
 				),
-				ToolChoiceParam::Mode(ToolChoiceOptions::None) => Some(
+				ToolChoiceParam::Option(ToolChoiceOptions::None) => Some(
 					completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None),
 				),
 				ToolChoiceParam::Function(ToolChoiceFunction { name }) => Some(
@@ -379,11 +393,11 @@ pub mod from_responses {
 						function: completions::FunctionName { name: name.clone() },
 					}),
 				),
-				ToolChoiceParam::Hosted(_)
+				ToolChoiceParam::BuiltIn(_)
 				| ToolChoiceParam::AllowedTools(_)
 				| ToolChoiceParam::Mcp(_)
 				| ToolChoiceParam::Custom(_)
-				| ToolChoiceParam::ProgrammaticToolCalling(_)
+				| ToolChoiceParam::ProgrammaticToolCalling
 				| ToolChoiceParam::ApplyPatch
 				| ToolChoiceParam::Shell => {
 					tracing::warn!(
@@ -579,8 +593,8 @@ pub mod to_responses {
 		};
 
 		let error = match finish_reason {
-			Some(completions::FinishReason::ContentFilter) => Some(responses::ErrorObject {
-				code: "content_filter".to_string(),
+			Some(completions::FinishReason::ContentFilter) => Some(responses::ResponseError {
+				code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 				message: "Content filtered".to_string(),
 				misalignment: None,
 			}),
@@ -589,7 +603,7 @@ pub mod to_responses {
 
 		let usage = resp.usage.map(|u| responses::ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: responses::InputTokenDetails {
 				cached_tokens: u
@@ -602,7 +616,7 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cache_write_tokens)
 					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as u32),
+					.map(|tokens| tokens as i64),
 			},
 			output_tokens_details: responses::OutputTokenDetails {
 				reasoning_tokens: u
@@ -923,13 +937,6 @@ pub mod to_responses {
 		)
 	}
 
-	fn usage_output_tokens(usage: &completions::Usage) -> u32 {
-		if usage.completion_tokens == 0 && usage.total_tokens > 0 {
-			return usage.total_tokens.saturating_sub(usage.prompt_tokens);
-		}
-		usage.completion_tokens
-	}
-
 	#[allow(clippy::too_many_arguments)]
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
@@ -946,9 +953,9 @@ pub mod to_responses {
 		logged_tool_calls: &mut Option<LoggedToolCalls>,
 	) {
 		use responses::{
-			AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
-			OutputContent, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
-			OutputTextContent, OutputTokenDetails, ResponseContentPartDoneEvent,
+			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
+			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
+			OutputTokenDetails, ResponseContentPartDoneEvent, ResponseError,
 			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
 			ResponseTextDoneEvent, ResponseUsage,
 		};
@@ -1084,7 +1091,7 @@ pub mod to_responses {
 		if let Some(ref u) = usage {
 			log.update(|r| {
 				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(usage_output_tokens(u) as u64);
+				r.response.output_tokens = Some(u.output_tokens() as u64);
 				r.response.total_tokens = Some(u.total_tokens as u64);
 				r.response.cached_input_tokens = u
 					.prompt_tokens_details
@@ -1104,7 +1111,7 @@ pub mod to_responses {
 
 		let usage_obj = usage.map(|u| ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: InputTokenDetails {
 				cached_tokens: u
@@ -1117,7 +1124,7 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cache_write_tokens)
 					.or(u.cache_creation_input_tokens)
-					.map(|tokens| tokens as u32),
+					.map(|tokens| tokens as i64),
 			},
 			output_tokens_details: OutputTokenDetails {
 				reasoning_tokens: u
@@ -1144,8 +1151,8 @@ pub mod to_responses {
 			Some(completions::FinishReason::ContentFilter) => response_builder.failed_event(
 				*sequence_number,
 				usage_obj,
-				ErrorObject {
-					code: "content_filter".to_string(),
+				ResponseError {
+					code: responses::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered".to_string(),
 					misalignment: None,
 				},

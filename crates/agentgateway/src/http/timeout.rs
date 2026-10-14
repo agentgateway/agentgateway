@@ -49,9 +49,15 @@ pub struct Policy {
 /// Attach the idle timeout to the upstream body before response processing.
 pub fn apply_response_idle_timeout(
 	mut response: crate::http::Response,
-	timeout: Duration,
+	policy: Option<&Policy>,
 ) -> crate::http::Response {
-	response.body_mut().set_idle_timeout(timeout);
+	if response.status() != ::http::StatusCode::SWITCHING_PROTOCOLS
+		&& let Some(timeout) = policy
+			.and_then(|t| t.response_idle_timeout)
+			.filter(|d| !d.is_zero())
+	{
+		response.body_mut().set_idle_timeout(timeout);
+	}
 	response
 }
 
@@ -70,7 +76,10 @@ mod tests {
 		let pending = futures_util::stream::pending::<Result<Bytes, Infallible>>();
 		let mut body = apply_response_idle_timeout(
 			crate::http::Response::new(crate::http::Body::from_stream(pending)),
-			Duration::from_secs(1),
+			Some(&Policy {
+				response_idle_timeout: Some(Duration::from_secs(1)),
+				..Default::default()
+			}),
 		)
 		.into_body();
 
@@ -93,7 +102,10 @@ mod tests {
 		});
 		let body = apply_response_idle_timeout(
 			crate::http::Response::new(crate::http::Body::from_stream(frames)),
-			Duration::from_secs(1),
+			Some(&Policy {
+				response_idle_timeout: Some(Duration::from_secs(1)),
+				..Default::default()
+			}),
 		)
 		.into_body();
 

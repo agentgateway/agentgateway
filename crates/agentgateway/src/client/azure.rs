@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::str::FromStr;
 
 use async_trait::async_trait;
@@ -10,8 +9,7 @@ use http_body_util::BodyExt;
 use tracing::{debug, error, warn};
 use typespec_client_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS;
 
-use crate::client::{ApplicationTransport, Call, Client, Transport};
-use crate::types::agent::Target;
+use crate::client::Client;
 
 #[async_trait]
 impl azure_core::http::HttpClient for Client {
@@ -50,38 +48,14 @@ impl azure_core::http::HttpClient for Client {
 			"performing request {method} '{}' with `agentgateway::client::Client`",
 			url.sanitize(&DEFAULT_ALLOWED_QUERY_PARAMETERS)
 		);
-		let rsp = self
-			.call(Call {
-				req: request,
-				target: match url.host().expect("url must have a host") {
-					url::Host::Domain(h) => Target::from((h, url.port_or_known_default().unwrap_or(80))),
-					url::Host::Ipv4(ip) => Target::Address(SocketAddr::from((
-						ip,
-						url.port_or_known_default().unwrap_or(80),
-					))),
-					url::Host::Ipv6(ip) => Target::Address(SocketAddr::from((
-						ip,
-						url.port_or_known_default().unwrap_or(80),
-					))),
-				},
-				connection: if url.scheme() == "https" {
-					Transport::from(ApplicationTransport::Tls(
-						crate::http::backendtls::SYSTEM_TRUST.base_config(),
-					))
-				} else {
-					Transport::from(ApplicationTransport::Plaintext)
-				}
-				.into(),
-			})
-			.await
-			.map_err(|e| {
-				error!("request failed: {e}");
-				azure_core::Error::with_error(
-					azure_core::error::ErrorKind::Io,
-					e,
-					"failed to execute `agentgateway::client::Client` request",
-				)
-			})?;
+		let rsp = self.simple_call(request).await.map_err(|e| {
+			error!("request failed: {e}");
+			azure_core::Error::with_error(
+				azure_core::error::ErrorKind::Io,
+				e,
+				"failed to execute `agentgateway::client::Client` request",
+			)
+		})?;
 
 		let status = rsp.status();
 		let headers = to_headers(rsp.headers());

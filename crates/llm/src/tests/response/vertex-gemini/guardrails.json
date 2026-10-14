@@ -1,0 +1,103 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "answer"
+          },
+          {
+            "text": "unsigned reasoning",
+            "thought": true
+          },
+          {
+            "text": "signed reasoning",
+            "thought": true,
+            "thoughtSignature": "signature"
+          },
+          {
+            "functionCall": {
+              "id": "call",
+              "name": "tool",
+              "args": {
+                "value": "argument"
+              }
+            }
+          },
+          {
+            "functionCall": {
+              "id": "signed",
+              "name": "tool",
+              "args": {
+                "value": "signed argument"
+              }
+            },
+            "thoughtSignature": "signature"
+          },
+          {
+            "functionResponse": {
+              "id": "call",
+              "name": "tool",
+              "response": {
+                "result": "result"
+              }
+            }
+          },
+          {
+            "executableCode": {
+              "language": "PYTHON",
+              "code": "print(1)"
+            }
+          },
+          {
+            "codeExecutionResult": {
+              "outcome": "OUTCOME_OK",
+              "output": "1"
+            }
+          },
+          {
+            "toolCall": {
+              "id": "search",
+              "toolType": "GOOGLE_SEARCH_WEB",
+              "args": {
+                "query": "query"
+              }
+            }
+          },
+          {
+            "toolResponse": {
+              "id": "search",
+              "toolType": "GOOGLE_SEARCH_WEB",
+              "response": {
+                "result": "result"
+              }
+            }
+          },
+          {
+            "inlineData": {
+              "mimeType": "image/png",
+              "data": "opaque"
+            }
+          },
+          {
+            "inlineData": {
+              "mimeType": "audio/wav",
+              "data": "opaque"
+            },
+            "audioTranscription": {
+              "text": "transcript",
+              "speakerLabel": "speaker",
+              "words": [
+                {
+                  "word": "transcript",
+                  "startOffset": "0s"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

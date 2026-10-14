@@ -1,0 +1,55 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "refund": {
+      "type": "noul",
+      "noul": 0.93
+    },
+    "1_": {
+      "type": "noul",
+      "noul": 0.81
+    },
+    "category": {
+      "type": "choice",
+      "choice": "damage",
+      "probabilities": {
+        "damage": 0.88,
+        "shipping": 0.12
+      },
+      "confidence": 0.88
+    },
+    "repeat": {
+      "type": "choice",
+      "choice": "true",
+      "probabilities": {
+        "true": 0.77,
+        "false": 0.2,
+        "unsure": 0.03
+      },
+      "confidence": 0.77
+    },
+    "urgency": {
+      "type": "score",
+      "score": 2,
+      "legend": {
+        "0": "Low",
+        "1": "Medium",
+        "2": "High"
+      },
+      "probabilities": {
+        "0": 0.05,
+        "1": 0.25,
+        "2": 0.7
+      },
+      "confidence": 0.7
+    },
+    "1": {
+      "type": "noul",
+      "noul": 0.12
+    }
+  },
+  "usage": {
+    "input_tokens": 212,
+    "output_tokens": 0
+  }
+}

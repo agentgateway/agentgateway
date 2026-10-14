@@ -46,9 +46,10 @@ info:
     }
   },
   "parsed": {
-    "input_tokens": 500,
+    "input_tokens": 1000,
     "output_tokens": 10,
-    "total_tokens": 510,
+    "total_tokens": 1010,
+    "reasoning_tokens": 0,
     "cache_creation_input_tokens": 200,
     "cached_input_tokens": 300,
     "service_tier": "default",

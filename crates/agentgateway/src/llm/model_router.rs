@@ -4,12 +4,14 @@ use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
 use headers::{ContentEncoding, HeaderMapExt};
+use itertools::Itertools;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
 
-use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, RequestBodyExt, Response};
+use crate::llm::router_callout::VirtualModelCalloutFailureMode;
+use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
@@ -17,6 +19,9 @@ use crate::{apply, cel, llm, schema_enum, schema_ser_schema};
 
 #[apply(schema_ser_schema!)]
 pub struct ModelRoute {
+	/// Catalog provider and reverse transformation compiled during local config normalization.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub discovery: Option<llm::discovery::ModelDiscovery>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub id: Option<String>,
 	pub name: String,
@@ -77,6 +82,7 @@ static SERVING_ENDPOINTS: LazyLock<Vec<(EndpointMatch, Option<llm::RouteType>, &
 			("/v1/audio/transcriptions", None),
 			("/v1/ocr", Some(Detect)),
 			("/v1/systemone", Some(Detect)),
+			("/v1/decisions", Some(Decisions)),
 			("/v1/embeddings", Some(Embeddings)),
 			("/v1/rerank", Some(Rerank)),
 			("/v2/rerank", Some(Rerank)),
@@ -167,7 +173,13 @@ pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
 	Failover { backend: RouteBackendReference },
 	Conditional(Vec<ConditionalTarget>),
+	Callout(Arc<llm::router_callout::VirtualModelCallout>),
 }
+
+/// The model name the client asked for, before any virtual model rewrite. The router stores it as
+/// a request extension so the proxy can attach it to the request log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OriginalModel(pub String);
 
 #[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
@@ -190,6 +202,7 @@ pub struct ConditionalTarget {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRouter {
+	discovery: llm::discovery::Discovery,
 	#[serde(skip_serializing_if = "String::is_empty")]
 	path_prefix: String,
 	models: Vec<ModelRoute>,
@@ -234,9 +247,15 @@ impl ModelRouter {
 	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
 			path_prefix: String::new(),
+			discovery: Default::default(),
 			models,
 			virtual_models,
 		}
+	}
+
+	pub fn with_discovery(mut self, discovery: llm::discovery::Discovery) -> Self {
+		self.discovery = discovery;
+		self
 	}
 
 	pub fn with_path_prefix(mut self, path_prefix: String) -> Self {
@@ -270,7 +289,12 @@ impl ModelRouter {
 		Some(strng::format!("{prefix}{template}"))
 	}
 
-	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
+	pub async fn resolve(
+		&self,
+		req: &mut Request,
+		catalog: &llm::catalog::ModelCatalog,
+		client: &PolicyClient,
+	) -> ResolveResult {
 		if !self.path_prefix.is_empty() {
 			let original = req.uri().clone();
 			let rewritten = http::modify_req_uri(req, |uri| {
@@ -310,7 +334,7 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(response);
 		}
 		if is_model_list_request(req) {
-			return ResolveResult::DirectResponse(self.model_list_response(req));
+			return ResolveResult::DirectResponse(self.model_list_response(req, catalog));
 		}
 		let requested_model = match requested_model(req).await {
 			Ok(requested_model) => requested_model,
@@ -321,19 +345,14 @@ impl ModelRouter {
 		}
 		req
 			.extensions_mut()
-			.get_or_insert_with(TransformationMetadata::default)
-			.0
-			.insert(
-				"agentgateway_user_model".to_string(),
-				Value::String(requested_model.model.clone()),
-			);
+			.insert(OriginalModel(requested_model.model.clone()));
 		if let Some(virtual_model) = self
 			.virtual_models
 			.iter()
 			.find(|model| model.name == requested_model.model)
 		{
 			return self
-				.resolve_virtual_model(virtual_model, req, requested_model.location)
+				.resolve_virtual_model(virtual_model, req, requested_model.location, client)
 				.await;
 		}
 		tracing::trace!(
@@ -354,23 +373,46 @@ impl ModelRouter {
 		}
 	}
 
-	fn model_list_response(&self, req: &Request) -> Response {
+	fn model_list_response(&self, req: &Request, catalog: &llm::catalog::ModelCatalog) -> Response {
+		let catalog =
+			(self.discovery == llm::discovery::Discovery::Catalog).then(|| catalog.snapshot());
 		let data = self
 			.models
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
 			.flat_map(|model| {
-				api_key_discoverable_models(req, &model.name)
-					.map(|name| model_list_entry(name, model.created))
+				let names: Vec<String> = if let Some(catalog) = &catalog
+					&& let Some(discovery) = &model.discovery
+					&& let Some(model_ids) = catalog.model_ids(&discovery.provider)
+				{
+					model_ids
+						// Get all models from the catalog. Apply our transformation to it
+						// For example, an expression `model.stripPrefix("foo/")` would become Prefix(foo/);
+						// we would take gpt-4o and make it foo/gpt-4o.
+						.filter_map(|name| discovery.transformation.apply(name))
+						.filter(|name| {
+							// Now check it still matches the model match (e.g 'foo/*') and we are authorized for this model
+							model_name_matches(&model.name, name) && api_key_model_authorized(req, name)
+						})
+						.map(|name| name.into_owned())
+						.collect()
+				} else {
+					api_key_discoverable_models(req, &model.name)
+						.map(str::to_owned)
+						.collect()
+				};
+				names.into_iter().map(|name| (name, model.created))
 			})
 			.chain(
 				self
 					.virtual_models
 					.iter()
 					.filter(|model| api_key_model_authorized(req, &model.name))
-					.map(|model| model_list_entry(&model.name, model.created)),
+					.map(|model| (model.name.clone(), model.created)),
 			)
+			.unique_by(|(name, _)| name.clone())
+			.map(|(name, created)| model_list_entry(&name, created))
 			.collect::<Vec<_>>();
 		let body = serde_json::json!({
 			"data": data,
@@ -388,7 +430,8 @@ impl ModelRouter {
 		&self,
 		virtual_model: &VirtualModelRoute,
 		req: &mut Request,
-		location: RequestedModelLocation,
+		mut location: RequestedModelLocation,
+		client: &PolicyClient,
 	) -> ResolveResult {
 		let (target, invalid) = match &virtual_model.routing {
 			VirtualModelRouting::Weighted(targets) => {
@@ -441,6 +484,44 @@ impl ModelRouter {
 					},
 				}
 			},
+			VirtualModelRouting::Callout(callout) => {
+				let selection = match callout.select(client, req, location.llm_request()).await {
+					Ok(selection) if self.has_model(&selection.model) => Some(selection),
+					Ok(selection) => {
+						tracing::debug!(
+							virtual_model = %virtual_model.name,
+							target_model = %selection.model,
+							"virtual model callout selected unknown model",
+						);
+						None
+					},
+					Err(err) => {
+						tracing::debug!(virtual_model = %virtual_model.name, %err, "virtual model callout failed");
+						None
+					},
+				};
+				match (selection, &callout.failure_mode) {
+					(Some(selection), _) => {
+						if let RequestedModelLocation::Body(Value::Object(body)) = &mut location {
+							for (k, v) in selection.fields {
+								match v {
+									Some(v) => body.insert(k, v),
+									None => body.remove(&k),
+								};
+							}
+						}
+						(selection.model, false)
+					},
+					(None, VirtualModelCalloutFailureMode::Fallback(model)) => (model.clone(), false),
+					(None, VirtualModelCalloutFailureMode::FailClosed) => {
+						return ResolveResult::DirectResponse(llm_error_response(
+							::http::StatusCode::SERVICE_UNAVAILABLE,
+							&format!("Virtual model {} callout failed", virtual_model.name),
+							"virtual_model_callout_failed",
+						));
+					},
+				}
+			},
 		};
 		if invalid {
 			tracing::debug!(
@@ -480,6 +561,13 @@ impl ModelRouter {
 			},
 			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
+	}
+
+	fn has_model(&self, model: &str) -> bool {
+		self
+			.models
+			.iter()
+			.any(|route| model_name_matches(&route.name, model))
 	}
 
 	fn resolve_concrete_model(
@@ -665,6 +753,11 @@ fn headers_match(headers: &[HeaderMatch], req: &Request) -> bool {
 		}
 	}
 	true
+}
+
+/// Ranks model patterns so more specific ones are tried first: higher is more specific.
+pub(crate) fn model_match_specificity(pattern: &str) -> usize {
+	pattern.chars().filter(|c| *c != '*').count()
 }
 
 fn model_name_matches(pattern: &str, model: &str) -> bool {
@@ -1056,9 +1149,17 @@ mod tests {
 	use crate::transport::BufferLimit;
 	use crate::types::agent::RouteBackendTarget;
 
+	fn original_model(req: &Request) -> Option<&str> {
+		req
+			.extensions()
+			.get::<OriginalModel>()
+			.map(|model| model.0.as_str())
+	}
+
 	#[tokio::test]
 	async fn conditional_virtual_model_can_use_llm_request() {
 		let model = |name: &str| ModelRoute {
+			discovery: None,
 			id: None,
 			name: name.to_string(),
 			created: 0,
@@ -1107,9 +1208,16 @@ mod tests {
 			.expect("valid request");
 
 		assert!(matches!(
-			router.resolve(&mut req).await,
+			router
+				.resolve(
+					&mut req,
+					&llm::catalog::ModelCatalog::default(),
+					&crate::test_helpers::policy_client(),
+				)
+				.await,
 			ResolveResult::Backend(_)
 		));
+		assert_eq!(original_model(&req), Some("smart-model"));
 		let cached = req
 			.body()
 			.extension::<crate::json::ParsedJson>()
@@ -1122,6 +1230,139 @@ mod tests {
 		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
 		assert_eq!(body["model"], "economy-model");
 		assert_eq!(cached, body);
+	}
+
+	#[tokio::test]
+	async fn callout_virtual_model() {
+		use wiremock::matchers::{body_json, header, method, path};
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		let server = MockServer::start().await;
+		Mock::given(method("POST"))
+			.and(path("/route"))
+			.and(header("x-tenant", "acme"))
+			.and(body_json(serde_json::json!({"max_tokens": 256})))
+			.respond_with(
+				ResponseTemplate::new(200)
+					.insert_header("x-route", "r1")
+					.set_body_json(serde_json::json!({"model": "premium-model", "effort": "high"})),
+			)
+			.expect(1)
+			.mount(&server)
+			.await;
+		Mock::given(path("/fail"))
+			.respond_with(ResponseTemplate::new(500))
+			.mount(&server)
+			.await;
+
+		let model = |name: &str| ModelRoute {
+			discovery: None,
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Internal,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				passthrough: None,
+				llm: Arc::default(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let callout = |name: &str, config: Value| VirtualModelRoute {
+			name: name.to_string(),
+			created: 0,
+			llm_policy: Arc::default(),
+			routing: VirtualModelRouting::Callout(Arc::new(
+				serde_json::from_value::<llm::router_callout::VirtualModelCallout>(config)
+					.expect("valid callout")
+					.with_configured_cache_store(),
+			)),
+		};
+		let router = ModelRouter::new(
+			vec![model("economy-model"), model("premium-model")],
+			vec![
+				callout(
+					"auto",
+					serde_json::json!({
+						"host": format!("http://{}/route", server.address()),
+						"headers": {"x-tenant": "'acme'"},
+						"body": "{'max_tokens': llmRequest.max_tokens}",
+						"transformation": {
+							"model": "callout.body.model",
+							"reasoning_effort": "callout.body.effort",
+							"route": "callout.headers['x-route']",
+						},
+						"cache": {"key": ["request.headers['x-session']"], "ttl": "1m"},
+					}),
+				),
+				callout(
+					"fallback",
+					serde_json::json!({
+						"host": format!("http://{}/fail", server.address()),
+						"transformation": {"model": "callout.body.model"},
+						"failureMode": {"fallback": "economy-model"},
+					}),
+				),
+				callout(
+					"closed",
+					serde_json::json!({
+						"host": format!("http://{}/fail", server.address()),
+						"transformation": {"model": "callout.body.model"},
+					}),
+				),
+			],
+		);
+		let client = crate::test_helpers::policy_client();
+		let resolve = async |model: &str| {
+			let mut req = ::http::Request::builder()
+				.uri("http://example.com/v1/chat/completions")
+				.header("x-session", "s1")
+				.body(http::Body::from(format!(
+					r#"{{"model":"{model}","max_tokens":256}}"#
+				)))
+				.expect("valid request");
+			let result = router
+				.resolve(&mut req, &llm::catalog::ModelCatalog::default(), &client)
+				.await;
+			(result, req)
+		};
+		let body = async |req: Request| -> Value {
+			let body = http::read_body_with_limit(req.into_body(), 1024)
+				.await
+				.expect("request body");
+			serde_json::from_slice(&body).expect("valid JSON request body")
+		};
+
+		// The second request is served from the cache.
+		for _ in 0..2 {
+			let (result, req) = resolve("auto").await;
+			assert!(matches!(result, ResolveResult::Backend(_)));
+			assert_eq!(
+				body(req).await,
+				serde_json::json!({
+					"model": "premium-model",
+					"max_tokens": 256,
+					"reasoning_effort": "high",
+					"route": "r1",
+				})
+			);
+		}
+
+		let (result, req) = resolve("fallback").await;
+		assert!(matches!(result, ResolveResult::Backend(_)));
+		assert_eq!(body(req).await["model"], "economy-model");
+
+		let (result, _) = resolve("closed").await;
+		let ResolveResult::DirectResponse(resp) = result else {
+			panic!("expected direct response");
+		};
+		assert_eq!(resp.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 	}
 
 	#[test]
@@ -1167,7 +1408,14 @@ mod tests {
 			router.trace_path(&req).as_deref(),
 			Some("/public/foo/v1/models")
 		);
-		let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(response) = router
+			.resolve(
+				&mut req,
+				&llm::catalog::ModelCatalog::default(),
+				&crate::test_helpers::policy_client(),
+			)
+			.await
+		else {
 			panic!("expected discovery")
 		};
 		assert_eq!(response.status(), ::http::StatusCode::OK);
@@ -1186,7 +1434,14 @@ mod tests {
 				.body(http::Body::empty())
 				.unwrap();
 			assert!(router.trace_path(&req).is_none());
-			let ResolveResult::DirectResponse(response) = router.resolve(&mut req).await else {
+			let ResolveResult::DirectResponse(response) = router
+				.resolve(
+					&mut req,
+					&llm::catalog::ModelCatalog::default(),
+					&crate::test_helpers::policy_client(),
+				)
+				.await
+			else {
 				panic!("expected rejection")
 			};
 			assert_eq!(response.status(), ::http::StatusCode::NOT_FOUND);
@@ -1213,7 +1468,14 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"weighted-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(resp) = router
+			.resolve(
+				&mut req,
+				&llm::catalog::ModelCatalog::default(),
+				&crate::test_helpers::policy_client(),
+			)
+			.await
+		else {
 			panic!("invalid weighted target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
@@ -1255,10 +1517,18 @@ mod tests {
 			.body(http::Body::from(r#"{"model":"conditional-model"}"#))
 			.expect("valid request");
 
-		let ResolveResult::DirectResponse(resp) = router.resolve(&mut req).await else {
+		let ResolveResult::DirectResponse(resp) = router
+			.resolve(
+				&mut req,
+				&llm::catalog::ModelCatalog::default(),
+				&crate::test_helpers::policy_client(),
+			)
+			.await
+		else {
 			panic!("invalid conditional target should fail");
 		};
 		assert_eq!(resp.status(), ::http::StatusCode::NOT_FOUND);
+		assert_eq!(original_model(&req), Some("conditional-model"));
 		let body = http::read_body_with_limit(resp.into_body(), 1024)
 			.await
 			.expect("error body");
@@ -1279,6 +1549,7 @@ mod tests {
 			),
 		)));
 		let model = ModelRoute {
+			discovery: None,
 			id: None,
 			name: "gpt-5-mini".to_string(),
 			created: 0,

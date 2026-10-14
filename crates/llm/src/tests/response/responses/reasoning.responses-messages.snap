@@ -94,6 +94,7 @@ info:
     "input_tokens": 18,
     "output_tokens": 5,
     "total_tokens": 23,
+    "reasoning_tokens": 8,
     "service_tier": "default",
     "provider_model": "qwen3-8b"
   }

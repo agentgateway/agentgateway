@@ -315,6 +315,20 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 			// status is reported from translator, so return normally
 			return err
 		}
+		if errors.Is(err, deployer.ErrSessionKey) {
+			// a session key Secret failure is a deployment problem, not invalid Gateway configuration
+			condition := metav1.Condition{
+				Type:               string(gwv1.GatewayConditionProgrammed),
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: gw.Generation,
+				Reason:             string(reports.GatewayReasonDeploymentFailed),
+				Message:            err.Error(),
+			}
+			if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
+				return fmt.Errorf("failed to update status for Gateway %s: %w", req, statusErr)
+			}
+			return err
+		}
 		// if we fail to either reference a valid GatewayParameters or
 		// the GatewayParameters configuration leads to issues building the
 		// objects, we want to set the status to InvalidParameters.
@@ -492,7 +506,7 @@ func updateGatewayStatusWithRetryFunc(
 		if !needsUpdate {
 			return nil
 		}
-		_, err := cli.UpdateStatus(&gwv1.Gateway{
+		err := cli.UpdateStatusNoResponse(&gwv1.Gateway{
 			ObjectMeta: pluginsdk.CloneObjectMetaForStatus(gw.ObjectMeta),
 			Status:     status,
 		})

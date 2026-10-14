@@ -52,10 +52,6 @@ impl H2Request {
 		Ok(h2)
 	}
 
-	pub fn get_request(&self) -> &Parts {
-		&self.request
-	}
-
 	pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
 		self.request.headers()
 	}

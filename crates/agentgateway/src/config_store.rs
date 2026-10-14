@@ -87,6 +87,8 @@ pub enum ConfigResourceKind {
 	TrafficTcpRoute,
 	#[serde(rename = "ui.policy")]
 	UiPolicy,
+	#[serde(rename = "frontend.policy")]
+	FrontendPolicy,
 }
 
 impl ConfigResourceKind {
@@ -114,6 +116,7 @@ impl ConfigResourceKind {
 			Self::TrafficRoute => "traffic.route",
 			Self::TrafficTcpRoute => "traffic.tcpRoute",
 			Self::UiPolicy => "ui.policy",
+			Self::FrontendPolicy => "frontend.policy",
 		}
 	}
 }
@@ -143,6 +146,7 @@ impl FromStr for ConfigResourceKind {
 			"traffic.route" => Ok(Self::TrafficRoute),
 			"traffic.tcpRoute" => Ok(Self::TrafficTcpRoute),
 			"ui.policy" => Ok(Self::UiPolicy),
+			"frontend.policy" => Ok(Self::FrontendPolicy),
 			_ => Err(ConfigResourceError::InvalidRequest(format!(
 				"unsupported config resource kind: {kind}"
 			))),
@@ -393,6 +397,7 @@ pub(crate) const MCP_SETTINGS_FIELDS: [&str; 5] = [
 const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
 const API_KEY_ID_METADATA: &str = "agentgateway.dev/id";
 const API_KEY_CREATED_AT_METADATA: &str = "agentgateway.dev/createdAt";
+const API_KEY_HINT_METADATA: &str = "agentgateway.dev/keyHint";
 
 /// Older file keys have no stored ID, so expose their array position to the resource API.
 fn file_api_key_id(value: &Value, index: usize) -> String {
@@ -440,6 +445,7 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::LlmPolicy => Some(FileResourceCollection::Map(&["llm", "policies"])),
 		ConfigResourceKind::McpPolicy => Some(FileResourceCollection::Map(&["mcp", "policies"])),
 		ConfigResourceKind::UiPolicy => Some(FileResourceCollection::Map(&["ui", "policies"])),
+		ConfigResourceKind::FrontendPolicy => Some(FileResourceCollection::Map(&["frontendPolicies"])),
 		ConfigResourceKind::TrafficGateway => Some(FileResourceCollection::Map(&["gateways"])),
 		ConfigResourceKind::TrafficRoute => Some(FileResourceCollection::List(&["routes"])),
 		ConfigResourceKind::TrafficTcpRoute => Some(FileResourceCollection::List(&["tcpRoutes"])),
@@ -503,7 +509,8 @@ pub(crate) fn upsert_file_config_resource(
 		| ConfigResourceKind::TrafficGateway
 		| ConfigResourceKind::TrafficRoute
 		| ConfigResourceKind::TrafficTcpRoute
-		| ConfigResourceKind::UiPolicy => unreachable!("direct file resources handled above"),
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => unreachable!("direct file resources handled above"),
 	}
 }
 
@@ -533,7 +540,8 @@ pub(crate) fn delete_file_config_resource(
 		| ConfigResourceKind::TrafficGateway
 		| ConfigResourceKind::TrafficRoute
 		| ConfigResourceKind::TrafficTcpRoute
-		| ConfigResourceKind::UiPolicy => unreachable!("direct file resources handled above"),
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => unreachable!("direct file resources handled above"),
 	}
 }
 
@@ -651,6 +659,7 @@ fn upsert_file_map_resource(
 				ConfigResourceKind::LlmPolicy
 					| ConfigResourceKind::McpPolicy
 					| ConfigResourceKind::UiPolicy
+					| ConfigResourceKind::FrontendPolicy
 			);
 		if !values.contains_key(previous_id) && !policy_upsert {
 			return Err(
@@ -861,7 +870,10 @@ pub(crate) fn prepare_policy_upsert(
 	validate_id(&id)?;
 	if !matches!(
 		kind,
-		ConfigResourceKind::LlmPolicy | ConfigResourceKind::McpPolicy | ConfigResourceKind::UiPolicy
+		ConfigResourceKind::LlmPolicy
+			| ConfigResourceKind::McpPolicy
+			| ConfigResourceKind::UiPolicy
+			| ConfigResourceKind::FrontendPolicy
 	) {
 		return Err(
 			ConfigResourceError::InvalidRequest(format!("{kind} is not a policy resource")).into(),
@@ -902,6 +914,7 @@ pub fn merge_model_catalog_sources(
 				// timestamped catalog rather than guessing from the resource timestamp,
 				// which may also reflect an unrelated custom-overlay edit.
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			});
 		}
 		sources.push(crate::ModelCatalogSource::InlineCatalog { inline });
@@ -987,6 +1000,9 @@ fn overlay_config_resources(
 	let has_ui_resources = resources
 		.iter()
 		.any(|resource| resource.kind == ConfigResourceKind::UiPolicy);
+	let has_frontend_resources = resources
+		.iter()
+		.any(|resource| resource.kind == ConfigResourceKind::FrontendPolicy);
 	let has_model_catalog = resources
 		.iter()
 		.any(|resource| resource.kind == ConfigResourceKind::ModelCatalog);
@@ -1013,6 +1029,7 @@ fn overlay_config_resources(
 		&& !has_mcp_resources
 		&& !has_traffic_resources
 		&& !has_ui_resources
+		&& !has_frontend_resources
 		&& !has_model_catalog
 	{
 		return Ok(());
@@ -1066,7 +1083,13 @@ fn overlay_config_resources(
 		};
 
 		append_settings(llm, resources, ConfigResourceKind::LlmSettings)?;
-		append_policy_kind(llm, resources, ConfigResourceKind::LlmPolicy, "llm")?;
+		append_policy_kind(
+			llm,
+			"policies",
+			resources,
+			ConfigResourceKind::LlmPolicy,
+			"llm.policies",
+		)?;
 		append_llm_kind(llm, resources, ConfigResourceKind::LlmProvider, "providers")?;
 		append_llm_kind(llm, resources, ConfigResourceKind::LlmModel, "models")?;
 		append_llm_kind(
@@ -1089,7 +1112,13 @@ fn overlay_config_resources(
 			.or_insert_with(|| Value::Array(Vec::new()));
 
 		append_settings(mcp, resources, ConfigResourceKind::McpSettings)?;
-		append_policy_kind(mcp, resources, ConfigResourceKind::McpPolicy, "mcp")?;
+		append_policy_kind(
+			mcp,
+			"policies",
+			resources,
+			ConfigResourceKind::McpPolicy,
+			"mcp.policies",
+		)?;
 		append_list_kind(
 			mcp,
 			resources,
@@ -1125,29 +1154,45 @@ fn overlay_config_resources(
 				.into(),
 			);
 		};
-		append_policy_kind(ui, resources, ConfigResourceKind::UiPolicy, "ui")?;
+		append_policy_kind(
+			ui,
+			"policies",
+			resources,
+			ConfigResourceKind::UiPolicy,
+			"ui.policies",
+		)?;
+	}
+	if has_frontend_resources {
+		append_policy_kind(
+			root,
+			"frontendPolicies",
+			resources,
+			ConfigResourceKind::FrontendPolicy,
+			"frontendPolicies",
+		)?;
 	}
 	Ok(())
 }
 
 fn append_policy_kind(
 	section: &mut serde_json::Map<String, Value>,
+	key: &str,
 	resources: &[ConfigResource],
 	kind: ConfigResourceKind,
-	section_name: &str,
+	path: &str,
 ) -> anyhow::Result<()> {
 	let Some(db_resources) = non_empty_resources(resources, kind) else {
 		return Ok(());
 	};
 	let policies = section
-		.entry("policies")
+		.entry(key)
 		.or_insert_with(|| Value::Object(serde_json::Map::new()));
 	if policies.is_null() {
 		*policies = Value::Object(serde_json::Map::new());
 	}
 	let policies = policies.as_object_mut().ok_or_else(|| {
 		ConfigResourceError::Conflict(format!(
-			"DB-backed {section_name} policies require {section_name}.policies to be an object in the file config"
+			"DB-backed {kind} resources require {path} to be an object in the file config"
 		))
 	})?;
 	for resource in db_resources {
@@ -1396,7 +1441,8 @@ pub(crate) fn prepare_resource(
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => {
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => {
 			return Err(
 				ConfigResourceError::InvalidRequest(format!("{kind} resources require an item ID")).into(),
 			);
@@ -1440,7 +1486,8 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 			}),
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => Err(
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => Err(
 			ConfigResourceError::InvalidRequest(format!("{kind} resources require an item ID")).into(),
 		),
 	}
@@ -1453,7 +1500,8 @@ fn validate_api_key_metadata(value: &Value) -> anyhow::Result<()> {
 		.and_then(|metadata| {
 			metadata
 				.keys()
-				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX))
+				// Key hint is not really required to be trusted so we can allow that
+				.find(|field| field.starts_with(API_KEY_METADATA_PREFIX) && *field != API_KEY_HINT_METADATA)
 		}) {
 		return Err(
 			ConfigResourceError::InvalidRequest(format!(
@@ -2301,6 +2349,7 @@ mod tests {
 			Some(crate::llm::catalog::CatalogMetadata {
 				source: None,
 				generated_at: DateTime::<Utc>::UNIX_EPOCH,
+				unknown: Default::default(),
 			})
 		);
 	}

@@ -14,6 +14,26 @@ use crate::types::agent::{
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
+#[test]
+fn merged_prompt_guards_validate_streaming_scopes() {
+	let streaming: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"streaming": "Enabled", "response": [{"regex": {"rules": []}}]
+	}))
+	.unwrap();
+	let tools: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"response": [{"regex": {"rules": []}, "scope": ["toolInput"]}]
+	}))
+	.unwrap();
+	for (shared, model) in [(streaming.clone(), tools.clone()), (tools, streaming)] {
+		let err = super::merge_prompt_guards(Some(shared), Some(model)).unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("streaming response guards only support the messages scope")
+		);
+	}
+}
+
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {
@@ -113,6 +133,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			scopes: vec![],
 			login: None,
 			logout: None,
+			credentials: Default::default(),
 		}),
 		..Default::default()
 	}
@@ -2353,7 +2374,7 @@ binds:
 	};
 	assert_eq!(
 		target_spec.backend,
-		crate::types::agent::SimpleBackendReference::Backend("shared-upstream".into())
+		crate::types::agent::SimpleBackendReference::Backend("/shared-upstream".into())
 	);
 	assert_eq!(target_spec.path, "/mcp");
 }
@@ -2386,6 +2407,93 @@ binds:
 			.contains("path is required when backend is set"),
 		"{err}"
 	);
+}
+
+// A route referencing a top-level backend by its bare name must resolve to the
+// backend's store key (`/name` for the empty local namespace), otherwise the
+// lookup at request time fails with a misleading `service not found`.
+// See https://github.com/agentgateway/agentgateway/issues/3662.
+#[tokio::test]
+async fn test_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: upstream
+    - backends:
+      - backend: /upstream
+"#,
+	)
+	.await
+	.expect("bare and qualified named backend references should normalize");
+
+	let routes = &normalized.listener_routes[0].1;
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	for route in routes {
+		let RouteBackendTarget::Backend(reference) = &route.backends[0].target else {
+			panic!("expected backend reference target");
+		};
+		// Both spellings must resolve to the exact key the backend is registered under.
+		assert_eq!(
+			reference.as_str(),
+			backend_name.as_str(),
+			"reference must match registered key"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_tcp_named_backend_reference_resolves_bare_name() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream
+  host: example.com:80
+binds:
+- port: 3000
+  protocol: AUTO
+  listeners:
+  - protocol: TCP
+    tcpRoutes:
+    - backends:
+      - backend: upstream
+"#,
+	)
+	.await
+	.expect("bare TCP named backend reference should normalize");
+
+	let backend_name = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Opaque(_, _) => Some(backend.backend.name()),
+			_ => None,
+		})
+		.expect("normalized opaque backend");
+	assert_eq!(backend_name.as_str(), "/upstream");
+
+	let tcp_route = &normalized.listener_tcp_routes[0].1[0];
+	let crate::types::agent::BackendReference::Backend(tcp_reference) =
+		&tcp_route.backends[0].backend
+	else {
+		panic!("expected TCP backend reference");
+	};
+	assert_eq!(tcp_reference.as_str(), backend_name.as_str());
 }
 
 #[test]
@@ -2566,6 +2674,16 @@ fn test_de_backend_auth_accepts_each_shape() {
 	));
 	assert!(full_key.credentials.is_empty());
 
+	let expression_key = parse(serde_json::json!({"key": {"expression": "jwt.sub"}}));
+	assert!(matches!(
+		expression_key.kind,
+		Some(super::LocalBackendAuthKind::Key {
+			value: None,
+			expression: Some(_),
+			..
+		})
+	));
+
 	let full_with_credentials = parse(serde_json::json!({
 		"key": {"value": "explicit-secret"},
 		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
@@ -2641,4 +2759,52 @@ binds:
 		.await
 		.expect("a change to the key file should notify the resource manager")
 		.expect("resource change channel should stay open");
+}
+
+/// A backend TLS file resolved by a serde hook during the parse is watched like a
+/// file the load fetched itself.
+#[tokio::test]
+async fn parse_time_backend_tls_files_become_managed_dependencies() {
+	let root = tempfile::NamedTempFile::new().unwrap();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../tests/common/testdata/root-cert.pem"),
+	)
+	.unwrap();
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let yaml = format!(
+		r#"
+frontendPolicies:
+  substrateEgressActorResolution:
+    host: 127.0.0.1:6443
+    policies:
+      backendTLS:
+        root: {}
+"#,
+		root.path().display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.unwrap();
+	let mut changes = manager.subscribe_changes();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../../../examples/mcp-tls/certs/cert.pem"),
+	)
+	.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a rotation of the root certificate is published")
+		.unwrap();
 }

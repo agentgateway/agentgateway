@@ -450,18 +450,6 @@ impl Identity {
 		}
 	}
 
-	pub fn to_strng(self: &Identity) -> Strng {
-		match self {
-			Identity::Spiffe {
-				trust_domain,
-				namespace,
-				service_account,
-			} => {
-				strng::format!("spiffe://{trust_domain}/ns/{namespace}/sa/{service_account}")
-			},
-		}
-	}
-
 	pub fn trust_domain(&self) -> Strng {
 		match self {
 			Identity::Spiffe { trust_domain, .. } => trust_domain.clone(),
@@ -471,28 +459,6 @@ impl Identity {
 
 fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 	*t == Default::default()
-}
-
-// The protocol that the sender should use to send data. Can be different from ServerProtocol when there is a
-// agentgateway in the middle (e.g. e/w gateway with double hbone).
-#[derive(
-	Default,
-	Debug,
-	Hash,
-	Eq,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	Clone,
-	Copy,
-	serde::Serialize,
-	serde::Deserialize,
-)]
-pub enum OutboundProtocol {
-	#[default]
-	TCP,
-	HBONE,
-	DOUBLEHBONE,
 }
 
 #[derive(
@@ -570,6 +536,7 @@ pub enum InboundProtocol {
 	LegacyIstioMtls,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Service {
@@ -577,8 +544,10 @@ pub struct Service {
 	pub namespace: Strng,
 	pub hostname: Strng,
 	pub vips: Vec<NetworkAddress>,
+	#[serde_as(as = "HashMap<PortKey, _>")]
 	pub ports: HashMap<u16, u16>,
 	#[serde(default)]
+	#[serde_as(as = "HashMap<PortKey, _>")]
 	pub app_protocols: HashMap<u16, AppProtocol>,
 
 	/// Maps endpoint UIDs to service [Endpoint]s.
@@ -784,6 +753,9 @@ impl From<workload::WorkloadStatus> for HealthStatus {
 	}
 }
 
+/// Port map keys accept both `8000` and `"8000"`.
+pub type PortKey = serde_with::PickFirst<(serde_with::Same, serde_with::DisplayFromStr)>;
+
 pub fn ports_from_xds(value: &PortList) -> HashMap<u16, u16> {
 	value
 		.ports
@@ -833,11 +805,6 @@ impl TryFrom<&XdsGatewayAddress> for GatewayAddress {
 }
 
 impl Workload {
-	pub fn try_from_xds(resource: XdsWorkload) -> Result<Self, ProtoError> {
-		let (w, _) = Self::try_from_xds_with_services(resource)?;
-		Ok(w)
-	}
-
 	pub fn try_from_xds_with_services(
 		resource: XdsWorkload,
 	) -> Result<(Self, HashMap<String, PortList>), ProtoError> {

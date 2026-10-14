@@ -115,7 +115,7 @@ export function ModelsPage() {
 			<div className="page-stack">
 				<PageHeader
 					title="LLM Models"
-					description="Onboard provider-backed models and configure model-specific behavior."
+					description="Configure the models callers can request and the providers that serve them."
 				/>
 				<Panel>
 					<StatusBanner state="loading" title="Detecting model configuration mode" />
@@ -181,7 +181,7 @@ function ModelsEditorPage() {
 	const activeVirtualEditing =
 		editingVirtual ??
 		(modelHash?.kind === 'add' && modelHash.type === 'virtual'
-			? { model: makeEmptyVirtualModel() }
+			? { model: makeEmptyVirtualModel(defaultVirtualTargetModel(models)) }
 			: null);
 	const editingDatabaseModel = Boolean(
 		hybrid &&
@@ -308,7 +308,7 @@ function ModelsEditorPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="LLM Models"
-				description="Onboard provider-backed models and configure model-specific behavior."
+				description="Configure the models callers can request and the providers that serve them."
 				actions={
 					<div className="button-row">
 						<button className="button" type="button" onClick={openNewVirtualModel}>
@@ -537,7 +537,7 @@ function ModelsEditorPage() {
 					onSave={saveModel}
 				/>
 			) : null}
-			{activeVirtualEditing ? (
+			{activeVirtualEditing && !isLoading ? (
 				<VirtualModelEditor
 					key={activeVirtualEditing.previousName ?? 'new'}
 					previousName={activeVirtualEditing.previousName}

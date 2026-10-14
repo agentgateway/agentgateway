@@ -166,7 +166,15 @@ fn test_path_matching() {
 		("prefix-path", PathMatch::PathPrefix("/api/".into())),
 		(
 			"regex-path",
-			PathMatch::Regex(Regex::new(r"^/api/v\d+/users$").unwrap()),
+			PathMatch::Regex(PathMatch::regex(r"/api/v\d+/users").unwrap()),
+		),
+		(
+			"regex-alternation",
+			PathMatch::Regex(PathMatch::regex(r"/alt/(Get|GetUser)").unwrap()),
+		),
+		(
+			"regex-lazy",
+			PathMatch::Regex(PathMatch::regex(r"/lazy/.*?").unwrap()),
 		),
 		("root-prefix", PathMatch::PathPrefix("/".into())),
 	];
@@ -232,6 +240,31 @@ fn test_path_matching() {
 			path: "/api/v3/users",
 			expected_route: Some("regex-path"),
 		},
+		TestCase {
+			name: "regex path must match the whole path",
+			path: "/api/v3/users/123",
+			expected_route: Some("prefix-path"),
+		},
+		TestCase {
+			name: "regex alternation matches first option",
+			path: "/alt/Get",
+			expected_route: Some("regex-alternation"),
+		},
+		TestCase {
+			name: "regex alternation matches longer option",
+			path: "/alt/GetUser",
+			expected_route: Some("regex-alternation"),
+		},
+		TestCase {
+			name: "regex alternation does not match a longer path",
+			path: "/alt/GetUserX",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "regex lazy quantifier matches the whole path",
+			path: "/lazy/abc",
+			expected_route: Some("regex-lazy"),
+		},
 		// Test root prefix fallback
 		TestCase {
 			name: "root prefix fallback",
@@ -270,6 +303,54 @@ fn test_path_matching() {
 			case.name
 		);
 	}
+}
+
+#[test]
+fn test_strip_path_prefix() {
+	use super::strip_path_prefix;
+
+	// Basic segment-aware matches
+	assert_eq!(strip_path_prefix("/foo/bar", "/foo"), Some("/bar"));
+	assert_eq!(strip_path_prefix("/foo", "/foo"), Some(""));
+	assert_eq!(strip_path_prefix("/foo/", "/foo"), Some("/"));
+
+	// Must not match partial segments
+	assert_eq!(strip_path_prefix("/foobar", "/foo"), None);
+	assert_eq!(strip_path_prefix("/foox", "/foo"), None);
+	assert_eq!(strip_path_prefix("/other", "/foo"), None);
+	assert_eq!(strip_path_prefix("/apifoo", "/api"), None);
+
+	// Root prefix matches everything
+	assert_eq!(strip_path_prefix("/anything", "/"), Some("/anything"));
+	assert_eq!(strip_path_prefix("/", "/"), Some("/"));
+	assert_eq!(strip_path_prefix("/foo/bar", "/"), Some("/foo/bar"));
+
+	// Trailing slash in prefix is ignored
+	assert_eq!(strip_path_prefix("/foo", "/foo/"), Some(""));
+	assert_eq!(strip_path_prefix("/foo/bar", "/foo/"), Some("/bar"));
+	assert_eq!(strip_path_prefix("/foo/", "/foo/"), Some("/"));
+
+	// Encoded slash (%2F) is NOT a segment boundary
+	assert_eq!(strip_path_prefix("/api%2Fv1", "/api"), None);
+
+	// Double slash is a valid segment boundary
+	assert_eq!(strip_path_prefix("/api//v1", "/api"), Some("//v1"));
+
+	// Path shorter than prefix
+	assert_eq!(strip_path_prefix("/fo", "/foo"), None);
+	assert_eq!(strip_path_prefix("", "/foo"), None);
+}
+
+#[test]
+fn test_path_regex() {
+	// An unbalanced pattern must not be able to close the anchoring group.
+	assert!(PathMatch::regex(r"/a)|(/b").is_err());
+	// Config dumps show the pattern as configured.
+	let pm = PathMatch::Regex(PathMatch::regex(r"/alt/(Get|GetUser)").unwrap());
+	assert_eq!(
+		serde_json::to_value(&pm).unwrap(),
+		serde_json::json!({"regex": "/alt/(Get|GetUser)"})
+	);
 }
 
 #[test]

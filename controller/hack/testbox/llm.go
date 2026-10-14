@@ -13,6 +13,7 @@ const llmPort = ":9234"
 func startLLMServer() (shutdownFunc, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", handleOpenAIChatCompletions)
+	mux.HandleFunc("/v1/responses", handleOpenAIResponses)
 	mux.HandleFunc("/v1/messages", handleAnthropicMessages)
 	mux.HandleFunc("/request", handleGuardrailsRequest)
 	mux.HandleFunc("/response", handleGuardrailsResponse)
@@ -58,6 +59,45 @@ func handleOpenAIChatCompletions(w http.ResponseWriter, r *http.Request) {
 			"prompt_tokens":     10,
 			"completion_tokens": 10,
 			"total_tokens":      20,
+		},
+	})
+}
+
+func handleOpenAIResponses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	prompt := readLLMPrompt(r)
+	content := "The name of this project is agentgateway"
+	if strings.Contains(strings.ToLower(prompt), "ssn") {
+		content = "123-45-6789 is an example SSN"
+	}
+
+	writeJSON(w, map[string]any{
+		"id":         "resp_testbox",
+		"object":     "response",
+		"created_at": time.Now().Unix(),
+		"status":     "completed",
+		"model":      "gpt-4o-mini",
+		"output": []map[string]any{
+			{
+				"id":     "msg_testbox",
+				"type":   "message",
+				"status": "completed",
+				"role":   "assistant",
+				"content": []map[string]any{
+					{"type": "output_text", "text": content, "annotations": []any{}},
+				},
+			},
+		},
+		"usage": map[string]any{
+			"input_tokens":          10,
+			"output_tokens":         10,
+			"total_tokens":          20,
+			"input_tokens_details":  map[string]any{"cached_tokens": 0},
+			"output_tokens_details": map[string]any{"reasoning_tokens": 0},
 		},
 	})
 }

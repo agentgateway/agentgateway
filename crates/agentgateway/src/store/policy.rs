@@ -4,7 +4,7 @@ use http::HeaderMap;
 use serde::Serialize;
 
 use crate::cel::{ContextBuilder, Expression};
-use crate::http::Response;
+use crate::http::{PolicyResponseExt, Response};
 use crate::proxy;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
@@ -47,6 +47,29 @@ pub trait RequestPolicyTrait: Send + Sync + 'static {
 	/// Policies that are also response policies MUST include the response-side expressions as well.
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		std::iter::empty()
+	}
+}
+
+/// Bridges request-only policies implemented against `agent_policy` into the gateway.
+impl<T> RequestPolicyTrait for T
+where
+	T: agent_policy::RequestPolicy<ResponseState = std::convert::Infallible>,
+{
+	async fn apply(
+		&self,
+		_client: &PolicyClient,
+		_log: &mut RequestLog,
+		req: &mut crate::http::Request,
+	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+		let ctx = agent_policy::PolicyContext::new(&crate::proxy::policy_host::GatewayCel);
+		let action = agent_policy::RequestPolicy::apply(self, ctx, req)
+			.await
+			.map_err(proxy::ProxyError::Policy)?;
+		Ok(action.response)
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		agent_policy::RequestPolicy::expressions(self)
 	}
 }
 

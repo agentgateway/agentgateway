@@ -225,7 +225,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -288,7 +288,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -366,7 +366,7 @@ async fn llm_model_router_endpoint_classification_and_trace_names(
 	let otel = oteltracemock::OtelTraceMock::new(move || TraceHandler(tx.clone()))
 		.spawn()
 		.await;
-	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
 	let serving_prefix = if http_route { "" } else { prefix };
 	let config = format!(
 		r#"
@@ -425,7 +425,7 @@ llm:
 	assert_eq!(requests.len(), 3);
 	assert_eq!(
 		&requests[0].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/chat/completions?trace=1"
+		"/v1/responses"
 	);
 	assert_eq!(
 		&requests[1].url[Position::BeforePath..Position::AfterQuery],
@@ -499,6 +499,7 @@ async fn llm_api_key_allowed_models_filters_discovery_and_requests() {
 		r#"
 llm:
   port: 0
+  discovery: disabled
   policies:
     apiKey:
       keys:
@@ -539,6 +540,83 @@ llm:
 	let body: Value = serde_json::from_slice(&read_body_raw(response.into_body()).await).unwrap();
 	assert_eq!(body["error"]["code"], "model_not_allowed");
 	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn llm_catalog_discovery() {
+	let mut results = serde_json::Map::new();
+	for (name, setting) in [
+		("default", ""),
+		("catalog", "discovery: catalog"),
+		("disabled", "discovery: disabled"),
+	] {
+		let config = format!(
+			r#"
+llm:
+  port: 0
+  {setting}
+  policies:
+    apiKey:
+      mode: strict
+      keys:
+      - key: unrestricted
+        metadata:
+          name: unrestricted
+      - key: restricted
+        metadata:
+          name: restricted
+        allowedModels: ["public/discovery-a", "discovery-*", "alias"]
+  providers:
+  - name: openai
+    provider: openAI
+    defaults:
+      transformation:
+        model: llmRequest.model.stripPrefix("public/")
+  models:
+  - name: public/discovery-*
+    provider:
+      reference: openai
+  - name: public/discovery-a
+    provider:
+      reference: openai
+  - name: discovery-*
+    provider: openAI
+  - name: hidden/*
+    visibility: internal
+    provider: openAI
+  - name: unsafe/*
+    provider: openAI
+    transformation:
+      model: request.headers["x-model"]
+  - name: unknown/*
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: http://localhost:9999/v1
+  virtualModels:
+  - name: alias
+    routing:
+      weighted:
+        targets:
+        - model: discovery-a
+"#
+		);
+		let mut t = setup_local_llm_config(&config).await;
+		Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+			agentgateway::ModelCatalogSource::Inline {
+				inline: r#"{"providers":{"openai":{"models":{"discovery-a":{},"discovery-b":{}}},"anthropic":{"models":{"discovery-other":{}}}}}"#.to_string(),
+			},
+		]).await.unwrap();
+		let io = t.serve_http(strng::literal!("bind/0"));
+		for key in ["unrestricted", "restricted"] {
+			let authorization = format!("Bearer {key}");
+			let models = list_models(io.clone(), &[("authorization", &authorization)]).await;
+			results.insert(format!("{name}/{key}"), serde_json::json!(models));
+		}
+	}
+	insta::assert_json_snapshot!(results);
 }
 
 #[tokio::test]
@@ -1138,7 +1216,7 @@ async fn llm_custom_provider_uses_upstream_route_fallback() {
 	let response_body: Value =
 		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
 	assert_eq!(response_body["object"], "chat.completion");
-	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["prompt_tokens"], 40);
 	assert_eq!(response_body["usage"]["completion_tokens"], 21);
 
 	let request = single_upstream_request(&mock).await;
@@ -1666,14 +1744,14 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 #[rstest::rstest]
 #[case::preserves_path(None, None, "/v1/messages?trace=repro")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
-#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/chat/completions?trace=repro")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]
 async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	#[case] path_override: Option<&str>,
 	#[case] path_prefix: Option<&str>,
 	#[case] expected_url: &str,
 ) {
-	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
 		AIProvider::OpenAI(openai::Provider {
@@ -1717,7 +1795,7 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 
 #[tokio::test]
 async fn llm_final_transformation_applies_after_messages_translation() {
-	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
 	let (mock, mut bind, io) = setup_llm_mock(
 		mock,
 		AIProvider::OpenAI(openai::Provider {
@@ -1732,10 +1810,10 @@ async fn llm_final_transformation_applies_after_messages_translation() {
 			"ai": {
 				"routes": { "/v1/messages": "messages" },
 				"finalTransformations": {
-					// Drop a field the converter added.
-					"reasoning_effort": r#"fail("remove")"#,
-					// Observe the converted message list.
-					"converted_message_count": "llmRequest.messages.size()"
+					// Drop the converted tools.
+					"tools": r#"fail("remove")"#,
+					// Observe the converted input list.
+					"converted_message_count": "llmRequest.input.size()"
 				}
 			}
 		}))
@@ -1767,14 +1845,14 @@ async fn llm_final_transformation_applies_after_messages_translation() {
 	let request = single_upstream_request(&mock).await;
 	let upstream_body: Value = serde_json::from_slice(&request.body).expect("upstream request JSON");
 
-	// The request really was converted to completions format.
-	assert_eq!(upstream_body["messages"][0]["role"], json!("system"));
+	// The request really was converted to Responses format.
+	assert_eq!(upstream_body["instructions"], json!("be brief"));
 	// Indexing yields Null for a missing key, so assert on key presence.
 	assert!(
-		upstream_body.get("reasoning_effort").is_none(),
-		"reasoning_effort should be removed, got: {upstream_body}"
+		upstream_body.get("tools").is_none(),
+		"tools should be removed, got: {upstream_body}"
 	);
-	assert_eq!(upstream_body["converted_message_count"], json!(2));
+	assert_eq!(upstream_body["converted_message_count"], json!(1));
 }
 
 #[rstest::rstest]

@@ -2,6 +2,7 @@ pub mod admission;
 pub mod dtrace;
 mod gateway;
 pub mod httpproxy;
+pub mod policy_host;
 pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
@@ -76,6 +77,7 @@ impl ProxyError {
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
 			| ProxyError::FilterError(_)
+			| ProxyError::Policy(_)
 			| ProxyError::StaleAssignment => ProxyResponseReason::Internal,
 			ProxyError::SubstrateIngressFailed(status, _) => substrate_ingress_reason(*status),
 			ProxyError::AIRequest(error) => classify_ai_request(error).reason,
@@ -196,6 +198,8 @@ pub enum ProxyError {
 	DnsResolution,
 	#[error("failed to apply filters: {0}")]
 	FilterError(#[from] http::filters::Error),
+	#[error("policy failed: {0}")]
+	Policy(agent_policy::BoxError),
 	#[error("backend type cannot be used in mirror")]
 	BackendUnsupportedMirror,
 	#[error("authentication failure: {0}")]
@@ -299,7 +303,7 @@ fn classify_ai_request(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::UnsupportedContent
 		| llm::AIError::UnsupportedConversion(_)
-		| llm::AIError::RequestParsing(_) => AIErrorClassification {
+		| llm::AIError::RequestParsing(..) => AIErrorClassification {
 			status: StatusCode::BAD_REQUEST,
 			reason: ProxyResponseReason::InvalidRequest,
 		},
@@ -354,7 +358,7 @@ fn classify_ai_response(error: &llm::AIError) -> AIErrorClassification {
 		| llm::AIError::StreamingUnsupported
 		| llm::AIError::UnsupportedModel
 		| llm::AIError::RequestTooLarge
-		| llm::AIError::RequestParsing(_)
+		| llm::AIError::RequestParsing(..)
 		| llm::AIError::RequestMarshal(_)
 		| llm::AIError::ResponseMarshal(_)
 		| llm::AIError::Encoding(_)
@@ -375,9 +379,8 @@ impl ProxyError {
 			_ => false,
 		}
 	}
-	pub fn into_response_with_grpc(self, is_grpc_request: bool) -> Response {
-		let msg = self.to_string();
-		let code = match self {
+	fn http_status(&self) -> StatusCode {
+		match *self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
 			ProxyError::ListenerNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
@@ -400,6 +403,7 @@ impl ProxyError {
 
 			// Should it be 4xx?
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::Policy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
 			ProxyError::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
 
@@ -417,6 +421,7 @@ impl ProxyError {
 				| http::oidc::Error::ProviderCallback(_) => StatusCode::BAD_REQUEST,
 				http::oidc::Error::SessionCookieTooLarge
 				| http::oidc::Error::TokenExchangeFailed(_)
+				| http::oidc::Error::TokenEndpointRejected(_)
 				| http::oidc::Error::MissingIdToken
 				| http::oidc::Error::InvalidIdToken(_)
 				| http::oidc::Error::Config(_)
@@ -451,26 +456,12 @@ impl ProxyError {
 			ProxyError::RequestLimitExceeded => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
-			ProxyError::RemoteRateLimitExceeded {
-				response_headers,
-				raw_body,
-				..
-			} => {
-				let mut rb = ::http::Response::builder()
-					.status(StatusCode::TOO_MANY_REQUESTS)
-					.extension(RateLimitDenied);
-				if let Some(hm) = rb.headers_mut() {
-					*hm = *response_headers;
-				}
-				return rb
-					.body(http::Body::from(raw_body))
-					.expect("static response must build");
-			},
+			ProxyError::RemoteRateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::BudgetExceeded(_) => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
-			ProxyError::GuardrailRejected { response, .. } => return response.0.map(http::Body::from),
+			ProxyError::GuardrailRejected { ref response, .. } => response.0.status(),
 
 			// Shouldn't happen on this path
 			ProxyError::UpstreamTCPCallFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -501,18 +492,43 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Stdio(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::OpenAPI(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::NoBackends) => StatusCode::SERVICE_UNAVAILABLE,
-			ProxyError::MCP(mcp::Error::UpstreamError(e)) => return e.0.map(http::Body::from),
+			ProxyError::MCP(mcp::Error::UpstreamError(ref e)) => e.0.status(),
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::Unavailable(_, _)) => StatusCode::SERVICE_UNAVAILABLE,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::McpGuardrails { .. }) => StatusCode::OK,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => StatusCode::OK,
+		}
+	}
+
+	pub fn into_response_with_grpc(self, is_grpc_request: bool) -> Response {
+		let msg = self.to_string();
+		let code = self.http_status();
+		let this = match self {
+			ProxyError::RemoteRateLimitExceeded {
+				response_headers,
+				raw_body,
+				..
+			} => {
+				let mut rb = ::http::Response::builder()
+					.status(code)
+					.extension(RateLimitDenied);
+				if let Some(hm) = rb.headers_mut() {
+					*hm = *response_headers;
+				}
+				return rb
+					.body(http::Body::from(raw_body))
+					.expect("static response must build");
+			},
+			ProxyError::GuardrailRejected { response, .. } => return response.0.map(http::Body::from),
+			ProxyError::MCP(mcp::Error::UpstreamError(e)) => return e.0.map(http::Body::from),
+			this => this,
 		};
-		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
+		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&this, code));
 		let mut rb = ::http::Response::builder().status(code);
 		if matches!(
-			&self,
+			&this,
 			ProxyError::RateLimitExceeded { .. } | ProxyError::MCP(mcp::Error::RateLimited { .. })
 		) {
 			rb = rb.extension(RateLimitDenied);
@@ -523,13 +539,13 @@ impl ProxyError {
 			limit,
 			remaining,
 			reset_seconds,
-		} = self
+		} = this
 			&& let Some(hm) = rb.headers_mut()
 		{
 			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
 			hm.insert(::http::header::RETRY_AFTER, reset_seconds.max(1).into());
 		}
-		if let ProxyError::MCP(mcp::Error::RateLimited { headers, .. }) = &self
+		if let ProxyError::MCP(mcp::Error::RateLimited { headers, .. }) = &this
 			&& let Some(hm) = rb.headers_mut()
 		{
 			hm.extend(headers.as_ref().clone());
@@ -538,7 +554,7 @@ impl ProxyError {
 		// Add an authentication challenge for basic auth failures. Requests authenticating to the
 		// gateway as a forward proxy are challenged with `Proxy-Authenticate` (paired with 407);
 		// ordinary requests use `WWW-Authenticate` (paired with 401).
-		if let ProxyError::BasicAuthenticationFailure(err) = &self {
+		if let ProxyError::BasicAuthenticationFailure(err) = &this {
 			let auth_header = format!("Basic realm=\"{}\"", err.realm());
 			let challenge = if err.is_proxy() {
 				hyper::header::PROXY_AUTHENTICATE
@@ -563,7 +579,7 @@ impl ProxyError {
 				.unwrap();
 		}
 
-		if let ProxyError::BudgetExceeded(exceeded) = &self {
+		if let ProxyError::BudgetExceeded(exceeded) = &this {
 			return rb
 				.header(hyper::header::CONTENT_TYPE, "application/json")
 				.header(hyper::header::RETRY_AFTER, exceeded.retry_after.to_string())
@@ -581,7 +597,7 @@ impl ProxyError {
 		}
 
 		// Add WWW-Authenticate header for MCP failures
-		if let ProxyError::McpJwtAuthenticationFailure(_, www) = &self {
+		if let ProxyError::McpJwtAuthenticationFailure(_, www) = &this {
 			if let Ok(hv) = HeaderValue::try_from(www) {
 				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
 			}
@@ -592,7 +608,7 @@ impl ProxyError {
 				)))
 				.unwrap();
 		}
-		if let ProxyError::MCP(e) = self
+		if let ProxyError::MCP(e) = this
 			&& let Some(body) = e.jsonrpc_error_body()
 		{
 			return rb
@@ -604,6 +620,13 @@ impl ProxyError {
 		rb.header(hyper::header::CONTENT_TYPE, "text/plain")
 			.body(http::Body::from(msg))
 			.unwrap()
+	}
+}
+
+impl From<ProxyError> for tonic::Status {
+	fn from(error: ProxyError) -> Self {
+		let code = proxy_error_to_grpc_status(&error, error.http_status());
+		tonic::Status::new(code, error.to_string())
 	}
 }
 
@@ -766,6 +789,22 @@ pub fn resolve_simple_backend_with_policies(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn grpc_status_follows_the_gateway_grpc_mapping() {
+		for (error, code) in [
+			(ProxyError::DnsResolution, Code::Unavailable),
+			(ProxyError::NoHealthyEndpoints, Code::Unavailable),
+			(ProxyError::UpstreamCallTimeout, Code::Unavailable),
+			(ProxyError::NoValidBackends, Code::Unavailable),
+			(ProxyError::AuthorizationFailed, Code::PermissionDenied),
+		] {
+			let message = error.to_string();
+			let status = tonic::Status::from(error);
+			assert_eq!(status.code(), code, "{message}");
+			assert_eq!(status.message(), message);
+		}
+	}
 
 	#[test]
 	fn substrate_ingress_reason_preserves_client_facing_statuses() {

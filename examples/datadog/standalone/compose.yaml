@@ -1,39 +1,25 @@
 name: agentgateway-datadog
 services:
-  fixture:
-    image: agentgateway-datadog-fixture:local
-    build:
-      context: ../fixture
+  homehub:
+    image: ghcr.io/solo-io/homehub-support-demo:${HOMEHUB_TAG:?Load versions.env}
+    read_only: true
     ports:
       - "127.0.0.1:18080:8080"
-    healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
-      interval: 2s
-      timeout: 2s
-      retries: 15
-  collector:
-    image: otel/opentelemetry-collector-contrib:0.146.0
-    command: [--config=/etc/otelcol/config.yaml]
-    environment:
-      OTLP_EXPORT_ENDPOINT: http://fixture:8080
-    volumes:
-      - ./collector.yaml:/etc/otelcol/config.yaml:ro
-    depends_on:
-      fixture:
-        condition: service_healthy
-  gateway:
-    image: ghcr.io/agentgateway/agentgateway:v1.5.0
-    command: [-f, /example/config.yaml]
-    environment:
-      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: http/protobuf
-    volumes:
-      - ./config.yaml:/example/config.yaml:ro
-      - ./config-content.yaml:/example/config-content.yaml:ro
+  datadog:
+    image: registry.datadoghq.com/agent:${DATADOG_AGENT_VERSION:?Load versions.env}
     ports:
-      - "127.0.0.1:13000:3000"
-      - "127.0.0.1:18520:15020"
-    depends_on:
-      fixture:
-        condition: service_healthy
-      collector:
-        condition: service_started
+      - "127.0.0.1:4318:4318"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      DD_API_KEY: ${DD_API_KEY:?Set DD_API_KEY in .env}
+      DD_SITE: ${DD_SITE:?Set DD_SITE in .env}
+      DD_HOSTNAME: agentgateway-datadog-demo
+      DD_ENV: datadog-dev
+      DD_TAGS: "env:datadog-dev service:agentgateway component:proxy"
+      DD_APM_ENABLED: "true"
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
+      DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED: "false"
+      DD_LOGS_ENABLED: "false"
+    volumes:
+      - ./openmetrics.yaml:/etc/datadog-agent/conf.d/openmetrics.d/conf.yaml:ro

@@ -298,8 +298,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			// Generate supported kinds for the listener
 			allowed, _ := GenerateSupportedKinds(l, cfg.EnableAgentgatewayModels)
 
-			// Set all listener conditions from the actual status
+			// Report the listener conditions managed by this controller.
 			for _, lcond := range lstatus.Conditions {
+				switch gwv1.ListenerConditionType(lcond.Type) {
+				case gwv1.ListenerConditionAccepted, gwv1.ListenerConditionProgrammed,
+					gwv1.ListenerConditionConflicted, gwv1.ListenerConditionResolvedRefs:
+				default:
+					continue
+				}
 				gwReporter.Listener(&l).SetCondition(reporter.ListenerCondition{
 					Type:    gwv1.ListenerConditionType(lcond.Type),
 					Status:  lcond.Status,

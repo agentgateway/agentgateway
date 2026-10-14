@@ -45,6 +45,9 @@ impl OidcPolicy {
 			self
 				.session
 				.clear_cookie(&self.session.cookie_name, self.redirect_uri.https),
+			self
+				.session
+				.clear_cookie(&self.session.refresh_cookie_name, self.redirect_uri.https),
 		];
 		// Cancel pending login attempts as well as the current session. Each attempt
 		// has its own transaction cookie under this policy's prefix; clear_cookie

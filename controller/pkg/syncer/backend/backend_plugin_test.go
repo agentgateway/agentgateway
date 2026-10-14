@@ -667,6 +667,11 @@ func TestBuildAIBackend(t *testing.T) {
 										Name: "openai",
 										Policies: &agentgateway.BackendWithAI{
 											Auth: &agentgateway.BackendAuth{InlineKey: new("first-token")},
+											Authorization: &agentgateway.Authorization{
+												Policy: agentgateway.AuthorizationPolicy{
+													MatchExpressions: []agentgateway.CELExpression{`request.headers["x-tenant"] == "acme"`},
+												},
+											},
 										},
 										OpenAI: &agentgateway.OpenAIConfig{
 											Model: new("gpt-4"),

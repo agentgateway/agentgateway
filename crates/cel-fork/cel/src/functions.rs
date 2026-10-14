@@ -71,9 +71,6 @@ impl<'a, 'vars: 'a, 'rf> FunctionContext<'vars, 'rf> {
 			other => other,
 		}
 	}
-	pub fn this_value(&self) -> Result<Value<'a>> {
-		self.this::<Value>().map(|v| v.always_materialize_owned())
-	}
 	pub fn this_or_arg_value(&self) -> Result<Value<'a>> {
 		self
 			.this_or_arg::<Value>()

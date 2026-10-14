@@ -1,4 +1,8 @@
-import type { LocalMcpAuthentication, McpGuardrails } from '@/gateway-config';
+import type {
+	LocalFrontendPolicies,
+	LocalMcpAuthentication,
+	McpGuardrails
+} from '@/gateway-config';
 import type {
 	ExtAuthzPolicy,
 	ExtProcPolicy,
@@ -13,7 +17,8 @@ import type {
 	TransformPolicy
 } from '@/types';
 
-export type PolicyKey = (keyof LlmPolicy | keyof TrafficRoutePolicy) & string;
+export type PolicyKey = (keyof LlmPolicy | keyof TrafficRoutePolicy | keyof LocalFrontendPolicies) &
+	string;
 
 export type JwtPolicy = GeneratedJwtPolicy;
 export type LocalRateLimitConfig = LocalRateLimitPolicy;

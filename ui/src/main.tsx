@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
+import {
+	createRootRoute,
+	createRoute,
+	createRouter,
+	RouterProvider,
+	redirect
+} from '@tanstack/react-router';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -21,7 +27,9 @@ import { ModelsPage } from '@/pages/Models';
 import { PlaygroundPage } from '@/pages/Playground';
 import { McpPoliciesPage, PoliciesPage } from '@/pages/Policies';
 import { ProvidersPage } from '@/pages/Providers';
-import { RawSettingsPage } from '@/pages/RawSettings';
+import { ObservabilitySettingsPage } from '@/pages/settings/ObservabilitySettings';
+import { SettingsLayout, settingsTabs } from '@/pages/settings/Settings';
+import { UiSettingsPage } from '@/pages/settings/UiSettings';
 import { TrafficGatewaysPage } from '@/pages/TrafficGateways';
 import { TrafficListenersPage } from '@/pages/TrafficListeners';
 import { TrafficRoutesPage } from '@/pages/TrafficRoutes';
@@ -191,10 +199,30 @@ const rawConfigRoute = createRoute({
 	component: RawConfigRoute
 });
 
-const rawSettingsRoute = createRoute({
+const settingsRoute = createRoute({
 	getParentRoute: () => appRoute,
 	path: '/settings',
-	component: RawSettingsPage
+	component: SettingsLayout
+});
+
+const settingsIndexRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: '/',
+	beforeLoad: () => {
+		throw redirect({ to: settingsTabs[0].to, replace: true });
+	}
+});
+
+const uiSettingsRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: '/ui',
+	component: UiSettingsPage
+});
+
+const observabilitySettingsRoute = createRoute({
+	getParentRoute: () => settingsRoute,
+	path: '/observability',
+	component: ObservabilitySettingsPage
 });
 
 function RawConfigRoute() {
@@ -238,7 +266,7 @@ const router = createRouter({
 			trafficListenersRoute,
 			trafficRoutesRoute,
 			celRoute,
-			rawSettingsRoute,
+			settingsRoute.addChildren([settingsIndexRoute, uiSettingsRoute, observabilitySettingsRoute]),
 			rawConfigRoute
 		])
 	])

@@ -15,6 +15,8 @@
 |`request.bodyPrefix`|string|The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
+|`request.agent`|object|The agent harness that sent the request.|
+|`request.agent.session`|string|The agent session the request belongs to, from `standardAttributes.session` or detected from<br>well-known agent headers such as `x-claude-code-session-id`.|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
@@ -70,7 +72,7 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
 |`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
-|`llm.serviceTier`|string|The service tier the provider served the request under.|
+|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `null`.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
@@ -160,9 +162,11 @@
 |`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
 |`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
 |`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
+|`mcp.params`|any|Current request parameters, with the same structure as the `params` object in an MCP request.<br>Available only during request-phase CEL guardrails.|
+|`mcp.result`|any|Current response result, with the same structure as the `result` object in an MCP response.<br>Available only during response-phase CEL guardrails.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
-|`backend.endpoint`|string|The selected backend call target, including the port for network endpoints. This is available<br>once the target has been resolved.|
+|`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
@@ -174,7 +178,7 @@
 |`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
 |`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
 |`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
-|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
+|`guardrails[].action`|enum|The action the guardrail took.<br>Possible values: `allow`, `failOpen`, `audit`, `mask`, `reject`.|
 |`guardrails[].guardrailId`|string|The configured guardrail identifier.|
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|

@@ -4,6 +4,38 @@ use http_body_util::BodyExt;
 
 use crate::Body;
 
+#[tokio::test(start_paused = true)]
+async fn body_reads_use_remaining_request_budget_when_present() {
+	use std::time::Duration;
+
+	use tokio::time::{Instant, advance};
+
+	let start = Instant::now();
+	let mut body = Body::from_stream(futures_util::stream::pending::<
+		Result<Bytes, std::convert::Infallible>,
+	>());
+	body.set_deadline(start + Duration::from_secs(5));
+	advance(Duration::from_secs(3)).await;
+	assert!(body.into_bytes(100).await.is_err());
+	assert_eq!(Instant::now() - start, Duration::from_secs(5));
+
+	let body = Body::from_stream(futures_util::stream::once(async {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		Ok::<_, std::convert::Infallible>(Bytes::from_static(b"ok"))
+	}));
+	assert_eq!(body.into_bytes(100).await.unwrap(), "ok");
+}
+
+#[tokio::test(start_paused = true)]
+async fn inspection_deadline_leaves_a_failed_body() {
+	let mut body = Body::from_stream(futures_util::stream::pending::<
+		Result<Bytes, std::convert::Infallible>,
+	>());
+	body.set_deadline(tokio::time::Instant::now() + std::time::Duration::from_secs(1));
+	assert!(body.inspect(100).await.is_err());
+	assert!(body.into_bytes(100).await.is_err());
+}
+
 #[tokio::test]
 async fn content_cache_follows_content_and_invalidates_on_replacement() {
 	#[derive(Clone)]

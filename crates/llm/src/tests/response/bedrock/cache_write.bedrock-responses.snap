@@ -39,7 +39,7 @@ info:
     ],
     "model": "input-model",
     "usage": {
-      "input_tokens": 16,
+      "input_tokens": 2403,
       "output_tokens": 9,
       "input_tokens_details": {
         "cached_tokens": 0,

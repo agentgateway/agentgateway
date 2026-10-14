@@ -175,6 +175,11 @@ pub enum RouteType {
 	GeminiCountTokens,
 	/// Cohere /v2/rerank (document reranking)
 	Rerank,
+	/// OpenAI /v1/decisions
+	Decisions,
+	/// TypeSafe /v1/systemone. Only used upstream, for translated decisions requests.
+	#[serde(skip)]
+	SystemOne,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
@@ -188,6 +193,7 @@ pub enum InputFormat {
 	CountTokens,
 	Detect,
 	Rerank,
+	Decisions,
 	/// Native Gemini generateContent body
 	Gemini,
 	/// Native Gemini countTokens body
@@ -210,6 +216,7 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Decisions => false,
 			InputFormat::Gemini => true,
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
@@ -269,6 +276,7 @@ pub enum ProviderState {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
+	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
@@ -516,7 +524,7 @@ impl Default for StreamingUsageGuard {
 }
 
 pub use types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
+	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseText, ResponseType,
 	SimpleChatCompletionMessage, ToolCall,
 };
 
@@ -557,8 +565,8 @@ pub enum AIError {
 	ResponseTooLarge,
 	#[error("prompt guard failed")]
 	PromptWebhookError,
-	#[error("failed to parse request: {0}")]
-	RequestParsing(serde_json::Error),
+	#[error("failed to parse {0:?} request: {1}")]
+	RequestParsing(InputFormat, serde_json::Error),
 	#[error("failed to marshal request: {0}")]
 	RequestMarshal(serde_json::Error),
 	#[error("failed to parse response: {0}")]

@@ -488,10 +488,7 @@ export function PlaygroundPage() {
 
 	return (
 		<div className="page-stack">
-			<PageHeader
-				title="LLM Playground"
-				description="Send a real chat completion request through the configured gateway for setup debugging."
-			/>
+			<PageHeader title="LLM Playground" description="Send test requests through the gateway." />
 			{configDataLoading ? (
 				<StatusBanner state="loading" title="Loading LLM configuration" />
 			) : configDataError ? (
@@ -587,17 +584,21 @@ export function PlaygroundPage() {
 									label="Specific model"
 									hint="Model uses a wildcard; specify the specific model."
 								>
-									<div className="target-resolved-composite">
-										{wildcardPrefix ? (
-											<span className="target-prefix">{wildcardPrefix}</span>
-										) : null}
-										<CatalogModelSelector
-											ariaLabel="Specific model"
-											value={specificModelSuffix}
-											provider={selectedCatalogProvider}
-											onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
-										/>
-									</div>
+									{(id, hintId) => (
+										<div className="target-resolved-composite">
+											{wildcardPrefix ? (
+												<span className="target-prefix">{wildcardPrefix}</span>
+											) : null}
+											<CatalogModelSelector
+												id={id}
+												ariaLabel="Specific model"
+												aria-describedby={hintId}
+												value={specificModelSuffix}
+												provider={selectedCatalogProvider}
+												onChange={value => setSpecificModel(`${wildcardPrefix}${value}`)}
+											/>
+										</div>
+									)}
 								</Field>
 							) : (
 								<div aria-hidden="true" />

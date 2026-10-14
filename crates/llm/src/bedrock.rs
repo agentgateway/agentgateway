@@ -66,9 +66,12 @@ impl Provider {
 	) -> BedrockEndpoint {
 		use super::RouteType as RT;
 		match route_type {
-			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => {
-				BedrockEndpoint::Runtime
-			},
+			RT::Embeddings
+			| RT::GeminiCountTokens
+			| RT::Rerank
+			| RT::Decisions
+			| RT::SystemOne
+			| RT::Realtime => BedrockEndpoint::Runtime,
 			RT::Models => BedrockEndpoint::Mantle,
 			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
 			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse /
@@ -92,6 +95,12 @@ impl Provider {
 		match self.endpoint_preference {
 			RuntimeOnly => Runtime,
 			MantleOnly => Mantle,
+			// Inline guardrails require Runtime, even when the model only advertises Mantle.
+			RuntimePreferred
+				if self.guardrail_identifier.is_some() || self.guardrail_version.is_some() =>
+			{
+				Runtime
+			},
 			// Prefer Runtime; use Mantle only for models tagged Mantle but not Runtime.
 			RuntimePreferred if has(tags::MANTLE) && !has(tags::RUNTIME) => Mantle,
 			RuntimePreferred => Runtime,
@@ -244,7 +253,7 @@ mod tests {
 	#[test]
 	fn resolve_endpoint_runtime_preferred_uses_catalog_tags() {
 		use crate::model_catalog::{TestCatalog, tags};
-		let p = provider(BedrockEndpointPreference::RuntimePreferred);
+		let mut p = provider(BedrockEndpointPreference::RuntimePreferred);
 		let cat = TestCatalog::new([("openai.gpt-oss-120b", &[tags::MANTLE][..])]);
 		let catalog: crate::model_catalog::Catalog = Some(&cat);
 		assert_eq!(
@@ -257,6 +266,12 @@ mod tests {
 				Some("anthropic.claude-3-5-sonnet-20241022-v2:0"),
 				catalog
 			),
+			BedrockEndpoint::Runtime
+		);
+		p.guardrail_identifier = Some(strng::new("test-guardrail"));
+		p.guardrail_version = Some(strng::new("1"));
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("openai.gpt-oss-120b"), catalog),
 			BedrockEndpoint::Runtime
 		);
 	}
@@ -460,6 +475,8 @@ mod tests {
 			Embeddings,
 			Realtime,
 			Rerank,
+			Decisions,
+			SystemOne,
 			GeminiCountTokens,
 			GenerateContent,
 			Detect,
@@ -470,8 +487,8 @@ mod tests {
 				Completions | Messages | Responses | AnthropicTokenCount | Models => {
 					BedrockEndpoint::Mantle
 				},
-				Embeddings | Realtime | Rerank | GeminiCountTokens | GenerateContent | Detect
-				| Passthrough => BedrockEndpoint::Runtime,
+				Embeddings | Realtime | Rerank | Decisions | SystemOne | GeminiCountTokens
+				| GenerateContent | Detect | Passthrough => BedrockEndpoint::Runtime,
 			};
 			assert_eq!(
 				mantle.resolve_endpoint(rt, Some("m"), None),

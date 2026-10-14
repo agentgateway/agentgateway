@@ -1623,6 +1623,17 @@ func (this *BackendPolicySpec_McpGuardrails_Remote) UnmarshalJSON(b []byte) erro
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpGuardrails_Expression
+func (this *BackendPolicySpec_McpGuardrails_Expression) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpGuardrails_Expression
+func (this *BackendPolicySpec_McpGuardrails_Expression) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_McpGuardrails_Processor
 func (this *BackendPolicySpec_McpGuardrails_Processor) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -2126,6 +2137,17 @@ func (this *ModelRoute_VirtualModel_Failover) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for ModelRoute_VirtualModel_Failover
 func (this *ModelRoute_VirtualModel_Failover) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for ModelRoute_VirtualModel_Callout
+func (this *ModelRoute_VirtualModel_Callout) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for ModelRoute_VirtualModel_Callout
+func (this *ModelRoute_VirtualModel_Callout) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

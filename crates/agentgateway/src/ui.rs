@@ -88,8 +88,7 @@ pub fn router(
 		resource_manager,
 		model_catalog,
 	};
-	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
-	Router::new()
+	let router = Router::new()
 		// OIDC intercepts this path to start login; without OIDC, return to the UI.
 		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
 		.route("/api/runtime", get(get_runtime))
@@ -113,9 +112,16 @@ pub fn router(
 		.route("/api/logs/analytics/summary", post(analytics_summary))
 		.route("/api/costs/models", get(cost_models))
 		.route("/api/costs/refresh-base", post(refresh_base_costs))
-		.route("/api/budgets/status", get(budget_status))
-		.nest_service("/ui", ui_service)
-		.route("/", get(|| async { Redirect::permanent("/ui") }))
+		.route("/api/budgets/status", get(budget_status));
+	let router = if assets_dir.entries().is_empty() {
+		router.route("/", get(crate::management::admin::handle_dashboard))
+	} else {
+		let ui_service = tower::service_fn(move |req| serve_ui_asset(req, assets_dir));
+		router
+			.nest_service("/ui", ui_service)
+			.route("/", get(|| async { Redirect::permanent("/ui") }))
+	};
+	router
 		.layer(axum::middleware::from_fn_with_state(
 			app.clone(),
 			authorize_route,
@@ -192,6 +198,15 @@ struct RuntimeInfo {
 	user: Option<RuntimeUser>,
 	build: RuntimeBuildInfo,
 	ui: RuntimeUiInfo,
+	config_reload: RuntimeConfigReloadInfo,
+}
+
+/// Standalone config reload outcome, mirroring the `config_synchronized` metric.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeConfigReloadInfo {
+	synchronized: bool,
+	last_error: Option<String>,
 }
 
 /// Display-only identity from standardAttributes.user, with optional JWT profile details.
@@ -354,6 +369,13 @@ async fn get_runtime(State(app): State<App>, req: axum::extract::Request) -> imp
 				},
 				config_store_mode: app.state.storage.mode,
 			},
+			config_reload: {
+				let last_error = app.state.config_reload_status.last_error();
+				RuntimeConfigReloadInfo {
+					synchronized: last_error.is_none(),
+					last_error,
+				}
+			},
 		}),
 	)
 }
@@ -468,10 +490,12 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 	let yaml_file_content = {
 		let mut document =
 			yaml_serde_edit::YamlObject::<Value>::parse(&current).map_err(anyhow::Error::from)?;
-		document
-			.set(config_json.clone())
-			.map_err(anyhow::Error::from)?;
-		let content = document.get_string();
+		// Attempt to edit it in place, or fallback to complete replacement
+		let content = match document.set(config_json.clone()) {
+			Ok(()) => document.get_string().to_owned(),
+			Err(yaml_serde_edit::Error::RoundTrip) => yaml::to_string(config_json)?,
+			Err(e) => return Err(anyhow::Error::from(e).into()),
+		};
 		if content
 			.lines()
 			.any(|line| line.trim_start().starts_with("# yaml-language-server:"))
@@ -638,7 +662,10 @@ async fn update_config_resource(
 	let store = app.config_resource_store()?;
 	let is_policy = matches!(
 		kind,
-		ConfigResourceKind::LlmPolicy | ConfigResourceKind::McpPolicy | ConfigResourceKind::UiPolicy
+		ConfigResourceKind::LlmPolicy
+			| ConfigResourceKind::McpPolicy
+			| ConfigResourceKind::UiPolicy
+			| ConfigResourceKind::FrontendPolicy
 	);
 	with_generation_retry(None, || async {
 		let snapshot = store.snapshot(None).await.map_err(resource_api_error)?;
@@ -698,7 +725,8 @@ async fn update_file_config_resource(
 		.map_err(resource_api_error)?,
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => {
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => {
 			crate::config_store::prepare_policy_upsert(kind, id.to_string(), value)
 				.map_err(resource_api_error)?
 		},
@@ -737,7 +765,8 @@ fn prepare_stored_update(
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
-		| ConfigResourceKind::UiPolicy => {
+		| ConfigResourceKind::UiPolicy
+		| ConfigResourceKind::FrontendPolicy => {
 			crate::config_store::prepare_policy_upsert(kind, id.to_string(), value)
 				.map_err(resource_api_error)
 		},
@@ -1322,6 +1351,37 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn cel_playground_sample_context_evaluates() {
+		let data: Value =
+			serde_json::from_str(include_str!("../../../ui/src/pages/celSampleContext.json")).unwrap();
+		let resp = handle_cel(Json(CelRequest {
+			expression: "1 + 2".to_string(),
+			data: Some(data),
+		}))
+		.await;
+		let status = resp.status();
+		let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+			.await
+			.unwrap();
+		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+		let body: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(body, serde_json::json!({"result": 3, "error": null}));
+	}
+
+	#[tokio::test]
+	async fn effective_config_reports_the_on_disk_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let on_disk = "binds:\n- port: 7070\n  listeners: []\n";
+		fs_err::write(&path, on_disk).unwrap();
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path));
+
+		let Json(value) = get_effective_config(State(app)).await.unwrap();
+		assert_eq!(value, yaml::from_str::<Value>(on_disk).unwrap());
+	}
+
+	#[tokio::test]
 	async fn config_writes_preserve_yaml_comments_and_validate_before_writing() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("config.yaml");
@@ -1393,6 +1453,7 @@ mod tests {
 				crate::config::standard_attributes(Some(&crate::RawStandardAttributes {
 					user: expression.map(str::to_owned),
 					group: None,
+					session: None,
 				}))
 				.unwrap(),
 			));

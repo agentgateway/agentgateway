@@ -29,9 +29,9 @@ info:
     "model": "claude-opus-4-6",
     "service_tier": "standard",
     "usage": {
-      "prompt_tokens": 47,
+      "prompt_tokens": 50,
       "completion_tokens": 251,
-      "total_tokens": 298,
+      "total_tokens": 301,
       "prompt_tokens_details": {
         "cached_tokens": 2,
         "cache_write_tokens": 1

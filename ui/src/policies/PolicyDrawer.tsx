@@ -3,8 +3,9 @@ import { useRef, useState } from 'react';
 
 import { ConfigDiffSaveActions, ConfigSaveButton } from '@/components/ConfigDiffDrawer';
 import { ConfirmDialog, Drawer, StatusBanner, Tooltip } from '@/components/Primitives';
-import type { BackendAuth } from '@/gateway-config';
+import type { BackendAuth, LoggingPolicy, TracingConfig } from '@/gateway-config';
 import { takeHybridFileWriteOverride } from '@/hooks';
+import { AccessLogPolicyEditor } from '@/policies/AccessLogPolicyEditor';
 import { AuthorizationPolicyEditor } from '@/policies/AuthorizationPolicyEditor';
 import { BackendAuthPolicyEditor } from '@/policies/backendAuth';
 import { CorsPolicyEditor } from '@/policies/CorsPolicyEditor';
@@ -18,6 +19,7 @@ import { McpGuardrailsPolicyEditor } from '@/policies/McpGuardrailsPolicyEditor'
 import { OidcPolicyEditor } from '@/policies/OidcPolicyEditor';
 import { policyEnabled } from '@/policies/policyUtils';
 import { RemoteRateLimitPolicyEditor } from '@/policies/RemoteRateLimitPolicyEditor';
+import { TracingPolicyEditor } from '@/policies/TracingPolicyEditor';
 import { TransformationsPolicyEditor } from '@/policies/TransformationsPolicyEditor';
 import type {
 	AuthorizationDraft,
@@ -35,6 +37,7 @@ import type { SchemaHelp } from '@/schemaHelp';
 import type { CorsPolicy, GatewayConfig } from '@/types';
 
 export type PolicyEditorKind =
+	| 'accessLog'
 	| 'authorization'
 	| 'backendAuth'
 	| 'cors'
@@ -47,6 +50,7 @@ export type PolicyEditorKind =
 	| 'mcpGuardrails'
 	| 'oidc'
 	| 'remoteRateLimit'
+	| 'tracing'
 	| 'transformations';
 
 export function PolicyDrawer(props: {
@@ -205,7 +209,15 @@ export function PolicyEditorBody(props: {
 	return (
 		<div className="policy-custom-editor">
 			{description ? <p className="policy-schema-description">{description}</p> : null}
-			{props.customEditor === 'authorization' ? (
+			{props.customEditor === 'accessLog' ? (
+				<AccessLogPolicyEditor
+					formId={props.formId}
+					accessLog={props.policyValue as LoggingPolicy | null | undefined}
+					help={props.help}
+					saving={props.saving}
+					onSave={props.onSave}
+				/>
+			) : props.customEditor === 'authorization' ? (
 				<AuthorizationPolicyEditor
 					formId={props.formId}
 					authorization={props.policyValue as AuthorizationDraft | null | undefined}
@@ -297,6 +309,14 @@ export function PolicyEditorBody(props: {
 				<RemoteRateLimitPolicyEditor
 					formId={props.formId}
 					remoteRateLimit={props.policyValue as RemoteRateLimitDraft | null | undefined}
+					help={props.help}
+					saving={props.saving}
+					onSave={props.onSave}
+				/>
+			) : props.customEditor === 'tracing' ? (
+				<TracingPolicyEditor
+					formId={props.formId}
+					tracing={props.policyValue as TracingConfig | null | undefined}
 					help={props.help}
 					saving={props.saving}
 					onSave={props.onSave}

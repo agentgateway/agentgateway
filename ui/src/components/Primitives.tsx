@@ -11,11 +11,12 @@ import {
 } from 'lucide-react';
 import type {
 	CSSProperties,
+	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
 	ReactNode
 } from 'react';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { cloneElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 const drawerStack: symbol[] = [];
 
@@ -71,6 +72,7 @@ export function Dropdown(props: {
 		searchText?: string;
 	}>;
 	onChange: (value: string) => void;
+	id?: string;
 	ariaLabel: string;
 	placeholder?: ReactNode;
 	searchable?: boolean;
@@ -84,7 +86,7 @@ export function Dropdown(props: {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
-	const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
+	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 	const typeaheadRef = useRef('');
 	const typeaheadTimerRef = useRef<number | null>(null);
 	const selected =
@@ -249,6 +251,7 @@ export function Dropdown(props: {
 				type="button"
 				role="combobox"
 				ref={triggerRef}
+				id={props.id}
 				aria-haspopup="listbox"
 				aria-expanded={open}
 				aria-controls={`${id}-listbox`}
@@ -288,8 +291,8 @@ export function Dropdown(props: {
 						/>
 					) : null}
 					{filteredOptions.map((option, index) => (
-						// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<div
+						<button
+							type="button"
 							className={[
 								'custom-select-option',
 								index === activeIndex ? 'active' : null,
@@ -310,7 +313,7 @@ export function Dropdown(props: {
 							onClick={() => selectOption(option)}
 						>
 							<DropdownOptionContent option={option} showDescription />
-						</div>
+						</button>
 					))}
 					{filteredOptions.length === 0 ? (
 						<div className="custom-select-empty">No matches</div>
@@ -686,7 +689,7 @@ export function ConfirmDialog(props: {
 	title: string;
 	children?: ReactNode;
 	confirmLabel?: ReactNode;
-	cancelLabel?: ReactNode;
+	cancelLabel?: ReactNode | null;
 	destructive?: boolean;
 	confirmDisabled?: boolean;
 	onCancel: () => void;
@@ -750,9 +753,11 @@ export function ConfirmDialog(props: {
 				</div>
 				{props.children ? <div className="confirm-dialog-body">{props.children}</div> : null}
 				<div className="confirm-dialog-footer">
-					<button className="button" type="button" onClick={props.onCancel}>
-						{props.cancelLabel ?? 'Cancel'}
-					</button>
+					{props.cancelLabel === null ? null : (
+						<button className="button" type="button" onClick={props.onCancel}>
+							{props.cancelLabel ?? 'Cancel'}
+						</button>
+					)}
 					<button
 						className={props.destructive ? 'button danger' : 'button primary'}
 						type="button"
@@ -807,28 +812,45 @@ export function EmptyState(props: { title: string; description: string; action?:
 
 export function Field(props: {
 	label: string;
-	children: ReactNode;
+	children:
+		| ReactElement<{ id?: string; 'aria-describedby'?: string }>
+		| ((id: string, hintId?: string) => ReactNode);
 	hint?: string;
 	className?: string;
 	tooltip?: string;
 }) {
-	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<label className={props.className ? `field ${props.className}` : 'field'}>
+	const generatedId = useId();
+	const hintId = useId();
+	const describedBy = props.hint ? hintId : undefined;
+	const id =
+		typeof props.children === 'function' ? generatedId : (props.children.props.id ?? generatedId);
+	const className = props.className ? `field ${props.className}` : 'field';
+	const control = (
+		<div className={props.tooltip ? 'field field-control' : className}>
 			<span className="field-label">
-				{props.label}
-				{props.tooltip ? (
-					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
-							<HelpCircle size={13} aria-hidden="true" />
-						</span>
-					</Tooltip>
-				) : null}
+				<label htmlFor={id}>{props.label}</label>
 			</span>
-			{props.children}
-			{props.hint ? <small>{props.hint}</small> : null}
-		</label>
+			{typeof props.children === 'function'
+				? props.children(id, describedBy)
+				: cloneElement(props.children, {
+						id,
+						'aria-describedby':
+							[props.children.props['aria-describedby'], describedBy].filter(Boolean).join(' ') ||
+							undefined
+					})}
+			{props.hint ? <small id={hintId}>{props.hint}</small> : null}
+		</div>
+	);
+	if (!props.tooltip) return control;
+	return (
+		<div className={`${className} field-with-help`}>
+			<Tooltip content={props.tooltip} side="right">
+				<button className="help-icon" type="button" aria-label={props.tooltip}>
+					<HelpCircle size={13} aria-hidden="true" />
+				</button>
+			</Tooltip>
+			{control}
+		</div>
 	);
 }
 
@@ -845,10 +867,9 @@ export function FieldGroup(props: {
 				{props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
+						<button className="help-icon" type="button" aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
-						</span>
+						</button>
 					</Tooltip>
 				) : null}
 			</span>

@@ -18,7 +18,6 @@ import {
 	cloneConfig,
 	configWarnings,
 	enableTrafficConfig,
-	ensureLlmFrontendDefaults,
 	startupLlmConfig,
 	startupMcpConfig
 } from '@/config';
@@ -266,7 +265,6 @@ export function useEnableSurface() {
 			function apply(next: GatewayConfig) {
 				if (surface === 'llm') {
 					next.llm ??= startupLlmConfig(next, gateway);
-					ensureLlmFrontendDefaults(next);
 				} else if (surface === 'mcp') {
 					next.mcp ??= startupMcpConfig(next, gateway);
 				} else {

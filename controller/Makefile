@@ -136,8 +136,10 @@ analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options wit
 .PHONY: ensure-custom-golangci-lint
 ensure-custom-golangci-lint:
 	@expected_go_version="$$(go env GOVERSION)"; \
+	expected_golangci_version="$$(sed -n 's/^version: *//p' .custom-gcl.yml)"; \
 	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[^[:space:]]*\).*/\1/p' )"; \
-	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
+	current_golangci_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* version \(v[0-9][0-9.]*\)-custom.*/\1/p' )"; \
+	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ] || [ "$$current_golangci_version" != "$$expected_golangci_version" ]; then \
 		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
 		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \
 		GOTOOLCHAIN="$$expected_go_version" golangci-lint custom; \
@@ -600,7 +602,7 @@ INSTALL_NAMESPACE ?= agentgateway-system
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
 # This version should stay in sync with the default node version in (controller)`test/setup/setup-kind-ci.sh`.
-CLUSTER_NODE_VERSION ?= v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+CLUSTER_NODE_VERSION ?= v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 
 .PHONY: kind-create
 kind-create: ## Create a KinD cluster

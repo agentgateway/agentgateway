@@ -387,6 +387,12 @@ const (
 
 	// ProviderFormatRerank is the Cohere-compatible rerank API.
 	ProviderFormatRerank ProviderFormat = "Rerank"
+
+	// ProviderFormatDecisions is the OpenAI decisions API.
+	ProviderFormatDecisions ProviderFormat = "Decisions"
+
+	// ProviderFormatSystemOne is the TypeSafe SystemOne API.
+	ProviderFormatSystemOne ProviderFormat = "SystemOne"
 )
 
 // Settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
@@ -549,6 +555,7 @@ type AnthropicConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.guardrail) || !has(self.endpointPreference) || !(self.endpointPreference in ['MantlePreferred', 'MantleOnly'])",message="Bedrock guardrails cannot be used with MantlePreferred or MantleOnly"
 type BedrockSettings struct {
 	// AWS region to use for the backend.
 	// Defaults to `us-east-1` if not specified.
@@ -618,6 +625,7 @@ type MCPBackend struct {
 	// +listMapKey=name
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=128
+	// +kubebuilder:validation:XValidation:rule="self.size() > 1 || self.all(t, !has(t.condition) || has(t.selector))",message="mcp target condition requires at least two targets unless the target uses selector"
 	// +required
 	Targets []McpTargetSelector `json:"targets"`
 
@@ -674,6 +682,9 @@ type McpTargetSelector struct {
 	Name gwv1.SectionName `json:"name"`
 
 	// Label selector used to select `Service` resources.
+	// Selected `Service` ports must set `appProtocol: agentgateway.dev/mcp` for
+	// streamable HTTP or `appProtocol: agentgateway.dev/mcp-sse` for SSE. Ports
+	// without a recognized MCP `appProtocol` value are ignored.
 	// If policies are needed on a per-service basis, `AgentgatewayPolicy` can
 	// target the desired `Service`.
 	// +optional
@@ -684,6 +695,12 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// CEL expression evaluated per request; when it evaluates to false, the
+	// target is excluded from the virtual MCP. `mcp.target.name` is available.
+	// With `selector`, the condition applies to each selected target.
+	// +optional
+	Condition *CELExpression `json:"condition,omitempty"`
 }
 
 const (

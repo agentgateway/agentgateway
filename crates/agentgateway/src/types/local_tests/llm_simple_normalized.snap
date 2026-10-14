@@ -281,6 +281,8 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 403
+                scope:
+                  - messages
           promptCaching:
             cacheSystem: true
             cacheMessages: true
@@ -423,6 +425,7 @@ backends:
         name: "llm:router"
         namespace: ""
         target:
+          discovery: catalog
           models:
             - name: llama-3.1-8b-instant
               created: 0

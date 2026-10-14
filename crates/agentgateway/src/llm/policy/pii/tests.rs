@@ -34,12 +34,12 @@ fn test_email_recognizer() {
 	let recognizer = EmailRecognizer::new();
 
 	// Test valid email addresses
-	let text = "Contact us at test@example.com or support@domain.org";
+	let text = "Contact us at test@example.com or support@mail.domain.org.";
 	let results = recognizer.recognize(text);
 
 	assert_eq!(results.len(), 2);
 	assert_eq!(results[0].matched, "test@example.com");
-	assert_eq!(results[1].matched, "support@domain.org");
+	assert_eq!(results[1].matched, "support@mail.domain.org");
 	assert!(results[0].score > 0.0);
 	assert!(results[1].score > 0.0);
 }
@@ -49,21 +49,20 @@ fn test_phone_recognizer() {
 	let recognizer = PhoneRecognizer::new();
 
 	// Test various phone number formats
-	let text = "Call us at (123) 456-7890 or +1-800-555-1234 or 555.123.4567";
+	let text = "Call us at (123) 456-7890 or +1-800-555-1234 or 555.123.4567 end.";
 	let results = recognizer.recognize(text);
 
-	assert!(results.len() >= 3);
-	// Check that we found phone numbers
-	let matched_numbers: Vec<&str> = results.iter().map(|r| r.matched.as_str()).collect();
-	assert!(
-		matched_numbers
-			.iter()
-			.any(|&s| s.contains("(123) 456-7890"))
-	);
-	assert!(
-		matched_numbers
-			.iter()
-			.any(|&s| s.contains("+1-800-555-1234"))
+	let matched: Vec<(&str, &str)> = results
+		.iter()
+		.map(|r| (r.matched.as_str(), &text[r.start..r.end]))
+		.collect();
+	assert_eq!(
+		matched,
+		vec![
+			("(123) 456-7890", "(123) 456-7890"),
+			("+1-800-555-1234", "+1-800-555-1234"),
+			("555.123.4567", "555.123.4567"),
+		]
 	);
 }
 
@@ -80,6 +79,89 @@ fn test_phone_recognizer_does_not_cross_line_breaks() {
 			.any(|result| result.matched == "(212) 555-0100"),
 		"expected the phone number before the line break to be recognized, got {results:?}"
 	);
+}
+
+#[test]
+fn test_phone_recognizer_adjacent_numbers() {
+	let recognizer = PhoneRecognizer::new();
+	let cases: &[(&str, &[&str])] = &[
+		(
+			"numbers: 212-555-0100 1-800-555-1234 done",
+			&["212-555-0100", "1-800-555-1234"],
+		),
+		(
+			"numbers: 212-555-0100 +1-800-555-1234 done",
+			&["212-555-0100", "+1-800-555-1234"],
+		),
+		(
+			"+1 212 555 0100 +44 20 7946 0958",
+			&["+1 212 555 0100", "+44 20 7946 0958"],
+		),
+		(
+			"212-555-0100,646-555-0199",
+			&["212-555-0100", "646-555-0199"],
+		),
+		(
+			"212-555-0100, +1-646-555-0199",
+			&["212-555-0100", "+1-646-555-0199"],
+		),
+		(
+			"212-555-0100;646-555-0199",
+			&["212-555-0100", "646-555-0199"],
+		),
+		(
+			"212-555-0100; +1 646 555 0199",
+			&["212-555-0100", "+1 646 555 0199"],
+		),
+		(
+			"212-555-0100\t646-555-0199",
+			&["212-555-0100", "646-555-0199"],
+		),
+		(
+			"212-555-0100\t+1-646-555-0199",
+			&["212-555-0100", "+1-646-555-0199"],
+		),
+		(
+			"(212) 555-0100 (646) 555-0199",
+			&["(212) 555-0100", "(646) 555-0199"],
+		),
+		(
+			"(212) 555-0100, (646) 555-0199",
+			&["(212) 555-0100", "(646) 555-0199"],
+		),
+		(
+			"+1 (212) 555-0100 +1 (646) 555-0199",
+			&["+1 (212) 555-0100", "+1 (646) 555-0199"],
+		),
+		(
+			"212.555.0100 646.555.0199",
+			&["212.555.0100", "646.555.0199"],
+		),
+		(
+			"212-555-0100 / 646-555-0199",
+			&["212-555-0100", "646-555-0199"],
+		),
+		(
+			"call 212-555-0100 or +1-646-555-0199 or (718) 555-0142.",
+			&["212-555-0100", "+1-646-555-0199", "(718) 555-0142"],
+		),
+		(
+			"212-555-0100 646-555-0199 718-555-0142",
+			&["212-555-0100", "646-555-0199", "718-555-0142"],
+		),
+	];
+	let failures: Vec<_> = cases
+		.iter()
+		.filter_map(|(text, want)| {
+			let spans: Vec<&str> = recognizer
+				.recognize(text)
+				.iter()
+				.map(|r| &text[r.start..r.end])
+				.collect();
+			(spans != *want).then(|| format!("{text:?}: got {spans:?}, want {want:?}"))
+		})
+		.collect();
+	assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
 
 #[test]

@@ -1,0 +1,135 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+  generation: 2
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: second.example.com
+status:
+  conditions:
+    - type: Accepted
+      status: "True"
+      reason: Accepted
+      observedGeneration: 1
+      lastTransitionTime: "2026-09-28T00:00:00Z"
+    - type: example.com/ExternalReady
+      status: "True"
+      reason: Seeded
+      message: Managed by another controller
+      observedGeneration: 1
+      lastTransitionTime: "2026-09-27T00:00:00Z"
+  listeners:
+    - name: http
+      attachedRoutes: 0
+      supportedKinds:
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+      conditions:
+        - type: Accepted
+          status: "True"
+          reason: Accepted
+          observedGeneration: 1
+          lastTransitionTime: "2026-09-28T00:00:00Z"
+        - type: example.com/ExternalReady
+          status: "True"
+          reason: Seeded
+          message: Managed by another controller
+          observedGeneration: 1
+          lastTransitionTime: "2026-09-27T00:00:00Z"
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/test-gateway
+      port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/test-gateway
+      hostname: second.example.com
+      key: default/test-gateway.http
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: test-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      observedGeneration: 2
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      observedGeneration: 2
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    - lastTransitionTime: fake
+      message: Managed by another controller
+      observedGeneration: 1
+      reason: Seeded
+      status: "True"
+      type: example.com/ExternalReady
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      - lastTransitionTime: fake
+        message: Managed by another controller
+        observedGeneration: 1
+        reason: Seeded
+        status: "True"
+        type: example.com/ExternalReady
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

@@ -1973,6 +1973,31 @@ spec:
                                     Custom response message to return to the client. If not specified, defaults to
                                     `The request was rejected due to inappropriate content`.
                                   properties:
+                                    headers:
+                                      description: Headers to include in the rejection
+                                        response.
+                                      items:
+                                        description: HTTPHeader represents an HTTP
+                                          Header name and value as defined by RFC
+                                          7230.
+                                        properties:
+                                          name:
+                                            description: Name of the HTTP header,
+                                              case-insensitive
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                          value:
+                                            description: Value for the HTTP header
+                                            maxLength: 4096
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        - value
+                                        type: object
+                                      type: array
                                     message:
                                       description: |-
                                         Custom response message to return to the client. If not specified, defaults to
@@ -1995,8 +2020,10 @@ spec:
                                     arguments are masked as a single string, meaning a prompt guard has the
                                     potential to rewrite the arguments into invalid JSON.
                                   items:
-                                    description: Which category of request content
-                                      a prompt guard inspects.
+                                    description: |-
+                                      Which category of request or response content a prompt guard inspects.
+                                      Encrypted payloads are excluded. Signed response payloads are scanned but
+                                      a mask that would change them rejects the response instead.
                                     enum:
                                     - Messages
                                     - SystemPrompt
@@ -3340,6 +3367,31 @@ spec:
                                     Custom response message to return to the client. If not specified, defaults to
                                     `The response was rejected due to inappropriate content`.
                                   properties:
+                                    headers:
+                                      description: Headers to include in the rejection
+                                        response.
+                                      items:
+                                        description: HTTPHeader represents an HTTP
+                                          Header name and value as defined by RFC
+                                          7230.
+                                        properties:
+                                          name:
+                                            description: Name of the HTTP header,
+                                              case-insensitive
+                                            maxLength: 256
+                                            minLength: 1
+                                            pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                            type: string
+                                          value:
+                                            description: Value for the HTTP header
+                                            maxLength: 4096
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        - value
+                                        type: object
+                                      type: array
                                     message:
                                       description: |-
                                         Custom response message to return to the client. If not specified, defaults to
@@ -3353,6 +3405,30 @@ spec:
                                       minimum: 200
                                       type: integer
                                   type: object
+                                scope:
+                                  description: |-
+                                    Which parts of the response this guard inspects. When unset, defaults to
+                                    `Messages`. Tool calls generated by the model are not inspected unless
+                                    `ToolInput` is listed explicitly; `ToolOutput` covers results of
+                                    serverside tools.
+                                    In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                    arguments are masked as a single string, meaning a prompt guard has the
+                                    potential to rewrite the arguments into invalid JSON.
+                                  items:
+                                    description: |-
+                                      Which category of request or response content a prompt guard inspects.
+                                      Encrypted payloads are excluded. Signed response payloads are scanned but
+                                      a mask that would change them rejects the response instead.
+                                    enum:
+                                    - Messages
+                                    - SystemPrompt
+                                    - ToolInput
+                                    - ToolOutput
+                                    type: string
+                                  maxItems: 4
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: set
                                 webhook:
                                   description: Webhook that receives responses for
                                     prompt guarding.
@@ -3482,6 +3558,11 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'scope: only regex and bedrockGuardrails
+                                  guards support a non-default scope; other guard
+                                  kinds always inspect the default (Messages)'
+                                rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                                  || (self.scope.size() == 1 && ''Messages'' in self.scope)'
                               - message: exactly one of the fields in [regex webhook
                                   bedrockGuardrails googleModelArmor] must be set
                                 rule: (has(self.regex)?1:0)+(has(self.webhook)?1:0)+(has(self.bedrockGuardrails)?1:0)+(has(self.googleModelArmor)?1:0)
@@ -3498,6 +3579,11 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-validations:
+                        - message: streaming response guards only support the Messages
+                            scope
+                          rule: '!has(self.streaming) || self.streaming != ''Enabled''
+                            || !has(self.response) || self.response.all(g, !has(g.scope)
+                            || g.scope.all(s, s == ''Messages''))'
                         - message: at least one of the fields in [request response]
                             must be set
                           rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
@@ -3510,6 +3596,7 @@ spec:
                           enum:
                           - AnthropicTokenCount
                           - Completions
+                          - Decisions
                           - Detect
                           - Embeddings
                           - GeminiCountTokens
@@ -3889,8 +3976,9 @@ spec:
                         type: array
                         x-kubernetes-list-type: atomic
                       crossAppAccess:
-                        description: Cross App Access (Identity Assertion / ID-JAG)
-                          authentication.
+                        description: |-
+                          Cross App Access (Identity Assertion / ID-JAG) authentication.
+                          If this configuration is invalid, requests using it are rejected.
                         properties:
                           accessTokenScopes:
                             description: |-
@@ -4755,8 +4843,9 @@ spec:
                           rule: (has(self.header)?1:0)+(has(self.queryParameter)?1:0)+(has(self.cookie)?1:0)
                             == 1
                       oauthTokenExchange:
-                        description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
-                          (RFC 7523) authentication.
+                        description: |-
+                          OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+                          If this configuration is invalid, requests using it are rejected.
                         properties:
                           actorToken:
                             description: RFC 8693 delegation actor token. TokenExchange
@@ -5326,6 +5415,53 @@ spec:
                         be set
                       rule: (has(self.key)?1:0)+(has(self.secretRef)?1:0)+(has(self.passthrough)?1:0)+(has(self.aws)?1:0)+(has(self.azure)?1:0)+(has(self.gcp)?1:0)+(has(self.oauthTokenExchange)?1:0)+(has(self.crossAppAccess)?1:0)+(has(self.jwtSign)?1:0)
                         <= 1
+                  authorization:
+                    description: |-
+                      Authorization rules that clients must satisfy after this backend is selected.
+                      Unlike traffic authorization, this policy is evaluated against the request
+                      associated with the selected destination backend.
+                    properties:
+                      action:
+                        description: |-
+                          The effect of this rule when it matches.
+                          If unspecified, defaults to `Allow`.
+                          `Require` rules are cumulative: all require rules must match.
+                        enum:
+                        - Allow
+                        - Deny
+                        - Require
+                        type: string
+                      policy:
+                        description: |-
+                          The authorization rule to evaluate.
+
+                          * `Allow`: any matching allow rule allows the request.
+                          * `Require`: every require rule must match for the request to be allowed.
+                          * `Deny`: any matching deny rule denies the request.
+
+                          `Deny` is not recommended because expression failures fail to deny; prefer
+                          `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
+
+                          If at least one `Allow` rule is configured, requests are denied unless at
+                          least one allow rule matches.
+                        properties:
+                          matchExpressions:
+                            description: CEL expressions that must all evaluate to
+                              true for the rule to match.
+                            items:
+                              description: A Common Expression Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 256
+                            minItems: 1
+                            type: array
+                        required:
+                        - matchExpressions
+                        type: object
+                    required:
+                    - policy
+                    type: object
                   extAuth:
                     description: |-
                       External authentication configuration for requests
@@ -5952,8 +6088,8 @@ spec:
                         - policy
                         type: object
                       guardrails:
-                        description: '`guardrails` routes selected JSON-RPC methods
-                          through a remote policy server.'
+                        description: Remote and in-process CEL policy processors for
+                          MCP requests and responses.
                         properties:
                           processors:
                             description: |-
@@ -5964,6 +6100,34 @@ spec:
                               description: MCPGuardrailsProcessor selects a single
                                 policy processor. Exactly one variant must be set.
                               properties:
+                                expression:
+                                  description: In-process guardrail driven by CEL
+                                    expressions.
+                                  properties:
+                                    condition:
+                                      description: Condition gating the action; absent
+                                        means always.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    reject:
+                                      description: Reject with this message.
+                                      maxLength: 4096
+                                      minLength: 1
+                                      type: string
+                                    transform:
+                                      description: |-
+                                        Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).
+                                        Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                  type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of the fields in [reject
+                                      transform] must be set
+                                    rule: (has(self.reject)?1:0)+(has(self.transform)?1:0)
+                                      == 1
                                 methods:
                                   additionalProperties:
                                     description: MCPMethodPhase controls when an MCP
@@ -6129,9 +6293,10 @@ spec:
                               - methods
                               type: object
                               x-kubernetes-validations:
-                              - message: exactly one of the fields in [remote] must
-                                  be set
-                                rule: (has(self.remote)?1:0) == 1
+                              - message: exactly one of the fields in [remote expression]
+                                  must be set
+                                rule: (has(self.remote)?1:0)+(has(self.expression)?1:0)
+                                  == 1
                             maxItems: 16
                             minItems: 1
                             type: array
@@ -6691,9 +6856,10 @@ spec:
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [ai auth extAuth health http
-                    mcp sessionAffinity tcp tls transformation tunnel] must be set
-                  rule: '[has(self.ai),has(self.auth),has(self.extAuth),has(self.health),has(self.http),has(self.mcp),has(self.sessionAffinity),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [ai auth authorization extAuth
+                    health http mcp sessionAffinity tcp tls transformation tunnel]
+                    must be set
+                  rule: '[has(self.ai),has(self.auth),has(self.authorization),has(self.extAuth),has(self.health),has(self.http),has(self.mcp),has(self.sessionAffinity),has(self.tcp),has(self.tls),has(self.transformation),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               frontend:
                 description: |-

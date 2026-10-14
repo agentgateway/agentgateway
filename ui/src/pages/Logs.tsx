@@ -359,6 +359,7 @@ export function LogsPage() {
 								values={logFilters[dimension]}
 								placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 								allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+								searchLabel={`Search ${meta.label.toLowerCase()}`}
 								onChange={values =>
 									setLogFilters(current => ({
 										...current,
@@ -392,7 +393,6 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						Stream
-						{stream ? <span className="stream-live-dot" /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
@@ -891,6 +891,7 @@ export function AnalyticsPage() {
 									values={filters[dimension]}
 									placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 									allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+									searchLabel={`Search ${meta.label.toLowerCase()}`}
 									onChange={values => updateFilter(dimension, values)}
 								/>
 							);
@@ -1148,12 +1149,10 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		(output === 'assistant' || output === 'toolCall');
 	return (
 		<Tooltip content={label}>
-			<span
+			<button
+				type="button"
 				className={`log-turn-badge ${common ? variant : 'other'}`}
-				role="img"
 				aria-label={label}
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				tabIndex={0}
 			>
 				{common ? (
 					<>
@@ -1164,7 +1163,7 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 				) : (
 					<Ellipsis size={15} />
 				)}
-			</span>
+			</button>
 		</Tooltip>
 	);
 }
@@ -1196,35 +1195,17 @@ function formatCompactNumber(value: number | null | undefined) {
 	return typeof value === 'number' ? compactNumberFormat.format(value) : '—';
 }
 
-const PROVIDER_ICON_KEYS = [
-	'openai',
-	'anthropic',
-	'gemini',
-	'vertex',
-	'bedrock',
-	'azure',
-	'copilot',
-	'cohere',
-	'ollama',
-	'baseten',
-	'cerebras',
-	'deepinfra',
-	'deepseek',
-	'groq',
-	'huggingface',
-	'mistral',
-	'openrouter',
-	'togetherai',
-	'xai',
-	'fireworks'
-];
+// Telemetry reports some providers by their qualified gen_ai.provider.name.
+const PROVIDER_ICON_ALIASES: Record<string, string> = {
+	'gcp.gemini': 'gemini',
+	'gcp.vertex_ai': 'vertex',
+	'aws.bedrock': 'bedrock'
+};
 
 function providerIconName(name: string | null | undefined) {
 	if (!name) return 'custom';
 	const normalized = name.trim().toLowerCase();
-	const match = PROVIDER_ICON_KEYS.find(key => normalized === key || normalized.includes(key));
-	if (!match) return name;
-	return match === 'xai' ? 'xAI' : match;
+	return PROVIDER_ICON_ALIASES[normalized] ?? normalized;
 }
 
 function logGuardrails(entry: LogEntry): Record<string, unknown>[] {

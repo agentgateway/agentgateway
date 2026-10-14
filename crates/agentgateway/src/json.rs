@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::http::{Request, Response};
+use crate::http::Response;
 use crate::*;
 
 /// Parsed JSON corresponding to the current body bytes.
@@ -9,18 +9,6 @@ use crate::*;
 pub(crate) struct ParsedJson(pub Value);
 
 impl agent_http::BodyExtension for ParsedJson {}
-
-pub fn must_traverse<'a, T>(
-	value: &'a Value,
-	path: &[&str],
-	f: impl Fn(&'a Value) -> Option<T>,
-) -> anyhow::Result<T> {
-	if let Some(res) = traverse(value, path).and_then(f) {
-		Ok(res)
-	} else {
-		Err(anyhow::anyhow!("missing field {}", path.join(".")))
-	}
-}
 
 pub fn traverse<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
 	if path.is_empty() {
@@ -51,26 +39,24 @@ fn parse_index(s: &str) -> Option<usize> {
 	s.parse().ok()
 }
 
-pub async fn from_request_body<T: DeserializeOwned>(req: Request) -> Result<T, http::Error> {
-	let lim = http::buffer_limit(&req);
-	from_body_with_limit(req.into_body(), lim).await
-}
-
+/// Read and parse JSON within the attached body deadline.
 pub async fn from_response_body<T: DeserializeOwned>(resp: Response) -> Result<T, http::Error> {
 	let lim = http::response_buffer_limit(&resp);
 	from_body_with_limit(resp.into_body(), lim).await
 }
 
+/// Read and parse JSON with a size limit and remaining body deadline.
 pub async fn from_body_with_limit<T: DeserializeOwned>(
 	body: http::Body,
 	limit: usize,
 ) -> Result<T, http::Error> {
-	let bytes = body.into_bytes(limit).await?;
+	let bytes = http::read_body_with_limit(body, limit).await?;
 	// Try to parse the response body as JSON
 	let t = serde_json::from_slice::<T>(bytes.as_ref()).map_err(http::Error::new)?;
 	Ok(t)
 }
 
+/// Inspect and parse JSON within the remaining body deadline.
 pub async fn inspect_body<T: DeserializeOwned>(req: &mut http::Request) -> anyhow::Result<T> {
 	let bytes = match http::inspect_body(req).await? {
 		http::BodyInspection::Complete(bytes) => bytes,

@@ -39,6 +39,24 @@ struct PreparedOidcPolicy {
 	scopes: Vec<String>,
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
+	credentials: OidcCredentials,
+}
+
+/// Credentials an OIDC policy accepts.
+#[apply(schema!)]
+#[derive(Copy, Default, PartialEq, Eq)]
+pub enum OidcCredentials {
+	/// Only browser sessions established through the policy's login flow.
+	#[default]
+	Session,
+	/// Browser sessions, or an ID token for this client sent as `Authorization: Bearer <token>`.
+	/// This lets non-browser clients authenticate with a token obtained from the provider directly.
+	SessionOrBearer,
+	/// Like `sessionOrBearer`, but lets unauthenticated non-navigation requests continue to later
+	/// policies with their credentials intact. Browser navigations retain the normal login behavior.
+	///
+	/// **Warning:** Pair this mode with `authorization` or another enforcement point.
+	Permissive,
 }
 
 /// Optional browser login entry point and unauthenticated redirect destination.
@@ -84,6 +102,15 @@ pub struct OidcLogout {
 /// Unauthenticated document navigations redirect to the provider login flow. Browser requests
 /// positively identified as non-navigation requests return 401 so the caller can initiate a
 /// document navigation.
+///
+/// Concurrent session refreshes are coalesced per gateway replica, with results reused for
+/// 30 seconds; temporary failures are cached for one second. With multiple replicas, configure
+/// the provider's refresh-token reuse grace period (for example, Okta's rotation grace period)
+/// to accommodate concurrent refreshes. A late rejection from another replica can otherwise
+/// clear a newly rotated refresh cookie.
+///
+/// Session refresh requires the provider to return a new `id_token` in each refresh response.
+/// Providers that omit it require the user to sign in again when the stored ID token expires.
 #[apply(schema_de!)]
 pub struct LocalOidcConfig {
 	/// Issuer used for discovery and ID token validation.
@@ -128,7 +155,9 @@ pub struct LocalOidcConfig {
 	#[serde(rename = "redirectURI")]
 	pub redirect_uri: String,
 
-	/// Additional OAuth2 scopes to request. `openid` is always included.
+	/// Additional OAuth2 scopes to request. `openid` is always included. Add `offline_access` when
+	/// the provider requires it to issue a refresh token; returned refresh tokens are used
+	/// automatically.
 	#[serde(default)]
 	pub scopes: Vec<String>,
 
@@ -139,6 +168,11 @@ pub struct LocalOidcConfig {
 	/// Optional logout endpoint. Independent of login; omit to disable the logout endpoint.
 	#[serde(default)]
 	pub logout: Option<OidcLogout>,
+
+	/// Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`
+	/// for `ui.policies.oidc`.
+	#[serde(default)]
+	pub credentials: Option<OidcCredentials>,
 }
 
 struct DiscoveredProviderMetadata {
@@ -178,6 +212,7 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			credentials,
 		} = self;
 		let redirect_uri = RedirectUri::parse(redirect_uri)?;
 		let mut endpoints = vec![redirect_uri.callback_path.as_str()];
@@ -288,6 +323,7 @@ impl LocalOidcConfig {
 			scopes,
 			login,
 			logout,
+			credentials: credentials.unwrap_or_default(),
 		})
 	}
 }
@@ -416,7 +452,8 @@ impl PreparedOidcPolicy {
 		policy_id: PolicyId,
 		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
 	) -> Result<OidcPolicy, Error> {
-		let (cookie_name, transaction_cookie_prefix) = session::derive_cookie_names(&policy_id);
+		let (cookie_name, refresh_cookie_name, transaction_cookie_prefix) =
+			session::derive_cookie_names(&policy_id);
 		let PreparedOidcPolicy {
 			provider,
 			client_id,
@@ -425,12 +462,14 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			credentials,
 		} = self;
 		let scopes = dedupe_scopes(scopes);
 		let token_endpoint_auth = provider.token_endpoint_auth;
 		let provider = Arc::new(provider.compile(client_id.clone())?);
 
 		Ok(OidcPolicy {
+			refresh_cache: Default::default(),
 			policy_id,
 			provider,
 			client: ClientConfig {
@@ -441,6 +480,7 @@ impl PreparedOidcPolicy {
 			redirect_uri,
 			session: SessionConfig {
 				cookie_name,
+				refresh_cookie_name,
 				transaction_cookie_prefix,
 				same_site: SameSiteMode::Lax,
 				secure: CookieSecureMode::Auto,
@@ -451,6 +491,7 @@ impl PreparedOidcPolicy {
 			scopes,
 			login,
 			logout,
+			credentials,
 		})
 	}
 }

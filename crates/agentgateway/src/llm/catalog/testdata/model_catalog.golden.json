@@ -9,7 +9,17 @@
           },
           "tags": [
             "legacy_thinking"
-          ]
+          ],
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "high"
+            ],
+            "budgetTokens": {
+              "min": 1024
+            }
+          }
         },
         "claude-opus-4-7": {
           "rates": {
@@ -18,7 +28,13 @@
           },
           "tags": [
             "adaptive_thinking"
-          ]
+          ],
+          "reasoning": {
+            "effort": [
+              "low",
+              "high"
+            ]
+          }
         },
         "claude-sonnet-4-5": {
           "rates": {
@@ -29,7 +45,10 @@
           },
           "tags": [
             "legacy_thinking"
-          ]
+          ],
+          "reasoning": {
+            "budgetTokens": {}
+          }
         }
       }
     },
@@ -57,10 +76,39 @@
     "openai": {
       "models": {
         "gpt-4o-mini": {
+          "name": "GPT-4o mini",
+          "released": "2024-07-18",
           "rates": {
             "input": "0.15",
             "output": "0.6",
             "cacheRead": "0.075"
+          },
+          "tiers": [
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "0.25",
+                "output": "1"
+              }
+            }
+          ],
+          "limits": {
+            "context": 128000,
+            "output": 16384
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": false,
+            "toolCall": true,
+            "temperature": true
           }
         },
         "gpt-4o-mini-audio-preview": {

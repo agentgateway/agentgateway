@@ -92,6 +92,7 @@ impl App {
 						name: backend_group_name.name.as_ref(),
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
+						kind: backend_group_name.kind.as_deref(),
 					};
 					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
 					let backend_policies = backend_policies.clone().merge(target_policies);
@@ -135,6 +136,7 @@ impl App {
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
+		req.extensions_mut().insert(log.mcp_guardrails.clone());
 
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)

@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
 use secrecy::SecretString;
-use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serializer};
 #[cfg(not(feature = "schema"))]
@@ -389,31 +388,6 @@ where
 	let input = String::deserialize(deserializer)?;
 
 	Ok(SecretString::from(input))
-}
-
-pub fn de_as<'de, I, O, D>(deserializer: D) -> Result<O, D::Error>
-where
-	D: Deserializer<'de>,
-	I: DeserializeOwned,
-	O: TryFrom<I>,
-	<O as TryFrom<I>>::Error: Display,
-{
-	let s: I = I::deserialize(deserializer)?;
-	O::try_from(s).map_err(serde::de::Error::custom)
-}
-
-pub fn de_as_opt<'de, I, O, D>(deserializer: D) -> Result<Option<O>, D::Error>
-where
-	D: Deserializer<'de>,
-	I: DeserializeOwned,
-	O: TryFrom<I>,
-	<O as TryFrom<I>>::Error: Display,
-{
-	let s: Option<I> = <Option<I>>::deserialize(deserializer)?;
-	match s {
-		Some(i) => Ok(Some(O::try_from(i).map_err(serde::de::Error::custom)?)),
-		None => Ok(None),
-	}
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
