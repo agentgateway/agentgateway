@@ -1136,13 +1136,22 @@ mod tests {
 		)
 		.unwrap();
 		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
+		let bedrock = br#"{"output":{"message":{"role":"assistant","content":[{"text":"hi"}]}},"stopReason":"end_turn","metrics":{"latencyMs":1},"usage":{"inputTokens":100,"outputTokens":0,"totalTokens":1000100,"cacheReadInputTokens":0,"cacheWriteInputTokens":1000000,"cacheDetails":[{"inputTokens":400000,"ttl":"5m"},{"inputTokens":600000,"ttl":"1h"}]}}"#;
 		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
 		let typed: agent_llm::types::messages::typed::MessagesResponse =
 			serde_json::from_str(body).unwrap();
+		let body = bytes::Bytes::from_static(body.as_bytes());
+		let bedrock = bytes::Bytes::from_static(bedrock);
+		use agent_llm::conversion::{bedrock as br, messages};
 		for resp in [
-			passthrough.to_llm_response(agent_llm::LogContentFields::default()),
-			typed.to_llm_response(agent_llm::LogContentFields::default()),
+			Box::new(passthrough) as Box<dyn ResponseType>,
+			Box::new(typed),
+			messages::from_completions::translate_response(&body).unwrap(),
+			br::from_completions::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
+			br::from_messages::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
+			br::from_responses::translate_response(&bedrock, "claude-opus-5", None, None).unwrap(),
 		] {
+			let resp = resp.to_llm_response(agent_llm::LogContentFields::default());
 			assert_eq!(resp.cache_creation_1h_input_tokens, Some(600_000));
 			let cost = snap
 				.project(

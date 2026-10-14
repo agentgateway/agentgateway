@@ -122,6 +122,7 @@ pub mod from_messages {
 				.completion_tokens_details
 				.as_ref()
 				.and_then(|d| d.reasoning_tokens),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {

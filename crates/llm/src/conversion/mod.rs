@@ -14,6 +14,7 @@ struct ProviderUsage {
 	input_tokens: u64,
 	total_tokens: u64,
 	reasoning_tokens: Option<u64>,
+	cache_creation_1h_input_tokens: Option<u64>,
 }
 
 /// Keep provider token counts for accounting when translating client usage conventions.
@@ -29,6 +30,9 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 			response.input_tokens = Some(usage.input_tokens);
 			response.total_tokens = Some(usage.total_tokens);
 			response.reasoning_tokens = usage.reasoning_tokens.or(response.reasoning_tokens);
+			response.cache_creation_1h_input_tokens = usage
+				.cache_creation_1h_input_tokens
+				.or(response.cache_creation_1h_input_tokens);
 		}
 		response
 	}

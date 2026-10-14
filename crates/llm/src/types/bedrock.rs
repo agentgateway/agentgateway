@@ -364,7 +364,7 @@ pub enum ConverseOutput {
 }
 
 /// Token usage information
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TokenUsage {
 	/// The number of input tokens which were used
 	#[serde(rename = "inputTokens")]
@@ -387,6 +387,32 @@ pub struct TokenUsage {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub cache_write_input_tokens: Option<usize>,
+	/// Cache write tokens split by TTL
+	#[serde(
+		rename = "cacheDetails",
+		default,
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	pub cache_details: Vec<CacheDetail>,
+}
+
+impl TokenUsage {
+	/// Cache write tokens with the given TTL ("5m" or "1h"), if Bedrock reported a split.
+	pub fn cache_write_input_tokens_for(&self, ttl: &str) -> Option<usize> {
+		self
+			.cache_details
+			.iter()
+			.filter(|d| d.ttl == ttl)
+			.map(|d| d.input_tokens)
+			.reduce(|a, b| a + b)
+	}
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CacheDetail {
+	#[serde(rename = "inputTokens")]
+	pub input_tokens: usize,
+	pub ttl: String,
 }
 
 /// Metrics for the Converse call

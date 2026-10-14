@@ -737,6 +737,7 @@ pub mod from_messages {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
