@@ -614,7 +614,7 @@ fn report_litellm_cache_params(findings: &mut Vec<ImportFinding>, value: &Value)
 			Some(message) => (ImportStatus::Manual, message),
 			None => (
 				ImportStatus::Unsupported,
-				"Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution",
+				"No migration guidance is available for this response-cache parameter; it was not emitted. Review it in the chosen cache solution",
 			),
 		};
 		report_litellm_cache_value(

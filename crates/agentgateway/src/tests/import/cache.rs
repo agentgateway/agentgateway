@@ -178,6 +178,22 @@ fn empty_or_malformed_cache_params_are_not_silently_dropped() {
 }
 
 #[test]
+fn documented_cache_params_without_guidance_are_not_reported_as_unrecognized() {
+	let result = import_settings(
+		"litellm_settings:\n  cache_params:\n    ssl: true\n    max_connections: 100\n    socket_timeout: 5\n",
+	);
+	for key in ["ssl", "max_connections", "socket_timeout"] {
+		let diagnostic = finding(
+			&result,
+			&format!("litellm_settings.cache_params.{key}"),
+			ImportStatus::Unsupported,
+		);
+		assert_concepts(diagnostic, &["no migration guidance", "not emitted"]);
+		assert!(!diagnostic.message.to_lowercase().contains("unrecognized"));
+	}
+}
+
+#[test]
 fn unknown_cache_params_preserve_paths_through_objects_arrays_and_empty_values() {
 	let result = import_settings(
 		r#"litellm_settings:

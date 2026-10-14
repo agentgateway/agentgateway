@@ -61,7 +61,7 @@ findings:
     message: LiteLLM response-cache namespace was not preserved; configure cache-key isolation manually before sharing a cache backend
   - sourcePath: litellm_settings.cache_params.future_setting
     status: unsupported
-    message: Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution
+    message: No migration guidance is available for this response-cache parameter; it was not emitted. Review it in the chosen cache solution
   - sourcePath: litellm_settings.cache_params.future_setting.nested
     status: unsupported
-    message: Unrecognized LiteLLM response-cache parameter was not emitted; review it in the chosen cache solution
+    message: No migration guidance is available for this response-cache parameter; it was not emitted. Review it in the chosen cache solution
