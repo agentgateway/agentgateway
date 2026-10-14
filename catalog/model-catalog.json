@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-13T17:36:31Z"
+    "generatedAt": "2026-10-14T08:36:31Z"
   },
   "providers": {
     "anthropic": {
@@ -4254,6 +4254,13 @@
             "cacheRead": "0.075"
           }
         },
+        "gemini-4-argon": {
+          "rates": {
+            "input": "2",
+            "output": "10",
+            "cacheRead": "0.1"
+          }
+        },
         "gpt-5-mini": {
           "rates": {
             "input": "0.25",
@@ -4732,6 +4739,15 @@
             "output": "0.87",
             "cacheRead": "0.0036"
           }
+        },
+        "anthropic/claude-fable-5": {
+          "rates": {
+            "input": "10",
+            "output": "50"
+          },
+          "tags": [
+            "adaptive_thinking"
+          ]
         },
         "deepseek-ai/DeepSeek-R1-0528": {
           "rates": {
@@ -6710,6 +6726,13 @@
             "input": "0.1",
             "output": "0.2",
             "cacheRead": "0.002"
+          }
+        },
+        "muse-wonder-1.0": {
+          "rates": {
+            "input": "4",
+            "output": "20",
+            "cacheRead": "0.2"
           }
         }
       }
