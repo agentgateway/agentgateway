@@ -1116,6 +1116,108 @@ async fn stale_session_key_returns_not_found() {
 }
 
 #[tokio::test]
+async fn delete_reports_success_when_upstream_delete_fails() {
+	let unreachable = {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		listener.local_addr().unwrap()
+	};
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(unreachable, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(unreachable));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let session_id = http::sessionpersistence::SessionState::MCP(
+		http::sessionpersistence::MCPSessionState::new(vec![http::sessionpersistence::MCPSession {
+			target_name: Some("mcp".to_string()),
+			session: Some("upstream-session".to_string()),
+			backend: None,
+		}]),
+	)
+	.encode(&http::sessionpersistence::Encoder::base64())
+	.unwrap();
+
+	let delete = reqwest::Client::new()
+		.delete(format!("http://{io}/mcp"))
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(delete.status(), reqwest::StatusCode::ACCEPTED);
+}
+
+#[tokio::test]
+async fn delete_on_replica_without_session_closes_upstream_session() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind_a, io_a) = setup_proxy(&mock, true, false).await;
+	let (_bind_b, io_b) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+	let init = mcp_json_post(&client, &format!("http://{io_a}/mcp"), &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize response should include a session id")
+		.to_str()
+		.unwrap()
+		.to_string();
+	let http::sessionpersistence::SessionState::MCP(state) =
+		http::sessionpersistence::SessionState::decode(
+			&session_id,
+			&http::sessionpersistence::Encoder::base64(),
+		)
+		.unwrap()
+	else {
+		panic!("expected MCP session state");
+	};
+	let upstream_session_id = state.sessions[0]
+		.session
+		.clone()
+		.expect("stateful upstream should assign a session id");
+
+	let delete = client
+		.delete(format!("http://{io_b}/mcp"))
+		.header("mcp-session-id", &session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(delete.status(), reqwest::StatusCode::ACCEPTED);
+
+	let list_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {}
+	});
+	let upstream_list = mcp_json_post(&client, &format!("http://{}/mcp", mock.addr), &list_body)
+		.header("mcp-session-id", upstream_session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(upstream_list.status(), reqwest::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
 async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	let mock = mock_streamable_http_server(false).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;

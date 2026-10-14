@@ -95,7 +95,7 @@ impl StreamableHttpService {
 			},
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request, inputs).await,
-			(http::Method::DELETE, true) => self.handle_delete(request, inputs).await,
+			(http::Method::DELETE, true) => Box::pin(self.handle_delete(request, inputs)).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
@@ -301,8 +301,8 @@ impl StreamableHttpService {
 		Ok(
 			self
 				.session_manager
-				.delete_session(&inputs.backend_id, &session_id, parts)
-				.await
+				.delete_session(&session_id, inputs, parts)
+				.await?
 				.unwrap_or_else(accepted_response),
 		)
 	}

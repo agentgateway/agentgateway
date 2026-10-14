@@ -1014,21 +1014,21 @@ impl SessionManager {
 		(sess, rx)
 	}
 
+	/// Deletion is best effort: upstream failures are not reported to the client, and a target
+	/// that fails to close keeps its upstream session until that target's own idle timeout.
 	pub async fn delete_session(
 		&self,
-		backend_id: &ResourceName,
 		id: &str,
+		builder: RelayInputs,
 		parts: Parts,
-	) -> Option<Response> {
-		let sess = {
-			let mut sm = self.sessions.write().expect("write lock");
-			if sm.get(id)?.backend_id != *backend_id {
-				return None;
-			}
-			sm.remove(id)?.session
+	) -> Result<Option<Response>, mcp::Error> {
+		let ctx = IncomingRequestContext::new(&parts);
+		// Resume so a replica that never saw the session still closes its upstream sessions.
+		let Some(sess) = self.get_or_resume_session(id, builder, &ctx)? else {
+			return Ok(None);
 		};
-		// Swallow the error
-		sess.delete_session(parts).await.ok()
+		self.sessions.write().expect("write lock").remove(id);
+		Ok(sess.delete_session(parts).await.ok())
 	}
 }
 
