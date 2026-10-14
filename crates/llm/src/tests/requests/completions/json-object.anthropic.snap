@@ -1,0 +1,64 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/json-object.json
+info:
+  model: replaceme
+  messages:
+    - role: system
+      content: Grade the answer. Reply in JSON.
+    - role: user
+      content: "Is 2+2=4? Give {\"score\": 0 or 1}."
+  response_format:
+    type: json_object
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Is 2+2=4? Give {\"score\": 0 or 1}."
+          }
+        ]
+      }
+    ],
+    "system": "Grade the answer. Reply in JSON.",
+    "model": "replaceme",
+    "max_tokens": 4096,
+    "tools": [
+      {
+        "name": "json_object_response",
+        "description": "Give your answer as a JSON object by calling this tool.",
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "tool",
+      "name": "json_object_response",
+      "disable_parallel_tool_use": true
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "replaceme",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Grade the answer. Reply in JSON."
+      },
+      {
+        "role": "user",
+        "content": "Is 2+2=4? Give {\"score\": 0 or 1}."
+      }
+    ]
+  }
+}
