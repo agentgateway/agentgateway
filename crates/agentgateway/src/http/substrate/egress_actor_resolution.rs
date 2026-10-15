@@ -44,7 +44,7 @@ impl EgressActorResolution {
 			x509_parser::parse_x509_certificate(pem.contents()).map_err(|error| {
 				ProxyError::SubstrateEgressDenied(format!("invalid actor certificate: {error}"))
 			})?;
-		// TLS already authenticated this certificate. Require the ateom identity here:
+		// TLS already authenticated this certificate. Require the worker identity here:
 		// a certificate issued directly to an actor must not authorize a tunnel.
 		if certificate.is_ca() {
 			return Err(ProxyError::SubstrateEgressDenied(
@@ -52,7 +52,7 @@ impl EgressActorResolution {
 			));
 		}
 		let invalid_identity =
-			|| ProxyError::SubstrateEgressDenied("invalid ateom-for-actor SPIFFE identity".to_owned());
+			|| ProxyError::SubstrateEgressDenied("invalid worker-for-actor SPIFFE identity".to_owned());
 		let sans = certificate
 			.subject_alternative_name()
 			.map_err(|_| invalid_identity())?
@@ -71,9 +71,9 @@ impl EgressActorResolution {
 				"actor certificate has multiple URI SANs".to_owned(),
 			));
 		}
-		// Matches Substrate's resources.ActorRefFromAteomForActorSPIFFEID.
+		// Matches Substrate's resources.ActorRefFromWorkerForActorSPIFFEID.
 		let (atespace, name) = uri
-			.strip_prefix("spiffe://substrate-actor.local/ateom-for-actor/")
+			.strip_prefix("spiffe://substrate-actor.local/worker-for-actor/")
 			.and_then(|path| path.split_once('/'))
 			.filter(|(atespace, name)| valid_resource_name(atespace) && valid_resource_name(name))
 			.ok_or_else(invalid_identity)?;
@@ -190,7 +190,7 @@ mod tests {
 	}
 
 	#[test]
-	fn actor_identity_is_parsed_from_the_ateom_uri_without_an_extension() {
+	fn actor_identity_is_parsed_from_the_worker_uri_without_an_extension() {
 		for (atespace, name) in [
 			("demo", "my-actor"),
 			(
@@ -198,7 +198,7 @@ mod tests {
 				"045841a7-5dcb-47eb-a76f-6d8460bfe009",
 			),
 		] {
-			let uri = format!("spiffe://substrate-actor.local/ateom-for-actor/{atespace}/{name}");
+			let uri = format!("spiffe://substrate-actor.local/worker-for-actor/{atespace}/{name}");
 			let identity = EgressActorResolution::identity(&request_with_identity(&[&uri])).unwrap();
 			assert_eq!(identity.atespace, atespace);
 			assert_eq!(identity.name, name);
@@ -209,26 +209,27 @@ mod tests {
 	fn actor_identity_rejects_other_purposes_and_malformed_uris() {
 		for uri in [
 			"spiffe://substrate-actor.local/actor/demo/my-actor",
+			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
 			"spiffe://substrate-actor.local/atespace/demo/actor/my-actor",
-			"spiffe://other.local/ateom-for-actor/demo/my-actor",
-			"https://substrate-actor.local/ateom-for-actor/demo/my-actor",
-			"spiffe://user@substrate-actor.local/ateom-for-actor/demo/my-actor",
-			"spiffe://substrate-actor.local:443/ateom-for-actor/demo/my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor?query",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor#fragment",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor/",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor/extra",
-			"spiffe://substrate-actor.local/ateom-for-actor//my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo",
-			"spiffe://substrate-actor.local/ateom-for-actor/de%2Fmo/my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my%2Factor",
-			"spiffe://substrate-actor.local/ateom-for-actor/../my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/..",
-			"spiffe://substrate-actor.local/ateom-for-actor/Demo/my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/My-Actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/-demo/my-actor",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor-",
+			"spiffe://other.local/worker-for-actor/demo/my-actor",
+			"https://substrate-actor.local/worker-for-actor/demo/my-actor",
+			"spiffe://user@substrate-actor.local/worker-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local:443/worker-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor?query",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor#fragment",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor/",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor/extra",
+			"spiffe://substrate-actor.local/worker-for-actor//my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/",
+			"spiffe://substrate-actor.local/worker-for-actor/demo",
+			"spiffe://substrate-actor.local/worker-for-actor/de%2Fmo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my%2Factor",
+			"spiffe://substrate-actor.local/worker-for-actor/../my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/..",
+			"spiffe://substrate-actor.local/worker-for-actor/Demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/My-Actor",
+			"spiffe://substrate-actor.local/worker-for-actor/-demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor-",
 		] {
 			assert!(
 				EgressActorResolution::identity(&request_with_identity(&[uri])).is_err(),
@@ -239,7 +240,7 @@ mod tests {
 
 	#[test]
 	fn actor_identity_requires_exactly_one_uri_san() {
-		let uri = "spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor";
+		let uri = "spiffe://substrate-actor.local/worker-for-actor/demo/my-actor";
 		for uris in [vec![], vec![uri, uri], vec![uri, "https://example.com"]] {
 			assert!(EgressActorResolution::identity(&request_with_identity(&uris)).is_err());
 		}
@@ -252,7 +253,7 @@ mod tests {
 		let mut params = CertificateParams::default();
 		params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
 		params.subject_alt_names.push(SanType::URI(
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor"
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor"
 				.try_into()
 				.unwrap(),
 		));
@@ -277,7 +278,7 @@ mod tests {
 		let mut req = Request::new(Body::empty());
 		req.headers_mut().insert(
 			"x-forwarded-client-cert",
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor"
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor"
 				.parse()
 				.unwrap(),
 		);

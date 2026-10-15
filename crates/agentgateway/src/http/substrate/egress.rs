@@ -324,7 +324,7 @@ fn provider_name(uri: &str) -> Option<&str> {
 }
 
 fn actor_spiffe_uri(atespace: &str, actor_name: &str) -> String {
-	// Translate the authenticated ateom identity to the actor identity providers authorize.
+	// Translate the authenticated worker identity to the actor identity providers authorize.
 	// Matches Substrate's resources.ActorSPIFFEID.
 	format!("spiffe://substrate-actor.local/actor/{atespace}/{actor_name}")
 }

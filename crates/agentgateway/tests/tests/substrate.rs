@@ -1727,7 +1727,7 @@ async fn substrate_egress_actor_resolution_refreshes_on_long_lived_tunnel() {
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -1783,7 +1783,7 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -2969,7 +2969,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -3067,25 +3067,31 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::NotFound)
 			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
 		StatusCode::FORBIDDEN,
 	);
-	assert_eq!(
-		substrate_egress_connect_status(
-			EgressHandler {
-				uid: "uid-1",
-				state: running,
-				error: None
-			},
-			"spiffe://substrate-actor.local/actor/demo/my-actor",
-			b"",
-		)
-		.await,
-		StatusCode::FORBIDDEN,
-	);
+	for uri in [
+		"spiffe://substrate-actor.local/actor/demo/my-actor",
+		"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+	] {
+		assert_eq!(
+			substrate_egress_connect_status(
+				EgressHandler {
+					uid: "uid-1",
+					state: running,
+					error: None
+				},
+				uri,
+				b"",
+			)
+			.await,
+			StatusCode::FORBIDDEN,
+			"{uri}",
+		);
+	}
 	assert_eq!(
 		substrate_egress_connect_status(
 			EgressHandler {
@@ -3093,7 +3099,7 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::Unavailable)
 			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -3107,7 +3113,7 @@ async fn substrate_egress_reports_an_unreachable_actor_service_as_unavailable() 
 	assert_eq!(
 		substrate_egress_connect_status_at(
 			closed,
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -3136,7 +3142,7 @@ async fn substrate_egress_rejects_actor_states_without_worker_placement(
 				state,
 				error: None,
 			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -3163,7 +3169,7 @@ async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection(
 					state: Some(state as i32),
 					error: None
 				},
-				"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+				"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 				payload,
 			)
 			.await,
