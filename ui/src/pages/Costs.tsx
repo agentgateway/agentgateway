@@ -1,6 +1,11 @@
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import {
+	recommendCostModels,
+	type CostRecommendation,
+	type CostRecommendationsResponse
+} from '@/api/costsApi';
 import { ConfigSaveButton } from '@/components/ConfigDiffDrawer';
 import { EmptyState, formatNumber, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
 import {
@@ -27,6 +32,14 @@ type CustomCostRow = {
 type DisplayCostSource = CostCatalogSource & {
 	storage: 'Database' | 'File';
 	label: string;
+};
+
+type RecommendationPeriod = '24h' | '7d' | '30d';
+
+const recommendationPeriods: Record<RecommendationPeriod, { label: string; durationMs: number }> = {
+	'24h': { label: '24 hours', durationMs: 24 * 60 * 60 * 1000 },
+	'7d': { label: '7 days', durationMs: 7 * 24 * 60 * 60 * 1000 },
+	'30d': { label: '30 days', durationMs: 30 * 24 * 60 * 60 * 1000 }
 };
 
 export function CostsPage() {
@@ -83,6 +96,11 @@ export function CostsPage() {
 	const [editingCustom, setEditingCustom] = useState(false);
 	const [customDraft, setCustomDraft] = useState<CustomCostRow[]>(customRows);
 	const [customError, setCustomError] = useState<string | null>(null);
+	const [recommendationPeriod, setRecommendationPeriod] = useState<RecommendationPeriod>('7d');
+	const [recommendationLoading, setRecommendationLoading] = useState(false);
+	const [recommendationError, setRecommendationError] = useState<string | null>(null);
+	const [recommendations, setRecommendations] = useState<CostRecommendationsResponse | null>(null);
+	const [focusCustomRow, setFocusCustomRow] = useState<number | null>(null);
 
 	useEffect(() => {
 		if (!editingCustom) setCustomDraft(customRows);
@@ -105,6 +123,41 @@ export function CostsPage() {
 		} finally {
 			setRefreshing(false);
 		}
+	}
+
+	async function findMissingModels() {
+		const to = new Date();
+		const from = new Date(to.getTime() - recommendationPeriods[recommendationPeriod].durationMs);
+		setRecommendationLoading(true);
+		setRecommendationError(null);
+		try {
+			setRecommendations(
+				await recommendCostModels({ from: from.toISOString(), to: to.toISOString() })
+			);
+		} catch (err) {
+			setRecommendationError(
+				err instanceof Error ? err.message : 'Failed to find models missing from the cost catalog'
+			);
+			setRecommendations(null);
+		} finally {
+			setRecommendationLoading(false);
+		}
+	}
+
+	function addRecommendedCost(candidate: CostRecommendation) {
+		const rows = editingCustom ? customDraft : customRows;
+		if (includesCustomCost(rows, candidate)) return;
+		setCustomDraft([
+			...rows,
+			{
+				...emptyCustomCostRow(),
+				provider: candidate.provider,
+				model: candidate.model
+			}
+		]);
+		setFocusCustomRow(rows.length);
+		setCustomError(null);
+		setEditingCustom(true);
 	}
 
 	return (
@@ -178,6 +231,120 @@ export function CostsPage() {
 						title="Using the embedded cost catalog"
 						description="Agentgateway includes a built-in catalog of model pricing. Refresh the base catalog to get the latest pricing data."
 					/>
+				)}
+			</Panel>
+			<Panel>
+				<div className="editor-title">
+					<div>
+						<h3>Recently observed models</h3>
+						<p>
+							Find models used in recent request logs that are missing from the loaded cost catalog.
+						</p>
+					</div>
+					<div className="button-row compact">
+						<span className="muted-copy inline">Look back:</span>
+						{(Object.keys(recommendationPeriods) as RecommendationPeriod[]).map(period => (
+							<button
+								className={recommendationPeriod === period ? 'button primary' : 'button'}
+								type="button"
+								aria-pressed={recommendationPeriod === period}
+								disabled={recommendationLoading}
+								key={period}
+								onClick={() => {
+									setRecommendationPeriod(period);
+									setRecommendations(null);
+									setRecommendationError(null);
+								}}
+							>
+								{recommendationPeriods[period].label}
+							</button>
+						))}
+						<button
+							className="button"
+							type="button"
+							disabled={recommendationLoading}
+							onClick={() => void findMissingModels()}
+						>
+							{recommendationLoading ? 'Scanning…' : 'Find missing models'}
+						</button>
+					</div>
+				</div>
+				{recommendationError ? (
+					<StatusBanner state="bad" title="Could not find missing models">
+						{recommendationError}
+					</StatusBanner>
+				) : null}
+				{recommendations ? (
+					<>
+						<p className="muted-copy">
+							Scanned {formatNumber(recommendations.scannedRequests)} logged model requests and found{' '}
+							{formatNumber(recommendations.candidates.length)} missing models.
+							{recommendations.truncated
+								? ' More than 100 model groups were observed; narrow the time range and scan again to check for additional results.'
+								: ''}
+						</p>
+						{recommendations.candidates.length ? (
+							<div className="table-wrap">
+								<table className="data-table">
+									<thead>
+										<tr>
+											<th>Provider</th>
+											<th>Model</th>
+											<th>Requests</th>
+											<th>Last seen</th>
+											<th aria-label="Actions" />
+										</tr>
+									</thead>
+									<tbody>
+										{recommendations.candidates.map(candidate => (
+											<tr key={`${candidate.provider}/${candidate.model}`}>
+												<td>{candidate.provider}</td>
+												<td>{candidate.model}</td>
+												<td>{formatNumber(candidate.requestCount)}</td>
+												<td>{new Date(candidate.lastSeen).toLocaleString()}</td>
+												<td>
+													<button
+														className="button"
+														type="button"
+														disabled={
+															saving ||
+															includesCustomCost(
+																editingCustom ? customDraft : customRows,
+																candidate
+															)
+														}
+														onClick={() => addRecommendedCost(candidate)}
+													>
+														{includesCustomCost(
+															editingCustom ? customDraft : customRows,
+															candidate
+														)
+															? 'Added'
+															: 'Add cost'}
+													</button>
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<EmptyState
+								title={
+									recommendations.truncated
+										? 'No missing models in the returned groups'
+										: 'No missing models found'
+								}
+								description={
+									recommendations.truncated
+										? 'The scan reached its result limit. Choose a shorter period and scan again.'
+										: 'No missing models with a usable requested model were found in this time range.'
+								}
+							/>
+						)}
+					</>
+				) : (
+					<p className="muted-copy">Run a scan to check recent request logs for missing model prices.</p>
 				)}
 			</Panel>
 			<Panel>
@@ -271,6 +438,7 @@ export function CostsPage() {
 										{editingCustom ? (
 											<input
 												className="cost-rate-input"
+												autoFocus={focusCustomRow === index}
 												value={row.input}
 												onChange={event => patchCustomRow(index, { input: event.target.value })}
 												placeholder="0.25"
@@ -450,6 +618,14 @@ function emptyCustomCostRow(): CustomCostRow {
 		cacheRead: '',
 		cacheWrite: ''
 	};
+}
+
+function includesCustomCost(rows: CustomCostRow[], candidate: CostRecommendation) {
+	return rows.some(
+		row =>
+			row.provider.trim() === candidate.provider.trim() &&
+			row.model.trim() === candidate.model.trim()
+	);
 }
 
 function inlineCostRows(sources: CostCatalogSource[]): CustomCostRow[] {

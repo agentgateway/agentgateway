@@ -87,6 +87,26 @@ impl ModelCatalog {
 		self.state.load().snapshot.list_models()
 	}
 
+	pub fn is_loaded(&self) -> bool {
+		self.state.load().snapshot.catalog.is_some()
+	}
+
+	pub fn is_model_missing_after_fallback(
+		&self,
+		provider: &str,
+		request_model: &str,
+		response_model: Option<&str>,
+	) -> bool {
+		let state = self.state.load();
+		let Some(catalog) = state.snapshot.catalog.as_ref() else {
+			return false;
+		};
+		if response_model.is_some_and(|model| catalog.resolve(provider, model).is_some()) {
+			return false;
+		}
+		catalog.resolve(provider, request_model).is_none()
+	}
+
 	pub async fn replace_sources(
 		self: &Arc<Self>,
 		sources: Vec<ModelCatalogSource>,

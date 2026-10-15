@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -8,9 +9,9 @@ use axum::response::sse::Event;
 use axum::response::{IntoResponse, Redirect, Response, Sse};
 use axum::routing::{get, post, put};
 use axum::{Extension, Json, Router};
-use chrono::Utc;
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use include_dir::Dir;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -110,6 +111,7 @@ pub fn router(
 		.route("/api/logs/tail", post(tail_logs))
 		.route("/api/logs/analytics/summary", post(analytics_summary))
 		.route("/api/costs/models", get(cost_models))
+		.route("/api/costs/recommendations", post(cost_recommendations))
 		.route("/api/costs/refresh-base", post(refresh_base_costs))
 		.route("/api/budgets/status", get(budget_status))
 		.nest_service("/ui", ui_service)
@@ -937,6 +939,134 @@ async fn cost_models(
 	State(app): State<App>,
 ) -> Result<Json<crate::llm::catalog::ModelCatalogModels>, ErrorResponse> {
 	Ok(Json(app.model_catalog.list_models()))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CostRecommendationsRequest {
+	time_range: CostRecommendationsTimeRange,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CostRecommendationsTimeRange {
+	from: DateTime<Utc>,
+	to: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CostRecommendationsResponse {
+	time_range: CostRecommendationsTimeRange,
+	scanned_requests: i64,
+	truncated: bool,
+	candidates: Vec<CostRecommendation>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CostRecommendation {
+	provider: String,
+	model: String,
+	request_count: i64,
+	last_seen: DateTime<Utc>,
+}
+
+async fn cost_recommendations(
+	State(app): State<App>,
+	Json(request): Json<CostRecommendationsRequest>,
+) -> Result<Json<CostRecommendationsResponse>, ErrorResponse> {
+	let time_range = request.time_range;
+	let now = Utc::now();
+	if time_range.from >= time_range.to
+		|| time_range.to > now + ChronoDuration::minutes(5)
+		|| time_range
+			.to
+			.signed_duration_since(time_range.from.clone())
+			> ChronoDuration::days(30)
+	{
+		return Err(ErrorResponse::Status(
+			StatusCode::BAD_REQUEST,
+			"Time range must be ordered, no longer than 30 days, and may not end more than 5 minutes in the future."
+				.to_string(),
+		));
+	}
+	if !app.model_catalog.is_loaded() {
+		return Err(ErrorResponse::Status(
+			StatusCode::SERVICE_UNAVAILABLE,
+			"The model cost catalog is not loaded.".to_string(),
+		));
+	}
+	if !crate::telemetry::log_store::enabled() {
+		return Err(ErrorResponse::Status(
+			StatusCode::SERVICE_UNAVAILABLE,
+			"Request logs are unavailable. Configure request-log storage to find recently used models."
+				.to_string(),
+		));
+	}
+
+	let usage = crate::telemetry::log_store::recent_model_usage(
+		time_range.from.clone(),
+		time_range.to.clone(),
+	)
+	.await
+	.map_err(ErrorResponse::Anyhow)?;
+	let mut candidates = BTreeMap::<(String, String), CostRecommendation>::new();
+	for group in &usage.groups {
+		let Some(request_model) = group
+			.request_model
+			.as_deref()
+			.filter(|model| !model.trim().is_empty())
+		else {
+			continue;
+		};
+		if !app.model_catalog.is_model_missing_after_fallback(
+			&group.provider,
+			request_model,
+			group.response_model.as_deref(),
+		) {
+			continue;
+		}
+		let key = (group.provider.clone(), request_model.to_string());
+		candidates
+			.entry(key)
+			.and_modify(|candidate| {
+				candidate.request_count = candidate
+					.request_count
+					.saturating_add(group.request_count);
+				if group.last_seen > candidate.last_seen {
+					candidate.last_seen = group.last_seen.clone();
+				}
+			})
+			.or_insert_with(|| CostRecommendation {
+				provider: group.provider.clone(),
+				model: request_model.to_string(),
+				request_count: group.request_count,
+				last_seen: group.last_seen.clone(),
+			});
+	}
+
+	let mut candidates = candidates.into_values().collect::<Vec<_>>();
+	candidates.sort_by(|left, right| {
+		right
+			.request_count
+			.cmp(&left.request_count)
+			.then_with(|| right.last_seen.cmp(&left.last_seen))
+			.then_with(|| left.provider.cmp(&right.provider))
+			.then_with(|| left.model.cmp(&right.model))
+	});
+	let mut truncated = usage.groups.len() > 100;
+	if candidates.len() > 100 {
+		truncated = true;
+		candidates.truncate(100);
+	}
+
+	Ok(Json(CostRecommendationsResponse {
+		time_range,
+		scanned_requests: usage.scanned_requests,
+		truncated,
+		candidates,
+	}))
 }
 
 #[derive(serde::Deserialize)]

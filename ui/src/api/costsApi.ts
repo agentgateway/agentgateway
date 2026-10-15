@@ -14,6 +14,25 @@ export interface CostCatalogModelsResponse {
 	}>;
 }
 
+export interface CostRecommendationsTimeRange {
+	from: string;
+	to: string;
+}
+
+export interface CostRecommendation {
+	provider: string;
+	model: string;
+	requestCount: number;
+	lastSeen: string;
+}
+
+export interface CostRecommendationsResponse {
+	timeRange: CostRecommendationsTimeRange;
+	scannedRequests: number;
+	truncated: boolean;
+	candidates: CostRecommendation[];
+}
+
 export function refreshBaseCosts() {
 	return requestJson<RefreshBaseCostsResponse>('/api/costs/refresh-base', {
 		method: 'POST'
@@ -22,4 +41,11 @@ export function refreshBaseCosts() {
 
 export function listCostModels() {
 	return requestJson<CostCatalogModelsResponse>('/api/costs/models');
+}
+
+export function recommendCostModels(timeRange: CostRecommendationsTimeRange) {
+	return requestJson<CostRecommendationsResponse>('/api/costs/recommendations', {
+		method: 'POST',
+		body: JSON.stringify({ timeRange })
+	});
 }

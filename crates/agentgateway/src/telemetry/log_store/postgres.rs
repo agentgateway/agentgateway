@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::time::Instant;
 
 use anyhow::Context;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
@@ -9,10 +10,11 @@ use tracing::{error, info, warn};
 
 use super::{
 	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
-	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
-	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
-	TailResponse, TimeRange, TurnEntry, UsageEntry, analytics_window, attr_filter_values,
-	decode_cursor, encode_cursor, limit, promoted_attribute_column, prompt_preview, turn_kind,
+	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters,
+	ObservedModelUsage, PayloadEntry, SearchRequest, SearchResponse, StoredObservedModelUsage,
+	StoredRequestLog, StoredRequestLogPayload, TailRequest, TailResponse, TimeRange, TurnEntry,
+	UsageEntry, analytics_window, attr_filter_values, decode_cursor, encode_cursor, limit,
+	promoted_attribute_column, prompt_preview, turn_kind,
 };
 
 pub struct PostgresLogStore {
@@ -85,6 +87,47 @@ impl PostgresLogStore {
 			None
 		};
 		Ok(SearchResponse { logs, next_cursor })
+	}
+
+	pub async fn recent_model_usage(
+		&self,
+		from: DateTime<Utc>,
+		to: DateTime<Utc>,
+	) -> anyhow::Result<Vec<StoredObservedModelUsage>> {
+		let mut qb = QueryBuilder::<Postgres>::new("WITH grouped AS (SELECT ");
+		qb
+			.push("gen_ai_provider_name AS provider, gen_ai_request_model AS request_model,")
+			.push(" gen_ai_response_model AS response_model, COUNT(*) AS request_count,")
+			.push(" MAX(completed_at) AS last_seen FROM request_logs WHERE completed_at >= ")
+			.push_bind(from)
+			.push(" AND completed_at < ")
+			.push_bind(to)
+			.push(" AND gen_ai_provider_name IS NOT NULL AND TRIM(gen_ai_provider_name) <> ''")
+			.push(" AND ((gen_ai_request_model IS NOT NULL AND TRIM(gen_ai_request_model) <> '')")
+			.push(" OR (gen_ai_response_model IS NOT NULL AND TRIM(gen_ai_response_model) <> ''))")
+			.push(" GROUP BY gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model)")
+			.push(" SELECT provider, request_model, response_model, request_count, last_seen,")
+			.push(" CAST(SUM(request_count) OVER () AS BIGINT) AS scanned_requests FROM grouped")
+			.push(" ORDER BY request_count DESC, last_seen DESC, provider ASC,")
+			.push(" COALESCE(request_model, '') ASC, COALESCE(response_model, '') ASC LIMIT ")
+			.push_bind(super::RECENT_MODEL_USAGE_GROUP_LIMIT);
+		let rows = qb.build().fetch_all(&self.pool).await?;
+		let groups = rows
+			.into_iter()
+			.map(|row| {
+				Ok(StoredObservedModelUsage {
+					usage: ObservedModelUsage {
+						provider: row.try_get("provider")?,
+						request_model: row.try_get("request_model")?,
+						response_model: row.try_get("response_model")?,
+						request_count: row.try_get("request_count")?,
+						last_seen: row.try_get("last_seen")?,
+					},
+					scanned_requests: row.try_get("scanned_requests")?,
+				})
+			})
+			.collect::<Result<Vec<_>, sqlx::Error>>()?;
+		Ok(groups)
 	}
 
 	pub async fn get(&self, request: GetRequest) -> anyhow::Result<GetResponse> {

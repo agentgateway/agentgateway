@@ -120,6 +120,18 @@ pub async fn analytics_summary(
 		.await
 }
 
+pub async fn recent_model_usage(
+	from: DateTime<Utc>,
+	to: DateTime<Utc>,
+) -> anyhow::Result<RecentModelUsageSummary> {
+	let store = REQUEST_LOG_STORE
+		.get()
+		.ok_or_else(|| anyhow::anyhow!("request log database is not configured"))?;
+	store
+		.request(|tx| LogStoreMsg::RecentModelUsage { from, to, tx })
+		.await
+}
+
 pub async fn tail(request: TailRequest) -> anyhow::Result<TailResponse> {
 	let store = REQUEST_LOG_STORE
 		.get()
@@ -158,6 +170,7 @@ impl Drop for RequestLogStoreGuard {
 // Testing shows this to achieve a pretty good throughput for both postgres and sqlite
 const DEFAULT_LOG_STORE_BATCH_SIZE: usize = 16384;
 const LOG_STORE_BATCH_SIZE_ENV: &str = "REQUEST_LOG_STORE_BATCH_SIZE";
+pub(super) const RECENT_MODEL_USAGE_GROUP_LIMIT: i64 = 101;
 
 #[allow(clippy::large_enum_variant)] // The StoredRequestLog, which is used 99.9% of the time, is the large one
 enum LogStoreMsg {
@@ -173,6 +186,11 @@ enum LogStoreMsg {
 	AnalyticsSummary {
 		request: AnalyticsSummaryRequest,
 		tx: QueryResponse<AnalyticsSummaryResponse>,
+	},
+	RecentModelUsage {
+		from: DateTime<Utc>,
+		to: DateTime<Utc>,
+		tx: QueryResponse<RecentModelUsageSummary>,
 	},
 	Tail {
 		request: TailRequest,
@@ -351,6 +369,11 @@ async fn process_log_store_msg(
 		LogStoreMsg::AnalyticsSummary { request, tx } => {
 			flush_log_store_batch(backend, batch).await;
 			let _ = tx.send(backend.analytics_summary(request).await);
+			false
+		},
+		LogStoreMsg::RecentModelUsage { from, to, tx } => {
+			flush_log_store_batch(backend, batch).await;
+			let _ = tx.send(backend.recent_model_usage(from, to).await);
 			false
 		},
 		LogStoreMsg::Tail { request, tx } => {
@@ -541,6 +564,26 @@ pub struct AnalyticsSummaryResponse {
 	pub buckets: Vec<AnalyticsTimeBucket>,
 	pub groups: Vec<AnalyticsGroup>,
 	pub filter_options: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecentModelUsageSummary {
+	pub scanned_requests: i64,
+	pub groups: Vec<ObservedModelUsage>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ObservedModelUsage {
+	pub provider: String,
+	pub request_model: Option<String>,
+	pub response_model: Option<String>,
+	pub request_count: i64,
+	pub last_seen: DateTime<Utc>,
+}
+
+pub(super) struct StoredObservedModelUsage {
+	pub usage: ObservedModelUsage,
+	pub scanned_requests: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -825,6 +868,25 @@ impl Backend {
 			Self::Sqlite(store) => store.analytics_summary(request).await,
 			Self::Postgres(store) => store.analytics_summary(request).await,
 		}
+	}
+
+	async fn recent_model_usage(
+		&self,
+		from: DateTime<Utc>,
+		to: DateTime<Utc>,
+	) -> anyhow::Result<RecentModelUsageSummary> {
+		let groups = match self {
+			Self::Sqlite(store) => store.recent_model_usage(from, to).await?,
+			Self::Postgres(store) => store.recent_model_usage(from, to).await?,
+		};
+		let scanned_requests = groups
+			.first()
+			.map(|group| group.scanned_requests)
+			.unwrap_or_default();
+		Ok(RecentModelUsageSummary {
+			scanned_requests,
+			groups: groups.into_iter().map(|group| group.usage).collect(),
+		})
 	}
 
 	async fn tail(&self, request: TailRequest) -> anyhow::Result<TailResponse> {
