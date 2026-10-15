@@ -1148,6 +1148,45 @@ async fn delete_reports_success_when_upstream_delete_fails() {
 }
 
 #[tokio::test]
+async fn upstream_delete_status_handling() {
+	use wiremock::matchers::{header, method, path};
+	use wiremock::{Mock, ResponseTemplate};
+
+	for (status, expect_ok) in [(200, true), (404, true), (405, true), (500, false)] {
+		let upstream = wiremock::MockServer::start().await;
+		Mock::given(method("DELETE"))
+			.and(path("/mcp"))
+			.and(header("mcp-session-id", "upstream-session"))
+			.respond_with(ResponseTemplate::new(status))
+			.expect(1)
+			.mount(&upstream)
+			.await;
+		let relay = Relay::new_for_request(
+			McpBackendGroup {
+				targets: vec![fake_streamable_target("a", *upstream.address())],
+				stateful: true,
+				failure_mode: FailureMode::FailClosed,
+				..Default::default()
+			},
+			empty_mcp_policies(),
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			&crate::mcp::upstream::IncomingRequestContext::empty(),
+		)
+		.unwrap();
+		relay
+			.upstreams
+			.get("a")
+			.unwrap()
+			.set_session_id(Some("upstream-session"), None);
+
+		let result = relay
+			.send_fanout_deletion(crate::mcp::upstream::IncomingRequestContext::empty())
+			.await;
+		assert_eq!(result.is_ok(), expect_ok, "DELETE answered with {status}");
+	}
+}
+
+#[tokio::test]
 async fn delete_on_replica_without_session_closes_upstream_session() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind_a, io_a) = setup_proxy(&mock, true, false).await;
