@@ -4196,6 +4196,7 @@ async fn mcp_authentication_after_route_jwt(
 #[case::unprefixed(ExpiredExchangeCase::Unprefixed)]
 #[case::stripped(ExpiredExchangeCase::Stripped)]
 #[case::route(ExpiredExchangeCase::Route)]
+#[case::legacy_sse(ExpiredExchangeCase::LegacySse)]
 #[tokio::test]
 async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeCase) {
 	use crate::http::jwt::tests::build_signed_token_with_payload;
@@ -4213,6 +4214,7 @@ async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeC
 		scenario,
 		ExpiredExchangeCase::Prefixed | ExpiredExchangeCase::List | ExpiredExchangeCase::Unprefixed
 	);
+	let legacy_sse = scenario == ExpiredExchangeCase::LegacySse;
 	let (jwks, authn) = mcp_jwt_authentication(mode);
 	let exp = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
@@ -4223,7 +4225,11 @@ async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeC
 		MCP_JWT_KID,
 		serde_json::json!({ "iss": MCP_JWT_ISSUER, "aud": audiences, "exp": exp }),
 	);
-	let mock = mock_streamable_http_server(true).await;
+	let mock = if legacy_sse {
+		mock_sse_server().await
+	} else {
+		mock_streamable_http_server(true).await
+	};
 
 	let token_endpoint = wiremock::MockServer::start().await;
 	wiremock::Mock::given(wiremock::matchers::method("POST"))
@@ -4321,7 +4327,7 @@ async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeC
 			.with_mcp_backend_and_target_policies(
 				mock.addr,
 				true,
-				false,
+				legacy_sse,
 				policies,
 				target_policies,
 				false,
@@ -4407,6 +4413,12 @@ async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeC
 		serde_json::json!({"jsonrpc": "2.0", "id": 2,
 			"method": "tools/call", "params": {"name": tool_name, "arguments": {}}})
 	};
+	if legacy_sse {
+		// The legacy mock keeps one counter per SSE session, so the value is still 1 after the
+		// retry only if the session survived the rejection.
+		let count = call_tool_text(&client, &url, &session_id, &token, "increment", 10).await;
+		assert_eq!(count, "1");
+	}
 	let calls_before_expiry = token_endpoint.received_requests().await.unwrap().len();
 	let denied = mcp_json_post(&client, &url, &call)
 		.bearer_auth(&expired)
@@ -4455,7 +4467,37 @@ async fn expired_exchange_subject_is_rejected(#[case] scenario: ExpiredExchangeC
 	assert_eq!(retry.status(), reqwest::StatusCode::OK);
 	assert!(read_response_message(retry).await.get("error").is_none());
 	assert!(token_endpoint.received_requests().await.unwrap().len() > calls_before_expiry);
-	assert_eq!(mock.init_count().await, 1);
+	if legacy_sse {
+		let count = call_tool_text(&client, &url, &session_id, &token, "get_value", 11).await;
+		assert_eq!(count, "1");
+	} else {
+		assert_eq!(mock.init_count().await, 1);
+	}
+}
+
+async fn call_tool_text(
+	client: &reqwest::Client,
+	url: &str,
+	session_id: &str,
+	token: &str,
+	name: &str,
+	id: i64,
+) -> String {
+	let call = serde_json::json!({"jsonrpc": "2.0", "id": id,
+		"method": "tools/call", "params": {"name": name, "arguments": {}}});
+	let response = mcp_json_post(client, url, &call)
+		.bearer_auth(token)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-03-26")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let message = read_response_message(response).await;
+	message["result"]["content"][0]["text"]
+		.as_str()
+		.unwrap_or_else(|| panic!("expected tool text, got {message}"))
+		.to_owned()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -4467,6 +4509,7 @@ enum ExpiredExchangeCase {
 	Unprefixed,
 	Stripped,
 	Route,
+	LegacySse,
 }
 
 const MCP_JWT_KID: &str = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";

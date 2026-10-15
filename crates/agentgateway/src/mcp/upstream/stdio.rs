@@ -65,7 +65,10 @@ impl Process {
 
 		if let Err(e) = self.queue(JsonRpcMessage::Request(req), ctx).await {
 			self.pending_requests.lock().unwrap().remove(&req_id);
-			return Err(e);
+			return Err(match e {
+				QueueError::Rejected(e) => e,
+				QueueError::Stopped => UpstreamError::Recv,
+			});
 		}
 
 		let response = receiver.await.map_err(|_| UpstreamError::Recv)?;
@@ -91,7 +94,10 @@ impl Process {
 		if !self.is_alive() {
 			return Err(UpstreamError::Send);
 		}
-		self.queue(JsonRpcMessage::notification(req), ctx).await
+		self
+			.queue(JsonRpcMessage::notification(req), ctx)
+			.await
+			.map_err(QueueError::into_send_error)
 	}
 
 	pub async fn send_client_message(
@@ -102,34 +108,68 @@ impl Process {
 		if !self.is_alive() {
 			return Err(UpstreamError::Send);
 		}
-		self.queue(msg, ctx).await
+		self
+			.queue(msg, ctx)
+			.await
+			.map_err(QueueError::into_send_error)
 	}
 
-	/// Waits until the message is sent. Only a rejected client credential is returned; other send
-	/// failures stop the transport, which fails pending requests.
+	/// Waits until the transport has sent the message.
 	async fn queue(
 		&self,
 		msg: ClientJsonRpcMessage,
 		ctx: &IncomingRequestContext,
-	) -> Result<(), UpstreamError> {
-		let (rejected_tx, rejected_rx) = oneshot::channel();
+	) -> Result<(), QueueError> {
+		let (sent, sent_rx) = oneshot::channel();
 		self
 			.sender
-			.send((msg, ctx.clone(), rejected_tx))
+			.send(QueuedMessage {
+				msg,
+				ctx: ctx.clone(),
+				sent,
+			})
 			.await
-			.map_err(|_| UpstreamError::Send)?;
-		match rejected_rx.await {
-			Ok(rejection) => Err(rejection),
-			Err(_) => Ok(()),
+			.map_err(|_| QueueError::Stopped)?;
+		match sent_rx.await {
+			Ok(Ok(())) => Ok(()),
+			Ok(Err(e)) => Err(QueueError::Rejected(e)),
+			// The transport stopped without sending this message.
+			Err(_) => Err(QueueError::Stopped),
 		}
 	}
 }
 
-type QueuedMessage = (
-	ClientJsonRpcMessage,
-	IncomingRequestContext,
-	oneshot::Sender<UpstreamError>,
-);
+struct QueuedMessage {
+	msg: ClientJsonRpcMessage,
+	ctx: IncomingRequestContext,
+	/// Completed once the message is sent or rejected. Dropped if the transport stops first.
+	sent: oneshot::Sender<Result<(), UpstreamError>>,
+}
+
+enum QueueError {
+	/// The transport rejected this message and remains usable.
+	Rejected(UpstreamError),
+	/// The transport stopped without sending this message.
+	Stopped,
+}
+
+impl QueueError {
+	fn into_send_error(self) -> UpstreamError {
+		match self {
+			QueueError::Rejected(e) => e,
+			QueueError::Stopped => UpstreamError::Send,
+		}
+	}
+}
+
+/// A failed send, classified by whether the transport can keep sending.
+#[derive(Debug)]
+pub enum SendError {
+	/// Only this message failed; the transport remains usable.
+	Request(UpstreamError),
+	/// The transport can no longer send messages.
+	Terminal(UpstreamError),
+}
 
 impl Process {
 	pub fn new(mut proc: impl MCPTransport) -> Self {
@@ -152,13 +192,14 @@ impl Process {
 			loop {
 				tokio::select! {
 					req = sender_rx.recv() => match req {
-						Some((msg, ctx, rejected)) => match proc.send(msg, &ctx).await {
-							Ok(()) => {},
-							// Rejected before anything was sent, so the transport is still usable.
-							Err(e) if e.is_client_authentication_failure() => {
-								let _ = rejected.send(e);
+						Some(QueuedMessage { msg, ctx, sent }) => match proc.send(msg, &ctx).await {
+							Ok(()) => {
+								let _ = sent.send(Ok(()));
 							},
-							Err(e) => {
+							Err(SendError::Request(e)) => {
+								let _ = sent.send(Err(e));
+							},
+							Err(SendError::Terminal(e)) => {
 								error!("Error sending message to stdio process: {:?}", e);
 								terminal_err = Some(e);
 								break;
@@ -251,7 +292,7 @@ pub trait MCPTransport: Send + 'static {
 		&mut self,
 		item: ClientJsonRpcMessage,
 		user_headers: &IncomingRequestContext,
-	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static;
+	) -> impl Future<Output = Result<(), SendError>> + Send + 'static;
 
 	/// Receive a message from the transport, this operation is sequential.
 	fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send;
@@ -265,8 +306,8 @@ impl MCPTransport for TokioChildProcess {
 		&mut self,
 		item: ClientJsonRpcMessage,
 		_: &IncomingRequestContext,
-	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
-		Transport::send(self, item).map_err(Into::into)
+	) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
+		Transport::send(self, item).map_err(|e| SendError::Terminal(e.into()))
 	}
 
 	fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
@@ -293,8 +334,10 @@ mod tests {
 			&mut self,
 			_: ClientJsonRpcMessage,
 			_: &IncomingRequestContext,
-		) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
-			std::future::ready(Err(UpstreamError::InvalidRequest("boom".to_string())))
+		) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
+			std::future::ready(Err(SendError::Terminal(UpstreamError::InvalidRequest(
+				"boom".to_string(),
+			))))
 		}
 
 		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
@@ -316,7 +359,7 @@ mod tests {
 			&mut self,
 			item: ClientJsonRpcMessage,
 			_: &IncomingRequestContext,
-		) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
+		) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
 			let tx = self.tx.clone();
 			async move {
 				if let JsonRpcMessage::Request(req) = item {
@@ -340,6 +383,147 @@ mod tests {
 		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
 			std::future::ready(Ok(()))
 		}
+	}
+
+	/// Rejects request 2 and every non-request message; the test supplies replies for other
+	/// requests.
+	struct RejectingTransport {
+		rx: mpsc::Receiver<ServerJsonRpcMessage>,
+	}
+
+	impl MCPTransport for RejectingTransport {
+		fn send(
+			&mut self,
+			item: ClientJsonRpcMessage,
+			_: &IncomingRequestContext,
+		) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
+			let rejected = match &item {
+				JsonRpcMessage::Request(req) => req.id == RequestId::Number(2),
+				_ => true,
+			};
+			std::future::ready(if rejected {
+				Err(SendError::Request(UpstreamError::InvalidRequest(
+					"rejected".to_string(),
+				)))
+			} else {
+				Ok(())
+			})
+		}
+
+		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
+			self.rx.recv()
+		}
+
+		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
+			std::future::ready(Ok(()))
+		}
+	}
+
+	fn ping(id: i64) -> JsonRpcRequest<ClientRequest> {
+		JsonRpcRequest {
+			jsonrpc: Default::default(),
+			id: RequestId::Number(id),
+			request: ClientRequest::PingRequest(Default::default()),
+		}
+	}
+
+	async fn wait_until_pending(proc: &Process, id: i64) {
+		timeout(Duration::from_secs(1), async {
+			while !proc
+				.pending_requests
+				.lock()
+				.unwrap()
+				.contains_key(&RequestId::Number(id))
+			{
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_process_request_send_failure_keeps_transport_usable() {
+		let (tx, rx) = mpsc::channel(4);
+		let proc = Arc::new(Process::new(RejectingTransport { rx }));
+		let ctx = IncomingRequestContext::empty();
+		let mut events = proc.get_event_stream().await.unwrap();
+		let first = tokio::spawn({
+			let proc = proc.clone();
+			async move {
+				proc
+					.send_message(ping(1), &IncomingRequestContext::empty())
+					.await
+			}
+		});
+		wait_until_pending(&proc, 1).await;
+
+		let err = proc.send_message(ping(2), &ctx).await.unwrap_err();
+		assert!(matches!(err, UpstreamError::InvalidRequest(ref msg) if msg == "rejected"));
+		let err = proc
+			.send_notification(
+				ClientNotification::InitializedNotification(Default::default()),
+				&ctx,
+			)
+			.await
+			.unwrap_err();
+		assert!(matches!(err, UpstreamError::InvalidRequest(ref msg) if msg == "rejected"));
+		let err = proc
+			.send_client_message(
+				ClientJsonRpcMessage::response(rmcp::model::ClientResult::empty(()), RequestId::Number(9)),
+				&ctx,
+			)
+			.await
+			.unwrap_err();
+		assert!(matches!(err, UpstreamError::InvalidRequest(ref msg) if msg == "rejected"));
+		assert!(proc.is_alive());
+		{
+			let pending = proc.pending_requests.lock().unwrap();
+			assert!(!pending.contains_key(&RequestId::Number(2)));
+			assert!(pending.contains_key(&RequestId::Number(1)));
+		}
+
+		let third = tokio::spawn({
+			let proc = proc.clone();
+			async move {
+				proc
+					.send_message(ping(3), &IncomingRequestContext::empty())
+					.await
+			}
+		});
+		wait_until_pending(&proc, 3).await;
+		for id in [3, 1] {
+			tx.send(ServerJsonRpcMessage::response(
+				rmcp::model::ServerResult::empty(()),
+				RequestId::Number(id),
+			))
+			.await
+			.unwrap();
+		}
+		tx.send(ServerJsonRpcMessage::notification(
+			rmcp::model::ServerNotification::ToolListChangedNotification(Default::default()),
+		))
+		.await
+		.unwrap();
+
+		for (task, id) in [(third, 3), (first, 1)] {
+			let resp = timeout(Duration::from_secs(1), task)
+				.await
+				.unwrap()
+				.unwrap()
+				.unwrap();
+			match resp {
+				ServerJsonRpcMessage::Response(r) => assert_eq!(r.id, RequestId::Number(id)),
+				other => panic!("expected response, got {other:?}"),
+			}
+		}
+		let event = timeout(Duration::from_secs(1), events.next())
+			.await
+			.unwrap();
+		assert!(matches!(
+			event,
+			Some(Ok(ServerJsonRpcMessage::Notification(_)))
+		));
 	}
 
 	#[tokio::test]
@@ -381,6 +565,100 @@ mod tests {
 			.unwrap_err();
 
 		assert!(matches!(err, UpstreamError::Recv));
+		assert!(!proc.is_alive());
+	}
+
+	#[tokio::test]
+	async fn test_process_fails_notification_when_transport_dies() {
+		let proc = Process::new(FailOnSendTransport);
+
+		let err = proc
+			.send_notification(
+				ClientNotification::InitializedNotification(Default::default()),
+				&IncomingRequestContext::empty(),
+			)
+			.await
+			.unwrap_err();
+
+		assert!(matches!(err, UpstreamError::Send));
+		assert!(!proc.is_alive());
+	}
+
+	/// Holds the first send until released, then fails every send as terminal.
+	struct HeldFailureTransport {
+		started: Option<oneshot::Sender<()>>,
+		release: Option<oneshot::Receiver<()>>,
+	}
+
+	impl MCPTransport for HeldFailureTransport {
+		fn send(
+			&mut self,
+			_: ClientJsonRpcMessage,
+			_: &IncomingRequestContext,
+		) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
+			if let Some(started) = self.started.take() {
+				let _ = started.send(());
+			}
+			let release = self.release.take();
+			async move {
+				if let Some(release) = release {
+					let _ = release.await;
+				}
+				Err(SendError::Terminal(UpstreamError::InvalidRequest(
+					"boom".to_string(),
+				)))
+			}
+		}
+
+		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
+			std::future::pending()
+		}
+
+		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
+			std::future::ready(Ok(()))
+		}
+	}
+
+	#[tokio::test]
+	async fn test_process_fails_queued_notification_when_transport_dies() {
+		let (started_tx, started_rx) = oneshot::channel();
+		let (release_tx, release_rx) = oneshot::channel();
+		let proc = Arc::new(Process::new(HeldFailureTransport {
+			started: Some(started_tx),
+			release: Some(release_rx),
+		}));
+		let notify = |proc: Arc<Process>| async move {
+			proc
+				.send_notification(
+					ClientNotification::InitializedNotification(Default::default()),
+					&IncomingRequestContext::empty(),
+				)
+				.await
+		};
+
+		let in_flight = tokio::spawn(notify(proc.clone()));
+		timeout(Duration::from_secs(1), started_rx)
+			.await
+			.unwrap()
+			.unwrap();
+		let queued = tokio::spawn(notify(proc.clone()));
+		timeout(Duration::from_secs(1), async {
+			while proc.sender.capacity() == proc.sender.max_capacity() {
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
+		release_tx.send(()).unwrap();
+
+		for task in [in_flight, queued] {
+			let err = timeout(Duration::from_secs(1), task)
+				.await
+				.unwrap()
+				.unwrap()
+				.unwrap_err();
+			assert!(matches!(err, UpstreamError::Send));
+		}
 		assert!(!proc.is_alive());
 	}
 
