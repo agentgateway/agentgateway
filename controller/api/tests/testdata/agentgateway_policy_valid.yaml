@@ -1488,6 +1488,31 @@ spec:
           jwks:
             inline: '{"keys":[]}'
           validation: {requiredClaims: [exp, nbf, aud, sub]}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-clock-skew
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {clockSkew: 1m30s}
+        - issuer: issuer-zero.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {clockSkew: 0s}
+        - issuer: issuer-max.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {clockSkew: 5m}
 
 ---
 apiVersion: agentgateway.dev/v1alpha1

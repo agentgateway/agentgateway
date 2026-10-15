@@ -972,6 +972,8 @@ message JWTValidationOptions {
   // Claims that must be present in the token before validation.
   // Defaults to ["exp"]. Use an empty list to require no claims.
   repeated string required_claims = 1;
+  // Clock skew allowance for exp and nbf, rounded down to whole seconds. Defaults to 60s.
+  google.protobuf.Duration clock_skew = 2;
 }
 
 message TrafficPolicySpec {

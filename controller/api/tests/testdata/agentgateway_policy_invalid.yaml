@@ -1810,6 +1810,42 @@ spec:
           jwks:
             inline: '{"keys":[]}'
           validation: {requiredClaims: [iss]}
+---
+_err: 'clockSkew must be at most 5m'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-clock-skew-too-large
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {clockSkew: 5m1s}
+---
+_err: 'clockSkew must be a duration in whole seconds'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-clock-skew-sub-second
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      providers:
+        - issuer: issuer.example
+          jwks:
+            inline: '{"keys":[]}'
+          validation: {clockSkew: 500ms}
 
 ---
 _err: 'path is only valid with protocol HTTP'

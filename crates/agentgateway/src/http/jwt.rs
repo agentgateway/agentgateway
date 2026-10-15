@@ -286,10 +286,22 @@ pub struct JWTValidationOptions {
 	/// those implied by the configured issuer and audiences.
 	#[serde(default = "default_required_claims")]
 	pub required_claims: HashSet<String>,
+	/// Allows for clock skew when checking `exp` and `nbf`.
+	/// Rounded down to whole seconds. Defaults to 60s.
+	#[serde(default = "default_clock_skew", with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub clock_skew: Duration,
 }
 
 fn default_required_claims() -> HashSet<String> {
 	HashSet::from(["exp".to_owned()])
+}
+
+/// Matches the `jsonwebtoken` default, which applied before this was configurable.
+pub const DEFAULT_CLOCK_SKEW: Duration = Duration::from_secs(60);
+
+fn default_clock_skew() -> Duration {
+	DEFAULT_CLOCK_SKEW
 }
 
 /// The only claim names the jsonwebtoken library actually enforces.
@@ -312,6 +324,7 @@ impl Default for JWTValidationOptions {
 	fn default() -> Self {
 		Self {
 			required_claims: default_required_claims(),
+			clock_skew: DEFAULT_CLOCK_SKEW,
 		}
 	}
 }
@@ -452,6 +465,7 @@ impl Provider {
 			// The new() requires 1 algorithm, so just pass the first before we override it
 			let mut validation = Validation::new(*supported_algorithms.first().unwrap());
 			validation.validate_nbf = true;
+			validation.leeway = jwt_validation_options.clock_skew.as_secs();
 			validation.algorithms = supported_algorithms;
 			// Override required_spec_claims with the user-configured set. A configured
 			// issuer or audience also implies that the corresponding claim must exist;

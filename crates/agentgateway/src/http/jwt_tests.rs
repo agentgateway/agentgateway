@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use itertools::Itertools;
+use jsonwebtoken::errors::ErrorKind;
 use serde_json::json;
 
 use super::{JWTValidationOptions, JwkError, Jwt, LocalJwtConfig, Mode, Provider, TokenError};
@@ -29,6 +30,11 @@ fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
 				jwt_validation_options.required_claims,
 				HashSet::from(["exp".to_owned()]),
 				"missing jwtValidationOptions should default required_claims to [\"exp\"]"
+			);
+			assert_eq!(
+				jwt_validation_options.clock_skew,
+				std::time::Duration::from_secs(60),
+				"missing jwtValidationOptions should default clock_skew to 60s"
 			);
 		},
 		_ => panic!("expected Single variant"),
@@ -90,12 +96,12 @@ fn test_deserialize_multi_provider_with_jwt_validation_options() {
 			{
 				"issuer": "https://idp-1.example.com",
 				"jwks": { "url": "https://idp-1.example.com/.well-known/jwks.json" },
-				"jwtValidationOptions": { "requiredClaims": [] }
+				"jwtValidationOptions": { "requiredClaims": [], "clockSkew": "0s" }
 			},
 			{
 				"issuer": "https://idp-2.example.com",
 				"jwks": { "url": "https://idp-2.example.com/.well-known/jwks.json" },
-				"jwtValidationOptions": { "requiredClaims": ["exp", "nbf"] }
+				"jwtValidationOptions": { "requiredClaims": ["exp", "nbf"], "clockSkew": "10s" }
 			}
 		]
 	}"#;
@@ -114,6 +120,16 @@ fn test_deserialize_multi_provider_with_jwt_validation_options() {
 				providers[1].jwt_validation_options.required_claims,
 				HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
 				"second provider should require exp and nbf"
+			);
+			assert_eq!(
+				providers[0].jwt_validation_options.clock_skew,
+				std::time::Duration::ZERO,
+				"explicit zero clockSkew should stay zero, not fall back to the default"
+			);
+			assert_eq!(
+				providers[1].jwt_validation_options.clock_skew,
+				std::time::Duration::from_secs(10),
+				"second provider should use the configured clockSkew"
 			);
 		},
 		_ => panic!("expected Multi variant"),
@@ -346,11 +362,11 @@ pub fn test_okp_non_ed25519_curve_rejected() {
 }
 
 fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
-	setup_test_jwt_with_required_claims(JWTValidationOptions::default().required_claims)
+	setup_test_jwt_with_options(JWTValidationOptions::default())
 }
 
-fn setup_test_jwt_with_required_claims(
-	required_claims: HashSet<String>,
+fn setup_test_jwt_with_options(
+	jwt_validation_options: JWTValidationOptions,
 ) -> (Jwt, &'static str, &'static str, &'static str) {
 	let jwks = json!({
 		"keys": [
@@ -375,7 +391,7 @@ fn setup_test_jwt_with_required_claims(
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
-		JWTValidationOptions { required_claims },
+		jwt_validation_options,
 	)
 	.unwrap();
 
@@ -421,7 +437,10 @@ pub fn test_configured_issuer_and_audiences_require_claims() {
 	use jsonwebtoken::errors::ErrorKind;
 
 	// Even an explicitly empty requiredClaims list cannot make identity constraints optional.
-	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt_with_required_claims(HashSet::new());
+	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt_with_options(JWTValidationOptions {
+		required_claims: HashSet::new(),
+		..Default::default()
+	});
 	let exp = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.unwrap()
@@ -465,7 +484,10 @@ fn test_nbf_validation() {
 		HashSet::new(),
 		HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
 	] {
-		let (jwt, kid, issuer, aud) = setup_test_jwt_with_required_claims(required_claims);
+		let (jwt, kid, issuer, aud) = setup_test_jwt_with_options(JWTValidationOptions {
+			required_claims,
+			..Default::default()
+		});
 		for (nbf, accepted) in [(now - 600, true), (now + 30, true), (now + 864_000, false)] {
 			let token = build_signed_token_with_payload(
 				kid,
@@ -481,6 +503,47 @@ fn test_nbf_validation() {
 				));
 			}
 		}
+	}
+}
+
+#[rstest::rstest]
+#[case::default_accepts_exp_within_skew(None, -30, -600, None)]
+#[case::default_rejects_exp_past_skew(None, -90, -600, Some(ErrorKind::ExpiredSignature))]
+#[case::default_rejects_nbf_past_skew(None, 900_000, 90, Some(ErrorKind::ImmatureSignature))]
+#[case::short_accepts_within_skew(Some(10), -5, 5, None)]
+#[case::short_rejects_exp_past_skew(Some(10), -30, -600, Some(ErrorKind::ExpiredSignature))]
+#[case::short_rejects_nbf_past_skew(Some(10), 900_000, 30, Some(ErrorKind::ImmatureSignature))]
+#[case::zero_rejects_past_exp(Some(0), -5, -600, Some(ErrorKind::ExpiredSignature))]
+#[case::zero_rejects_future_nbf(Some(0), 900_000, 5, Some(ErrorKind::ImmatureSignature))]
+#[case::max_accepts_within_skew(Some(300), -240, 240, None)]
+fn test_clock_skew(
+	#[case] clock_skew_secs: Option<u64>,
+	#[case] exp_offset: i64,
+	#[case] nbf_offset: i64,
+	#[case] expected: Option<ErrorKind>,
+) {
+	let mut jwt_validation_options = JWTValidationOptions::default();
+	if let Some(secs) = clock_skew_secs {
+		jwt_validation_options.clock_skew = std::time::Duration::from_secs(secs);
+	}
+	let (jwt, kid, issuer, aud) = setup_test_jwt_with_options(jwt_validation_options);
+	let now = jsonwebtoken::get_current_timestamp();
+	let token = build_signed_token_with_payload(
+		kid,
+		json!({
+			"iss": issuer,
+			"aud": aud,
+			"exp": now.checked_add_signed(exp_offset).unwrap(),
+			"nbf": now.checked_add_signed(nbf_offset).unwrap(),
+		}),
+	);
+	let result = jwt.validate_claims(&token);
+	match expected {
+		None => assert!(result.is_ok(), "{result:?}"),
+		Some(kind) => assert!(
+			matches!(&result, Err(TokenError::Invalid(error)) if *error.kind() == kind),
+			"expected {kind:?}, got {result:?}"
+		),
 	}
 }
 
@@ -1075,6 +1138,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::new(),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(
@@ -1179,6 +1243,7 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::new(),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(
@@ -1230,6 +1295,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(

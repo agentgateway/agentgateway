@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/kube/krt"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -175,6 +178,26 @@ func TestProcessJWTAuthenticationPolicyDefaultsRequiredClaimsWhenOptionsEmpty(t 
 	got := policy.GetTraffic().GetJwt().GetProviders()[0].GetJwtValidationOptions().GetRequiredClaims()
 	if len(got) != 1 || got[0] != "exp" {
 		t.Fatalf("expected default required claims [exp], got %v", got)
+	}
+}
+
+func TestTranslateJWTValidationOptionsClockSkew(t *testing.T) {
+	tests := []struct {
+		name      string
+		clockSkew *agentgateway.Duration
+		want      *durationpb.Duration
+	}{
+		{name: "unset leaves the data plane default", clockSkew: nil, want: nil},
+		{name: "explicit value", clockSkew: &agentgateway.Duration{Duration: 10 * time.Second}, want: durationpb.New(10 * time.Second)},
+		{name: "zero", clockSkew: &agentgateway.Duration{}, want: durationpb.New(0)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := translateJWTValidationOptions(&agentgateway.JWTValidationOptions{ClockSkew: tt.clockSkew}).GetClockSkew()
+			if !proto.Equal(got, tt.want) {
+				t.Fatalf("expected clock skew %v, got %v", tt.want, got)
+			}
+		})
 	}
 }
 

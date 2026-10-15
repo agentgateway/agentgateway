@@ -867,7 +867,10 @@ func translateJWTValidationOptions(opts *agentgateway.JWTValidationOptions) *api
 	if opts.RequiredClaims != nil {
 		claims = cast(*opts.RequiredClaims)
 	}
-	return &api.JWTValidationOptions{RequiredClaims: claims}
+	return &api.JWTValidationOptions{
+		RequiredClaims: claims,
+		ClockSkew:      durationToProto(opts.ClockSkew),
+	}
 }
 
 func processBasicAuthenticationPolicy(
