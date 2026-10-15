@@ -72,14 +72,10 @@ pub fn apply_prompt_caching(
 			});
 		mark(last_cacheable);
 	}
-	if caching.cache_tools {
-		mark(
-			req
-				.rest
-				.get_mut("tools")
-				.and_then(serde_json::Value::as_array_mut)
-				.and_then(|tools| tools.last_mut()),
-		);
+	if caching.cache_tools
+		&& let Some(tool) = req.tools.as_mut().and_then(|tools| tools.last_mut())
+	{
+		tool.cache_control = Some(serde_json::json!({"type": "ephemeral"}));
 	}
 }
 
@@ -110,11 +106,11 @@ fn has_cache_control(req: &types::messages::Request) -> bool {
 						.is_some_and(|parts| parts.iter().any(marked)))
 		});
 	let tools = req
-		.rest
-		.get("tools")
-		.and_then(serde_json::Value::as_array)
-		.is_some_and(|tools| tools.iter().any(marked));
-	marked(&req.rest) || system || content || tools
+		.tools
+		.iter()
+		.flatten()
+		.any(|tool| tool.cache_control.is_some());
+	req.cache_control.is_some() || system || content || tools
 }
 
 fn system_tokens(system: &types::messages::TextBlock) -> usize {
@@ -823,6 +819,7 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
+			cache_control: None,
 		}
 	}
 

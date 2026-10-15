@@ -25,8 +25,21 @@ pub struct Request {
 	pub stream: Option<bool>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tools: Option<Vec<Tool>>,
+	/// Kept as raw JSON so fields we do not model (such as scope) pass through unchanged.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct Tool {
+	#[serde(flatten)]
+	pub rest: serde_json::Value,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
@@ -1242,6 +1255,10 @@ pub mod typed {
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub output_config: Option<OutputConfig>,
+
+		/// Automatic caching: marks the last cacheable block of the request.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
