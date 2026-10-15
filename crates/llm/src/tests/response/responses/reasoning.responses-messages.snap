@@ -87,7 +87,10 @@ info:
     "usage": {
       "input_tokens": 18,
       "output_tokens": 5,
-      "service_tier": "default"
+      "service_tier": "default",
+      "output_tokens_details": {
+        "thinking_tokens": 8
+      }
     }
   },
   "parsed": {

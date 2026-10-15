@@ -1,0 +1,76 @@
+---
+source: crates/llm/src/golden_tests.rs
+assertion_line: 782
+description: src/tests/response/anthropic/namespace_tool.json
+info:
+  id: msg_namespace_tool
+  type: message
+  role: assistant
+  model: claude-sonnet-5-5
+  content:
+    - type: tool_use
+      id: call_namespace_1
+      name: multi_agent_v1__spawn_agent
+      input:
+        task: review the bridge
+  stop_reason: tool_use
+  stop_sequence: ~
+  usage:
+    input_tokens: 18
+    output_tokens: 12
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "function_call",
+        "arguments": "{\"task\":\"review the bridge\"}",
+        "call_id": "call_namespace_1",
+        "namespace": "multi_agent_v1",
+        "name": "spawn_agent",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "claude-sonnet-5-5",
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 12,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 30
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 18,
+    "output_tokens": 12,
+    "total_tokens": 30,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "claude-sonnet-5-5",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_namespace_1",
+            "name": "multi_agent_v1__spawn_agent",
+            "arguments": {
+              "task": "review the bridge"
+            }
+          }
+        ],
+        "finish_reason": "completed"
+      }
+    ]
+  }
+}

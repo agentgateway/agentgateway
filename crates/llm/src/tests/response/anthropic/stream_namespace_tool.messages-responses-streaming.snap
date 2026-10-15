@@ -1,0 +1,53 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_namespace_tool.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"resp_msg_namespace_tool","model":"claude-sonnet-5-5","object":"response","output":[],"status":"in_progress"}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":1,"response":{"created_at":123,"id":"resp_msg_namespace_tool","model":"claude-sonnet-5-5","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"function_call","arguments":"","call_id":"call_namespace_1","namespace":"multi_agent_v1","name":"spawn_agent","id":"fc_msg_namespace_tool_0","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":3,"item_id":"fc_msg_namespace_tool_0","output_index":0,"delta":"{\"task\":\"review the bridge\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","name":"spawn_agent","sequence_number":4,"item_id":"fc_msg_namespace_tool_0","output_index":0,"arguments":"{\"task\":\"review the bridge\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"function_call","arguments":"{\"task\":\"review the bridge\"}","call_id":"call_namespace_1","namespace":"multi_agent_v1","name":"spawn_agent","id":"fc_msg_namespace_tool_0","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":6,"response":{"created_at":123,"id":"resp_msg_namespace_tool","model":"claude-sonnet-5-5","object":"response","output":[{"type":"function_call","arguments":"{\"task\":\"review the bridge\"}","call_id":"call_namespace_1","namespace":"multi_agent_v1","name":"spawn_agent","id":"fc_msg_namespace_tool_0","status":"completed"}],"status":"completed","usage":{"input_tokens":18,"input_tokens_details":{"cached_tokens":0},"output_tokens":12,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":30}}}
+
+
+
+{
+  "input_tokens": 18,
+  "output_tokens": 12,
+  "total_tokens": 30,
+  "cached_input_tokens": 0,
+  "provider_model": "claude-sonnet-5-5",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_namespace_1",
+          "name": "multi_agent_v1__spawn_agent",
+          "arguments": {
+            "task": "review the bridge"
+          }
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}

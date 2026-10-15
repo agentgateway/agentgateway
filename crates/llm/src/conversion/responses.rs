@@ -525,8 +525,12 @@ pub mod from_messages {
 					id,
 					name,
 					input,
+					caller,
 					cache_control: _,
 				} => {
+					if caller.is_some() {
+						return unsupported("messages caller metadata cannot be represented by responses");
+					}
 					flush_output_message(&mut text_parts, out);
 					let arguments = serde_json::to_string(&input).map_err(AIError::RequestMarshal)?;
 					// Messages preserves the call ID, not the optional Responses item ID.
@@ -831,6 +835,7 @@ pub mod from_messages {
 						id: call.call_id,
 						name: call.name,
 						input,
+						caller: None,
 						cache_control: None,
 					});
 				},
@@ -938,6 +943,7 @@ pub mod from_messages {
 							cache_creation_input_tokens: None,
 							cache_read_input_tokens: None,
 							service_tier: None,
+							output_tokens_details: None,
 						},
 						input_audio_tokens: None,
 						output_audio_tokens: None,
@@ -1142,6 +1148,7 @@ pub mod from_messages {
 							id,
 							name,
 							input: Value::Object(Map::new()),
+							caller: None,
 							cache_control: None,
 						},
 					},
@@ -1288,15 +1295,27 @@ pub mod from_messages {
 					},
 					responses::ResponseStreamEvent::ResponseOutputItemAdded(added) => {
 						ensure_message_start(&mut state, &mut events, &log);
-						if let responses::OutputItem::FunctionCall(call) = added.item {
-							open_tool_block(
-								&mut state,
-								&mut events,
-								added.output_index,
-								Some(call.call_id),
-								Some(call.name),
-							);
-							record_token(&mut state, &log);
+						match added.item {
+							responses::OutputItem::FunctionCall(call) => {
+								open_tool_block(
+									&mut state,
+									&mut events,
+									added.output_index,
+									Some(call.call_id),
+									Some(call.name),
+								);
+								record_token(&mut state, &log);
+							},
+							responses::OutputItem::CustomToolCall(call) => {
+								open_tool_block(
+									&mut state,
+									&mut events,
+									added.output_index,
+									Some(call.call_id),
+									Some(call.name),
+								);
+							},
+							_ => {},
 						}
 					},
 					responses::ResponseStreamEvent::ResponseContentPartAdded(added) => {
@@ -1392,6 +1411,45 @@ pub mod from_messages {
 							);
 						}
 					},
+					responses::ResponseStreamEvent::ResponseCustomToolCallInputDelta(delta) => {
+						ensure_message_start(&mut state, &mut events, &log);
+						open_tool_block(
+							&mut state,
+							&mut events,
+							delta.output_index,
+							Some(delta.item_id),
+							None,
+						);
+						if !delta.delta.is_empty() {
+							record_token(&mut state, &log);
+						}
+					},
+					responses::ResponseStreamEvent::ResponseCustomToolCallInputDone(done) => {
+						ensure_message_start(&mut state, &mut events, &log);
+						let index = open_tool_block(
+							&mut state,
+							&mut events,
+							done.output_index,
+							Some(done.item_id),
+							None,
+						);
+						if !done.input.is_empty() {
+							record_token(&mut state, &log);
+						}
+						let block = state.tool_blocks.entry(done.output_index).or_default();
+						if !block.emitted_arguments {
+							block.emitted_arguments = true;
+							push_event(
+								&mut events,
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index,
+									delta: messages::ContentBlockDelta::InputJsonDelta {
+										partial_json: json!({"content": done.input}).to_string(),
+									},
+								},
+							);
+						}
+					},
 					responses::ResponseStreamEvent::ResponseRefusalDelta(delta) => {
 						state.saw_refusal = true;
 						state.pending_stop_reason = Some(messages::StopReason::Refusal);
@@ -1469,6 +1527,44 @@ pub mod from_messages {
 										id: strng::new(&call.call_id),
 										name: strng::new(&call.name),
 										arguments,
+									},
+								);
+							}
+							close_tool_block(&mut state, &mut events, done.output_index);
+						},
+						responses::OutputItem::CustomToolCall(call) => {
+							state.saw_tool_call = true;
+							let index = open_tool_block(
+								&mut state,
+								&mut events,
+								done.output_index,
+								Some(call.call_id.clone()),
+								Some(call.name.clone()),
+							);
+							if !call.input.is_empty() {
+								record_token(&mut state, &log);
+							}
+							let input = json!({"content": call.input});
+							let block = state.tool_blocks.entry(done.output_index).or_default();
+							if !block.emitted_arguments {
+								block.emitted_arguments = true;
+								push_event(
+									&mut events,
+									messages::MessagesStreamEvent::ContentBlockDelta {
+										index,
+										delta: messages::ContentBlockDelta::InputJsonDelta {
+											partial_json: input.to_string(),
+										},
+									},
+								);
+							}
+							if let Some(tool_calls) = tool_calls.as_mut() {
+								tool_calls.insert(
+									done.output_index,
+									OutputMessagePart::ToolCall {
+										id: strng::new(&call.call_id),
+										name: strng::new(&call.name),
+										arguments: input,
 									},
 								);
 							}
@@ -1616,6 +1712,7 @@ pub mod from_messages {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier,
+				output_tokens_details: None,
 			};
 		};
 		let cache_creation_input_tokens = usage
@@ -1635,6 +1732,12 @@ pub mod from_messages {
 			cache_creation_input_tokens,
 			cache_read_input_tokens,
 			service_tier,
+			output_tokens_details: (usage.output_tokens_details.reasoning_tokens > 0).then_some(
+				messages::OutputTokensDetails {
+					thinking_tokens: Some(usage.output_tokens_details.reasoning_tokens as usize),
+					rest: Value::Object(Map::new()),
+				},
+			),
 		}
 	}
 
@@ -1648,6 +1751,7 @@ pub mod from_messages {
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			output_tokens_details: usage.output_tokens_details,
 		}
 	}
 

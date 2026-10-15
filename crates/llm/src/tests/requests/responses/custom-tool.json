@@ -1,0 +1,12 @@
+{
+  "model": "claude-sonnet-4-5",
+  "input": [
+    {"role": "user", "content": "Run the calculation."},
+    {"type": "custom_tool_call", "id": "ctc_python", "call_id": "call_python", "name": "python", "input": "print(6 * 7)"},
+    {"type": "custom_tool_call_output", "call_id": "call_python", "output": "42\n"}
+  ],
+  "tools": [
+    {"type": "custom", "name": "python", "description": "Run Python.", "format": {"type": "text"}}
+  ],
+  "tool_choice": {"type": "custom", "name": "python"}
+}
