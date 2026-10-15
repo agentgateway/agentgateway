@@ -1828,3 +1828,75 @@ spec:
         name: otel-collector
         port: 4317
       path: /v1/traces
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-without-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+
+---
+_err: 'kind File requires file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-kind-with-name
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'requires name and no file'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-secret-with-file
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - name: client-cert
+        file:
+          cert: /etc/certs/tls.crt
+          key: /etc/certs/tls.key
+
+---
+_err: 'key'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-mtls-file-missing-key
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: dummy
+  backend:
+    tls:
+      mtlsCertificateRef:
+      - kind: File
+        file:
+          cert: /etc/certs/tls.crt

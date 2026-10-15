@@ -56,6 +56,9 @@ async fn serve_https_http1_connection(
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			cert_path: None,
+			key_path: None,
+			root_path: None,
 			spiffe: false,
 		}
 		.try_into()
@@ -506,6 +509,9 @@ fn spawn_client_hello(io: tokio::io::DuplexStream) -> tokio::task::JoinHandle<bo
 			alpn: None,
 			subject_alt_names: None,
 			key_exchange_groups: None,
+			cert_path: None,
+			key_path: None,
+			root_path: None,
 			spiffe: false,
 		}
 		.try_into()
