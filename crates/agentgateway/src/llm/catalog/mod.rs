@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use arc_swap::ArcSwap;
-pub use model::{Breakdown, Catalog, CatalogMetadata};
+pub use model::{
+	Breakdown, Capabilities, Catalog, CatalogMetadata, Limits, Modalities, Model, Reasoning,
+};
 use model::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
@@ -13,7 +15,10 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
-use super::{CacheTokenConvention, LLMInfo, LLMResponse};
+use super::{
+	CacheTokenConvention, LLMInfo, LLMResponse, Provider, anthropic, azure, bedrock, gemini, openai,
+	vertex,
+};
 use crate::{ModelCatalogSource, apply, schema};
 
 mod model;
@@ -21,6 +26,71 @@ pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 const BUILTIN_CATALOG_JSON: &str = include_str!("../../../../../catalog/model-catalog.json");
+
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PricingTier {
+	Standard,
+	Flex,
+	Priority,
+	Reserved,
+}
+
+impl PricingTier {
+	/// Normalizes a provider-reported service tier. Unknown tiers are None.
+	pub fn detect(provider: &str, service_tier: &str) -> Option<Self> {
+		let tier = match (provider, service_tier) {
+			// https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rest/v1/GenerateContentResponse#TrafficType
+			// Anthropic models on Vertex report Anthropic service tiers.
+			(provider, tier) if provider == vertex::Provider::NAME.as_str() => match tier {
+				"ON_DEMAND" | "standard" => Self::Standard,
+				"ON_DEMAND_FLEX" => Self::Flex,
+				"ON_DEMAND_PRIORITY" | "priority" => Self::Priority,
+				"PROVISIONED_THROUGHPUT" => Self::Reserved,
+				_ => return None,
+			},
+			// https://ai.google.dev/api/generate-content#ServiceTier
+			(provider, tier) if provider == gemini::Provider::NAME.as_str() => match tier {
+				"standard" => Self::Standard,
+				"flex" => Self::Flex,
+				"priority" => Self::Priority,
+				_ => return None,
+			},
+			// https://developers.openai.com/api/docs/guides/fast-mode
+			// https://developers.openai.com/api/docs/guides/flex-processing
+			// https://openai.com/api-scale-tier/
+			(provider, tier)
+				if provider == openai::Provider::NAME.as_str()
+					|| provider == azure::Provider::NAME.as_str() =>
+			{
+				match tier {
+					"default" => Self::Standard,
+					"flex" => Self::Flex,
+					"fast" | "priority" => Self::Priority,
+					"scale" => Self::Reserved,
+					_ => return None,
+				}
+			},
+			// https://platform.claude.com/docs/en/api/service-tiers
+			(provider, tier) if provider == anthropic::Provider::NAME.as_str() => match tier {
+				"standard" => Self::Standard,
+				"priority" => Self::Priority,
+				_ => return None,
+			},
+			// https://docs.aws.amazon.com/bedrock/latest/userguide/service-tiers-inference.html
+			// Anthropic models on Bedrock may report Anthropic service tiers.
+			(provider, tier) if provider == bedrock::Provider::NAME.as_str() => match tier {
+				"default" | "standard" => Self::Standard,
+				"flex" => Self::Flex,
+				"priority" => Self::Priority,
+				"reserved" => Self::Reserved,
+				_ => return None,
+			},
+			_ => return None,
+		};
+		Some(tier)
+	}
+}
 
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
@@ -226,6 +296,8 @@ pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
 	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.
 	model_tags: std::collections::HashMap<String, Arc<std::collections::BTreeSet<String>>>,
+	/// Precomputed CEL view of each model, keyed by provider then model ID.
+	model_info: std::collections::HashMap<String, std::collections::HashMap<String, Arc<ModelInfo>>>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -279,9 +351,22 @@ impl CatalogSnapshot {
 			.filter(|(_, m)| !m.tags.is_empty())
 			.map(|(id, m)| (id.clone(), Arc::new(m.tags.clone())))
 			.collect();
+		let model_info = merged
+			.providers
+			.iter()
+			.map(|(provider, p)| {
+				let models = p
+					.models
+					.iter()
+					.map(|(id, m)| (id.clone(), Arc::new(ModelInfo::new(id, m))))
+					.collect();
+				(provider.clone(), models)
+			})
+			.collect();
 		CatalogSnapshot {
 			catalog: Some(merged),
 			model_tags,
+			model_info,
 		}
 	}
 
@@ -289,7 +374,13 @@ impl CatalogSnapshot {
 		CatalogSnapshot {
 			catalog: None,
 			model_tags: std::collections::HashMap::new(),
+			model_info: std::collections::HashMap::new(),
 		}
+	}
+
+	/// Looks up one model in this immutable snapshot.
+	pub(crate) fn model(&self, provider: &str, model: &str) -> Option<&Model> {
+		self.catalog.as_ref()?.resolve(provider, model)
 	}
 
 	/// Borrow model IDs for one provider from this immutable snapshot.
@@ -350,8 +441,8 @@ impl CatalogSnapshot {
 			);
 			return CostProjection::unpriced(CostLookupStatus::NoCatalog);
 		};
-		let entry = catalog.resolve(provider, model);
-		let Some(entry) = entry else {
+		let entry = catalog.resolve_entry(provider, model);
+		let Some((id, entry)) = entry else {
 			if trace_missing {
 				crate::proxy::dtrace::pol_event!(
 					TRACE_POLICY_KIND,
@@ -366,12 +457,22 @@ impl CatalogSnapshot {
 			}
 			return CostProjection::unpriced(CostLookupStatus::Missing);
 		};
+		let model_info = self
+			.model_info
+			.get(provider)
+			.and_then(|models| models.get(id))
+			.cloned();
 
 		let provisional_usage = usage_for(convention, resp, true, true);
+		let pricing_tier = resp
+			.service_tier
+			.as_deref()
+			.and_then(|tier| PricingTier::detect(provider, tier))
+			.unwrap_or(PricingTier::Standard);
 		// Tier selection must be invariant to cache repricing below: cache tokens
 		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
-		let rates = entry.effective_rates(context_tokens);
+		let rates = entry.effective_rates(context_tokens, pricing_tier);
 		if rates.is_empty() {
 			crate::proxy::dtrace::pol_event!(
 				TRACE_POLICY_KIND,
@@ -386,7 +487,10 @@ impl CatalogSnapshot {
 					"usage": &provisional_usage,
 				}),
 			);
-			return CostProjection::unpriced(CostLookupStatus::Unpriced);
+			return CostProjection {
+				model: model_info,
+				..CostProjection::unpriced(CostLookupStatus::Unpriced)
+			};
 		}
 
 		let prices_cache_read = rates.cache_read.is_some();
@@ -406,6 +510,7 @@ impl CatalogSnapshot {
 				"provider": provider,
 				"model": model,
 				"status": status_name(CostLookupStatus::Exact),
+				"pricingTier": format!("{pricing_tier:?}"),
 				"cacheTokenConvention": cache_convention_name(convention),
 				"contextTokens": context_tokens,
 				"pricesCacheRead": prices_cache_read,
@@ -419,6 +524,7 @@ impl CatalogSnapshot {
 			status: CostLookupStatus::Exact,
 			cost: Some(breakdown),
 			cost_rates: Some(cost_rates),
+			model: model_info,
 		}
 	}
 }
@@ -442,6 +548,7 @@ pub struct CostProjection {
 	pub status: CostLookupStatus,
 	pub cost: Option<Breakdown>,
 	pub cost_rates: Option<CostRates>,
+	pub model: Option<Arc<ModelInfo>>,
 }
 
 impl CostProjection {
@@ -450,6 +557,55 @@ impl CostProjection {
 			status,
 			cost: None,
 			cost_rates: None,
+			model: None,
+		}
+	}
+}
+
+/// Catalog metadata for the model that served an LLM request.
+#[apply(schema!)]
+#[derive(::cel::DynamicType)]
+pub struct ModelInfo {
+	/// The catalog model ID the request resolved to.
+	pub id: String,
+	/// Human-readable display name.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
+	/// Lifecycle stage (alpha, beta, deprecated); absent means generally available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub status: Option<String>,
+	/// Release date, as YYYY-MM-DD or YYYY-MM.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub released: Option<String>,
+	/// Freeform capability/routing tags for this model.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub tags: Vec<String>,
+	/// Token limits.
+	#[serde(default)]
+	pub limits: Limits,
+	/// Supported input and output modalities.
+	#[serde(default)]
+	pub modalities: Modalities,
+	/// Supported features. Absent fields are unknown.
+	#[serde(default)]
+	pub capabilities: Capabilities,
+	/// How reasoning can be controlled.
+	#[serde(default)]
+	pub reasoning: Reasoning,
+}
+
+impl ModelInfo {
+	fn new(id: &str, m: &Model) -> Self {
+		ModelInfo {
+			id: id.to_string(),
+			name: m.name.clone(),
+			status: m.status.clone(),
+			released: m.released.clone(),
+			tags: m.tags.iter().cloned().collect(),
+			limits: m.limits.clone(),
+			modalities: m.modalities.clone(),
+			capabilities: m.capabilities.clone(),
+			reasoning: m.reasoning.clone(),
 		}
 	}
 }
@@ -467,6 +623,9 @@ pub struct CostRates {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: Option<f64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "cacheWrite1h")]
+	pub cache_write_1h: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -488,6 +647,7 @@ impl From<&Rates> for CostRates {
 			output: f(&r.output),
 			cache_read: f(&r.cache_read),
 			cache_write: f(&r.cache_write),
+			cache_write_1h: f(&r.cache_write_1h),
 			reasoning: f(&r.reasoning),
 			input_audio: f(&r.input_audio),
 			output_audio: f(&r.output_audio),
@@ -502,13 +662,14 @@ fn breakdown_f64(d: Decimal) -> f64 {
 
 impl Breakdown {
 	// (CEL field name, value) pairs. `total` is computed, the rest are stored.
-	fn components(&self) -> [(&'static str, Decimal); 9] {
+	fn components(&self) -> [(&'static str, Decimal); 10] {
 		[
 			("total", self.total()),
 			("input", self.input),
 			("output", self.output),
 			("cacheRead", self.cache_read),
 			("cacheWrite", self.cache_write),
+			("cacheWrite1h", self.cache_write_1h),
 			("reasoning", self.reasoning),
 			("inputAudio", self.input_audio),
 			("outputAudio", self.output_audio),
@@ -527,6 +688,8 @@ pub struct CostBreakdown {
 	pub cache_read: f64,
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: f64,
+	#[dynamic(rename = "cacheWrite1h")]
+	pub cache_write_1h: f64,
 	pub reasoning: f64,
 	#[dynamic(rename = "inputAudio")]
 	pub input_audio: f64,
@@ -543,6 +706,7 @@ impl From<&Breakdown> for CostBreakdown {
 			output: breakdown_f64(b.output),
 			cache_read: breakdown_f64(b.cache_read),
 			cache_write: breakdown_f64(b.cache_write),
+			cache_write_1h: breakdown_f64(b.cache_write_1h),
 			reasoning: breakdown_f64(b.reasoning),
 			input_audio: breakdown_f64(b.input_audio),
 			output_audio: breakdown_f64(b.output_audio),
@@ -559,6 +723,7 @@ impl From<CostBreakdown> for Breakdown {
 			output: d(b.output),
 			cache_read: d(b.cache_read),
 			cache_write: d(b.cache_write),
+			cache_write_1h: d(b.cache_write_1h),
 			reasoning: d(b.reasoning),
 			input_audio: d(b.input_audio),
 			output_audio: d(b.output_audio),
@@ -766,11 +931,18 @@ fn usage_for(
 		.unwrap_or(0)
 		.saturating_sub(reasoning)
 		.saturating_sub(output_audio);
+	// 1h writes are a subset of cache_write; zero when writes are unpriced and folded into input.
+	let cache_write_1h = resp
+		.cache_creation_1h_input_tokens
+		.unwrap_or(0)
+		.min(cache_write);
+	let cache_write = cache_write - cache_write_1h;
 
 	Usage {
 		input,
 		cache_read,
 		cache_write,
+		cache_write_1h,
 		output,
 		reasoning,
 		input_audio,
@@ -788,6 +960,39 @@ mod tests {
 	use rust_decimal::prelude::ToPrimitive;
 
 	use super::*;
+
+	#[test]
+	fn ordered_tiers_select_served_tier_and_context() {
+		let catalog = CatalogSnapshot::parse(
+			r#"{"providers":{"gcp.vertex_ai":{"models":{"m":{
+				"rates":{"input":"1"},
+				"tiers":[
+					{"serviceTier":"flex","rates":{"input":"0.5"}},
+					{"serviceTier":"flex","contextOver":200000,"rates":{"input":"0.75"}},
+					{"contextOver":200000,"rates":{"input":"2"}}
+				]
+			}}}}}"#,
+		)
+		.unwrap();
+		let price = |tokens: u64, served_tier: Option<&str>| {
+			catalog
+				.price(
+					vertex::Provider::NAME.as_str(),
+					"m",
+					&LLMResponse {
+						input_tokens: Some(tokens),
+						service_tier: served_tier.map(Into::into),
+						..Default::default()
+					},
+					CacheTokenConvention::InputIncludesCache,
+				)
+				.0
+		};
+		assert_eq!(price(300_000, Some("ON_DEMAND_FLEX")), Some(0.225));
+		assert_eq!(price(100_000, Some("ON_DEMAND_FLEX")), Some(0.05));
+		assert_eq!(price(300_000, Some("ON_DEMAND")), Some(0.6));
+		assert_eq!(price(100_000, None), Some(0.1));
+	}
 
 	fn test_catalog(input_rate: &str) -> String {
 		format!(
@@ -994,6 +1199,73 @@ mod tests {
 			assert_eq!(cost.cache_read.to_f64(), Some(expected_read));
 			assert_eq!(cost.cache_write.to_f64(), Some(expected_write));
 			assert_eq!(cost.total().to_f64(), Some(expected_total));
+		}
+	}
+
+	#[test]
+	fn anthropic_splits_1h_cache_writes() {
+		let resp = LLMResponse {
+			input_tokens: Some(100),
+			cache_creation_input_tokens: Some(1000),
+			cache_creation_1h_input_tokens: Some(600),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, true);
+		assert_eq!(u.input, 100);
+		assert_eq!(u.cache_write, 400);
+		assert_eq!(u.cache_write_1h, 600);
+	}
+
+	#[test]
+	fn anthropic_folds_1h_cache_writes_into_input_when_unpriced() {
+		let resp = LLMResponse {
+			input_tokens: Some(100),
+			cache_creation_input_tokens: Some(1000),
+			cache_creation_1h_input_tokens: Some(600),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, false);
+		assert_eq!(u.input, 1100);
+		assert_eq!(u.cache_write, 0);
+		assert_eq!(u.cache_write_1h, 0);
+	}
+
+	#[test]
+	fn anthropic_prices_1h_cache_writes_at_1h_rate() {
+		use agent_llm::types::ResponseType;
+		let snap = CatalogSnapshot::parse(
+			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWrite1h":"10"}}}}}}"#,
+		)
+		.unwrap();
+		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
+		let bedrock = br#"{"output":{"message":{"role":"assistant","content":[{"text":"hi"}]}},"stopReason":"end_turn","metrics":{"latencyMs":1},"usage":{"inputTokens":100,"outputTokens":0,"totalTokens":1000100,"cacheReadInputTokens":0,"cacheWriteInputTokens":1000000,"cacheDetails":[{"inputTokens":400000,"ttl":"5m"},{"inputTokens":600000,"ttl":"1h"}]}}"#;
+		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
+		let typed: agent_llm::types::messages::typed::MessagesResponse =
+			serde_json::from_str(body).unwrap();
+		let body = bytes::Bytes::from_static(body.as_bytes());
+		let bedrock = bytes::Bytes::from_static(bedrock);
+		use agent_llm::conversion::{bedrock as br, messages};
+		for resp in [
+			Box::new(passthrough) as Box<dyn ResponseType>,
+			Box::new(typed),
+			messages::from_completions::translate_response(&body).unwrap(),
+			br::from_completions::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
+			br::from_messages::translate_response(&bedrock, "claude-opus-5", None).unwrap(),
+			br::from_responses::translate_response(&bedrock, "claude-opus-5", None, None).unwrap(),
+		] {
+			let resp = resp.to_llm_response(agent_llm::LogContentFields::default());
+			assert_eq!(resp.cache_creation_1h_input_tokens, Some(600_000));
+			let cost = snap
+				.project(
+					"anthropic",
+					"claude-opus-5",
+					&resp,
+					CacheTokenConvention::InputExcludesCache,
+				)
+				.cost
+				.expect("model is priced");
+			assert_eq!(cost.cache_write.to_f64(), Some(2.5));
+			assert_eq!(cost.cache_write_1h.to_f64(), Some(6.0));
 		}
 	}
 
@@ -1217,6 +1489,41 @@ mod tests {
 			projection.cost.is_none(),
 			"provider model was found, so request model fallback must not hide unpriced rates"
 		);
+	}
+
+	#[test]
+	fn model_info_is_exposed_to_cel() {
+		let catalog = model_catalog(
+			r#"{"providers":{"openai":{"models":{
+				"provider-model":{
+					"name":"Provider Model",
+					"status":"deprecated",
+					"tags":["frontier"],
+					"limits":{"context":128000},
+					"capabilities":{"toolCall":true},
+					"reasoning":{"budgetTokens":{"max":32000}}
+				}
+			}}}}"#,
+		);
+		let ctx = crate::cel::LLMContext::from_llm_info(
+			test_llm_info("my-model", Some("provider-model")),
+			Some(&catalog),
+		);
+		let exec = crate::cel::Executor::new_llm_rate_limit_streaming(None, &ctx);
+		for expr in [
+			r#"llm.model.id == "provider-model""#,
+			r#"llm.model.name == "Provider Model""#,
+			r#"llm.model.status == "deprecated""#,
+			r#""frontier" in llm.model.tags"#,
+			"llm.model.limits.context == 128000",
+			"llm.model.capabilities.toolCall",
+			"llm.model.reasoning.budgetTokens.max == 32000",
+		] {
+			assert!(
+				exec.eval_bool(&crate::cel::Expression::new_strict(expr).unwrap()),
+				"{expr}"
+			);
+		}
 	}
 
 	#[test]

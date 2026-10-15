@@ -1,6 +1,7 @@
 import { Fingerprint, Globe2, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 
+import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup, StatusBanner } from '@/components/Primitives';
@@ -8,7 +9,6 @@ import type { LocalOidcConfig } from '@/gateway-config';
 import { ListEditor } from '@/policies/ListEditor';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, isRecord } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { OidcDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -22,17 +22,7 @@ type SourceDraft = {
 };
 
 type OidcFieldErrors = Partial<
-	Record<
-		| 'issuer'
-		| 'clientId'
-		| 'clientSecret'
-		| 'redirectURI'
-		| 'discovery'
-		| 'authorizationEndpoint'
-		| 'tokenEndpoint'
-		| 'jwks',
-		string
-	>
+	Record<'discovery' | 'authorizationEndpoint' | 'tokenEndpoint' | 'jwks', string>
 >;
 
 const providerModes: Array<{
@@ -120,6 +110,7 @@ export function OidcPolicyEditor(props: {
 	const [error, setError] = useState<string | null>(null);
 
 	const preview = buildOidcPolicy();
+	const merged = useMergedEdits(props.oidc, preview);
 
 	function buildOidcPolicy() {
 		return cleanEmpty({
@@ -144,15 +135,11 @@ export function OidcPolicyEditor(props: {
 			setError('Fix the highlighted fields before saving.');
 			return;
 		}
-		props.onSave(buildOidcPolicy());
+		props.onSave(merged.value);
 	}
 
 	function validateOidcPolicy() {
 		const errors: OidcFieldErrors = {};
-		if (!issuer.trim()) errors.issuer = 'Issuer is required.';
-		if (!clientId.trim()) errors.clientId = 'Client ID is required.';
-		if (!clientSecret.trim()) errors.clientSecret = 'Client secret is required.';
-		if (!redirectURI.trim()) errors.redirectURI = 'Redirect URI is required.';
 		if (providerMode === 'discovery') {
 			const discoveryError = validateSource(discovery, false);
 			if (discoveryError) errors.discovery = discoveryError;
@@ -175,6 +162,7 @@ export function OidcPolicyEditor(props: {
 				save();
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<PolicySection
 				icon={<Fingerprint size={17} />}
 				title="Provider"
@@ -183,33 +171,32 @@ export function OidcPolicyEditor(props: {
 				<Field
 					label="Issuer"
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'issuer')}
-					className={fieldErrors.issuer ? 'invalid' : undefined}
-					hint={fieldErrors.issuer}
+					path="issuer"
 				>
-					<input
-						value={issuer}
-						aria-invalid={Boolean(fieldErrors.issuer)}
-						onChange={event => {
-							setIssuer(event.target.value);
-							clearFieldError('issuer');
-						}}
-						placeholder="https://issuer.example.com"
-					/>
-					<div className="suggestion-row">
-						{issuerSuggestions.map(suggestion => (
-							<button
-								className="table-action"
-								type="button"
-								key={suggestion.label}
-								onClick={() => {
-									setIssuer(suggestion.value);
-									clearFieldError('issuer');
-								}}
-							>
-								{suggestion.label}
-							</button>
-						))}
-					</div>
+					{(id, hintId, invalid) => (
+						<>
+							<input
+								id={id}
+								aria-describedby={hintId}
+								aria-invalid={invalid}
+								value={issuer}
+								onChange={event => setIssuer(event.target.value)}
+								placeholder="https://issuer.example.com"
+							/>
+							<div className="suggestion-row">
+								{issuerSuggestions.map(suggestion => (
+									<button
+										className="table-action"
+										type="button"
+										key={suggestion.label}
+										onClick={() => setIssuer(suggestion.value)}
+									>
+										{suggestion.label}
+									</button>
+								))}
+							</div>
+						</>
+					)}
 				</Field>
 
 				<FieldGroup
@@ -320,24 +307,18 @@ export function OidcPolicyEditor(props: {
 				<Field
 					label="Client ID"
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientId')}
-					className={fieldErrors.clientId ? 'invalid' : undefined}
-					hint={fieldErrors.clientId}
+					path="clientId"
 				>
 					<input
 						value={clientId}
-						aria-invalid={Boolean(fieldErrors.clientId)}
-						onChange={event => {
-							setClientId(event.target.value);
-							clearFieldError('clientId');
-						}}
+						onChange={event => setClientId(event.target.value)}
 						placeholder="agentgateway-browser"
 					/>
 				</Field>
 				<Field
 					label="Client secret"
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'clientSecret')}
-					className={fieldErrors.clientSecret ? 'invalid' : undefined}
-					hint={fieldErrors.clientSecret}
+					path="clientSecret"
 				>
 					<input
 						type="text"
@@ -351,27 +332,18 @@ export function OidcPolicyEditor(props: {
 						name="agw-oidc-client-secret"
 						spellCheck={false}
 						value={clientSecret}
-						aria-invalid={Boolean(fieldErrors.clientSecret)}
-						onChange={event => {
-							setClientSecret(event.target.value);
-							clearFieldError('clientSecret');
-						}}
+						onChange={event => setClientSecret(event.target.value)}
 						placeholder="OAuth2 client secret"
 					/>
 				</Field>
 				<Field
 					label="Redirect URI"
 					tooltip={props.help.field<LocalOidcConfig>('LocalOidcConfig', 'redirectURI')}
-					className={fieldErrors.redirectURI ? 'invalid' : undefined}
-					hint={fieldErrors.redirectURI}
+					path="redirectURI"
 				>
 					<input
 						value={redirectURI}
-						aria-invalid={Boolean(fieldErrors.redirectURI)}
-						onChange={event => {
-							setRedirectURI(event.target.value);
-							clearFieldError('redirectURI');
-						}}
+						onChange={event => setRedirectURI(event.target.value)}
 						placeholder="http://localhost:4000/oauth/callback"
 					/>
 				</Field>
@@ -392,8 +364,6 @@ export function OidcPolicyEditor(props: {
 					onChange={setScopes}
 				/>
 			</PolicySection>
-
-			<ResultingYaml value={preview} />
 
 			{error ? (
 				<StatusBanner state="bad" title="Invalid OIDC policy">

@@ -175,6 +175,11 @@ pub enum RouteType {
 	GeminiCountTokens,
 	/// Cohere /v2/rerank (document reranking)
 	Rerank,
+	/// OpenAI /v1/decisions
+	Decisions,
+	/// TypeSafe /v1/systemone. Only used upstream, for translated decisions requests.
+	#[serde(skip)]
+	SystemOne,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
@@ -188,6 +193,7 @@ pub enum InputFormat {
 	CountTokens,
 	Detect,
 	Rerank,
+	Decisions,
 	/// Native Gemini generateContent body
 	Gemini,
 	/// Native Gemini countTokens body
@@ -210,6 +216,7 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Decisions => false,
 			InputFormat::Gemini => true,
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
@@ -269,6 +276,7 @@ pub enum ProviderState {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
+	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
@@ -394,6 +402,9 @@ pub struct LLMResponse {
 	pub reasoning_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
+	/// Subset of cache_creation_input_tokens written with a 1h TTL (Anthropic `cache_creation.ephemeral_1h_input_tokens`).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_1h_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -516,7 +527,7 @@ impl Default for StreamingUsageGuard {
 }
 
 pub use types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
+	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseText, ResponseType,
 	SimpleChatCompletionMessage, ToolCall,
 };
 

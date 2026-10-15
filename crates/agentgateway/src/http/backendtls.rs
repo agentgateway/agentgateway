@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use once_cell::sync::Lazy;
-use rustls::ClientConfig;
+use rustls::{ClientConfig, RootCertStore};
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
@@ -13,26 +13,11 @@ use tracing::trace;
 use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
+use crate::types::discovery::Identity;
 use crate::{apply, transport};
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
 	Lazy::new(|| ResolvedBackendTLS::default().try_into().unwrap());
-pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
-	ResolvedBackendTLS {
-		cert: None,
-		key: None,
-		root: None,
-		hostname: None,
-		insecure: true,
-		insecure_host: false,
-		alpn: None,
-		subject_alt_names: None,
-		key_exchange_groups: None,
-		spiffe: false,
-	}
-	.try_into()
-	.unwrap()
-});
 
 // a ClientConfig stores the ALPN, but we need to set it per request possibly. This struct helps manage that.
 #[derive(Clone, Debug)]
@@ -104,11 +89,6 @@ pub struct SpiffeBackendTLS {
 }
 
 impl BackendTLS {
-	/// Whether this backend sources the gateway's client identity/roots from SPIFFE.
-	pub fn is_spiffe(&self) -> bool {
-		matches!(self.source, BackendTLSSource::Spiffe(_))
-	}
-
 	/// Returns the static config for the requested HTTP version. Only valid for
 	/// [`BackendTLSSource::Static`]; SPIFFE-sourced backends are resolved at connection time via
 	/// `proxy::httpproxy::resolve_backend_tls` and must not reach here.
@@ -121,6 +101,7 @@ impl BackendTLS {
 		VersionedBackendTLS {
 			hostname_override: self.hostname_override.clone(),
 			config: config.config_for(None),
+			expected_identities: None,
 			peer_identity_mode: tls::PeerIdentityMode::Istio,
 		}
 	}
@@ -130,22 +111,57 @@ impl BackendTLS {
 pub struct VersionedBackendTLS {
 	pub hostname_override: Option<ServerName<'static>>,
 	pub config: Arc<ClientConfig>,
+	/// If set, `config` is shared across identity sets and the peer is verified against these
+	/// identities with a verifier installed per connection. See `connect_config`.
+	pub expected_identities: Option<ExpectedIdentities>,
 	/// How to interpret the upstream server's SPIFFE identity when extracting peer TLS info.
 	/// `Spiffe` for SPIFFE-sourced backends so their non-Istio SVIDs are not parsed as Istio identities.
 	pub peer_identity_mode: tls::PeerIdentityMode,
 }
 
+#[derive(Debug, Clone)]
+pub struct ExpectedIdentities {
+	pub roots: Arc<RootCertStore>,
+	pub identities: Vec<Identity>,
+}
+
+impl VersionedBackendTLS {
+	/// The config to establish a new connection with.
+	pub fn connect_config(&self) -> Arc<ClientConfig> {
+		let Some(expected) = &self.expected_identities else {
+			return self.config.clone();
+		};
+		let mut cc = ClientConfig::clone(&self.config);
+		cc.dangerous()
+			.set_certificate_verifier(Arc::new(tls::identity::IdentityVerifier {
+				roots: expected.roots.clone(),
+				identity: expected.identities.clone(),
+			}));
+		Arc::new(cc)
+	}
+}
+
+// Used in the connection pool key, so it must cover everything that affects how the connection was verified.
+// `roots` is not included as it is tied to `config`.
 impl std::hash::Hash for VersionedBackendTLS {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		// Hash the pointer address
 		Arc::as_ptr(&self.config).hash(state);
 		self.hostname_override.hash(state);
+		self
+			.expected_identities
+			.as_ref()
+			.map(|e| &e.identities)
+			.hash(state);
 	}
 }
 
 impl PartialEq for VersionedBackendTLS {
 	fn eq(&self, other: &Self) -> bool {
-		Arc::ptr_eq(&self.config, &other.config) && self.hostname_override == other.hostname_override
+		Arc::ptr_eq(&self.config, &other.config)
+			&& self.hostname_override == other.hostname_override
+			&& self.expected_identities.as_ref().map(|e| &e.identities)
+				== other.expected_identities.as_ref().map(|e| &e.identities)
 	}
 }
 

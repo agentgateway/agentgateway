@@ -179,6 +179,7 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
+			cache_creation_1h_input_tokens: None,
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -267,11 +268,75 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.choices {
+			visit_reasoning_text(&mut c.message.rest, f);
+			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
+			let f = &mut plain;
 			if let Some(text) = &mut c.message.content {
-				f(text);
+				f(ContentScope::Messages, text);
 			}
+			super::visit_json_at(&mut c.message.rest, &["refusal"], ContentScope::Messages, f);
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["audio", "transcript"],
+				ContentScope::Messages,
+				f,
+			);
+			// tool call args are json-in-json, same as the request side
+			if let Some(serde_json::Value::Array(calls)) = c.message.rest.get_mut("tool_calls") {
+				for call in calls {
+					super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+					super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+				}
+			}
+			super::visit_json_at(
+				&mut c.message.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
+		}
+	}
+}
+
+fn visit_reasoning_text(
+	rest: &mut serde_json::Value,
+	f: &mut dyn FnMut(crate::types::ResponseText, &mut String),
+) {
+	let signed = super::has_signature(rest);
+	for field in ["reasoning", "reasoning_content"] {
+		super::visit_json_at(
+			rest,
+			&[field],
+			ContentScope::Messages,
+			&mut |scope, text| {
+				f(
+					crate::types::ResponseText {
+						scope,
+						signed: signed && field == "reasoning_content",
+					},
+					text,
+				);
+			},
+		);
+	}
+	if let Some(serde_json::Value::Array(details)) = rest.get_mut("reasoning_details") {
+		for detail in details {
+			let field = match detail.get("type").and_then(serde_json::Value::as_str) {
+				Some("reasoning.text") => "text",
+				Some("reasoning.summary") => "summary",
+				_ => continue,
+			};
+			let signed = super::has_signature(detail);
+			super::visit_json_at(
+				detail,
+				&[field],
+				ContentScope::Messages,
+				&mut |scope, text| {
+					f(crate::types::ResponseText { scope, signed }, text);
+				},
+			);
 		}
 	}
 }
@@ -368,9 +433,11 @@ impl super::RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
-			Some(tokens)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self.tools.iter().flatten(),
+			))
 		} else {
 			None
 		};
@@ -1185,23 +1252,6 @@ pub mod typed {
 	}
 
 	#[allow(dead_code)]
-	pub const SYSTEM_ROLE: &str = "system";
-	#[allow(dead_code)]
-	pub const ASSISTANT_ROLE: &str = "assistant";
-
-	#[allow(dead_code)]
-	pub fn message_role(msg: &RequestMessage) -> &'static str {
-		match msg {
-			RequestMessage::Developer(_) => "developer",
-			RequestMessage::System(_) => "system",
-			RequestMessage::Assistant(_) => "assistant",
-			RequestMessage::Tool(_) => "tool",
-			RequestMessage::Function(_) => "function",
-			RequestMessage::User(_) => "user",
-		}
-	}
-
-	#[allow(dead_code)]
 	pub fn message_text(msg: &RequestMessage) -> Option<&str> {
 		// All of these types support Vec<Text>... show we support those?
 		// Right now, we don't support
@@ -1236,13 +1286,6 @@ pub mod typed {
 				.max_completion_tokens
 				.or(self.max_tokens)
 				.unwrap_or(4096) as usize
-		}
-
-		pub fn max_tokens_option(&self) -> Option<u64> {
-			self
-				.max_completion_tokens
-				.or(self.max_tokens)
-				.map(Into::into)
 		}
 
 		pub fn stop_sequence(&self) -> Vec<String> {

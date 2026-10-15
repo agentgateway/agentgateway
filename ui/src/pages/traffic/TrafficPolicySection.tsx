@@ -24,10 +24,17 @@ import {
 	Workflow
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 
-import { Drawer, EmptyState, Tooltip, YamlBlock } from '@/components/Primitives';
-import { PolicyEditorBody, type PolicyEditorKind } from '@/policies/PolicyDrawer';
+import { EditorValueContext } from '@/components/EditorContracts';
+import {
+	Drawer,
+	DrawerCheckContext,
+	EmptyState,
+	Tooltip,
+	YamlBlock
+} from '@/components/Primitives';
+import { PolicyEditorBody, type PolicyEditorKind, usePolicyRaw } from '@/policies/PolicyDrawer';
 import { policyEnabled, policySummary, titleFromKey } from '@/policies/policyUtils';
 import { policyUi } from '@/policies/registry';
 import { useSchemaHelp } from '@/schemaHelp';
@@ -176,9 +183,6 @@ export function TrafficPolicySection(props: {
 		}));
 	}, [catalog, props.policies]);
 	const selectedMeta = items.find(item => item.key === selected);
-	const selectedFormId = selectedMeta
-		? `traffic-policy-editor-${sanitizePolicyFormId(props.schemaRoot)}-${sanitizePolicyFormId(selectedMeta.key)}`
-		: undefined;
 	const enabled = items.filter(item => item.enabled);
 	const grouped = useMemo(() => groupTrafficPolicies(items), [items]);
 
@@ -214,65 +218,25 @@ export function TrafficPolicySection(props: {
 				<ChevronRight size={17} />
 			</button>
 
-			{drawerOpen ? (
-				<Drawer
-					// Remount when switching between the catalog and an individual
-					// policy's editor so Drawer's own dirty-tracking (any click on a
-					// dropdown option anywhere inside it) doesn't linger after a save
-					// has already committed the policy via onSave/setPolicy above —
-					// otherwise closing the catalog view falsely prompts to discard
-					// changes that were already saved.
-					key={selected ?? 'catalog'}
-					title={selectedMeta ? selectedMeta.title : props.title}
-					variant="nested"
+			{drawerOpen && selectedMeta ? (
+				<TrafficPolicyEditorDrawer
+					key={selectedMeta.key}
+					formId={`traffic-policy-editor-${sanitizePolicyFormId(props.schemaRoot)}-${sanitizePolicyFormId(selectedMeta.key)}`}
+					policy={selectedMeta}
+					schemaRoot={props.schemaRoot}
+					policies={props.policies}
+					onBack={() => setSelected(null)}
 					onClose={closeDrawer}
-					headerActions={
-						selectedMeta ? (
-							<Tooltip
-								content={
-									policyEnabled(props.policies, selectedMeta.key)
-										? 'Delete policy'
-										: 'Policy is not enabled'
-								}
-							>
-								<button
-									className="icon-button danger"
-									type="button"
-									aria-label="Delete policy"
-									disabled={!policyEnabled(props.policies, selectedMeta.key)}
-									onClick={() => setPolicy(selectedMeta.key, null)}
-								>
-									<Trash2 size={17} />
-								</button>
-							</Tooltip>
-						) : undefined
-					}
-					footer={
-						selectedMeta && selectedFormId ? (
-							<button className="button primary" type="submit" form={selectedFormId}>
-								<Save size={16} />
-								Save
-							</button>
-						) : undefined
-					}
-				>
-					{selectedMeta ? (
-						<TrafficPolicyEditor
-							formId={selectedFormId}
-							policy={selectedMeta}
-							schemaRoot={props.schemaRoot}
-							policies={props.policies}
-							onBack={() => setSelected(null)}
-							onSave={value => setPolicy(selectedMeta.key, value)}
-						/>
-					) : (
-						<TrafficPolicyCatalog
-							title={props.title}
-							grouped={grouped}
-							policies={props.policies}
-							onOpen={setSelected}
-						/>
-					)}
+					onSave={value => setPolicy(selectedMeta.key, value)}
+				/>
+			) : drawerOpen ? (
+				<Drawer key="catalog" title={props.title} variant="nested" onClose={closeDrawer}>
+					<TrafficPolicyCatalog
+						title={props.title}
+						grouped={grouped}
+						policies={props.policies}
+						onOpen={setSelected}
+					/>
 				</Drawer>
 			) : null}
 		</section>
@@ -341,23 +305,95 @@ function TrafficPolicyTile(props: { policy: TrafficPolicyItem; onOpen: (key: str
 	);
 }
 
-function TrafficPolicyEditor(props: {
-	formId?: string;
+function TrafficPolicyEditorDrawer(props: {
+	formId: string;
 	policy: TrafficPolicyItem;
 	schemaRoot: TrafficPolicySchemaRoot;
 	policies?: Record<string, unknown> | null;
 	onBack: () => void;
+	onClose: () => void;
+	onSave: (value: unknown) => void;
+}) {
+	const enabled = policyEnabled(props.policies, props.policy.key);
+	const policy = usePolicyRaw({
+		formId: props.formId,
+		policyValue: props.policies?.[props.policy.key] ?? null,
+		schemaPath: ['$defs', props.schemaRoot, 'properties', props.policy.key],
+		onSave: props.onSave
+	});
+	return (
+		<Drawer
+			title={props.policy.title}
+			variant="nested"
+			onClose={props.onClose}
+			raw={props.policy.customEditor ? policy.raw : undefined}
+			headerActions={
+				<>
+					<Tooltip content="Back to policies">
+						<button
+							className="icon-button"
+							type="button"
+							aria-label="Back to policies"
+							onClick={props.onBack}
+						>
+							<ArrowLeft size={17} />
+						</button>
+					</Tooltip>
+					<Tooltip content={enabled ? 'Delete policy' : 'Policy is not enabled'}>
+						<button
+							className="icon-button danger"
+							type="button"
+							aria-label="Delete policy"
+							disabled={!enabled}
+							onClick={() => props.onSave(null)}
+						>
+							<Trash2 size={17} />
+						</button>
+					</Tooltip>
+				</>
+			}
+			footer={<PolicySaveButton onSave={policy.submit} />}
+		>
+			<EditorValueContext.Provider value={policy.report}>
+				<TrafficPolicyEditor
+					key={JSON.stringify(policy.value ?? null)}
+					formId={props.formId}
+					policy={props.policy}
+					schemaRoot={props.schemaRoot}
+					value={policy.value}
+					onSave={props.onSave}
+				/>
+			</EditorValueContext.Provider>
+		</Drawer>
+	);
+}
+
+function PolicySaveButton(props: { onSave: () => void }) {
+	const check = useContext(DrawerCheckContext);
+	return (
+		<button
+			className="button primary"
+			type="button"
+			onClick={() => {
+				if (!check || check()) props.onSave();
+			}}
+		>
+			<Save size={16} />
+			Save
+		</button>
+	);
+}
+
+function TrafficPolicyEditor(props: {
+	formId?: string;
+	policy: TrafficPolicyItem;
+	schemaRoot: TrafficPolicySchemaRoot;
+	value: unknown;
 	onSave: (value: unknown) => void;
 }) {
 	const help = useSchemaHelp();
 	return (
 		<div className="traffic-policy-drawer-stack">
-			<div className="traffic-policy-editor-topbar">
-				<button className="button" type="button" onClick={props.onBack}>
-					<ArrowLeft size={16} />
-					Policies
-				</button>
-			</div>
 			<div className="section-heading">
 				<p>{props.policy.description}</p>
 			</div>
@@ -365,7 +401,7 @@ function TrafficPolicyEditor(props: {
 				formId={props.formId}
 				policyKey={props.policy.key}
 				customEditor={props.policy.customEditor}
-				policyValue={props.policies?.[props.policy.key] ?? null}
+				policyValue={props.value}
 				help={help}
 				saving={false}
 				schemaRoot={props.schemaRoot}

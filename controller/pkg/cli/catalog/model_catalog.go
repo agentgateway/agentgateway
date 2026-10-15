@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -95,9 +96,26 @@ func (p *Provider) overlayWith(overlay Provider, addExactModels bool) {
 }
 
 func (m *Model) overlayWith(overlay Model) {
+	m.Name = cmp.Or(overlay.Name, m.Name)
+	m.Status = cmp.Or(overlay.Status, m.Status)
+	m.Released = cmp.Or(overlay.Released, m.Released)
+	overlayNonZero(&m.Limits, overlay.Limits)
+	overlayNonZero(&m.Capabilities, overlay.Capabilities)
+	overlayNonZero(&m.Modalities, overlay.Modalities)
+	budget := m.Reasoning.BudgetTokens
+	overlayNonZero(&m.Reasoning, overlay.Reasoning)
+	if budget != nil && overlay.Reasoning.BudgetTokens != nil {
+		merged := *budget
+		overlayNonZero(&merged, *overlay.Reasoning.BudgetTokens)
+		m.Reasoning.BudgetTokens = &merged
+	}
 	m.Rates.overlayWith(overlay.Rates)
 	if len(overlay.Tiers) > 0 {
-		m.Tiers = overlay.Tiers
+		// Replace each supplied service tier while preserving other service tiers.
+		m.Tiers = slices.DeleteFunc(m.Tiers, func(t Tier) bool {
+			return slices.ContainsFunc(overlay.Tiers, func(o Tier) bool { return o.ServiceTier == t.ServiceTier })
+		})
+		m.Tiers = append(m.Tiers, overlay.Tiers...)
 	}
 	for _, tag := range overlay.Tags {
 		if !slices.Contains(m.Tags, tag) {
@@ -154,28 +172,72 @@ type Provider struct {
 }
 
 type Model struct {
-	Rates Rates    `json:"rates,omitzero"`
-	Tiers []Tier   `json:"tiers,omitempty"`
-	Tags  []string `json:"tags,omitempty"`
+	// Name is the human-readable display name.
+	Name string `json:"name,omitempty"`
+	// Status is the lifecycle stage (alpha, beta, deprecated); absent means generally available.
+	Status string `json:"status,omitempty"`
+	// Released is the release date, as YYYY-MM-DD or YYYY-MM.
+	Released string   `json:"released,omitempty"`
+	Rates    Rates    `json:"rates,omitzero"`
+	Tiers    []Tier   `json:"tiers,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	// Limits are token limits. Context is the total window shared by input and output; Input,
+	// when set, is a tighter cap on the input alone.
+	Limits       Limits       `json:"limits,omitzero"`
+	Modalities   Modalities   `json:"modalities,omitzero"`
+	Capabilities Capabilities `json:"capabilities,omitzero"`
+	Reasoning    Reasoning    `json:"reasoning,omitzero"`
 }
 
-func (m Model) IsZero() bool {
-	return m.Rates.IsZero() && len(m.Tiers) == 0 && len(m.Tags) == 0
+type Limits struct {
+	Context uint64 `json:"context,omitempty"`
+	Input   uint64 `json:"input,omitempty"`
+	Output  uint64 `json:"output,omitempty"`
+}
+
+type Modalities struct {
+	Input  []string `json:"input,omitempty"`
+	Output []string `json:"output,omitempty"`
+}
+
+// Capabilities are tri-state: nil means unknown.
+type Capabilities struct {
+	Reasoning        *bool `json:"reasoning,omitempty"`
+	StructuredOutput *bool `json:"structuredOutput,omitempty"`
+	ToolCall         *bool `json:"toolCall,omitempty"`
+	Temperature      *bool `json:"temperature,omitempty"`
+}
+
+// Reasoning describes how reasoning can be controlled. A model may support several mechanisms.
+type Reasoning struct {
+	// Toggle reports that reasoning can be turned on and off.
+	Toggle *bool `json:"toggle,omitempty"`
+	// Effort lists the accepted effort levels.
+	Effort []string `json:"effort,omitempty"`
+	// BudgetTokens is the accepted reasoning token budget range.
+	BudgetTokens *BudgetTokens `json:"budgetTokens,omitempty"`
+}
+
+type BudgetTokens struct {
+	Min *uint64 `json:"min,omitempty"`
+	Max *uint64 `json:"max,omitempty"`
 }
 
 type Rates struct {
-	Input       Money `json:"input,omitempty"`
-	Output      Money `json:"output,omitempty"`
-	CacheRead   Money `json:"cacheRead,omitempty"`
-	CacheWrite  Money `json:"cacheWrite,omitempty"`
-	Reasoning   Money `json:"reasoning,omitempty"`
-	InputAudio  Money `json:"inputAudio,omitempty"`
-	OutputAudio Money `json:"outputAudio,omitempty"`
-	PerPage     Money `json:"perPage,omitempty"`
+	Input        Money `json:"input,omitempty"`
+	Output       Money `json:"output,omitempty"`
+	CacheRead    Money `json:"cacheRead,omitempty"`
+	CacheWrite   Money `json:"cacheWrite,omitempty"`
+	CacheWrite1h Money `json:"cacheWrite1h,omitempty"`
+	Reasoning    Money `json:"reasoning,omitempty"`
+	InputAudio   Money `json:"inputAudio,omitempty"`
+	OutputAudio  Money `json:"outputAudio,omitempty"`
+	PerPage      Money `json:"perPage,omitempty"`
 }
 
 type Tier struct {
-	ContextOver uint64 `json:"contextOver"`
+	ContextOver uint64 `json:"contextOver,omitempty"`
+	ServiceTier string `json:"serviceTier,omitempty"`
 	Rates       Rates  `json:"rates,omitzero"`
 }
 
@@ -186,11 +248,16 @@ func (r Rates) IsZero() bool {
 }
 
 func (r *Rates) overlayWith(overlay Rates) {
-	dst := reflect.ValueOf(r).Elem()
+	overlayNonZero(r, overlay)
+}
+
+// overlayNonZero copies each non-zero field of overlay into dst.
+func overlayNonZero[T any](dst *T, overlay T) {
+	d := reflect.ValueOf(dst).Elem()
 	src := reflect.ValueOf(overlay)
 	for i := range src.NumField() {
 		if !src.Field(i).IsZero() {
-			dst.Field(i).Set(src.Field(i))
+			d.Field(i).Set(src.Field(i))
 		}
 	}
 }
@@ -237,12 +304,17 @@ func (m *Model) validate() error {
 	if err := m.Rates.validate(); err != nil {
 		return err
 	}
-	var prev uint64
+	previous := make(map[string]uint64)
 	for i, t := range m.Tiers {
-		if i > 0 && t.ContextOver <= prev {
-			return fmt.Errorf("tier %d threshold %d not strictly greater than previous %d", i, t.ContextOver, prev)
+		switch t.ServiceTier {
+		case "", "standard", "flex", "priority", "reserved":
+		default:
+			return fmt.Errorf("tier %d has unsupported serviceTier %q", i, t.ServiceTier)
 		}
-		prev = t.ContextOver
+		if prior, ok := previous[t.ServiceTier]; ok && t.ContextOver <= prior {
+			return fmt.Errorf("tier %d contextOver must increase within its serviceTier", i)
+		}
+		previous[t.ServiceTier] = t.ContextOver
 		if err := t.Rates.validate(); err != nil {
 			return fmt.Errorf("tier %d: %w", i, err)
 		}

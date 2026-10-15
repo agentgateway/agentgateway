@@ -44,8 +44,10 @@ impl AgentGateway {
 	pub async fn new(raw_config: impl Into<String>) -> anyhow::Result<Self> {
 		agent_core::telemetry::testing::setup_test_logging();
 		let raw_config = raw_config.into();
-		// Use port 0 for $PORT so the OS assigns a free port at bind time
-		let config = raw_config.replace("$PORT", "0");
+		let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+		let reserved_port = listener.local_addr()?.port();
+		drop(listener);
+		let config = raw_config.replace("$PORT", &reserved_port.to_string());
 		let mut document: Value =
 			yaml::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = document
@@ -98,9 +100,14 @@ impl AgentGateway {
 				.await
 				.unwrap();
 
-			// Report the actual bound port back to the test.
+			// Report the configured test gateway rather than whichever bind happens to
+			// appear first when the config contains multiple gateways.
 			let addrs = app.bind_addresses();
-			let port = addrs.first().map(|a| a.port()).unwrap_or(0);
+			let port = addrs
+				.iter()
+				.find(|address| address.port() == reserved_port)
+				.map(|address| address.port())
+				.unwrap_or(0);
 			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination
@@ -134,9 +141,8 @@ impl AgentGateway {
 	pub async fn shutdown(mut self) {
 		if let Some(tx) = self.shutdown_tx.take() {
 			let _ = tx.send(());
-			// The shutdown signal has been sent, the task will terminate gracefully
 		}
-		self.task.abort();
+		let _ = (&mut self.task).await;
 	}
 
 	pub async fn send_request(&self, method: Method, url: &str) -> Response {

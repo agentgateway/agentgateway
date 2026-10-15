@@ -396,6 +396,9 @@ async fn send_model_armor_request<T: Serialize>(
 		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 
+	if !resp.status().is_success() {
+		anyhow::bail!("Model Armor API error: status={}", resp.status());
+	}
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;
 	Ok(resp)
 }

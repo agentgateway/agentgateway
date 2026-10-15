@@ -431,7 +431,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 }
 
 #[test]
-fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
+fn test_enabled_thinking_applies_sampling_constraints_and_preserves_tool_choice() {
 	let provider = Provider {
 		model_override: None,
 		region: strng::new("us-east-1"),
@@ -440,7 +440,51 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		endpoint_preference: Default::default(),
 	};
 
-	let req = messages::typed::Request {
+	// Manual extended thinking rejects forced tool use, so the client's tool_choice must be
+	// forwarded unchanged rather than rewritten to `any`.
+	let cases = [
+		(
+			Some(messages::typed::ToolChoice::Auto {
+				disable_parallel_tool_use: None,
+			}),
+			Some(json!({ "auto": {} })),
+		),
+		(None, None),
+		(Some(messages::typed::ToolChoice::None {}), None),
+		(
+			Some(messages::typed::ToolChoice::Any {
+				disable_parallel_tool_use: None,
+			}),
+			Some(json!({ "any": {} })),
+		),
+		(
+			Some(messages::typed::ToolChoice::Tool {
+				name: "lookup".to_string(),
+				disable_parallel_tool_use: None,
+			}),
+			Some(json!({ "tool": { "name": "lookup" } })),
+		),
+	];
+	for (tool_choice, expected) in cases {
+		let req = enabled_thinking_request_with_tool_choice(tool_choice);
+		let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
+		let inference = out.inference_config.unwrap();
+		assert_eq!(inference.temperature, None);
+		assert_eq!(inference.top_p, None);
+
+		let tool_choice = out
+			.tool_config
+			.as_ref()
+			.and_then(|cfg| cfg.tool_choice.as_ref())
+			.map(|tc| serde_json::to_value(tc).unwrap());
+		assert_eq!(tool_choice, expected);
+	}
+}
+
+fn enabled_thinking_request_with_tool_choice(
+	tool_choice: Option<messages::typed::ToolChoice>,
+) -> messages::typed::Request {
+	messages::typed::Request {
 		model: "anthropic.claude-3-sonnet".to_string(),
 		messages: vec![messages::typed::Message {
 			role: messages::typed::Role::User,
@@ -475,25 +519,12 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 				cache_control: None,
 			},
 		)]),
-		tool_choice: Some(messages::typed::ToolChoice::Auto {
-			disable_parallel_tool_use: None,
-		}),
+		tool_choice,
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
 		}),
 		output_config: None,
-	};
-
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
-	let inference = out.inference_config.unwrap();
-	assert_eq!(inference.temperature, None);
-	assert_eq!(inference.top_p, None);
-
-	let tool_choice = out
-		.tool_config
-		.as_ref()
-		.and_then(|cfg| cfg.tool_choice.as_ref());
-	assert!(matches!(tool_choice, Some(types::bedrock::ToolChoice::Any)));
+	}
 }
 
 #[test]

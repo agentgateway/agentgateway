@@ -310,12 +310,13 @@ fn test_ext_authz_cache_lookup_hits_outside_refresh_window() {
 #[test]
 fn test_ext_authz_cache_lookup_refreshes_once_near_expiry() {
 	let cached = test_cached_grpc_response(Duration::from_millis(50), Duration::from_secs(1));
+	let now = cached.expires_at - Duration::from_millis(50);
 
-	let lookup = cached.lookup(Instant::now());
+	let lookup = cached.lookup(now);
 	assert_eq!(lookup, super::CacheLookup::Refresh);
 	assert!(cached.refreshing.load(Ordering::Acquire));
 
-	let lookup = cached.lookup(Instant::now());
+	let lookup = cached.lookup(now);
 	assert_eq!(lookup, super::CacheLookup::Hit);
 }
 

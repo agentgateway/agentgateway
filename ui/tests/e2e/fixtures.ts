@@ -344,6 +344,28 @@ export function xdsDumpModels(): DumpModel[] {
 	];
 }
 
+// `match.model` may be a wildcard (`gpt-*`, `*-latest`, `*`) and visibility defaults to Public,
+// so a public pattern is a normal dump entry.
+export function xdsWildcardModel(): DumpModel {
+	return {
+		listenerKey: 'default/model-gateway.llm',
+		key: 'default/gpt-5-any.llm',
+		name: 'gpt-5-*',
+		routerKey: '',
+		kind: {
+			concrete: {
+				name: 'gpt-5-*',
+				created: 1783641600,
+				visibility: 'public',
+				headerMatches: [],
+				backend: { weight: 1, backend: 'default/gpt-5-any/backend.llm' },
+				policies: { llm: {} },
+				backendPolicies: []
+			}
+		}
+	};
+}
+
 export function xdsDump(models: DumpModel[] = xdsDumpModels()): StoresDump {
 	return {
 		workloads: [],
@@ -373,7 +395,8 @@ export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
 				buildProfile: 'test',
 				buildTarget: 'test'
 			},
-			ui: { gatewayMode: 'xds', configStoreMode: 'file' }
+			ui: { gatewayMode: 'xds', configStoreMode: 'file' },
+			configReload: { synchronized: true, lastError: null }
 		});
 	});
 
@@ -402,7 +425,8 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 				buildProfile: 'test',
 				buildTarget: 'test'
 			},
-			ui: { gatewayMode: 'standalone', configStoreMode: 'file' }
+			ui: { gatewayMode: 'standalone', configStoreMode: 'file' },
+			configReload: { synchronized: true, lastError: null }
 		});
 	});
 

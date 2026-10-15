@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -321,17 +320,14 @@ func TranslateAgentgatewayPolicy(
 		}, existingStatus, policy.Generation, attachmentErrorConditionMap(baseConds, attachmentErrors), controller))
 	}
 
-	// Build final status from accumulated ancestors
+	// Sort only our new entries. MergeAncestors keeps existing entries in place, matching the order the status
+	// syncer writes, so a re-sort of the whole list would make desired and live status differ without a change.
+	slices.SortStableFunc(ancestors, func(a, b gwv1.PolicyAncestorStatus) int {
+		return strings.Compare(reports.ParentString(a.AncestorRef), reports.ParentString(b.AncestorRef))
+	})
 	status := gwv1.PolicyStatus{
 		Ancestors: MergeAncestors(agw.ControllerName, existingStatus.Ancestors, ancestors),
 	}
-
-	// sort all parents for consistency with Equals and for Update
-	// match sorting semantics of istio/istio, see:
-	// https://github.com/istio/istio/blob/6dcaa0206bcaf20e3e3b4e45e9376f0f96365571/pilot/pkg/config/kube/gateway/conditions.go#L188-L193
-	slices.SortStableFunc(status.Ancestors, func(a, b gwv1.PolicyAncestorStatus) int {
-		return strings.Compare(reports.ParentString(a.AncestorRef), reports.ParentString(b.AncestorRef))
-	})
 
 	return &status, agwPolicies
 }
@@ -811,8 +807,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			JwtValidationOptions: translateJWTValidationOptions(pp.Validation),
 		}
 		if i := pp.JWKS.Inline; i != nil {
-			var ks jose.JSONWebKeySet
-			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+			if _, err := jwks.ParseKeySet([]byte(*i)); err != nil {
 				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
 			}
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
@@ -1008,8 +1003,9 @@ func processAPIKeyAuthenticationPolicy(
 			dataSets = append(dataSets, apiKeyData{kind: "configMap", name: cm.Name, data: data})
 		}
 	}
+	slices.SortBy(dataSets, func(d apiKeyData) string { return d.name })
 	for _, s := range dataSets {
-		for k, v := range s.data {
+		for k, v := range maps.SeqStable(s.data) {
 			trimmed := bytes.TrimSpace(v)
 			if len(trimmed) == 0 {
 				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: empty value", s.kind, s.name, k))
@@ -1055,7 +1051,7 @@ func processAPIKeyAuthenticationPolicy(
 		}
 	}
 	// Ensure deterministic ordering
-	slices.SortFunc(p.ApiKeys, func(a, b *api.TrafficPolicySpec_APIKey_User) int {
+	slices.SortStableFunc(p.ApiKeys, func(a, b *api.TrafficPolicySpec_APIKey_User) int {
 		return cmp.Or(
 			cmp.Compare(a.Key, b.Key),
 			cmp.Compare(a.KeyHash, b.KeyHash),
@@ -1436,6 +1432,43 @@ func buildExtAuthSpec(
 		}
 	}
 
+	return spec, errors.Join(errs...)
+}
+
+// TranslateModelCallout translates the callout routing of a virtual model, excluding the fallback model.
+func TranslateModelCallout(ctx PolicyCtx, namespace string, callout *agentgateway.CalloutModelRouting) (*api.ModelRoute_VirtualModel_Callout, error) {
+	var errs []error
+	be, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, callout.PolicyBackendEndpoint, namespace)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("failed to build callout: %v", err))
+	}
+	spec := &api.ModelRoute_VirtualModel_Callout{
+		Target:         be,
+		InlinePolicies: inlinePolicies,
+		Headers: castCELMap(callout.Headers, func(key string, expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("callout headers %q is not a valid CEL expression: %s", key, expr))
+		}),
+		Body: castCELPtr(callout.Body, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("callout body is not a valid CEL expression: %s", expr))
+		}),
+		Transformation: castCELMap(callout.Transformation, func(key string, expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("callout transformation %q is not a valid CEL expression: %s", key, expr))
+		}),
+	}
+	if parsedURL != nil && parsedURL.EscapedPath() != "" {
+		spec.Path = new(parsedURL.EscapedPath())
+	}
+	if cache := callout.Cache; cache != nil {
+		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
+			Key: castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("callout cache key is not a valid CEL expression: %s", expr))
+			}),
+			Ttl: castDurationOrCEL(cache.TTL, func(expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("callout cache ttl is not a valid CEL expression: %s", expr))
+			}),
+			MaxEntries: ptr.OrDefault(cache.MaxEntries, 0),
+		}
+	}
 	return spec, errors.Join(errs...)
 }
 
@@ -1941,19 +1974,20 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 		Group: string(group),
 		Kind:  string(kind),
 	}
-	if ctx.RouteBackend != nil {
-		return ctx.RouteBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
-	}
 	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
 		return nil, err
+	}
+	if ctx.RouteBackend != nil {
+		return ctx.RouteBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 	}
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 }
 
 func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
+	// Route-like sources follow the route grant mode, which BackendAllowed applies.
 	if ref.Namespace != nil &&
 		string(*ref.Namespace) != defaultNS &&
-		ctx.Collections.Settings.BackendRefGrantMode.RequirePolicyBackendGrant() {
+		(ctx.RouteBackend != nil || ctx.Collections.Settings.BackendRefGrantMode.RequirePolicyBackendGrant()) {
 		sourceGVK := ctx.PolicySourceGVK()
 		if !ctx.Grants.BackendAllowed(
 			ctx.Krt,

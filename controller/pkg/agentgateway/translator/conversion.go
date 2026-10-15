@@ -933,8 +933,13 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 		}
 	}
 	// Ensure stable order
-	slices.SortBy(parentRefs, func(a RouteParentReference) string {
-		return ParentRefString(a.OriginalReference)
+	slices.SortFunc(parentRefs, func(a, b RouteParentReference) int {
+		return cmp.Or(
+			strings.Compare(ParentRefString(a.OriginalReference), ParentRefString(b.OriginalReference)),
+			strings.Compare(a.ListenerKey, b.ListenerKey),
+			strings.Compare(ptr.OrEmpty(a.ServiceKey).String(), ptr.OrEmpty(b.ServiceKey).String()),
+			strings.Compare(a.Hostname, b.Hostname),
+		)
 	})
 	return parentRefs
 }

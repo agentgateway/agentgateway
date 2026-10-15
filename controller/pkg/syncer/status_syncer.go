@@ -458,7 +458,7 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 		// Passing Spec is ignored by the API server but has costs.
 		// Passing ResourceVersion is important to ensure we are not writing stale data. The collection is responsible for
 		// re-enqueuing a resource if it ends up being rejected due to stale ResourceVersion.
-		_, err := s.Client.UpdateStatus(s.Build(metav1.ObjectMeta{
+		err := s.Client.UpdateStatusNoResponse(s.Build(metav1.ObjectMeta{
 			Name:            obj.Name,
 			Namespace:       obj.Namespace,
 			ResourceVersion: rv,
@@ -489,115 +489,49 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 }
 
 func mergeXBackendAncestorStatuses(ourControllerName string, existing, desired []gwxv1a1.BackendAncestorStatus) []gwxv1a1.BackendAncestorStatus {
-	out := make([]gwxv1a1.BackendAncestorStatus, 0, len(existing)+len(desired))
-	for _, ancestor := range existing {
-		if string(ancestor.ControllerName) != ourControllerName {
-			out = append(out, ancestor)
-		}
-	}
-	ours := make([]gwxv1a1.BackendAncestorStatus, 0, len(desired))
-	for _, ancestor := range desired {
-		if string(ancestor.ControllerName) == ourControllerName {
-			ours = append(ours, ancestor)
-		}
-	}
-	slices.SortFunc(ours, func(a, b gwxv1a1.BackendAncestorStatus) int {
-		return compareParentReference(a.AncestorRef, b.AncestorRef)
-	})
-	return append(out, ours...)
+	return reports.MergeOwnedStatuses(existing, desired,
+		func(a gwxv1a1.BackendAncestorStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwxv1a1.BackendAncestorStatus) bool {
+			return reports.CompareParentReference(a.AncestorRef, b.AncestorRef) == 0
+		},
+		func(a, b gwxv1a1.BackendAncestorStatus) int {
+			return reports.CompareParentReference(a.AncestorRef, b.AncestorRef)
+		},
+	)
 }
 
 func mergePolicyAncestorStatuses(ourControllerName string, existing []gwv1.PolicyAncestorStatus, desired []gwv1.PolicyAncestorStatus) []gwv1.PolicyAncestorStatus {
-	out := make([]gwv1.PolicyAncestorStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, a := range existing {
-		if string(a.ControllerName) != ourControllerName {
-			out = append(out, a)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]gwv1.PolicyAncestorStatus, 0, len(desired))
-	for _, a := range desired {
-		if string(a.ControllerName) == ourControllerName {
-			ours = append(ours, a)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b gwv1.PolicyAncestorStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareParentReference(a.AncestorRef, b.AncestorRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return reports.MergeOwnedStatuses(existing, desired,
+		func(a gwv1.PolicyAncestorStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwv1.PolicyAncestorStatus) bool {
+			return reports.CompareParentReference(a.AncestorRef, b.AncestorRef) == 0
+		},
+		func(a, b gwv1.PolicyAncestorStatus) int {
+			return reports.CompareParentReference(a.AncestorRef, b.AncestorRef)
+		},
+	)
 }
 
 func mergeRouteParentStatuses(ourControllerName string, existing []gwv1.RouteParentStatus, desired []gwv1.RouteParentStatus) []gwv1.RouteParentStatus {
-	out := make([]gwv1.RouteParentStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, a := range existing {
-		if string(a.ControllerName) != ourControllerName {
-			out = append(out, a)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]gwv1.RouteParentStatus, 0, len(desired))
-	for _, a := range desired {
-		if string(a.ControllerName) == ourControllerName {
-			ours = append(ours, a)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b gwv1.RouteParentStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareParentReference(a.ParentRef, b.ParentRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return reports.MergeOwnedStatuses(existing, desired,
+		func(a gwv1.RouteParentStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b gwv1.RouteParentStatus) bool {
+			return reports.CompareParentReference(a.ParentRef, b.ParentRef) == 0
+		},
+		func(a, b gwv1.RouteParentStatus) int { return reports.CompareParentReference(a.ParentRef, b.ParentRef) },
+	)
 }
 
 func mergeInferencePoolParentStatuses(ourControllerName string, existing []inf.ParentStatus, desired []inf.ParentStatus) []inf.ParentStatus {
-	out := make([]inf.ParentStatus, 0, len(existing)+len(desired))
-
-	// Preserve any entries not owned by our controller.
-	for _, p := range existing {
-		if string(p.ControllerName) != ourControllerName {
-			out = append(out, p)
-		}
-	}
-
-	// Only add entries owned by our controller from the desired status.
-	// This ensures we can clear stale entries by publishing an empty desired list.
-	ours := make([]inf.ParentStatus, 0, len(desired))
-	for _, p := range desired {
-		if string(p.ControllerName) == ourControllerName {
-			ours = append(ours, p)
-		}
-	}
-
-	// Ensure stable ordering of our entries so status doesn't flap due to map/set iteration upstream.
-	slices.SortFunc(ours, func(a, b inf.ParentStatus) int {
-		if c := cmp.Compare(string(a.ControllerName), string(b.ControllerName)); c != 0 {
-			return c
-		}
-		return compareInferencePoolParentReference(a.ParentRef, b.ParentRef)
-	})
-
-	out = append(out, ours...)
-	return out
+	return reports.MergeOwnedStatuses(existing, desired,
+		func(a inf.ParentStatus) bool { return string(a.ControllerName) == ourControllerName },
+		func(a, b inf.ParentStatus) bool {
+			return reports.CompareInferencePoolParentReference(a.ParentRef, b.ParentRef) == 0
+		},
+		func(a, b inf.ParentStatus) int {
+			return reports.CompareInferencePoolParentReference(a.ParentRef, b.ParentRef)
+		},
+	)
 }
 
 func mergeGatewayStatus(existing gwv1.GatewayStatus, desired gwv1.GatewayStatus) gwv1.GatewayStatus {
@@ -760,94 +694,6 @@ func mergeGatewayAddresses(existing []gwv1.GatewayStatusAddress, desired []gwv1.
 	})
 
 	return out
-}
-
-func compareParentReference(a, b gwv1.ParentReference) int {
-	// ParentReference includes pointer fields with defaults. Canonicalize those defaults so nil vs explicitly-set
-	// default values don't introduce ordering churn.
-	if c := cmp.Compare(parentRefGroupOrDefault(a.Group), parentRefGroupOrDefault(b.Group)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(parentRefKindOrDefault(a.Kind), parentRefKindOrDefault(b.Kind)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(derefStringPtr(a.Namespace), derefStringPtr(b.Namespace)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(string(a.Name), string(b.Name)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(derefStringPtr(a.SectionName), derefStringPtr(b.SectionName)); c != 0 {
-		return c
-	}
-	return comparePortNumberPtr(a.Port, b.Port)
-}
-
-func compareInferencePoolParentReference(a, b inf.ParentReference) int {
-	// ParentReference includes fields with defaults. Canonicalize those defaults so omitted vs explicitly-set
-	// default values don't introduce ordering churn.
-	if c := cmp.Compare(inferencePoolParentRefGroupOrDefault(a.Group), inferencePoolParentRefGroupOrDefault(b.Group)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(inferencePoolParentRefKindOrDefault(a.Kind), inferencePoolParentRefKindOrDefault(b.Kind)); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(string(a.Namespace), string(b.Namespace)); c != 0 {
-		return c
-	}
-	return cmp.Compare(string(a.Name), string(b.Name))
-}
-
-func inferencePoolParentRefGroupOrDefault(g *inf.Group) string {
-	if g == nil {
-		// ParentReference.Group default.
-		return "gateway.networking.k8s.io"
-	}
-	return string(*g)
-}
-
-func inferencePoolParentRefKindOrDefault(k inf.Kind) string {
-	if k == "" {
-		// ParentReference.Kind default.
-		return "Gateway"
-	}
-	return string(k)
-}
-
-func parentRefGroupOrDefault(g *gwv1.Group) string {
-	if g == nil {
-		// ParentReference.Group default.
-		return "gateway.networking.k8s.io"
-	}
-	return string(*g)
-}
-
-func parentRefKindOrDefault(k *gwv1.Kind) string {
-	if k == nil {
-		// ParentReference.Kind default.
-		return "Gateway"
-	}
-	return string(*k)
-}
-
-func derefStringPtr[S ~string](p *S) string {
-	if p == nil {
-		return ""
-	}
-	return string(*p)
-}
-
-func comparePortNumberPtr(a, b *gwv1.PortNumber) int {
-	switch {
-	case a == nil && b == nil:
-		return 0
-	case a == nil:
-		return -1
-	case b == nil:
-		return 1
-	default:
-		return cmp.Compare(int(*a), int(*b))
-	}
 }
 
 func addressTypeOrDefault(t *gwv1.AddressType) string {

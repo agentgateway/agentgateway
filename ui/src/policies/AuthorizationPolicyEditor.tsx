@@ -5,9 +5,9 @@ import type * as Monaco from 'monaco-editor';
 import { useState } from 'react';
 
 import { celEditorOptions, celLanguage, configureCelMonaco } from '@/celMonaco';
+import { useReportEditorValue } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { EmptyState, StatusBanner } from '@/components/Primitives';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { AuthorizationDraft } from '@/policies/types';
 
 type RuleEffect = 'allow' | 'deny' | 'require';
@@ -40,6 +40,7 @@ export function AuthorizationPolicyEditor(props: {
 	const [errors, setErrors] = useState<Record<number, string>>({});
 	const [summaryError, setSummaryError] = useState<string | null>(null);
 	const preview = buildAuthorization(rules);
+	useReportEditorValue(preview);
 
 	function addRule() {
 		setRules(current => [
@@ -216,7 +217,6 @@ export function AuthorizationPolicyEditor(props: {
 				</div>
 			)}
 
-			<ResultingYaml value={preview} />
 			{summaryError ? (
 				<StatusBanner state="bad" title="Invalid authorization policy">
 					{summaryError}

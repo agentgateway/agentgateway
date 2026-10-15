@@ -32,7 +32,7 @@ pub async fn handshake(
 			"connecting tls");
 
 	let (ext, counter, tcp) = tcp.into_parts();
-	let tls = TlsConnector::from(cfg.config.clone())
+	let tls = TlsConnector::from(cfg.connect_config())
 		.connect(server_name, Box::new(tcp))
 		.await
 		.map_err(crate::http::Error::new)?;

@@ -8,6 +8,7 @@ service Control {
   rpc GetActor(GetActorRequest) returns (Actor) {}
   rpc ResumeActor(ResumeActorRequest) returns (ResumeActorResponse) {}
   rpc GetActorEgressPolicy(GetActorEgressPolicyRequest) returns (EgressPolicy) {}
+  rpc MintActorJwt(MintActorJwtRequest) returns (MintActorJwtResponse) {}
 }
 
 message Actor {
@@ -34,7 +35,7 @@ enum ActorState {
 
 // The minimal running-actor assignment required by AgentGateway ingress.
 message WorkerAssignment {
-  string worker_pod_ip = 5;
+  repeated string worker_pod_ips = 5;
 }
 
 message ResourceMetadata {
@@ -111,8 +112,25 @@ message CredentialHeader {
   string header = 1;
   string prefix = 2;
   string credential_uri = 3;
+  ActorJwtSource actor_jwt = 4;
+}
+
+message ActorJwtSource {
+  repeated string audiences = 1;
+  int64 expiration_seconds = 2;
 }
 
 message GetActorEgressPolicyRequest {
   ObjectRef actor = 1;
+  string name = 2;
+}
+
+message MintActorJwtRequest {
+  ObjectRef actor = 5;
+  repeated string audiences = 1;
+  int64 expiration_seconds = 8;
+}
+
+message MintActorJwtResponse {
+  string actor_jwt = 1;
 }

@@ -1,6 +1,6 @@
 {
-  "model": "claude-sonnet-4-5",
-  "max_tokens": 1024,
+  "model": "gpt-5.6",
+  "max_tokens": 64,
   "messages": [
     {
       "role": "user",
@@ -10,7 +10,7 @@
           "source": {
             "type": "text",
             "media_type": "text/plain",
-            "data": "document body"
+            "data": "omitted"
           },
           "cache_control": {
             "type": "ephemeral"
@@ -18,7 +18,7 @@
         },
         {
           "type": "text",
-          "text": "Summarize this document"
+          "text": "No preceding content to cache"
         }
       ]
     },
@@ -26,19 +26,56 @@
       "role": "assistant",
       "content": [
         {
-          "type": "server_tool_use",
-          "id": "srvtoolu_1",
-          "name": "web_search",
-          "input": {
-            "query": "agentgateway"
+          "type": "document",
+          "source": {
+            "type": "text",
+            "media_type": "text/plain",
+            "data": "omitted"
           },
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "search_result",
+          "source": "https://example.com",
+          "title": "Result",
+          "content": [
+            {
+              "type": "text",
+              "text": "omitted"
+            }
+          ],
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "Before search result"
+        },
+        {
+          "type": "search_result",
+          "source": "https://example.com",
+          "title": "Result",
+          "content": [
+            {
+              "type": "text",
+              "text": "omitted"
+            }
+          ],
           "cache_control": {
             "type": "ephemeral"
           }
         },
         {
           "type": "web_search_tool_result",
-          "tool_use_id": "srvtoolu_1",
+          "tool_use_id": "srv_1",
           "content": [],
           "cache_control": {
             "type": "ephemeral"
@@ -46,30 +83,7 @@
         },
         {
           "type": "text",
-          "text": "Searching the web"
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Use this search result"
-        },
-        {
-          "type": "search_result",
-          "source": "https://example.com",
-          "title": "Example",
-          "content": [
-            {
-              "type": "text",
-              "text": "search result body"
-            }
-          ],
-          "cache_control": {
-            "type": "ephemeral"
-          }
+          "text": "After search result"
         }
       ]
     },
@@ -77,39 +91,23 @@
       "role": "assistant",
       "content": [
         {
-          "type": "tool_use",
-          "id": "call_search",
-          "name": "lookup",
-          "input": {}
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
+          "type": "text",
+          "text": "Before server tool"
+        },
         {
-          "type": "tool_result",
-          "tool_use_id": "call_search",
-          "content": [
-            {
-              "type": "text",
-              "text": "tool result text"
-            },
-            {
-              "type": "search_result",
-              "source": "https://example.com",
-              "title": "Example",
-              "content": [
-                {
-                  "type": "text",
-                  "text": "search result body"
-                }
-              ],
-              "cache_control": {
-                "type": "ephemeral"
-              }
-            }
-          ]
+          "type": "thinking",
+          "thinking": "reasoning",
+          "signature": "signature"
+        },
+        {
+          "type": "server_tool_use",
+          "id": "srv_1",
+          "name": "web_search",
+          "input": {},
+          "cache_control": {
+            "type": "ephemeral",
+            "ttl": "1h"
+          }
         }
       ]
     }
@@ -117,10 +115,25 @@
   "tools": [
     {
       "name": "lookup",
-      "description": "Look up information",
       "input_schema": {
-        "type": "object",
-        "properties": {}
+        "type": "object"
+      }
+    },
+    {
+      "type": "web_search_20250305",
+      "name": "web_search",
+      "cache_control": {
+        "type": "ephemeral",
+        "ttl": "1h"
+      }
+    },
+    {
+      "name": "over_limit",
+      "input_schema": {
+        "type": "object"
+      },
+      "cache_control": {
+        "type": "ephemeral"
       }
     }
   ]

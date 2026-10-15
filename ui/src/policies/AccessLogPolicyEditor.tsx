@@ -1,21 +1,15 @@
 import { Database, ScrollText, Send } from 'lucide-react';
 import { useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { LoggingPolicy, OtlpLoggingConfig } from '@/gateway-config';
 import { ListEditor } from '@/policies/ListEditor';
-import {
-	hasUnsupportedTarget,
-	KeyValueEditor,
-	targetFrom,
-	unsupportedTargetLabel
-} from '@/policies/PolicyFormControls';
+import { hasUnsupportedTarget, KeyValueEditor, targetFrom } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import { otlpProtocolOptions } from '@/policies/TracingPolicyEditor';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -42,44 +36,35 @@ export function AccessLogPolicyEditor(props: {
 	const [llmMode, setLlmMode] = useState<LlmMode>(original?.database?.llm ?? 'default');
 	const [databaseAdd, setDatabaseAdd] = useState(original?.database?.add ?? {});
 
-	if (original?.otlp && hasUnsupportedTarget(original.otlp)) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported OTLP target type"
-				value={original}
-				schema={props.help.node(['$defs', 'LoggingPolicy'])}
-				help={props.help}
-			>
-				OTLP export uses a {unsupportedTargetLabel(original.otlp)} target. The visual editor
-				currently supports host targets only.
-			</UnsupportedYamlFallback>
-		);
-	}
+	const merged = useMergedEdits(
+		original,
+		cleanEmpty({
+			preset: preset === 'otel' ? 'otel' : undefined,
+			filter: filter.trim(),
+			add: Object.keys(add).length ? add : undefined,
+			remove,
+			otlp: otlpEnabled
+				? ({
+						host: otlpHost.trim(),
+						protocol: otlpProtocol,
+						path: otlpProtocol === 'http' ? otlpPath.trim() : undefined,
+						filter: otlpFilter.trim()
+					} as OtlpLoggingConfig)
+				: undefined,
+			database:
+				llmMode !== 'default' || Object.keys(databaseAdd).length
+					? {
+							llm: llmMode === 'default' ? undefined : llmMode,
+							add: Object.keys(databaseAdd).length ? databaseAdd : undefined
+						}
+					: undefined
+		}) as LoggingPolicy
+	);
+	const policy = merged.value;
 
-	const policy = cleanEmpty({
-		...original,
-		preset: preset === 'otel' ? 'otel' : undefined,
-		filter: filter.trim(),
-		add: Object.keys(add).length ? add : undefined,
-		remove,
-		otlp: otlpEnabled
-			? ({
-					...original?.otlp,
-					host: otlpHost.trim(),
-					protocol: otlpProtocol,
-					path: otlpProtocol === 'http' ? otlpPath.trim() : undefined,
-					filter: otlpFilter.trim()
-				} as OtlpLoggingConfig)
-			: undefined,
-		database:
-			llmMode !== 'default' || Object.keys(databaseAdd).length
-				? {
-						...original?.database,
-						llm: llmMode === 'default' ? undefined : llmMode,
-						add: Object.keys(databaseAdd).length ? databaseAdd : undefined
-					}
-				: undefined
-	}) as LoggingPolicy;
+	if (original?.otlp && hasUnsupportedTarget(original.otlp)) {
+		return <UnsupportedInForm supports="OTLP export to a host target" />;
+	}
 
 	return (
 		<form
@@ -244,7 +229,6 @@ export function AccessLogPolicyEditor(props: {
 					onChange={setDatabaseAdd}
 				/>
 			</PolicySection>
-			<ResultingYaml value={policy} />
 		</form>
 	);
 }

@@ -1368,7 +1368,7 @@ fn try_bool(val: ResolveResult) -> Result<bool, ExecutionError> {
 mod tests {
 	use std::collections::HashMap;
 
-	use crate::context::{MapResolver, VariableResolver};
+	use crate::context::{MapResolver, SingleVarResolver};
 	use crate::objects::{Key, ListValue, Value};
 	use crate::parser::Expression;
 	use crate::{Context, ExecutionError, Program};
@@ -1663,33 +1663,13 @@ mod tests {
 		}
 	}
 
-	struct CompositeResolver<'a, 'rf> {
-		base: &'rf dyn VariableResolver<'a>,
-		name: &'a str,
-		val: Value<'a>,
-	}
-
-	impl<'a, 'rf> VariableResolver<'a> for CompositeResolver<'a, 'rf> {
-		fn resolve(&self, expr: &str) -> Option<Value<'a>> {
-			if expr == self.name {
-				Some(self.val.clone())
-			} else {
-				self.base.resolve(expr)
-			}
-		}
-	}
-
 	#[test]
 	fn test_function_identifier() {
 		fn with<'a, 'rf, 'b>(ftx: &'b mut crate::FunctionContext<'a, 'rf>) -> crate::ResolveResult<'a> {
 			let this = ftx.this.as_ref().unwrap();
 			let ident = ftx.ident(0)?;
 			let expr: &'a Expression = ftx.expr(1)?;
-			let resolver = CompositeResolver::<'a, 'rf> {
-				base: ftx.variables,
-				name: ident,
-				val: this.clone(),
-			};
+			let resolver = SingleVarResolver::new(ftx.variables, ident, this.clone());
 			let v = Value::resolve(expr, ftx.ptx, &resolver)?;
 			Ok(v)
 		}

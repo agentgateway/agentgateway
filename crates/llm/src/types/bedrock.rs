@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Copy, Clone, Deserialize, Serialize, Debug, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -257,6 +256,7 @@ pub struct InvokeModelBody {
 }
 
 #[derive(Clone, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ToolConfiguration {
 	/// An array of tools that you want to pass to a model.
 	pub tools: Vec<Tool>,
@@ -277,6 +277,8 @@ pub enum Tool {
 #[derive(Clone, std::fmt::Debug, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CachePointBlock {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub ttl: Option<String>,
 	/// Specifies the type of cache point within the CachePointBlock.
 	pub r#type: CachePointType,
 }
@@ -362,7 +364,7 @@ pub enum ConverseOutput {
 }
 
 /// Token usage information
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TokenUsage {
 	/// The number of input tokens which were used
 	#[serde(rename = "inputTokens")]
@@ -385,6 +387,32 @@ pub struct TokenUsage {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub cache_write_input_tokens: Option<usize>,
+	/// Cache write tokens split by TTL
+	#[serde(
+		rename = "cacheDetails",
+		default,
+		skip_serializing_if = "Vec::is_empty"
+	)]
+	pub cache_details: Vec<CacheDetail>,
+}
+
+impl TokenUsage {
+	/// Cache write tokens with the given TTL ("5m" or "1h"), if Bedrock reported a split.
+	pub fn cache_write_input_tokens_for(&self, ttl: &str) -> Option<usize> {
+		self
+			.cache_details
+			.iter()
+			.filter(|d| d.ttl == ttl)
+			.map(|d| d.input_tokens)
+			.reduce(|a, b| a + b)
+	}
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CacheDetail {
+	#[serde(rename = "inputTokens")]
+	pub input_tokens: usize,
+	pub ttl: String,
 }
 
 /// Metrics for the Converse call
@@ -420,9 +448,9 @@ pub enum StopReason {
 #[serde(rename_all = "camelCase")]
 pub enum ToolChoice {
 	/// The model must request at least one tool (no text is generated).
-	Any,
+	Any {},
 	/// (Default). The Model automatically decides if a tool should be called or whether to generate text instead.
-	Auto,
+	Auto {},
 	/// The Model must request the specified tool. Only supported by Anthropic Claude 3 models.
 	Tool { name: String },
 	/// The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.
@@ -595,10 +623,19 @@ pub struct ToolUseBlockDelta {
 	pub input: String,
 }
 
+fn deserialize_base64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+	use base64::Engine;
+	let s = String::deserialize(deserializer)?;
+	base64::prelude::BASE64_STANDARD
+		.decode(s)
+		.map_err(serde::de::Error::custom)
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub enum ReasoningContentBlockDelta {
-	#[serde(rename = "redactedContent")]
-	RedactedContent(#[allow(unused)] Bytes),
+	// Bedrock blobs are base64 encoded; fragments must be decoded before they can be joined.
+	#[serde(rename = "redactedContent", deserialize_with = "deserialize_base64")]
+	RedactedContent(Vec<u8>),
 	#[serde(rename = "signature")]
 	Signature(#[allow(unused)] String),
 	#[serde(rename = "text")]

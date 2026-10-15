@@ -31,6 +31,7 @@ struct BudgetCounter {
 	amount: Decimal,
 	pending: Decimal,
 	unit: Option<BudgetLimitUnit>,
+	/// [`UNBOUNDED_WINDOW`] for a budget without a window, whose usage never resets.
 	rolling: Duration,
 	window_start: UnixDate,
 	window_end: UnixDate,
@@ -39,11 +40,10 @@ struct BudgetCounter {
 
 impl BudgetCounter {
 	fn configured(api_key: &str, budget: &Budget, now: UnixDate) -> anyhow::Result<Self> {
-		let rolling = budget.window.rolling;
-		anyhow::ensure!(
-			!rolling.is_zero(),
-			"budget rolling window must be greater than zero"
-		);
+		let rolling = budget
+			.window
+			.as_ref()
+			.map_or(UNBOUNDED_WINDOW, |window| window.rolling);
 		let (window_start, window_end) = budget_window(now, rolling)?;
 		Ok(Self {
 			definition: Some(BudgetDefinition {
@@ -62,11 +62,10 @@ impl BudgetCounter {
 
 	/// Attaches the latest definition and resets runtime state if its window or unit changed.
 	fn configure(&mut self, api_key: &str, budget: &Budget, now: UnixDate) -> anyhow::Result<()> {
-		let rolling = budget.window.rolling;
-		anyhow::ensure!(
-			!rolling.is_zero(),
-			"budget rolling window must be greater than zero"
-		);
+		let rolling = budget
+			.window
+			.as_ref()
+			.map_or(UNBOUNDED_WINDOW, |window| window.rolling);
 		if now >= self.window_end || self.rolling != rolling || self.unit != Some(budget.limit.unit) {
 			(self.window_start, self.window_end) = budget_window(now, rolling)?;
 			self.amount = Decimal::ZERO;
@@ -82,7 +81,8 @@ impl BudgetCounter {
 		Ok(())
 	}
 
-	/// Advances an expired counter to the epoch-aligned fixed window containing `now`.
+	/// Advances an expired counter to the epoch-aligned fixed window containing `now`. Counters
+	/// without a window never expire.
 	fn refresh(&mut self, now: UnixDate) {
 		if now < self.window_end {
 			return;
@@ -131,8 +131,10 @@ pub struct Budget {
 	pub name: String,
 	/// Maximum usage allowed during the window.
 	pub limit: BudgetLimit,
-	/// Rolling window over which usage will be accumulated.
-	pub window: BudgetWindow,
+	/// Rolling window over which usage will be accumulated. If unset, usage accumulates for the
+	/// lifetime of the budget and is never reset.
+	#[serde(default)]
+	pub window: Option<BudgetWindow>,
 	/// Action taken when the budget is exceeded.
 	pub on_budget_exceeded: BudgetExceededAction,
 }
@@ -289,7 +291,8 @@ pub struct BudgetSettlement {
 #[derive(Debug, thiserror::Error)]
 #[error("Budget exceeded")]
 pub struct BudgetExceeded {
-	pub retry_after: u64,
+	/// Seconds until the budget resets, or `None` for a budget that never resets.
+	pub retry_after: Option<u64>,
 }
 
 fn budget_id(api_key_id: &str, budget: &Budget) -> String {
@@ -308,16 +311,27 @@ fn budget_id(api_key_id: &str, budget: &Budget) -> String {
 /// For example, a one-hour duration produces UTC clock-hour windows, while a 30-day duration
 /// produces consecutive 30-day periods measured from 1970-01-01 rather than calendar months.
 /// UTC and fixed durations deliberately avoid daylight-saving and other local-calendar behavior.
+/// [`UNBOUNDED_WINDOW`] spans from the Unix epoch to the latest representable time.
 fn budget_window(now: UnixDate, rolling: Duration) -> anyhow::Result<(UnixDate, UnixDate)> {
+	let unbounded = rolling == UNBOUNDED_WINDOW;
 	let rolling = TimeDelta::from_std(rolling).context("budget rolling window is too large")?;
-	let start = now
-		.duration_trunc(rolling)
-		.context("failed to align budget rolling window")?;
+	let start = if unbounded {
+		UnixDate::UNIX_EPOCH
+	} else {
+		now
+			.duration_trunc(rolling)
+			.context("failed to align budget rolling window")?
+	};
 	let end = start
 		.checked_add_signed(rolling)
 		.context("budget rolling window is too large")?;
 	Ok((start, end))
 }
+
+/// Window length of budgets that never reset. It is whole milliseconds so the window end
+/// round-trips through the database unchanged.
+const UNBOUNDED_WINDOW: Duration =
+	Duration::from_millis(UnixDate::MAX_UTC.timestamp_millis() as u64);
 
 impl BudgetPolicy {
 	/// Creates a policy used while normalizing a candidate local configuration. It shares the live
@@ -424,13 +438,13 @@ impl BudgetPolicy {
 		let mut blocked = None;
 		for budget in &budgets.budgets {
 			let budget_id = budget_id(&budgets.api_key_id, budget);
-			let (used, window_end) = {
+			let (used, window_end, rolling) = {
 				let mut counter = self
 					.counters
 					.get_mut(&budget_id)
 					.context("budget counter was not registered")?;
 				counter.refresh(now);
-				(counter.amount, counter.window_end)
+				(counter.amount, counter.window_end, counter.rolling)
 			};
 			let exceeded = used >= budget.limit.amount.decimal();
 			if exceeded {
@@ -461,13 +475,14 @@ impl BudgetPolicy {
 				&& matches!(budget.on_budget_exceeded, BudgetExceededAction::Block)
 				&& blocked.is_none()
 			{
-				let retry_after = (window_end - now).to_std().unwrap_or_default();
-				blocked = Some(BudgetExceeded {
-					// Retry-After is whole seconds, rounded up from the remaining window duration.
-					retry_after: retry_after
+				// Retry-After is whole seconds, rounded up from the remaining window duration.
+				let retry_after = (rolling != UNBOUNDED_WINDOW).then(|| {
+					let remaining = (window_end - now).to_std().unwrap_or_default();
+					remaining
 						.as_secs()
-						.saturating_add(u64::from(retry_after.subsec_nanos() != 0)),
+						.saturating_add(u64::from(remaining.subsec_nanos() != 0))
 				});
+				blocked = Some(BudgetExceeded { retry_after });
 			}
 		}
 		Ok(blocked)
@@ -543,7 +558,7 @@ impl crate::store::RequestPolicyTrait for BudgetPolicy {
 			return Err(crate::proxy::ProxyError::BudgetExceeded(exceeded).into());
 		}
 
-		log.budgets = Some(BudgetSettlement {
+		log.budgets.push(BudgetSettlement {
 			policy: self.clone(),
 			budgets,
 		});
@@ -662,9 +677,9 @@ CREATE TABLE budget_usage (
 				unit: BudgetLimitUnit::Tokens,
 				amount: BudgetAmount(Decimal::from(100)),
 			},
-			window: BudgetWindow {
+			window: Some(BudgetWindow {
 				rolling: Duration::from_secs(60 * 60),
-			},
+			}),
 			on_budget_exceeded: BudgetExceededAction::Block,
 		};
 		let now = Utc::now();
@@ -743,9 +758,9 @@ CREATE TABLE budget_usage (
 				unit: BudgetLimitUnit::Usd,
 				amount: BudgetAmount(Decimal::ONE),
 			},
-			window: BudgetWindow {
+			window: Some(BudgetWindow {
 				rolling: Duration::from_secs(60 * 60),
-			},
+			}),
 			on_budget_exceeded: BudgetExceededAction::Block,
 		};
 		let mut expired_residue = BudgetCounter::configured("key", &usd_budget, now).unwrap();
@@ -764,6 +779,79 @@ CREATE TABLE budget_usage (
 				.unwrap()
 				.pending
 				.is_zero()
+		);
+	}
+
+	#[tokio::test]
+	async fn budgets_without_a_window_never_reset() {
+		let pool = sqlx::sqlite::SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect("sqlite::memory:")
+			.await
+			.unwrap();
+		let keys: crate::http::apikey::LocalAPIKeys = serde_json::from_value(serde_json::json!({
+			"keys": [{
+				"key": "sk-budget",
+				"metadata": {"name": "budgeted-key"},
+				"budgets": [{
+					"name": "lifetime",
+					"limit": {"unit": "Tokens", "amount": 10},
+					"onBudgetExceeded": "Block"
+				}]
+			}]
+		}))
+		.unwrap();
+		let authentication = keys.compile().unwrap();
+		let budgets = authentication
+			.users
+			.values()
+			.find_map(|policy| policy.budgets.clone())
+			.unwrap();
+		let budget_id = budget_id(&budgets.api_key_id, &budgets.budgets[0]);
+		let policy = Arc::new(BudgetPolicy::default());
+		policy
+			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+			.await
+			.unwrap();
+		policy.register(&authentication, true).unwrap();
+		{
+			let mut counter = policy.counters.get_mut(&budget_id).unwrap();
+			counter.amount = Decimal::from(10);
+			counter.pending = Decimal::from(10);
+		}
+		policy.flush().await.unwrap();
+
+		// A fresh process preloads the persisted lifetime usage.
+		let restarted = Arc::new(BudgetPolicy::default());
+		restarted
+			.initialize(crate::database::DatabasePool::Sqlite(pool.clone()))
+			.await
+			.unwrap();
+		restarted.register(&authentication, true).unwrap();
+		assert_eq!(
+			restarted.counters.get(&budget_id).unwrap().amount,
+			Decimal::from(10)
+		);
+
+		// Switching to a rolling window replaces the lifetime row instead of being rejected as an
+		// older window.
+		let mut rolling = budgets.budgets[0].clone();
+		rolling.window = Some(BudgetWindow {
+			rolling: Duration::from_secs(60 * 60),
+		});
+		{
+			let mut counter = restarted.counters.get_mut(&budget_id).unwrap();
+			counter
+				.configure(&budgets.api_key, &rolling, Utc::now())
+				.unwrap();
+			assert_eq!(counter.amount, Decimal::ZERO);
+			counter.amount = Decimal::from(3);
+			counter.pending = Decimal::from(3);
+		}
+		restarted.flush().await.unwrap();
+		assert_eq!(
+			restarted.counters.get(&budget_id).unwrap().amount,
+			Decimal::from(3)
 		);
 	}
 }

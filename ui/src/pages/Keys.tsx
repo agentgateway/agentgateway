@@ -8,6 +8,7 @@ import {
 	KeyRound,
 	Pencil,
 	Plus,
+	RefreshCw,
 	SlidersHorizontal,
 	Tags,
 	Trash2,
@@ -17,6 +18,7 @@ import { useEffect, useState } from 'react';
 
 import type { BudgetStatus, BudgetStatusResponse } from '@/api/budgetsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -216,8 +218,8 @@ export function KeysPage() {
 					{saveError}
 				</StatusBanner>
 			) : null}
-			{policy?.mode && policy.mode !== 'strict' ? (
-				<StatusBanner state="warn" title={`Policy mode is ${modeLabel(policy.mode)}`}>
+			{policy && (policy.mode ?? 'optional') !== 'strict' ? (
+				<StatusBanner state="warn" title={`Policy mode is ${modeLabel(policy.mode ?? 'optional')}`}>
 					Use strict mode when keys should be mandatory.
 				</StatusBanner>
 			) : null}
@@ -487,7 +489,7 @@ function PolicyControls(props: {
 	onDisable: () => void;
 	onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
-	const [mode, setMode] = useState(props.policy?.mode ?? 'strict');
+	const [mode, setMode] = useState(props.policy?.mode ?? 'optional');
 	const [location, setLocation] = useState(() => authorizationLocationFrom(props.policy?.location));
 	const patch: Partial<LlmApiKeyPolicy> = {
 		mode,
@@ -601,7 +603,7 @@ function KeyEditor(props: {
 	const [key, setKey] = useState(isNew || !hasKeyValue(props.initial) ? '' : props.initial.key);
 	const [replaceKey, setReplaceKey] = useState(false);
 	const [storeRaw, setStoreRaw] = useState(!keyHashSupported);
-	const [generatedKey] = useState(() => `agw_sk_${randomKey(32)}`);
+	const [generatedKey] = useState(newGeneratedKey);
 	const [hashed, setHashed] = useState<{ key: string; hash: string } | null>(null);
 	const [metadataValues, setMetadataValues] = useState(() =>
 		stringMetadata(withoutManagedMetadata(initialMetadata))
@@ -620,6 +622,7 @@ function KeyEditor(props: {
 	);
 	const [submitted, setSubmitted] = useState(false);
 	const replacing = isNew || replaceKey;
+	const generatedFormat = !isNew && keyDisplay(props.initial).startsWith('agw_sk_');
 	const rawKey = isNew && keyMode === 'auto' ? generatedKey : key;
 	const hashPending = replacing && !storeRaw && hashed?.key !== rawKey;
 	useEffect(() => {
@@ -671,7 +674,7 @@ function KeyEditor(props: {
 		budgets.some(
 			budget =>
 				!budget.name.trim() ||
-				!budget.window.rolling?.trim() ||
+				(budget.window && !budget.window.rolling.trim()) ||
 				!Number.isFinite(budget.limit.amount) ||
 				budget.limit.amount < 0 ||
 				(budget.limit.unit === 'Tokens' && !Number.isInteger(budget.limit.amount))
@@ -680,6 +683,10 @@ function KeyEditor(props: {
 		...(props.config?.llm?.models ?? []).map(model => model.name),
 		...(props.config?.llm?.virtualModels ?? []).map(model => model.name)
 	].filter((name): name is string => typeof name === 'string');
+	const merged = useMergedEdits(props.previousKey ? props.initial : undefined, virtualKey(), [
+		'$defs',
+		'LocalAPIKey'
+	]);
 
 	function virtualKey() {
 		const metadata: Record<string, unknown> = {
@@ -709,14 +716,32 @@ function KeyEditor(props: {
 
 	function nextVirtualKey() {
 		setSubmitted(true);
-		return nameRequired || modelError || invalidBudgets ? null : virtualKey();
+		return nameRequired || modelError || invalidBudgets ? null : merged.value;
 	}
 
 	function save() {
 		const virtualKey = nextVirtualKey();
 		if (!virtualKey) return;
-		props.onSave(virtualKey, props.previousKey, isNew && !storeRaw ? rawKey : undefined);
+		props.onSave(virtualKey, props.previousKey, replacing && !storeRaw ? rawKey : undefined);
 	}
+
+	const keyInput = (
+		<input
+			value={key}
+			type="text"
+			className="masked-secret-input"
+			autoComplete="off"
+			autoCorrect="off"
+			autoCapitalize="none"
+			data-1p-ignore="true"
+			data-lpignore="true"
+			data-form-type="other"
+			name="agw-virtual-api-key"
+			spellCheck={false}
+			onChange={event => setKey(event.target.value)}
+			placeholder="agw_sk_..."
+		/>
+	);
 
 	return (
 		<Drawer
@@ -731,7 +756,7 @@ function KeyEditor(props: {
 						props.databaseBacked
 							? {
 									original: props.previousKey ? keyResourceForDisplay(props.initial) : {},
-									modified: keyResourceForDisplay(virtualKey())
+									modified: keyResourceForDisplay(merged.value)
 								}
 							: undefined
 					}
@@ -756,6 +781,7 @@ function KeyEditor(props: {
 				/>
 			)}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<Field label="Name">
 				<input
 					value={name}
@@ -795,34 +821,40 @@ function KeyEditor(props: {
 					tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}
 				>
 					<div className="key-editor-value-row">
-						<VirtualKeyValue apiKey={props.initial} />
-						<button
-							className="button"
-							type="button"
-							onClick={() => setReplaceKey(current => !current)}
-						>
-							{replaceKey ? 'Keep existing' : 'Replace key'}
-						</button>
+						{generatedFormat ? (
+							<>
+								<VirtualKeyValue apiKey={replaceKey ? { key } : props.initial} />
+								<button
+									className="table-action"
+									type="button"
+									onClick={() => {
+										setKey(newGeneratedKey());
+										setReplaceKey(true);
+									}}
+								>
+									<RefreshCw size={14} />
+									Regenerate
+								</button>
+							</>
+						) : (
+							<>
+								{replaceKey ? keyInput : <VirtualKeyValue apiKey={props.initial} />}
+								<button
+									className="table-action"
+									type="button"
+									onClick={() => setReplaceKey(current => !current)}
+								>
+									{replaceKey ? <X size={14} /> : <Pencil size={14} />}
+									{replaceKey ? 'Keep existing' : 'Edit'}
+								</button>
+							</>
+						)}
 					</div>
 				</FieldGroup>
 			)}
-			{(isNew && keyMode === 'custom') || (!isNew && replaceKey) ? (
+			{isNew && keyMode === 'custom' ? (
 				<Field label="Key value" tooltip={props.help.field<VirtualApiKey>('LocalAPIKey', 'key')}>
-					<input
-						value={key}
-						type="text"
-						className="masked-secret-input"
-						autoComplete="off"
-						autoCorrect="off"
-						autoCapitalize="none"
-						data-1p-ignore="true"
-						data-lpignore="true"
-						data-form-type="other"
-						name="agw-virtual-api-key"
-						spellCheck={false}
-						onChange={event => setKey(event.target.value)}
-						placeholder="agw_sk_..."
-					/>
+					{keyInput}
 				</Field>
 			) : null}
 			{replacing ? (
@@ -846,7 +878,7 @@ function KeyEditor(props: {
 			<CollapsiblePolicySection
 				icon={<CircleDollarSign size={17} />}
 				title="Budgets"
-				description="Cap how much this key can spend or consume during each rolling window."
+				description="Cap how much this key can spend or consume, per rolling window or in total."
 				summary={
 					submitted && invalidBudgets ? (
 						<span className="badge bad">Invalid</span>
@@ -865,8 +897,7 @@ function KeyEditor(props: {
 				<BudgetEditor budgets={budgets} apiKeyName={keyName(props.initial)} onChange={setBudgets} />
 				{submitted && invalidBudgets ? (
 					<StatusBanner state="bad" title="Invalid budgets">
-						Budget names must be present and unique, rolling windows are required, and amounts must
-						be non-negative whole numbers.
+						Budget names must be present and unique, and amounts must be non-negative whole numbers.
 					</StatusBanner>
 				) : null}
 			</CollapsiblePolicySection>
@@ -1039,13 +1070,18 @@ function BudgetEditor(props: {
 												placeholder="monthly-spend"
 											/>
 										</Field>
-										<Field label="Rolling window" hint="Examples: 24h, 7d, or 30d.">
+										<Field
+											label="Rolling window"
+											hint="Examples: 24h, 7d, or 30d. Leave empty for a budget that never resets."
+										>
 											<input
-												value={budget.window.rolling ?? ''}
+												value={budget.window?.rolling ?? ''}
 												onChange={event =>
 													updateBudget(index, {
 														...budget,
-														window: { rolling: event.target.value }
+														window: event.target.value.trim()
+															? { rolling: event.target.value }
+															: undefined
 													})
 												}
 												placeholder="30d"
@@ -1142,10 +1178,14 @@ function BudgetUsage(props: {
 				</span>
 				<span>
 					{live
-						? `${Math.round(fraction * 100)}% · resets ${formatRelativeTime(
-								new Date(live.window.end).toISOString()
-							)}`
-						: `No usage recorded yet · ${budget.window.rolling || 'unset'} rolling window`}
+						? `${Math.round(fraction * 100)}% · ${
+								live.window.end === null
+									? 'never resets'
+									: `resets ${formatRelativeTime(new Date(live.window.end).toISOString())}`
+							}`
+						: `No usage recorded yet · ${
+								budget.window ? `${budget.window.rolling} rolling window` : 'never resets'
+							}`}
 				</span>
 			</div>
 			<div className="api-key-budget-meter">
@@ -1181,6 +1221,10 @@ function newVirtualKey(): VirtualApiKey {
 async function sha256KeyHash(value: string) {
 	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
 	return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function newGeneratedKey() {
+	return `agw_sk_${randomKey(32)}`;
 }
 
 function randomKey(length: number) {
@@ -1365,7 +1409,7 @@ function BudgetSummary(props: {
 						content={`${budgetAmountLabel(used, budget.limit.unit)} of ${budgetAmountLabel(
 							budget.limit.amount,
 							budget.limit.unit
-						)} per ${budget.window.rolling}`}
+						)} ${budget.window ? `per ${budget.window.rolling}` : 'total'}`}
 					>
 						<div className="key-budget-summary-row">
 							<span className="key-budget-summary-name">{budget.name}</span>
@@ -1418,11 +1462,10 @@ function withoutServerMetadata(value: Record<string, unknown>) {
 	);
 }
 
+// The metadata the key/value editor can show. Other values are kept as they are
+// by the merge on save.
 function stringMetadata(value: Record<string, unknown>) {
 	return Object.fromEntries(
-		Object.entries(value).map(([key, item]) => [
-			key,
-			typeof item === 'string' ? item : String(item)
-		])
+		Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
 	);
 }

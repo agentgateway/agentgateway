@@ -32,6 +32,7 @@ use rmcp::model::{
 };
 pub use router::App;
 use thiserror::Error;
+pub(crate) use upstream::openapi_server_prefix;
 
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
@@ -546,6 +547,37 @@ pub struct MCPInfo {
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub error: Option<MCPError>,
+}
+
+/// `mcp` in CEL; params and result are borrowed while guardrails evaluate.
+#[derive(Debug, Clone, Copy, ::cel::DynamicType)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+pub struct MCPView<'a> {
+	#[dynamic(flatten)]
+	#[cfg_attr(feature = "schema", schemars(flatten))]
+	pub info: &'a MCPInfo,
+	// TODO: Expose the selected targets as a list of MCPTarget in mcp.targets for CEL guardrails.
+	/// Current request parameters, with the same structure as the `params` object in an MCP request.
+	/// Available only during request-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
+	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+	/// Current response result, with the same structure as the `result` object in an MCP response.
+	/// Available only during response-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
+	pub result: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+}
+
+impl<'a> MCPView<'a> {
+	pub fn new(info: &'a MCPInfo) -> Self {
+		Self {
+			info,
+			params: None,
+			result: None,
+		}
+	}
 }
 
 impl MCPInfo {

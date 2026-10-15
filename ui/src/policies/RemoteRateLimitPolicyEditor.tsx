@@ -1,20 +1,14 @@
 import { Gauge, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { UnsupportedInForm, useReportEditorValue } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { Field, FieldGroup } from '@/components/Primitives';
 import type { DescriptorEntry, RemoteRateLimit } from '@/gateway-config';
-import {
-	hasUnsupportedTarget,
-	TargetEditor,
-	targetFrom,
-	unsupportedTargetLabel
-} from '@/policies/PolicyFormControls';
+import { hasUnsupportedTarget, TargetEditor, targetFrom } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, isRecord } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { RemoteRateLimitDraft, TargetDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -62,24 +56,13 @@ export function RemoteRateLimitPolicyEditor(props: {
 		[domain, target, descriptors]
 	);
 
+	useReportEditorValue(unsupported ? props.remoteRateLimit : build());
+
 	if (unsupported) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported remote rate limit shape"
-				value={props.remoteRateLimit}
-				schema={props.help.node(['$defs', 'RemoteRateLimit'])}
-				help={props.help}
-			>
-				{isConditional(props.remoteRateLimit)
-					? 'This policy uses conditional remote rate limit entries. The visual editor currently supports one explicit remote rate limit.'
-					: `This policy uses a ${unsupportedTargetLabel(props.remoteRateLimit)} target. The visual editor currently supports host targets only.`}
-			</UnsupportedYamlFallback>
-		);
+		return <UnsupportedInForm supports="a single remote rate limit with a host target" />;
 	}
 
-	function save() {
-		setAttemptedSave(true);
-		if (errors.length) return;
+	function build() {
 		const preserved: Record<string, unknown> =
 			isRecord(props.remoteRateLimit) && !isConditional(props.remoteRateLimit)
 				? { ...props.remoteRateLimit }
@@ -100,7 +83,13 @@ export function RemoteRateLimitPolicyEditor(props: {
 			),
 			failureMode: failureMode === 'failClosed' ? undefined : failureMode
 		}) as RemoteRateLimitDraft;
-		props.onSave(next);
+		return next;
+	}
+
+	function save() {
+		setAttemptedSave(true);
+		if (errors.length) return;
+		props.onSave(build());
 	}
 
 	return (
@@ -158,6 +147,7 @@ export function RemoteRateLimitPolicyEditor(props: {
 				</div>
 				<TargetEditor
 					value={target}
+					help={props.help}
 					tooltip={props.help.field<RemoteRateLimit>('RemoteRateLimit', 'host')}
 					onChange={setTarget}
 				/>
@@ -200,22 +190,6 @@ export function RemoteRateLimitPolicyEditor(props: {
 					Add descriptor
 				</button>
 			</PolicySection>
-
-			<ResultingYaml
-				value={cleanEmpty({
-					...target,
-					domain,
-					descriptors: descriptors.map(descriptor =>
-						cleanEmpty({
-							entries: descriptor.entries,
-							type: descriptor.type === 'requests' ? undefined : descriptor.type,
-							cost: descriptor.cost.trim() || undefined,
-							limitOverride: descriptor.limitOverride.trim() || undefined
-						})
-					),
-					failureMode: failureMode === 'failClosed' ? undefined : failureMode
-				})}
-			/>
 		</form>
 	);
 }

@@ -34,6 +34,7 @@ info:
             "text": "Two plus two is four."
           }
         ],
+        "encrypted_content": "SIG-xyz==",
         "status": "completed"
       },
       {

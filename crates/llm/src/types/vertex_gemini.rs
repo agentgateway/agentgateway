@@ -63,7 +63,51 @@ pub enum Part {
 	FileData(FileDataPart),
 	ExecutableCode(ExecutableCodePart),
 	CodeExecutionResult(CodeExecutionResultPart),
+	ToolCall(ToolCallPart),
+	ToolResponse(ToolResponsePart),
 	Unknown(serde_json::Value),
+}
+
+impl Part {
+	pub(super) fn has_signature(&self) -> bool {
+		let rest = match self {
+			Self::Text(p) => {
+				return p.thought_signature.as_ref().is_some_and(|s| !s.is_empty())
+					|| super::has_signature(&p.rest);
+			},
+			Self::FunctionCall(p) => {
+				return p.thought_signature.as_ref().is_some_and(|s| !s.is_empty())
+					|| super::has_signature(&p.rest);
+			},
+			Self::FunctionResponse(p) => &p.rest,
+			Self::InlineData(p) => &p.rest,
+			Self::FileData(p) => &p.rest,
+			Self::ExecutableCode(p) => &p.rest,
+			Self::CodeExecutionResult(p) => &p.rest,
+			Self::ToolCall(p) => &p.rest,
+			Self::ToolResponse(p) => &p.rest,
+			Self::Unknown(value) => value,
+		};
+		super::has_signature(rest)
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolCallPart {
+	#[serde(alias = "tool_call")]
+	pub tool_call: serde_json::Value,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolResponsePart {
+	#[serde(alias = "tool_response")]
+	pub tool_response: serde_json::Value,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,6 +382,10 @@ pub struct PromptFeedback {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageMetadata {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub traffic_type: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_token_count: Option<u64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]

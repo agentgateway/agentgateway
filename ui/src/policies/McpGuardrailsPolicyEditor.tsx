@@ -1,12 +1,12 @@
 import { Plus, Server, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { EmptyState, Field, FieldGroup, StatusBanner } from '@/components/Primitives';
 import type { Processor } from '@/gateway-config';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import { cleanEmpty } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { McpGuardrailsDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -63,12 +63,16 @@ export function McpGuardrailsPolicyEditor(props: {
 	saving: boolean;
 	onSave: (guardrails: McpGuardrailsDraft) => void;
 }) {
-	const [processors, setProcessors] = useState<ProcessorDraft[]>(() =>
-		initialProcessors(props.guardrails)
-	);
+	const [initial] = useState(() => initialProcessors(props.guardrails));
+	const [processors, setProcessors] = useState<ProcessorDraft[]>(initial ?? []);
 	const [errors, setErrors] = useState<Record<number, string>>({});
 	const [error, setError] = useState<string | null>(null);
 	const preview = buildGuardrails(processors);
+	const merged = useMergedEdits(props.guardrails, preview);
+
+	if (!initial) {
+		return <UnsupportedInForm supports="remote processors with a host target" />;
+	}
 
 	function addProcessor() {
 		setProcessors(current => [...current, newProcessor()]);
@@ -110,7 +114,7 @@ export function McpGuardrailsPolicyEditor(props: {
 			return;
 		}
 		setError(null);
-		props.onSave(buildGuardrails(processors));
+		props.onSave(merged.value);
 	}
 
 	return (
@@ -122,6 +126,7 @@ export function McpGuardrailsPolicyEditor(props: {
 				save();
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<div className="authz-rule-toolbar">
 				<div>
 					<strong>
@@ -222,7 +227,6 @@ export function McpGuardrailsPolicyEditor(props: {
 				</div>
 			)}
 
-			<ResultingYaml value={preview} />
 			{error ? (
 				<StatusBanner state="bad" title="Invalid MCP guardrails policy">
 					{error}
@@ -295,18 +299,24 @@ function MethodPhaseEditor(props: {
 	);
 }
 
-function initialProcessors(guardrails: McpGuardrailsDraft | null | undefined): ProcessorDraft[] {
+// The form edits remote processors with a host; any other processor makes the
+// whole policy unsupported (undefined).
+function initialProcessors(
+	guardrails: McpGuardrailsDraft | null | undefined
+): ProcessorDraft[] | undefined {
 	const processors = Array.isArray(guardrails?.processors) ? guardrails.processors : [];
-	return processors.map((processor: unknown) => {
-		const record = isRecord(processor) ? processor : {};
-		return {
-			host: typeof record.host === 'string' ? record.host : '',
-			failureMode: record.failureMode === 'failOpen' ? 'failOpen' : 'failClosed',
-			methods: phaseMap(record.methods),
-			metadata: stringMap(record.metadata),
-			requestHeaders: ''
-		};
-	});
+	const drafts = processors.map((processor: unknown) =>
+		isRecord(processor) && processor.kind === 'remote' && typeof processor.host === 'string'
+			? {
+					host: processor.host,
+					failureMode: processor.failureMode === 'failOpen' ? 'failOpen' : 'failClosed',
+					methods: phaseMap(processor.methods),
+					metadata: stringMap(processor.metadata),
+					requestHeaders: ''
+				}
+			: undefined
+	);
+	return drafts.every(Boolean) ? (drafts as ProcessorDraft[]) : undefined;
 }
 
 function newProcessor(): ProcessorDraft {

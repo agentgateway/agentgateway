@@ -4,7 +4,6 @@ import { FieldGroup, StatusBanner } from '@/components/Primitives';
 import { SchemaHelpPanel } from '@/components/SchemaHelpPanel';
 import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
 import { toYamlText } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { SchemaHelp } from '@/schemaHelp';
 
 export function GenericPolicyEditor(props: {
@@ -26,7 +25,6 @@ export function GenericPolicyEditor(props: {
 		'properties',
 		props.policyKey
 	]);
-	const preview = safeParseYaml(yamlText);
 	const editorPath = useMemo(
 		() =>
 			`agentgateway-policy-${sanitizeEditorPath(props.schemaRoot ?? 'LocalLLMPolicy')}-${sanitizeEditorPath(props.policyKey)}.yaml`,
@@ -81,7 +79,6 @@ export function GenericPolicyEditor(props: {
 					onSave={saveYaml}
 				/>
 			</FieldGroup>
-			<ResultingYaml value={preview} />
 		</form>
 	);
 }
@@ -98,12 +95,4 @@ function isEmptyMapping(value: unknown) {
 	return Boolean(
 		value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
 	);
-}
-
-function safeParseYaml(value: string) {
-	try {
-		return parseSchemaYamlEditorValue(value);
-	} catch {
-		return { error: 'Invalid YAML' };
-	}
 }

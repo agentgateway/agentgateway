@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { FieldGroup } from '@/components/Primitives';
@@ -10,12 +10,10 @@ import {
 	hasUnsupportedTarget,
 	KeyValueEditor,
 	TargetEditor,
-	targetFrom,
-	unsupportedTargetLabel
+	targetFrom
 } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { ExtProcDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -101,19 +99,10 @@ export function ExtProcPolicyEditor(props: {
 	);
 	const [metadataError, setMetadataError] = useState<string | null>(null);
 	const preview = buildExtProc();
+	const merged = useMergedEdits(props.extProc, preview);
 
 	if (unsupportedTarget) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported target type"
-				value={props.extProc ?? {}}
-				schema={props.help.node(['$defs', 'ExtProc'])}
-				help={props.help}
-			>
-				This policy uses a {unsupportedTargetLabel(props.extProc)} target. The visual editor
-				currently supports host targets only.
-			</UnsupportedYamlFallback>
-		);
+		return <UnsupportedInForm supports="host targets" />;
 	}
 
 	function buildExtProc() {
@@ -135,8 +124,8 @@ export function ExtProcPolicyEditor(props: {
 				responseTrailerMode,
 				allowModeOverride: allowModeOverride ? true : undefined
 			},
-			requestAttributes,
-			responseAttributes,
+			requestAttributes: Object.keys(requestAttributes).length ? requestAttributes : undefined,
+			responseAttributes: Object.keys(responseAttributes).length ? responseAttributes : undefined,
 			metadataContext
 		}) as ExtProcDraft;
 	}
@@ -145,7 +134,7 @@ export function ExtProcPolicyEditor(props: {
 		try {
 			if (metadataText.trim()) parseYamlText(metadataText);
 			setMetadataError(null);
-			props.onSave(buildExtProc());
+			props.onSave(merged.value);
 		} catch (err) {
 			setMetadataError(err instanceof Error ? err.message : 'Invalid metadata YAML');
 		}
@@ -160,8 +149,10 @@ export function ExtProcPolicyEditor(props: {
 				save();
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<TargetEditor
 				value={target}
+				help={props.help}
 				tooltip={props.help.field<ExtProc>('ExtProc', 'host')}
 				onChange={setTarget}
 			/>
@@ -283,7 +274,6 @@ export function ExtProcPolicyEditor(props: {
 					/>
 				</FieldGroup>
 			</PolicySection>
-			<ResultingYaml value={preview} />
 		</form>
 	);
 }

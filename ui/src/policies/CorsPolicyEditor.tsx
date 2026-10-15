@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
+import { useReportEditorValue } from '@/components/EditorContracts';
 import { Field, FieldGroup } from '@/components/Primitives';
 import { ListEditor } from '@/policies/ListEditor';
 import { appendUnique, cleanEmpty, toggleStringSet } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { SchemaHelp } from '@/schemaHelp';
 import type { CorsPolicy } from '@/types';
 
@@ -41,6 +41,7 @@ export function CorsPolicyEditor(props: {
 		allowCredentials,
 		maxAge
 	});
+	useReportEditorValue(policy);
 
 	return (
 		<form
@@ -150,7 +151,6 @@ export function CorsPolicyEditor(props: {
 					/>
 				</Field>
 			</div>
-			<ResultingYaml value={policy} />
 		</form>
 	);
 }

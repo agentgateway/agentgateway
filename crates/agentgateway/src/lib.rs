@@ -78,6 +78,11 @@ pub struct RawStandardAttributes {
 	/// CEL expression used to populate the `agentgateway.group` request log attribute.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub group: Option<String>,
+	/// CEL expression identifying the session a request belongs to, exposed to CEL as `request.agent.session`.
+	/// If unset, or if the expression fails, the session is detected from well-known agent headers
+	/// such as `x-claude-code-session-id`. Return `null` to mark the request as having no session.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub session: Option<String>,
 }
 
 /// Controls which IP address families the DNS resolver will query for
@@ -251,6 +256,11 @@ pub struct RawConfig {
 	#[serde(default)]
 	backend: BackendConfig,
 
+	/// Configuration for calls the gateway makes on its own behalf, such as cloud provider credential
+	/// fetches, JWKS fetches, OIDC discovery, and external authorization.
+	#[serde(default)]
+	callouts: CalloutConfig,
+
 	#[serde(
 		default,
 		rename = "listener",
@@ -308,6 +318,29 @@ pub struct BackendConfig {
 	#[serde(default = "defaults::h2_keepalive_timeout", with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	h2_keepalive_timeout: Duration,
+}
+
+#[apply(schema!)]
+#[derive(Default)]
+pub struct CalloutConfig {
+	/// HTTP proxy to tunnel callouts through. If unset, the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+	/// and `NO_PROXY` environment variables are used.
+	/// Callouts to backends with their own tunnel policy, Kubernetes services, and loopback or
+	/// link-local addresses (such as cloud metadata servers) are sent directly.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tunnel: Option<CalloutTunnel>,
+}
+
+#[apply(schema!)]
+pub struct CalloutTunnel {
+	/// URL of the proxy, for example `http://proxy.example.com:3128`.
+	#[serde(with = "http_serde::uri")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub url: ::http::Uri,
+	/// Destinations that bypass the proxy, using `NO_PROXY` syntax: hostnames (matching subdomains),
+	/// IP addresses, CIDRs, or `*`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub no_proxy: Vec<String>,
 }
 
 #[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
@@ -696,8 +729,14 @@ pub struct Config {
 	/// Process-wide budget policy used by standalone configuration.
 	#[serde(skip)]
 	pub budget_policy: Arc<http::budget::BudgetPolicy>,
+	/// Tracks standalone config reload outcomes so the admin API can report the
+	/// configuration the runtime is actually running, even when a newer config
+	/// was rejected.
+	#[serde(skip)]
+	pub config_reload_status: Arc<ConfigReloadStatus>,
 
 	pub backend: BackendConfig,
+	pub callouts: CalloutConfig,
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
 	pub model_catalog: ModelCatalogConfig,
@@ -713,6 +752,30 @@ pub struct ModelCatalogConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StorageConfig {
 	pub mode: ConfigStoreMode,
+}
+
+/// Outcome of standalone configuration reloads. `Config` carries this so the
+/// admin API (`/api/runtime`) can report whether the on-disk configuration
+/// was rejected during a reload, mirroring the `config_synchronized` metric.
+#[derive(Debug, Default)]
+pub struct ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	last_error: std::sync::RwLock<Option<String>>,
+}
+
+impl ConfigReloadStatus {
+	/// Error of the most recent failed reload, if any.
+	pub fn last_error(&self) -> Option<String> {
+		self.last_error.read().unwrap().clone()
+	}
+
+	fn record_success(&self) {
+		*self.last_error.write().unwrap() = None;
+	}
+
+	fn record_failure(&self, error: String) {
+		*self.last_error.write().unwrap() = Some(error);
+	}
 }
 
 /// A source of model cost catalog data.
@@ -826,12 +889,6 @@ impl ConfigSource {
 	pub async fn read_to_string(&self) -> anyhow::Result<String> {
 		Ok(match self {
 			ConfigSource::File(path) => fs_err::tokio::read_to_string(path).await?,
-			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
-		})
-	}
-	pub fn read_to_string_sync(&self) -> anyhow::Result<String> {
-		Ok(match self {
-			ConfigSource::File(path) => fs_err::read_to_string(path)?,
 			ConfigSource::Static(data) => std::str::from_utf8(data).map(|s| s.to_string())?,
 		})
 	}

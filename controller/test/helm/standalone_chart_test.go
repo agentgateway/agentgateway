@@ -331,6 +331,19 @@ func TestStandaloneChartOIDCCookieSecret(t *testing.T) {
 	require.NotContains(t, out, "name: OIDC_COOKIE_SECRET")
 }
 
+func TestStandaloneChartSessionKeySecret(t *testing.T) {
+	t.Parallel()
+	out, stderr, err := renderStandaloneChart(t, `session:
+  secretName: platform-session-key
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "name: SESSION_KEY\n          valueFrom:\n            secretKeyRef:\n              name: platform-session-key\n              key: key")
+
+	out, stderr, err = renderStandaloneChart(t, "")
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "name: SESSION_KEY")
+}
+
 func TestStandaloneChartInlineConfig(t *testing.T) {
 	t.Parallel()
 	out, stderr, err := renderStandaloneChart(t, `config:

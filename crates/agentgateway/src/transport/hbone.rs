@@ -38,7 +38,6 @@ impl agent_hbone::pool::CertificateFetcher<WorkloadKey> for CaClient {
 		key: WorkloadKey,
 	) -> anyhow::Result<Arc<rustls::client::ClientConfig>> {
 		let id = self.get_identity().await?;
-		let tls = id.hbone_mtls(key.dst_id)?;
-		Ok(tls.config)
+		Ok(id.hbone_mtls(key.dst_id).connect_config())
 	}
 }

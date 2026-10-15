@@ -70,7 +70,7 @@ pub struct ExtAuthzDynamicMetadata(serde_json::Map<String, JsonValue>);
 #[apply(schema!)]
 pub struct BodyOptions {
 	/// Maximum request body size to send to the authorization service. Defaults to 8192 bytes.
-	#[serde(default)]
+	#[serde(default = "default_max_request_bytes")]
 	pub max_request_bytes: u32,
 	/// Whether to send a partial body when the request exceeds `maxRequestBytes`.
 	#[serde(default)]
@@ -83,7 +83,7 @@ pub struct BodyOptions {
 impl Default for BodyOptions {
 	fn default() -> Self {
 		Self {
-			max_request_bytes: 8192,
+			max_request_bytes: default_max_request_bytes(),
 			allow_partial_message: false,
 			pack_as_bytes: false,
 		}
@@ -158,14 +158,29 @@ impl Default for Protocol {
 pub struct CacheConfig {
 	/// CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.
 	pub key: Vec<Arc<cel::Expression>>,
-	/// CEL expression that returns how long cached authorization results are reused.
-	/// The expression is evaluated after the authorization response has been applied
-	/// to the request, and must return either a duration or timestamp.
+	/// CEL expression that returns how long cached results are reused.
+	/// Must return either a duration or timestamp.
 	#[serde(deserialize_with = "crate::cel::de_duration_or_expression")]
 	pub ttl: Arc<cel::Expression>,
-	/// Maximum number of authorization results to keep in the cache.
+	/// Maximum number of results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
+}
+
+impl CacheConfig {
+	pub(crate) fn evaluate_ttl(&self, exec: &cel::Executor<'_>) -> Option<Duration> {
+		match exec.eval(&self.ttl).ok()? {
+			Value::Duration(ttl) => ttl.to_std().ok(),
+			Value::Timestamp(expires_at) => expires_at
+				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
+				.to_std()
+				.ok(),
+			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
+			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
+			_ => None,
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -190,6 +205,7 @@ pub struct ExtAuthz {
 	/// Warning: the safety of this feature depends on the cache key accurately capturing the fields
 	/// the server operates on. For example, if you return a different result based on header A but only
 	/// cache header B, users may get incorrect cache hits.
+	/// The TTL is evaluated after the authorization response has been applied to the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cache: Option<CacheConfig>,
 	#[serde(skip, default = "default_cache_store")]
@@ -236,19 +252,8 @@ impl ExtAuthz {
 		if cache.key.is_empty() {
 			return Err(CacheMissReason::EmptyKey);
 		}
-		let exec = cel::Executor::new_request(req);
-		let values = cache
-			.key
-			.iter()
-			.enumerate()
-			.map(|(index, expr)| {
-				exec
-					.eval(expr)
-					.and_then(CacheKeyValue::try_from_cel)
-					.map_err(|_| CacheMissReason::KeyEvaluationFailed { index })
-			})
-			.collect::<Result<Vec<_>, _>>()?;
-		Ok(CacheKey(values))
+		CacheKey::evaluate(&cel::Executor::new_request(req), &cache.key)
+			.map_err(|index| CacheMissReason::KeyEvaluationFailed { index })
 	}
 
 	fn lookup_cache(
@@ -722,19 +727,7 @@ impl ExtAuthz {
 	}
 
 	fn cache_ttl(&self, req: &Request, cache: &CacheConfig) -> Option<Duration> {
-		let exec = cel::Executor::new_request(req);
-		let value = exec.eval(&cache.ttl).ok()?;
-		match value {
-			Value::Duration(ttl) => ttl.to_std().ok(),
-			Value::Timestamp(expires_at) => expires_at
-				.signed_duration_since(chrono::Utc::now().with_timezone(expires_at.offset()))
-				.to_std()
-				.ok(),
-			Value::Int(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::UInt(expires_at) => unix_epoch_ttl(expires_at as f64),
-			Value::Float(expires_at) => unix_epoch_ttl(expires_at),
-			_ => None,
-		}
+		cache.evaluate_ttl(&cel::Executor::new_request(req))
 	}
 
 	pub async fn check_http(
@@ -1121,6 +1114,26 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub(crate) struct CacheKey(Vec<CacheKeyValue>);
 
+impl CacheKey {
+	/// Evaluates each key expression, returning the index of the first expression that fails.
+	pub(crate) fn evaluate(
+		exec: &cel::Executor<'_>,
+		keys: &[Arc<cel::Expression>],
+	) -> Result<Self, usize> {
+		keys
+			.iter()
+			.enumerate()
+			.map(|(index, expr)| {
+				exec
+					.eval(expr)
+					.and_then(CacheKeyValue::try_from_cel)
+					.map_err(|_| index)
+			})
+			.collect::<Result<Vec<_>, _>>()
+			.map(CacheKey)
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CacheLookup {
 	Hit,
@@ -1425,6 +1438,10 @@ fn cache_refresh_threshold(ttl: Duration) -> Duration {
 
 fn should_cache_http_direct_response(status: StatusCode) -> bool {
 	matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+}
+
+fn default_max_request_bytes() -> u32 {
+	8192
 }
 
 pub(crate) fn default_cache_entries() -> usize {

@@ -519,15 +519,17 @@ impl LocalAPIKey {
 				budget.name,
 				api_key.as_deref().unwrap_or_default(),
 			);
-			let window_ms = budget.window.rolling.as_millis();
-			anyhow::ensure!(
-				window_ms > 0,
-				"budget rolling windows must be greater than zero"
-			);
-			anyhow::ensure!(
-				window_ms <= i64::MAX as u128,
-				"budget rolling window is too large"
-			);
+			if let Some(window) = &budget.window {
+				let window_ms = window.rolling.as_millis();
+				anyhow::ensure!(
+					window_ms > 0,
+					"budget rolling windows must be greater than zero"
+				);
+				anyhow::ensure!(
+					window_ms <= i64::MAX as u128,
+					"budget rolling window is too large"
+				);
+			}
 			let amount = budget.limit.amount.decimal().normalize();
 			let multiplier = match budget.limit.unit {
 				BudgetLimitUnit::Usd => {

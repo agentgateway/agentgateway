@@ -2203,6 +2203,38 @@ async fn llm_transformations_can_set_missing_model() {
 	assert_eq!(llm_request.request_model, "transformed-model");
 }
 
+#[test]
+fn copilot_required_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let mut authorization = HeaderValue::from_static("Bearer configured-token");
+	authorization.set_sensitive(true);
+	let mut req = ::http::Request::builder()
+		.header(header::AUTHORIZATION, authorization)
+		.header("editor-version", "custom-editor")
+		.header("x-initiator", "incoming")
+		.body(Body::empty())
+		.unwrap();
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None, None)
+		.unwrap();
+
+	let headers = req.headers();
+	assert_eq!(headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(headers["openai-intent"], "conversation-agent");
+	assert_eq!(headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(headers["x-initiator"], "agent");
+	assert_eq!(headers["x-interaction-type"], "conversation-agent");
+	assert_eq!(headers[header::AUTHORIZATION], "Bearer configured-token");
+	assert!(headers[header::AUTHORIZATION].is_sensitive());
+}
+
 #[tokio::test]
 async fn copilot_anthropic_model_uses_messages_route() {
 	use crate::http::auth::BackendInfo;
@@ -2940,6 +2972,37 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	);
 	assert_eq!(req.uri().path(), "/v1/custom/chat/completions");
 	assert_eq!(req.uri().query(), Some("trace=repro"));
+}
+
+#[rstest::rstest]
+#[case::v1("/v1", "/v1/systemone")]
+#[case::nested("/openai/v1", "/openai/v1/systemone")]
+#[case::root("/", "/v1/systemone")]
+fn setup_request_custom_detect_replaces_v1_with_path_prefix(
+	#[case] path_prefix: &str,
+	#[case] expected_path: &str,
+) {
+	let mut req =
+		crate::http::tests_common::request("https://example.com/v1/systemone", http::Method::POST, &[]);
+
+	AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: vec![],
+	})
+	.setup_request(
+		&mut req,
+		RouteType::Detect,
+		None,
+		None,
+		Some(path_prefix),
+		true,
+		None,
+		None,
+	)
+	.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), expected_path);
 }
 
 #[test]
@@ -4195,6 +4258,21 @@ fn fixed_providers_classify_by_family() {
 			"gpt-4o",
 			""
 		),
+		CacheTokenConvention::InputIncludesCache,
+	);
+	let foundry = AIProvider::azure(azure::Provider {
+		model_override: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+	});
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "claude-haiku-4-5", ""),
+		CacheTokenConvention::InputExcludesCache,
+	);
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "gpt-4o", ""),
 		CacheTokenConvention::InputIncludesCache,
 	);
 	let bedrock = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {

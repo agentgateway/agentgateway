@@ -20,6 +20,33 @@ use crate::*;
 #[path = "route_test.rs"]
 mod tests;
 
+/// Strips a path prefix using segment-aware matching per the Gateway API spec.
+///
+/// The prefix is matched at a path segment boundary: after stripping the prefix,
+/// the remainder must either be empty or start with '/'. A trailing '/' in the
+/// prefix is ignored (except for the root prefix "/").
+///
+/// Returns the remainder of the path after stripping the prefix, or None if the
+/// path does not start with the given prefix at a segment boundary.
+///
+/// # Examples
+/// ```ignore
+/// assert_eq!(strip_path_prefix("/foo/bar", "/foo"), Some("/bar"));
+/// assert_eq!(strip_path_prefix("/foo", "/foo"), Some(""));
+/// assert_eq!(strip_path_prefix("/foo/", "/foo"), Some("/"));
+/// assert_eq!(strip_path_prefix("/foobar", "/foo"), None);
+/// assert_eq!(strip_path_prefix("/anything", "/"), Some("/anything"));
+/// ```
+pub(crate) fn strip_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	let prefix = prefix.trim_end_matches('/');
+	let rest = path.strip_prefix(prefix)?;
+	if prefix.is_empty() || rest.is_empty() || rest.starts_with('/') {
+		Some(rest)
+	} else {
+		None
+	}
+}
+
 /// Check if a RouteMatch matches the given request (path, method, headers, query).
 fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 	let request_path =
@@ -35,14 +62,7 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 			.map(|m| m.start() == 0 && m.end() == request_path.len())
 			.unwrap_or(false),
 		PathMatch::Invalid => false,
-		PathMatch::PathPrefix(p) => {
-			let p = p.trim_end_matches('/');
-			let Some(suffix) = request_path.trim_end_matches('/').strip_prefix(p) else {
-				return false;
-			};
-			// TODO this is not right!!
-			suffix.is_empty() || suffix.starts_with('/')
-		},
+		PathMatch::PathPrefix(p) => strip_path_prefix(request_path, p.as_str()).is_some(),
 	};
 	if !path_matches {
 		return false;

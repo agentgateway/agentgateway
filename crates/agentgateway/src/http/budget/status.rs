@@ -1,7 +1,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
-use super::BudgetPolicy;
+use super::{BudgetPolicy, UNBOUNDED_WINDOW};
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,8 +42,9 @@ pub struct BudgetStatusUsage {
 #[serde(rename_all = "camelCase")]
 pub struct BudgetStatusWindow {
 	pub start: i64,
-	pub end: i64,
-	pub duration_ms: i64,
+	/// `None` for a budget without a window, which never resets.
+	pub end: Option<i64>,
+	pub duration_ms: Option<i64>,
 	pub expired: bool,
 }
 
@@ -82,9 +83,11 @@ impl BudgetPolicy {
 					},
 					window: BudgetStatusWindow {
 						start: counter.window_start.timestamp_millis(),
-						end: counter.window_end.timestamp_millis(),
-						duration_ms: i64::try_from(counter.rolling.as_millis())
-							.expect("budget duration was validated"),
+						end: (counter.rolling != UNBOUNDED_WINDOW)
+							.then(|| counter.window_end.timestamp_millis()),
+						duration_ms: (counter.rolling != UNBOUNDED_WINDOW).then(|| {
+							i64::try_from(counter.rolling.as_millis()).expect("budget duration was validated")
+						}),
 						expired,
 					},
 					on_budget_exceeded: definition.budget.on_budget_exceeded.as_str().to_owned(),

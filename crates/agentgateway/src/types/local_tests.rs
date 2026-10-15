@@ -14,6 +14,26 @@ use crate::types::agent::{
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
+#[test]
+fn merged_prompt_guards_validate_streaming_scopes() {
+	let streaming: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"streaming": "Enabled", "response": [{"regex": {"rules": []}}]
+	}))
+	.unwrap();
+	let tools: llm::policy::PromptGuard = serde_json::from_value(serde_json::json!({
+		"response": [{"regex": {"rules": []}, "scope": ["toolInput"]}]
+	}))
+	.unwrap();
+	for (shared, model) in [(streaming.clone(), tools.clone()), (tools, streaming)] {
+		let err = super::merge_prompt_guards(Some(shared), Some(model)).unwrap_err();
+		assert!(
+			err
+				.to_string()
+				.contains("streaming response guards only support the messages scope")
+		);
+	}
+}
+
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {
@@ -113,6 +133,7 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 			scopes: vec![],
 			login: None,
 			logout: None,
+			credentials: Default::default(),
 		}),
 		..Default::default()
 	}
@@ -2491,6 +2512,77 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 	);
 }
 
+#[rstest::rstest]
+#[case::host_only(serde_json::json!({ "host": "https://example.com" }), Ok("/from-spec"))]
+#[case::host_root(serde_json::json!({ "host": "https://example.com/" }), Ok("/from-spec"))]
+#[case::host_path(serde_json::json!({ "host": "https://example.com/api" }), Ok("/api"))]
+#[case::host_parts_root(serde_json::json!({ "host": "example.com", "port": 80, "path": "/" }), Ok("/from-spec"))]
+#[case::host_parts_path(serde_json::json!({ "host": "example.com", "port": 80, "path": "/api" }), Ok("/api"))]
+#[case::reference(serde_json::json!({ "backend": "example" }), Ok("/from-spec"))]
+#[case::reference_path(serde_json::json!({ "backend": "example", "path": "/api" }), Ok("/api"))]
+#[case::relative(serde_json::json!({ "backend": "example", "path": "api" }), Err("must start with"))]
+#[case::authority(serde_json::json!({ "backend": "example", "path": "//example.com/api" }), Err("must start with"))]
+#[case::query(serde_json::json!({ "backend": "example", "path": "/api?v=1" }), Err("must start with"))]
+#[case::backslash(serde_json::json!({ "backend": "example", "path": "/api\\v1" }), Err("must start with"))]
+#[case::space(serde_json::json!({ "backend": "example", "path": "/api v1" }), Err("must start with"))]
+#[tokio::test]
+async fn test_openapi_target_prefix(
+	#[case] mut target: serde_json::Value,
+	#[case] expected: Result<&str, &str>,
+	#[values(false, true)] multiple_servers: bool,
+) {
+	let servers = if multiple_servers {
+		serde_json::json!([{ "url": "https://example.com/v1" }, { "url": "https://example.com/v2" }])
+	} else {
+		serde_json::json!([{ "url": "https://example.com/from-spec" }])
+	};
+	target["schema"] = serde_json::json!(
+		serde_json::json!({
+			"openapi": "3.0.0",
+			"info": { "title": "Test", "version": "1.0.0" },
+			"servers": servers,
+			"paths": {}
+		})
+		.to_string()
+	);
+	let local: super::LocalBackend = serde_json::from_value(serde_json::json!({
+		"mcp": { "targets": [{ "name": "example", "openapi": target }] }
+	}))
+	.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
+	let result = local
+		.as_backends(
+			ResourceName::new("test-mcp".into(), "".into()),
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
+		.await;
+	let expected = match expected {
+		Ok("/from-spec") if multiple_servers => Err("multiple servers"),
+		e => e,
+	};
+	let backends = match (result, expected) {
+		(Err(err), Err(msg)) => {
+			let err = err.to_string();
+			assert!(err.contains("openapi MCP target 'example'"), "{err}");
+			assert!(err.contains(msg), "{err}");
+			return;
+		},
+		(result, _) => result.unwrap(),
+	};
+	let mcp = backends
+		.iter()
+		.find_map(|b| match &b.backend {
+			Backend::MCP(_, mcp) => Some(mcp),
+			_ => None,
+		})
+		.unwrap();
+	let crate::types::agent::McpTargetSpec::OpenAPI(target) = &mcp.targets[0].spec else {
+		panic!("expected OpenAPI target");
+	};
+	assert_eq!(Ok(target.prefix.as_str()), expected);
+}
+
 #[tokio::test]
 async fn test_top_level_backend_targeted_transformations_are_backend_policies() {
 	let normalized = normalize_test_yaml(
@@ -2653,6 +2745,16 @@ fn test_de_backend_auth_accepts_each_shape() {
 	));
 	assert!(full_key.credentials.is_empty());
 
+	let expression_key = parse(serde_json::json!({"key": {"expression": "jwt.sub"}}));
+	assert!(matches!(
+		expression_key.kind,
+		Some(super::LocalBackendAuthKind::Key {
+			value: None,
+			expression: Some(_),
+			..
+		})
+	));
+
 	let full_with_credentials = parse(serde_json::json!({
 		"key": {"value": "explicit-secret"},
 		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
@@ -2728,4 +2830,52 @@ binds:
 		.await
 		.expect("a change to the key file should notify the resource manager")
 		.expect("resource change channel should stay open");
+}
+
+/// A backend TLS file resolved by a serde hook during the parse is watched like a
+/// file the load fetched itself.
+#[tokio::test]
+async fn parse_time_backend_tls_files_become_managed_dependencies() {
+	let root = tempfile::NamedTempFile::new().unwrap();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../tests/common/testdata/root-cert.pem"),
+	)
+	.unwrap();
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let yaml = format!(
+		r#"
+frontendPolicies:
+  substrateEgressActorResolution:
+    host: 127.0.0.1:6443
+    policies:
+      backendTLS:
+        root: {}
+"#,
+		root.path().display()
+	);
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml,
+	)
+	.await
+	.unwrap();
+	let mut changes = manager.subscribe_changes();
+	fs_err::write(
+		root.path(),
+		include_bytes!("../../../../examples/mcp-tls/certs/cert.pem"),
+	)
+	.unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a rotation of the root certificate is published")
+		.unwrap();
 }

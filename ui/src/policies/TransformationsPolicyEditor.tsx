@@ -1,6 +1,7 @@
 import { Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { FieldGroup } from '@/components/Primitives';
 import type { LocalTransform } from '@/gateway-config';
@@ -8,7 +9,6 @@ import { ListEditor } from '@/policies/ListEditor';
 import { KeyValueEditor } from '@/policies/PolicyFormControls';
 import { CollapsiblePolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { TransformationDraft, TransformDraft } from '@/policies/types';
 import type { SchemaHelp } from '@/schemaHelp';
 
@@ -22,11 +22,11 @@ export function TransformationsPolicyEditor(props: {
 	const [request, setRequest] = useState<TransformDraft>(props.transformations?.request ?? {});
 	const [response, setResponse] = useState<TransformDraft>(props.transformations?.response ?? {});
 	const preview = cleanEmpty({ request, response }) as TransformationDraft;
+	const merged = useMergedEdits(props.transformations, preview);
 
-	useEffect(() => {
-		setRequest(props.transformations?.request ?? {});
-		setResponse(props.transformations?.response ?? {});
-	}, [props.transformations]);
+	if (props.transformations && 'conditional' in props.transformations) {
+		return <UnsupportedInForm supports="request and response transformations without conditions" />;
+	}
 
 	return (
 		<form
@@ -34,9 +34,10 @@ export function TransformationsPolicyEditor(props: {
 			className="policy-editor-stack"
 			onSubmit={event => {
 				event.preventDefault();
-				props.onSave(preview);
+				props.onSave(merged.value);
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<TransformSection
 				key={`request-${hasTransformContent(request)}`}
 				title="Request transformations"
@@ -53,7 +54,6 @@ export function TransformationsPolicyEditor(props: {
 				help={props.help}
 				onChange={setResponse}
 			/>
-			<ResultingYaml value={preview} />
 		</form>
 	);
 }

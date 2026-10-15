@@ -12,7 +12,7 @@ use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, CallToolRequestMethod, ClientJsonRpcMessage, ClientNotification, ClientRequest,
-	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, Implementation,
+	ConstString, DiscoverResult, ExtensionCapabilities, Extensions, GetMeta, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
 	ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion, RequestId,
 	RequestMetaObject, ResultType, ServerCapabilities, ServerConfig, ServerJsonRpcMessage,
@@ -698,9 +698,11 @@ impl Relay {
 		})
 	}
 
-	pub(crate) async fn run_guardrails_call_request<P: serde::de::DeserializeOwned>(
+	pub(crate) async fn run_guardrails_call_request<
+		P: serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug + Send + Sync,
+	>(
 		&self,
-		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
+		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_, P>,
 		ctx: &mut IncomingRequestContext,
 	) -> Result<Option<P>, UpstreamError> {
 		use crate::mcp::guardrails::Outcome;
@@ -737,10 +739,16 @@ impl Relay {
 		backend: &str,
 		method: &str,
 		params: &mut P,
+		extensions: &mut Extensions,
 		ctx: &mut IncomingRequestContext,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize + serde::de::DeserializeOwned,
+		P: serde::Serialize
+			+ serde::de::DeserializeOwned
+			+ std::fmt::Debug
+			+ Send
+			+ Sync
+			+ rmcp::model::RequestParamsMeta,
 	{
 		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(());
@@ -750,23 +758,39 @@ impl Relay {
 		if !ext.runs_request(method) {
 			return Ok(());
 		}
-		let params_b = serde_json::to_vec(&*params)
-			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
 		let backends = [backend.to_string()];
-		if let Some(p) = self
+		// rmcp extracts wire params._meta into extensions. Move it back while the
+		// processors inspect/rewrite params, then restore its canonical location.
+		// TODO maybe it should be mcp.meta, that way transform only touches it if it cares
+		if let Some(meta) = extensions.remove::<RequestMetaObject>() {
+			if let Some(params_meta) = params.meta_mut().as_mut() {
+				params_meta.0.0.extend(meta.0.0);
+			} else {
+				params.set_meta(meta);
+			}
+		}
+		let outcome = self
 			.run_guardrails_call_request::<P>(
 				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: &backends,
 					method,
-					params: Some(params_b.into()),
+					body: mcp::guardrails::MCPBody::new(Some(&*params)),
 				},
 				ctx,
 			)
-			.await?
-		{
-			*params = p;
+			.await;
+		let outcome = match outcome {
+			Ok(Some(p)) => {
+				*params = p;
+				Ok(())
+			},
+			Ok(None) => Ok(()),
+			Err(e) => Err(e),
+		};
+		if let Some(meta) = params.meta_mut().take() {
+			extensions.insert(meta);
 		}
-		Ok(())
+		outcome
 	}
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
@@ -1123,7 +1147,7 @@ impl Relay {
 					&mut crate::mcp::guardrails::CallRequestCtx {
 						backends: service_names.as_deref().unwrap_or_default(),
 						method: r.request.method(),
-						params: None,
+						body: mcp::guardrails::MCPBody::new(None).with_meta(r.request.get_meta()),
 					},
 					ctx,
 					&self.policy_client,
@@ -2084,23 +2108,11 @@ async fn apply_guardrails_response_intercept(
 	let ServerJsonRpcMessage::Response(resp) = msg else {
 		return None;
 	};
-	let json: bytes::Bytes = match serde_json::to_vec(&resp.result) {
-		Ok(v) => v.into(),
-		Err(e) => {
-			// Fail the response rather than skip a hook the operator configured,
-			// matching the request side's handling of serialize failures.
-			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
-			return Some(ServerJsonRpcMessage::error(
-				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
-				Some(resp.id.clone()),
-			));
-		},
-	};
 	match crate::mcp::guardrails::run_response(
 		&ctx.ext,
 		&ctx.method,
 		&ctx.backends,
-		json,
+		&resp.result,
 		&ctx.req_ctx,
 		&ctx.client,
 	)

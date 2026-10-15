@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
 use agentgateway::transport::stream::TLSConnectionInfo;
 use agentgateway::transport::tls::TlsInfo;
@@ -7,10 +9,13 @@ use protos::ateapi::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Notify;
+use tonic_types::{ErrorDetails, StatusExt};
 
 use crate::common::prelude::*;
 
 const ACTOR_UID: &str = "6f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f";
+// Port 1 is privileged and outside the ephemeral range: nothing in the test process listens there.
+const UNREACHABLE_ADDR: &str = "127.0.0.1:1";
 
 async fn send_request(io: MemoryClient, method: Method, url: &str) -> Response {
 	let authority = url
@@ -45,13 +50,17 @@ struct IngressHandler {
 #[derive(Clone)]
 struct EgressHandler {
 	uid: &'static str,
-	state: ActorState,
+	state: Option<i32>,
 	error: Option<tonic::Code>,
 }
 
 #[derive(Clone)]
 struct CredentialEgressHandler {
 	policy: Result<EgressPolicy, tonic::Status>,
+	state: ActorState,
+	mint_calls: Option<Arc<AtomicUsize>>,
+	mint_delay: Duration,
+	jwt_expiration_seconds: i64,
 }
 
 #[async_trait::async_trait]
@@ -71,7 +80,7 @@ impl ateapimock::Handler for CredentialEgressHandler {
 				..Default::default()
 			}),
 			status: Some(ActorStatus {
-				state: ActorState::Running as i32,
+				state: self.state as i32,
 				worker_assignment: None,
 			}),
 		})
@@ -81,12 +90,37 @@ impl ateapimock::Handler for CredentialEgressHandler {
 		&mut self,
 		request: &protos::ateapi::GetActorEgressPolicyRequest,
 	) -> Result<EgressPolicy, tonic::Status> {
+		if request.name != "default" {
+			return Err(tonic::Status::invalid_argument("name must be default"));
+		}
 		let actor = request.actor.as_ref().unwrap();
 		assert_eq!(
 			(actor.atespace.as_str(), actor.name.as_str()),
 			("demo", "my-actor")
 		);
 		self.policy.clone()
+	}
+
+	async fn mint_actor_jwt(
+		&mut self,
+		request: &protos::ateapi::MintActorJwtRequest,
+	) -> Result<protos::ateapi::MintActorJwtResponse, tonic::Status> {
+		let actor = request.actor.as_ref().unwrap();
+		assert_eq!(
+			(actor.atespace.as_str(), actor.name.as_str()),
+			("demo", "my-actor")
+		);
+		assert_eq!(request.audiences, ["https://api.example.com"]);
+		assert_eq!(request.expiration_seconds, self.jwt_expiration_seconds);
+		self
+			.mint_calls
+			.as_ref()
+			.unwrap()
+			.fetch_add(1, Ordering::Relaxed);
+		tokio::time::sleep(self.mint_delay).await;
+		Ok(protos::ateapi::MintActorJwtResponse {
+			actor_jwt: "minted-actor-jwt".to_owned(),
+		})
 	}
 }
 
@@ -135,8 +169,8 @@ impl ateapimock::Handler for EgressHandler {
 				uid: self.uid.to_owned(),
 				..Default::default()
 			}),
-			status: Some(ActorStatus {
-				state: self.state as i32,
+			status: self.state.map(|state| ActorStatus {
+				state,
 				worker_assignment: None,
 			}),
 		})
@@ -162,7 +196,7 @@ impl ateapimock::Handler for IngressHandler {
 				status: Some(ActorStatus {
 					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
-						worker_pod_ip: self.pod_ip.clone(),
+						worker_pod_ips: vec![self.pod_ip.clone()],
 					}),
 				}),
 			}),
@@ -179,6 +213,23 @@ struct ParkingHandler {
 	failure_code: tonic::Code,
 	entered: Option<Arc<Notify>>,
 	resumed: bool,
+}
+
+#[derive(Clone)]
+struct RejectedResumeHandler {
+	status: tonic::Status,
+	calls: Arc<AtomicUsize>,
+}
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for RejectedResumeHandler {
+	async fn resume_actor(
+		&mut self,
+		_request: &protos::ateapi::ResumeActorRequest,
+	) -> Result<ResumeActorResponse, tonic::Status> {
+		self.calls.fetch_add(1, Ordering::Relaxed);
+		Err(self.status.clone())
+	}
 }
 
 #[derive(Clone)]
@@ -213,7 +264,7 @@ impl ateapimock::Handler for SelectiveParkingHandler {
 				status: Some(ActorStatus {
 					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
-						worker_pod_ip: self.pod_ip.clone(),
+						worker_pod_ips: vec![self.pod_ip.clone()],
 					}),
 				}),
 			}),
@@ -246,7 +297,7 @@ impl ateapimock::Handler for ParkingHandler {
 				status: Some(ActorStatus {
 					state: 0,
 					worker_assignment: Some(protos::ateapi::WorkerAssignment {
-						worker_pod_ip: self.pod_ip.clone(),
+						worker_pod_ips: vec![self.pod_ip.clone()],
 					}),
 				}),
 				..Default::default()
@@ -301,6 +352,141 @@ async fn actor_ingress_resolves_the_dynamic_backend() {
 		actor_requests[0].headers.get("x-ate-target-port").unwrap(),
 		"80"
 	);
+}
+
+struct TraceparentHandler(IngressHandler, Arc<StdMutex<Vec<String>>>);
+
+#[async_trait::async_trait]
+impl ateapimock::Handler for TraceparentHandler {
+	async fn resume_actor(
+		&mut self,
+		request: &protos::ateapi::ResumeActorRequest,
+	) -> Result<ResumeActorResponse, tonic::Status> {
+		self.0.resume_actor(request).await
+	}
+
+	fn resume_actor_metadata(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		let tp = metadata.get("traceparent").and_then(|v| v.to_str().ok());
+		self.1.lock().unwrap().extend(tp.map(str::to_owned));
+	}
+}
+
+struct TraceHandler {
+	spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
+}
+
+#[async_trait::async_trait]
+impl oteltracemock::Handler for TraceHandler {
+	async fn export(
+		&mut self,
+		request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+	) -> Result<
+		opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
+		tonic::Status,
+	> {
+		self.spans.lock().unwrap().extend(
+			request
+				.resource_spans
+				.iter()
+				.flat_map(|resource| &resource.scope_spans)
+				.flat_map(|scope| &scope.spans)
+				.cloned(),
+		);
+		oteltracemock::ok_response()
+	}
+}
+
+#[tokio::test]
+async fn actor_ingress_propagates_trace_context_to_resume_actor() {
+	unsafe {
+		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
+		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
+	}
+	let spans = Arc::new(StdMutex::new(Vec::new()));
+	let otel = oteltracemock::OtelTraceMock::new({
+		let spans = Arc::clone(&spans);
+		move || TraceHandler {
+			spans: Arc::clone(&spans),
+		}
+	})
+	.spawn()
+	.await;
+	let actor = simple_mock().await;
+	let seen = Arc::new(StdMutex::new(Vec::new()));
+	let api = ateapimock::AteApiMock::new({
+		let (seen, pod_ip) = (seen.clone(), actor.address().ip().to_string());
+		move || {
+			let inner = IngressHandler {
+				pod_ip: pod_ip.clone(),
+				calls: Default::default(),
+				resumed: true,
+				uid: ACTOR_UID,
+			};
+			TraceparentHandler(inner, seen.clone())
+		}
+	})
+	.spawn()
+	.await;
+
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_frontend_policy(json!({"tracing": {"host": otel.address.to_string()}}))
+		.await;
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": api.address.to_string(),
+				"connectTargetPort": actor.address().port(),
+			}
+		}))
+		.await;
+
+	let client_tp = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+	let response = send_request_headers(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		"http://my-actor.demo.actors.resources.substrate.ate.dev/",
+		&[
+			("ate-target-actor", "demo/my-actor"),
+			("traceparent", client_tp),
+		],
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+
+	// Same trace and sampled flag, but the gateway's own span as parent.
+	let seen = seen.lock().unwrap().clone();
+	assert_eq!(seen.len(), 1, "{seen:?}");
+	assert_eq!(seen[0][..36], client_tp[..36]);
+	assert_ne!(seen[0][36..52], client_tp[36..52]);
+	assert!(seen[0].ends_with("-01"), "{}", seen[0]);
+
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while spans.lock().unwrap().len() < 2 {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.unwrap();
+
+	let spans = spans.lock().unwrap();
+	let resume_actor = spans
+		.iter()
+		.find(|span| span.name == "ateapi.Control/ResumeActor")
+		.expect("ResumeActor client span should be exported");
+	let request = spans
+		.iter()
+		.find(|span| {
+			span.trace_id == resume_actor.trace_id && span.span_id == resume_actor.parent_span_id
+		})
+		.expect("parent request span should be exported");
+	assert_eq!(resume_actor.trace_id, request.trace_id);
+	assert_eq!(resume_actor.parent_span_id, request.span_id);
 }
 
 #[tokio::test]
@@ -533,6 +719,97 @@ async fn resume_disposition_gateway(
 		}))
 		.await;
 	gateway
+}
+
+async fn actor_service_ingress_response(
+	api_address: SocketAddr,
+	request_parking: Value,
+) -> Response {
+	let dynamic = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
+	let mut gateway = setup_proxy_test("{}")
+		.unwrap()
+		.with_raw_backend(dynamic.into())
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/dynamic")));
+	gateway
+		.attach_route_policy(json!({
+			"substrateIngress": {
+				"host": api_address.to_string(),
+				"connectTargetPort": 80,
+				"requestParking": request_parking,
+			}
+		}))
+		.await;
+	send_request(
+		gateway.serve_http(BIND_KEY),
+		Method::GET,
+		&actor_url("my-actor", "/"),
+	)
+	.await
+}
+
+#[tokio::test]
+async fn actor_ingress_rejections_match_substrate_contract() {
+	let response =
+		actor_service_ingress_response(UNREACHABLE_ADDR.parse().unwrap(), json!({ "max": 0 })).await;
+	assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	assert_eq!(response.headers()["ate-error-reason"], "API_UNAVAILABLE");
+
+	let api = ateapimock::AteApiMock::new(|| RejectedResumeHandler {
+		status: tonic::Status::unavailable("resume unavailable"),
+		calls: Default::default(),
+	})
+	.spawn()
+	.await;
+	let response = actor_service_ingress_response(
+		api.address,
+		json!({
+			"budget": "100ms",
+			"max": 1,
+			"retryInterval": "10ms",
+			"retryFactor": 1.0,
+		}),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+	assert_eq!(response.headers()["ate-error-reason"], "API_UNAVAILABLE");
+
+	for (code, reason) in [
+		(tonic::Code::ResourceExhausted, "NO_CAPACITY"),
+		(tonic::Code::FailedPrecondition, "TERMINAL_STATE"),
+	] {
+		let calls = Arc::new(AtomicUsize::new(0));
+		let status = tonic::Status::with_error_details(
+			code,
+			"resume refused",
+			ErrorDetails::with_error_info(reason, "ate.dev", std::collections::HashMap::new()),
+		);
+		let api = ateapimock::AteApiMock::new({
+			let calls = calls.clone();
+			move || RejectedResumeHandler {
+				status: status.clone(),
+				calls: calls.clone(),
+			}
+		})
+		.spawn()
+		.await;
+		let request_parking = if reason == "NO_CAPACITY" {
+			json!({ "max": 0 })
+		} else {
+			json!({
+				"budget": "100ms",
+				"max": 1,
+				"retryInterval": "10ms",
+				"retryFactor": 1.0,
+			})
+		};
+		let response = actor_service_ingress_response(api.address, request_parking).await;
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		assert_eq!(response.headers()["ate-error-reason"], reason);
+		if reason == "TERMINAL_STATE" {
+			assert_eq!(calls.load(Ordering::Relaxed), 1);
+		}
+	}
 }
 
 #[tokio::test]
@@ -1310,10 +1587,18 @@ async fn substrate_egress_connect_status(
 	certificate_uri: &str,
 	payload: &[u8],
 ) -> StatusCode {
-	let upstream = simple_mock().await;
 	let api = ateapimock::AteApiMock::new(move || handler.clone())
 		.spawn()
 		.await;
+	substrate_egress_connect_status_at(api.address, certificate_uri, payload).await
+}
+
+async fn substrate_egress_connect_status_at(
+	api_address: std::net::SocketAddr,
+	certificate_uri: &str,
+	payload: &[u8],
+) -> StatusCode {
+	let upstream = simple_mock().await;
 
 	let mut outer = simple_bind();
 	outer.key = strng::literal!("outer");
@@ -1331,7 +1616,7 @@ async fn substrate_egress_connect_status(
 	gateway
 		.attach_frontend_policy(json!({
 			"substrateEgressActorResolution": {
-				"host": api.address.to_string(),
+				"host": api_address.to_string(),
 			}
 		}))
 		.await;
@@ -1442,7 +1727,7 @@ async fn substrate_egress_actor_resolution_refreshes_on_long_lived_tunnel() {
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -1498,7 +1783,7 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -1523,15 +1808,20 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
-#[case(false, false)]
-#[case(false, true)]
-#[case(true, false)]
-#[case(true, true)]
+#[case(false, false, false)]
+#[case(false, true, false)]
+#[case(true, false, false)]
+#[case(true, true, false)]
+#[case(false, true, true)]
 #[tokio::test]
 async fn substrate_egress_replaces_only_requested_credentials(
 	#[case] https: bool,
 	#[case] placeholder: bool,
+	#[case] actor_jwt: bool,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 ) {
+	let delayed_actor_jwt = actor_jwt && state == ActorState::Running;
+	let jwt_expiration_seconds = if delayed_actor_jwt { 3 } else { 600 };
 	let (upstream, backend_tls) = if https {
 		let (upstream, certs) = tls_mock().await;
 		let tls: agentgateway::http::backendtls::BackendTLS =
@@ -1551,7 +1841,15 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		replace_headers: vec![protos::ateapi::CredentialHeader {
 			header: "authorization".to_owned(),
 			prefix: "Bearer ".to_owned(),
-			credential_uri: "ate-secret://kubernetes.io/default/upstream-token".to_owned(),
+			credential_uri: if actor_jwt {
+				String::new()
+			} else {
+				"ate-secret://kubernetes.io/default/upstream-token".to_owned()
+			},
+			actor_jwt: actor_jwt.then_some(protos::ateapi::ActorJwtSource {
+				audiences: vec!["https://api.example.com".to_owned()],
+				expiration_seconds: jwt_expiration_seconds,
+			}),
 		}],
 	});
 	let ports = Some(protos::ateapi::Ports {
@@ -1602,8 +1900,20 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		rules: vec![fallback, rule],
 		..Default::default()
 	};
-	let api = ateapimock::AteApiMock::new(move || CredentialEgressHandler {
-		policy: Ok(policy.clone()),
+	let mint_calls = Arc::new(AtomicUsize::new(0));
+	let api = ateapimock::AteApiMock::new({
+		let mint_calls = mint_calls.clone();
+		move || CredentialEgressHandler {
+			policy: Ok(policy.clone()),
+			state,
+			mint_calls: actor_jwt.then(|| mint_calls.clone()),
+			mint_delay: if delayed_actor_jwt {
+				Duration::from_millis(1500)
+			} else {
+				Duration::ZERO
+			},
+			jwt_expiration_seconds,
+		}
 	})
 	.spawn()
 	.await;
@@ -1727,17 +2037,37 @@ async fn substrate_egress_replaces_only_requested_credentials(
 
 	assert_eq!(
 		credential_calls.load(Ordering::Relaxed),
-		usize::from(placeholder)
+		usize::from(placeholder && !actor_jwt)
 	);
+	assert_eq!(
+		mint_calls.load(Ordering::Relaxed),
+		usize::from(placeholder && actor_jwt)
+	);
+	if delayed_actor_jwt {
+		tokio::time::sleep(Duration::from_millis(700)).await;
+		let io = open_actor_egress_tunnel(&gateway, port).await;
+		exchange(io, &request).await;
+		assert_eq!(mint_calls.load(Ordering::Relaxed), 2);
+	}
 	let upstream_requests = upstream.received_requests().await.unwrap();
-	assert_eq!(upstream_requests.len(), 1);
+	assert_eq!(
+		upstream_requests.len(),
+		if delayed_actor_jwt { 2 } else { 1 }
+	);
 	assert_eq!(
 		upstream_requests[0]
 			.headers
 			.get("authorization")
 			.map(|v| v.to_str().unwrap()),
-		placeholder.then_some("Bearer injected-token")
+		placeholder.then_some(if actor_jwt {
+			"Bearer minted-actor-jwt"
+		} else {
+			"Bearer injected-token"
+		})
 	);
+	if actor_jwt {
+		return;
+	}
 	let log = find_request_log(&path).await;
 	assert_eq!(log["ate.actor.uid"].as_str(), Some("uid-1"), "{log:#?}");
 	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
@@ -1748,11 +2078,16 @@ async fn substrate_egress_replaces_only_requested_credentials(
 // even when the HTTPS listener is a more specific static listener match.
 async fn substrate_tls_gateway(
 	policy: Result<EgressPolicy, tonic::Status>,
+	state: ActorState,
 	upstream: std::net::SocketAddr,
 	root: Option<Vec<u8>>,
 ) -> (TestBind, agentgateway::test_helpers::MockInstance) {
 	let api = ateapimock::AteApiMock::new(move || CredentialEgressHandler {
 		policy: policy.clone(),
+		state,
+		mint_calls: None,
+		mint_delay: Duration::ZERO,
+		jwt_expiration_seconds: 600,
 	})
 	.spawn()
 	.await;
@@ -1848,6 +2183,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	#[case] intercept: bool,
 	#[case] allowed_request: bool,
 	#[case] use_connect_ip: bool,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 ) {
 	let (upstream, certs) = tls_mock().await;
 	let port = upstream.address().port();
@@ -1883,6 +2219,7 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 	};
 	let (gateway, _api) = substrate_tls_gateway(
 		Ok(policy),
+		state,
 		*upstream.address(),
 		Some(certs.root_cert.pem().into_bytes()),
 	)
@@ -2021,6 +2358,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			rules: vec![rule],
 			..Default::default()
 		}),
+		ActorState::Running,
 		address,
 		root,
 	)
@@ -2189,6 +2527,7 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 		};
 		let (mut gateway, _api) = substrate_tls_gateway(
 			Ok(policy),
+			ActorState::Running,
 			address,
 			Some(certs.root_cert.pem().into_bytes()),
 		)
@@ -2334,9 +2673,13 @@ async fn substrate_egress_https_denial_returns_403_without_dialing(
 #[case("missing-sni")]
 #[case("missing-https-listener")]
 #[case("api-unavailable")]
+#[case("missing-policy")]
 #[case("static-backend")]
 #[tokio::test]
-async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[case] kind: &str) {
+async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(
+	#[case] kind: &str,
+	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
+) {
 	let (upstream, _certs) = tls_mock().await;
 	let raw_upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
 	let address = if matches!(kind, "opaque" | "server-first" | "static-backend") {
@@ -2358,13 +2701,15 @@ async fn substrate_egress_rejects_unrecognized_or_unauthorized_connections(#[cas
 	};
 	let policy = if kind == "api-unavailable" {
 		Err(tonic::Status::unavailable("control API unavailable"))
+	} else if kind == "missing-policy" {
+		Err(tonic::Status::not_found("actor has no egress policy"))
 	} else {
 		Ok(EgressPolicy {
 			rules: vec![rule],
 			..Default::default()
 		})
 	};
-	let (gateway, _api) = substrate_tls_gateway(policy, address, None).await;
+	let (gateway, _api) = substrate_tls_gateway(policy, state, address, None).await;
 	let gateway = if kind == "static-backend" {
 		gateway.with_raw_backend(BackendWithPolicies {
 			backend: Backend::Opaque(
@@ -2549,6 +2894,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 						header: "authorization".to_owned(),
 						prefix: "Bearer ".to_owned(),
 						credential_uri: "ate-secret://kubernetes.io/default/upstream-token".to_owned(),
+						actor_jwt: None,
 					}],
 				}),
 			}),
@@ -2563,6 +2909,10 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 			Traceparents::new(
 				CredentialEgressHandler {
 					policy: Ok(policy.clone()),
+					state: ActorState::Running,
+					mint_calls: None,
+					mint_delay: Duration::ZERO,
+					jwt_expiration_seconds: 600,
 				},
 				seen.clone(),
 			)
@@ -2619,7 +2969,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 		Some(TLSConnectionInfo {
 			src_identity: Some(TlsInfo {
 				certificate: Some(
-					actor_certificate("spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor").into(),
+					actor_certificate("spiffe://substrate-actor.local/worker-for-actor/demo/my-actor").into(),
 				),
 				..Default::default()
 			}),
@@ -2709,7 +3059,7 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 
 #[tokio::test]
 async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time() {
-	let running = ActorState::Running;
+	let running = Some(ActorState::Running as i32);
 	assert_eq!(
 		substrate_egress_connect_status(
 			EgressHandler {
@@ -2717,38 +3067,31 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::NotFound)
 			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
 		StatusCode::FORBIDDEN,
 	);
-	assert_eq!(
-		substrate_egress_connect_status(
-			EgressHandler {
-				uid: "uid-1",
-				state: running,
-				error: None
-			},
-			"spiffe://substrate-actor.local/actor/demo/my-actor",
-			b"",
-		)
-		.await,
-		StatusCode::FORBIDDEN,
-	);
-	assert_eq!(
-		substrate_egress_connect_status(
-			EgressHandler {
-				uid: "uid-1",
-				state: ActorState::Suspended,
-				error: None
-			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
-			b"",
-		)
-		.await,
-		StatusCode::FORBIDDEN,
-	);
+	for uri in [
+		"spiffe://substrate-actor.local/actor/demo/my-actor",
+		"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+	] {
+		assert_eq!(
+			substrate_egress_connect_status(
+				EgressHandler {
+					uid: "uid-1",
+					state: running,
+					error: None
+				},
+				uri,
+				b"",
+			)
+			.await,
+			StatusCode::FORBIDDEN,
+			"{uri}",
+		);
+	}
 	assert_eq!(
 		substrate_egress_connect_status(
 			EgressHandler {
@@ -2756,7 +3099,7 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 				state: running,
 				error: Some(tonic::Code::Unavailable)
 			},
-			"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 			b"",
 		)
 		.await,
@@ -2765,7 +3108,55 @@ async fn substrate_egress_rejects_invalid_or_unavailable_actors_at_connect_time(
 }
 
 #[tokio::test]
-async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection() {
+async fn substrate_egress_reports_an_unreachable_actor_service_as_unavailable() {
+	let closed = UNREACHABLE_ADDR.parse().unwrap();
+	assert_eq!(
+		substrate_egress_connect_status_at(
+			closed,
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::SERVICE_UNAVAILABLE,
+	);
+}
+
+#[rstest::rstest]
+#[case::unspecified(Some(ActorState::Unspecified as i32))]
+#[case::suspending(Some(ActorState::Suspending as i32))]
+#[case::suspended(Some(ActorState::Suspended as i32))]
+#[case::pausing(Some(ActorState::Pausing as i32))]
+#[case::paused(Some(ActorState::Paused as i32))]
+#[case::crashed(Some(ActorState::Crashed as i32))]
+#[case::deleting(Some(ActorState::Deleting as i32))]
+#[case::unknown(Some(999))]
+#[case::missing_status(None)]
+#[tokio::test]
+async fn substrate_egress_rejects_actor_states_without_worker_placement(
+	#[case] state: Option<i32>,
+) {
+	assert_eq!(
+		substrate_egress_connect_status(
+			EgressHandler {
+				uid: "uid-1",
+				state,
+				error: None,
+			},
+			"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
+			b"",
+		)
+		.await,
+		StatusCode::FORBIDDEN,
+	);
+}
+
+#[rstest::rstest]
+#[case::running(ActorState::Running)]
+#[case::resuming(ActorState::Resuming)]
+#[tokio::test]
+async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection(
+	#[case] state: ActorState,
+) {
 	for payload in [
 		b"GET / HTTP/1.1\r\nHost: allowed.example\r\n\r\n".as_slice(),
 		b"\x16\x03\x03\x00\x01\x00".as_slice(),
@@ -2775,10 +3166,10 @@ async fn substrate_egress_accepts_valid_actor_connect_before_protocol_detection(
 			substrate_egress_connect_status(
 				EgressHandler {
 					uid: "uid-1",
-					state: ActorState::Running,
+					state: Some(state as i32),
 					error: None
 				},
-				"spiffe://substrate-actor.local/ateom-for-actor/demo/my-actor",
+				"spiffe://substrate-actor.local/worker-for-actor/demo/my-actor",
 				payload,
 			)
 			.await,

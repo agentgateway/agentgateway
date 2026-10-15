@@ -1,4 +1,6 @@
+mod aws;
 mod azure;
+mod callout;
 pub(crate) mod connect_tunnel;
 mod dns;
 mod hbone_tunnel;
@@ -26,6 +28,7 @@ use crate::*;
 pub struct Client {
 	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
+	callout_proxy: Option<Arc<callout::Proxy>>,
 }
 
 impl Debug for Client {
@@ -33,6 +36,10 @@ impl Debug for Client {
 		f.debug_struct("Client").finish()
 	}
 }
+
+/// Overrides the connect timeout of a `Client::simple_call` request.
+#[derive(Debug, Clone, Copy)]
+pub struct ConnectTimeout(pub Duration);
 
 pub struct Call {
 	pub req: http::Request,
@@ -579,7 +586,11 @@ impl Client {
 			metrics,
 		};
 		let client = b.build(connector.clone());
-		Client { client, connector }
+		Client {
+			client,
+			connector,
+			callout_proxy: None,
+		}
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
@@ -596,17 +607,29 @@ impl Client {
 			.port()
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
-		let transport = Transport::from(if scheme == &Scheme::HTTPS {
+		let app = if scheme == &Scheme::HTTPS {
 			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
 		} else {
 			ApplicationTransport::Plaintext
-		});
-		let target = Target::from((host, port));
+		};
+		let target = Target::from((host.trim_start_matches('[').trim_end_matches(']'), port));
+		let transport = self.callout_transport(Transport::Plain(app), &target);
+		let tcp = req
+			.extensions()
+			.get::<ConnectTimeout>()
+			.map(|t| types::backend::TCP {
+				connect_timeout: Some(t.0),
+				..Default::default()
+			});
 		self
 			.call(Call {
 				req,
 				target,
-				connection: transport.into(),
+				connection: ConnectionConfig {
+					transport,
+					tcp,
+					max_connection_duration: None,
+				},
 			})
 			.await
 	}

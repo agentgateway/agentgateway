@@ -331,3 +331,46 @@ impl EncodeLabelSet for CustomField {
 		self.0.as_ref().encode(encoder)
 	}
 }
+
+#[derive(Copy, Clone, Hash, Debug, PartialEq, Eq, Default)]
+pub enum OutboundCallSubtype {
+	// Primary
+	#[default]
+	Http,
+	Llm,
+	Mcp,
+
+	// Policy
+	ExtAuthz,
+	Substrate,
+	ExtProc,
+	Guardrail,
+	RateLimit,
+	Oidc,
+	Callout,
+	Custom(&'static str),
+}
+
+impl OutboundCallSubtype {
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Http => "Http",
+			Self::Llm => "Llm",
+			Self::Mcp => "Mcp",
+			Self::ExtAuthz => "ExtAuthz",
+			Self::Substrate => "Substrate",
+			Self::ExtProc => "ExtProc",
+			Self::Guardrail => "Guardrail",
+			Self::RateLimit => "RateLimit",
+			Self::Oidc => "Oidc",
+			Self::Callout => "Callout",
+			Self::Custom(name) => name,
+		}
+	}
+}
+
+impl EncodeLabelValue for OutboundCallSubtype {
+	fn encode(&self, encoder: &mut LabelValueEncoder) -> Result<(), Error> {
+		self.as_str().encode(encoder)
+	}
+}

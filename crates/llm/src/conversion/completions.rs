@@ -122,6 +122,7 @@ pub mod from_messages {
 				.completion_tokens_details
 				.as_ref()
 				.and_then(|d| d.reasoning_tokens),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
@@ -240,6 +241,7 @@ pub mod from_messages {
 			stop_reason: Some(stop_reason),
 			stop_sequence,
 			usage: messages::Usage {
+				cache_creation: None,
 				input_tokens: usage
 					.as_ref()
 					.map(|u| u.prompt_tokens as usize)
@@ -534,6 +536,7 @@ pub mod from_messages {
 						stop_sequence: state.pending_stop_sequence.take(),
 					},
 					usage: messages::MessageDeltaUsage {
+						cache_creation: None,
 						input_tokens: Some(input_tokens),
 						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens,
@@ -610,6 +613,7 @@ pub mod from_messages {
 									stop_reason: None,
 									stop_sequence: None,
 									usage: messages::Usage {
+										cache_creation: None,
 										input_tokens: 0,
 										output_tokens: 0,
 										cache_creation_input_tokens: None,
@@ -698,7 +702,9 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
-											entry.arguments.push_str(args);
+											if log_content.tool_calls {
+												entry.arguments.push_str(args);
+											}
 										}
 									}
 

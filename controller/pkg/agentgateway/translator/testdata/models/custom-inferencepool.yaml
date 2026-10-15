@@ -121,6 +121,7 @@ output:
       concreteModel:
         backend:
           backend: default/llama/backend.llm
+        discoveryProvider: team-a
       key: default/llama.llm
       listenerKey: default/llm-pool.llm
       match:

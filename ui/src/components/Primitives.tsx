@@ -3,6 +3,7 @@ import {
 	AlertTriangle,
 	CheckCircle2,
 	ChevronDown,
+	Code,
 	HelpCircle,
 	Info,
 	Loader2,
@@ -11,13 +12,97 @@ import {
 } from 'lucide-react';
 import type {
 	CSSProperties,
+	ReactElement,
 	KeyboardEvent as ReactKeyboardEvent,
 	MouseEvent as ReactMouseEvent,
 	ReactNode
 } from 'react';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+	cloneElement,
+	createContext,
+	useCallback,
+	useContext,
+	useEffect,
+	useId,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState
+} from 'react';
+
+import { SchemaHelpPanel } from '@/components/SchemaHelpPanel';
+import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
+import {
+	type ConfigValueError,
+	configSchemaNode,
+	configValueError,
+	configValueErrors,
+	schemaRequires
+} from '@/configValidation';
+import { useSchemaHelp } from '@/schemaHelp';
 
 const drawerStack: symbol[] = [];
+
+// Lets a drawer's form edit its value as raw YAML instead.
+export type DrawerRaw = {
+	// Config schema node for the value, such as ['$defs', 'LocalLLMVirtualModel'].
+	// Only edits valid against it reach the form.
+	schemaPath: string[];
+	// The form's current value, or undefined while the form is invalid.
+	value: () => unknown;
+	// Raw mode opened with `value`.
+	onOpen?: (value: unknown) => void;
+	// Each valid raw edit. The form reloads from the last one when raw mode closes.
+	onChange: (value: unknown) => void;
+	// The value of a blank form. Clearing the raw text loads it, so the form can
+	// start over.
+	empty?: unknown;
+};
+
+// Provided by a drawer with raw mode; pins it to raw with a reason.
+export const PinRawContext = createContext<((reason: string) => void) | null>(null);
+
+// Checks a drawer's form value against its config schema before saving: false
+// (with the errors shown on the form) when it is invalid.
+export const DrawerCheckContext = createContext<(() => boolean) | null>(null);
+
+// Schema errors for a drawer's form, which Field and FieldGroup show for their
+// `path`.
+const FieldErrorsContext = createContext<{
+	schemaPath: string[];
+	// Errors for the current value once a save was attempted; null before.
+	errors: () => ConfigValueError[] | null;
+	register: (path: string) => () => void;
+} | null>(null);
+
+// Forms hold unset text fields as '' (or whitespace), which the schema would
+// accept as set. Only the check sees this; the saved value is unchanged.
+function withoutEmptyStrings(value: unknown): unknown {
+	if (Array.isArray(value)) return value.map(withoutEmptyStrings);
+	if (!value || typeof value !== 'object') return value;
+	return Object.fromEntries(
+		Object.entries(value).flatMap(([key, item]) =>
+			typeof item === 'string' && !item.trim() ? [] : [[key, withoutEmptyStrings(item)]]
+		)
+	);
+}
+
+function pathsOverlap(error: string, field: string) {
+	return (
+		error !== '' &&
+		(error === field || error.startsWith(`${field}.`) || field.startsWith(`${error}.`))
+	);
+}
+
+function useFieldError(path: string | undefined) {
+	const context = useContext(FieldErrorsContext);
+	useLayoutEffect(() => (path && context ? context.register(path) : undefined), [context, path]);
+	if (!path || !context) return { required: false, error: undefined };
+	return {
+		required: schemaRequires(context.schemaPath, path),
+		error: context.errors()?.find(error => pathsOverlap(error.path, path))?.message
+	};
+}
 
 export function PageHeader(props: { title: string; description?: string; actions?: ReactNode }) {
 	return (
@@ -71,6 +156,7 @@ export function Dropdown(props: {
 		searchText?: string;
 	}>;
 	onChange: (value: string) => void;
+	id?: string;
 	ariaLabel: string;
 	placeholder?: ReactNode;
 	searchable?: boolean;
@@ -84,7 +170,7 @@ export function Dropdown(props: {
 	const [activeIndex, setActiveIndex] = useState(0);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
-	const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
+	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 	const typeaheadRef = useRef('');
 	const typeaheadTimerRef = useRef<number | null>(null);
 	const selected =
@@ -249,6 +335,7 @@ export function Dropdown(props: {
 				type="button"
 				role="combobox"
 				ref={triggerRef}
+				id={props.id}
 				aria-haspopup="listbox"
 				aria-expanded={open}
 				aria-controls={`${id}-listbox`}
@@ -288,8 +375,8 @@ export function Dropdown(props: {
 						/>
 					) : null}
 					{filteredOptions.map((option, index) => (
-						// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-						<div
+						<button
+							type="button"
 							className={[
 								'custom-select-option',
 								index === activeIndex ? 'active' : null,
@@ -310,7 +397,7 @@ export function Dropdown(props: {
 							onClick={() => selectOption(option)}
 						>
 							<DropdownOptionContent option={option} showDescription />
-						</div>
+						</button>
 					))}
 					{filteredOptions.length === 0 ? (
 						<div className="custom-select-empty">No matches</div>
@@ -515,6 +602,16 @@ function clamp(value: number, min: number, max: number) {
 	return Math.min(Math.max(value, min), max);
 }
 
+function checkRaw(text: string, raw: DrawerRaw): { value?: unknown; error: string | null } {
+	if (!text.trim() && 'empty' in raw) return { value: raw.empty, error: null };
+	try {
+		const value = parseSchemaYamlEditorValue(text);
+		return { value, error: configValueError(raw.schemaPath, value) || null };
+	} catch (err) {
+		return { error: err instanceof Error ? err.message : 'Invalid YAML' };
+	}
+}
+
 export function Drawer(props: {
 	title: string;
 	children: ReactNode;
@@ -524,12 +621,109 @@ export function Drawer(props: {
 	variant?: 'default' | 'nested';
 	dirty?: boolean;
 	saving?: boolean;
+	raw?: DrawerRaw;
+	// Save errors, shown in form and raw mode alike.
+	error?: string | null;
 }) {
 	const drawerRef = useRef<HTMLElement>(null);
+	const [rawText, setRawText] = useState<string | null>(null);
+	const [rawPinned, setRawPinned] = useState<string | null>(null);
+	// Raw edits can change fields an editor's own `dirty` check does not see.
+	const [rawEdited, setRawEdited] = useState(false);
+	const schemaHelp = useSchemaHelp();
+	const rawRef = useRef(props.raw);
+	rawRef.current = props.raw;
+	const pinRaw = useCallback((reason: string) => {
+		setRawPinned(reason);
+		setRawText(
+			text => text ?? dump(rawRef.current?.value() ?? {}, { noRefs: true, lineWidth: 100 })
+		);
+	}, []);
+
+	function toggleRaw() {
+		// Leaving raw drops any invalid text; the form holds the last valid value.
+		if (rawText !== null) {
+			setRawText(null);
+			return;
+		}
+		const value = props.raw?.value();
+		if (value === undefined) return;
+		props.raw?.onOpen?.(value);
+		setRawText(dump(value ?? {}, { noRefs: true, lineWidth: 100 }));
+	}
+
+	// Form fields that show errors for a path, which also pick the shape errors
+	// are reported against (see configValueErrors).
+	const fieldPaths = useRef(new Map<string, number>());
+	const lastErrors = useRef<{ value: unknown; errors: ConfigValueError[] } | null>(null);
+	const [checked, setChecked] = useState(false);
+	function formErrors() {
+		const raw = rawRef.current;
+		if (!raw) return [];
+		const value = raw.value();
+		// No value: the editor's own validation reports why.
+		if (value === undefined || value === null) return [];
+		if (lastErrors.current?.value !== value) {
+			lastErrors.current = {
+				value,
+				errors: configValueErrors(raw.schemaPath, withoutEmptyStrings(value), [
+					...fieldPaths.current.keys()
+				])
+			};
+		}
+		return lastErrors.current.errors;
+	}
+	const schemaPathKey = props.raw?.schemaPath.join('/');
+	// biome-ignore lint/correctness/useExhaustiveDependencies: formErrors reads refs; this changes with what it reports.
+	const fieldErrors = useMemo(
+		() =>
+			props.raw
+				? {
+						schemaPath: props.raw.schemaPath,
+						errors: () => (checked ? formErrors() : null),
+						register(path: string) {
+							fieldPaths.current.set(path, (fieldPaths.current.get(path) ?? 0) + 1);
+							return () => {
+								const count = (fieldPaths.current.get(path) ?? 1) - 1;
+								if (count) fieldPaths.current.set(path, count);
+								else fieldPaths.current.delete(path);
+							};
+						}
+					}
+				: null,
+		[checked, schemaPathKey]
+	);
+	function check() {
+		// Raw text is validated as it is edited.
+		if (rawText !== null) return true;
+		lastErrors.current = null;
+		setChecked(true);
+		return !formErrors().length;
+	}
+	const unshownErrors =
+		checked && rawText === null
+			? formErrors().filter(
+					error => ![...fieldPaths.current.keys()].some(path => pathsOverlap(error.path, path))
+				)
+			: [];
+
+	// Derived from the text, so the value raw mode opens with is checked too.
+	const rawError = rawText !== null && props.raw ? checkRaw(rawText, props.raw).error : null;
+
+	function editRaw(text: string) {
+		setRawText(text);
+		setRawEdited(true);
+		if (!props.raw) return;
+		const checked = checkRaw(text, props.raw);
+		if (checked.error) return;
+		// The form may be able to show the new value; if not, it pins raw again.
+		setRawPinned(null);
+		props.raw.onChange(checked.value);
+	}
 	const drawerId = useRef(Symbol('drawer'));
 	const [formChanged, setFormChanged] = useState(false);
 	const [confirmClose, setConfirmClose] = useState(false);
-	const dirty = props.dirty ?? formChanged;
+	const dirty = (props.dirty ?? formChanged) || rawEdited;
 	const closeStateRef = useRef({
 		dirty,
 		saving: props.saving,
@@ -642,6 +836,20 @@ export function Drawer(props: {
 						<h3 id="drawer-title">{props.title}</h3>
 						<div className="drawer-header-actions">
 							{props.headerActions}
+							{props.raw ? (
+								<Tooltip content={rawPinned ?? 'Raw'}>
+									<button
+										className={rawText === null ? 'icon-button' : 'icon-button active'}
+										type="button"
+										aria-label="Raw"
+										aria-pressed={rawText !== null}
+										disabled={Boolean(rawPinned)}
+										onClick={toggleRaw}
+									>
+										<Code size={17} />
+									</button>
+								</Tooltip>
+							) : null}
 							<Tooltip content="Close">
 								<button
 									className="icon-button"
@@ -654,12 +862,62 @@ export function Drawer(props: {
 							</Tooltip>
 						</div>
 					</div>
-					<div className="drawer-body">{props.children}</div>
+					<div className="drawer-body">
+						{props.raw && rawText !== null ? (
+							<div className="policy-yaml-fallback">
+								<SchemaHelpPanel
+									schema={configSchemaNode(props.raw.schemaPath)}
+									help={schemaHelp}
+								/>
+								{rawError ? (
+									<StatusBanner state="bad" title="Invalid configuration">
+										{rawError}
+									</StatusBanner>
+								) : null}
+								<SchemaYamlEditor
+									className="policy-yaml-editor"
+									invalid={Boolean(rawError)}
+									path="agentgateway-drawer-raw.yaml"
+									schema={configSchemaNode(props.raw.schemaPath) ?? {}}
+									showLineNumbers={false}
+									value={rawText}
+									onChange={editRaw}
+								/>
+							</div>
+						) : (
+							<PinRawContext.Provider value={props.raw ? pinRaw : null}>
+								<FieldErrorsContext.Provider value={fieldErrors}>
+									{props.children}
+								</FieldErrorsContext.Provider>
+							</PinRawContext.Provider>
+						)}
+						{unshownErrors.length ? (
+							<StatusBanner state="bad" title="Invalid configuration">
+								{unshownErrors.map(error => (
+									<div key={error.path}>
+										{error.path ? <code>{error.path}</code> : null}
+										{error.path ? ': ' : null}
+										{error.message}
+									</div>
+								))}
+							</StatusBanner>
+						) : null}
+						{props.error ? (
+							<StatusBanner state="bad" title="Save failed">
+								{props.error}
+							</StatusBanner>
+						) : null}
+					</div>
 					{props.footer ? (
 						<div className="drawer-footer">
-							{typeof props.footer === 'function'
-								? props.footer(requestClose, dirty)
-								: props.footer}
+							{/* Invalid raw text has not reached the form, so saving now would save stale values. */}
+							<fieldset className="drawer-footer-actions" disabled={Boolean(rawError)}>
+								<DrawerCheckContext.Provider value={props.raw ? check : null}>
+									{typeof props.footer === 'function'
+										? props.footer(requestClose, dirty)
+										: props.footer}
+								</DrawerCheckContext.Provider>
+							</fieldset>
 						</div>
 					) : null}
 				</aside>
@@ -809,28 +1067,56 @@ export function EmptyState(props: { title: string; description: string; action?:
 
 export function Field(props: {
 	label: string;
-	children: ReactNode;
+	children:
+		| ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>
+		| ((id: string, hintId?: string, invalid?: boolean) => ReactNode);
 	hint?: string;
 	className?: string;
 	tooltip?: string;
+	// The dotted path this field edits within its drawer's value, such as
+	// `jwks.url`: it is marked when the schema requires it, and shows schema
+	// errors for it after a save attempt.
+	path?: string;
 }) {
-	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<label className={props.className ? `field ${props.className}` : 'field'}>
+	const generatedId = useId();
+	const hintId = useId();
+	const field = useFieldError(props.path);
+	const hint = field.error ?? props.hint;
+	const describedBy = hint ? hintId : undefined;
+	const id =
+		typeof props.children === 'function' ? generatedId : (props.children.props.id ?? generatedId);
+	const className = ['field', props.className, field.error ? 'invalid' : null]
+		.filter(Boolean)
+		.join(' ');
+	const control = (
+		<div className={props.tooltip ? 'field field-control' : className}>
 			<span className="field-label">
-				{props.label}
-				{props.tooltip ? (
-					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
-							<HelpCircle size={13} aria-hidden="true" />
-						</span>
-					</Tooltip>
-				) : null}
+				<label htmlFor={id} className={field.required ? 'field-required' : undefined}>
+					{props.label}
+				</label>
 			</span>
-			{props.children}
-			{props.hint ? <small>{props.hint}</small> : null}
-		</label>
+			{typeof props.children === 'function'
+				? props.children(id, describedBy, Boolean(field.error))
+				: cloneElement(props.children, {
+						id,
+						'aria-describedby':
+							[props.children.props['aria-describedby'], describedBy].filter(Boolean).join(' ') ||
+							undefined,
+						'aria-invalid': field.error ? true : props.children.props['aria-invalid']
+					})}
+			{hint ? <small id={hintId}>{hint}</small> : null}
+		</div>
+	);
+	if (!props.tooltip) return control;
+	return (
+		<div className={`${className} field-with-help`}>
+			<Tooltip content={props.tooltip} side="right">
+				<button className="help-icon" type="button" aria-label={props.tooltip}>
+					<HelpCircle size={13} aria-hidden="true" />
+				</button>
+			</Tooltip>
+			{control}
+		</div>
 	);
 }
 
@@ -840,22 +1126,29 @@ export function FieldGroup(props: {
 	hint?: string;
 	className?: string;
 	tooltip?: string;
+	// As for Field.
+	path?: string;
 }) {
+	const field = useFieldError(props.path);
+	const hint = field.error ?? props.hint;
 	return (
-		<div className={props.className ? `field ${props.className}` : 'field'}>
+		<div
+			className={['field', props.className, field.error ? 'invalid' : null]
+				.filter(Boolean)
+				.join(' ')}
+		>
 			<span className="field-label">
-				{props.label}
+				{field.required ? <span className="field-required">{props.label}</span> : props.label}
 				{props.tooltip ? (
 					<Tooltip content={props.tooltip} side="right">
-						{/** biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-						<span className="help-icon" role="img" tabIndex={0} aria-label={props.tooltip}>
+						<button className="help-icon" type="button" aria-label={props.tooltip}>
 							<HelpCircle size={13} aria-hidden="true" />
-						</span>
+						</button>
 					</Tooltip>
 				) : null}
 			</span>
 			{props.children}
-			{props.hint ? <small>{props.hint}</small> : null}
+			{hint ? <small>{hint}</small> : null}
 		</div>
 	);
 }

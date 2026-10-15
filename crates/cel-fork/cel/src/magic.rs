@@ -152,7 +152,11 @@ impl<'a, 'rf> FromContext<'a, 'rf> for Argument {
 }
 
 impl<'a, 'rf> FromContext<'a, 'rf> for This {
-	fn from_context(_ctx: &mut FunctionContext<'a, 'rf>) -> Self {
+	fn from_context(ctx: &mut FunctionContext<'a, 'rf>) -> Self {
+		// Without a target, `this` is read from the first argument, so subsequent arguments shift by one.
+		if ctx.this.is_none() {
+			ctx.arg_idx += 1;
+		}
 		This
 	}
 }

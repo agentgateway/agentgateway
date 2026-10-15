@@ -15,6 +15,19 @@ pub(crate) use common::spawn_service;
 #[cfg(any(test, feature = "internal_benches"))]
 pub use policy::{policy_client, test_policy};
 
+#[cfg(test)]
+pub(crate) fn test_client() -> crate::client::Client {
+	crate::client::Client::new(
+		&crate::client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		crate::BackendConfig::default(),
+		None,
+	)
+}
+
 mod common {
 	use std::net::SocketAddr;
 

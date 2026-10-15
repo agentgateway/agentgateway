@@ -17,27 +17,51 @@
 |`config.modelCatalog[].inline.metadata.generatedAt`|string|Time the generated catalog contents last changed.|
 |`config.modelCatalog[].inline.providers`|object|Map of provider name to its supported models and pricing.|
 |`config.modelCatalog[].inline.providers.*.models`|object|Map of model ID to its pricing rates and tiers.|
+|`config.modelCatalog[].inline.providers.*.models.*.name`|string|Human-readable display name.|
+|`config.modelCatalog[].inline.providers.*.models.*.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
+|`config.modelCatalog[].inline.providers.*.models.*.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates`|object|Base pricing rates for this model.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.perPage`|string|Cost per page, for document/OCR models.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Context-length pricing tiers that override the base rates.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this tier's rates apply.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers`|[]object|Pricing rules ordered by increasing context threshold within each service tier.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].contextOver`|integer|Context-token threshold above which this rule applies. Defaults to zero.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].serviceTier`|enum|Normalized served service tier; absent matches any service tier.<br>Possible values: `standard`, `flex`, `priority`, `reserved`.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates`|object|Pricing rates for this tier, overlaid on the base model rates.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.input`|string|Cost per 1M input (prompt) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.perPage`|string|Cost per page, for document/OCR models.|
 |`config.modelCatalog[].inline.providers.*.models.*.tags`|[]string|Freeform capability/routing tags for this model.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits`|object|Token limits.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.context`|integer|Total context window, shared by input and output.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.input`|integer|Maximum input tokens, when tighter than the context window allows.|
+|`config.modelCatalog[].inline.providers.*.models.*.limits.output`|integer|Maximum output tokens.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities`|object|Supported input and output modalities.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities.input`|[]string|Input modalities, such as text, image, pdf, audio, or video.|
+|`config.modelCatalog[].inline.providers.*.models.*.modalities.output`|[]string|Output modalities, such as text, image, audio, or video.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities`|object|Supported features. Absent fields are unknown.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.reasoning`|boolean|Whether the model supports reasoning.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.structuredOutput`|boolean|Whether the model supports JSON Schema structured outputs.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.toolCall`|boolean|Whether the model supports tool calling.|
+|`config.modelCatalog[].inline.providers.*.models.*.capabilities.temperature`|boolean|Whether the model accepts the temperature parameter.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning`|object|How reasoning can be controlled.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.toggle`|boolean|Whether reasoning can be turned on and off.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.effort`|[]string|Accepted effort levels.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
+|`config.modelCatalog[].inline.providers.*.models.*.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
@@ -61,6 +85,7 @@
 |`config.standardAttributes`|object|Standard request log attributes populated for database-backed local runtime features.|
 |`config.standardAttributes.user`|string|CEL expression used to populate the `agentgateway.user` request log attribute.|
 |`config.standardAttributes.group`|string|CEL expression used to populate the `agentgateway.group` request log attribute.|
+|`config.standardAttributes.session`|string|CEL expression identifying the session a request belongs to, exposed to CEL as `request.agent.session`.<br>If unset, or if the expression fails, the session is detected from well-known agent headers<br>such as `x-claude-code-session-id`. Return `null` to mark the request as having no session.|
 |`config.statsAddr`|string|Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.histograms`|enum|Histogram representation to collect. Native histograms are exposed only through the<br>Prometheus protobuf format. Defaults to classic.<br>Possible values: `classic`, `native`, `both`.|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
@@ -108,6 +133,10 @@
 |`config.backend.poolMaxSize`|integer|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
 |`config.backend.h2KeepaliveInterval`|string|Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.<br>PINGs are sent even on idle connections to proactively evict dead connections from the pool.<br>Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval<br>and will reject connections that ping more frequently.|
 |`config.backend.h2KeepaliveTimeout`|string|Timeout waiting for a PING ACK before considering the connection dead and closing it.<br>Only applies when h2_keepalive_interval is set. Defaults to 5s.|
+|`config.callouts`|object|Configuration for calls the gateway makes on its own behalf, such as cloud provider credential<br>fetches, JWKS fetches, OIDC discovery, and external authorization.|
+|`config.callouts.tunnel`|object|HTTP proxy to tunnel callouts through. If unset, the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,<br>and `NO_PROXY` environment variables are used.<br>Callouts to backends with their own tunnel policy, Kubernetes services, and loopback or<br>link-local addresses (such as cloud metadata servers) are sent directly.|
+|`config.callouts.tunnel.url`|string|URL of the proxy, for example `http://proxy.example.com:3128`.|
+|`config.callouts.tunnel.noProxy`|[]string|Destinations that bypass the proxy, using `NO_PROXY` syntax: hostnames (matching subdomains),<br>IP addresses, CIDRs, or `*`.|
 |`config.hbone`|object|HBONE (HTTP/2 CONNECT tunnel) protocol configuration.|
 |`config.hbone.windowSize`|integer|HTTP/2 per-stream flow-control window size in bytes. Defaults to 4 MiB.|
 |`config.hbone.connectionWindowSize`|integer|HTTP/2 connection-level flow-control window size in bytes. Defaults to 16 MiB.|
@@ -213,7 +242,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -227,6 +256,10 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -401,6 +434,7 @@
 |`binds[].listeners[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`binds[].listeners[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`binds[].listeners[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -425,7 +459,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -466,10 +500,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`binds[].listeners[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -494,10 +528,10 @@
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`binds[].listeners[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -649,7 +683,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -710,7 +744,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -814,10 +848,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -828,7 +862,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -842,6 +876,10 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -916,7 +954,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -1020,10 +1058,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1034,7 +1072,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -1048,6 +1086,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -1188,10 +1230,10 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1202,7 +1244,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -1216,6 +1258,10 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -1320,6 +1366,7 @@
 |`binds[].listeners[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`binds[].listeners[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`binds[].listeners[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`binds[].listeners[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`binds[].listeners[].policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -1379,10 +1426,10 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`binds[].listeners[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -1407,10 +1454,10 @@
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`binds[].listeners[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`binds[].listeners[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`binds[].listeners[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`binds[].listeners[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`binds[].listeners[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`binds[].listeners[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`binds[].listeners[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`binds[].listeners[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -1512,7 +1559,7 @@
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`binds[].listeners[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`binds[].listeners[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -1586,10 +1633,10 @@
 |`frontendPolicies.networkExtAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`frontendPolicies.networkExtAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`frontendPolicies.networkExtAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`frontendPolicies.networkExtAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`frontendPolicies.networkExtAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`frontendPolicies.networkExtAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`frontendPolicies.networkExtAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`frontendPolicies.networkExtAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`frontendPolicies.networkExtAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`frontendPolicies.networkExtAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`frontendPolicies.substrateEgressActorResolution`|object|Validate the originating actor before accepting a CONNECT tunnel.|
 |`frontendPolicies.substrateEgressActorResolution.service`|object|Service reference. Service must be defined in the top level services list.|
 |`frontendPolicies.substrateEgressActorResolution.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -1683,6 +1730,7 @@
 |`policies[].target.backend.backend.name`|string||
 |`policies[].target.backend.backend.namespace`|string||
 |`policies[].target.backend.backend.section`|string||
+|`policies[].target.backend.backend.kind`|string||
 |`policies[].target.backend.service`|object||
 |`policies[].target.backend.service.hostname`|string||
 |`policies[].target.backend.service.namespace`|string||
@@ -1750,7 +1798,7 @@
 |`policies[].policy.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`policies[].policy.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`policies[].policy.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`policies[].policy.mcpGuardrails`|object|External MCP policy processors.|
+|`policies[].policy.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`policies[].policy.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`policies[].policy.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`policies[].policy.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -1764,6 +1812,10 @@
 |`policies[].policy.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`policies[].policy.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`policies[].policy.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`policies[].policy.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`policies[].policy.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`policies[].policy.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`policies[].policy.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`policies[].policy.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`policies[].policy.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`policies[].policy.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -1938,6 +1990,7 @@
 |`policies[].policy.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`policies[].policy.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`policies[].policy.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`policies[].policy.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`policies[].policy.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`policies[].policy.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`policies[].policy.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -1962,7 +2015,7 @@
 |`policies[].policy.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`policies[].policy.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`policies[].policy.apiKey.keys[].budgets[].limit.amount`|number||
-|`policies[].policy.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`policies[].policy.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`policies[].policy.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`policies[].policy.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -2003,10 +2056,10 @@
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`policies[].policy.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`policies[].policy.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`policies[].policy.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`policies[].policy.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`policies[].policy.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`policies[].policy.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`policies[].policy.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`policies[].policy.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -2031,10 +2084,10 @@
 |`policies[].policy.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`policies[].policy.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`policies[].policy.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`policies[].policy.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`policies[].policy.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`policies[].policy.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`policies[].policy.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`policies[].policy.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`policies[].policy.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`policies[].policy.extProc`|object|Send request and response data to an external processing service.|
 |`policies[].policy.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -2186,7 +2239,7 @@
 |`backends[].mcp.targets[].stdio.args`|[]string||
 |`backends[].mcp.targets[].stdio.env`|object||
 |`backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`backends[].mcp.targets[].openapi`|object||
+|`backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -2247,7 +2300,7 @@
 |`backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -2351,10 +2404,10 @@
 |`backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -2365,7 +2418,7 @@
 |`backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
+|`backends[].ai.policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].ai.policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -2379,6 +2432,10 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`backends[].ai.policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -2453,7 +2510,7 @@
 |`backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -2557,10 +2614,10 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -2571,7 +2628,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -2585,6 +2642,10 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -2723,10 +2784,10 @@
 |`backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -2737,7 +2798,7 @@
 |`backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`backends[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`backends[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -2751,6 +2812,10 @@
 |`backends[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`backends[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`backends[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -2867,7 +2932,7 @@
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routeGroups[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routeGroups[].routes[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -2881,6 +2946,10 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routeGroups[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -3055,6 +3124,7 @@
 |`routeGroups[].routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routeGroups[].routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routeGroups[].routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`routeGroups[].routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routeGroups[].routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routeGroups[].routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -3079,7 +3149,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -3120,10 +3190,10 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routeGroups[].routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`routeGroups[].routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -3148,10 +3218,10 @@
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routeGroups[].routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routeGroups[].routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routeGroups[].routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routeGroups[].routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routeGroups[].routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`routeGroups[].routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3303,7 +3373,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -3364,7 +3434,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -3468,10 +3538,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3482,7 +3552,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -3496,6 +3566,10 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -3570,7 +3644,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -3674,10 +3748,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3688,7 +3762,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -3702,6 +3776,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -3842,10 +3920,10 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routeGroups[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -3856,7 +3934,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -3870,6 +3948,10 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -3946,6 +4028,7 @@
 |`gateways.*.listeners[].oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.listeners[].oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.listeners[].oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`gateways.*.listeners[].oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.listeners[].jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4005,10 +4088,10 @@
 |`gateways.*.listeners[].extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`gateways.*.listeners[].extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`gateways.*.listeners[].extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`gateways.*.listeners[].extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`gateways.*.listeners[].extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`gateways.*.listeners[].extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`gateways.*.listeners[].extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`gateways.*.listeners[].extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`gateways.*.listeners[].extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`gateways.*.listeners[].extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`gateways.*.listeners[].extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`gateways.*.listeners[].extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`gateways.*.listeners[].extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4033,10 +4116,10 @@
 |`gateways.*.listeners[].extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`gateways.*.listeners[].extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`gateways.*.listeners[].extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`gateways.*.listeners[].extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`gateways.*.listeners[].extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`gateways.*.listeners[].extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`gateways.*.listeners[].extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`gateways.*.listeners[].extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`gateways.*.listeners[].extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`gateways.*.listeners[].extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`gateways.*.listeners[].extProc`|object|Send request and response data to an external processing service.|
 |`gateways.*.listeners[].extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`gateways.*.listeners[].extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4138,7 +4221,7 @@
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit.amount`|number||
-|`gateways.*.listeners[].apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.listeners[].apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4185,6 +4268,7 @@
 |`gateways.*.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`gateways.*.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`gateways.*.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`gateways.*.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`gateways.*.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`gateways.*.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -4244,10 +4328,10 @@
 |`gateways.*.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`gateways.*.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`gateways.*.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`gateways.*.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`gateways.*.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`gateways.*.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`gateways.*.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`gateways.*.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`gateways.*.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`gateways.*.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`gateways.*.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`gateways.*.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`gateways.*.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4272,10 +4356,10 @@
 |`gateways.*.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`gateways.*.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`gateways.*.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`gateways.*.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`gateways.*.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`gateways.*.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`gateways.*.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`gateways.*.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`gateways.*.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`gateways.*.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`gateways.*.extProc`|object|Send request and response data to an external processing service.|
 |`gateways.*.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`gateways.*.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4377,7 +4461,7 @@
 |`gateways.*.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`gateways.*.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`gateways.*.apiKey.keys[].budgets[].limit.amount`|number||
-|`gateways.*.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`gateways.*.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`gateways.*.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`gateways.*.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4471,7 +4555,7 @@
 |`routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routes[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -4485,6 +4569,10 @@
 |`routes[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routes[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routes[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routes[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routes[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routes[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -4659,6 +4747,7 @@
 |`routes[].policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`routes[].policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`routes[].policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`routes[].policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`routes[].policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`routes[].policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`routes[].policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -4683,7 +4772,7 @@
 |`routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`routes[].policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`routes[].policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`routes[].policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`routes[].policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`routes[].policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -4724,10 +4813,10 @@
 |`routes[].policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routes[].policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routes[].policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routes[].policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routes[].policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routes[].policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routes[].policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routes[].policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`routes[].policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -4752,10 +4841,10 @@
 |`routes[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routes[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routes[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routes[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routes[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routes[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routes[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routes[].policies.extProc`|object|Send request and response data to an external processing service.|
 |`routes[].policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4907,7 +4996,7 @@
 |`routes[].backends[].mcp.targets[].stdio.args`|[]string||
 |`routes[].backends[].mcp.targets[].stdio.env`|object||
 |`routes[].backends[].mcp.targets[].stdio.clear_env`|boolean||
-|`routes[].backends[].mcp.targets[].openapi`|object||
+|`routes[].backends[].mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`routes[].backends[].mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`routes[].backends[].mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -4968,7 +5057,7 @@
 |`routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -5072,10 +5161,10 @@
 |`routes[].backends[].ai.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routes[].backends[].ai.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routes[].backends[].ai.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routes[].backends[].ai.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5086,7 +5175,7 @@
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routes[].backends[].ai.policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -5100,6 +5189,10 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].ai.policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -5174,7 +5267,7 @@
 |`routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -5278,10 +5371,10 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5292,7 +5385,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -5306,6 +5399,10 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].ai.groups[].providers[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].ai.groups[].providers[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -5446,10 +5543,10 @@
 |`routes[].backends[].policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`routes[].backends[].policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`routes[].backends[].policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`routes[].backends[].policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5460,7 +5557,7 @@
 |`routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
+|`routes[].backends[].policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -5474,6 +5571,10 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routes[].backends[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].backends[].policies.inferenceRouting`|object|Route requests through an endpoint picker before forwarding to this backend.|
@@ -5599,7 +5700,7 @@
 |`llm.providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`llm.providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`llm.providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`llm.providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`llm.providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.providers[].defaults`|object|defaults defines provider-level policy defaults. Model-level policy fields override these.|
 |`llm.providers[].defaults.defaults`|object|Request payload fields to set when not already present in the request.|
@@ -5607,6 +5708,13 @@
 |`llm.providers[].defaults.overrides`|object|Request payload fields to set, overriding any existing values in the request.|
 |`llm.providers[].defaults.overrides.*`|any||
 |`llm.providers[].defaults.transformation`|object|CEL expressions that compute request payload fields, overriding existing values.|
+|`llm.providers[].defaults.requestTransformation`|object|CEL expressions that modify the HTTP request (headers, metadata, etc) to the LLM provider.<br>Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.|
+|`llm.providers[].defaults.requestTransformation.add`|object|Headers to append using CEL expressions for values.|
+|`llm.providers[].defaults.requestTransformation.set`|object|Headers to set using CEL expressions for values.|
+|`llm.providers[].defaults.requestTransformation.remove`|[]string|Header names to remove.|
+|`llm.providers[].defaults.requestTransformation.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`llm.providers[].defaults.requestTransformation.body`|string|CEL expression that computes a replacement body.|
+|`llm.providers[].defaults.requestTransformation.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.providers[].defaults.requestHeaders`|object|Headers to add, set, or remove on requests to the LLM provider.|
 |`llm.providers[].defaults.requestHeaders.add`|object|Headers to append without replacing existing values.|
 |`llm.providers[].defaults.requestHeaders.set`|object|Headers to set, replacing any existing values.|
@@ -5687,7 +5795,7 @@
 |`llm.models[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`llm.models[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.models[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`llm.models[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
+|`llm.models[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`, `decisions`, `systemOne`.|
 |`llm.models[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.models[].passthrough`|enum|passthrough controls how requests are handled.<br>By default, requests will be parsed and translated as needed.<br>With passthrough, they will be unmodified and optionally inspected (with `detect`).<br>In this mode, requests must be sent in the native format of the provider.<br>Possible values: `detect`, `opaque`.|
 |`llm.models[].authorization`|object|authorization configures HTTP authorization rules for requests to this model.|
@@ -5699,8 +5807,15 @@
 |`llm.models[].defaults.*`|any||
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].overrides.*`|any||
-|`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
+|`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>This operates on fields of the LLM request payload; to modify the HTTP request (headers, metadata, etc), use `requestTransformation`.|
 |`llm.models[].finalTransformation`|object|final_transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.|
+|`llm.models[].requestTransformation`|object|requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.<br>Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.|
+|`llm.models[].requestTransformation.add`|object|Headers to append using CEL expressions for values.|
+|`llm.models[].requestTransformation.set`|object|Headers to set using CEL expressions for values.|
+|`llm.models[].requestTransformation.remove`|[]string|Header names to remove.|
+|`llm.models[].requestTransformation.replace`|string|CEL expression that computes the full set of headers, replacing all existing headers.<br>The expression must evaluate to a map of header name to value (a string, or a list of<br>strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;<br>set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,<br>so those still operate on top of the replaced headers.|
+|`llm.models[].requestTransformation.body`|string|CEL expression that computes a replacement body.|
+|`llm.models[].requestTransformation.metadata`|object|Metadata values to add using CEL expressions.|
 |`llm.models[].requestHeaders`|object|requestHeaders modifies headers in requests to the LLM provider.|
 |`llm.models[].requestHeaders.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].requestHeaders.set`|object|Headers to set, replacing any existing values.|
@@ -5776,6 +5891,22 @@
 |`llm.virtualModels[].routing.conditional.targets`|[]object|targets are evaluated in order. The first matching condition selects the model.|
 |`llm.virtualModels[].routing.conditional.targets[].when`|string|when must evaluate to true for this target to be selected. Omit only on the final fallback target.|
 |`llm.virtualModels[].routing.conditional.targets[].model`|string|model is resolved against llm.models using the same wildcard matching as client requests.|
+|`llm.virtualModels[].routing.callout`|object|callout selects the target model by calling an external HTTP service.|
+|`llm.virtualModels[].routing.callout.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.virtualModels[].routing.callout.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
+|`llm.virtualModels[].routing.callout.service.port`|integer|Port on the target Service to route to.|
+|`llm.virtualModels[].routing.callout.host`|string|Hostname or IP address|
+|`llm.virtualModels[].routing.callout.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.virtualModels[].routing.callout.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`llm.virtualModels[].routing.callout.headers`|object|Headers to set on the callout request, computed from CEL expressions.<br>Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers.|
+|`llm.virtualModels[].routing.callout.body`|string|CEL expression that computes the callout request body.<br>Strings and bytes are used directly; other values are JSON-encoded.<br>If unset, the original request body is forwarded.|
+|`llm.virtualModels[].routing.callout.transformation`|object|CEL expressions that compute request payload fields from the callout response, overriding existing values.<br>`callout.headers` holds the response headers and `callout.body` the decoded JSON response body.<br>`model` is required and selects the target from `llm.models`.|
+|`llm.virtualModels[].routing.callout.failureMode`|object|Behavior when the callout fails, returns a non-2xx or non-JSON response, or selects an unknown model.<br>Defaults to `failClosed`.|
+|`llm.virtualModels[].routing.callout.failureMode.fallback`|string|Route to this model, which is resolved against llm.models, without applying `transformation`.|
+|`llm.virtualModels[].routing.callout.cache`|object|Reuse callout responses using CEL expressions as the cache key.<br>On a cache hit, `transformation` is evaluated against the cached response.<br>Keying on a session identifier makes routing sticky for that session.<br>The TTL is evaluated with `callout` available, before `transformation` is applied.|
+|`llm.virtualModels[].routing.callout.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
+|`llm.virtualModels[].routing.callout.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`llm.virtualModels[].routing.callout.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`llm.policies`|object|policies defines policies for handling incoming requests, before a model is selected|
 |`llm.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`llm.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
@@ -5798,6 +5929,7 @@
 |`llm.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`llm.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`llm.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`llm.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`llm.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`llm.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -5857,10 +5989,10 @@
 |`llm.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`llm.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`llm.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`llm.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`llm.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`llm.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`llm.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`llm.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`llm.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -5885,10 +6017,10 @@
 |`llm.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`llm.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`llm.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`llm.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`llm.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`llm.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`llm.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`llm.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`llm.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`llm.policies.extProc`|object|Send request and response data to an external processing service.|
 |`llm.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`llm.policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -5990,7 +6122,7 @@
 |`llm.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`llm.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`llm.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`llm.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`llm.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`llm.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`llm.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6054,7 +6186,7 @@
 |`mcp.targets[].stdio.args`|[]string||
 |`mcp.targets[].stdio.env`|object||
 |`mcp.targets[].stdio.clear_env`|boolean||
-|`mcp.targets[].openapi`|object||
+|`mcp.targets[].openapi`|object|Expose the operations in an OpenAPI schema as MCP tools.<br>A non-root path in `host` or `path` replaces the schema's server path.|
 |`mcp.targets[].openapi.host`|string|Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.|
 |`mcp.targets[].openapi.host`|string|Hostname or IP address of the MCP server.|
 |`mcp.targets[].openapi.port`|integer|Port on the MCP server to connect to.|
@@ -6135,7 +6267,7 @@
 |`mcp.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`mcp.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`mcp.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`mcp.policies.mcpGuardrails`|object|External MCP policy processors.|
+|`mcp.policies.mcpGuardrails`|object|Remote and in-process CEL policy processors for MCP requests and responses.|
 |`mcp.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
 |`mcp.policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`mcp.policies.mcpGuardrails.processors[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -6149,6 +6281,10 @@
 |`mcp.policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string|Headers to forward; an empty list forwards all headers.|
 |`mcp.policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string|Headers to drop; takes precedence over the allow list.|
 |`mcp.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
+|`mcp.policies.mcpGuardrails.processors[].reject`|string|Reject with this message. Exactly one of `reject` or `transform` is required.|
+|`mcp.policies.mcpGuardrails.processors[].transform`|string|Returns a replacement body (`mcp.params` on requests or `mcp.result` on responses).<br>Use `merge` to preserve fields you do not wish to mutate; `null` leaves the body unchanged.|
+|`mcp.policies.mcpGuardrails.processors[].condition`|string|Condition gating the action; absent means always.|
+|`mcp.policies.mcpGuardrails.processors[].kind`|enum|Possible values: `expression`.|
 |`mcp.policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`mcp.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
@@ -6323,6 +6459,7 @@
 |`mcp.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`mcp.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`mcp.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`mcp.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`mcp.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`mcp.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`mcp.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -6347,7 +6484,7 @@
 |`mcp.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`mcp.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`mcp.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`mcp.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`mcp.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`mcp.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`mcp.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6388,10 +6525,10 @@
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`mcp.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`mcp.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`mcp.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`mcp.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`mcp.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`mcp.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`mcp.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`mcp.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -6416,10 +6553,10 @@
 |`mcp.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`mcp.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`mcp.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`mcp.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`mcp.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`mcp.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`mcp.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`mcp.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`mcp.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`mcp.policies.extProc`|object|Send request and response data to an external processing service.|
 |`mcp.policies.extProc.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extProc.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6572,6 +6709,7 @@
 |`ui.policies.oidc.logout`|object|Optional logout endpoint. Independent of login; omit to disable the logout endpoint.|
 |`ui.policies.oidc.logout.path`|string|Local endpoint that clears this policy's session and login transaction cookies,<br>for example `/auth/logout`. Submit a POST from the callback URI's origin;<br>requests without a matching Origin header are rejected. The policy handles<br>this endpoint even when there is no valid session. This does not log out of<br>the identity provider or revoke tokens.|
 |`ui.policies.oidc.logout.redirect`|string|Local destination for the 303 redirect AFTER logout, for example `/signed-out`.<br>Defaults to `login.redirect` if configured, otherwise `/`. Make the destination<br>public through routing or a conditional policy; a protected destination can<br>immediately start another OAuth login using the existing identity-provider session.|
+|`ui.policies.oidc.credentials`|enum|Credentials accepted for authentication. Defaults to `session`, or `sessionOrBearer`<br>for `ui.policies.oidc`.<br>Possible values: `session`, `sessionOrBearer`, `permissive`.|
 |`ui.policies.jwtAuth`|object|Authenticate incoming requests with JWT bearer tokens.|
 |`ui.policies.jwtAuth.mode`|enum|Controls whether requests must include a JWT and how validation failures are handled.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.jwtAuth.location`|object|Where to read the JWT from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -6631,10 +6769,10 @@
 |`ui.policies.extAuthz.conditional[].includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`ui.policies.extAuthz.conditional[].includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`ui.policies.extAuthz.conditional[].includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`ui.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`ui.policies.extAuthz.conditional[].cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`ui.policies.extAuthz.conditional[].cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`ui.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`ui.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`ui.policies.extAuthz.conditional[].cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`ui.policies.extAuthz.conditional[].cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`ui.policies.extAuthz.service`|object|Service reference. Service must be defined in the top level services list.|
 |`ui.policies.extAuthz.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`ui.policies.extAuthz.service.port`|integer|Port on the target Service to route to.|
@@ -6659,10 +6797,10 @@
 |`ui.policies.extAuthz.includeRequestBody.maxRequestBytes`|integer|Maximum request body size to send to the authorization service. Defaults to 8192 bytes.|
 |`ui.policies.extAuthz.includeRequestBody.allowPartialMessage`|boolean|Whether to send a partial body when the request exceeds `maxRequestBytes`.|
 |`ui.policies.extAuthz.includeRequestBody.packAsBytes`|boolean|Whether to send the body as raw bytes for gRPC authorization checks.|
-|`ui.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.|
+|`ui.policies.extAuthz.cache`|object|Cache authorization results using CEL expressions as the cache key.<br>Warning: the safety of this feature depends on the cache key accurately capturing the fields<br>the server operates on. For example, if you return a different result based on header A but only<br>cache header B, users may get incorrect cache hits.<br>The TTL is evaluated after the authorization response has been applied to the request.|
 |`ui.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
-|`ui.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
-|`ui.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`ui.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached results are reused.<br>Must return either a duration or timestamp.|
+|`ui.policies.extAuthz.cache.maxEntries`|integer|Maximum number of results to keep in the cache.|
 |`ui.policies.basicAuth`|object|Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.|
 |`ui.policies.basicAuth.htpasswd`|object|User database in htpasswd format. Can be inline or loaded from a file.|
 |`ui.policies.basicAuth.htpasswd.file`|string|Path to a file on disk to load the value from.|
@@ -6687,7 +6825,7 @@
 |`ui.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
 |`ui.policies.apiKey.keys[].budgets[].limit.unit`|enum|Possible values: `USD`, `Tokens`.|
 |`ui.policies.apiKey.keys[].budgets[].limit.amount`|number||
-|`ui.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated.|
+|`ui.policies.apiKey.keys[].budgets[].window`|object|Rolling window over which usage will be accumulated. If unset, usage accumulates for the<br>lifetime of the budget and is never reset.|
 |`ui.policies.apiKey.keys[].budgets[].window.rolling`|string|Duration of the fixed usage window, for example `1h`, `24h`, or `30d`.<br>Windows are aligned to the Unix epoch rather than starting with the first request: `1h`<br>follows UTC clock hours, `24h` starts at midnight UTC, and `30d` uses consecutive 30-day<br>periods rather than calendar months.|
 |`ui.policies.apiKey.keys[].budgets[].onBudgetExceeded`|enum|Action taken when the budget is exceeded.<br>Possible values: `Audit`, `Block`.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
@@ -6755,9 +6893,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendPolicies>.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendPolicies>.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<BackendPolicies>.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<BackendPolicies>.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<BackendPolicies>.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<BackendPolicies>.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<BackendPolicies>.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<BackendPolicies>.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -6963,8 +7102,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendPolicies>.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendPolicies>.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value.|
+|`<BackendPolicies>.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<BackendPolicies>.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendPolicies>.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<BackendPolicies>.http`|object|HTTP protocol settings for this backend.|
 |`<BackendPolicies>.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<BackendPolicies>.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7002,9 +7142,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendAuth>.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendAuth>.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.key`|object|Send a configured secret value to the backend.|
+|`<BackendAuth>.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<BackendAuth>.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<BackendAuth>.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<BackendAuth>.key.location`|object|Where to place the secret in the backend request.|
 |`<BackendAuth>.key.location.header`|object|Read the credential from an HTTP header.|
 |`<BackendAuth>.key.location.header.name`|string|Header name containing the credential.|
@@ -7363,8 +7504,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<BackendAuth>.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<BackendAuth>.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<BackendAuth>.credentials[].key`|object|Credential value.|
+|`<BackendAuth>.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<BackendAuth>.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<BackendAuth>.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 
 ### `<Guardrails>`
 
@@ -7428,9 +7570,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -7636,8 +7779,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.request[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7714,9 +7858,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -7922,8 +8067,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7994,9 +8140,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -8202,8 +8349,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8274,9 +8422,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -8482,8 +8631,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8552,9 +8702,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -8760,8 +8911,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8854,9 +9006,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -9062,8 +9215,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.response[].webhook.target.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].webhook.target.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9142,9 +9296,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -9350,8 +9505,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9422,9 +9578,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -9630,8 +9787,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9700,9 +9858,10 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value, or a value computed from the request, to the backend.<br>Exactly one of `value` or `expression` must be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend. File references are watched, so<br>rotating the file reloads it without a restart.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.value.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.expression`|string|CEL expression evaluated against the request to produce the value to send.<br>If it fails or does not return a string, the target location is cleared instead.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
@@ -9908,8 +10067,9 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie`|object|Read the credential from a request cookie.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.cookie.name`|string|Cookie name containing the credential.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key`|object|Credential value. Exactly one of `key` or `expression` must be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].key.file`|string|Path to a file on disk to load the value from.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].expression`|string|CEL expression evaluated against the request to produce the credential value.<br>If it fails or does not return a string, the credential location is cleared instead.|
 |`<Guardrails>.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9944,3 +10104,4 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`<Guardrails>.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`<Guardrails>.response[].rejection.headers.remove`|[]string|Header names to remove.|
+|`<Guardrails>.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|

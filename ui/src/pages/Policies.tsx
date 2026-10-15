@@ -217,8 +217,8 @@ export function PolicyCatalogPage(props: {
 		};
 	}, [deleteResource, upsertPolicy]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useLayoutEffect(() => {
+		if (selected !== null) return;
 		const scroll = pendingScrollRestore.current;
 		if (!scroll) return;
 		pendingScrollRestore.current = null;

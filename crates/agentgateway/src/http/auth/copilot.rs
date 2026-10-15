@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use ::http::HeaderValue;
+use agent_llm::copilot::Provider;
 
 use crate::http::Request;
 
@@ -9,34 +10,15 @@ const DOMAIN: &str = "github.com";
 
 pub(super) async fn insert_headers(req: &mut Request) -> anyhow::Result<()> {
 	let token = load_token().await?;
+	insert_headers_with_token(req, &token)
+}
+
+fn insert_headers_with_token(req: &mut Request, token: &str) -> anyhow::Result<()> {
 	let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
 	auth.set_sensitive(true);
 
 	req.headers_mut().insert(http::header::AUTHORIZATION, auth);
-	req.headers_mut().insert(
-		http::header::CONTENT_TYPE,
-		HeaderValue::from_static("application/json"),
-	);
-	req.headers_mut().insert(
-		"editor-version",
-		HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
-	);
-	req.headers_mut().insert(
-		"x-github-api-version",
-		HeaderValue::from_static("2025-10-01"),
-	);
-	req
-		.headers_mut()
-		.insert("x-initiator", HeaderValue::from_static("agent"));
-	req.headers_mut().insert(
-		"x-interaction-type",
-		HeaderValue::from_static("conversation-agent"),
-	);
-	req.headers_mut().insert(
-		"openai-intent",
-		HeaderValue::from_static("conversation-agent"),
-	);
-
+	Provider::set_required_headers(req.headers_mut());
 	Ok(())
 }
 
@@ -156,6 +138,28 @@ mod tests {
 			extract_json_oauth_token(contents, "github.com").as_deref(),
 			Some("copilot-token")
 		);
+	}
+
+	#[test]
+	fn supplied_token_sets_protocol_headers() {
+		let mut req = ::http::Request::new(crate::http::Body::empty());
+		insert_headers_with_token(&mut req, "configured-token").unwrap();
+
+		for (name, value) in [
+			("authorization", "Bearer configured-token"),
+			("content-type", "application/json"),
+			(
+				"editor-version",
+				concat!("agentgateway/", env!("CARGO_PKG_VERSION")),
+			),
+			("openai-intent", "conversation-agent"),
+			("x-github-api-version", "2025-10-01"),
+			("x-initiator", "agent"),
+			("x-interaction-type", "conversation-agent"),
+		] {
+			assert_eq!(req.headers()[name], value);
+		}
+		assert!(req.headers()["authorization"].is_sensitive());
 	}
 
 	#[test]

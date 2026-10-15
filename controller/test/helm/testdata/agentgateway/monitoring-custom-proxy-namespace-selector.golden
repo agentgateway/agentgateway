@@ -21,6 +21,13 @@ spec:
       - "agentgateway"
   namespaceSelector:
     any: true
+  scrapeNativeHistograms: false
+  scrapeClassicHistograms: true
+  scrapeProtocols:
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText1.0.0
+    - PrometheusText0.0.4
   podMetricsEndpoints:
   - port: metrics
     path: /metrics

@@ -1,9 +1,9 @@
 import '@/monacoWorkers';
 import { DiffEditor } from '@monaco-editor/react';
 import { FileText, Save } from 'lucide-react';
-import { type ReactNode, useId, useState } from 'react';
+import { type ReactNode, useContext, useId, useState } from 'react';
 
-import { Drawer, Tooltip } from '@/components/Primitives';
+import { Drawer, DrawerCheckContext, Tooltip } from '@/components/Primitives';
 import { cloneConfig } from '@/config';
 import { configureConfigYamlMonaco } from '@/configMonaco';
 import { allowNextHybridFileWrite, useHybridFileWriteOverrideKeys, useRuntimeInfo } from '@/hooks';
@@ -165,9 +165,16 @@ export function ConfigDiffSaveActions(props: {
 		original: string;
 		modified: string;
 	} | null>(null);
+	const check = useContext(DrawerCheckContext);
+
+	function save() {
+		if (check && !check()) return;
+		props.onSave();
+	}
 
 	function viewDiff() {
 		if ((!props.config && !props.resourceDiff) || props.diffDisabled || props.saveDisabled) return;
+		if (check && !check()) return;
 		if (props.beforeDiff && !props.beforeDiff()) return;
 		if (props.resourceDiff) {
 			const resourceDiff =
@@ -214,7 +221,7 @@ export function ConfigDiffSaveActions(props: {
 					disabled={props.saving || props.saveDisabled}
 					allowHybridWrite={Boolean(props.resourceDiff)}
 					hybridFileWriteMessage={props.hybridFileWriteMessage}
-					onClick={props.onSave}
+					onClick={save}
 				>
 					<Save size={16} />
 					{props.saveLabel}

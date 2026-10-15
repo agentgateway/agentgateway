@@ -11,9 +11,10 @@
 		"format": "biome format --write .",
 		"format:check": "biome format .",
 		"generate-schema": "node scripts/generate-schema.mjs",
-		"lint": "pnpm typecheck && pnpm check",
+		"lint": "pnpm typecheck && pnpm check && pnpm test",
 		"preview": "pnpm build && vite preview",
 		"preview:e2e": "pnpm build --mode e2e && vite preview --mode e2e",
+		"test": "node --test 'src/**/*.test.ts'",
 		"test:e2e": "playwright test",
 		"typecheck": "pnpm generate-schema && tsc -b"
 	},

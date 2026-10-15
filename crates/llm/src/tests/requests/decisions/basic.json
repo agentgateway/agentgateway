@@ -1,0 +1,12 @@
+{
+  "model": "gpt-6-luna",
+  "input": [
+    {
+      "role": "user",
+      "content": [{"type": "input_text", "text": "The package was left in the rain and the box is soaked through."}]
+    }
+  ],
+  "questions": [
+    {"type": "predicate", "name": "visible_damage", "instructions": "Does the customer report visible damage to the package?"}
+  ]
+}

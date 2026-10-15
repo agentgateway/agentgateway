@@ -11,8 +11,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	YamlBlock
+	Tooltip
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import {
@@ -305,6 +304,12 @@ function ProviderEditor(props: {
 			onClose={props.onCancel}
 			dirty={JSON.stringify(provider) !== initialDraft}
 			saving={props.saving}
+			raw={{
+				schemaPath: ['$defs', 'LocalLLMProvider'],
+				value: () => preview ?? provider,
+				onChange: value => setProvider(value as LlmProvider),
+				empty: makeEmptyLlmProvider()
+			}}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
 					config={props.config}
@@ -319,7 +324,6 @@ function ProviderEditor(props: {
 					diffTitle={props.databaseBacked ? 'Provider resource diff' : 'Provider config diff'}
 					saveLabel="Save provider"
 					saving={props.saving}
-					saveDisabled={!provider.name.trim()}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={validateBeforeDiff}
@@ -330,6 +334,7 @@ function ProviderEditor(props: {
 			<div className="form-grid">
 				<Field
 					label="Provider name"
+					path="name"
 					tooltip={props.help.field<LlmProvider>(
 						'LocalLLMProvider',
 						'name',
@@ -367,11 +372,6 @@ function ProviderEditor(props: {
 					}))
 				}
 			/>
-
-			<details>
-				<summary>Generated provider config</summary>
-				<YamlBlock value={preview ?? {}} />
-			</details>
 		</Drawer>
 	);
 }

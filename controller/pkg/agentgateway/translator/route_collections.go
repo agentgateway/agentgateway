@@ -241,9 +241,10 @@ func buildDelegatedHTTPRoutes(
 	})
 	findMatchingBindings := func(krtctx krt.HandlerContext, obj *gwv1.HTTPRoute) []routeGroupBindingKey {
 		candidates := krt.Fetch(krtctx, bindings, krt.FilterIndex(bindingsByNamespace, obj.Namespace))
-		return slices.Filter(candidates, func(binding routeGroupBindingKey) bool {
+		matched := slices.Filter(candidates, func(binding routeGroupBindingKey) bool {
 			return routeMatchesRouteGroup(obj, binding)
 		})
+		return slices.SortBy(matched, routeGroupBindingKey.String)
 	}
 	var resolveGateways func(krtctx krt.HandlerContext, binding routeGroupBindingKey, seen sets.Set[string]) []types.NamespacedName
 	resolveGateways = func(krtctx krt.HandlerContext, binding routeGroupBindingKey, seen sets.Set[string]) []types.NamespacedName {

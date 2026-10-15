@@ -1,4 +1,4 @@
-use agentgateway::llm::{AIProvider, custom, gemini, openai};
+use agentgateway::llm::{AIProvider, copilot, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
 use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
@@ -34,6 +34,48 @@ async fn llm_openai() {
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
+}
+
+#[rstest::rstest]
+#[case::configured_key("configured-token")]
+#[case::empty_key("")]
+#[tokio::test]
+async fn llm_copilot_explicit_auth(#[case] credential: &str) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Copilot(copilot::Provider {
+			model_override: None,
+		}),
+		false,
+	);
+	provider.policies =
+		Some(serde_json::from_value(json!({"backendAuth": {"key": credential}})).unwrap());
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let response = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		llm_body!("requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	read_body_raw(response.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.headers[header::AUTHORIZATION].to_str().unwrap(),
+		format!("Bearer {credential}").trim_end()
+	);
+	assert_eq!(request.headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		request.headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(request.headers["openai-intent"], "conversation-agent");
+	assert_eq!(request.headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(request.headers["x-initiator"], "agent");
+	assert_eq!(request.headers["x-interaction-type"], "conversation-agent");
 }
 
 #[tokio::test]
@@ -225,7 +267,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -288,7 +330,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -617,6 +659,74 @@ llm:
 		}
 	}
 	insta::assert_json_snapshot!(results);
+}
+
+#[tokio::test]
+async fn llm_model_list_metadata() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: fast
+    provider: openAI
+    params:
+      model: gpt-5-mini
+  - name: openai/*
+    provider: openAI
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
+  - name: local-model
+    provider: openAI
+  virtualModels:
+  - name: blend
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: fast
+          weight: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{"openai":{"models":{
+				"gpt-5.5":{"name":"GPT-5.5","released":"2026-04-23","limits":{"context":1050000,"input":922000,"output":128000},"modalities":{"input":["text","image","pdf"],"output":["text"]},"capabilities":{"reasoning":true,"structuredOutput":true,"toolCall":true,"temperature":false},"reasoning":{"effort":["low","high"]}},
+				"gpt-5-mini":{"name":"GPT-5 mini","released":"2025-08","limits":{"context":400000,"output":64000},"modalities":{"input":["text","image"],"output":["text"]},"capabilities":{"reasoning":true,"toolCall":true,"temperature":true},"reasoning":{"effort":["low","medium"]}}
+			}}}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let mut models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models?limit=1").await;
+	let limited: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(limited["data"].as_array().unwrap().len(), 1);
+
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/v1/models/openai/gpt-5.5",
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let model: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(model["id"], "openai/gpt-5.5");
+	assert_eq!(model["max_tokens"], 128000);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models/missing").await;
+	assert_eq!(res.status(), StatusCode::NOT_FOUND);
+	// Entries without catalog metadata carry the config load time.
+	for model in models["data"].as_array_mut().unwrap() {
+		if model["id"] == "local-model" || model["id"] == "blend" {
+			model["created"] = json!(0);
+		}
+	}
+	insta::assert_json_snapshot!(models);
 }
 
 #[tokio::test]

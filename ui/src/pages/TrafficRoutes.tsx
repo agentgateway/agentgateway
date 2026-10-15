@@ -3,6 +3,7 @@ import { Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { UnsupportedInForm } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import {
 	ConfirmDialog,
@@ -14,8 +15,7 @@ import {
 	PageHeader,
 	Panel,
 	StatusBanner,
-	Tooltip,
-	YamlBlock
+	Tooltip
 } from '@/components/Primitives';
 import { isDatabaseConfigResource } from '@/config';
 import type {
@@ -684,12 +684,15 @@ function GatewayRouteEditor(props: {
 		effectiveGatewayRouteRef(props.editing.route, props.config, kind)
 	);
 	const [error, setError] = useState<string | null>(null);
+	const multipleGateways = Array.isArray(route.gateways) && route.gateways.length > 1;
 	const preview = cleanGatewayRoute(
 		{
 			...route,
-			gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
-				? undefined
-				: gateway
+			gateways: multipleGateways
+				? route.gateways
+				: implicitDefaultRouteGateway(route, props.config, gateway, kind)
+					? undefined
+					: gateway
 		} as LocalAttachedGatewayRoute,
 		kind
 	);
@@ -719,6 +722,16 @@ function GatewayRouteEditor(props: {
 					: 'Add route'
 			}
 			onClose={props.onCancel}
+			raw={{
+				schemaPath: ['$defs', kind === 'http' ? 'LocalAttachedRoute' : 'LocalAttachedTCPRoute'],
+				value: () => preview,
+				onChange: value => {
+					const next = value as LocalAttachedGatewayRoute;
+					setRoute(next);
+					setGateway(effectiveGatewayRouteRef(next, props.config, kind));
+				},
+				empty: makeRoute(kind)
+			}}
 			footer={
 				<ConfigDiffSaveActions
 					config={props.config}
@@ -768,6 +781,7 @@ function GatewayRouteEditor(props: {
 			}
 		>
 			{error ? <StatusBanner state="bad" title={error} /> : null}
+			{multipleGateways ? <UnsupportedInForm supports="routes attached to one gateway" /> : null}
 			<div className="route-editor-stack">
 				{!props.editing.resourceId && typeof props.editing.routeIndex !== 'number' ? (
 					<FieldGroup label="Kind" tooltip="Route protocol family.">
@@ -861,11 +875,6 @@ function GatewayRouteEditor(props: {
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
-
-				<details open>
-					<summary>Resulting YAML</summary>
-					<YamlBlock value={preview} />
-				</details>
 			</div>
 		</Drawer>
 	);
@@ -930,6 +939,12 @@ function RouteEditor(props: {
 		<Drawer
 			title={typeof props.editing.routeIndex === 'number' ? 'Edit route' : 'Add route'}
 			onClose={props.onCancel}
+			raw={{
+				schemaPath: ['$defs', effectiveKind === 'http' ? 'LocalRoute' : 'LocalTCPRoute'],
+				value: () => preview,
+				onChange: value => setRoute(value as TrafficRoute | TrafficTcpRoute),
+				empty: makeRoute(effectiveKind)
+			}}
 			dirty={draft !== initialDraft}
 			saving={props.saving}
 			footer={requestClose => (
@@ -1033,11 +1048,6 @@ function RouteEditor(props: {
 					policies={route.policies as Record<string, unknown> | null | undefined}
 					onChange={policies => setRoute({ ...route, policies })}
 				/>
-
-				<details open>
-					<summary>Resulting YAML</summary>
-					<YamlBlock value={preview} />
-				</details>
 			</div>
 		</Drawer>
 	);
@@ -1389,24 +1399,7 @@ function RouteBackendRow(props: {
 }) {
 	const type = editableBackendKind(props.backend);
 	if (!type || (props.kind === 'tcp' && (type === 'dynamic' || type === 'routeGroup'))) {
-		return (
-			<div className="route-backend-row readonly">
-				<div>
-					<strong>{backendSummary(props.backend)}</strong>
-					<span>Unsupported backend shape in this form</span>
-				</div>
-				<Tooltip content="Remove backend">
-					<button
-						className="icon-button danger"
-						type="button"
-						aria-label="Remove backend"
-						onClick={props.onRemove}
-					>
-						<Trash2 size={15} />
-					</button>
-				</Tooltip>
-			</div>
-		);
+		return <UnsupportedInForm supports="the backend types it lists" />;
 	}
 
 	const backend = props.backend;

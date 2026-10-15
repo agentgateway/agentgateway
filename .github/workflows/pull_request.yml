@@ -19,7 +19,7 @@ env:
   CARGO_TERM_COLOR: always
   CI: true
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
 
 jobs:
   #### Proxy jobs ####
@@ -184,7 +184,6 @@ jobs:
       run: |
         CGO_ENABLED=0 PERSIST_INSTALL=true go test -trimpath -tags=e2e,agent,disable_pgv -v ./controller/test/e2e
     - name: Verify Kind images
-      if: ${{ always() }}
       run: TEST_MODE=e2e ./controller/test/setup/verify-kind-images.sh
     - name: Archive bug report directory on failure
       if: ${{ failure() }}
@@ -223,7 +222,6 @@ jobs:
       run: |
         make -C controller agw-conformance
     - name: Verify Kind images
-      if: ${{ always() }}
       run: TEST_MODE=conformance ./controller/test/setup/verify-kind-images.sh
     - name: Debug Info
       if: ${{ failure() }}
@@ -278,7 +276,6 @@ jobs:
       run: |
         make -C controller gie-conformance
     - name: Verify Kind images
-      if: ${{ always() }}
       run: TEST_MODE=gie-conformance ./controller/test/setup/verify-kind-images.sh
     - name: Debug Info
       if: ${{ failure() }}

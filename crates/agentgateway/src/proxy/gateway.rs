@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -14,7 +15,7 @@ use bytes::Bytes;
 use futures::pin_mut;
 use futures_util::FutureExt;
 use futures_util::future::{self, Either};
-use http::StatusCode;
+use http::{HeaderValue, StatusCode, Version, header};
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
 use rand::RngExt;
@@ -73,13 +74,6 @@ impl HboneAddress {
 		match self {
 			HboneAddress::SocketAddr(_) => None,
 			HboneAddress::SvcHostname(s, _) => Some(s.clone()),
-		}
-	}
-
-	pub fn hostname_addr(&self) -> Option<Arc<str>> {
-		match self {
-			HboneAddress::SocketAddr(_) => None,
-			HboneAddress::SvcHostname(_, _) => Some(Arc::from(self.to_string())),
 		}
 	}
 
@@ -283,6 +277,7 @@ impl Gateway {
 		let listener = tokio::net::TcpListener::from_std(listener)?;
 		info!(bind = name.as_str(), "started bind");
 		let component = format!("bind {name}");
+		let drain_observer = drain.observer();
 
 		// Desired drain semantics:
 		// A drain will start when SIGTERM is sent.
@@ -317,6 +312,7 @@ impl Gateway {
 					// Can fail if they immediately disconnected; not much we can do.
 					return;
 				};
+				stream.ext_mut().insert(drain_observer.clone());
 				stream.with_logging(LoggingMode::Downstream);
 				let pi = pi.clone();
 				// We got the connection; make a strong drain blocker.
@@ -970,21 +966,33 @@ impl Gateway {
 			})
 			.clone();
 		let drain_proxy = proxy.clone();
+		let drain_observer = stream.ext::<drain::DrainObserver>().cloned();
+		// Set once max_connection_duration is reached, asking HTTP/1 clients to close.
+		let close_connection = Arc::new(AtomicBool::new(false));
+		let service_close_connection = close_connection.clone();
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
 			hyper::service::service_fn(move |mut req| {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
+				let drain_observer = drain_observer.clone();
+				let close_connection = service_close_connection.clone();
+				let is_http1 = matches!(req.version(), Version::HTTP_10 | Version::HTTP_11);
 
 				// Ensure we have capacity before we allocate the large proxy future.
 				let Some(request_permit) = request_admission.requests.try_acquire(max_requests) else {
 					request_shed.inc();
 					let is_grpc = crate::http::is_grpc_request(&req);
 					debug!(bind = %proxy.bind_name, "request rejected: request limit");
-					return Either::Left(future::ready(Ok::<_, Infallible>(
-						ProxyError::RequestLimitExceeded.into_response_with_grpc(is_grpc),
-					)));
+					let mut response = ProxyError::RequestLimitExceeded.into_response_with_grpc(is_grpc);
+					close_if_draining(
+						is_http1,
+						drain_observer.as_ref(),
+						&close_connection,
+						&mut response,
+					);
+					return Either::Left(future::ready(Ok::<_, Infallible>(response)));
 				};
 
 				if let Some(buffer) = buffer {
@@ -993,7 +1001,7 @@ impl Gateway {
 				let req = req.map(crate::http::Body::new);
 
 				Either::Right(async move {
-					let response = telemetry::request_scope(
+					let mut response = telemetry::request_scope(
 						// This is the per-request HTTP flow future. It is the baseline task state
 						// multiplied by concurrent in-flight requests on this connection.
 						dtrace::DebugTracer::maybe_scope(req, |req| async move {
@@ -1002,6 +1010,12 @@ impl Gateway {
 						.assert_size::<{ 18 * 1024 }>(),
 					)
 					.await?;
+					close_if_draining(
+						is_http1,
+						drain_observer.as_ref(),
+						&close_connection,
+						&mut response,
+					);
 					Ok(response.map(|body| body.with_drop_guard(request_permit)))
 				})
 			}),
@@ -1014,7 +1028,12 @@ impl Gateway {
 		let watch_connection_drain = async move {
 			let max_connection_duration = async {
 				match max_connection_duration {
-					Some(d) => tokio::time::sleep(d).await,
+					Some(d) => {
+						tokio::time::sleep(d).await;
+						debug!("max connection duration reached, closing connection after next response");
+						close_connection.store(true, Ordering::Relaxed);
+						tokio::time::sleep(MAX_CONNECTION_DURATION_GRACE).await;
+					},
 					None => std::future::pending::<()>().await,
 				}
 			};
@@ -1818,6 +1837,29 @@ fn is_accept_error_per_connection(e: &std::io::Error) -> bool {
 		e.raw_os_error(),
 		Some(libc::ECONNABORTED | libc::ECONNRESET | libc::EPERM)
 	)
+}
+
+/// How long an HTTP/1 connection past max_connection_duration may serve a final
+/// `Connection: close` response before it is closed.
+const MAX_CONNECTION_DURATION_GRACE: Duration = Duration::from_secs(10);
+
+/// During drain, or once max_connection_duration is reached, ask HTTP/1 clients to close
+/// the connection after this response.
+/// An existing Connection header (such as `upgrade` on a 101) is left untouched.
+fn close_if_draining<B>(
+	is_http1: bool,
+	drain: Option<&drain::DrainObserver>,
+	close_connection: &AtomicBool,
+	response: &mut ::http::Response<B>,
+) {
+	if is_http1
+		&& (close_connection.load(Ordering::Relaxed) || drain.is_some_and(|d| d.is_draining()))
+	{
+		response
+			.headers_mut()
+			.entry(header::CONNECTION)
+			.or_insert(HeaderValue::from_static("close"));
+	}
 }
 
 fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> bool {

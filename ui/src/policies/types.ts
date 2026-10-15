@@ -29,7 +29,7 @@ export type AuthorizationDraft = {
 	rules: Array<string | { allow?: string; deny?: string; require?: string }>;
 };
 
-export type TargetDraft = { host: string };
+export type TargetDraft = { host: string; policies: unknown };
 
 export type TransformationDraft = TransformationPolicy;
 export type TransformDraft = TransformPolicy;

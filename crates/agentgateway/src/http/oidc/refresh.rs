@@ -200,6 +200,8 @@ impl OidcPolicy {
 			.unwrap_or(refresh_session.refresh_token);
 		let refresh_cookie = self.refresh_cookie(Some(refresh_token), browser_session.subject)?;
 		let mut response_headers = HeaderMap::new();
+		// These cookies ride on an arbitrary upstream response; make sure a shared cache never stores them.
+		response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 		for cookie in [session_cookie, refresh_cookie] {
 			response_headers.append(
 				header::SET_COOKIE,
