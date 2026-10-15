@@ -142,8 +142,7 @@ impl SqliteLogStore {
 		to: DateTime<Utc>,
 	) -> anyhow::Result<Vec<StoredObservedModelUsage>> {
 		let mut qb = QueryBuilder::<Sqlite>::new("WITH grouped AS (SELECT ");
-		qb
-			.push("gen_ai_provider_name AS provider, gen_ai_request_model AS request_model,")
+		qb.push("gen_ai_provider_name AS provider, gen_ai_request_model AS request_model,")
 			.push(" gen_ai_response_model AS response_model, COUNT(*) AS request_count,")
 			.push(" MAX(completed_at) AS last_seen FROM request_logs WHERE completed_at >= ")
 			.push_bind(from)

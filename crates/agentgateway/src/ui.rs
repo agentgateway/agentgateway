@@ -980,10 +980,7 @@ async fn cost_recommendations(
 	let now = Utc::now();
 	if time_range.from >= time_range.to
 		|| time_range.to > now + ChronoDuration::minutes(5)
-		|| time_range
-			.to
-			.signed_duration_since(time_range.from.clone())
-			> ChronoDuration::days(30)
+		|| time_range.to.signed_duration_since(time_range.from.clone()) > ChronoDuration::days(30)
 	{
 		return Err(ErrorResponse::Status(
 			StatusCode::BAD_REQUEST,
@@ -1005,12 +1002,10 @@ async fn cost_recommendations(
 		));
 	}
 
-	let usage = crate::telemetry::log_store::recent_model_usage(
-		time_range.from.clone(),
-		time_range.to.clone(),
-	)
-	.await
-	.map_err(ErrorResponse::Anyhow)?;
+	let usage =
+		crate::telemetry::log_store::recent_model_usage(time_range.from.clone(), time_range.to.clone())
+			.await
+			.map_err(ErrorResponse::Anyhow)?;
 	let mut candidates = BTreeMap::<(String, String), CostRecommendation>::new();
 	for group in &usage.groups {
 		let Some(request_model) = group
@@ -1031,9 +1026,7 @@ async fn cost_recommendations(
 		candidates
 			.entry(key)
 			.and_modify(|candidate| {
-				candidate.request_count = candidate
-					.request_count
-					.saturating_add(group.request_count);
+				candidate.request_count = candidate.request_count.saturating_add(group.request_count);
 				if group.last_seen > candidate.last_seen {
 					candidate.last_seen = group.last_seen.clone();
 				}

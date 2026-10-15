@@ -1,10 +1,10 @@
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-	recommendCostModels,
 	type CostRecommendation,
-	type CostRecommendationsResponse
+	type CostRecommendationsResponse,
+	recommendCostModels
 } from '@/api/costsApi';
 import { ConfigSaveButton } from '@/components/ConfigDiffDrawer';
 import { EmptyState, formatNumber, PageHeader, Panel, StatusBanner } from '@/components/Primitives';
@@ -101,10 +101,17 @@ export function CostsPage() {
 	const [recommendationError, setRecommendationError] = useState<string | null>(null);
 	const [recommendations, setRecommendations] = useState<CostRecommendationsResponse | null>(null);
 	const [focusCustomRow, setFocusCustomRow] = useState<number | null>(null);
+	const customInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
 	useEffect(() => {
 		if (!editingCustom) setCustomDraft(customRows);
 	}, [customRows, editingCustom]);
+
+	useEffect(() => {
+		if (editingCustom && focusCustomRow !== null) {
+			customInputRefs.current[focusCustomRow]?.focus();
+		}
+	}, [editingCustom, focusCustomRow]);
 
 	async function refreshCosts() {
 		// ConfigSaveButton records file overrides for useUpdateConfig, but this endpoint writes the catalog directly.
@@ -277,8 +284,8 @@ export function CostsPage() {
 				{recommendations ? (
 					<>
 						<p className="muted-copy">
-							Scanned {formatNumber(recommendations.scannedRequests)} logged model requests and found{' '}
-							{formatNumber(recommendations.candidates.length)} missing models.
+							Scanned {formatNumber(recommendations.scannedRequests)} logged model requests and
+							found {formatNumber(recommendations.candidates.length)} missing models.
 							{recommendations.truncated
 								? ' More than 100 model groups were observed; narrow the time range and scan again to check for additional results.'
 								: ''}
@@ -315,10 +322,7 @@ export function CostsPage() {
 														}
 														onClick={() => addRecommendedCost(candidate)}
 													>
-														{includesCustomCost(
-															editingCustom ? customDraft : customRows,
-															candidate
-														)
+														{includesCustomCost(editingCustom ? customDraft : customRows, candidate)
 															? 'Added'
 															: 'Add cost'}
 													</button>
@@ -344,7 +348,9 @@ export function CostsPage() {
 						)}
 					</>
 				) : (
-					<p className="muted-copy">Run a scan to check recent request logs for missing model prices.</p>
+					<p className="muted-copy">
+						Run a scan to check recent request logs for missing model prices.
+					</p>
 				)}
 			</Panel>
 			<Panel>
@@ -438,7 +444,9 @@ export function CostsPage() {
 										{editingCustom ? (
 											<input
 												className="cost-rate-input"
-												autoFocus={focusCustomRow === index}
+												ref={element => {
+													customInputRefs.current[index] = element;
+												}}
 												value={row.input}
 												onChange={event => patchCustomRow(index, { input: event.target.value })}
 												placeholder="0.25"
