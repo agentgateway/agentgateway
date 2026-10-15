@@ -403,9 +403,10 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 }
 
 type portProtocol struct {
-	hostnames sets.String
-	protocol  gwv1.ProtocolType
-	internal  bool
+	hostnames    sets.String
+	sniHostnames sets.String
+	protocol     gwv1.ProtocolType
+	internal     bool
 }
 
 type ListenerConflict string
@@ -415,6 +416,23 @@ const (
 	ListenerConflictProtocol = "protocol"
 	ListenerConflictBindMode = "bind-mode"
 )
+
+func listenerProtocolGroup(p gwv1.ProtocolType) gwv1.ProtocolType {
+	if p == gwv1.TLSProtocolType {
+		return gwv1.HTTPSProtocolType
+	}
+	return p
+}
+
+func sniHostname(listener *GatewayListener) (string, bool) {
+	if listenerProtocolGroup(listener.ParentInfo.Protocol) != gwv1.HTTPSProtocolType {
+		return "", false
+	}
+	if listener.ParentInfo.OriginalHostname == "" {
+		return "*", true
+	}
+	return listener.ParentInfo.OriginalHostname, true
+}
 
 func validateListenerConflicts(listeners []*GatewayListener) {
 	// Precompute the final size to avoid incremental sizing
@@ -430,11 +448,15 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 				// Listeners are ordered by Gateway API precedence before validation.
 				// Preserve the winning bind mode and reject only the later listener.
 				conflict = ListenerConflictBindMode
-			} else if p.protocol == listener.ParentInfo.Protocol {
-				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
+			} else if listenerProtocolGroup(p.protocol) == listenerProtocolGroup(listener.ParentInfo.Protocol) {
+				sni, hasSNI := sniHostname(listener)
+				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) || (hasSNI && p.sniHostnames.Contains(sni)) {
 					conflict = ListenerConflictHostname
 				} else {
 					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
+					if hasSNI {
+						p.sniHostnames.Insert(sni)
+					}
 				}
 			} else {
 				conflict = ListenerConflictProtocol
@@ -442,10 +464,15 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 		} else {
 			hostnames := sets.NewWithLength[string](hostnameCounts[listener.ParentInfo.Port])
 			hostnames.InsertAll(listener.ParentInfo.Hostnames...)
+			sniHostnames := sets.New[string]()
+			if sni, ok := sniHostname(listener); ok {
+				sniHostnames.Insert(sni)
+			}
 			portMap[listener.ParentInfo.Port] = &portProtocol{
-				hostnames: hostnames,
-				protocol:  listener.ParentInfo.Protocol,
-				internal:  listener.ParentInfo.Internal,
+				hostnames:    hostnames,
+				sniHostnames: sniHostnames,
+				protocol:     listener.ParentInfo.Protocol,
+				internal:     listener.ParentInfo.Internal,
 			}
 		}
 		if conflict != listener.Conflict {
