@@ -1486,11 +1486,6 @@ pub mod from_messages {
 		let typed = json::convert::<_, messages::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let (mut xlated, tool_name_map) = translate_internal(typed, provider, headers, catalog)?;
-		let automatic = req
-			.rest
-			.get("cache_control")
-			.and_then(|v| <messages::CacheControlEphemeral as serde::Deserialize>::deserialize(v).ok());
-		helpers::insert_automatic_cache_point(&mut xlated, automatic.as_ref());
 		if let Some(caching) = prompt_caching {
 			helpers::apply_prompt_caching(&mut xlated, caching);
 		}
@@ -2009,6 +2004,16 @@ pub mod from_messages {
 		} else {
 			Some(metadata)
 		};
+
+		if let Some((last, earlier)) = messages.split_last_mut() {
+			helpers::insert_cache_point_on_retained_prefix(
+				&mut last.content,
+				earlier,
+				system_content.as_mut(),
+				req.cache_control.as_ref(),
+				&mut cache_points_used,
+			);
+		}
 
 		let mut bedrock_request = bedrock::ConverseRequest {
 			model_id: req.model,
@@ -4018,22 +4023,6 @@ mod helpers {
 			.flat_map(|t| &t.tools)
 			.filter(|t| matches!(t, bedrock::Tool::CachePoint(_)));
 		system.count() + messages.count() + tools.count()
-	}
-
-	pub fn insert_automatic_cache_point(
-		req: &mut bedrock::ConverseRequest,
-		breakpoint: Option<&CacheControlEphemeral>,
-	) {
-		let mut cache_points_used = count_cache_points(req);
-		if let Some((last, earlier)) = req.messages.split_last_mut() {
-			insert_cache_point_on_retained_prefix(
-				&mut last.content,
-				earlier,
-				req.system.as_mut(),
-				breakpoint,
-				&mut cache_points_used,
-			);
-		}
 	}
 
 	pub fn apply_prompt_caching(
