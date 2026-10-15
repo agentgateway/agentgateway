@@ -351,11 +351,14 @@ impl OAuthTokenExchangeAuth {
 			})?;
 		// Reject known-expired credentials using claims verified for this token, despite ingress clock skew.
 		// Return a 401 so the client refreshes; RFC 8693's 400 `invalid_request` looks like misconfiguration.
-		if let Some(claims) = req.extensions().get::<Claims>()
-			&& claims.jwt.expose_secret() == subject_token
-			&& let Some(exp) = claims.inner.get("exp").and_then(Value::as_f64)
-			&& exp <= jsonwebtoken::get_current_timestamp() as f64
-		{
+		// Without a numeric `exp` there is no known expiry, so the token endpoint decides.
+		let expired = req
+			.extensions()
+			.get::<Claims>()
+			.filter(|claims| claims.jwt.expose_secret() == subject_token)
+			.and_then(|claims| claims.inner.get("exp")?.as_f64())
+			.is_some_and(|exp| exp <= jsonwebtoken::get_current_timestamp() as f64);
+		if expired {
 			let err = ProxyError::JwtAuthenticationFailure(jwt::TokenError::Invalid(
 				jsonwebtoken::errors::ErrorKind::ExpiredSignature.into(),
 			));
