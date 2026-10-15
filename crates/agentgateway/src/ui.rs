@@ -1002,10 +1002,9 @@ async fn cost_recommendations(
 		));
 	}
 
-	let usage =
-		crate::telemetry::log_store::recent_model_usage(time_range.from, time_range.to)
-			.await
-			.map_err(ErrorResponse::Anyhow)?;
+	let usage = crate::telemetry::log_store::recent_model_usage(time_range.from, time_range.to)
+		.await
+		.map_err(ErrorResponse::Anyhow)?;
 	let mut candidates = BTreeMap::<(String, String), CostRecommendation>::new();
 	for group in &usage.groups {
 		let Some(request_model) = group
@@ -1035,7 +1034,7 @@ async fn cost_recommendations(
 				provider: group.provider.clone(),
 				model: request_model.to_string(),
 				request_count: group.request_count,
-			last_seen: group.last_seen,
+				last_seen: group.last_seen,
 			});
 	}
 
