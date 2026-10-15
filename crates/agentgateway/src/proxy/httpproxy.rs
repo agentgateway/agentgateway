@@ -2298,11 +2298,15 @@ async fn apply_inference_routing(
 	inference_result
 		.policy_response
 		.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_result.destination);
+	let destination_for_log = inference_result.destination.clone();
+	log.add(move |l| l.inference_pool = destination_for_log);
 
 	// Explicit inference and stateful MCP destinations take precedence over stateless affinity.
 	// In practice inference and MCP pinning do not conflict because they target different backends.
-	let destination = inference_result.destination.or(policies.override_dest);
+	let destination = inference_result
+		.destination
+		.clone()
+		.or(policies.override_dest.map(Target::Address));
 	let affinity_key = if destination.is_none() {
 		policies
 			.session_affinity
@@ -3429,12 +3433,12 @@ pub fn build_service_call(
 	} else {
 		None
 	};
-	if let Some(destination) = service_override.destination
+	if let Some(destination) = &service_override.destination
 		&& service_override.destination_passthrough
 	{
 		return Ok(BackendCall {
 			static_target: false,
-			target: Target::Address(destination),
+			target: destination.clone(),
 			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
 			transport_override: None,
@@ -3446,6 +3450,19 @@ pub fn build_service_call(
 		});
 	}
 
+	// Validated mode matches the destination against local service endpoints,
+	// which only IP destinations can satisfy. A hostname destination is an L7
+	// front door and must be trusted directly (destinationMode: Passthrough).
+	let validated_dest = match &service_override.destination {
+		Some(Target::Address(addr)) => Some(*addr),
+		Some(Target::Hostname(host, port)) => {
+			return Err(ProxyError::Processing(anyhow!(
+				"EPP returned hostname destination {host}:{port}, which requires destinationMode 'Passthrough'"
+			)));
+		},
+		_ => None,
+	};
+
 	let discovery = inputs.stores.read_discovery();
 	let workloads = &discovery.workloads;
 	let (ep, handle, wl) = svc
@@ -3454,7 +3471,7 @@ pub fn build_service_call(
 			workloads,
 			svc.as_ref(),
 			port,
-			service_override.destination,
+			validated_dest,
 			service_override.affinity_key,
 		)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -3463,7 +3480,7 @@ pub fn build_service_call(
 		ep.as_ref(),
 		svc.as_ref(),
 		port,
-		service_override.destination,
+		validated_dest,
 		service_override.inference_failed_open,
 	)
 	.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -4874,9 +4891,9 @@ pub struct WaypointTarget {
 	pub identities: Vec<Identity>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ServiceCallOverride {
-	pub destination: Option<SocketAddr>,
+	pub destination: Option<Target>,
 	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
 	pub affinity_key: Option<u64>,

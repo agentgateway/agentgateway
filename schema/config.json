@@ -10062,12 +10062,12 @@
       "description": "Controls how an endpoint-picker-selected destination is used.",
       "oneOf": [
         {
-          "description": "Require the selected destination to match agentgateway's local service endpoints.",
+          "description": "Require the selected destination to match agentgateway's local service endpoints.\nOnly IP destinations can be validated; a hostname destination is rejected.",
           "type": "string",
           "const": "validated"
         },
         {
-          "description": "Trust the selected destination directly without local endpoint validation.",
+          "description": "Trust the selected destination directly without local endpoint validation.\nThe destination may be an IP address or a DNS hostname.",
           "type": "string",
           "const": "passthrough"
         }

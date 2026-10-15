@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -1349,7 +1348,7 @@ pub struct RequestLog {
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
-	pub inference_pool: Option<SocketAddr>,
+	pub inference_pool: Option<Target>,
 
 	pub ate_actor_name: Option<String>,
 	pub ate_actor_uid: Option<String>,
