@@ -2877,6 +2877,8 @@ pub mod from_responses {
 			Ok(blocks)
 		};
 
+		let mut invalid_function_calls = std::collections::HashSet::new();
+
 		// Process each input item
 		for item in items {
 			match item {
@@ -2999,10 +3001,16 @@ pub mod from_responses {
 				},
 				InputItem::Item(Item::FunctionCall(call)) => {
 					let Ok(input) = serde_json::from_str::<serde_json::Value>(&call.arguments) else {
-						tracing::warn!(
-							"Skipping function_call with invalid JSON arguments for tool '{}': {}",
-							call.name,
-							call.arguments
+						tracing::warn!("Replaying an invalid function call as non-executable text");
+						invalid_function_calls.insert(call.call_id);
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::Assistant,
+								content: vec![bedrock::ContentBlock::Text(
+									"A function call had invalid JSON arguments and was not executed.".to_string(),
+								)],
+							},
 						);
 						continue;
 					};
@@ -3034,6 +3042,19 @@ pub mod from_responses {
 							.collect::<Vec<_>>()
 							.join("\n"),
 					};
+
+					if invalid_function_calls.contains(&call_id) {
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::User,
+								content: vec![bedrock::ContentBlock::Text(format!(
+									"The unexecuted function call returned this error: {output_text}"
+								))],
+							},
+						);
+						continue;
+					}
 
 					helpers::push_or_merge_message(
 						&mut messages,

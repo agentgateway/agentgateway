@@ -2089,3 +2089,165 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 		"unexpected error: {err}"
 	);
 }
+
+fn invalid_call_replay_request(input: serde_json::Value) -> serde_json::Value {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"input": input,
+		"tools": [{"type": "function", "name": "shell", "parameters": {"type": "object"}}]
+	}))
+	.unwrap();
+	let body = super::from_responses::translate(&req, &provider, None, None, None)
+		.unwrap()
+		.body;
+	serde_json::from_slice(&body).unwrap()
+}
+
+fn assert_invalid_replay_pairing(body: &serde_json::Value) {
+	let messages = body["messages"].as_array().unwrap();
+	for (index, message) in messages.iter().enumerate() {
+		for block in message["content"].as_array().unwrap() {
+			if let Some(result) = block.get("toolResult") {
+				assert!(index > 0);
+				let previous = &messages[index - 1];
+				assert_eq!(previous["role"], "assistant");
+				let count = previous["content"]
+					.as_array()
+					.unwrap()
+					.iter()
+					.filter(|b| b.get("toolUse").map(|u| &u["toolUseId"]) == Some(&result["toolUseId"]))
+					.count();
+				assert_eq!(
+					count, 1,
+					"result must have exactly one use in the previous turn"
+				);
+			}
+		}
+	}
+}
+
+#[test]
+fn test_responses_invalid_arguments_replay_is_recoverable_text() {
+	let body = invalid_call_replay_request(json!([
+		{"role": "user", "content": "hello"},
+		{"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""},
+		{"type": "function_call_output", "call_id": "bad", "output": "EOF_PARSE_ERROR"},
+		{"role": "user", "content": "continue"}
+	]));
+	assert_invalid_replay_pairing(&body);
+	let text = serde_json::to_string(&body["messages"]).unwrap();
+	assert!(text.contains("EOF_PARSE_ERROR"));
+	assert!(text.contains("was not executed"));
+	assert!(!text.contains("toolUse"));
+	assert!(!text.contains("toolResult"));
+}
+
+#[test]
+fn test_responses_invalid_arguments_preserve_mixed_parallel_pairing() {
+	for (invalid_first, invalid_output_first) in
+		[(false, false), (false, true), (true, false), (true, true)]
+	{
+		let valid = json!({"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{\"cmd\":\"echo ok\"}"});
+		let invalid = json!({"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""});
+		let mut input = vec![json!({"role": "user", "content": "hello"})];
+		input.extend(if invalid_first {
+			vec![invalid, valid]
+		} else {
+			vec![valid, invalid]
+		});
+		let valid_output = json!({"type": "function_call_output", "call_id": "ok", "output": "OK"});
+		let invalid_output =
+			json!({"type": "function_call_output", "call_id": "bad", "output": "EOF_PARSE_ERROR"});
+		input.extend(if invalid_output_first {
+			vec![invalid_output, valid_output]
+		} else {
+			vec![valid_output, invalid_output]
+		});
+		let body = invalid_call_replay_request(json!(input));
+		assert_invalid_replay_pairing(&body);
+		let blocks = body["messages"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.flat_map(|m| m["content"].as_array().unwrap())
+			.collect::<Vec<_>>();
+		assert_eq!(
+			blocks.iter().filter(|b| b.get("toolUse").is_some()).count(),
+			1
+		);
+		assert_eq!(
+			blocks
+				.iter()
+				.filter(|b| b.get("toolResult").is_some())
+				.count(),
+			1
+		);
+		assert!(
+			serde_json::to_string(&body)
+				.unwrap()
+				.contains("EOF_PARSE_ERROR")
+		);
+	}
+}
+
+#[test]
+fn test_responses_invalid_arguments_keep_sequential_turn_boundaries() {
+	let body = invalid_call_replay_request(json!([
+		{"role": "user", "content": "hello"},
+		{"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{}"},
+		{"type": "function_call_output", "call_id": "ok", "output": "OK"},
+		{"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""},
+		{"type": "message", "role": "assistant", "content": []},
+		{"type": "function_call_output", "call_id": "bad", "output": "EOF_PARSE_ERROR"},
+		{"type": "function_call", "call_id": "retry", "name": "shell", "arguments": "{}"},
+		{"type": "function_call_output", "call_id": "retry", "output": "RECOVERED"}
+	]));
+	assert_invalid_replay_pairing(&body);
+	let messages = body["messages"].as_array().unwrap();
+	assert_eq!(messages.len(), 7);
+	assert_eq!(messages[3]["role"], "assistant");
+	assert_eq!(messages[4]["role"], "user");
+	assert!(messages[3]["content"][0].get("text").is_some());
+	assert!(messages[4]["content"][0].get("text").is_some());
+}
+
+#[test]
+fn test_responses_invalid_arguments_are_not_forwarded_as_input() {
+	let body = invalid_call_replay_request(json!([
+		{"role": "user", "content": "hello"},
+		{"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\"SYNTHETIC_SECRET_DO_NOT_FORWARD"},
+		{"type": "function_call_output", "call_id": "bad", "output": "EOF"}
+	]));
+	assert!(
+		!serde_json::to_string(&body)
+			.unwrap()
+			.contains("SYNTHETIC_SECRET_DO_NOT_FORWARD")
+	);
+}
+
+#[test]
+fn test_responses_invalid_arguments_do_not_change_valid_error_results() {
+	let body = invalid_call_replay_request(json!([
+		{"role": "user", "content": "hello"},
+		{"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{\"cmd\":\"exit 1\"}"},
+		{"type": "function_call_output", "call_id": "ok", "output": "exit code 1"}
+	]));
+	assert_invalid_replay_pairing(&body);
+	let messages = body["messages"].as_array().unwrap();
+	assert_eq!(messages.len(), 3);
+	assert_eq!(
+		messages[1]["content"][0]["toolUse"]["input"],
+		json!({"cmd": "exit 1"})
+	);
+	assert_eq!(
+		messages[2]["content"][0]["toolResult"]["content"][0]["text"],
+		"exit code 1"
+	);
+}
