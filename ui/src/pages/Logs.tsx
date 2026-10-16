@@ -19,7 +19,7 @@ import {
 	Wrench
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { analyticsSummary, getLog, searchLogs, streamLogs } from '@/api/logsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -1332,6 +1332,8 @@ function LogCallRow(props: {
 	const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
 	const operation = props.entry.genAi.operationName ?? 'chat';
 	const provider = props.entry.genAi.providerName ?? null;
+	const summaryId = useId();
+	const toggleRef = useRef<HTMLButtonElement>(null);
 	return (
 		<tbody
 			className={
@@ -1340,25 +1342,49 @@ function LogCallRow(props: {
 					: `log-row ${statusBad ? 'bad' : 'ok'}`
 			}
 		>
-			{/** biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<tr
+				id={summaryId}
 				className="log-row-summary"
-				tabIndex={0}
-				role="button"
-				aria-expanded={props.expanded}
-				onClick={props.onToggle}
-				onKeyDown={event => {
-					if (event.key === 'Enter' || event.key === ' ') {
-						event.preventDefault();
-						props.onToggle();
+				onClick={event => {
+					const toggle = toggleRef.current;
+					// Another button in the row, like the turn badge, keeps focus.
+					const button = (event.target as Element).closest('button');
+					if (toggle && (!button || button === toggle)) {
+						// Pointer clicks leave keyboard mode, like the old focusable row.
+						if (event.detail > 0) delete toggle.dataset.keyboard;
+						if (document.activeElement !== toggle) {
+							toggle.focus({ focusVisible: false, preventScroll: true });
+						}
 					}
+					props.onToggle();
 				}}
 			>
 				<td className="log-td-time">
-					<span className="log-cell-lines">
-						<span className="log-cell-primary">{formatRelativeTime(props.entry.completedAt)}</span>
-						<span className="log-cell-secondary">{formatDate(props.entry.completedAt)}</span>
-					</span>
+					<button
+						aria-expanded={props.expanded}
+						aria-labelledby={summaryId}
+						className="log-row-toggle"
+						ref={toggleRef}
+						type="button"
+						onBlur={event => {
+							delete event.currentTarget.dataset.keyboard;
+						}}
+						onKeyDown={event => {
+							// Show the row ring after a key press, as the focused row did before.
+							event.currentTarget.dataset.keyboard = '';
+							if (event.key === ' ') {
+								event.preventDefault();
+								props.onToggle();
+							}
+						}}
+					>
+						<span className="log-cell-lines">
+							<span className="log-cell-primary">
+								{formatRelativeTime(props.entry.completedAt)}
+							</span>
+							<span className="log-cell-secondary">{formatDate(props.entry.completedAt)}</span>
+						</span>
+					</button>
 				</td>
 				<td className="log-td-status">
 					<span className="log-status-indicators">

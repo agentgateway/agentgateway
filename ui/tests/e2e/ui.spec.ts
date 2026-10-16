@@ -954,7 +954,7 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Add server' }).first().click();
 	await page.getByLabel('Server name').fill('weather');
-	await page.getByRole('radio', { name: 'OpenAPI' }).click();
+	await page.getByRole('button', { name: 'OpenAPI' }).click();
 	for (const name of ['URL', 'Schema']) {
 		const formControls = await page.evaluate(text => {
 			const span = [...document.querySelectorAll('.field-label')].find(

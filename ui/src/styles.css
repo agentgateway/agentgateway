@@ -3788,7 +3788,14 @@ tbody tr:hover {
 	background: var(--surface-2);
 }
 
-.log-row-summary:focus-visible {
+.log-row-toggle {
+	all: unset;
+	display: block;
+	width: 100%;
+}
+
+.log-row-summary:has(.log-row-toggle:focus-visible),
+.log-row-summary:has(.log-row-toggle[data-keyboard]:focus) {
 	outline: 2px solid var(--primary);
 	outline-offset: -2px;
 }
@@ -5028,6 +5035,10 @@ textarea {
 }
 
 .segmented-control {
+	min-width: 0;
+	margin: 0;
+	border: 0;
+	padding: 0;
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 0;
