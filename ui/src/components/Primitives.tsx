@@ -117,6 +117,7 @@ export function Dropdown(props: {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
 	const [activeIndex, setActiveIndex] = useState(0);
+	const containerRef = useRef<HTMLDivElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -272,12 +273,9 @@ export function Dropdown(props: {
 	}
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<div
 			className={['custom-select', props.className].filter(Boolean).join(' ')}
-			onBlur={event => {
-				if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-			}}
+			ref={containerRef}
 		>
 			<button
 				className="custom-select-trigger"
@@ -291,6 +289,9 @@ export function Dropdown(props: {
 				aria-activedescendant={activeOptionId}
 				aria-label={props.ariaLabel}
 				disabled={props.disabled}
+				onBlur={event => {
+					if (!containerRef.current?.contains(event.relatedTarget)) setOpen(false);
+				}}
 				onClick={() => setOpen(current => !current)}
 				onKeyDown={onComboboxKeyDown}
 			>
@@ -318,6 +319,9 @@ export function Dropdown(props: {
 							aria-activedescendant={activeOptionId}
 							aria-label={`Search ${props.ariaLabel}`}
 							value={query}
+							onBlur={event => {
+								if (!containerRef.current?.contains(event.relatedTarget)) setOpen(false);
+							}}
 							onChange={event => setQuery(event.target.value)}
 							onKeyDown={onComboboxKeyDown}
 							placeholder={`Search ${props.ariaLabel.toLowerCase()}...`}
@@ -707,12 +711,11 @@ export function Drawer(props: {
 
 	return (
 		<>
-			{/** biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<div
 				className={props.variant === 'nested' ? 'drawer-backdrop nested' : 'drawer-backdrop'}
 				role="presentation"
-				onMouseDown={requestClose}
 			>
+				<div className="dismiss-overlay" aria-hidden="true" onMouseDown={requestClose} />
 				<aside
 					className={props.variant === 'nested' ? 'drawer nested' : 'drawer'}
 					role="dialog"
@@ -869,8 +872,8 @@ export function ConfirmDialog(props: {
 	}
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
-		<div className="confirm-backdrop" role="presentation" onMouseDown={props.onCancel}>
+		<div className="confirm-backdrop" role="presentation">
+			<div className="dismiss-overlay" aria-hidden="true" onMouseDown={props.onCancel} />
 			<div
 				className="confirm-dialog"
 				role="alertdialog"

@@ -719,6 +719,11 @@ td.row-actions > * + * {
 	background: transparent;
 }
 
+.dismiss-overlay {
+	position: absolute;
+	inset: 0;
+}
+
 .drawer {
 	position: relative;
 	display: grid;
@@ -781,6 +786,7 @@ td.row-actions > * + * {
 }
 
 .confirm-dialog {
+	position: relative;
 	width: min(420px, 100%);
 	border: 1px solid var(--line);
 	border-radius: 8px;
