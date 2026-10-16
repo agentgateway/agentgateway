@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -570,13 +571,16 @@ func (s *Syncer) buildAgwResources(
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
-	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+	routeGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if _, isAdditionalClass := s.additionalGatewayClasses[gw.ParentInfo.ParentGatewayClassName]; isAdditionalClass {
 			return nil
 		}
-		if gw.Conflict == translator.ListenerConflictBindMode {
-			// Bind mode is selected by listener precedence. Keep the losing listener
-			// available to status reporting, but do not program it or attach routes.
+		return &gw
+	}, krtopts.ToOptions("translator/RouteGateways")...)
+
+	// Keep conflicted parents for attachment status, but do not program them.
+	filteredGateways := krt.NewCollection(routeGateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+		if gw.Conflict != "" {
 			return nil
 		}
 		return &gw
@@ -607,16 +611,21 @@ func (s *Syncer) buildAgwResources(
 	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
-	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
-
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways)
+	resolvers := []translator.ParentResolver{routeParents}
 	// Compose with plugin-provided parent resolvers.
-	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
-		resolvers := []translator.ParentResolver{routeParents}
+	if ext := s.agwPlugins.AddResourceExtension; ext != nil {
+		additionalClasses := sets.New(maps.Keys(s.additionalGatewayClasses)...)
 		for _, r := range ext.ParentResolvers {
 			if r != nil {
-				resolvers = append(resolvers, r)
+				resolvers = append(resolvers, translator.ArbitratedParentResolver{
+					Resolver: r, Listeners: gateways, Gateways: s.agwCollections.Gateways,
+					AdditionalGatewayClasses: additionalClasses,
+				})
 			}
 		}
+	}
+	if len(resolvers) > 1 {
 		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
 	}
 

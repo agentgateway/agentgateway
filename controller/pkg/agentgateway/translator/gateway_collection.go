@@ -384,6 +384,30 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			result = append(result, &ls.GatewayListener)
 		}
 		validateListenerConflicts(result)
+		for i, listener := range result[:len(kgw.Listeners)] {
+			var reason gwv1.ListenerConditionReason
+			var message string
+			switch listener.Conflict {
+			case ListenerConflictHostname:
+				reason = gwv1.ListenerReasonHostnameConflict
+				message = "Found conflicting hostnames on listeners, all listeners on a single port must have unique hostnames"
+			case ListenerConflictProtocol:
+				reason = gwv1.ListenerReasonProtocolConflict
+				message = "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
+			default:
+				continue
+			}
+			listenerReporter := gwReporter.Listener(&kgw.Listeners[i])
+			for _, condition := range []reporter.ListenerCondition{
+				{Type: gwv1.ListenerConditionConflicted, Status: metav1.ConditionTrue},
+				{Type: gwv1.ListenerConditionAccepted, Status: metav1.ConditionFalse},
+				{Type: gwv1.ListenerConditionProgrammed, Status: metav1.ConditionFalse},
+			} {
+				condition.Reason = reason
+				condition.Message = message
+				listenerReporter.SetCondition(condition)
+			}
+		}
 		// Precedence sorting groups listeners from each ListenerSet together. Count
 		// a parent once when its first valid, non-conflicting listener is encountered.
 		var attachedListenerSets int32
@@ -420,7 +444,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 	// Precompute the final size to avoid incremental sizing
 	hostnameCounts := make(map[gwv1.PortNumber]int)
 	for _, listener := range listeners {
-		hostnameCounts[listener.ParentInfo.Port] += len(listener.ParentInfo.Hostnames)
+		hostnameCounts[listener.ParentInfo.Port]++
 	}
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for i, listener := range listeners {
@@ -431,17 +455,17 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 				// Preserve the winning bind mode and reject only the later listener.
 				conflict = ListenerConflictBindMode
 			} else if p.protocol == listener.ParentInfo.Protocol {
-				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
+				if p.hostnames.Contains(listener.ParentInfo.OriginalHostname) {
 					conflict = ListenerConflictHostname
 				} else {
-					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
+					p.hostnames.Insert(listener.ParentInfo.OriginalHostname)
 				}
 			} else {
 				conflict = ListenerConflictProtocol
 			}
 		} else {
 			hostnames := sets.NewWithLength[string](hostnameCounts[listener.ParentInfo.Port])
-			hostnames.InsertAll(listener.ParentInfo.Hostnames...)
+			hostnames.Insert(listener.ParentInfo.OriginalHostname)
 			portMap[listener.ParentInfo.Port] = &portProtocol{
 				hostnames: hostnames,
 				protocol:  listener.ParentInfo.Protocol,
@@ -611,6 +635,45 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 }
 
 type ParentResolver = plugins.ParentResolver
+
+type ArbitratedParentResolver struct {
+	Resolver                 ParentResolver
+	Listeners                krt.Collection[*GatewayListener]
+	Gateways                 krt.Collection[*gwv1.Gateway]
+	AdditionalGatewayClasses sets.Set[string]
+}
+
+func (p ArbitratedParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
+	var result []*ParentInfo
+	seen := sets.New[string]()
+	for _, parent := range p.Resolver.ParentsFor(ctx, pk) {
+		if parent == nil {
+			continue
+		}
+		if parent.ServiceKey != nil || parent.ListenerKey == "" {
+			result = append(result, parent)
+			continue
+		}
+		gateway := ptr.Flatten(krt.FetchOne(ctx, p.Gateways, krt.FilterKey(parent.ParentGateway.String())))
+		if gateway == nil {
+			continue
+		}
+		if p.AdditionalGatewayClasses.Contains(string(gateway.Spec.GatewayClassName)) {
+			result = append(result, parent)
+			continue
+		}
+		if seen.Contains(parent.ListenerKey) {
+			continue
+		}
+		listener := ptr.Flatten(krt.FetchOne(ctx, p.Listeners, krt.FilterKey(parent.ListenerKey)))
+		if listener == nil || listener.ParentGateway != parent.ParentGateway {
+			continue
+		}
+		seen.Insert(parent.ListenerKey)
+		result = append(result, &listener.ParentInfo)
+	}
+	return result
+}
 
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
