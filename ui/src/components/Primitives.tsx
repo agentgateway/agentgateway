@@ -507,9 +507,9 @@ export function Tooltip(props: {
 	}, [open, props.side]);
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 		<span
 			className="tooltip-wrap"
+			role="none"
 			onMouseEnter={() => setOpen(true)}
 			onMouseLeave={() => setOpen(false)}
 			onFocus={() => setOpen(true)}

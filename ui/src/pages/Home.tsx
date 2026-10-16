@@ -125,9 +125,11 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
-			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
 			<div
 				className="startup-shell"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="startup-title"
 				onClick={event => {
 					if (event.target === event.currentTarget) setStartupFlow(false);
 				}}
@@ -135,12 +137,7 @@ export function HomePage() {
 					if (event.key === 'Escape') setStartupFlow(false);
 				}}
 			>
-				<section
-					className="startup-panel"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="startup-title"
-				>
+				<section className="startup-panel">
 					<div className="startup-copy">
 						<h2 id="startup-title">Welcome to Agentgateway</h2>
 						<p>Choose what this gateway will serve. Anything skipped can be enabled later.</p>
