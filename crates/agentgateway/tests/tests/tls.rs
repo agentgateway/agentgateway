@@ -93,6 +93,41 @@ async fn tls_termination() {
 	assert_matches!(res, Err(_));
 }
 
+/// Regression test for <https://github.com/agentgateway/agentgateway/issues/1829>:
+/// When the gateway terminates TLS at an HTTPS listener and forwards plaintext HTTP
+/// to the upstream backend, it must set `X-Forwarded-Proto: https` so the backend
+/// knows the original client-facing protocol.
+#[tokio::test]
+async fn tls_termination_sets_x_forwarded_proto() {
+	let mock = simple_mock().await;
+	let bind = https_bind();
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(bind)
+		.with_route(basic_route(*mock.address()));
+
+	let io = t.serve_https(strng::new("bind"), Some("a.example.com"));
+	let res = RequestBuilder::new(Method::GET, "http://a.example.com/check-proto")
+		.send(io)
+		.await
+		.unwrap();
+	assert_eq!(res.status(), 200);
+
+	let body = read_body(res.into_body()).await;
+	assert_eq!(
+		body
+			.headers
+			.get("x-forwarded-proto")
+			.expect("x-forwarded-proto header must be set by the gateway on TLS termination")
+			.to_str()
+			.unwrap(),
+		"https",
+		"gateway must inject x-forwarded-proto: https when TLS is terminated"
+	);
+}
+
 #[tokio::test]
 async fn tls_connection_reuses_listener_after_route_insert() {
 	let existing = body_mock(b"existing-route").await;
