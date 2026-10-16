@@ -72,8 +72,15 @@ pub fn apply_prompt_caching(
 			});
 		mark(last_cacheable);
 	}
+	// Deferred tools cannot carry cache_control, so mark the last tool that is loaded up front.
+	// https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool#prompt-caching
 	if caching.cache_tools
-		&& let Some(tool) = req.tools.as_mut().and_then(|tools| tools.last_mut())
+		&& let Some(tool) = req
+			.tools
+			.iter_mut()
+			.flatten()
+			.rev()
+			.find(|tool| tool.rest["defer_loading"] != true)
 	{
 		tool.cache_control = Some(serde_json::json!({"type": "ephemeral"}));
 	}
@@ -82,11 +89,10 @@ pub fn apply_prompt_caching(
 /// Looks for cache_control only where the API accepts it, so a key with the same name inside tool
 /// inputs or schemas is not mistaken for a mark.
 fn has_cache_control(req: &types::messages::Request) -> bool {
-	let marked = |block: &serde_json::Value| block.get("cache_control").is_some_and(|c| !c.is_null());
 	let system = match &req.system {
-		Some(types::messages::TextBlock::Array(parts)) => {
-			parts.iter().any(|part| marked(part.fields()))
-		},
+		Some(types::messages::TextBlock::Array(parts)) => parts
+			.iter()
+			.any(|part| has_nested_cache_control(part.fields())),
 		_ => false,
 	};
 	let content = req
@@ -97,20 +103,27 @@ fn has_cache_control(req: &types::messages::Request) -> bool {
 			_ => None,
 		})
 		.flatten()
-		.any(|part| {
-			let block = part.fields();
-			marked(block)
-				|| (block["type"] == "tool_result"
-					&& block["content"]
-						.as_array()
-						.is_some_and(|parts| parts.iter().any(marked)))
-		});
+		.any(|part| has_nested_cache_control(part.fields()));
 	let tools = req
 		.tools
 		.iter()
 		.flatten()
 		.any(|tool| tool.cache_control.is_some());
 	req.cache_control.is_some() || system || content || tools
+}
+
+fn has_nested_cache_control(value: &serde_json::Value) -> bool {
+	match value {
+		serde_json::Value::Array(blocks) => blocks.iter().any(has_nested_cache_control),
+		serde_json::Value::Object(block) => {
+			block.get("cache_control").is_some_and(|c| !c.is_null())
+				|| types::messages::cache_control_children(block)
+					.iter()
+					.filter_map(|field| block.get(*field))
+					.any(has_nested_cache_control)
+		},
+		_ => false,
+	}
 }
 
 fn system_tokens(system: &types::messages::TextBlock) -> usize {
@@ -156,7 +169,11 @@ mod tests {
 					{"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
 					{"role": "user", "content": "How are you?"}
 				],
-				"tools": [{"name": "get_weather", "input_schema": {"type": "object"}}]
+				"tools": [
+					{"name": "get_weather", "input_schema": {"type": "object"}},
+					// Deferred tools cannot carry cache_control.
+					{"name": "get_time", "input_schema": {"type": "object"}, "defer_loading": true}
+				]
 			}),
 			&caching,
 		);
@@ -185,6 +202,7 @@ mod tests {
 					.is_none()
 			);
 			assert_eq!(out["tools"][0]["cache_control"], mark);
+			assert!(out["tools"][1].get("cache_control").is_none());
 		}
 	}
 
@@ -232,6 +250,20 @@ mod tests {
 		assert_eq!(
 			out["messages"][0]["content"][0]["cache_control"],
 			serde_json::json!({"type": "ephemeral"})
+		);
+		// Marks nested inside other blocks count as client marks too.
+		let mut nested = request(serde_json::Value::Null);
+		nested["messages"][1]["content"] = serde_json::json!([{
+			"type": "search_result",
+			"source": "https://example.com",
+			"title": "Example",
+			"content": [{"type": "text", "text": "result", "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
+		}]);
+		let out = apply(nested, &caching);
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
 		);
 	}
 }
