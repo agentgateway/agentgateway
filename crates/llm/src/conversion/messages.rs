@@ -7,7 +7,7 @@ use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
-use crate::{AIError, StreamingUsageGuard, parse};
+use crate::{AIError, StreamingUsageGuard, parse, types};
 
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
@@ -21,6 +21,120 @@ fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> O
 	Some(budget_tokens.min(max_tokens - 1))
 }
 
+/// Client cache marks take precedence: when the request already has any, the policy adds none, so
+/// it can never place a default TTL mark ahead of a longer client TTL.
+pub fn apply_prompt_caching(
+	req: &mut types::messages::Request,
+	caching: &crate::PromptCachingConfig,
+) {
+	if has_cache_control(req) {
+		return;
+	}
+	let mark = |block: Option<&mut serde_json::Value>| {
+		if let Some(block) = block.and_then(serde_json::Value::as_object_mut) {
+			block.insert(
+				"cache_control".into(),
+				serde_json::json!({"type": "ephemeral"}),
+			);
+		}
+	};
+	if caching.cache_system
+		&& let Some(system) = &mut req.system
+		&& caching
+			.min_tokens
+			.is_none_or(|min| system_tokens(system) >= min)
+	{
+		mark(
+			system
+				.parts_mut()
+				.and_then(|parts| parts.last_mut())
+				.map(types::messages::TextPart::fields_mut),
+		);
+	}
+	if caching.cache_messages && req.messages.len() >= 2 {
+		let idx = (req.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+		// Thinking blocks cannot carry cache_control.
+		let last_cacheable = req.messages[idx]
+			.content
+			.as_mut()
+			.and_then(types::messages::ContentBlock::parts_mut)
+			.and_then(|parts| {
+				parts
+					.iter_mut()
+					.rev()
+					.map(types::messages::ContentPart::fields_mut)
+					.find(|block| {
+						!matches!(
+							block["type"].as_str(),
+							Some("thinking" | "redacted_thinking")
+						)
+					})
+			});
+		mark(last_cacheable);
+	}
+	// Deferred tools cannot carry cache_control, so mark the last tool that is loaded up front.
+	// https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool#prompt-caching
+	if caching.cache_tools
+		&& let Some(tool) = req
+			.tools
+			.iter_mut()
+			.flatten()
+			.rev()
+			.find(|tool| tool.rest["defer_loading"] != true)
+	{
+		tool.cache_control = Some(serde_json::json!({"type": "ephemeral"}));
+	}
+}
+
+/// Looks for cache_control only where the API accepts it, so a key with the same name inside tool
+/// inputs or schemas is not mistaken for a mark.
+fn has_cache_control(req: &types::messages::Request) -> bool {
+	let system = match &req.system {
+		Some(types::messages::TextBlock::Array(parts)) => parts
+			.iter()
+			.any(|part| has_nested_cache_control(part.fields())),
+		_ => false,
+	};
+	let content = req
+		.messages
+		.iter()
+		.filter_map(|message| match &message.content {
+			Some(types::messages::ContentBlock::Array(parts)) => Some(parts),
+			_ => None,
+		})
+		.flatten()
+		.any(|part| has_nested_cache_control(part.fields()));
+	let tools = req
+		.tools
+		.iter()
+		.flatten()
+		.any(|tool| tool.cache_control.is_some());
+	req.cache_control.is_some() || system || content || tools
+}
+
+fn has_nested_cache_control(value: &serde_json::Value) -> bool {
+	match value {
+		serde_json::Value::Array(blocks) => blocks.iter().any(has_nested_cache_control),
+		serde_json::Value::Object(block) => {
+			block.get("cache_control").is_some_and(|c| !c.is_null())
+				|| types::messages::cache_control_children(block)
+					.iter()
+					.filter_map(|field| block.get(*field))
+					.any(has_nested_cache_control)
+		},
+		_ => false,
+	}
+}
+
+fn system_tokens(system: &types::messages::TextBlock) -> usize {
+	match system {
+		types::messages::TextBlock::Text(text) => super::estimate_tokens([text.as_str()]),
+		types::messages::TextBlock::Array(parts) => {
+			super::estimate_tokens(parts.iter().filter_map(types::messages::TextPart::text))
+		},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -31,6 +145,126 @@ mod tests {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
 		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
+	}
+
+	fn apply(req: serde_json::Value, caching: &crate::PromptCachingConfig) -> serde_json::Value {
+		let mut req: types::messages::Request = serde_json::from_value(req).unwrap();
+		apply_prompt_caching(&mut req, caching);
+		serde_json::to_value(&req).unwrap()
+	}
+
+	#[test]
+	fn apply_prompt_caching_marks_system_history_and_tools() {
+		let caching = crate::PromptCachingConfig {
+			cache_tools: true,
+			min_tokens: None,
+			..Default::default()
+		};
+		let messages = apply(
+			serde_json::json!({
+				"model": "claude-sonnet-4",
+				"system": "You are helpful.",
+				"messages": [
+					{"role": "user", "content": "Hello"},
+					{"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
+					{"role": "user", "content": "How are you?"}
+				],
+				"tools": [
+					{"name": "get_weather", "input_schema": {"type": "object"}},
+					// Deferred tools cannot carry cache_control.
+					{"name": "get_time", "input_schema": {"type": "object"}, "defer_loading": true}
+				]
+			}),
+			&caching,
+		);
+		let completions: types::completions::Request = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4",
+			"messages": [
+				{"role": "system", "content": "You are helpful."},
+				{"role": "user", "content": "Hello"},
+				{"role": "assistant", "content": "Hi"},
+				{"role": "user", "content": "How are you?"}
+			],
+			"tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]
+		}))
+		.unwrap();
+		let completions: serde_json::Value = serde_json::from_slice(
+			&from_completions::translate(&completions, Some(&caching), None).unwrap(),
+		)
+		.unwrap();
+		let mark = serde_json::json!({"type": "ephemeral"});
+		for out in [messages, completions] {
+			assert_eq!(out["system"][0]["cache_control"], mark);
+			assert_eq!(out["messages"][1]["content"][0]["cache_control"], mark);
+			assert!(
+				out["messages"][2]["content"][0]
+					.get("cache_control")
+					.is_none()
+			);
+			assert_eq!(out["tools"][0]["cache_control"], mark);
+			assert!(out["tools"][1].get("cache_control").is_none());
+		}
+	}
+
+	#[test]
+	fn apply_prompt_caching_skips_short_system_prompt() {
+		let out = apply(
+			serde_json::json!({
+				"system": "You are helpful.",
+				"messages": [{"role": "user", "content": "Hello"}]
+			}),
+			&crate::PromptCachingConfig::default(),
+		);
+		assert_eq!(out["system"], "You are helpful.");
+	}
+
+	#[test]
+	fn apply_prompt_caching_defers_to_client_marks() {
+		let request = |system_mark: serde_json::Value| {
+			serde_json::json!({
+				"system": [{"type": "text", "text": "a", "cache_control": system_mark}],
+				"messages": [
+					{"role": "assistant", "content": [
+						{"type": "tool_use", "id": "t1", "name": "set", "input": {"cache_control": "on"}}
+					]},
+					{"role": "user", "content": "How are you?"}
+				]
+			})
+		};
+		let caching = crate::PromptCachingConfig {
+			min_tokens: None,
+			..Default::default()
+		};
+		let out = apply(
+			request(serde_json::json!({"type": "ephemeral", "ttl": "1h"})),
+			&caching,
+		);
+		assert_eq!(out["system"][0]["cache_control"]["ttl"], "1h");
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
+		// The cache_control key in the tool input is tool data, not a client mark.
+		let out = apply(request(serde_json::Value::Null), &caching);
+		assert_eq!(
+			out["messages"][0]["content"][0]["cache_control"],
+			serde_json::json!({"type": "ephemeral"})
+		);
+		// Marks nested inside other blocks count as client marks too.
+		let mut nested = request(serde_json::Value::Null);
+		nested["messages"][1]["content"] = serde_json::json!([{
+			"type": "search_result",
+			"source": "https://example.com",
+			"title": "Example",
+			"content": [{"type": "text", "text": "result", "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
+		}]);
+		let out = apply(nested, &caching);
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
 	}
 }
 
@@ -268,13 +502,106 @@ pub mod from_completions {
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(
 		req: &types::completions::Request,
+		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, catalog);
+		let mut xlated = translate_internal(typed, model_id, catalog);
+		if let Some(caching) = prompt_caching {
+			apply_prompt_caching(&mut xlated, caching);
+		}
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	fn apply_prompt_caching(req: &mut messages::Request, caching: &crate::PromptCachingConfig) {
+		if has_cache_control(req) {
+			return;
+		}
+		let mark = || Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
+		if caching.cache_system
+			&& let Some(messages::SystemPrompt::Text(text)) = &mut req.system
+			&& caching
+				.min_tokens
+				.is_none_or(|min| crate::conversion::estimate_tokens([text.as_str()]) >= min)
+		{
+			let text = std::mem::take(text);
+			req.system = Some(messages::SystemPrompt::Blocks(vec![
+				messages::SystemContentBlock::Text {
+					text,
+					cache_control: mark(),
+				},
+			]));
+		}
+		if caching.cache_messages && req.messages.len() >= 2 {
+			let idx = (req.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+			if let Some(cache_control) = req.messages[idx]
+				.content
+				.iter_mut()
+				.rev()
+				.find_map(content_cache_control)
+			{
+				*cache_control = mark();
+			}
+		}
+		if caching.cache_tools
+			&& let Some(tool) = req.tools.as_mut().and_then(|tools| tools.last_mut())
+		{
+			match tool {
+				messages::Tool::Custom(tool) => tool.cache_control = mark(),
+				messages::Tool::Server(tool) => tool.cache_control = mark(),
+			}
+		}
+	}
+
+	fn has_cache_control(req: &mut messages::Request) -> bool {
+		let system = matches!(&req.system, Some(messages::SystemPrompt::Blocks(blocks))
+			if blocks.iter().any(|messages::SystemContentBlock::Text { cache_control, .. }| cache_control.is_some()));
+		let content = req
+			.messages
+			.iter_mut()
+			.flat_map(|message| &mut message.content)
+			.any(|block| {
+				// Tool results translated from Completions only hold text parts.
+				let nested = matches!(block, messages::ContentBlock::ToolResult {
+					content: messages::ToolResultContent::Array(parts),
+					..
+				} if parts.iter().any(|part| matches!(part, messages::ToolResultContentPart::Text {
+					cache_control: Some(_),
+					..
+				})));
+				nested || content_cache_control(block).is_some_and(|c| c.is_some())
+			});
+		let tools = req
+			.tools
+			.iter()
+			.flatten()
+			.any(|tool| tool.cache_control().is_some());
+		system || content || tools
+	}
+
+	fn content_cache_control(
+		block: &mut messages::ContentBlock,
+	) -> Option<&mut Option<messages::CacheControlEphemeral>> {
+		match block {
+			messages::ContentBlock::Text(messages::ContentTextBlock { cache_control, .. })
+			| messages::ContentBlock::Image(messages::ContentImageBlock { cache_control, .. })
+			| messages::ContentBlock::Document(messages::ContentDocumentBlock {
+				cache_control, ..
+			})
+			| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+				cache_control,
+				..
+			})
+			| messages::ContentBlock::ToolUse { cache_control, .. }
+			| messages::ContentBlock::ToolResult { cache_control, .. }
+			| messages::ContentBlock::ServerToolUse { cache_control, .. }
+			| messages::ContentBlock::WebSearchToolResult { cache_control, .. } => Some(cache_control),
+			messages::ContentBlock::Thinking { .. }
+			| messages::ContentBlock::RedactedThinking { .. }
+			| messages::ContentBlock::Unknown => None,
+		}
 	}
 
 	fn translate_internal(
@@ -524,6 +851,7 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
+			cache_control: None,
 		}
 	}
 

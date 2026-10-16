@@ -482,13 +482,18 @@ fn apply_openai_moderation(
 
 fn render_anthropic_messages(
 	req: types::ChatRequest,
-	catalog: agent_llm::model_catalog::Catalog<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+			conversion::messages::from_completions::translate(&req, ctx.prompt_caching, ctx.catalog)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Messages(mut req) => {
+			if let Some(caching) = ctx.prompt_caching {
+				conversion::messages::apply_prompt_caching(&mut req, caching);
+			}
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
@@ -533,9 +538,13 @@ fn render_bedrock_converse(
 			ctx.prompt_caching,
 			ctx.catalog,
 		),
-		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers), ctx.catalog)
-		},
+		types::ChatRequest::Messages(req) => conversion::bedrock::from_messages::translate(
+			&req,
+			provider,
+			Some(ctx.headers),
+			ctx.prompt_caching,
+			ctx.catalog,
+		),
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
 			&req,
 			provider,
@@ -589,9 +598,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {

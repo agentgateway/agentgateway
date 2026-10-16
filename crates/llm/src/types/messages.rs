@@ -25,8 +25,21 @@ pub struct Request {
 	pub stream: Option<bool>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tools: Option<Vec<Tool>>,
+	/// Kept as raw JSON so fields we do not model (such as scope) pass through unchanged.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct Tool {
+	#[serde(flatten)]
+	pub rest: serde_json::Value,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
@@ -76,8 +89,74 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+/// Fields of a request block that hold nested blocks which may carry cache_control. Walking only
+/// these keeps a key with the same name inside tool inputs or schemas from being treated as a mark.
+pub(crate) fn cache_control_children(
+	block: &serde_json::Map<String, serde_json::Value>,
+) -> &'static [&'static str] {
+	match block.get("type").and_then(serde_json::Value::as_str) {
+		None if block.contains_key("role") => &["content"],
+		Some("tool_result" | "mcp_tool_result" | "search_result" | "content") => &["content"],
+		Some("document") => &["source"],
+		_ => &[],
+	}
+}
+
+impl TextBlock {
+	/// The blocks of this prompt, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<TextPart>> {
+		if let TextBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = TextBlock::Array(vec![TextPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			TextBlock::Array(parts) => Some(parts),
+			TextBlock::Text(_) => None,
+		}
+	}
+}
+
+impl ContentBlock {
+	/// The blocks of this content, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<ContentPart>> {
+		if let ContentBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = ContentBlock::Array(vec![ContentPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			ContentBlock::Array(parts) => Some(parts),
+			ContentBlock::Text(_) => None,
+		}
+	}
+}
+
 impl TextPart {
-	fn text(&self) -> Option<&str> {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn text(&self) -> Option<&str> {
 		match self {
 			TextPart::Text { text, .. } => Some(text),
 			TextPart::Unknown(_) => None,
@@ -100,6 +179,21 @@ impl TextPart {
 }
 
 impl ContentPart {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
 	fn text(&self) -> Option<&str> {
 		match self {
 			ContentPart::Text { text, .. } => Some(text),
@@ -1060,6 +1154,10 @@ pub mod typed {
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub output_config: Option<OutputConfig>,
+
+		/// Automatic caching: marks the last cacheable block of the request.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]

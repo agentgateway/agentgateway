@@ -687,10 +687,11 @@ spec:
                                         type: object
                                       promptCaching:
                                         description: |-
-                                          Automatic prompt caching for supported
-                                          providers, currently AWS Bedrock.
+                                          Automatic prompt caching for supported providers: Anthropic, Anthropic
+                                          models on Vertex AI, and AWS Bedrock (Claude 3+ and Nova models).
                                           Reduces API costs by caching static content like system prompts and tool definitions.
-                                          Only applicable for Bedrock Claude 3+ and Nova models.
+                                          Cache marks sent by the client take precedence: if a request already has any,
+                                          the policy adds none.
                                         properties:
                                           cacheMessageOffset:
                                             description: |-
@@ -714,12 +715,14 @@ spec:
                                             description: |-
                                               Enables caching for tool definitions. Defaults to false.
                                               Inserts a cache point after all tool specifications.
+                                              Ignored for Bedrock Nova models, which do not support caching tools.
                                             type: boolean
                                           minTokens:
                                             description: |-
                                               Minimum estimated token count
                                               before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
-                                              Defaults to 1024. Bedrock requires at least 1,024 tokens for caching to be effective.
+                                              Applies to system prompt caching. Defaults to 1024; most models require at least
+                                              1,024 tokens for caching to be effective.
                                             minimum: 0
                                             type: integer
                                         type: object
@@ -10500,10 +10503,11 @@ spec:
                         type: object
                       promptCaching:
                         description: |-
-                          Automatic prompt caching for supported
-                          providers, currently AWS Bedrock.
+                          Automatic prompt caching for supported providers: Anthropic, Anthropic
+                          models on Vertex AI, and AWS Bedrock (Claude 3+ and Nova models).
                           Reduces API costs by caching static content like system prompts and tool definitions.
-                          Only applicable for Bedrock Claude 3+ and Nova models.
+                          Cache marks sent by the client take precedence: if a request already has any,
+                          the policy adds none.
                         properties:
                           cacheMessageOffset:
                             description: |-
@@ -10527,12 +10531,14 @@ spec:
                             description: |-
                               Enables caching for tool definitions. Defaults to false.
                               Inserts a cache point after all tool specifications.
+                              Ignored for Bedrock Nova models, which do not support caching tools.
                             type: boolean
                           minTokens:
                             description: |-
                               Minimum estimated token count
                               before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
-                              Defaults to 1024. Bedrock requires at least 1,024 tokens for caching to be effective.
+                              Applies to system prompt caching. Defaults to 1024; most models require at least
+                              1,024 tokens for caching to be effective.
                             minimum: 0
                             type: integer
                         type: object

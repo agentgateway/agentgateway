@@ -41,6 +41,7 @@ const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
+const BEDROCK_PROMPT_CACHING: &str = "bedrock-prompt-caching";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
@@ -67,9 +68,12 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
-						BEDROCK
-					},
+					BEDROCK_TITAN
+					| BEDROCK_COHERE
+					| BEDROCK_NOVA
+					| BEDROCK_OPENAI
+					| BEDROCK_OPENAI_GPT
+					| BEDROCK_PROMPT_CACHING => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -216,7 +220,10 @@ mod requests {
 			&[COMPLETIONS, BEDROCK, RESPONSES],
 		),
 		("responses_agent_subset", &[RESPONSES]),
-		("tool_result_error", &[COMPLETIONS, RESPONSES]),
+		(
+			"tool_result_error",
+			&[COMPLETIONS, RESPONSES, BEDROCK_PROMPT_CACHING],
+		),
 		("citations", &[COMPLETIONS, RESPONSES]),
 		("unknown_content", &[COMPLETIONS, RESPONSES]),
 		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
@@ -235,6 +242,7 @@ mod requests {
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
 		("cache_control", &[BEDROCK, GEMINI]),
+		("cache_control_tool_outputs", &[BEDROCK]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -293,7 +301,7 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i, Some(&catalog))
+						conversion::messages::from_completions::translate(i, None, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
 						conversion::bedrock::from_completions::translate(
@@ -375,8 +383,44 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
+					BEDROCK_PROMPT_CACHING => test_request(
+						BEDROCK_PROMPT_CACHING,
+						&path,
+						|i: &mut types::messages::Request| {
+							let caching = crate::PromptCachingConfig {
+								cache_tools: true,
+								min_tokens: None,
+								..Default::default()
+							};
+							// Nova supports caching, but not on tool definitions.
+							i.model = Some("amazon.nova-pro-v1:0".to_string());
+							let nova: serde_json::Value = serde_json::from_slice(
+								&conversion::bedrock::from_messages::translate(
+									i,
+									&bedrock,
+									None,
+									Some(&caching),
+									None,
+								)?
+								.body,
+							)
+							.unwrap();
+							assert!(
+								nova["toolConfig"]["tools"]
+									.as_array()
+									.unwrap()
+									.iter()
+									.all(|tool| tool.get("cachePoint").is_none())
+							);
+							// The policy only marks models known to support caching.
+							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
+							conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
+								.map(|r| r.body)
+						},
+					),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)

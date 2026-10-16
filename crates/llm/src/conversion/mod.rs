@@ -9,6 +9,15 @@ pub mod systemone;
 pub mod vertex;
 pub mod vertex_gemini;
 
+/// Rough token estimate (words x 1.3) used for the promptCaching policy's minTokens.
+pub(crate) fn estimate_tokens<'a>(texts: impl IntoIterator<Item = &'a str>) -> usize {
+	let word_count: usize = texts
+		.into_iter()
+		.map(|t| t.split_whitespace().count())
+		.sum();
+	(word_count * 13) / 10
+}
+
 #[derive(Default)]
 struct ProviderUsage {
 	input_tokens: u64,
