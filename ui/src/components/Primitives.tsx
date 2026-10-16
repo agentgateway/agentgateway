@@ -700,7 +700,7 @@ export function Drawer(props: {
 	const missingFields = useRef(new Set<symbol>());
 	const lastErrors = useRef<{ value: unknown; errors: ConfigValueError[] } | null>(null);
 	const [checked, setChecked] = useState(false);
-	function formErrors() {
+	const formErrors = useCallback(() => {
 		const raw = rawRef.current;
 		if (!raw) return [];
 		const value = raw.value();
@@ -715,14 +715,13 @@ export function Drawer(props: {
 			};
 		}
 		return lastErrors.current.errors;
-	}
+	}, []);
 	const schemaPathKey = props.raw?.schemaPath.join('/');
-	// biome-ignore lint/correctness/useExhaustiveDependencies: formErrors reads refs; this changes with what it reports.
 	const fieldErrors = useMemo(
 		() =>
-			props.raw
+			schemaPathKey !== undefined && rawRef.current
 				? {
-						schemaPath: props.raw.schemaPath,
+						schemaPath: rawRef.current.schemaPath,
 						errors: () => (checked ? formErrors() : null),
 						register(path: string) {
 							fieldPaths.current.set(path, (fieldPaths.current.get(path) ?? 0) + 1);
@@ -735,7 +734,7 @@ export function Drawer(props: {
 						missing: missingFields.current
 					}
 				: null,
-		[checked, schemaPathKey]
+		[checked, formErrors, schemaPathKey]
 	);
 	function check() {
 		// Raw text is validated as it is edited.
