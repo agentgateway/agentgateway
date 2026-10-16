@@ -489,18 +489,15 @@ export function SegmentedControl<T extends string>(props: {
 	className?: string;
 }) {
 	return (
-		<div
+		<fieldset
 			className={['segmented-control', props.className].filter(Boolean).join(' ')}
-			role="radiogroup"
 			aria-label={props.ariaLabel}
 		>
 			{props.options.map(option => (
-				// biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<button
 					className={option.value === props.value ? 'active' : ''}
 					type="button"
-					role="radio"
-					aria-checked={option.value === props.value}
+					aria-pressed={option.value === props.value}
 					key={option.value}
 					onClick={() => props.onChange(option.value)}
 				>
@@ -508,7 +505,7 @@ export function SegmentedControl<T extends string>(props: {
 					{option.description ? <small>{option.description}</small> : null}
 				</button>
 			))}
-		</div>
+		</fieldset>
 	);
 }
 
@@ -819,7 +816,7 @@ export function Drawer(props: {
 
 	function trackButtonChange(event: ReactMouseEvent<HTMLElement>) {
 		const target = event.target as HTMLElement;
-		if (target.closest('[role="option"], [role="radio"], .segmented-control button, .choice-pill'))
+		if (target.closest('[role="option"], .segmented-control button, .choice-pill'))
 			setFormChanged(true);
 	}
 
