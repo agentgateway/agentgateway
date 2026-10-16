@@ -2113,7 +2113,42 @@ fn invalid_call_replay_request(input: serde_json::Value) -> serde_json::Value {
 fn assert_invalid_replay_pairing(body: &serde_json::Value) {
 	let messages = body["messages"].as_array().unwrap();
 	for (index, message) in messages.iter().enumerate() {
-		for block in message["content"].as_array().unwrap() {
+		let content = message["content"].as_array().unwrap();
+		if index > 0 {
+			assert_ne!(
+				messages[index - 1]["role"],
+				message["role"],
+				"Bedrock messages must alternate roles"
+			);
+		}
+		if content
+			.iter()
+			.any(|block| block.get("toolResult").is_some())
+		{
+			assert_eq!(message["role"], "user");
+			assert!(
+				content
+					.iter()
+					.all(|block| block.get("toolResult").is_some()),
+				"tool-result turns must not contain recovery text or other conversation blocks"
+			);
+		}
+		for block in content {
+			if let Some(tool_use) = block.get("toolUse") {
+				assert_eq!(message["role"], "assistant");
+				let next = &messages[index + 1];
+				assert_eq!(next["role"], "user");
+				let count = next["content"]
+					.as_array()
+					.unwrap()
+					.iter()
+					.filter(|b| b.get("toolResult").map(|r| &r["toolUseId"]) == Some(&tool_use["toolUseId"]))
+					.count();
+				assert_eq!(
+					count, 1,
+					"use must have exactly one result in the next turn"
+				);
+			}
 			if let Some(result) = block.get("toolResult") {
 				assert!(index > 0);
 				let previous = &messages[index - 1];
@@ -2154,47 +2189,118 @@ fn test_responses_invalid_arguments_preserve_mixed_parallel_pairing() {
 	for (invalid_first, invalid_output_first) in
 		[(false, false), (false, true), (true, false), (true, true)]
 	{
-		let valid = json!({"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{\"cmd\":\"echo ok\"}"});
-		let invalid = json!({"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""});
-		let mut input = vec![json!({"role": "user", "content": "hello"})];
-		input.extend(if invalid_first {
-			vec![invalid, valid]
-		} else {
-			vec![valid, invalid]
-		});
-		let valid_output = json!({"type": "function_call_output", "call_id": "ok", "output": "OK"});
-		let invalid_output =
-			json!({"type": "function_call_output", "call_id": "bad", "output": "EOF_PARSE_ERROR"});
-		input.extend(if invalid_output_first {
-			vec![invalid_output, valid_output]
-		} else {
-			vec![valid_output, invalid_output]
-		});
+		for continuation in [
+			vec![],
+			vec![json!({"role": "user", "content": "continue"})],
+			vec![
+				json!({"type": "function_call", "call_id": "retry", "name": "shell", "arguments": "{}"}),
+				json!({"type": "function_call_output", "call_id": "retry", "output": "RECOVERED"}),
+			],
+		] {
+			let valid = json!({"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{\"cmd\":\"echo ok\"}"});
+			let invalid = json!({"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""});
+			let mut input = vec![json!({"role": "user", "content": "hello"})];
+			input.extend(if invalid_first {
+				vec![invalid, valid]
+			} else {
+				vec![valid, invalid]
+			});
+			let valid_output = json!({"type": "function_call_output", "call_id": "ok", "output": "OK"});
+			let invalid_output =
+				json!({"type": "function_call_output", "call_id": "bad", "output": "EOF_PARSE_ERROR"});
+			input.extend(if invalid_output_first {
+				vec![invalid_output, valid_output]
+			} else {
+				vec![valid_output, invalid_output]
+			});
+			input.extend(continuation);
+			let body = invalid_call_replay_request(json!(input));
+			assert_invalid_replay_pairing(&body);
+			let messages = body["messages"].as_array().unwrap();
+			assert_eq!(messages[1]["role"], "assistant");
+			assert_eq!(
+				messages[1]["content"]
+					.as_array()
+					.unwrap()
+					.iter()
+					.filter(|block| block.get("toolUse").is_some())
+					.count(),
+				1
+			);
+			assert_eq!(messages[2]["content"].as_array().unwrap().len(), 1);
+			assert_eq!(messages[2]["content"][0]["toolResult"]["toolUseId"], "ok");
+			assert_eq!(messages[3]["role"], "assistant");
+			assert_eq!(messages[4]["role"], "user");
+			assert_eq!(
+				messages[4]["content"][0]["text"],
+				"The unexecuted function call returned this error: EOF_PARSE_ERROR"
+			);
+		}
+	}
+}
+
+#[test]
+fn test_responses_invalid_arguments_keep_entire_parallel_output_group_together() {
+	let valid_output = json!({"type": "function_call_output", "call_id": "ok", "output": "OK"});
+	let custom_output =
+		json!({"type": "custom_tool_call_output", "call_id": "custom", "output": "CUSTOM_OK"});
+	let invalid_output = json!({"type": "function_call_output", "call_id": "bad", "output": [{"type": "input_text", "text": "EOF_PARSE_ERROR"}]});
+	for outputs in [
+		vec![
+			valid_output.clone(),
+			invalid_output.clone(),
+			custom_output.clone(),
+		],
+		vec![
+			invalid_output.clone(),
+			custom_output.clone(),
+			valid_output.clone(),
+		],
+		vec![custom_output, valid_output, invalid_output],
+	] {
+		let mut input = vec![
+			json!({"role": "user", "content": "hello"}),
+			json!({"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{}"}),
+			json!({"type": "function_call", "call_id": "bad", "name": "shell", "arguments": "{\"cmd\":\""}),
+			json!({"type": "custom_tool_call", "id": "ctc_custom", "call_id": "custom", "name": "shell", "input": "echo custom"}),
+		];
+		input.extend(outputs);
 		let body = invalid_call_replay_request(json!(input));
 		assert_invalid_replay_pairing(&body);
-		let blocks = body["messages"]
-			.as_array()
-			.unwrap()
-			.iter()
-			.flat_map(|m| m["content"].as_array().unwrap())
-			.collect::<Vec<_>>();
+		let messages = body["messages"].as_array().unwrap();
+		assert_eq!(messages.len(), 5);
+		assert_eq!(messages[2]["content"].as_array().unwrap().len(), 2);
 		assert_eq!(
-			blocks.iter().filter(|b| b.get("toolUse").is_some()).count(),
-			1
-		);
-		assert_eq!(
-			blocks
-				.iter()
-				.filter(|b| b.get("toolResult").is_some())
-				.count(),
-			1
-		);
-		assert!(
-			serde_json::to_string(&body)
-				.unwrap()
-				.contains("EOF_PARSE_ERROR")
+			messages[4]["content"][0]["text"],
+			"The unexecuted function call returned this error: EOF_PARSE_ERROR"
 		);
 	}
+}
+
+#[test]
+fn test_responses_invalid_arguments_preserve_multiple_recovery_diagnostics() {
+	let body = invalid_call_replay_request(json!([
+		{"role": "user", "content": "hello"},
+		{"type": "function_call", "call_id": "ok", "name": "shell", "arguments": "{}"},
+		{"type": "function_call", "call_id": "bad1", "name": "shell", "arguments": "{"},
+		{"type": "function_call", "call_id": "bad2", "name": "shell", "arguments": "{"},
+		{"type": "function_call_output", "call_id": "bad1", "output": "FIRST_ERROR"},
+		{"type": "function_call_output", "call_id": "ok", "output": "OK"},
+		{"type": "function_call_output", "call_id": "bad2", "output": "SECOND_ERROR"}
+	]));
+	assert_invalid_replay_pairing(&body);
+	let messages = body["messages"].as_array().unwrap();
+	assert_eq!(messages.len(), 5);
+	assert_eq!(messages[2]["content"].as_array().unwrap().len(), 1);
+	assert_eq!(messages[4]["content"].as_array().unwrap().len(), 2);
+	assert_eq!(
+		messages[4]["content"][0]["text"],
+		"The unexecuted function call returned this error: FIRST_ERROR"
+	);
+	assert_eq!(
+		messages[4]["content"][1]["text"],
+		"The unexecuted function call returned this error: SECOND_ERROR"
+	);
 }
 
 #[test]
