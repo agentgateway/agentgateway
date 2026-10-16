@@ -15,8 +15,8 @@ use super::{
 use crate::http::auth::BackendAuthError;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::oauth::{
-	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
-	encode_client_secret_basic, format_token_endpoint_error_body,
+	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_CLIENT_CREDENTIALS, GRANT_TYPE_JWT_BEARER,
+	GRANT_TYPE_TOKEN_EXCHANGE, encode_client_secret_basic, format_token_endpoint_error_body,
 };
 use crate::http::{self, Body};
 use crate::json;
@@ -360,6 +360,11 @@ fn build_token_request_form(
 			ser
 				.append_pair("grant_type", GRANT_TYPE_JWT_BEARER)
 				.append_pair("assertion", subject_token);
+		},
+		OAuthGrantType::ClientCredentials => {
+			// RFC 6749 §4.4 carries no subject token; the gateway's own client_auth
+			// (appended below) is the whole credential.
+			ser.append_pair("grant_type", GRANT_TYPE_CLIENT_CREDENTIALS);
 		},
 	}
 	for audience in spec.audiences {
