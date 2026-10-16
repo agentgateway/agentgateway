@@ -1067,7 +1067,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, a key is generated when the config file or database is writable.\nSet to `disabled` to leave sessions unencrypted.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },

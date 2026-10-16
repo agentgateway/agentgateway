@@ -90,7 +90,7 @@
 |`config.histograms`|enum|Histogram representation to collect. Native histograms are exposed only through the<br>Prometheus protobuf format. Defaults to classic.<br>Possible values: `classic`, `native`, `both`.|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|
-|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, a key is generated when the config file or database is writable.<br>Set to `disabled` to leave sessions unencrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.mcp`|object|MCP gateway settings.|
 |`config.mcp.sessionTtl`|string|Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.|
 |`config.sensitiveHeaders`|[]string|Additional request headers whose values should be redacted from trace and debug output.|

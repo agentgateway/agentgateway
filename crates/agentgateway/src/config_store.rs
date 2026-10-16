@@ -8,7 +8,7 @@ use sqlx::postgres::PgListener;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Sqlite, SqlitePool, Transaction};
 use tokio::sync::watch;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::database::DatabasePool;
 use crate::telemetry::log_store;
@@ -89,6 +89,8 @@ pub enum ConfigResourceKind {
 	UiPolicy,
 	#[serde(rename = "frontend.policy")]
 	FrontendPolicy,
+	#[serde(rename = "session.key")]
+	SessionKey,
 }
 
 impl ConfigResourceKind {
@@ -117,6 +119,7 @@ impl ConfigResourceKind {
 			Self::TrafficTcpRoute => "traffic.tcpRoute",
 			Self::UiPolicy => "ui.policy",
 			Self::FrontendPolicy => "frontend.policy",
+			Self::SessionKey => "session.key",
 		}
 	}
 }
@@ -147,6 +150,7 @@ impl FromStr for ConfigResourceKind {
 			"traffic.tcpRoute" => Ok(Self::TrafficTcpRoute),
 			"ui.policy" => Ok(Self::UiPolicy),
 			"frontend.policy" => Ok(Self::FrontendPolicy),
+			"session.key" => Ok(Self::SessionKey),
 			_ => Err(ConfigResourceError::InvalidRequest(format!(
 				"unsupported config resource kind: {kind}"
 			))),
@@ -165,6 +169,11 @@ pub struct ConfigResourceUpsertRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourceUpsert {
 	pub value: Value,
+}
+
+/// Generates a random AES-256-GCM key, hex encoded.
+pub fn generate_session_key() -> anyhow::Result<String> {
+	Ok(hex::encode(crate::crypto::rand::bytes(32)?))
 }
 
 pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
@@ -228,6 +237,45 @@ impl ConfigResourceStore {
 
 	pub fn subscribe_changes(&self) -> watch::Receiver<()> {
 		self.change_tx.subscribe()
+	}
+
+	/// Returns the stored session key, generating and storing one if none exists yet.
+	pub async fn session_key(&self) -> anyhow::Result<String> {
+		loop {
+			let snapshot = self.snapshot(Some(ConfigResourceKind::SessionKey)).await?;
+			if let Some(key) = snapshot
+				.resources
+				.first()
+				.and_then(|r| r.value.get("key"))
+				.and_then(Value::as_str)
+			{
+				return Ok(key.to_string());
+			}
+			let key = generate_session_key()?;
+			let prepared = PreparedResource {
+				kind: ConfigResourceKind::SessionKey,
+				id: "default".to_string(),
+				value: serde_json::json!({ "key": key }),
+			};
+			match self
+				.upsert_prepared(vec![prepared], Some(snapshot.generation))
+				.await
+			{
+				Ok(_) => {
+					info!(
+						"generated a session key and stored it in the database; we recommend setting SESSION_KEY instead"
+					);
+					return Ok(key);
+				},
+				// Another writer (possibly another replica generating its own key) won; re-read.
+				Err(err)
+					if matches!(
+						err.downcast_ref(),
+						Some(ConfigResourceError::GenerationConflict { .. })
+					) => {},
+				Err(err) => return Err(err),
+			}
+		}
 	}
 
 	pub async fn list(
@@ -452,7 +500,8 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::ModelCatalog
 		| ConfigResourceKind::LlmApiKey
 		| ConfigResourceKind::McpSettings
-		| ConfigResourceKind::LlmSettings => None,
+		| ConfigResourceKind::LlmSettings
+		| ConfigResourceKind::SessionKey => None,
 	}
 }
 
@@ -500,6 +549,7 @@ pub(crate) fn upsert_file_config_resource(
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			upsert_file_settings(config, prepared.kind, &prepared.value)
 		},
+		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -531,6 +581,7 @@ pub(crate) fn delete_file_config_resource(
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			delete_file_settings(config, kind)
 		},
+		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -763,6 +814,13 @@ fn delete_file_api_key(config: &mut Value, id: &str) -> anyhow::Result<bool> {
 }
 
 /// Projects the singleton surface settings resource onto its top-level fields.
+fn session_key_file_error() -> anyhow::Error {
+	ConfigResourceError::InvalidRequest(
+		"session.key is stored in the database; use config.session.key in file mode".to_string(),
+	)
+	.into()
+}
+
 fn upsert_file_settings(
 	config: &mut Value,
 	kind: ConfigResourceKind,
@@ -1454,7 +1512,7 @@ pub(crate) fn prepare_resource(
 
 fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String> {
 	match kind {
-		ConfigResourceKind::ModelCatalog => Ok("default".to_string()),
+		ConfigResourceKind::ModelCatalog | ConfigResourceKind::SessionKey => Ok("default".to_string()),
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => Ok("default".to_string()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmVirtualModel

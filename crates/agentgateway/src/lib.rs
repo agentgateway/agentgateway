@@ -427,7 +427,8 @@ pub struct RawHBONE {
 #[apply(schema_de!)]
 pub struct RawSession {
 	/// The AES-256-GCM session protection key to be used for session tokens.
-	/// If not set, sessions will not be encrypted.
+	/// If not set, a key is generated when the config file or database is writable.
+	/// Set to `disabled` to leave sessions unencrypted.
 	/// For example, generated via `openssl rand -hex 32`.
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(serialize_with = "ser_redact", deserialize_with = "deser_key")]
@@ -721,6 +722,9 @@ pub struct Config {
 	pub proxy_metadata: ProxyMetadata,
 	pub threading_mode: ThreadingMode,
 	pub session_encoder: http::sessionpersistence::Encoder,
+	/// True when neither SESSION_KEY nor config.session.key is set, so a key may be generated.
+	#[serde(skip)]
+	pub session_key_unset: bool,
 	/// Runtime cookie/session crypto for browser OIDC flows.
 	pub oidc_cookie_encoder: Option<http::sessionpersistence::Encoder>,
 	/// Handle for tasks/spans emitted on the admin runtime.
