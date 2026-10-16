@@ -150,6 +150,15 @@ pub mod from_messages {
 		stop_sequence_from_fields([rest.get("stop_reason"), rest.get("matched_stop")])
 	}
 
+	// Prefer `reasoning_content` when it's non-null, even if empty; otherwise fall back to `reasoning`.
+	// Some providers send both fields, so this can't be a serde alias.
+	fn response_reasoning<'a>(
+		reasoning_content: Option<&'a str>,
+		extra: Option<&'a Value>,
+	) -> Option<&'a str> {
+		reasoning_content.or_else(|| extra?.get("reasoning")?.as_str())
+	}
+
 	pub(crate) fn translate_response_internal(
 		resp: completions::Response,
 	) -> Result<messages::MessagesResponse, AIError> {
@@ -171,7 +180,12 @@ pub mod from_messages {
 		// Engines report reasoning beside the text; the Messages contract puts it first. A turn whose
 		// reasoning text is withheld carries the signature alone, so the signature is enough to send
 		// the block: it is what the next turn has to replay.
-		let thinking = choice.message.reasoning_content.unwrap_or_default();
+		let thinking = response_reasoning(
+			choice.message.reasoning_content.as_deref(),
+			choice.message.extra.as_ref(),
+		)
+		.unwrap_or_default()
+		.to_owned();
 		let signature = choice.message.reasoning_signature.unwrap_or_default();
 		if !thinking.is_empty() || !signature.is_empty() {
 			content.push(messages::ContentBlock::Thinking {
@@ -634,11 +648,11 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(thinking) = choice
-							.delta
-							.reasoning_content
-							.as_deref()
-							.filter(|s| !s.is_empty())
+						if let Some(thinking) = response_reasoning(
+							choice.delta.reasoning_content.as_deref(),
+							choice.delta.extra.as_ref(),
+						)
+						.filter(|s| !s.is_empty())
 						{
 							let index = open_thinking_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
