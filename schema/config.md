@@ -737,7 +737,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom`|object||
@@ -947,7 +947,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -2293,7 +2293,7 @@
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.provider.copilot`|object||
 |`backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.provider.custom`|object||
@@ -2503,7 +2503,7 @@
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`backends[].ai.groups[].providers[].provider.copilot`|object||
 |`backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.custom`|object||
@@ -3427,7 +3427,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.custom`|object||
@@ -3637,7 +3637,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom`|object||
@@ -5050,7 +5050,7 @@
 |`routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routes[].backends[].ai.provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routes[].backends[].ai.provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routes[].backends[].ai.provider.copilot`|object||
 |`routes[].backends[].ai.provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.custom`|object||
@@ -5260,7 +5260,7 @@
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceType`|enum|The type of Azure endpoint. Determines the host suffix.<br>Possible values: `openAI`, `foundry`, `aiServices`.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.apiVersion`|string|Azure API version query parameter for the endpoint.|
-|`routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name, required when `resourceType` is `foundry`.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
+|`routes[].backends[].ai.groups[].providers[].provider.azure.projectName`|string|The Foundry project name for project-scoped OpenAI-compatible APIs.<br>Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.<br>This is distinct from `resourceName` which is used for the host.|
 |`routes[].backends[].ai.groups[].providers[].provider.copilot`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.copilot.model`|string|Model ID to send to GitHub Copilot, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom`|object||

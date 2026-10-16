@@ -1021,11 +1021,12 @@ impl AIProvider {
 				}
 			},
 			AIProvider::Azure(p) => {
-				let mut formats = vec![Completions, Responses, Embeddings, Rerank];
-				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
-					&& p.is_anthropic_model(request_model)
-				{
-					formats.extend([Messages, AnthropicTokenCount]);
+				let mut formats = vec![Completions, Embeddings, Rerank, Responses];
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry) {
+					formats.push(SystemOne);
+					if p.is_anthropic_model(request_model) {
+						formats.extend([AnthropicTokenCount, Messages]);
+					}
 				}
 				formats
 			},
@@ -1239,7 +1240,7 @@ impl AIProvider {
 				let endpoint = p.resolve_endpoint(route_type, None, None);
 				Target::Hostname(p.get_host(route_type, endpoint), 443)
 			},
-			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
+			AIProvider::Azure(p) => Target::Hostname(p.get_host(route_type), 443),
 			AIProvider::Custom(_) => return None,
 		})
 	}
@@ -1569,7 +1570,7 @@ impl AIProvider {
 			AIProvider::Anthropic(_) => Authority::from_static(anthropic::DEFAULT_HOST_STR),
 			AIProvider::Gemini(_) => Authority::from_static(gemini::DEFAULT_HOST_STR),
 			AIProvider::Vertex(provider) => Authority::from_str(&provider.get_host(route_type))?,
-			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
+			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host(route_type))?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
 				let endpoint = bedrock_endpoint.expect("setup_request resolves the Bedrock endpoint");

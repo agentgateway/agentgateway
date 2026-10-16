@@ -9654,7 +9654,7 @@
           ]
         },
         "projectName": {
-          "description": "The Foundry project name, required when `resourceType` is `foundry`.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
+          "description": "The Foundry project name for project-scoped OpenAI-compatible APIs.\nUsed to construct paths: `/api/projects/{projectName}/openai/v1/...`.\nThis is distinct from `resourceName` which is used for the host.",
           "type": [
             "string",
             "null"
@@ -9676,12 +9676,12 @@
           "const": "openAI"
         },
         {
-          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "description": "Azure AI Foundry: project endpoints at `{resourceName}.services.ai.azure.com`,\nor resource-level SystemOne at `{resourceName}.cognitiveservices.azure.com`.\nUses `project_name` for paths like `/api/projects/{project}/openai/v1/...`.",
           "type": "string",
           "const": "foundry"
         },
         {
-          "description": "Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`\nRequires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`",
+          "description": "Azure AI Foundry: project endpoints at `{resourceName}.services.ai.azure.com`,\nor resource-level SystemOne at `{resourceName}.cognitiveservices.azure.com`.\nUses `project_name` for paths like `/api/projects/{project}/openai/v1/...`.",
           "type": "string",
           "const": "aiServices"
         }

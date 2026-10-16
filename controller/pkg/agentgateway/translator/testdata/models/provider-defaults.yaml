@@ -19,6 +19,24 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
+  name: azure-foundry
+  namespace: default
+spec:
+  azure:
+    projectName: test-project
+    resourceName: example
+    resourceType: Foundry
+  match:
+    model: deployment-alias
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-only
+  provider: Azure
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
   name: bedrock
   namespace: default
 spec:
@@ -58,6 +76,23 @@ spec:
 ---
 # Output
 output:
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - azure:
+              projectName: test-project
+              resourceName: example
+              resourceType: FOUNDRY
+            name: backend
+      key: default/azure-foundry/backend.llm
+      name:
+        name: azure-foundry
+        namespace: default
 - gateway:
     Name: llm-only
     Namespace: default
@@ -129,6 +164,19 @@ output:
     modelRoute:
       concreteModel:
         backend:
+          backend: default/azure-foundry/backend.llm
+        discoveryProvider: azure
+      key: default/azure-foundry.llm
+      listenerKey: default/llm-only.llm
+      match:
+        model: deployment-alias
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
           backend: default/bedrock/backend.llm
         discoveryProvider: aws.bedrock
       key: default/bedrock.llm
@@ -162,6 +210,31 @@ output:
       match:
         model: vertexai
 status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: azure-foundry
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: llm-only
+        namespace: default
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayModel
   metadata:
@@ -257,7 +330,7 @@ status:
       status: "True"
       type: Programmed
     listeners:
-    - attachedRoutes: 3
+    - attachedRoutes: 4
       conditions:
       - lastTransitionTime: fake
         message: No errors found
