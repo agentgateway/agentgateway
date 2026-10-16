@@ -3547,7 +3547,7 @@ fn azure_decisions_capability(
 }
 
 #[tokio::test]
-async fn azure_foundry_decisions_uses_systemone_with_deployment_alias() {
+async fn azure_foundry_uses_systemone_with_deployment_alias() {
 	let provider = AIProvider::azure(azure::Provider {
 		api_version: None,
 		model_override: Some(strng::new("deployment-alias")),
@@ -3555,6 +3555,8 @@ async fn azure_foundry_decisions_uses_systemone_with_deployment_alias() {
 		resource_name: strng::new("example"),
 		resource_type: azure::AzureResourceType::Foundry,
 	});
+
+	// Decisions translates the body to SystemOne and applies the deployment alias.
 	let req = ::http::Request::builder()
 		.uri("/v1/decisions")
 		.header(::http::header::CONTENT_TYPE, "application/json")
@@ -3585,6 +3587,31 @@ async fn azure_foundry_decisions_uses_systemone_with_deployment_alias() {
 	));
 	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
 	assert_eq!(body["model"], "deployment-alias");
+
+	// Native SystemOne preserves the body while applying the same deployment alias.
+	let mut native_body = body.clone();
+	native_body["model"] = json!("foundry-decision");
+	let req = ::http::Request::builder()
+		.uri("/v1/systemone")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&native_body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Foundry SystemOne should forward natively")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(llm_request.provider_state.is_none());
+	let native_body: Value =
+		serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(native_body, body);
 }
 
 #[test]
