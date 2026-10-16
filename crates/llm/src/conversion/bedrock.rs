@@ -1290,7 +1290,7 @@ pub mod from_completions {
 						// Emit the start of a tool call
 						let d = completions::StreamResponseDelta {
 							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-								index: tool_index,
+								index: Some(tool_index),
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
@@ -1368,7 +1368,7 @@ pub mod from_completions {
 								) {
 									json_buffer.push_str(&tu.input);
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: tool_index,
+										index: Some(tool_index),
 										id: None, // Only sent in the first chunk
 										r#type: None,
 										function: Some(completions::FunctionCallStream {

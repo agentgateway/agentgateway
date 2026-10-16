@@ -1428,7 +1428,7 @@ pub mod to_completions {
 				let idx = self.tool_index;
 				self.tool_index += 1;
 				tool_calls.push(completions::ChatCompletionMessageToolCallChunk {
-					index: idx,
+					index: Some(idx),
 					id: Some(join_tool_call_id(
 						tool_call_id(call.id, &id, idx),
 						call.thought_signature,
@@ -1591,7 +1591,9 @@ pub mod to_completions {
 						if let Some(calls) = &choice.delta.tool_calls {
 							for call in calls {
 								if let Some(tool_calls) = tool_calls.as_mut() {
-									let entry = tool_calls.entry(call.index).or_default();
+									let entry = tool_calls
+										.entry(call.index.expect("native tool call chunks carry an index"))
+										.or_default();
 									if let Some(id) = &call.id {
 										entry.0 = Some(id.clone());
 									}

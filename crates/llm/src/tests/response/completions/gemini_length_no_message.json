@@ -1,0 +1,21 @@
+{
+  "choices": [
+    {
+      "finish_reason": "length",
+      "index": 0,
+      "logprobs": null
+    }
+  ],
+  "model": "google/gemini-3.8-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens_details": {
+      "reasoning_tokens": 29
+    },
+    "prompt_tokens": 8509,
+    "prompt_tokens_details": {
+      "cached_tokens": 4061
+    },
+    "total_tokens": 8538
+  }
+}
