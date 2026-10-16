@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-14T21:14:36Z"
+    "generatedAt": "2026-10-16T08:35:39Z"
   },
   "providers": {
     "anthropic": {
@@ -15938,6 +15938,41 @@
             ]
           }
         },
+        "stepfun-ai/Step-5-Preview": {
+          "name": "Step 5 Preview",
+          "released": "2026-09-16",
+          "rates": {
+            "input": "1",
+            "output": "2.7",
+            "cacheRead": "0.05"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 1000000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
         "tencent/Hy4-preview": {
           "name": "Hy4 preview",
           "released": "2026-08-28",
@@ -16610,6 +16645,42 @@
               "low",
               "medium",
               "high"
+            ]
+          }
+        },
+        "accounts/fireworks/models/muse-spark-open": {
+          "name": "Muse Spark Open",
+          "released": "2026-10-15",
+          "rates": {
+            "input": "1.25",
+            "output": "4.25",
+            "cacheRead": "0.15"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
             ]
           }
         },
