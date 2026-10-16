@@ -390,13 +390,33 @@ mod requests {
 						BEDROCK_PROMPT_CACHING,
 						&path,
 						|i: &mut types::messages::Request| {
-							// The policy only marks models known to support caching.
-							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
 							let caching = crate::PromptCachingConfig {
 								cache_tools: true,
 								min_tokens: None,
 								..Default::default()
 							};
+							// Nova supports caching, but not on tool definitions.
+							i.model = Some("amazon.nova-pro-v1:0".to_string());
+							let nova: serde_json::Value = serde_json::from_slice(
+								&conversion::bedrock::from_messages::translate(
+									i,
+									&bedrock,
+									None,
+									Some(&caching),
+									None,
+								)?
+								.body,
+							)
+							.unwrap();
+							assert!(
+								nova["toolConfig"]["tools"]
+									.as_array()
+									.unwrap()
+									.iter()
+									.all(|tool| tool.get("cachePoint").is_none())
+							);
+							// The policy only marks models known to support caching.
+							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
 							conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
 								.map(|r| r.body)
 						},

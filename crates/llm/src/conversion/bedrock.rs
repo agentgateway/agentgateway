@@ -2591,6 +2591,7 @@ pub mod from_responses {
 	fn tool_output_text(
 		parts: &[responses::InputContent],
 	) -> (String, Option<responses::PromptCacheBreakpointConfig>) {
+		// TODO: cache non-text tool output parts if/when we support proxying them to Bedrock.
 		let texts = parts.iter().filter_map(|part| match part {
 			responses::InputContent::InputText(text) => Some(text),
 			_ => None,
@@ -3976,6 +3977,12 @@ mod helpers {
 		fn cache_point(self) -> Option<bedrock::CachePointBlock>;
 	}
 
+	impl CachePoint for bedrock::CachePointBlock {
+		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
+			Some(self)
+		}
+	}
+
 	impl CachePoint for Option<&PromptCacheBreakpointParam> {
 		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
 			self.map(|_| create_cache_point())
@@ -4065,23 +4072,13 @@ mod helpers {
 		}
 	}
 
-	fn count_cache_points(req: &bedrock::ConverseRequest) -> usize {
-		let system = req
-			.system
-			.iter()
-			.flatten()
-			.filter(|b| matches!(b, bedrock::SystemContentBlock::CachePoint { .. }));
-		let messages = req
-			.messages
-			.iter()
-			.flat_map(|m| &m.content)
-			.filter(|b| matches!(b, bedrock::ContentBlock::CachePoint(_)));
-		let tools = req
-			.tool_config
-			.iter()
-			.flat_map(|t| &t.tools)
-			.filter(|t| matches!(t, bedrock::Tool::CachePoint(_)));
-		system.count() + messages.count() + tools.count()
+	fn has_cache_point(req: &bedrock::ConverseRequest) -> bool {
+		let mut system = req.system.iter().flatten();
+		let mut messages = req.messages.iter().flat_map(|m| &m.content);
+		let mut tools = req.tool_config.iter().flat_map(|t| &t.tools);
+		system.any(|b| matches!(b, bedrock::SystemContentBlock::CachePoint { .. }))
+			|| messages.any(|b| matches!(b, bedrock::ContentBlock::CachePoint(_)))
+			|| tools.any(|t| matches!(t, bedrock::Tool::CachePoint(_)))
 	}
 
 	pub fn apply_prompt_caching(
@@ -4090,20 +4087,13 @@ mod helpers {
 	) {
 		let supports_caching = supports_prompt_caching(&req.model_id);
 		tracing::debug!(
-			"Prompt caching policy: {:?}, model: {}, supports caching: {}",
-			(
-				caching.cache_system,
-				caching.cache_messages,
-				caching.cache_tools
-			),
-			req.model_id,
-			supports_caching
+			?caching,
+			model = req.model_id,
+			supports_caching,
+			"prompt caching policy"
 		);
-		if !supports_caching {
-			return;
-		}
 		// Client cache points take precedence over the policy.
-		if count_cache_points(req) > 0 {
+		if !supports_caching || has_cache_point(req) {
 			return;
 		}
 		if caching.cache_system
@@ -4117,7 +4107,10 @@ mod helpers {
 		if caching.cache_messages {
 			insert_message_cache_point(&mut req.messages, caching.cache_message_offset);
 		}
+		// Nova models do not support cache points in tool definitions.
+		// https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 		if caching.cache_tools
+			&& !req.model_id.to_lowercase().contains("amazon.nova")
 			&& let Some(tool_config) = &mut req.tool_config
 			&& !tool_config.tools.is_empty()
 		{
@@ -4178,15 +4171,12 @@ mod helpers {
 
 		// Clamp so the index never goes below 0
 		let target_idx = (len - 2).saturating_sub(offset);
-		if matches!(
-			messages[target_idx].content.last(),
-			Some(bedrock::ContentBlock::CachePoint(_))
-		) {
-			return;
-		}
-		messages[target_idx]
-			.content
-			.push(bedrock::ContentBlock::CachePoint(create_cache_point()));
+		// The policy only runs when the request has no cache points, so the limit cannot be hit here.
+		insert_cache_point_on_prefix(
+			&mut messages[target_idx].content,
+			create_cache_point(),
+			&mut 0,
+		);
 
 		tracing::debug!(
 			"Inserted cachePoint in message at index {} (offset={})",

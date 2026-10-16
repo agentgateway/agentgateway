@@ -279,42 +279,34 @@ fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
 }
 
 /// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
-/// Only fields where the API accepts cache_control are touched, so tool data is left as is.
+/// Only fields where the API accepts cache_control are walked, so tool data is left as is.
 fn remove_cache_control_scope(body: &mut Map<String, Value>) {
 	if let Some(Value::Object(cache_control)) = body.get_mut("cache_control") {
 		cache_control.remove("scope");
 	}
-	for key in ["tools", "system"] {
-		body
-			.get_mut(key)
-			.and_then(Value::as_array_mut)
-			.into_iter()
-			.flatten()
-			.for_each(remove_block_scope);
-	}
-	let content = body
-		.get_mut("messages")
-		.and_then(Value::as_array_mut)
-		.into_iter()
-		.flatten()
-		.filter_map(|message| message.get_mut("content")?.as_array_mut())
-		.flatten();
-	for block in content {
-		if block["type"] == "tool_result" {
-			block
-				.get_mut("content")
-				.and_then(Value::as_array_mut)
-				.into_iter()
-				.flatten()
-				.for_each(remove_block_scope);
+	for field in ["system", "tools", "messages"] {
+		if let Some(value) = body.get_mut(field) {
+			remove_nested_cache_control_scope(value);
 		}
-		remove_block_scope(block);
 	}
 }
 
-fn remove_block_scope(block: &mut Value) {
-	if let Some(Value::Object(cache_control)) = block.get_mut("cache_control") {
-		cache_control.remove("scope");
+fn remove_nested_cache_control_scope(value: &mut Value) {
+	match value {
+		Value::Array(blocks) => blocks
+			.iter_mut()
+			.for_each(remove_nested_cache_control_scope),
+		Value::Object(block) => {
+			if let Some(Value::Object(cache_control)) = block.get_mut("cache_control") {
+				cache_control.remove("scope");
+			}
+			for field in crate::types::messages::cache_control_children(block) {
+				if let Some(value) = block.get_mut(*field) {
+					remove_nested_cache_control_scope(value);
+				}
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -716,6 +708,25 @@ mod tests {
 					"id": "t2",
 					"name": "set",
 					"input": {"cache_control": {"scope": "user data"}}
+				}, {
+					"type": "search_result",
+					"source": "https://example.com",
+					"title": "Example",
+					"content": [{
+						"type": "text",
+						"text": "result",
+						"cache_control": {"type": "ephemeral", "scope": "turn"}
+					}]
+				}, {
+					"type": "document",
+					"source": {
+						"type": "content",
+						"content": [{
+							"type": "text",
+							"text": "doc",
+							"cache_control": {"type": "ephemeral", "scope": "turn"}
+						}]
+					}
 				}]
 			}]
 		}))
@@ -734,6 +745,16 @@ mod tests {
 				.is_none()
 		);
 		assert_eq!(content[2]["input"]["cache_control"]["scope"], "user data");
+		assert!(
+			content[3]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
+		assert!(
+			content[4]["source"]["content"][0]["cache_control"]
+				.get("scope")
+				.is_none()
+		);
 	}
 
 	#[test]

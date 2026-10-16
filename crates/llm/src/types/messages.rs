@@ -89,6 +89,19 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+/// Fields of a request block that hold nested blocks which may carry cache_control. Walking only
+/// these keeps a key with the same name inside tool inputs or schemas from being treated as a mark.
+pub(crate) fn cache_control_children(
+	block: &serde_json::Map<String, serde_json::Value>,
+) -> &'static [&'static str] {
+	match block.get("type").and_then(serde_json::Value::as_str) {
+		None if block.contains_key("role") => &["content"],
+		Some("tool_result" | "mcp_tool_result" | "search_result" | "content") => &["content"],
+		Some("document") => &["source"],
+		_ => &[],
+	}
+}
+
 impl TextBlock {
 	/// The blocks of this prompt, turning a non-empty string into a single text block.
 	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<TextPart>> {
