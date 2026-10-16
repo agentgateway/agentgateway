@@ -139,6 +139,20 @@ impl DnsLookupFamily {
 
 #[apply(schema_de!)]
 #[derive(Default)]
+pub struct RawAdminTls {
+	/// Path to the PEM certificate chain served by the admin listener.
+	/// Can also be set via the `ADMIN_TLS_CERT` environment variable.
+	cert: Option<PathBuf>,
+	/// Path to the PEM private key for the admin certificate.
+	/// Can also be set via the `ADMIN_TLS_KEY` environment variable.
+	key: Option<PathBuf>,
+	/// Path to a PEM CA bundle. When set, clients must present a certificate signed by it.
+	/// Can also be set via the `ADMIN_TLS_CLIENT_CA` environment variable.
+	client_ca: Option<PathBuf>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct RawDnsConfig {
 	/// Controls which IP address families the DNS resolver will query for
 	/// upstream connections.
@@ -203,6 +217,8 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
+	/// Serve the admin listener over TLS. Cannot be combined with a Unix socket admin address.
+	admin_tls: Option<RawAdminTls>,
 	/// Standard request log attributes populated for database-backed local runtime features.
 	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -697,6 +713,7 @@ pub struct Config {
 	/// Specify the number of worker threads the Tokio Runtime will use.
 	pub num_worker_threads: usize,
 	pub admin_addr: Address,
+	pub admin_tls: Option<AdminTlsConfig>,
 	pub stats_addr: Address,
 	pub histograms: HistogramMode,
 	pub readiness_addr: Address,
@@ -941,6 +958,14 @@ impl ProxyInputs {
 			admission: Default::default(),
 		}
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdminTlsConfig {
+	pub cert: PathBuf,
+	pub key: PathBuf,
+	pub client_ca: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

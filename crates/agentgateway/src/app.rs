@@ -214,7 +214,12 @@ pub async fn run_with_ui_assets(
 }
 
 async fn ui_url(config: &Config) -> String {
-	let admin_url = || format!("http://{}/ui", config.admin_addr);
+	let admin_scheme = if config.admin_tls.is_some() {
+		"https"
+	} else {
+		"http"
+	};
+	let admin_url = || format!("{admin_scheme}://{}/ui", config.admin_addr);
 	let Some(local_config) = &config.xds.local_config else {
 		return admin_url();
 	};

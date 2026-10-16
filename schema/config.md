@@ -82,6 +82,10 @@
 |`config.clusterId`|string|Identifier for the cluster this gateway runs in. Defaults to "Kubernetes".|
 |`config.network`|string|Network name for this gateway, used for locality-aware routing.|
 |`config.adminAddr`|string|Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
+|`config.adminTls`|object|Serve the admin listener over TLS. Cannot be combined with a Unix socket admin address.|
+|`config.adminTls.cert`|string|Path to the PEM certificate chain served by the admin listener.<br>Can also be set via the `ADMIN_TLS_CERT` environment variable.|
+|`config.adminTls.key`|string|Path to the PEM private key for the admin certificate.<br>Can also be set via the `ADMIN_TLS_KEY` environment variable.|
+|`config.adminTls.clientCa`|string|Path to a PEM CA bundle. When set, clients must present a certificate signed by it.<br>Can also be set via the `ADMIN_TLS_CLIENT_CA` environment variable.|
 |`config.standardAttributes`|object|Standard request log attributes populated for database-backed local runtime features.|
 |`config.standardAttributes.user`|string|CEL expression used to populate the `agentgateway.user` request log attribute.|
 |`config.standardAttributes.group`|string|CEL expression used to populate the `agentgateway.group` request log attribute.|

@@ -22,8 +22,11 @@ use tokio::net::TcpListener;
 use tokio::net::UnixListener;
 use tracing::info;
 
+use super::admin_tls::ReloadableServerConfig;
 use crate::transport::stream::Socket;
 use crate::types::frontend;
+
+const TLS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub fn http1_server() -> http1::Builder {
 	let mut b = http1::Builder::new();
@@ -47,7 +50,7 @@ pub fn plaintext_response(code: hyper::StatusCode, body: String) -> Response {
 }
 
 /// Server implements a generic HTTP server with the follow behavior:
-/// * HTTP/1.1 plaintext only
+/// * HTTP/1.1, plaintext or TLS
 /// * Draining
 pub struct Server<S> {
 	name: String,
@@ -55,6 +58,7 @@ pub struct Server<S> {
 	drain_rx: DrainWatcher,
 	state: S,
 	allow_proxy_protocol: bool,
+	tls: Option<ReloadableServerConfig>,
 }
 
 enum Listener {
@@ -158,11 +162,17 @@ impl<S> Server<S> {
 			drain_rx,
 			state: s,
 			allow_proxy_protocol: false,
+			tls: None,
 		})
 	}
 
 	pub fn with_optional_proxy_protocol(mut self) -> Self {
 		self.allow_proxy_protocol = true;
+		self
+	}
+
+	pub fn with_tls(mut self, tls: ReloadableServerConfig) -> Self {
+		self.tls = Some(tls);
 		self
 	}
 
@@ -184,6 +194,7 @@ impl<S> Server<S> {
 		let state = Arc::new(self.state);
 		let f = Arc::new(f);
 		let allow_proxy_protocol = self.allow_proxy_protocol;
+		let tls = self.tls;
 		for bind in self.binds {
 			let address = bind.address();
 			info!(
@@ -196,6 +207,7 @@ impl<S> Server<S> {
 			let state = state.clone();
 			let name = self.name.clone();
 			let f = f.clone();
+			let tls = tls.clone();
 			tokio::spawn(async move {
 				let stream = listener_stream(bind, allow_proxy_protocol);
 				let mut stream = stream.take_until(Box::pin(drain_stream.wait_for_drain()));
@@ -210,7 +222,18 @@ impl<S> Server<S> {
 					let drain = drain_connections.clone();
 					let f = f.clone();
 					let state = state.clone();
+					let tls = tls.clone();
 					tokio::spawn(async move {
+						let socket = match tls {
+							None => socket,
+							Some(tls) => match handshake(socket, tls.current()).await {
+								Ok(socket) => socket,
+								Err(err) => {
+									tracing::debug!(%err, "management TLS handshake failed");
+									return Ok(());
+								},
+							},
+						};
 						let serve = http1_server()
 							.half_close(true)
 							.header_read_timeout(Duration::from_secs(2))
@@ -252,6 +275,16 @@ impl<S> Server<S> {
 			});
 		}
 	}
+}
+
+async fn handshake(socket: Socket, config: Arc<rustls::ServerConfig>) -> anyhow::Result<Socket> {
+	Ok(
+		tokio::time::timeout(
+			TLS_HANDSHAKE_TIMEOUT,
+			crate::transport::tls::accept(socket, config),
+		)
+		.await??,
+	)
 }
 
 async fn prepare_socket(

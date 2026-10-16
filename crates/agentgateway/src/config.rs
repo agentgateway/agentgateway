@@ -353,6 +353,7 @@ pub fn parse_config(
 		.transpose()
 		.ctx("invalid ADMIN_ADDR/config.adminAddr")?
 		.unwrap_or(Address::Localhost(ipv6_localhost_enabled, 15000));
+	let admin_tls = parse_admin_tls(raw.admin_tls.unwrap_or_default(), &admin_addr)?;
 	// Parse stats_addr from environment variable or config file
 	let stats_addr = parse::<String>("STATS_ADDR")?
 		.or(raw.stats_addr)
@@ -438,6 +439,7 @@ pub fn parse_config(
 		network: network.clone().into(),
 		self_identity,
 		admin_addr,
+		admin_tls,
 		stats_addr,
 		readiness_addr,
 		self_addr,
@@ -709,6 +711,33 @@ pub(crate) fn session_attribute(
 		return Ok(None);
 	};
 	Ok(Some(Arc::new(cel::Expression::new_strict(session)?)))
+}
+
+fn parse_admin_tls(
+	raw: crate::RawAdminTls,
+	admin_addr: &Address,
+) -> anyhow::Result<Option<crate::AdminTlsConfig>> {
+	let cert = parse::<PathBuf>("ADMIN_TLS_CERT")?.or(raw.cert);
+	let key = parse::<PathBuf>("ADMIN_TLS_KEY")?.or(raw.key);
+	let client_ca = parse::<PathBuf>("ADMIN_TLS_CLIENT_CA")?.or(raw.client_ca);
+	let (cert, key) = match (cert, key) {
+		(Some(cert), Some(key)) => (cert, key),
+		(None, None) if client_ca.is_none() => return Ok(None),
+		(None, None) => anyhow::bail!(
+			"ADMIN_TLS_CLIENT_CA/config.adminTls.clientCa requires ADMIN_TLS_CERT and ADMIN_TLS_KEY"
+		),
+		_ => anyhow::bail!(
+			"ADMIN_TLS_CERT/config.adminTls.cert and ADMIN_TLS_KEY/config.adminTls.key must be set together"
+		),
+	};
+	if matches!(admin_addr, Address::UnixSocket(_)) {
+		anyhow::bail!("config.adminTls is not supported when adminAddr is a Unix socket");
+	}
+	Ok(Some(crate::AdminTlsConfig {
+		cert,
+		key,
+		client_ca,
+	}))
 }
 
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>

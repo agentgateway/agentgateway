@@ -284,6 +284,17 @@
             "null"
           ]
         },
+        "adminTls": {
+          "description": "Serve the admin listener over TLS. Cannot be combined with a Unix socket admin address.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawAdminTls"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "standardAttributes": {
           "description": "Standard request log attributes populated for database-backed local runtime features.",
           "anyOf": [
@@ -1009,6 +1020,33 @@
       "properties": {
         "endpoint": {
           "description": "SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawAdminTls": {
+      "type": "object",
+      "properties": {
+        "cert": {
+          "description": "Path to the PEM certificate chain served by the admin listener.\nCan also be set via the `ADMIN_TLS_CERT` environment variable.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "description": "Path to the PEM private key for the admin certificate.\nCan also be set via the `ADMIN_TLS_KEY` environment variable.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientCa": {
+          "description": "Path to a PEM CA bundle. When set, clients must present a certificate signed by it.\nCan also be set via the `ADMIN_TLS_CLIENT_CA` environment variable.",
           "type": [
             "string",
             "null"

@@ -28,6 +28,7 @@ use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
 
+use super::admin_tls::ReloadableServerConfig;
 use super::hyper_helpers::Server;
 use crate::Config;
 type Request = ::http::Request<RawBody>;
@@ -143,14 +144,17 @@ impl Service {
 		let service = AdminService {
 			router: admin_router(state.clone(), ui_assets),
 		};
-		Server::<AdminService>::bind(
+		let mut server = Server::<AdminService>::bind(
 			"admin",
 			state.config.admin_addr.clone(),
 			drain_rx,
 			service.clone(),
 		)
-		.await
-		.map(|s| Service { s, service })
+		.await?;
+		if let Some(tls) = state.config.admin_tls.clone() {
+			server = server.with_tls(ReloadableServerConfig::watch(tls).await?);
+		}
+		Ok(Service { s: server, service })
 	}
 
 	pub fn address(&self) -> Option<SocketAddr> {
