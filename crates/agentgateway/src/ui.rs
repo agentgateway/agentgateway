@@ -255,6 +255,8 @@ struct UiConfigResource {
 	created_at: Option<chrono::DateTime<Utc>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	updated_at: Option<chrono::DateTime<Utc>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	result: Option<crate::config_store::WriteResult>,
 }
 
 #[derive(Serialize)]
@@ -272,6 +274,7 @@ impl From<ConfigResource> for UiConfigResource {
 			revision: Some(resource.revision),
 			created_at: Some(resource.created_at),
 			updated_at: Some(resource.updated_at),
+			result: resource.result,
 		}
 	}
 }
@@ -285,6 +288,7 @@ impl From<PreparedResource> for UiConfigResource {
 			revision: None,
 			created_at: None,
 			updated_at: None,
+			result: None,
 		}
 	}
 }
@@ -721,6 +725,7 @@ async fn update_file_config_resource(
 			id.to_string(),
 			value,
 			crate::config_store::file_api_key_created_at(&config, id),
+			crate::config_store::file_config_resource(&config, kind, id),
 		)
 		.map_err(resource_api_error)?,
 		ConfigResourceKind::LlmPolicy
@@ -760,8 +765,13 @@ fn prepare_stored_update(
 			})?;
 			let created_at = crate::config_store::api_key_created_at(&existing.value)
 				.or_else(|| Some(existing.created_at.timestamp()));
-			crate::config_store::prepare_api_key_update(id.to_string(), value, created_at)
-				.map_err(resource_api_error)
+			crate::config_store::prepare_api_key_update(
+				id.to_string(),
+				value,
+				created_at,
+				Some(&existing.value),
+			)
+			.map_err(resource_api_error)
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy

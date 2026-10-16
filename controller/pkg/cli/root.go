@@ -14,6 +14,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/migrate"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/profile"
 	proxycmd "github.com/agentgateway/agentgateway/controller/pkg/cli/proxy"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/standalone"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
 	cliversion "github.com/agentgateway/agentgateway/controller/pkg/cli/version"
 )
@@ -32,6 +33,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(catalog.Command())
 	rootCmd.AddCommand(costs.Command())
 	rootCmd.AddCommand(migrate.Command())
+	rootCmd.AddCommand(standalone.Command())
 	rootCmd.AddCommand(flag.BuildCobra(config.Command))
 	rootCmd.AddCommand(flag.BuildCobra(profile.Command))
 	rootCmd.AddCommand(flag.BuildCobra(trace.Command))
