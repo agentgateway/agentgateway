@@ -2069,6 +2069,13 @@ impl McpBackendHost {
 			},
 			McpBackendHost::Host { host, port, path } => match (host, port, path) {
 				(host, Some(port), Some(path)) => {
+					if host.parse::<IpAddr>().is_err() {
+						let authority =
+							::http::uri::Authority::try_from(host.as_str()).context("invalid MCP host")?;
+						if authority.host() != host {
+							anyhow::bail!("invalid MCP host: expected only a hostname or IP address");
+						}
+					}
 					let b = Target::from((host.as_str(), *port));
 					ProcessedMcpBackendHost::Inline {
 						backend: b,
