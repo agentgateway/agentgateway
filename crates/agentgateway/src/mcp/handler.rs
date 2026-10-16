@@ -123,6 +123,29 @@ fn per_target_deduped<T>(
 	)
 }
 
+/// Same as [`duplicate_names`], for callers that compute client-facing names on the fly
+/// (owned `String`s) rather than borrowing upstream names.
+fn duplicate_owned_names(enabled: bool, names: impl Iterator<Item = String>) -> HashSet<String> {
+	if !enabled {
+		return HashSet::new();
+	}
+	let mut counts: HashMap<String, usize> = HashMap::new();
+	for name in names {
+		*counts.entry(name).or_default() += 1;
+	}
+	let duplicates = counts
+		.into_iter()
+		.filter_map(|(name, count)| (count > 1).then_some(name))
+		.collect::<HashSet<_>>();
+	if !duplicates.is_empty() {
+		debug!(
+			"dropping ambiguous MCP names served by multiple targets: {}",
+			duplicates.iter().sorted().join(", ")
+		);
+	}
+	duplicates
+}
+
 fn incompatible_upstream_result(method: &str) -> ClientError {
 	ClientError::new(anyhow::anyhow!(
 		"upstream returned a result incompatible with `{method}`"
@@ -449,13 +472,20 @@ impl Relay {
 		res: &'b str,
 		ctx: &IncomingRequestContext,
 		meta: Option<&RequestMetaObject>,
-	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+	) -> Result<(Cow<'a, str>, Cow<'b, str>), UpstreamError> {
+		// An explicit rename pins the owning target and the upstream-facing name, so the
+		// client-facing name never has to be looked up by listing upstreams.
+		if kind == ResolveKind::Tool
+			&& let Some((target, source)) = self.upstreams.tool_name_overrides.source_of(res)
+		{
+			return Ok((Cow::Owned(target.to_string()), Cow::Owned(source.to_string())));
+		}
 		if self.needs_resolution() {
 			let target = self.resolve_unprefixed(kind, res, ctx, meta).await?;
-			return Ok((Cow::Owned(target.to_string()), res));
+			return Ok((Cow::Owned(target.to_string()), Cow::Borrowed(res)));
 		}
 		let (target, name) = self.parse_resource_name(res)?;
-		Ok((Cow::Borrowed(target), name))
+		Ok((Cow::Borrowed(target), Cow::Borrowed(name)))
 	}
 
 	/// Find the single target serving the unprefixed `name` by listing every
@@ -797,22 +827,42 @@ impl Relay {
 		let policies = self.policies.clone();
 		let prefix_names = self.prefix_names();
 		let reject_duplicates = self.needs_resolution();
+		let overrides = self.upstreams.tool_name_overrides.clone();
 		Box::new(move |streams, cel| {
-			let per_target = per_target_deduped(
-				streams,
-				reject_duplicates,
-				|s| match s {
-					ServerResult::ListToolsResult(ltr) => Ok(ltr.tools),
+			// Client-facing name: an explicit override wins, otherwise the prefixing rule.
+			let public_name = |target: &str, raw: &str| -> String {
+				match overrides.public_name(target, raw) {
+					Some(name) => name.to_string(),
+					None => resource_name(prefix_names, target, raw),
+				}
+			};
+			let per_target = streams
+				.into_iter()
+				.map(|(server_name, s)| match s {
+					ServerResult::ListToolsResult(ltr) => Ok((server_name, ltr.tools)),
 					_ => Err(incompatible_upstream_result("tools/list")),
-				},
-				|tool| tool.name.as_ref(),
-			)?;
+				})
+				.collect::<Result<Vec<_>, ClientError>>()?;
+			// Ambiguity is judged on client-facing names, so an explicit override can
+			// resolve a collision that would otherwise drop every ambiguous name.
+			let duplicates = duplicate_owned_names(
+				reject_duplicates,
+				per_target.iter().flat_map(|(target, tools)| {
+					tools
+						.iter()
+						.map(|t| public_name(target.as_str(), t.name.as_ref()))
+				}),
+			);
 			let tools = per_target
 				.into_iter()
 				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
+						.filter(|t| {
+							!duplicates.contains(&public_name(server_name.as_str(), t.name.as_ref()))
+						})
 						// Apply authorization policies, filtering tools that are not allowed.
+						// Policies are evaluated against the upstream (original) tool name.
 						.filter(|t| {
 							policies.validate(
 								&rbac::ResourceType::Tool(rbac::ResourceId::new(
@@ -823,9 +873,10 @@ impl Relay {
 								cel,
 							)
 						})
-						// Rename to handle multiplexing
+						// Rename to handle multiplexing / explicit overrides
 						.map(|mut t| {
-							t.name = Cow::Owned(resource_name(prefix_names, server_name.as_str(), &t.name));
+							let name = public_name(server_name.as_str(), t.name.as_ref());
+							t.name = Cow::Owned(name);
 							t
 						})
 						.collect_vec()

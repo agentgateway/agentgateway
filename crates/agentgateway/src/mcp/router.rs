@@ -115,6 +115,7 @@ impl App {
 				session_idle_ttl: backend.session_idle_ttl,
 				sse_keep_alive: backend.sse_keep_alive,
 				server: backend.server.clone(),
+				tool_name_overrides: backend.tool_name_overrides.clone(),
 			}
 		};
 		let sessions = self.session.clone();
@@ -249,6 +250,7 @@ pub struct McpBackendGroup {
 	pub session_idle_ttl: Duration,
 	pub sse_keep_alive: Option<Duration>,
 	pub server: Option<McpServerOverrides>,
+	pub tool_name_overrides: Vec<crate::types::agent::McpToolNameOverride>,
 }
 
 impl Default for McpBackendGroup {
@@ -261,6 +263,7 @@ impl Default for McpBackendGroup {
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 			sse_keep_alive: None,
 			server: None,
+			tool_name_overrides: vec![],
 		}
 	}
 }
