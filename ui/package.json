@@ -3,6 +3,9 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#*": "./src/*"
+	},
 	"scripts": {
 		"build": "node scripts/generate-schema.mjs && tsc -b && vite build",
 		"check": "biome check .",
