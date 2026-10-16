@@ -160,6 +160,68 @@ impl TestPki {
 	}
 }
 
+struct ServerIdentity {
+	ca_pem: String,
+	cert_pem: String,
+	key_pem: String,
+}
+
+impl ServerIdentity {
+	fn new(ca_name: &str) -> Self {
+		let ca_key = rcgen::KeyPair::generate().unwrap();
+		let ca_cert = ca_params(ca_name).self_signed(&ca_key).unwrap();
+		let ca = rcgen::Issuer::new(ca_params(ca_name), ca_key);
+		let (cert_pem, key_pem) = leaf("localhost", rcgen::ExtendedKeyUsagePurpose::ServerAuth, &ca);
+		Self {
+			ca_pem: ca_cert.pem(),
+			cert_pem,
+			key_pem,
+		}
+	}
+
+	fn client(&self) -> reqwest::Client {
+		reqwest::Client::builder()
+			.add_root_certificate(reqwest::Certificate::from_pem(self.ca_pem.as_bytes()).unwrap())
+			.resolve("localhost", ([127, 0, 0, 1], 0).into())
+			.build()
+			.unwrap()
+	}
+
+	async fn serves(&self, port: u16) -> bool {
+		self
+			.client()
+			.get(format!("https://localhost:{port}/config_dump"))
+			.send()
+			.await
+			.is_ok_and(|resp| resp.status() == reqwest::StatusCode::OK)
+	}
+}
+
+fn replace_atomically(path: &std::path::Path, contents: &str) {
+	let tmp = path.with_extension("tmp");
+	std::fs::write(&tmp, contents).unwrap();
+	std::fs::rename(&tmp, path).unwrap();
+}
+
+fn tls_config(cert: &std::path::Path, key: &std::path::Path) -> String {
+	format!(
+		"config:\n  adminAddr: 127.0.0.1:0\n  adminTls:\n    cert: {}\n    key: {}\n",
+		cert.display(),
+		key.display(),
+	)
+}
+
+async fn wait_until_served(identity: &ServerIdentity, port: u16) {
+	let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+	while !identity.serves(port).await {
+		assert!(
+			tokio::time::Instant::now() < deadline,
+			"reloaded certificate was not served in time"
+		);
+		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+	}
+}
+
 #[tokio::test]
 async fn admin_serves_https_when_tls_configured() {
 	let pki = TestPki::new();
@@ -217,6 +279,88 @@ async fn admin_client_ca_requires_valid_client_certificate() {
 		.await
 		.expect("request with a valid client certificate should succeed");
 	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn admin_tls_reloads_replaced_certificate() {
+	let dir = tempfile::tempdir().unwrap();
+	let cert = dir.path().join("cert.pem");
+	let key = dir.path().join("key.pem");
+	let first = ServerIdentity::new("first ca");
+	let second = ServerIdentity::new("second ca");
+	std::fs::write(&cert, &first.cert_pem).unwrap();
+	std::fs::write(&key, &first.key_pem).unwrap();
+	let (addr, _drain_tx) = spawn_admin(&tls_config(&cert, &key)).await;
+	let port = addr.port();
+
+	assert!(first.serves(port).await);
+	assert!(!second.serves(port).await);
+
+	replace_atomically(&key, &second.key_pem);
+	replace_atomically(&cert, &second.cert_pem);
+	wait_until_served(&second, port).await;
+	assert!(!first.serves(port).await);
+}
+
+#[tokio::test]
+async fn admin_tls_keeps_previous_certificate_when_reload_is_invalid() {
+	let dir = tempfile::tempdir().unwrap();
+	let cert = dir.path().join("cert.pem");
+	let key = dir.path().join("key.pem");
+	let first = ServerIdentity::new("first ca");
+	let second = ServerIdentity::new("second ca");
+	std::fs::write(&cert, &first.cert_pem).unwrap();
+	std::fs::write(&key, &first.key_pem).unwrap();
+	let (addr, _drain_tx) = spawn_admin(&tls_config(&cert, &key)).await;
+	let port = addr.port();
+
+	replace_atomically(&cert, "not a certificate");
+	replace_atomically(&key, "not a key");
+	let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+	while tokio::time::Instant::now() < deadline {
+		assert!(
+			first.serves(port).await,
+			"previous certificate must keep being served"
+		);
+		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+	}
+
+	replace_atomically(&key, &second.key_pem);
+	replace_atomically(&cert, &second.cert_pem);
+	wait_until_served(&second, port).await;
+}
+
+#[cfg(target_family = "unix")]
+#[tokio::test]
+async fn admin_tls_reloads_kubernetes_symlink_rotation() {
+	use std::os::unix::fs::symlink;
+
+	let dir = tempfile::tempdir().unwrap();
+	let first = ServerIdentity::new("first ca");
+	let second = ServerIdentity::new("second ca");
+	let v1 = dir.path().join("..2024");
+	std::fs::create_dir(&v1).unwrap();
+	std::fs::write(v1.join("tls.crt"), &first.cert_pem).unwrap();
+	std::fs::write(v1.join("tls.key"), &first.key_pem).unwrap();
+	symlink("..2024", dir.path().join("..data")).unwrap();
+	symlink("..data/tls.crt", dir.path().join("tls.crt")).unwrap();
+	symlink("..data/tls.key", dir.path().join("tls.key")).unwrap();
+	let (addr, _drain_tx) = spawn_admin(&tls_config(
+		&dir.path().join("tls.crt"),
+		&dir.path().join("tls.key"),
+	))
+	.await;
+	let port = addr.port();
+	assert!(first.serves(port).await);
+
+	let v2 = dir.path().join("..2025");
+	std::fs::create_dir(&v2).unwrap();
+	std::fs::write(v2.join("tls.crt"), &second.cert_pem).unwrap();
+	std::fs::write(v2.join("tls.key"), &second.key_pem).unwrap();
+	symlink("..2025", dir.path().join("..data_tmp")).unwrap();
+	std::fs::rename(dir.path().join("..data_tmp"), dir.path().join("..data")).unwrap();
+
+	wait_until_served(&second, port).await;
 }
 
 #[tokio::test]
