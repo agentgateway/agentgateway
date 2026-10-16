@@ -3,8 +3,10 @@ router:
   skipProcessing:
     enabled: true
 
-# The chart model runtime is configured below.
-env: []
+# Hugging Face must write downloads and locks on the read-only container.
+env:
+- name: HF_HOME
+  value: /tmp/huggingface
 
 args:
 - --secure=false
@@ -27,14 +29,14 @@ config:
 
   providers:
     defaults:
-      default_model: homehub-support
+      model: homehub-support
     models:
     - name: homehub-support
       provider_model_id: homehub-support
       api_format: openai
       backend_refs:
       - name: agentgateway-support-backend
-        base_url: http://support-backend.homehub.svc.cluster.local:8080/v1
+        endpoint: support-backend.homehub.svc.cluster.local:8080
         provider: openai
         weight: 100
 
@@ -83,10 +85,13 @@ config:
       - model: homehub-support
         use_reasoning: false
       plugins:
-      - type: semantic-cache
+      - type: response_cache
         configuration:
           enabled: true
-          similarity_threshold: 0.70
+          mode: semantic
+          scope: global
+          semantic:
+            similarity_threshold: 0.70
           ttl_seconds: 86400
     - name: uncached_homehub_support
       description: Forward other HomeHub support intents without response reuse.
@@ -109,7 +114,7 @@ config:
         enabled: false
       streamed_body:
         enabled: true
-        max_bytes: 1048576
+        max_bytes: 10485760
         timeout_sec: 30
       skip_processing:
         enabled: true
@@ -142,7 +147,7 @@ config:
         enabled: false
     stores:
       memory: null
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: redis
         similarity_threshold: 0.70
@@ -173,5 +178,4 @@ config:
           development:
             drop_index_on_startup: false
             auto_create_index: true
-            verbose_errors: true
       vector_store: null
