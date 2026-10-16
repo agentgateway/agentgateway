@@ -288,6 +288,7 @@ async fn admin_tls_reloads_replaced_certificate() {
 	let key = dir.path().join("key.pem");
 	let first = ServerIdentity::new("first ca");
 	let second = ServerIdentity::new("second ca");
+	let third = ServerIdentity::new("third ca");
 	std::fs::write(&cert, &first.cert_pem).unwrap();
 	std::fs::write(&key, &first.key_pem).unwrap();
 	let (addr, _drain_tx) = spawn_admin(&tls_config(&cert, &key)).await;
@@ -300,6 +301,11 @@ async fn admin_tls_reloads_replaced_certificate() {
 	replace_atomically(&cert, &second.cert_pem);
 	wait_until_served(&second, port).await;
 	assert!(!first.serves(port).await);
+
+	replace_atomically(&key, &third.key_pem);
+	replace_atomically(&cert, &third.cert_pem);
+	wait_until_served(&third, port).await;
+	assert!(!second.serves(port).await);
 }
 
 #[tokio::test]

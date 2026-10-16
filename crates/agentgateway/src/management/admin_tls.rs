@@ -17,10 +17,11 @@ impl ReloadableServerConfig {
 		let current = Arc::new(ArcSwap::from(build(&config).await?));
 		let mut paths = vec![config.cert.clone(), config.key.clone()];
 		paths.extend(config.client_ca.clone());
-		let mut watched = crate::util::watch_files(paths)?;
+		let watch_options = crate::util::WatchFilesOptions::default().close_on_removal(true);
+		let mut watched = crate::util::watch_files_with_options(paths.clone(), watch_options)?;
 		let weak = Arc::downgrade(&current);
 		tokio::spawn(async move {
-			while watched.changed().await {
+			while let Some(invalidated) = watched.changed_invalidated().await {
 				let Some(current) = Weak::upgrade(&weak) else {
 					return;
 				};
@@ -30,6 +31,15 @@ impl ReloadableServerConfig {
 						info!("admin TLS certificates reloaded");
 					},
 					Err(err) => warn!(%err, "failed to reload admin TLS certificates, keeping previous"),
+				}
+				if invalidated {
+					match crate::util::watch_files_with_options(paths.clone(), watch_options) {
+						Ok(new_watched) => watched = new_watched,
+						Err(err) => {
+							warn!(%err, "failed to re-watch admin TLS files");
+							return;
+						},
+					}
 				}
 			}
 		});
