@@ -2673,8 +2673,10 @@ where
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub enum TracingProtocol {
+	/// Export over OTLP/gRPC.
 	#[default]
 	Grpc,
+	/// Export over OTLP/HTTP.
 	Http,
 }
 

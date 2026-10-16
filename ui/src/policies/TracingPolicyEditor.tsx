@@ -95,6 +95,7 @@ export function TracingPolicyEditor(props: {
 							ariaLabel="Protocol"
 							value={protocol}
 							options={otlpProtocolOptions}
+							schema={props.help.fieldNode<TracingConfig>('TracingConfig', 'protocol')}
 							onChange={setProtocol}
 						/>
 					</FieldGroup>

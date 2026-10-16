@@ -508,11 +508,8 @@ function PolicyControls(props: {
 				<EnumSelector
 					ariaLabel="Validation mode"
 					value={mode}
-					options={[
-						{ value: 'strict', label: 'Strict' },
-						{ value: 'optional', label: 'Optional' },
-						{ value: 'permissive', label: 'Permissive' }
-					]}
+					schema={props.help.fieldNode<LlmApiKeyPolicy>('LocalAPIKeys', 'mode')}
+					labels={{ strict: 'Strict', optional: 'Optional', permissive: 'Permissive' }}
 					onChange={value => setMode(value as 'strict' | 'optional' | 'permissive')}
 				/>
 			</FieldGroup>

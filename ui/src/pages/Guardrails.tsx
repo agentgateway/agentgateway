@@ -148,37 +148,31 @@ const requestGuardKinds: Array<EnumSelectorOption<GuardKind>> = [
 	{
 		value: 'regex',
 		label: 'Custom regex',
-		description: 'Match and optionally mask custom regular expressions.',
 		icon: <Braces size={16} />
 	},
 	{
 		value: 'webhook',
 		label: 'Webhook',
-		description: 'Send content to an external guardrail service.',
 		icon: <ShieldCheck size={16} />
 	},
 	{
 		value: 'openAIModeration',
 		label: 'OpenAI Moderation',
-		description: 'Use OpenAI moderation checks for incoming prompts.',
 		icon: <GuardrailProviderIcon src={openAiIcon} alt="" />
 	},
 	{
 		value: 'bedrockGuardrails',
 		label: 'Bedrock Guardrails',
-		description: 'Use AWS Bedrock Guardrails.',
 		icon: <GuardrailProviderIcon src={bedrockIcon} alt="" />
 	},
 	{
 		value: 'googleModelArmor',
 		label: 'Google Model Armor',
-		description: 'Use Google Model Armor for safety checks.',
 		icon: <GuardrailProviderIcon src={googleCloudIcon} alt="" />
 	},
 	{
 		value: 'azureContentSafety',
 		label: 'Azure Content Safety',
-		description: 'Use Azure AI Content Safety.',
 		icon: <GuardrailProviderIcon src={azureIcon} alt="" />
 	}
 ];
@@ -547,6 +541,7 @@ function AddGuardModal(props: {
 					ariaLabel="Guard type"
 					value={kind}
 					options={options}
+					schema={props.help.node(schemaPath)}
 					placeholder="Select guard type"
 					allowEmpty
 					onChange={selectKind}
@@ -651,6 +646,7 @@ function EditGuardDrawer(props: {
 							ariaLabel="Guard type"
 							value={draft.kind}
 							options={props.phase === 'request' ? requestGuardKinds : responseGuardKinds}
+							schema={props.help.node(schemaPath)}
 							onChange={value => {
 								setDraft(emptyGuardDraft(value));
 								merged.reset(undefined);

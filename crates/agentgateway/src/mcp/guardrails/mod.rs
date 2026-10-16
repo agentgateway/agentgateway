@@ -213,8 +213,10 @@ impl HeaderFilter {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum FailureMode {
+	/// Reject the request when the processor is unavailable.
 	#[default]
 	FailClosed,
+	/// Allow the request when the processor is unavailable.
 	FailOpen,
 }
 

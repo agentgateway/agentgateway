@@ -124,17 +124,10 @@ export function RemoteRateLimitPolicyEditor(props: {
 							ariaLabel="Failure mode"
 							value={failureMode}
 							options={[
-								{
-									value: 'failClosed',
-									label: 'Fail closed',
-									description: 'Deny requests when the rate limit service is unavailable.'
-								},
-								{
-									value: 'failOpen',
-									label: 'Fail open',
-									description: 'Allow requests when the rate limit service is unavailable.'
-								}
+								{ value: 'failClosed', label: 'Fail closed' },
+								{ value: 'failOpen', label: 'Fail open' }
 							]}
+							schema={props.help.fieldNode<RemoteRateLimit>('RemoteRateLimit', 'failureMode')}
 							onChange={setFailureMode}
 						/>
 					</FieldGroup>
@@ -232,18 +225,8 @@ function DescriptorEditor(props: {
 				<EnumSelector<DescriptorType>
 					ariaLabel={`Descriptor ${props.index + 1} type`}
 					value={props.descriptor.type}
-					options={[
-						{
-							value: 'requests',
-							label: 'Requests',
-							description: 'Evaluate request-count descriptors while processing the request.'
-						},
-						{
-							value: 'tokens',
-							label: 'Tokens',
-							description: 'Evaluate token descriptors after the LLM response completes.'
-						}
-					]}
+					schema={props.help.fieldNode<DescriptorEntry>('DescriptorEntry', 'type')}
+					labels={{ requests: 'Requests', tokens: 'Tokens' }}
 					onChange={type => props.onChange({ ...props.descriptor, type })}
 				/>
 			</FieldGroup>

@@ -21,8 +21,10 @@ pub(crate) const TOKEN_TYPE_JWT: &str = "urn:ietf:params:oauth:token-type:jwt";
 #[apply(schema!)]
 #[derive(Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenEndpointAuth {
+	/// Send client credentials using HTTP Basic authentication.
 	#[default]
 	ClientSecretBasic,
+	/// Send client credentials in the token request body.
 	ClientSecretPost,
 }
 

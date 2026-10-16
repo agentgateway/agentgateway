@@ -11,10 +11,14 @@ pub struct AwsRegion {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum BedrockEndpointPreference {
+	/// Use Runtime, except for models the catalog lists as available only on Mantle.
 	#[default]
 	RuntimePreferred,
+	/// Use Mantle, except for models the catalog lists as available only on Runtime.
 	MantlePreferred,
+	/// Always use Mantle for chat; unsupported models fail.
 	MantleOnly,
+	/// Always use Runtime for chat; unsupported models fail.
 	RuntimeOnly,
 }
 

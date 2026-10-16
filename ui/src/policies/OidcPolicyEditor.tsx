@@ -238,6 +238,10 @@ export function OidcPolicyEditor(props: {
 								value={tokenEndpointAuth}
 								ariaLabel="Token endpoint auth"
 								options={tokenEndpointAuthOptions}
+								schema={props.help.fieldNode<LocalOidcConfig>(
+									'LocalOidcConfig',
+									'tokenEndpointAuth'
+								)}
 								onChange={setTokenEndpointAuth}
 							/>
 						</FieldGroup>

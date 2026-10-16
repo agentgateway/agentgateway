@@ -3093,12 +3093,27 @@
       "unevaluatedProperties": false
     },
     "Phase": {
-      "type": "string",
-      "enum": [
-        "off",
-        "request",
-        "response",
-        "full"
+      "oneOf": [
+        {
+          "description": "Do not run this processor for matching methods.",
+          "type": "string",
+          "const": "off"
+        },
+        {
+          "description": "Run before forwarding the MCP request.",
+          "type": "string",
+          "const": "request"
+        },
+        {
+          "description": "Run after the MCP response is available.",
+          "type": "string",
+          "const": "response"
+        },
+        {
+          "description": "Run with request and response context.",
+          "type": "string",
+          "const": "full"
+        }
       ]
     },
     "SimpleLocalBackendPolicies": {
@@ -5024,10 +5039,17 @@
       ]
     },
     "FailureMode": {
-      "type": "string",
-      "enum": [
-        "failClosed",
-        "failOpen"
+      "oneOf": [
+        {
+          "description": "Reject the request when the processor is unavailable.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request when the processor is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "HeaderFilter": {
@@ -7004,10 +7026,17 @@
       ]
     },
     "TokenEndpointAuth": {
-      "type": "string",
-      "enum": [
-        "clientSecretBasic",
-        "clientSecretPost"
+      "oneOf": [
+        {
+          "description": "Send client credentials using HTTP Basic authentication.",
+          "type": "string",
+          "const": "clientSecretBasic"
+        },
+        {
+          "description": "Send client credentials in the token request body.",
+          "type": "string",
+          "const": "clientSecretPost"
+        }
       ]
     },
     "OidcLogin": {
@@ -9620,12 +9649,27 @@
       ]
     },
     "BedrockEndpointPreference": {
-      "type": "string",
-      "enum": [
-        "runtimePreferred",
-        "mantlePreferred",
-        "mantleOnly",
-        "runtimeOnly"
+      "oneOf": [
+        {
+          "description": "Use Runtime, except for models the catalog lists as available only on Mantle.",
+          "type": "string",
+          "const": "runtimePreferred"
+        },
+        {
+          "description": "Use Mantle, except for models the catalog lists as available only on Runtime.",
+          "type": "string",
+          "const": "mantlePreferred"
+        },
+        {
+          "description": "Always use Mantle for chat; unsupported models fail.",
+          "type": "string",
+          "const": "mantleOnly"
+        },
+        {
+          "description": "Always use Runtime for chat; unsupported models fail.",
+          "type": "string",
+          "const": "runtimeOnly"
+        }
       ]
     },
     "AzureProvider": {
@@ -11231,10 +11275,17 @@
       "additionalProperties": false
     },
     "TracingProtocol": {
-      "type": "string",
-      "enum": [
-        "grpc",
-        "http"
+      "oneOf": [
+        {
+          "description": "Export over OTLP/gRPC.",
+          "type": "string",
+          "const": "grpc"
+        },
+        {
+          "description": "Export over OTLP/HTTP.",
+          "type": "string",
+          "const": "http"
+        }
       ]
     },
     "DatabaseLoggingConfig": {
