@@ -3,6 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use crate::types::completions::typed::ReasoningEffort;
+
 /// Well-known catalog tags: AWS Bedrock endpoint tags, plus format tags mirroring [`crate::ChatFormat::tag`].
 pub mod tags {
 	// AWS Bedrock endpoint tags.
@@ -58,6 +60,9 @@ pub(crate) fn anthropic_thinking_capabilities(
 pub trait ModelCatalogHandle: Send + Sync {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool;
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>>;
+	/// `None` when the catalog doesn't know the model; empty when it advertises no effort levels
+	/// this crate recognizes, which doesn't mean the model takes none
+	fn reasoning_efforts(&self, provider: &str, model_id: &str) -> Option<Vec<ReasoningEffort>>;
 }
 
 /// Borrowed catalog handle threaded through the request path; `None` when no catalog is loaded.
@@ -89,5 +94,9 @@ impl ModelCatalogHandle for TestCatalog {
 
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>> {
 		self.models.get(model_id).map(|t| Arc::new(t.clone()))
+	}
+
+	fn reasoning_efforts(&self, _provider: &str, _model_id: &str) -> Option<Vec<ReasoningEffort>> {
+		None
 	}
 }
