@@ -3974,6 +3974,7 @@ resourceMetadata:
   mcpResourceUri: "mcp://test"
 jwtValidationOptions:
   requiredClaims: []
+  clockSkew: 15s
 "#;
 		let auth: LocalMcpAuthentication = serde_norway::from_str(yaml).unwrap();
 		let jwt_config = auth.as_jwt().unwrap();
@@ -3986,6 +3987,11 @@ jwtValidationOptions:
 				assert!(
 					jwt_validation_options.required_claims.is_empty(),
 					"jwt_validation_options should be propagated to LocalJwtConfig"
+				);
+				assert_eq!(
+					jwt_validation_options.clock_skew,
+					Duration::from_secs(15),
+					"clock_skew should be propagated to LocalJwtConfig"
 				);
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),

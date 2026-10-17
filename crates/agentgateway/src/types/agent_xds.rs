@@ -561,9 +561,7 @@ fn mcp_authentication_from_proto(
 	let jwt_validation_options = m
 		.jwt_validation_options
 		.as_ref()
-		.map(|vo| http::jwt::JWTValidationOptions {
-			required_claims: vo.required_claims.iter().cloned().collect(),
-		})
+		.map(convert_jwt_validation_options)
 		.unwrap_or_default();
 	let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
 		diagnostics,
@@ -2856,9 +2854,7 @@ fn traffic_policy_from_proto(
 					let jwt_validation_options = p
 						.jwt_validation_options
 						.as_ref()
-						.map(|vo| http::jwt::JWTValidationOptions {
-							required_claims: vo.required_claims.iter().cloned().collect(),
-						})
+						.map(convert_jwt_validation_options)
 						.unwrap_or_default();
 					Ok(jwt_provider_from_inline_jwks_or_warn(
 						diagnostics,
@@ -3457,6 +3453,18 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 	let secs = d.seconds.max(0) as u64;
 	let nanos = d.nanos.max(0) as u32;
 	Duration::new(secs, nanos)
+}
+
+fn convert_jwt_validation_options(
+	vo: &proto::agent::JwtValidationOptions,
+) -> http::jwt::JWTValidationOptions {
+	http::jwt::JWTValidationOptions {
+		required_claims: vo.required_claims.iter().cloned().collect(),
+		clock_skew: vo
+			.clock_skew
+			.map(convert_duration)
+			.unwrap_or(http::jwt::DEFAULT_CLOCK_SKEW),
+	}
 }
 
 fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
@@ -5627,6 +5635,21 @@ mod tests {
 			.unwrap(),
 			Some(Duration::from_millis(1500))
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::unset_uses_default(None, Duration::from_secs(60))]
+	#[case::explicit(Some(prost_types::Duration { seconds: 5, nanos: 0 }), Duration::from_secs(5))]
+	#[case::zero(Some(prost_types::Duration::default()), Duration::ZERO)]
+	fn convert_jwt_validation_options_clock_skew(
+		#[case] clock_skew: Option<prost_types::Duration>,
+		#[case] expected: Duration,
+	) {
+		let converted = convert_jwt_validation_options(&proto::agent::JwtValidationOptions {
+			clock_skew,
+			..Default::default()
+		});
+		assert_eq!(converted.clock_skew, expected);
 	}
 
 	#[test]

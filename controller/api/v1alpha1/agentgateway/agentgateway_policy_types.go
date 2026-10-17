@@ -1276,6 +1276,13 @@ type JWTValidationOptions struct {
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=4
 	RequiredClaims *[]JWTClaim `json:"requiredClaims,omitempty"`
+
+	// Allows for clock skew when checking `exp` and `nbf`.
+	// Must be whole seconds and at most 5m. Defaults to 60s.
+	// +kubebuilder:validation:XValidation:rule="!self.contains('ms')",message="clockSkew must be a duration in whole seconds, e.g. 30s or 1m"
+	// +kubebuilder:validation:XValidation:rule="duration(self) <= duration('5m')",message="clockSkew must be at most 5m"
+	// +optional
+	ClockSkew *Duration `json:"clockSkew,omitempty"`
 }
 
 // JWTClaim is a JWT claim whose presence can be required during validation.

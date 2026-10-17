@@ -6010,6 +6010,19 @@ spec:
                               list removes only the additional presence requirements. Expiration is
                               still checked whenever `exp` is present.
                             properties:
+                              clockSkew:
+                                description: |-
+                                  Allows for clock skew when checking `exp` and `nbf`.
+                                  Must be whole seconds and at most 5m. Defaults to 60s.
+                                maxLength: 32
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                type: string
+                                x-kubernetes-validations:
+                                - message: clockSkew must be a duration in whole seconds,
+                                    e.g. 30s or 1m
+                                  rule: '!self.contains(''ms'')'
+                                - message: clockSkew must be at most 5m
+                                  rule: duration(self) <= duration('5m')
                               requiredClaims:
                                 description: |-
                                   Additional claims that must be present in the token payload.
@@ -10099,6 +10112,19 @@ spec:
                                 list removes only the additional presence requirements. Expiration is
                                 still checked whenever `exp` is present.
                               properties:
+                                clockSkew:
+                                  description: |-
+                                    Allows for clock skew when checking `exp` and `nbf`.
+                                    Must be whole seconds and at most 5m. Defaults to 60s.
+                                  maxLength: 32
+                                  pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                  type: string
+                                  x-kubernetes-validations:
+                                  - message: clockSkew must be a duration in whole
+                                      seconds, e.g. 30s or 1m
+                                    rule: '!self.contains(''ms'')'
+                                  - message: clockSkew must be at most 5m
+                                    rule: duration(self) <= duration('5m')
                                 requiredClaims:
                                   description: |-
                                     Additional claims that must be present in the token payload.
