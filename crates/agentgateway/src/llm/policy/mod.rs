@@ -1061,7 +1061,7 @@ impl Policy {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
-				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
+				Self::evaluate_moderation(req, claims, client, m, &guard.rejection, &guard.scope).await
 			},
 			RequestGuardKind::BedrockGuardrails(bg) => {
 				Self::evaluate_bedrock_guardrails_request(
@@ -1075,11 +1075,26 @@ impl Policy {
 				.await
 			},
 			RequestGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_request(req, claims, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_request(
+					req,
+					claims,
+					client,
+					gma,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			RequestGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_request(req, claims, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_request(
+					req,
+					claims,
+					client,
+					acs,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 		}
 	}
@@ -1090,8 +1105,13 @@ impl Policy {
 		client: &PolicyClient,
 		moderation: &Moderation,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
-		let resp = moderation::send_request(req, claims, client, moderation).await?;
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let resp = moderation::send_request(content, claims, client, moderation).await?;
 		Ok(Self::moderation_outcome(
 			resp,
 			rejection,
@@ -1261,8 +1281,13 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
-		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let resp = google_model_armor::send_request(content, claims, client, model_armor).await?;
 		Ok(Self::model_armor_outcome(resp, model_armor, rejection))
 	}
 
@@ -1291,15 +1316,21 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<RequestGuardMutation>, Option<GuardDetail>)> {
+		let (content, _) = Self::scoped_request_texts(req, guard_scope);
+		if content.is_empty() {
+			return Ok((GuardrailOutcome::None, None));
+		}
+		let content = content.join("\n");
 		let audit = config.action == RejectAuditAction::Audit;
 		if let Some(ref analyze_text) = config.analyze_text {
-			let resp = azure_content_safety::send_analyze_text_for_request(
-				req,
-				claims.clone(),
+			let resp = azure_content_safety::send_analyze_text(
 				client,
+				claims.clone(),
 				config,
 				analyze_text,
+				&content,
 			)
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
@@ -1311,12 +1342,12 @@ impl Policy {
 			}
 		}
 		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
-			let resp = azure_content_safety::send_detect_jailbreak_for_request(
-				req,
-				claims.clone(),
+			let resp = azure_content_safety::send_detect_jailbreak(
 				client,
+				claims.clone(),
 				config,
 				detect_jailbreak,
+				&content,
 			)
 			.await?;
 			if resp.jailbreak_detected() {
@@ -1363,8 +1394,9 @@ impl Policy {
 		client: &PolicyClient,
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
-		let content = Self::webhook_choice_texts(resp);
+		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
 		if content.is_empty() {
 			return Ok((GuardrailOutcome::None, None));
@@ -1385,20 +1417,21 @@ impl Policy {
 		client: &PolicyClient,
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<(GuardrailOutcome<ResponseGuardMutation>, Option<GuardDetail>)> {
-		let content = Self::webhook_choice_texts(resp);
+		let (content, _) = Self::scoped_response_texts(resp, guard_scope);
 
 		if content.is_empty() {
 			return Ok((GuardrailOutcome::None, None));
 		}
 
 		if let Some(ref analyze_text) = config.analyze_text {
-			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
-				content,
-				claims,
+			let guardrail_resp = azure_content_safety::send_analyze_text(
 				client,
+				claims,
 				config,
 				analyze_text,
+				&content.join("\n"),
 			)
 			.await?;
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
@@ -1422,16 +1455,6 @@ impl Policy {
 		}
 		let detail = resp.build_detail(guardrails);
 		(GuardrailOutcome::Audit, Some(detail))
-	}
-
-	/// One flattened text per choice; masking guards must use `scoped_response_texts`
-	/// instead so counts align with `visit_text_mut` order.
-	fn webhook_choice_texts(resp: &dyn ResponseType) -> Vec<String> {
-		resp
-			.to_webhook_choices()
-			.into_iter()
-			.map(|c| c.message.content.to_string())
-			.collect()
 	}
 
 	#[cfg(test)]
@@ -2000,11 +2023,26 @@ impl Policy {
 				.await
 			},
 			ResponseGuardKind::GoogleModelArmor(gma) => {
-				Self::evaluate_google_model_armor_response(resp, None, client, gma, &guard.rejection).await
+				Self::evaluate_google_model_armor_response(
+					resp,
+					None,
+					client,
+					gma,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			ResponseGuardKind::AzureContentSafety(acs) => {
-				Self::evaluate_azure_content_safety_response(resp, None, client, acs, &guard.rejection)
-					.await
+				Self::evaluate_azure_content_safety_response(
+					resp,
+					None,
+					client,
+					acs,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 		}
 	}
@@ -2051,13 +2089,9 @@ fn de_content_scope<'de, D: serde::Deserializer<'de>>(
 }
 
 impl RequestGuard {
-	/// TODO not all guard types properly scan all scopes
-	/// avoids silently ignoring configured scopes
+	/// Webhooks always inspect the default scope; reject anything else rather than silently ignore it.
 	pub(crate) fn validate_scope(&self) -> Result<(), String> {
-		if matches!(
-			self.kind,
-			RequestGuardKind::Regex(_) | RequestGuardKind::BedrockGuardrails(_)
-		) {
+		if !matches!(self.kind, RequestGuardKind::Webhook(_)) {
 			return Ok(());
 		}
 		let default = default_content_scope();
@@ -2066,10 +2100,10 @@ impl RequestGuard {
 		if is_default {
 			return Ok(());
 		}
-		Err(format!(
-			"scope: only regex and bedrockGuardrails guards support a non-default scope; {} guards always inspect the default (systemPrompt + messages)",
-			self.kind.name(),
-		))
+		Err(
+			"scope: webhook guards do not support a non-default scope; they always inspect the default (systemPrompt + messages)"
+				.into(),
+		)
 	}
 
 	/// Returns the configured failure mode, defaulting to `FailClosed`.
@@ -2479,19 +2513,16 @@ fn de_response_scope<'de, D: serde::Deserializer<'de>>(
 }
 
 impl ResponseGuard {
-	/// Only regex and bedrockGuardrails walk scoped response text; others always inspect messages.
+	/// Webhooks always inspect messages; other guards walk scoped response text.
 	pub(crate) fn validate_scope(&self) -> Result<(), String> {
-		if matches!(
-			self.kind,
-			ResponseGuardKind::Regex(_) | ResponseGuardKind::BedrockGuardrails(_)
-		) || self.scope == default_response_scope()
+		if !matches!(self.kind, ResponseGuardKind::Webhook(_)) || self.scope == default_response_scope()
 		{
 			return Ok(());
 		}
-		Err(format!(
-			"scope: only regex and bedrockGuardrails response guards support a non-default scope; {} guards always inspect messages",
-			self.kind.name(),
-		))
+		Err(
+			"scope: webhook response guards do not support a non-default scope; they always inspect messages"
+				.into(),
+		)
 	}
 
 	fn failure_mode(&self) -> FailureMode {

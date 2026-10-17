@@ -1,11 +1,9 @@
 use agent_core::strng;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use crate::http::auth::BackendAuthKind;
 use crate::http::jwt::Claims;
-use crate::llm::RequestType;
 use crate::llm::policy::{
 	AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig, with_default_timeout,
 };
@@ -127,58 +125,6 @@ impl DetectJailbreakResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Public entry points
-// ---------------------------------------------------------------------------
-
-/// Analyze text content from a request for harmful content categories.
-pub async fn send_analyze_text_for_request(
-	req: &mut dyn RequestType,
-	claims: Option<Claims>,
-	client: &PolicyClient,
-	root: &AzureContentSafety,
-	config: &AnalyzeTextConfig,
-) -> anyhow::Result<AnalyzeTextResponse> {
-	let content = req
-		.get_messages()
-		.into_iter()
-		.map(|m| m.content.to_string())
-		.collect_vec()
-		.join("\n");
-
-	send_analyze_text(client, claims, root, config, &content).await
-}
-
-/// Analyze text content from a response for harmful content categories.
-pub async fn send_analyze_text_for_response(
-	content: Vec<String>,
-	claims: Option<Claims>,
-	client: &PolicyClient,
-	root: &AzureContentSafety,
-	config: &AnalyzeTextConfig,
-) -> anyhow::Result<AnalyzeTextResponse> {
-	let combined_content = content.join("\n");
-	send_analyze_text(client, claims, root, config, &combined_content).await
-}
-
-/// Detect jailbreak attempts in request content.
-pub async fn send_detect_jailbreak_for_request(
-	req: &mut dyn RequestType,
-	claims: Option<Claims>,
-	client: &PolicyClient,
-	root: &AzureContentSafety,
-	config: &DetectJailbreakConfig,
-) -> anyhow::Result<DetectJailbreakResponse> {
-	let content = req
-		.get_messages()
-		.into_iter()
-		.map(|m| m.content.to_string())
-		.collect_vec()
-		.join("\n");
-
-	send_detect_jailbreak(client, claims, root, config, &content).await
-}
-
-// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -282,7 +228,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 // Analyze Text
 // ---------------------------------------------------------------------------
 
-async fn send_analyze_text(
+pub async fn send_analyze_text(
 	client: &PolicyClient,
 	claims: Option<Claims>,
 	root: &AzureContentSafety,
@@ -338,7 +284,7 @@ async fn send_analyze_text(
 // Detect Jailbreak
 // ---------------------------------------------------------------------------
 
-async fn send_detect_jailbreak(
+pub async fn send_detect_jailbreak(
 	client: &PolicyClient,
 	claims: Option<Claims>,
 	root: &AzureContentSafety,

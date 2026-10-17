@@ -4543,12 +4543,11 @@ mod tests {
 		.unwrap_err();
 		convert_content_scopes(&[42], llm::policy::default_content_scope).unwrap_err();
 
-		// TODO respect scopes in all guard types
 		let ai = Ai {
 			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
 				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
 					rejection: None,
-					kind: Some(Kind::OpenaiModeration(Default::default())),
+					kind: Some(Kind::Webhook(Default::default())),
 					scope: vec![ProtoScope::ToolInput as i32],
 				}],
 				..Default::default()

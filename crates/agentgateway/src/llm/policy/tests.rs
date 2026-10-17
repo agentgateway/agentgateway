@@ -3403,7 +3403,7 @@ fn prompt_guard_scope_support() {
 	// claiming tool coverage on a guard that only ever sees message text must fail validation
 	let err = serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
-			"openAIModeration": {},
+			"webhook": {"target": {"host": "localhost:8080"}},
 			"scope": ["messages", "toolInput"],
 		}]
 	}))
@@ -3415,8 +3415,18 @@ fn prompt_guard_scope_support() {
 	// spelling out the default is honest, in any order
 	serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
-			"openAIModeration": {},
+			"webhook": {"target": {"host": "localhost:8080"}},
 			"scope": ["messages", "systemPrompt"],
+		}]
+	}))
+	.unwrap()
+	.validate()
+	.unwrap();
+
+	serde_json::from_value::<PromptGuard>(serde_json::json!({
+		"request": [{
+			"openAIModeration": {},
+			"scope": ["messages", "toolOutput"],
 		}]
 	}))
 	.unwrap()
