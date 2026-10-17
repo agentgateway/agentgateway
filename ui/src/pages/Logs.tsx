@@ -19,7 +19,7 @@ import {
 	Wrench
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { analyticsSummary, getLog, searchLogs, streamLogs } from '@/api/logsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -2367,8 +2367,10 @@ function escapeLogMarkdownHtml(value: string) {
 }
 
 function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: string }) {
-	const html = useMemo(
-		() =>
+	const ref = useRef<HTMLDivElement>(null);
+	// Keep this div empty in JSX so React leaves the sanitized content alone.
+	useLayoutEffect(() => {
+		ref.current?.replaceChildren(
 			DOMPurify.sanitize(
 				marked.parse(props.content, {
 					async: false,
@@ -2378,17 +2380,17 @@ function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: st
 				}) as string,
 				{
 					ALLOWED_ATTR: [],
-					ALLOWED_TAGS: LOG_MARKDOWN_TAGS
+					ALLOWED_TAGS: LOG_MARKDOWN_TAGS,
+					RETURN_DOM_FRAGMENT: true
 				}
-			),
-		[props.content]
-	);
+			)
+		);
+	}, [props.content]);
 	return (
 		<div
 			className={`log-msg-content log-markdown${props.collapsed ? ' collapsed' : ''}`}
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			dangerouslySetInnerHTML={{ __html: html }}
 			id={props.anchorId}
+			ref={ref}
 		/>
 	);
 }

@@ -545,7 +545,8 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 
 ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join('\n')}
 
-[docs](https://example.invalid/docs) ![probe](https://example.invalid/pixel)`
+[docs](https://example.invalid/docs) ![probe](https://example.invalid/pixel)
+<img src="x" onerror="window.__logMarkdownProbe = 1">raw-html-probe<script>window.__logMarkdownProbe = 1</script>`
 								}
 							]
 						},
