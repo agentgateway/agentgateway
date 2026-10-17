@@ -1,0 +1,10 @@
+{
+  "model": "replaceme",
+  "messages": [
+    {"role": "user", "content": "What's the weather in Paris? Answer in JSON."}
+  ],
+  "tools": [
+    {"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}}
+  ],
+  "response_format": {"type": "json_object"}
+}

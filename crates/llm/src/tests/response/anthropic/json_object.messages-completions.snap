@@ -1,0 +1,49 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/json_object.json
+info:
+  id: msg_json
+  type: message
+  role: assistant
+  model: claude-opus-4-5
+  content:
+    - type: tool_use
+      id: toolu_json
+      name: json_object_response
+      input:
+        score: 1
+  stop_reason: tool_use
+  stop_sequence: ~
+  usage:
+    input_tokens: 40
+    output_tokens: 12
+---
+{
+  "response": {
+    "model": "claude-opus-4-5",
+    "usage": {
+      "prompt_tokens": 40,
+      "completion_tokens": 12,
+      "total_tokens": 52
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "{\"score\":1}",
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "stop"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 40,
+    "output_tokens": 12,
+    "total_tokens": 52,
+    "provider_model": "claude-opus-4-5"
+  }
+}

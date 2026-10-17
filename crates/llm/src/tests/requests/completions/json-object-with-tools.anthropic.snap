@@ -1,0 +1,73 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/json-object-with-tools.json
+info:
+  model: replaceme
+  messages:
+    - role: user
+      content: "What's the weather in Paris? Answer in JSON."
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        parameters:
+          type: object
+          properties:
+            city:
+              type: string
+  response_format:
+    type: json_object
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What's the weather in Paris? Answer in JSON."
+          }
+        ]
+      }
+    ],
+    "model": "replaceme",
+    "max_tokens": 4096,
+    "tools": [
+      {
+        "name": "get_weather",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ],
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "replaceme",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What's the weather in Paris? Answer in JSON."
+      }
+    ]
+  }
+}

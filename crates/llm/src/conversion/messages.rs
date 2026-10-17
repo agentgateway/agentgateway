@@ -93,6 +93,11 @@ pub mod from_completions {
 	use crate::types::messages::typed as messages;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
+	/// Claude has no "any JSON object" mode, and its structured output only takes schemas with
+	/// `additionalProperties: false`. So `json_object` becomes this tool, which the model is told to
+	/// call, and its input comes back as the reply's text (litellm does the same).
+	pub(crate) const JSON_OBJECT_TOOL: &str = "json_object_response";
+
 	fn cache_control(
 		breakpoint: &Option<completions::PromptCacheBreakpointParam>,
 	) -> Option<messages::CacheControlEphemeral> {
@@ -422,6 +427,23 @@ pub mod from_completions {
 		} else {
 			None
 		};
+		// Emulate `json_object` only when the caller has no tools of its own: forcing ours would
+		// stop the model from calling theirs.
+		let json_object = matches!(
+			req.response_format,
+			Some(completions::ResponseFormat::JsonObject)
+		) && tools.as_ref().is_none_or(|tools| tools.is_empty());
+		let tools = if json_object {
+			Some(vec![messages::Tool::Custom(messages::CustomTool {
+				name: JSON_OBJECT_TOOL.to_string(),
+				strict: None,
+				description: Some("Give your answer as a JSON object by calling this tool.".to_string()),
+				input_schema: serde_json::json!({ "type": "object", "additionalProperties": true }),
+				cache_control: None,
+			})])
+		} else {
+			tools
+		};
 		let metadata = req.user.map(|user| messages::Metadata {
 			fields: HashMap::from([("user_id".to_string(), user)]),
 		});
@@ -493,13 +515,33 @@ pub mod from_completions {
 					schema: json_schema.schema,
 				})
 			},
-			Some(completions::ResponseFormat::JsonObject) => Some(messages::OutputFormat::JsonSchema {
-				schema: serde_json::json!({
-					"type": "object",
-					"additionalProperties": true
-				}),
-			}),
-			Some(completions::ResponseFormat::Text) | None => None,
+			// With the caller's own tools there is nothing faithful to send, so Claude's 400 says so.
+			Some(completions::ResponseFormat::JsonObject) if !json_object => {
+				Some(messages::OutputFormat::JsonSchema {
+					schema: serde_json::json!({
+						"type": "object",
+						"additionalProperties": true
+					}),
+				})
+			},
+			Some(completions::ResponseFormat::JsonObject)
+			| Some(completions::ResponseFormat::Text)
+			| None => None,
+		};
+		// Claude refuses a forced tool while thinking, so then it is only offered.
+		let tool_choice = if json_object {
+			Some(if thinking.is_some() {
+				messages::ToolChoice::Auto {
+					disable_parallel_tool_use: Some(true),
+				}
+			} else {
+				messages::ToolChoice::Tool {
+					name: JSON_OBJECT_TOOL.to_string(),
+					disable_parallel_tool_use: Some(true),
+				}
+			})
+		} else {
+			tool_choice
 		};
 		let output_config = if response_format.is_some() || effort.is_some() {
 			Some(messages::OutputConfig {
@@ -553,12 +595,20 @@ pub mod from_completions {
 		let mut content = None;
 		let mut reasoning_content: Option<String> = None;
 		let mut reasoning_signatures = Vec::new();
+		let mut json_object_answered = false;
 		for block in resp.content {
 			match block {
 				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
 					// A message may contain multiple text blocks (e.g. text split around
 					// citations); concatenate them into the single OpenAI `content` field.
 					content.get_or_insert_with(String::new).push_str(&text)
+				},
+				messages::ContentBlock::ToolUse { name, input, .. } if name == JSON_OBJECT_TOOL => {
+					let Some(json) = serde_json::to_string(&input).ok() else {
+						continue;
+					};
+					content.get_or_insert_with(String::new).push_str(&json);
+					json_object_answered = true;
 				},
 				messages::ContentBlock::ToolUse {
 					id, name, input, ..
@@ -627,7 +677,14 @@ pub mod from_completions {
 			},
 			extra: None,
 		};
-		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
+		let finish_reason = match resp.stop_reason.as_ref() {
+			Some(messages::StopReason::ToolUse)
+				if json_object_answered && message.tool_calls.is_none() =>
+			{
+				Some(completions::FinishReason::Stop)
+			},
+			other => other.map(super::translate_stop_reason),
+		};
 		// Only one choice for anthropic
 		let choice = completions::ChatChoice {
 			rest: Default::default(),
@@ -726,6 +783,8 @@ pub mod from_completions {
 		let mut last_token_at: Option<Instant> = None;
 		let mut next_tool_index = 0u32;
 		let mut ongoing_tool_calls: HashMap<usize, OngoingToolCall> = HashMap::new();
+		// Blocks that are the `json_object` answer, and whether each has streamed any text yet.
+		let mut json_object_blocks: HashMap<usize, bool> = HashMap::new();
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
@@ -788,6 +847,10 @@ pub mod from_completions {
 					index,
 					content_block,
 				} => match content_block {
+					messages::ContentBlock::ToolUse { name, .. } if name == JSON_OBJECT_TOOL => {
+						json_object_blocks.insert(index, false);
+						None
+					},
 					messages::ContentBlock::ToolUse {
 						id, name, input, ..
 					}
@@ -852,6 +915,19 @@ pub mod from_completions {
 						messages::ContentBlockDelta::ThinkingDelta { thinking } => {
 							dr.reasoning_content = Some(thinking)
 						},
+						messages::ContentBlockDelta::InputJsonDelta { partial_json }
+							if json_object_blocks.contains_key(&index) =>
+						{
+							if partial_json.is_empty() {
+								emit_chunk = false;
+							} else {
+								json_object_blocks.insert(index, true);
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(&partial_json);
+								}
+								dr.content = Some(partial_json);
+							}
+						},
 						messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
 							tool_calls.append_arguments(index, &partial_json);
 							match ongoing_tool_calls.get_mut(&index) {
@@ -892,7 +968,14 @@ pub mod from_completions {
 					}
 				},
 				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
-					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
+					let finish_reason = match delta.stop_reason.as_ref() {
+						Some(messages::StopReason::ToolUse)
+							if !json_object_blocks.is_empty() && next_tool_index == 0 =>
+						{
+							Some(completions::FinishReason::Stop)
+						},
+						other => other.map(super::translate_stop_reason),
+					};
 					let log_finish_reason = delta
 						.stop_reason
 						.as_ref()
@@ -964,6 +1047,26 @@ pub mod from_completions {
 							completion_tokens_details: None,
 						}),
 					)
+				},
+				messages::MessagesStreamEvent::ContentBlockStop { index }
+					if json_object_blocks.get(&index) == Some(&false) =>
+				{
+					// The model called the tool with no input: answer `{}`, as a tool call would.
+					json_object_blocks.insert(index, true);
+					if let Some(completion) = completion.as_mut() {
+						completion.push_str("{}");
+					}
+					let choice = completions::ChatChoiceStream {
+						rest: Default::default(),
+						index: 0,
+						logprobs: None,
+						delta: completions::StreamResponseDelta {
+							content: Some("{}".to_string()),
+							..Default::default()
+						},
+						finish_reason: None,
+					};
+					mk(vec![choice], None)
 				},
 				messages::MessagesStreamEvent::ContentBlockStop { index } => {
 					match ongoing_tool_calls.remove(&index) {
