@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-16T15:54:44Z"
+    "generatedAt": "2026-10-17T08:31:08Z"
   },
   "providers": {
     "anthropic": {
@@ -15944,7 +15944,7 @@
           "rates": {
             "input": "1",
             "output": "2.7",
-            "cacheRead": "0.05"
+            "cacheRead": "0.1"
           },
           "limits": {
             "context": 1048576,
