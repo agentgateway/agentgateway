@@ -872,9 +872,9 @@ mod responses {
 			filters => vec![
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
-				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
+				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"${1}_xxx""#),
 				(r#""id":"rs_[0-9a-f]{16}""#, r#""id":"rs_xxx""#),
-				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"${1}_xxx""#),
 				(r#""item_id":"rs_[0-9a-f]{16}""#, r#""item_id":"rs_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
