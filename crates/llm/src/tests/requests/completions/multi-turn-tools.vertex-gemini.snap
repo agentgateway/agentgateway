@@ -40,6 +40,16 @@ info:
           properties:
             location:
               type: string
+            days:
+              type: integer
+              exclusiveMinimum: 0
+              maximum: 14
+            hours:
+              type: array
+              items:
+                type: integer
+                minimum: 0
+                exclusiveMaximum: 24
           required:
             - location
 ---
@@ -118,6 +128,19 @@ info:
               "properties": {
                 "location": {
                   "type": "string"
+                },
+                "days": {
+                  "type": "integer",
+                  "maximum": 14,
+                  "minimum": 0
+                },
+                "hours": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 24
+                  }
                 }
               },
               "required": [

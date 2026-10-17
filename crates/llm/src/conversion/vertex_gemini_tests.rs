@@ -788,6 +788,52 @@ fn tool_parameters_inline_defs_and_refs() {
 	assert_eq!(params["properties"]["events"]["items"]["type"], "object");
 }
 
+#[rstest::rstest]
+#[case::minimum(
+	json!({ "type": "integer", "exclusiveMinimum": 0 }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+#[case::maximum(
+	json!({ "type": "number", "exclusiveMaximum": 1 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 0.5 }),
+	json!({ "type": "number", "maximum": 0.5 })
+)]
+#[case::exclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 2 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 0, "minimum": 1 }),
+	json!({ "type": "integer", "minimum": 1 })
+)]
+#[case::exclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 5, "minimum": 2 }),
+	json!({ "type": "integer", "minimum": 5 })
+)]
+#[case::draft4_boolean(
+	json!({ "type": "integer", "minimum": 0, "exclusiveMinimum": true }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+fn exclusive_bounds_become_inclusive(#[case] property: Value, #[case] expected: Value) {
+	let params = tool_parameters(json!({ "type": "object", "properties": { "x": property } }));
+	assert_eq!(params["properties"]["x"], expected);
+}
+
+fn tool_parameters(parameters: Value) -> Value {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": { "name": "t", "parameters": parameters }
+		}]
+	}));
+	g["tools"][0]["functionDeclarations"][0]["parameters"].clone()
+}
+
 // Case 3: Pydantic wraps a described nested-model field as {allOf:[{$ref}], description} (or a
 // $ref with siblings). Gemini supports neither; the single allOf member must be flattened into the
 // parent, not dropped (dropping would lose the type).

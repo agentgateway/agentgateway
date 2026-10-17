@@ -35,7 +35,14 @@
         "description": "Get the current weather in a location",
         "parameters": {
           "type": "object",
-          "properties": { "location": { "type": "string" } },
+          "properties": {
+            "location": { "type": "string" },
+            "days": { "type": "integer", "exclusiveMinimum": 0, "maximum": 14 },
+            "hours": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0, "exclusiveMaximum": 24 }
+            }
+          },
           "required": ["location"]
         }
       }

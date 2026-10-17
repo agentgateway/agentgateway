@@ -777,8 +777,6 @@ pub mod from_completions {
 		"pattern",
 		"minimum",
 		"maximum",
-		"exclusiveMinimum",
-		"exclusiveMaximum",
 		"minItems",
 		"maxItems",
 		"minProperties",
@@ -1093,9 +1091,33 @@ pub mod from_completions {
 		}
 
 		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
+		convert_exclusive_bounds(map);
 		map.retain(|k, _| {
 			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
 		});
+	}
+
+	fn convert_exclusive_bounds(map: &mut serde_json::Map<String, Value>) {
+		// Gemini rejects exclusive bounds
+		use std::cmp::Ordering;
+		for (exclusive, inclusive, tighter) in [
+			("exclusiveMinimum", "minimum", Ordering::Greater),
+			("exclusiveMaximum", "maximum", Ordering::Less),
+		] {
+			let Some(bound) = map.remove(exclusive).filter(Value::is_number) else {
+				continue;
+			};
+			let exclusive_value = bound.as_f64().expect("a JSON number converts to f64");
+			let is_tighter = match map.get(inclusive) {
+				None => true,
+				Some(current) => current.as_f64().is_some_and(|inclusive_value| {
+					exclusive_value.partial_cmp(&inclusive_value) == Some(tighter)
+				}),
+			};
+			if is_tighter {
+				map.insert(inclusive.to_string(), bound);
+			}
+		}
 	}
 
 	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
