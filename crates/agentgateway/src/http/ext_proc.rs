@@ -25,7 +25,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
+use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
 use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
@@ -128,9 +128,11 @@ pub use processing::{
 /// Controls how an endpoint-picker-selected destination is used.
 pub enum InferenceRoutingDestinationMode {
 	/// Require the selected destination to match agentgateway's local service endpoints.
+	/// Only IP destinations can be validated; a hostname destination is rejected.
 	#[default]
 	Validated,
 	/// Trust the selected destination directly without local endpoint validation.
+	/// The destination may be an IP address or a DNS hostname.
 	Passthrough,
 }
 
@@ -189,7 +191,7 @@ pub struct InferencePoolRouter {
 
 #[derive(Debug, Default)]
 pub struct InferenceRequestResult {
-	pub destination: Option<SocketAddr>,
+	pub destination: Option<Target>,
 	pub destination_mode: InferenceRoutingDestinationMode,
 	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
@@ -239,12 +241,25 @@ impl InferencePoolRouter {
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
+		// The EPP destination is host:port. IPs parse to Target::Address; DNS names
+		// to Target::Hostname, allowing an EPP to steer to an L7 front door (e.g. a
+		// remote cluster's gateway) instead of a bare IP.
 		let dest = req
 			.headers_mut()
 			.remove(&INFERENCE_DESTINATION_HEADER)
-			.and_then(|v| v.to_str().ok().map(|v| v.parse::<SocketAddr>()))
+			.and_then(|v| v.to_str().ok().map(Target::try_from))
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
+		let dest = match dest {
+			// The header contract is host:port; a unix: destination would let the EPP
+			// point the proxy at a local socket.
+			Some(Target::UnixSocket(_)) => {
+				return Err(ProxyError::Processing(anyhow!(
+					"EPP returned invalid address: expected host:port"
+				)));
+			},
+			d => d,
+		};
 		Ok(InferenceRequestResult {
 			destination: dest,
 			destination_mode: self.destination_mode,
