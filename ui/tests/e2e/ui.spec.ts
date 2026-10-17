@@ -631,6 +631,31 @@ test('Client Setup hides client snippets until the gateway URL is set', async ({
 	await expect(page.locator('.client-setup-summary')).toContainText('Not set');
 });
 
+test('Client Setup generates a Continue config.yaml', async ({ page }) => {
+	await mockGateway(page);
+	await page.goto('/llm/client-setup');
+
+	await page.getByLabel('Gateway base URL').fill('https://gateway.example.com/team-a');
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: 'fast' }).click();
+	await page.getByRole('combobox', { name: 'Integration' }).click();
+	await page.getByRole('option', { name: 'Continue' }).click();
+
+	const clientRecipe = page.locator('.client-recipe-card');
+	await expect(clientRecipe).toContainText('~/.continue/config.yaml');
+	await expect(clientRecipe).toContainText('provider: openai');
+	await expect(clientRecipe).toContainText('model: "fast"');
+	await expect(clientRecipe).toContainText('apiBase: "https://gateway.example.com/team-a/v1"');
+	await expect(clientRecipe).toContainText('apiKey: "agw_sk_testkey123456789"');
+
+	await page.getByRole('combobox', { name: 'Virtual API key' }).click();
+	await page.getByRole('option', { name: 'Raw value' }).click();
+	await expect(clientRecipe).not.toContainText('apiKey:');
+
+	await page.getByLabel('Raw API key').fill('agw_sk_test');
+	await expect(clientRecipe).toContainText('apiKey: "agw_sk_test"');
+});
+
 test('native Field hint describes its input and label focuses it', async ({ page }) => {
 	await mockGateway(page);
 	await page.goto('/llm/client-setup');
