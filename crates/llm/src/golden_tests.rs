@@ -51,6 +51,8 @@ const SYSTEMONE: &str = "systemone";
 mod requests {
 	use super::*;
 
+	const GEMINI_MODEL: &str = "gemini-3.8-flash";
+
 	fn test_request<I>(
 		provider: &str,
 		relative_path: &str,
@@ -183,7 +185,14 @@ mod requests {
 		),
 		(
 			"reasoning",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"metadata",
@@ -205,7 +214,10 @@ mod requests {
 		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
-		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
+		(
+			"reasoning_replay",
+			&[BEDROCK, COMPLETIONS, RESPONSES, VERTEX_GEMINI],
+		),
 		(
 			"tool_history_without_tools",
 			&[BEDROCK, COMPLETIONS, RESPONSES],
@@ -230,7 +242,7 @@ mod requests {
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
-		("codex-assistant-history", &[BEDROCK, GEMINI]),
+		("codex-assistant-history", &[BEDROCK, GEMINI, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
@@ -384,6 +396,12 @@ mod requests {
 					RESPONSES => test_request(RESPONSES, &path, |i| {
 						conversion::responses::from_messages::translate(i)
 					}),
+					VERTEX_GEMINI => {
+						test_request(VERTEX_GEMINI, &path, |i: &mut types::messages::Request| {
+							i.model = Some(GEMINI_MODEL.into());
+							conversion::vertex_gemini::from_messages::translate(i, true, None)
+						})
+					},
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
 			}
@@ -410,6 +428,12 @@ mod requests {
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
 					}),
+					VERTEX_GEMINI => {
+						test_request(VERTEX_GEMINI, &path, |i: &mut types::responses::Request| {
+							i.model = Some(GEMINI_MODEL.into());
+							conversion::vertex_gemini::from_responses::translate(i, true, None).map(|r| r.body)
+						})
+					},
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
 			}

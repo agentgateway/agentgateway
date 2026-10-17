@@ -1725,6 +1725,81 @@ fn client_thinking_config_wins_over_the_catalog() {
 	);
 }
 
+// ---------- Request: Messages and Responses through Chat Completions ----------
+
+fn messages_tool_replay(call_id: &str) -> Vec<u8> {
+	let req: types::messages::Request = serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"max_tokens": 256,
+		"messages": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": call_id, "name": "get_weather", "input": { "location": "Columbus" } }
+			] },
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "call_1", "content": "15C" }
+			] }
+		],
+		"tools": [{ "name": "get_weather", "input_schema": { "type": "object" } }]
+	}))
+	.unwrap();
+	from_messages::translate(&req, true, None).unwrap()
+}
+
+fn responses_tool_replay(call_id: &str) -> Vec<u8> {
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"input": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "type": "function_call", "call_id": call_id, "name": "get_weather", "arguments": "{\"location\":\"Columbus\"}" },
+			{ "type": "function_call_output", "call_id": "call_1", "output": "15C" }
+		],
+		"tools": [{ "type": "function", "name": "get_weather", "parameters": { "type": "object" } }]
+	}))
+	.unwrap();
+	from_responses::translate(&req, true, None).unwrap().body
+}
+
+#[rstest::rstest]
+fn replayed_signature_survives_the_chain(
+	#[values(messages_tool_replay, responses_tool_replay)] replay: fn(&str) -> Vec<u8>,
+) {
+	let signature = "AY89".repeat(1024);
+	let bytes = replay(&format!("call_1__thought__{signature}"));
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(
+		g["contents"][1]["parts"][0],
+		json!({
+			"functionCall": { "name": "get_weather", "args": { "location": "Columbus" } },
+			"thoughtSignature": signature
+		})
+	);
+	assert_eq!(
+		g["contents"][2]["parts"][0]["functionResponse"]["name"],
+		"get_weather"
+	);
+	assert!(!String::from_utf8(bytes).unwrap().contains("__thought__"));
+}
+
+#[test]
+fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
+	let req: types::messages::Request = serde_json::from_value(json!({
+		"model": "gemini-2.5-flash",
+		"max_tokens": 8192,
+		"top_k": 40,
+		"thinking": { "type": "enabled", "budget_tokens": 3000 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}))
+	.unwrap();
+	let bytes = from_messages::translate(&req, true, None).unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(g["generationConfig"].get("topK"), None);
+	assert_eq!(
+		g["generationConfig"]["thinkingConfig"],
+		json!({ "thinkingBudget": 2048, "includeThoughts": true })
+	);
+}
+
 // ---------- Request: cachedContent / labels ----------
 
 #[test]

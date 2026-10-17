@@ -1267,6 +1267,49 @@ pub mod from_completions {
 	}
 }
 
+pub mod from_messages {
+	use crate::model_catalog::Catalog;
+	use crate::{AIError, types};
+
+	pub fn translate(
+		req: &types::messages::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let completions = crate::conversion::completions::from_messages::translate_request(req)?;
+		super::from_completions::translate(&super::loose(&completions)?, is_vertex, catalog)
+	}
+}
+
+pub mod from_responses {
+	use crate::conversion::namespace_tools::NamespaceToolMap;
+	use crate::model_catalog::Catalog;
+	use crate::{AIError, types};
+
+	pub struct TranslatedRequest {
+		pub body: Vec<u8>,
+		pub namespaces: NamespaceToolMap,
+	}
+
+	pub fn translate(
+		req: &types::responses::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<TranslatedRequest, AIError> {
+		let completions = crate::conversion::openai_compat::from_responses::translate_request(req)?;
+		let body =
+			super::from_completions::translate(&super::loose(&completions.request)?, is_vertex, catalog)?;
+		Ok(TranslatedRequest {
+			body,
+			namespaces: completions.namespaces,
+		})
+	}
+}
+
+fn loose(req: &types::completions::typed::Request) -> Result<types::completions::Request, AIError> {
+	crate::json::convert(req).map_err(AIError::RequestMarshal)
+}
+
 pub mod to_completions {
 	use std::collections::HashMap;
 	use std::sync::Arc;
