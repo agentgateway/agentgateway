@@ -607,7 +607,7 @@ func (s *Syncer) buildAgwResources(
 	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
-	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways, krtopts)
 
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {

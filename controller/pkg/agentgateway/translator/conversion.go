@@ -880,6 +880,19 @@ func ReferenceAllowed(
 }
 
 func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
+	// Several collections resolve the parents of the same route. When they are precomputed, use them
+	// rather than resolving again.
+	if ctx.parentRefs != nil {
+		_, _, kind := GetCommonRouteInfo(obj)
+		key := utils.TypedNamespacedName{Kind: kind.Kind, NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}}
+		if refs := krt.FetchOne(ctx.Krt, ctx.parentRefs, krt.FilterKey(key.String())); refs != nil {
+			return refs.Refs
+		}
+	}
+	return resolveParentReferenceInfo(ctx, parents, obj)
+}
+
+func resolveParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
 	allowed := ctx.References.AllowedParentReferences

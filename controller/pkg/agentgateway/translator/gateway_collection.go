@@ -614,14 +614,31 @@ type ParentResolver = plugins.ParentResolver
 
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
-	Gateways     krt.Collection[*GatewayListener]
-	GatewayIndex krt.Index[utils.TypedNamespacedName, *GatewayListener]
+	Parents     krt.Collection[*RouteParent]
+	ParentIndex krt.Index[utils.TypedNamespacedName, *RouteParent]
+}
+
+// RouteParent is the subset of a GatewayListener that routes depend on. Routes fetch this rather
+// than the GatewayListener, so listener changes routes do not read (such as TLS certificates) do
+// not recompute every attached route.
+type RouteParent struct {
+	Name         string
+	ParentObject utils.TypedNamespacedName
+	ParentInfo
+}
+
+func (p *RouteParent) ResourceName() string {
+	return p.Name
+}
+
+func (p *RouteParent) Equals(other *RouteParent) bool {
+	return p.Name == other.Name && p.ParentObject == other.ParentObject && p.ParentInfo.Equals(other.ParentInfo)
 }
 
 // Fetch returns the parents for a given parent key.
 func (p RouteParents) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
-	return slices.Map(krt.Fetch(ctx, p.Gateways, krt.FilterIndex(p.GatewayIndex, pk)), func(gw *GatewayListener) *ParentInfo {
-		return &gw.ParentInfo
+	return slices.Map(krt.Fetch(ctx, p.Parents, krt.FilterIndex(p.ParentIndex, pk)), func(rp *RouteParent) *ParentInfo {
+		return &rp.ParentInfo
 	})
 }
 
@@ -643,13 +660,17 @@ func (c *CompositeParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.Ty
 // BuildRouteParents builds a RouteParents from a collection of gateways.
 func BuildRouteParents(
 	gateways krt.Collection[*GatewayListener],
+	krtopts krtutil.KrtOptions,
 ) RouteParents {
-	idx := krt.NewIndex(gateways, "Parent", func(o *GatewayListener) []utils.TypedNamespacedName {
+	parents := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *GatewayListener) **RouteParent {
+		return new(&RouteParent{Name: gw.Name, ParentObject: gw.ParentObject, ParentInfo: gw.ParentInfo})
+	}, krtopts.ToOptions("translator/RouteParents")...)
+	idx := krt.NewIndex(parents, "Parent", func(o *RouteParent) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.ParentObject}
 	})
 	return RouteParents{
-		Gateways:     gateways,
-		GatewayIndex: idx,
+		Parents:     parents,
+		ParentIndex: idx,
 	}
 }
 

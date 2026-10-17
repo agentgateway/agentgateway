@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"reflect"
 	"strings"
 
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
@@ -454,6 +455,13 @@ func AgwRouteCollection(
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
+	inputs.parentRefs = krt.JoinCollection([]krt.Collection[RouteParentRefs]{
+		routeParentRefsCollection(inputs, httpRouteCol, wellknown.HTTPRouteGVK, krtopts),
+		routeParentRefsCollection(inputs, grpcRouteCol, wellknown.GRPCRouteGVK, krtopts),
+		routeParentRefsCollection(inputs, tcpRouteCol, wellknown.TCPRouteGVK, krtopts),
+		routeParentRefsCollection(inputs, tlsRouteCol, wellknown.TLSRouteGVK, krtopts),
+	}, krtopts.ToOptions("translator/RouteParentRefs")...)
+
 	// Build delegation bindings before creating the HTTPRoute status collection,
 	// so we can set parent status for delegated routes.
 	httpRouteGroupBindings := buildHTTPRouteGroupBindings(httpRouteCol, inputs, krtopts)
@@ -1043,6 +1051,38 @@ type RouteContextInputs struct {
 	References          plugins.ReferenceTypes
 	ControllerName      string
 	BackendRefGrantMode apisettings.BackendRefGrantMode
+
+	// parentRefs, if set, holds the resolved parent references of each route.
+	parentRefs krt.Collection[RouteParentRefs]
+}
+
+// RouteParentRefs holds the resolved parent references of a route, so the many collections that
+// need them resolve them once.
+type RouteParentRefs struct {
+	Route utils.TypedNamespacedName
+	Refs  []RouteParentReference
+}
+
+func (r RouteParentRefs) ResourceName() string {
+	return r.Route.String()
+}
+
+func (r RouteParentRefs) Equals(other RouteParentRefs) bool {
+	return r.Route == other.Route && reflect.DeepEqual(r.Refs, other.Refs)
+}
+
+func routeParentRefsCollection[T controllers.Object](
+	inputs RouteContextInputs,
+	col krt.Collection[T],
+	kind schema.GroupVersionKind,
+	krtopts krtutil.KrtOptions,
+) krt.Collection[RouteParentRefs] {
+	return krt.NewCollection(col, func(krtctx krt.HandlerContext, obj T) *RouteParentRefs {
+		return &RouteParentRefs{
+			Route: utils.TypedNamespacedName{Kind: kind.Kind, NamespacedName: config.NamespacedName(obj)},
+			Refs:  resolveParentReferenceInfo(inputs.WithCtx(krtctx), inputs.RouteParents, obj),
+		}
+	}, krtopts.ToOptions("translator/"+kind.Kind+"ParentRefs")...)
 }
 
 func (i RouteContextInputs) WithCtx(krtctx krt.HandlerContext) RouteContext {
