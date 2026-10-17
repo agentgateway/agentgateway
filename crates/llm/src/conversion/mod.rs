@@ -89,6 +89,31 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
 }
 
+// Keep provider state in the client API's opaque reasoning field so long signatures do not alter
+// public tool IDs. The embedded call ID preserves the association across parallel tool calls.
+const GEMINI_THOUGHT_SIGNATURE_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+/// Borrowed to encode, owned once decoded.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GeminiThoughtSignature<S = String> {
+	call_id: S,
+	signature: S,
+}
+
+impl<'a> GeminiThoughtSignature<&'a str> {
+	fn encode(call_id: &'a str, signature: &'a str) -> String {
+		let json = serde_json::to_string(&Self { call_id, signature })
+			.expect("serializing two strings cannot fail");
+		format!("{GEMINI_THOUGHT_SIGNATURE_PREFIX}{json}")
+	}
+}
+
+impl GeminiThoughtSignature {
+	fn decode(carrier: &str) -> Option<Self> {
+		serde_json::from_str(carrier.strip_prefix(GEMINI_THOUGHT_SIGNATURE_PREFIX)?).ok()
+	}
+}
+
 #[cfg(test)]
 mod rerank_tests;
 

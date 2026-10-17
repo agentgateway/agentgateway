@@ -576,6 +576,7 @@ pub mod from_completions {
 								name: name.clone(),
 								arguments: args,
 							},
+							..Default::default()
 						},
 					));
 				},

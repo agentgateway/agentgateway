@@ -94,6 +94,7 @@ pub mod from_messages {
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
+	use crate::conversion::GeminiThoughtSignature;
 	use crate::parse::sse::SseJsonEvent;
 	use crate::types::ResponseType;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, types};
@@ -186,20 +187,18 @@ pub mod from_messages {
 				cache_control: None,
 			}));
 		}
-		if let Some(tool_calls) = choice.message.tool_calls {
-			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
-				completions::MessageToolCalls::Function(f) => {
-					let input = crate::conversion::tool_arguments_to_input(&f.function.arguments);
-					Some(messages::ContentBlock::ToolUse {
-						id: f.id,
-						name: f.function.name,
-						input,
-						cache_control: None,
-					})
-				},
-				completions::MessageToolCalls::Custom(_) => None,
-			}));
-		}
+		content.extend(
+			choice
+				.message
+				.tool_calls
+				.into_iter()
+				.flatten()
+				.filter_map(|tc| match tc {
+					completions::MessageToolCalls::Function(call) => Some(call),
+					completions::MessageToolCalls::Custom(_) => None,
+				})
+				.flat_map(tool_call_blocks),
+		);
 
 		let (mut stop_reason, may_have_stop_sequence) = match choice.finish_reason {
 			Some(completions::FinishReason::Stop) => (messages::StopReason::EndTurn, true),
@@ -270,6 +269,25 @@ pub mod from_messages {
 			}),
 			content,
 		})
+	}
+
+	/// A Gemini thought signature rides in a `Thinking` block placed before the tool call it belongs to.
+	fn tool_call_blocks(
+		call: completions::MessageToolCall,
+	) -> impl Iterator<Item = messages::ContentBlock> {
+		let thinking = call
+			.thought_signature()
+			.map(|signature| messages::ContentBlock::Thinking {
+				thinking: String::new(),
+				signature: GeminiThoughtSignature::encode(&call.id, signature),
+			});
+		let tool_use = messages::ContentBlock::ToolUse {
+			input: crate::conversion::tool_arguments_to_input(&call.function.arguments),
+			id: call.id,
+			name: call.function.name,
+			cache_control: None,
+		};
+		thinking.into_iter().chain(std::iter::once(tool_use))
 	}
 
 	pub fn translate_stream(
@@ -1063,6 +1081,17 @@ pub mod from_messages {
 					}
 				},
 				messages::Role::Assistant => {
+					let mut gemini_signatures: HashMap<_, _> = msg
+						.content
+						.iter()
+						.filter_map(|block| match block {
+							messages::ContentBlock::Thinking { signature, .. } => {
+								crate::conversion::GeminiThoughtSignature::decode(signature)
+							},
+							_ => None,
+						})
+						.map(|value| (value.call_id, value.signature))
+						.collect();
 					let mut assistant_parts = Vec::new();
 					let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 					let mut reasoning_content: Option<String> = None;
@@ -1082,21 +1111,28 @@ pub mod from_messages {
 							messages::ContentBlock::ToolUse {
 								id, name, input, ..
 							} => {
-								tool_calls.push(completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id,
-										function: completions::FunctionCall {
-											name,
-											arguments: serde_json::to_string(&input).unwrap_or_default(),
-										},
+								let signature = gemini_signatures.remove(&id);
+								let mut call = completions::MessageToolCall {
+									id,
+									function: completions::FunctionCall {
+										name,
+										arguments: serde_json::to_string(&input).unwrap_or_default(),
 									},
-								));
+									extra_content: None,
+								};
+								if let Some(signature) = signature {
+									call.set_thought_signature(signature);
+								}
+								tool_calls.push(completions::MessageToolCalls::Function(call));
 							},
 							// Chat Completions carries one reasoning text per turn, so the blocks are joined.
 							messages::ContentBlock::Thinking {
 								thinking,
 								signature,
 							} => {
+								if GeminiThoughtSignature::decode(&signature).is_some() {
+									continue;
+								}
 								match reasoning_content.as_mut() {
 									Some(text) => {
 										text.push_str("\n\n");
