@@ -7,12 +7,12 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), true).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), true, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
 fn to_gemini_api(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), false).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), false, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -175,6 +175,7 @@ fn gs_url_without_extension_or_hint_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -239,6 +240,7 @@ fn file_gs_uri_without_extension_or_hint_is_rejected() {
 			"file_data": "gs://bucket/object"
 		}))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -265,6 +267,7 @@ fn data_url_without_media_type_or_filename_is_rejected() {
 			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
 		)),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -288,6 +291,7 @@ fn raw_base64_file_data_without_a_mime_source_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -312,6 +316,7 @@ fn file_id_is_rejected_rather_than_dropped() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_id": "file-abc123" }))),
 		true,
+		None,
 	);
 	let err = err.expect_err("opaque file_id must be rejected");
 	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
@@ -330,6 +335,7 @@ fn file_part_without_data_or_id_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "filename": "report.pdf" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -344,6 +350,7 @@ fn rejected_signed_url_omits_query_from_error() {
 			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
 		}))),
 		true,
+		None,
 	)
 	.expect_err("extension-less URL without a MIME hint must be rejected");
 	let msg = err.to_string();
@@ -375,6 +382,7 @@ fn http_image_url_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
@@ -1629,43 +1637,80 @@ fn gemini_schema_non_string_const_typed_by_value_kind() {
 	);
 }
 
-#[test]
-fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
-	let g = to_gemini(json!({
-		"model": "gemini-3-pro",
+#[rstest::rstest]
+#[case::none_omits("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "none", None)]
+#[case::minimal_kept("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "minimal", "includeThoughts": true })))]
+#[case::minimal_rounds_up("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::max_is_high("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "max", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_4_gets_a_level("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_api_provider("gemini-4-argon", false, Some(("gcp.gemini", &["low", "medium", "high"][..])), "low", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::unusable_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["max"][..])), "high", None)]
+#[case::known_without_levels_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "low", None)]
+#[case::known_without_levels_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "medium", None)]
+#[case::known_without_levels_high("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "high", None)]
+#[case::only_high_from_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "low", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::only_high_from_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "medium", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::mixed_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "max"][..])), "high", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::other_provider_ignored("gemini-3-flash-preview", true, Some(("gcp.gemini", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_minimal("gemini-3.8-flash", true, None, "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_gemini_4("gemini-4-argon", true, None, "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::budget_high("gemini-2.5-flash", true, None, "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+#[case::budget_xhigh("gemini-2.5-flash", true, None, "xhigh", Some(json!({ "thinkingBudget": 8192, "includeThoughts": true })))]
+#[case::budget_max("gemini-2.5-flash", true, None, "max", Some(json!({ "thinkingBudget": 16384, "includeThoughts": true })))]
+#[case::budget_only_catalog_entry("gemini-2.5-pro", true, Some(("gcp.vertex_ai", &[][..])), "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+fn thinking_config(
+	#[case] model: &str,
+	#[case] is_vertex: bool,
+	#[case] entry: Option<(&str, &[&str])>,
+	#[case] effort: &str,
+	#[case] expected: Option<Value>,
+) {
+	let catalog = entry.map(|(provider, efforts)| {
+		let efforts: Vec<_> = efforts
+			.iter()
+			.map(|e| serde_json::from_value(json!(e)).unwrap())
+			.collect();
+		crate::model_catalog::TestCatalog::new([]).with_efforts(provider, model, efforts)
+	});
+	let request = req(json!({
+		"model": model,
 		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "high"
+		"reasoning_effort": effort
 	}));
+	let bytes = from_completions::translate(
+		&request,
+		is_vertex,
+		catalog
+			.as_ref()
+			.map(|c| c as &dyn crate::model_catalog::ModelCatalogHandle),
+	)
+	.unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
 	assert_eq!(
-		g["generationConfig"]["thinkingConfig"]["thinkingLevel"],
-		"high"
+		g["generationConfig"].get("thinkingConfig").cloned(),
+		expected
 	);
 }
 
 #[test]
-fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
-	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
-		let g = to_gemini(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": "x" }],
-			"reasoning_effort": effort
-		}));
-		assert_eq!(
-			g["generationConfig"]["thinkingConfig"]["thinkingBudget"],
-			budget
-		);
-	}
-}
-
-#[test]
-fn reasoning_effort_none_omits_thinking_config() {
-	let g = to_gemini(json!({
-		"model": "gemini-2.5-flash",
+fn client_thinking_config_wins_over_the_catalog() {
+	let catalog = crate::model_catalog::TestCatalog::new([]).with_efforts(
+		"gcp.vertex_ai",
+		"gemini-3.8-flash",
+		vec![crate::types::completions::typed::ReasoningEffort::Low],
+	);
+	let request = req(json!({
+		"model": "gemini-3.8-flash",
 		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "none"
+		"reasoning_effort": "low",
+		"thinkingConfig": { "thinkingLevel": "high" }
 	}));
-	let gc = g.get("generationConfig");
-	assert!(gc.is_none() || gc.unwrap().get("thinkingConfig").is_none());
+	let bytes = from_completions::translate(&request, true, Some(&catalog)).unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(
+		g["generationConfig"]["thinkingConfig"],
+		json!({ "thinkingLevel": "high" })
+	);
 }
 
 // ---------- Request: cachedContent / labels ----------

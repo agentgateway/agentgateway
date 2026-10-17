@@ -110,7 +110,10 @@ pub mod from_completions {
 	use serde_json::{Value, json};
 
 	use super::*;
+	use crate::Provider as _;
 	use crate::conversion::completions::parse_data_url;
+	use crate::model_catalog::{Catalog, nearest_effort};
+	use crate::types::completions::typed::ReasoningEffort;
 
 	fn canonical_mime(mime: &str) -> &str {
 		match mime {
@@ -154,14 +157,19 @@ pub mod from_completions {
 			mime_from_ext_token(hint).map(str::to_string)
 		}
 	}
-	pub fn translate(req: &types::completions::Request, is_vertex: bool) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req, is_vertex)?;
+	pub fn translate(
+		req: &types::completions::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let out = build_request(req, is_vertex, catalog)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
 		is_vertex: bool,
+		catalog: Catalog<'_>,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = req
 			.model
@@ -189,7 +197,7 @@ pub mod from_completions {
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, model, is_vertex);
+		let generation_config = build_generation_config(req, model, is_vertex, catalog);
 
 		let cached_content = req
 			.rest
@@ -702,6 +710,7 @@ pub mod from_completions {
 		req: &types::completions::Request,
 		model: &str,
 		is_vertex: bool,
+		catalog: Catalog<'_>,
 	) -> Option<vg::GenerationConfig> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
@@ -714,7 +723,7 @@ pub mod from_completions {
 		};
 
 		let (response_mime_type, response_schema) = response_format(req, is_vertex);
-		let thinking_config = thinking_config(req, model);
+		let thinking_config = thinking_config(req, model, is_vertex, catalog);
 
 		let cfg = vg::GenerationConfig {
 			temperature: req.temperature,
@@ -1133,13 +1142,12 @@ pub mod from_completions {
 		}
 	}
 
-	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
-	/// `thinkingBudget`. Detected by model name.
-	fn uses_thinking_levels(model: &str) -> bool {
-		model.contains("gemini-3")
-	}
-
-	fn thinking_config(req: &types::completions::Request, model: &str) -> Option<vg::ThinkingConfig> {
+	fn thinking_config(
+		req: &types::completions::Request,
+		model: &str,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Option<vg::ThinkingConfig> {
 		if let Some(tc) = req
 			.rest
 			.get("thinking_config")
@@ -1148,34 +1156,74 @@ pub mod from_completions {
 			return vg::ThinkingConfig::deserialize(tc).ok();
 		}
 
-		let effort = req.reasoning_effort.as_ref()?;
-		if uses_thinking_levels(model) {
-			let level = match effort {
-				types::completions::typed::ReasoningEffort::None => return None,
-				types::completions::typed::ReasoningEffort::Minimal => "minimal",
-				types::completions::typed::ReasoningEffort::Low => "low",
-				types::completions::typed::ReasoningEffort::Medium => "medium",
-				types::completions::typed::ReasoningEffort::High
-				| types::completions::typed::ReasoningEffort::Xhigh
-				| types::completions::typed::ReasoningEffort::Max => "high",
-			};
-			Some(vg::ThinkingConfig {
+		let effort = req
+			.reasoning_effort
+			.as_ref()
+			.filter(|e| **e != ReasoningEffort::None)?;
+		let level = select_thinking_level(effort, model, is_vertex, catalog);
+		if let Some(level) = level {
+			return Some(vg::ThinkingConfig {
 				thinking_level: Some(level.into()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
 				rest: Default::default(),
-			})
+			});
+		}
+		if uses_thinking_levels(model) {
+			// Models using levels must not fall back to a thinking budget
+			return None;
+		}
+
+		let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
+		Some(vg::ThinkingConfig {
+			thinking_level: None,
+			thinking_budget: Some(budget),
+			include_thoughts: Some(true),
+			rest: Default::default(),
+		})
+	}
+
+	fn select_thinking_level(
+		effort: &ReasoningEffort,
+		model: &str,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Option<&'static str> {
+		let provider = if is_vertex {
+			crate::vertex::Provider::NAME
 		} else {
-			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
-			// thinking budget at 32K; check every target model's limit before raising it.
-			// `none` omits thinkingConfig instead of sending budget 0.
-			let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
-			Some(vg::ThinkingConfig {
-				thinking_level: None,
-				thinking_budget: Some(budget),
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			})
+			crate::gemini::Provider::NAME
+		};
+		let level_in = |accepted: &[ReasoningEffort]| {
+			let levels: Vec<_> = accepted
+				.iter()
+				.filter(|e| gemini_level(e).is_some())
+				.cloned()
+				.collect();
+			nearest_effort(effort, &levels).and_then(|e| gemini_level(&e))
+		};
+		match catalog.and_then(|c| c.reasoning_efforts(&provider, model)) {
+			Some(accepted) => level_in(&accepted),
+			None if uses_thinking_levels(model) => level_in(&[
+				ReasoningEffort::Low,
+				ReasoningEffort::Medium,
+				ReasoningEffort::High,
+			]),
+			None => None,
+		}
+	}
+
+	fn uses_thinking_levels(model: &str) -> bool {
+		model.contains("gemini-3") || model.contains("gemini-4")
+	}
+
+	fn gemini_level(effort: &ReasoningEffort) -> Option<&'static str> {
+		match effort {
+			ReasoningEffort::Minimal => Some("minimal"),
+			ReasoningEffort::Low => Some("low"),
+			ReasoningEffort::Medium => Some("medium"),
+			ReasoningEffort::High => Some("high"),
+			ReasoningEffort::None | ReasoningEffort::Xhigh | ReasoningEffort::Max => None,
 		}
 	}
 }

@@ -311,7 +311,7 @@ mod requests {
 						|i: &mut types::completions::Request| {
 							let mut resolved = i.clone();
 							resolved.model = Some("gemini-2.5-pro".into());
-							conversion::vertex_gemini::from_completions::translate(&resolved, true)
+							conversion::vertex_gemini::from_completions::translate(&resolved, true, None)
 						},
 					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),

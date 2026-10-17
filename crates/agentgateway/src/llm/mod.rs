@@ -502,7 +502,7 @@ fn render_vertex_gemini(
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
 			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
-			conversion::vertex_gemini::from_completions::translate(&req, is_vertex)
+			conversion::vertex_gemini::from_completions::translate(&req, is_vertex, ctx.catalog)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"

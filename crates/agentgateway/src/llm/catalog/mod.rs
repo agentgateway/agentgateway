@@ -1173,6 +1173,22 @@ mod tests {
 		);
 	}
 
+	#[rstest::rstest]
+	#[case::vertex_gemini_3("gcp.vertex_ai", "gemini-3.8-flash")]
+	#[case::vertex_gemini_4("gcp.vertex_ai", "gemini-4-argon")]
+	#[case::gemini_api_gemini_4("gcp.gemini", "gemini-4-argon")]
+	fn builtin_catalog_lists_gemini_thinking_levels(#[case] provider: &str, #[case] model: &str) {
+		let catalog = ModelCatalog::from_json(BUILTIN_CATALOG_JSON);
+		assert_eq!(
+			catalog.as_handle().reasoning_efforts(provider, model),
+			Some(vec![
+				ReasoningEffort::Low,
+				ReasoningEffort::Medium,
+				ReasoningEffort::High
+			])
+		);
+	}
+
 	#[test]
 	fn openai_family_splits_cached_out_of_input_when_priced() {
 		let resp = LLMResponse {
