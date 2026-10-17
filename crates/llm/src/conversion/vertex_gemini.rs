@@ -183,7 +183,7 @@ pub mod from_completions {
 
 		let system_instruction = (!system_text.is_empty()).then(|| vg::Content {
 			role: None,
-			parts: vec![text_part(&system_text.join("\n"))],
+			parts: vec![text_part(system_text.join("\n"))],
 			rest: Value::Null,
 		});
 
@@ -255,11 +255,23 @@ pub mod from_completions {
 		let mut call_meta: std::collections::HashMap<String, (String, usize)> = Default::default();
 		let mut system_text: Vec<String> = Vec::new();
 		let mut contents: Vec<vg::Content> = Vec::new();
+		// Vertex rejects a reminder between the results of a parallel call
+		let mut reminders: Vec<vg::Part> = Vec::new();
 		for m in messages {
-			match m.role.as_str() {
-				"system" | "developer" => {
+			let role = m.role.as_str();
+			if !matches!(role, "system" | "developer" | "tool" | "function") {
+				push_content(&mut contents, "user", std::mem::take(&mut reminders));
+			}
+			match role {
+				// In systemInstruction, a later system message would change the cached prefix every turn
+				"system" | "developer" if contents.is_empty() => {
 					system_text.extend(content_text(&m.content).filter(|t| !t.is_empty()));
 				},
+				"system" | "developer" => reminders.extend(
+					content_text(&m.content)
+						.filter(|t| !t.is_empty())
+						.map(|t| text_part(format!("<system-reminder>\n{t}\n</system-reminder>"))),
+				),
 				"user" => push_content(&mut contents, "user", user_parts(&m.content)?),
 				"assistant" => {
 					if let Some(calls) = &m.tool_calls {
@@ -320,6 +332,7 @@ pub mod from_completions {
 				_ => {},
 			}
 		}
+		push_content(&mut contents, "user", reminders);
 
 		// Vertex rejects `id` and correlates functionResponse to functionCall positionally, so each
 		// response group must follow the assistant's tool_calls order even when a client returns the
@@ -531,9 +544,9 @@ pub mod from_completions {
 		)))
 	}
 
-	fn text_part(text: &str) -> vg::Part {
+	fn text_part(text: impl Into<String>) -> vg::Part {
 		vg::Part::Text(vg::TextPart {
-			text: text.to_string(),
+			text: text.into(),
 			thought: None,
 			thought_signature: None,
 			rest: Value::Null,

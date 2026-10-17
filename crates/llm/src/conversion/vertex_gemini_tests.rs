@@ -57,6 +57,105 @@ fn consecutive_same_role_messages_merge() {
 	assert_eq!(g["contents"][1]["role"], "model");
 }
 
+#[rstest::rstest]
+fn system_messages_keep_the_prefix_stable(#[values("system", "developer")] role: &str) {
+	let turn = |n: usize| {
+		let messages: Vec<Value> = [system("You are Claude Code."), user("read the files")]
+			.into_iter()
+			.chain((0..n).flat_map(|i| {
+				let id = format!("call_{i}");
+				[
+					calls(&[&id]),
+					result(&id),
+					json!({ "role": role, "content": format!("<total_tokens>{i}</total_tokens>") }),
+				]
+			}))
+			.collect();
+		to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }))
+	};
+	let (prev, next) = (turn(2), turn(3));
+	assert_eq!(prev["systemInstruction"], next["systemInstruction"]);
+	let (prev, next) = (
+		prev["contents"].as_array().unwrap(),
+		next["contents"].as_array().unwrap(),
+	);
+	assert_eq!(prev[..], next[..prev.len()]);
+}
+
+#[rstest::rstest]
+#[case::leading(vec![system("s"), user("hi")], &["system:text", "user:text"])]
+#[case::between_turns(
+	vec![user("hi"), system("s"), assistant("ok")],
+	&["user:text,reminder", "model:text"]
+)]
+#[case::after_single_call(
+	vec![user("hi"), calls(&["a"]), system("s"), result("a"), user("next")],
+	&["user:text", "model:call", "user:result", "user:reminder,text"]
+)]
+#[case::between_parallel_results(
+	vec![user("hi"), calls(&["a", "b"]), result("a"), system("s"), result("b")],
+	&["user:text", "model:call,call", "user:result,result", "user:reminder"]
+)]
+#[case::trailing(
+	vec![user("hi"), calls(&["a"]), result("a"), system("s")],
+	&["user:text", "model:call", "user:result", "user:reminder"]
+)]
+fn system_message_placement(#[case] messages: Vec<Value>, #[case] expected: &[&str]) {
+	let g = to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }));
+	let system = g
+		.get("systemInstruction")
+		.map(|_| "system:text".to_string());
+	let contents = g["contents"].as_array().unwrap().iter().map(|c| {
+		let parts: Vec<&str> = c["parts"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|p| match p {
+				_ if p.get("functionCall").is_some() => "call",
+				_ if p.get("functionResponse").is_some() => "result",
+				_ if p["text"]
+					.as_str()
+					.is_some_and(|t| t.starts_with("<system-reminder>")) =>
+				{
+					"reminder"
+				},
+				_ => "text",
+			})
+			.collect();
+		format!("{}:{}", c["role"].as_str().unwrap(), parts.join(","))
+	});
+	assert_eq!(
+		system.into_iter().chain(contents).collect::<Vec<_>>(),
+		expected
+	);
+}
+
+fn user(text: &str) -> Value {
+	json!({ "role": "user", "content": text })
+}
+
+fn assistant(text: &str) -> Value {
+	json!({ "role": "assistant", "content": text })
+}
+
+fn system(text: &str) -> Value {
+	json!({ "role": "system", "content": text })
+}
+
+fn calls(ids: &[&str]) -> Value {
+	let calls: Vec<Value> = ids
+		.iter()
+		.map(
+			|id| json!({ "id": id, "type": "function", "function": { "name": "Read", "arguments": "{}" } }),
+		)
+		.collect();
+	json!({ "role": "assistant", "tool_calls": calls })
+}
+
+fn result(id: &str) -> Value {
+	json!({ "role": "tool", "tool_call_id": id, "content": "file" })
+}
+
 #[test]
 fn empty_messages_get_synthetic_user_entry() {
 	let g = to_gemini(json!({ "model": "gemini-2.5-flash", "messages": [] }));

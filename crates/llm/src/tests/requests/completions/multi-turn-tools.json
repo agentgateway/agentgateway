@@ -1,6 +1,7 @@
 {
   "model": "gemini-2.5-pro",
   "messages": [
+    { "role": "system", "content": "You are a weather assistant." },
     { "role": "user", "content": "Weather in Columbus and Berlin?" },
     {
       "role": "assistant",
@@ -13,6 +14,7 @@
         }
       ]
     },
+    { "role": "system", "content": "Report temperatures in celsius." },
     { "role": "tool", "tool_call_id": "call_1", "name": "get_weather", "content": "{\"temp\":15}" },
     {
       "role": "assistant",
@@ -25,7 +27,8 @@
         }
       ]
     },
-    { "role": "tool", "tool_call_id": "call_2", "name": "get_weather", "content": "{\"temp\":9}" }
+    { "role": "tool", "tool_call_id": "call_2", "name": "get_weather", "content": "{\"temp\":9}" },
+    { "role": "system", "content": "2 tool calls used." }
   ],
   "tools": [
     {
