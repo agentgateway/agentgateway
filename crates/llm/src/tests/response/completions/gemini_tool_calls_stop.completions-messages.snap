@@ -1,0 +1,70 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_tool_calls_stop.json
+info:
+  choices:
+    - finish_reason: stop
+      index: 0
+      message:
+        role: assistant
+        tool_calls:
+          - function:
+              arguments: "{\"location\":\"Paris\"}"
+              name: get_weather
+            id: call_575029
+            type: function
+  created: 1791284455
+  id: x7TEaqD0Eeet5OUPoYHGgQo
+  model: gemini-3.8-flash
+  object: chat.completion
+  usage:
+    completion_tokens: 20
+    prompt_tokens: 120
+    total_tokens: 140
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "tool_use",
+        "id": "call_575029",
+        "name": "get_weather",
+        "input": {
+          "location": "Paris"
+        }
+      }
+    ],
+    "model": "gemini-3.8-flash",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 120,
+      "output_tokens": 20
+    }
+  },
+  "parsed": {
+    "input_tokens": 120,
+    "output_tokens": 20,
+    "total_tokens": 140,
+    "provider_model": "gemini-3.8-flash",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_575029",
+            "name": "get_weather",
+            "arguments": {
+              "location": "Paris"
+            }
+          }
+        ],
+        "finish_reason": "tool_use"
+      }
+    ]
+  }
+}

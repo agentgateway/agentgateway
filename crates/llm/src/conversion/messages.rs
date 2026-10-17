@@ -812,7 +812,7 @@ pub mod from_completions {
 							logprobs: None,
 							delta: completions::StreamResponseDelta {
 								tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-									index: tool_index,
+									index: Some(tool_index),
 									id: Some(id),
 									r#type: Some(completions::FunctionType::Function),
 									function: Some(completions::FunctionCallStream {
@@ -859,7 +859,7 @@ pub mod from_completions {
 								Some(ongoing) => {
 									ongoing.emitted_arguments = true;
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: ongoing.tool_index,
+										index: Some(ongoing.tool_index),
 										id: None,
 										r#type: None,
 										function: Some(completions::FunctionCallStream {
@@ -976,7 +976,7 @@ pub mod from_completions {
 								logprobs: None,
 								delta: completions::StreamResponseDelta {
 									tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: ongoing.tool_index,
+										index: Some(ongoing.tool_index),
 										id: None,
 										r#type: None,
 										function: Some(completions::FunctionCallStream {
