@@ -1034,7 +1034,14 @@ mod responses {
 		("response/vertex/rerank-no-details.json", VERTEX),
 		("response/cohere/rerank.json", COHERE),
 	];
-	const VERTEX_GEMINI_RESPONSES: &[&str] = &["basic", "tool", "reasoning", "blocked"];
+	const VERTEX_GEMINI_RESPONSES: &[&str] = &[
+		"basic",
+		"tool",
+		"reasoning",
+		"blocked",
+		"max_tokens",
+		"malformed_function_call",
+	];
 	const DETECT_RESPONSES: &[(&str, &str)] = &[
 		("response/detect/bedrock-invoke.bin", BEDROCK_TO_DETECT),
 		(
