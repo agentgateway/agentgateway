@@ -12,7 +12,8 @@ use super::{
 	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
 	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
 	TailResponse, TimeRange, TurnEntry, UsageEntry, analytics_window, attr_filter_values,
-	decode_cursor, encode_cursor, limit, promoted_attribute_column, prompt_preview, turn_kind,
+	decode_cursor, encode_cursor, escape_like, limit, promoted_attribute_column, prompt_preview,
+	search_term, turn_kind,
 };
 
 pub struct PostgresLogStore {
@@ -451,6 +452,14 @@ fn push_filters(
 	if let Some(has_payload) = filters.has_payload {
 		qb.push(" AND has_payload = ");
 		qb.push_bind(has_payload);
+	}
+	if let Some(search) = search_term(filters) {
+		let pattern = format!("%{}%", escape_like(search));
+		qb.push(" AND (agentgateway_user ILIKE ");
+		qb.push_bind(pattern.clone());
+		qb.push(" ESCAPE '\\' OR agentgateway_group ILIKE ");
+		qb.push_bind(pattern);
+		qb.push(" ESCAPE '\\')");
 	}
 	for (key, value) in &filters.attributes {
 		let Some(values) = attr_filter_values(value) else {

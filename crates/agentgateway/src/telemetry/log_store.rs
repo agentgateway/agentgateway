@@ -448,6 +448,11 @@ pub struct LogFilters {
 	pub trace_id: Option<String>,
 	#[serde(default)]
 	pub has_payload: Option<bool>,
+	/// Case-insensitive substring matched against the user and group of a request. Unlike
+	/// `attributes`, which selects an exact value of a named attribute, this matches anywhere in
+	/// either value, so a partial name finds a request whose full value is not known yet.
+	#[serde(default)]
+	pub search: Option<String>,
 	#[serde(default)]
 	pub attributes: BTreeMap<String, Value>,
 }
@@ -733,6 +738,28 @@ pub(crate) fn promoted_attribute_column(key: &str) -> Option<&'static str> {
 		"user_agent.name" => Some("user_agent_name"),
 		_ => None,
 	}
+}
+
+/// The free-text search term, or `None` when it is empty or only whitespace.
+pub(crate) fn search_term(filters: &LogFilters) -> Option<&str> {
+	filters
+		.search
+		.as_deref()
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+}
+
+/// Escapes the characters that `LIKE` and `ILIKE` treat as wildcards, so a search for `50%` or
+/// `a_b` matches those characters literally. The caller adds the `%` wildcards around the result.
+pub(crate) fn escape_like(term: &str) -> String {
+	let mut escaped = String::with_capacity(term.len());
+	for character in term.chars() {
+		if matches!(character, '\\' | '%' | '_') {
+			escaped.push('\\');
+		}
+		escaped.push(character);
+	}
+	escaped
 }
 
 pub(crate) fn analytics_window(
