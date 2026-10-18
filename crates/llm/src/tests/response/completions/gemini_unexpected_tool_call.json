@@ -1,0 +1,22 @@
+{
+  "choices": [
+    {
+      "finish_reason": "unexpected_tool_call",
+      "index": 0,
+      "message": {
+        "content": null,
+        "refusal": "I could not call get_weather because tool calls are disabled for this request.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791284455,
+  "id": "9tTEaqrlEeeKvdIPv7bgyAw",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 22,
+    "prompt_tokens": 106,
+    "total_tokens": 128
+  }
+}

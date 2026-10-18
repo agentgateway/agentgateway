@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-gemini_malformed_function_call.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"4tTEaqrlEeeKvdIPv7bgyAw","type":"message","role":"assistant","content":[],"model":"gemini-3.8-flash","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":106,"output_tokens":183}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 106,
+  "output_tokens": 183,
+  "total_tokens": 289,
+  "provider_model": "gemini-3.8-flash"
+}
