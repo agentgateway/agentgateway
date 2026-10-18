@@ -850,6 +850,29 @@ pub mod typed {
 		}
 	}
 
+	/// A streamed chunk, or the error event an upstream sends in its place
+	#[allow(clippy::large_enum_variant)] // Almost every event is a chunk.
+	#[derive(Debug, Serialize)]
+	#[serde(untagged)]
+	pub enum StreamEvent {
+		Chunk(StreamResponse),
+		Error(ChatCompletionErrorResponse),
+	}
+
+	/// Picks the variant by the `error` key, so a malformed chunk reports its own parse error
+	/// rather than serde's untagged "did not match any variant".
+	impl<'de> Deserialize<'de> for StreamEvent {
+		fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+			let event = serde_json::Value::deserialize(deserializer)?;
+			let parsed = if event.get("error").is_some_and(|error| !error.is_null()) {
+				ChatCompletionErrorResponse::deserialize(event).map(Self::Error)
+			} else {
+				StreamResponse::deserialize(event).map(Self::Chunk)
+			};
+			parsed.map_err(serde::de::Error::custom)
+		}
+	}
+
 	#[derive(Debug, Deserialize, Clone, Serialize)]
 	/// Represents a streamed chunk of a chat completion response returned by model, based on the provided input.
 	pub struct StreamResponse {
@@ -1426,6 +1449,35 @@ pub mod typed {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[rstest::rstest]
+	#[case::chunk(
+		r#"{"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"hi"}}]}"#,
+		Ok("chunk")
+	)]
+	#[case::chunk_with_null_error(
+		r#"{"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"hi"}}],"error":null}"#,
+		Ok("chunk")
+	)]
+	#[case::error(
+		r#"{"error":{"message":"overloaded","type":"overloaded_error"}}"#,
+		Ok("error")
+	)]
+	#[case::tool_call_without_index(
+		r#"{"id":"c","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"f","arguments":"{}"}}]}}]}"#,
+		Err("missing field `index`")
+	)]
+	fn stream_events_keep_the_chunk_parse_error(
+		#[case] event: &str,
+		#[case] expected: Result<&str, &str>,
+	) {
+		match (serde_json::from_str::<typed::StreamEvent>(event), expected) {
+			(Ok(typed::StreamEvent::Chunk(_)), Ok("chunk")) => {},
+			(Ok(typed::StreamEvent::Error(_)), Ok("error")) => {},
+			(Err(err), Err(message)) => assert!(err.to_string().contains(message), "{err}"),
+			(parsed, expected) => panic!("got {parsed:?}, expected {expected:?}"),
+		}
+	}
 
 	#[rstest::rstest]
 	#[case::unknown_string(serde_json::json!("function_call_filter: MALFORMED_FUNCTION_CALL"), true)]

@@ -1,0 +1,108 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/tool.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: "**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"
+            thought: true
+          - functionCall:
+              name: get_weather
+              args:
+                location: Columbus
+              id: call_29821
+            thoughtSignature: AY89a19C8d1omi7MBl5ym02pT+xiycEjTJ4qrOwN7H1Cki51qRU4+Zl+CaifcKfoRRVq2K4ePlJbISgSBIGSKPEbhYmAUQcNpz5ARZed7Esz2tlHtjFOf35jp+XXrEJp7c6J8YPXcTY4B+JSRXwOOwtCqPZsSZl829mtJHslRKCRDh7/ADiGQw7Tbq7aMAkfLy4nPp+X9qDpPx3v05cJ+sMVaqhs3kxGfg4RRZLwDjmkB1aGgekvCElBTWM72i6z5SUMJsitt6rIFTecI0OASr7M2qZazuaKyrUz1L4vyQLHsu8qEz5RF/aGvOz8hSfFNAM/eMbRC5KirzBY7aEp66b0zD/v+zySkSFBHiJ7ugvFPTJuEisY/o28+gSvp6mpOBv+YuSeD/UUxRaCOfdZb7dbASrGM1cW26Kg4akAAnAsC98T2SwMxE/vKWUhEAar+/MiE5e4kfbdgj+jEitqzzgcZbW0folqsVVgffzL+breZnRQdD1to7OA6Y/sjCALoeUTgCJf/Ld44s4Q0Oz9zLZgnaqEJ3MET/M2K2PfPDxJoxpofecVWVTTBsqFfqOGe2/BpBeqRhDFCw7XfGjB09ekBhhEN8UuyStEymvjA59SnRY/flI5Q73i3ODlvd5dhIyBA3nKU50jnzONiFrusp5tdea/QKEN5I7Ncjm88maAObuSE8RU7jbD9Nt/1+pnVIQJ4l5xjV2SGr1rNlc37Rmevk0Mh3SYEu8rfWlc2XPXpP/SowNkaMYz3bKNOoKawAtia68wKHdsEQ3zveiL3raZxbnB
+          - functionCall:
+              name: get_weather
+              args:
+                location: Tokyo
+              id: call_29822
+      finishReason: STOP
+  usageMetadata:
+    promptTokenCount: 39
+    candidatesTokenCount: 32
+    totalTokenCount: 210
+    trafficType: ON_DEMAND
+    promptTokensDetails:
+      - modality: TEXT
+        tokenCount: 39
+    candidatesTokensDetails:
+      - modality: TEXT
+        tokenCount: 32
+    thoughtsTokenCount: 139
+  modelVersion: gemini-3.8-flash
+  createTime: "2026-10-17T05:13:11.546498Z"
+  responseId: 5wPTasKtIZidmPUPjf2jsQU
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n",
+        "signature": ""
+      },
+      {
+        "type": "tool_use",
+        "id": "call_29821__thought__AY89a19C8d1omi7MBl5ym02pT+xiycEjTJ4qrOwN7H1Cki51qRU4+Zl+CaifcKfoRRVq2K4ePlJbISgSBIGSKPEbhYmAUQcNpz5ARZed7Esz2tlHtjFOf35jp+XXrEJp7c6J8YPXcTY4B+JSRXwOOwtCqPZsSZl829mtJHslRKCRDh7/ADiGQw7Tbq7aMAkfLy4nPp+X9qDpPx3v05cJ+sMVaqhs3kxGfg4RRZLwDjmkB1aGgekvCElBTWM72i6z5SUMJsitt6rIFTecI0OASr7M2qZazuaKyrUz1L4vyQLHsu8qEz5RF/aGvOz8hSfFNAM/eMbRC5KirzBY7aEp66b0zD/v+zySkSFBHiJ7ugvFPTJuEisY/o28+gSvp6mpOBv+YuSeD/UUxRaCOfdZb7dbASrGM1cW26Kg4akAAnAsC98T2SwMxE/vKWUhEAar+/MiE5e4kfbdgj+jEitqzzgcZbW0folqsVVgffzL+breZnRQdD1to7OA6Y/sjCALoeUTgCJf/Ld44s4Q0Oz9zLZgnaqEJ3MET/M2K2PfPDxJoxpofecVWVTTBsqFfqOGe2/BpBeqRhDFCw7XfGjB09ekBhhEN8UuyStEymvjA59SnRY/flI5Q73i3ODlvd5dhIyBA3nKU50jnzONiFrusp5tdea/QKEN5I7Ncjm88maAObuSE8RU7jbD9Nt/1+pnVIQJ4l5xjV2SGr1rNlc37Rmevk0Mh3SYEu8rfWlc2XPXpP/SowNkaMYz3bKNOoKawAtia68wKHdsEQ3zveiL3raZxbnB",
+        "name": "get_weather",
+        "input": {
+          "location": "Columbus"
+        }
+      },
+      {
+        "type": "tool_use",
+        "id": "call_29822",
+        "name": "get_weather",
+        "input": {
+          "location": "Tokyo"
+        }
+      }
+    ],
+    "model": "gemini-3.8-flash",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 171,
+      "service_tier": "default"
+    }
+  },
+  "parsed": {
+    "input_tokens": 39,
+    "output_tokens": 171,
+    "total_tokens": 210,
+    "reasoning_tokens": 139,
+    "service_tier": "ON_DEMAND",
+    "provider_model": "gemini-3.8-flash",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_29821__thought__AY89a19C8d1omi7MBl5ym02pT+xiycEjTJ4qrOwN7H1Cki51qRU4+Zl+CaifcKfoRRVq2K4ePlJbISgSBIGSKPEbhYmAUQcNpz5ARZed7Esz2tlHtjFOf35jp+XXrEJp7c6J8YPXcTY4B+JSRXwOOwtCqPZsSZl829mtJHslRKCRDh7/ADiGQw7Tbq7aMAkfLy4nPp+X9qDpPx3v05cJ+sMVaqhs3kxGfg4RRZLwDjmkB1aGgekvCElBTWM72i6z5SUMJsitt6rIFTecI0OASr7M2qZazuaKyrUz1L4vyQLHsu8qEz5RF/aGvOz8hSfFNAM/eMbRC5KirzBY7aEp66b0zD/v+zySkSFBHiJ7ugvFPTJuEisY/o28+gSvp6mpOBv+YuSeD/UUxRaCOfdZb7dbASrGM1cW26Kg4akAAnAsC98T2SwMxE/vKWUhEAar+/MiE5e4kfbdgj+jEitqzzgcZbW0folqsVVgffzL+breZnRQdD1to7OA6Y/sjCALoeUTgCJf/Ld44s4Q0Oz9zLZgnaqEJ3MET/M2K2PfPDxJoxpofecVWVTTBsqFfqOGe2/BpBeqRhDFCw7XfGjB09ekBhhEN8UuyStEymvjA59SnRY/flI5Q73i3ODlvd5dhIyBA3nKU50jnzONiFrusp5tdea/QKEN5I7Ncjm88maAObuSE8RU7jbD9Nt/1+pnVIQJ4l5xjV2SGr1rNlc37Rmevk0Mh3SYEu8rfWlc2XPXpP/SowNkaMYz3bKNOoKawAtia68wKHdsEQ3zveiL3raZxbnB",
+            "name": "get_weather",
+            "arguments": {
+              "location": "Columbus"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "call_29822",
+            "name": "get_weather",
+            "arguments": {
+              "location": "Tokyo"
+            }
+          }
+        ],
+        "finish_reason": "tool_use"
+      }
+    ]
+  }
+}

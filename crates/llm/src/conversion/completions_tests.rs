@@ -595,6 +595,9 @@ data: [DONE]
 	#[rstest::rstest]
 	#[case::done("data: [DONE]\n\n")]
 	#[case::eof("")]
+	#[case::upstream_error(
+		"data: {\"error\":{\"message\":\"overloaded\",\"type\":\"overloaded_error\"}}\n\n"
+	)]
 	#[tokio::test]
 	async fn a_held_refusal_survives_a_stream_that_ends_early(#[case] ending: &str) {
 		let input = refusal_chunk("I can't help ") + &refusal_chunk("with that.") + ending;

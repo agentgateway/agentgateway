@@ -922,6 +922,8 @@ mod responses {
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
+	const VERTEX_GEMINI_TO_MESSAGES: &str = "vertex-gemini-messages";
+	const VERTEX_GEMINI_TO_RESPONSES: &str = "vertex-gemini-responses";
 
 	const ALL_BEDROCK: &[&str] = &[
 		BEDROCK_TO_COMPLETIONS,
@@ -1060,6 +1062,7 @@ mod responses {
 	];
 	const VERTEX_GEMINI_RESPONSES: &[&str] = &[
 		"basic",
+		"cached",
 		"tool",
 		"reasoning",
 		"blocked",
@@ -1150,7 +1153,7 @@ mod responses {
 			],
 		),
 	];
-	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
+	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool", "stream_max_tokens"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		(
 			"stream",
@@ -1379,6 +1382,12 @@ mod responses {
 			let path = format!("response/vertex-gemini/{name}.json");
 			test_response(VERTEX_GEMINI_TO_COMPLETIONS, &path, |i| {
 				conversion::vertex_gemini::to_completions::translate_response(&i)
+			});
+			test_response(VERTEX_GEMINI_TO_MESSAGES, &path, |i| {
+				conversion::vertex_gemini::from_messages::translate_response(&i)
+			});
+			test_response(VERTEX_GEMINI_TO_RESPONSES, &path, |i| {
+				conversion::vertex_gemini::from_responses::translate_response(&i, "input-model", None)
 			});
 			// The same responses served to a native Gemini client: body untouched, usage extracted.
 			test_response(GEMINI_NATIVE, &path, |i| {
@@ -1682,6 +1691,31 @@ mod responses {
 						strng::literal!("input-model"),
 						reporter,
 						LOG_CONTENT,
+					)
+				})
+			})
+			.await;
+			test_streaming(VERTEX_GEMINI_TO_MESSAGES, &path, |response, reporter| {
+				response.map(|body| {
+					conversion::vertex_gemini::from_messages::translate_stream(
+						body,
+						BUFFER_LIMIT,
+						strng::literal!("input-model"),
+						reporter,
+						LOG_CONTENT,
+					)
+				})
+			})
+			.await;
+			test_streaming(VERTEX_GEMINI_TO_RESPONSES, &path, |response, reporter| {
+				response.map(|body| {
+					conversion::vertex_gemini::from_responses::translate_stream(
+						body,
+						BUFFER_LIMIT,
+						strng::literal!("input-model"),
+						reporter,
+						LOG_CONTENT,
+						None,
 					)
 				})
 			})

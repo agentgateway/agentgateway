@@ -51,8 +51,8 @@ impl StreamEnd {
 		self.finished.store(true, Ordering::Relaxed);
 	}
 
-	/// The upstream reported an error, which the translator sent on as an error event. The body
-	/// ends there, without waiting for upstream to close
+	/// The upstream reported an error. The body ends without waiting for upstream to close, even
+	/// when the client already had the final event and so gets no error event
 	pub fn fail(&self) {
 		self.failed.store(true, Ordering::Relaxed);
 		self.failure.notify_one();
@@ -62,10 +62,19 @@ impl StreamEnd {
 /// Append `[DONE]` only after a terminal reply; an early EOF ends with a body error
 /// A failed stream ends after its error event
 pub fn append_done_if_finished(body: Body, end: Arc<StreamEnd>) -> Body {
+	end_stream(body, end, true)
+}
+
+/// Ends a translated stream once its upstream fails, however upstream goes on
+pub fn end_after_error(body: Body, end: Arc<StreamEnd>) -> Body {
+	end_stream(body, end, false)
+}
+
+fn end_stream(body: Body, end: Arc<StreamEnd>, needs_finish: bool) -> Body {
 	body.transform_stream(|body| {
 		let stream = stream::unfold(
 			Some((body.into_data_stream().boxed(), end)),
-			|state| async move {
+			move |state| async move {
 				let (mut stream, end) = state?;
 				let next = match future::select(stream.next(), pin!(end.failure.notified())).await {
 					Either::Left((next, _)) => next,
@@ -74,6 +83,7 @@ pub fn append_done_if_finished(body: Body, end: Arc<StreamEnd>) -> Body {
 				let error = match next {
 					Some(Ok(chunk)) => return Some((Ok(chunk), Some((stream, end)))),
 					_ if end.failed.load(Ordering::Relaxed) => return None,
+					None if !needs_finish => return None,
 					None if end.finished.load(Ordering::Relaxed) => {
 						let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
 						return Some((Ok(done), None));

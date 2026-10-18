@@ -85,7 +85,7 @@ info:
     "output_tokens": 171,
     "total_tokens": 210,
     "reasoning_tokens": 139,
-    "service_tier": "default",
+    "service_tier": "ON_DEMAND",
     "provider_model": "gemini-3.8-flash",
     "output_messages": [
       {

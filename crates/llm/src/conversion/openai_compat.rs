@@ -511,13 +511,19 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		Ok(Box::new(translate_completion(resp, model, namespaces)?))
+	}
+
+	pub fn translate_completion(
+		resp: completions::Response,
+		model: &str,
+		namespaces: Option<&crate::conversion::namespace_tools::NamespaceToolMap>,
+	) -> Result<types::responses::Response, AIError> {
 		let mut typed = translate_response_internal(resp, model);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
-		let passthrough =
-			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		json::convert(&typed).map_err(AIError::ResponseParsing)
 	}
 
 	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
@@ -680,13 +686,17 @@ pub mod to_responses {
 		let mut pending_stop_reason: Option<completions::FinishReason> = None;
 		let mut pending_usage: Option<completions::Usage> = None;
 
-		parse::sse::json_transform_multi::<completions::StreamResponse, ResponseStreamEvent, _>(
+		let end = std::sync::Arc::new(parse::sse::StreamEnd::default());
+		let seen_end = end.clone();
+		let mut failed = false;
+		let body = parse::sse::json_transform_multi::<completions::StreamEvent, ResponseStreamEvent, _>(
 			b,
 			buffer_limit,
 			move |evt| {
 				let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
 				match evt {
+					_ if failed => return events,
 					SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 					SseJsonEvent::Done => {
 						// Fall through to namespace restoration for the terminal events too.
@@ -720,7 +730,23 @@ pub mod to_responses {
 						);
 						return events;
 					},
-					SseJsonEvent::Data(Ok(chunk)) => {
+					SseJsonEvent::Data(Ok(completions::StreamEvent::Error(e))) => {
+						failed = true;
+						seen_end.fail();
+						if !flushed {
+							flushed = true;
+							let response_builder = response_builder.get_or_insert_with(|| {
+								types::responses::ResponseBuilder::new(response_id.clone(), String::new())
+							});
+							sequence_number += 1;
+							events.push((
+								"event",
+								response_builder.failed_event(sequence_number, None, response_error(e.error)),
+							));
+						}
+						return events;
+					},
+					SseJsonEvent::Data(Ok(completions::StreamEvent::Chunk(chunk))) => {
 						if !sent_created {
 							sent_created = true;
 							let response_builder = response_builder.insert(
@@ -1021,7 +1047,21 @@ pub mod to_responses {
 				}
 				events
 			},
-		)
+		);
+		parse::sse::end_after_error(body, end)
+	}
+
+	fn response_error(error: completions::ChatCompletionError) -> responses::ResponseError {
+		let code = match error.r#type.as_deref() {
+			Some("rate_limit_error") => responses::ResponseErrorCode::RateLimitExceeded,
+			Some("invalid_request_error") => responses::ResponseErrorCode::InvalidPrompt,
+			_ => responses::ResponseErrorCode::ServerError,
+		};
+		responses::ResponseError {
+			code,
+			message: error.message,
+			misalignment: None,
+		}
 	}
 
 	/// Records the first token time, or the gap since the previous token.

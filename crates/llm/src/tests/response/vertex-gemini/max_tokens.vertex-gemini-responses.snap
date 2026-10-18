@@ -1,0 +1,66 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/max_tokens.json
+info:
+  candidates:
+    - finishReason: MAX_TOKENS
+  usageMetadata:
+    promptTokenCount: 23
+    totalTokenCount: 28
+    trafficType: ON_DEMAND
+    promptTokensDetails:
+      - modality: TEXT
+        tokenCount: 23
+    thoughtsTokenCount: 5
+  modelVersion: gemini-3.8-flash
+  createTime: "2026-10-17T05:13:45.056791Z"
+  responseId: CQTTate7A9jZxs0P8f-z-AQ
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": ""
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "incomplete"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 23,
+      "output_tokens": 5,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 5
+      },
+      "total_tokens": 28
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_output_tokens"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 23,
+    "output_tokens": 5,
+    "total_tokens": 28,
+    "reasoning_tokens": 5,
+    "cached_input_tokens": 0,
+    "service_tier": "ON_DEMAND",
+    "provider_model": "input-model"
+  }
+}

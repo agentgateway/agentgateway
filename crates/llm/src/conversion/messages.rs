@@ -59,6 +59,27 @@ mod tests {
 		None
 	)]
 	#[case::overflow_wording_on_another_status(500, "INTERNAL", OVERFLOW, "api_error", None)]
+	#[case::unavailable(
+		503,
+		"UNAVAILABLE",
+		"The model is overloaded.",
+		"overloaded_error",
+		None
+	)]
+	#[case::permission_denied(
+		403,
+		"PERMISSION_DENIED",
+		"Permission denied.",
+		"permission_error",
+		None
+	)]
+	#[case::unauthenticated(
+		401,
+		"UNAUTHENTICATED",
+		"API key not valid.",
+		"authentication_error",
+		None
+	)]
 	#[case::marker_kept(
 		400,
 		"INVALID_ARGUMENT",
@@ -131,13 +152,29 @@ pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 	let m = messages::MessagesErrorResponse {
 		r#type: "error".to_string(),
 		error: messages::MessagesError {
-			r#type: super::completions::google_error_type(&res.error).to_string(),
+			r#type: res
+				.error
+				.status
+				.as_deref()
+				.and_then(messages_error_type_for_google_status)
+				.unwrap_or_else(|| super::completions::google_error_type(&res.error))
+				.to_string(),
 			message,
 		},
 	};
 	Ok(Bytes::from(
 		serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
 	))
+}
+
+/// Messages has its own types for these Google statuses, which the shared Chat Completions
+/// mapping folds into `api_error` and `authentication_error`.
+pub fn messages_error_type_for_google_status(status: &str) -> Option<&'static str> {
+	match status {
+		"UNAVAILABLE" => Some("overloaded_error"),
+		"PERMISSION_DENIED" => Some("permission_error"),
+		_ => None,
+	}
 }
 
 pub mod from_completions {

@@ -1,0 +1,56 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/cached.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: hi
+      finishReason: STOP
+  usageMetadata:
+    promptTokenCount: 5
+    candidatesTokenCount: 2
+    thoughtsTokenCount: 1
+    totalTokenCount: 8
+    cachedContentTokenCount: 3
+    trafficType: ON_DEMAND
+  modelVersion: gemini-3.8-flash
+  responseId: resp-cached-1
+---
+{
+  "response": {
+    "candidates": [
+      {
+        "content": {
+          "role": "model",
+          "parts": [
+            {
+              "text": "hi"
+            }
+          ]
+        },
+        "finishReason": "STOP"
+      }
+    ],
+    "usageMetadata": {
+      "trafficType": "ON_DEMAND",
+      "promptTokenCount": 5,
+      "candidatesTokenCount": 2,
+      "totalTokenCount": 8,
+      "cachedContentTokenCount": 3,
+      "thoughtsTokenCount": 1
+    },
+    "responseId": "resp-cached-1",
+    "modelVersion": "gemini-3.8-flash"
+  },
+  "parsed": {
+    "input_tokens": 5,
+    "output_tokens": 3,
+    "total_tokens": 8,
+    "reasoning_tokens": 1,
+    "cached_input_tokens": 3,
+    "service_tier": "ON_DEMAND",
+    "provider_model": "gemini-3.8-flash"
+  }
+}

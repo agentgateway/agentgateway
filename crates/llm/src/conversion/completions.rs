@@ -615,13 +615,17 @@ pub mod from_messages {
 
 		let mut state = StreamState::default();
 
-		crate::parse::sse::json_transform_multi::<
-			completions::StreamResponse,
+		let end = std::sync::Arc::new(crate::parse::sse::StreamEnd::default());
+		let seen_end = end.clone();
+		let mut failed = false;
+		let body = crate::parse::sse::json_transform_multi::<
+			completions::StreamEvent,
 			messages::MessagesStreamEvent,
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
+				_ if failed => return events,
 				SseJsonEvent::Eof | SseJsonEvent::Error => {
 					flush_refusal_as_text(&mut state, &mut events, &log);
 					return events;
@@ -638,7 +642,34 @@ pub mod from_messages {
 					);
 					return events;
 				},
-				SseJsonEvent::Data(Ok(f)) => {
+				SseJsonEvent::Data(Ok(completions::StreamEvent::Error(e))) => {
+					failed = true;
+					seen_end.fail();
+					if !state.sent_message_stop {
+						state.sent_message_stop = true;
+						flush_refusal_as_text(&mut state, &mut events, &log);
+						push_event(
+							&mut events,
+							messages::MessagesStreamEvent::Error {
+								error: messages::MessagesError {
+									// In the native Gemini chain, `code` carries Google's status.
+									r#type: e
+										.error
+										.code
+										.as_ref()
+										.and_then(serde_json::Value::as_str)
+										.and_then(crate::conversion::messages::messages_error_type_for_google_status)
+										.map(str::to_string)
+										.or(e.error.r#type)
+										.unwrap_or_else(|| "api_error".to_string()),
+									message: e.error.message,
+								},
+							},
+						);
+					}
+					return events;
+				},
+				SseJsonEvent::Data(Ok(completions::StreamEvent::Chunk(f))) => {
 					if !state.sent_message_start {
 						state.sent_message_start = true;
 						push_event(
@@ -799,7 +830,8 @@ pub mod from_messages {
 				},
 			}
 			events
-		})
+		});
+		crate::parse::sse::end_after_error(body, end)
 	}
 
 	/// A refusal is the model's own reply, so Messages shows it as text. With `content_filter` it

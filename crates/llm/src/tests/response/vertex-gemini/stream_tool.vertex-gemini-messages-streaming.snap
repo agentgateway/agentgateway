@@ -1,0 +1,77 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_tool.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"6gPTapKuOKeqz_IPgLmi6Aw","type":"message","role":"assistant","content":[],"model":"gemini-3.8-flash","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_668209__thought__AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=","name":"get_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Columbus\"}"}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"call_xxx","name":"get_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"location\":\"Tokyo\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":2}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":39,"output_tokens":132}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 39,
+  "output_tokens": 132,
+  "total_tokens": 171,
+  "reasoning_tokens": 100,
+  "service_tier": "ON_DEMAND",
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_668209__thought__AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Columbus"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_668212",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Tokyo"
+          }
+        }
+      ],
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

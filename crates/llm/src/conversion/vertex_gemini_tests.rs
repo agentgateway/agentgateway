@@ -2415,6 +2415,8 @@ mod passthrough {
 	}
 }
 
+// ---------- Messages and Responses streams through Chat Completions ----------
+
 mod chain {
 	use std::sync::{Arc, Mutex};
 	use std::time::Duration;
@@ -2424,6 +2426,7 @@ mod chain {
 
 	use super::passthrough::captured_info;
 	use super::*;
+	use crate::conversion::stream_tests::{End, drain, last_event, upstream};
 	use crate::{
 		LLMInfo, LLMResponse, LogContentFields, StreamingUsageGuard, StreamingUsageReporter,
 	};
@@ -2438,6 +2441,27 @@ mod chain {
 			strng::new("gemini-3.8-flash"),
 			log,
 			LogContentFields::default(),
+		)
+	}
+
+	fn messages(b: Body, log: StreamingUsageGuard) -> Body {
+		from_messages::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		)
+	}
+
+	fn responses(b: Body, log: StreamingUsageGuard) -> Body {
+		from_responses::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+			None,
 		)
 	}
 
@@ -2477,45 +2501,152 @@ mod chain {
 		(StreamingUsageGuard::new(Box::new(recorder)), info, reports)
 	}
 
+	/// One upstream frame per SSE event, so the chain sees the chunks arrive separately
+	fn sse_frames(input: &'static str) -> Body {
+		let frames = input
+			.split_inclusive("\n\n")
+			.map(|event| Ok::<_, std::convert::Infallible>(bytes::Bytes::from(event)));
+		Body::from_stream(futures_util::stream::iter(frames.collect::<Vec<_>>()))
+	}
+
+	fn client_events(body: &[u8]) -> Vec<Value> {
+		std::str::from_utf8(body)
+			.unwrap()
+			.lines()
+			.filter_map(|l| l.strip_prefix("data: "))
+			.filter(|d| *d != "[DONE]")
+			.map(|d| serde_json::from_str(d).unwrap())
+			.collect()
+	}
+
+	fn gaps(r: &LLMResponse) -> u64 {
+		r.inter_chunk_latencies.iter().map(|(count, _)| count).sum()
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn reports_native_usage_once(#[values(messages, responses)] chain: Chain) {
+		let (log, info, reports) = recorder();
+		let input = include_str!("../tests/response/vertex-gemini/stream_tool.json");
+		let mut body = chain(sse_frames(input), log);
+		body.frame().await.expect("first frame").unwrap();
+		let first_token = info.lock().unwrap().response.first_token;
+		assert!(first_token.is_some());
+		body.collect().await.unwrap();
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(
+				r.input_tokens,
+				r.output_tokens,
+				r.total_tokens,
+				r.reasoning_tokens
+			),
+			(Some(39), Some(132), Some(171), Some(100))
+		);
+		assert_eq!(r.service_tier.as_deref(), Some("ON_DEMAND"));
+		assert_eq!(r.provider_model.as_deref(), Some("gemini-3.8-flash"));
+		assert_eq!(
+			r.first_token, first_token,
+			"later chunks keep the first-token time"
+		);
+		assert_eq!(gaps(r), 3, "one gap per native chunk after the first");
+	}
+
+	#[rstest::rstest]
+	#[case::messages(
+		messages,
+		"message_delta",
+		"/usage",
+		json!({ "input_tokens": 2, "output_tokens": 3, "cache_read_input_tokens": 3 })
+	)]
+	#[case::responses(
+		responses,
+		"response.completed",
+		"/response/usage",
+		json!({
+			"input_tokens": 5, "input_tokens_details": { "cached_tokens": 3 },
+			"output_tokens": 3, "output_tokens_details": { "reasoning_tokens": 1 },
+			"total_tokens": 8
+		})
+	)]
+	#[tokio::test]
+	async fn records_a_usage_only_final_chunk(
+		#[case] chain: Chain,
+		#[case] terminal: &str,
+		#[case] usage: &str,
+		#[case] expected: Value,
+	) {
+		let (log, _, reports) = recorder();
+		let input = concat!(
+			"data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"hi\"}]},\"finishReason\":\"STOP\"}]}\n\n",
+			"data: {\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2,\"totalTokenCount\":8,",
+			"\"thoughtsTokenCount\":1,\"cachedContentTokenCount\":3}}\n\n",
+		);
+		let out = chain(Body::from(input), log)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+
+		let events = client_events(&out);
+		let terminals: Vec<_> = events.iter().filter(|e| e["type"] == terminal).collect();
+		let [end] = terminals.as_slice() else {
+			panic!("want one {terminal}, got {}", terminals.len())
+		};
+		assert_eq!(end.pointer(usage), Some(&expected));
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(
+				r.input_tokens,
+				r.output_tokens,
+				r.cached_input_tokens,
+				r.reasoning_tokens,
+				r.total_tokens
+			),
+			(Some(5), Some(3), Some(3), Some(1), Some(8))
+		);
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn reports_usage_seen_before_a_disconnect(#[values(messages, responses)] chain: Chain) {
+		let (log, _, reports) = recorder();
+		let first = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
+		let upstream = futures_util::StreamExt::chain(
+			futures_util::stream::iter([Ok::<_, std::convert::Infallible>(bytes::Bytes::from(first))]),
+			futures_util::stream::pending(),
+		);
+		let mut body = chain(Body::from_stream(upstream), log);
+		tokio::time::timeout(Duration::from_secs(5), body.frame())
+			.await
+			.expect("first frame in time")
+			.expect("stream still open")
+			.unwrap();
+		assert!(reports.lock().unwrap().is_empty());
+		drop(body);
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(r.input_tokens, r.output_tokens, r.total_tokens),
+			(Some(7), Some(1), Some(8))
+		);
+		assert!(r.first_token.is_some());
+	}
+
 	const FIRST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
 	const ERROR: &str = "data: {\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}\n\n";
 	const LAST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
-
-	#[derive(Clone, Copy)]
-	enum End {
-		Close,
-		Reset,
-		Hang,
-	}
-
-	fn upstream(frames: &[&'static str], end: End) -> Body {
-		use futures_util::StreamExt as _;
-		let frames = frames
-			.iter()
-			.map(|f| Ok::<_, std::io::Error>(bytes::Bytes::from_static(f.as_bytes())))
-			.chain(matches!(end, End::Reset).then(|| Err(std::io::Error::other("connection reset"))));
-		let frames = futures_util::stream::iter(frames.collect::<Vec<_>>());
-		match end {
-			End::Hang => Body::from_stream(frames.chain(futures_util::stream::pending())),
-			End::Close | End::Reset => Body::from_stream(frames),
-		}
-	}
-
-	/// What the client got, and whether its body ended with an error
-	async fn drain(mut body: Body) -> (String, bool) {
-		let mut text = String::new();
-		while let Some(frame) = body.frame().await {
-			match frame {
-				Ok(frame) => text.push_str(std::str::from_utf8(frame.data_ref().unwrap()).unwrap()),
-				Err(_) => return (text, true),
-			}
-		}
-		(text, false)
-	}
-
-	fn last_event(text: &str) -> &str {
-		text.trim_end().rsplit("\n\n").next().unwrap()
-	}
 
 	const SUCCESS_ENDINGS: [&str; 4] = [
 		"[DONE]",
@@ -2534,7 +2665,7 @@ mod chain {
 	#[case::connection_drop(&[FIRST], End::Reset)]
 	#[tokio::test]
 	async fn a_failed_stream_never_ends_as_a_success(
-		#[values(completions)] chain: Chain,
+		#[values(completions, messages, responses)] chain: Chain,
 		#[case] frames: &[&'static str],
 		#[case] end: End,
 	) {
@@ -2589,7 +2720,9 @@ mod chain {
 	/// The failed reply's own text is dropped, and its usage still counts
 	#[rstest::rstest]
 	#[tokio::test]
-	async fn a_failed_reply_ends_with_an_error(#[values(completions)] chain: Chain) {
+	async fn a_failed_reply_ends_with_an_error(
+		#[values(completions, messages, responses)] chain: Chain,
+	) {
 		let (log, _, reports) = recorder();
 		let (text, failed) = drain(chain(upstream(&[FIRST, MALFORMED], End::Close), log)).await;
 		assert!(!failed, "{text}");
@@ -2622,17 +2755,33 @@ mod chain {
 	}
 
 	#[rstest::rstest]
+	#[case::unavailable(ERROR, "overloaded_error", "The model is overloaded.")]
+	#[case::permission_denied(
+		"data: {\"error\":{\"code\":403,\"message\":\"Permission denied.\",\"status\":\"PERMISSION_DENIED\"}}\n\n",
+		"permission_error",
+		"Permission denied."
+	)]
+	#[case::unauthenticated(
+		"data: {\"error\":{\"code\":401,\"message\":\"API key not valid.\",\"status\":\"UNAUTHENTICATED\"}}\n\n",
+		"authentication_error",
+		"API key not valid."
+	)]
 	#[tokio::test]
-	async fn a_finished_stream_ends_as_a_success(#[values(completions)] chain: Chain) {
-		let (text, failed) = drain(chain(
-			upstream(&[FIRST, LAST], End::Close),
+	async fn messages_clients_get_geminis_error(
+		#[case] error: &'static str,
+		#[case] r#type: &str,
+		#[case] message: &str,
+	) {
+		let (text, _) = drain(messages(
+			upstream(&[FIRST, error], End::Close),
 			StreamingUsageGuard::default(),
 		))
 		.await;
-		assert!(!failed);
-		assert!(
-			SUCCESS_ENDINGS.iter().any(|ending| text.contains(ending)),
-			"{text}"
+		assert_eq!(
+			last_event(&text),
+			format!(
+				"event: error\ndata: {{\"type\":\"error\",\"error\":{{\"type\":\"{type}\",\"message\":\"{message}\"}}}}"
+			)
 		);
 	}
 }

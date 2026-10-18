@@ -1268,8 +1268,13 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use agent_core::prelude::Strng;
+	use agent_http::Body;
+	use bytes::Bytes;
+
 	use crate::model_catalog::Catalog;
-	use crate::{AIError, types};
+	use crate::types::ResponseType;
+	use crate::{AIError, LogContentFields, StreamingUsageGuard, types};
 
 	pub fn translate(
 		req: &types::messages::Request,
@@ -1279,12 +1284,46 @@ pub mod from_messages {
 		let completions = crate::conversion::completions::from_messages::translate_request(req)?;
 		super::from_completions::translate(&super::loose(&completions)?, is_vertex, catalog)
 	}
+
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let completions =
+			super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		crate::conversion::completions::from_messages::translate_stream(
+			completions,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+	}
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let (completions, provider_usage) = super::to_completions::translate(bytes)?;
+		let response =
+			crate::conversion::completions::from_messages::translate_response_internal(completions)?;
+		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
+	}
 }
 
 pub mod from_responses {
+	use std::sync::Arc;
+
+	use agent_core::prelude::Strng;
+	use agent_http::Body;
+	use bytes::Bytes;
+
 	use crate::conversion::namespace_tools::NamespaceToolMap;
 	use crate::model_catalog::Catalog;
-	use crate::{AIError, types};
+	use crate::types::ResponseType;
+	use crate::{AIError, LogContentFields, StreamingUsageGuard, types};
 
 	pub struct TranslatedRequest {
 		pub body: Vec<u8>,
@@ -1303,6 +1342,42 @@ pub mod from_responses {
 			body,
 			namespaces: completions.namespaces,
 		})
+	}
+
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+		namespaces: Option<Arc<NamespaceToolMap>>,
+	) -> Body {
+		let completions =
+			super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		crate::conversion::openai_compat::to_responses::translate_stream(
+			completions,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			namespaces,
+		)
+	}
+
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		namespaces: Option<&NamespaceToolMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
+		let (completions, provider_usage) = super::to_completions::translate(bytes)?;
+		let response = crate::conversion::openai_compat::to_responses::translate_completion(
+			completions,
+			model,
+			namespaces,
+		)?;
+		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
 	}
 }
 
@@ -1326,12 +1401,41 @@ pub mod to_completions {
 	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let (response, provider_usage) = translate(bytes)?;
+		let response = json::convert::<_, types::completions::Response>(&response)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
+	}
+
+	/// The Chat Completions reply, and the accounting taken from Gemini's own usage
+	pub(super) fn translate(
+		bytes: &Bytes,
+	) -> Result<(completions::Response, Option<super::super::ProviderUsage>), AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-		let typed = build_response(&resp);
-		let inner =
-			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(inner))
+		Ok((
+			build_response(&resp),
+			resp.usage_metadata.as_ref().map(provider_usage),
+		))
+	}
+
+	fn provider_usage(um: &vg::UsageMetadata) -> super::super::ProviderUsage {
+		let (input_tokens, _, total_tokens) = um.counts();
+		super::super::ProviderUsage {
+			input_tokens,
+			total_tokens,
+			reasoning_tokens: um.thoughts_token_count,
+			cached_input_tokens: um.cached_content_token_count,
+			service_tier: um
+				.service_tier
+				.as_deref()
+				.or(um.traffic_type.as_deref())
+				.map(strng::new),
+			..Default::default()
+		}
 	}
 
 	#[derive(Default)]
@@ -1757,7 +1861,7 @@ pub mod to_completions {
 		let mut failed = false;
 		let body = parse::sse::json_transform_multi::<
 			vg::GenerateContentResponse,
-			CompletionsStreamEvent,
+			completions::StreamEvent,
 			_,
 		>(b, buffer_limit, move |ev| {
 			let chunk = match ev {
@@ -1775,7 +1879,7 @@ pub mod to_completions {
 				tracing::warn!(%error, "gemini stream failed");
 				failed = true;
 				seen_end.fail();
-				return vec![("", CompletionsStreamEvent::Error(stream_error(error)))];
+				return vec![("", completions::StreamEvent::Error(stream_error(error)))];
 			}
 
 			let now = Instant::now();
@@ -1813,7 +1917,7 @@ pub mod to_completions {
 			if let Some((_, error)) = reply_failure(&chunk) {
 				failed = true;
 				seen_end.fail();
-				return vec![("", CompletionsStreamEvent::Error(stream_error(&error)))];
+				return vec![("", completions::StreamEvent::Error(stream_error(&error)))];
 			}
 
 			match state.translate(&chunk) {
@@ -1875,21 +1979,12 @@ pub mod to_completions {
 							});
 						}
 					}
-					vec![("", CompletionsStreamEvent::Chunk(sr))]
+					vec![("", completions::StreamEvent::Chunk(sr))]
 				},
 				None => vec![],
 			}
 		});
 		parse::sse::append_done_if_finished(body, end)
-	}
-
-	/// A chunk, or the error event an OpenAI stream sends in its place
-	#[allow(clippy::large_enum_variant)] // Almost every event is a chunk
-	#[derive(serde::Serialize)]
-	#[serde(untagged)]
-	enum CompletionsStreamEvent {
-		Chunk(completions::StreamResponse),
-		Error(completions::ChatCompletionErrorResponse),
 	}
 
 	fn stream_error(error: &Value) -> completions::ChatCompletionErrorResponse {

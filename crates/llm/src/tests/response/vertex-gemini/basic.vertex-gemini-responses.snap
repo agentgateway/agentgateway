@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/basic.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: The provider is Gemini.
+      finishReason: STOP
+      index: 0
+  usageMetadata:
+    promptTokenCount: 8
+    candidatesTokenCount: 6
+    totalTokenCount: 14
+  modelVersion: gemini-2.5-pro
+  responseId: resp-basic-1
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "The provider is Gemini."
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 8,
+      "output_tokens": 6,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 14
+    },
+    "created_at": "[date]",
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 8,
+    "output_tokens": 6,
+    "total_tokens": 14,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}
