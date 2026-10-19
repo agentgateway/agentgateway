@@ -52,19 +52,25 @@ pub(crate) fn parse_chat_completion_error(
 /// Translate a Google error response into an OpenAI Chat Completions error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
 	let res = parse_google_error(bytes)?;
-	let m = types::completions::typed::ChatCompletionErrorResponse {
-		event_id: None,
-		error: types::completions::typed::ChatCompletionError {
-			r#type: Some(google_error_type(&res.error).to_string()),
-			message: res.error.message.clone(),
-			param: None,
-			code: res.error.status.clone().map(serde_json::Value::String),
-			event_id: None,
-		},
-	};
+	let m = chat_error_from_google(&res.error);
 	Ok(Bytes::from(
 		serde_json::to_vec(&m).map_err(crate::AIError::ResponseMarshal)?,
 	))
+}
+
+pub(crate) fn chat_error_from_google(
+	error: &types::completions::typed::GoogleError,
+) -> types::completions::typed::ChatCompletionErrorResponse {
+	types::completions::typed::ChatCompletionErrorResponse {
+		event_id: None,
+		error: types::completions::typed::ChatCompletionError {
+			r#type: Some(google_error_type(error).to_string()),
+			message: error.message.clone(),
+			param: None,
+			code: error.status.clone().map(serde_json::Value::String),
+			event_id: None,
+		},
+	}
 }
 
 pub(crate) fn parse_data_url(url: &str) -> Option<(&str, &str)> {

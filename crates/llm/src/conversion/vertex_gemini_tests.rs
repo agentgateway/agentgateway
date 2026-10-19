@@ -2037,7 +2037,7 @@ mod passthrough {
 		fn report_usage(&mut self) {}
 	}
 
-	fn captured_info() -> Arc<Mutex<LLMInfo>> {
+	pub(super) fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
 				input_tokens: None,
@@ -2229,5 +2229,190 @@ mod passthrough {
 			);
 			assert_eq!(captured.lock().unwrap().response.total_tokens, None);
 		}
+	}
+}
+
+mod chain {
+	use std::sync::{Arc, Mutex};
+	use std::time::Duration;
+
+	use agent_http::Body;
+	use http_body_util::BodyExt;
+
+	use super::passthrough::captured_info;
+	use super::*;
+	use crate::{
+		LLMInfo, LLMResponse, LogContentFields, StreamingUsageGuard, StreamingUsageReporter,
+	};
+
+	type Chain = fn(Body, StreamingUsageGuard) -> Body;
+	type Reports = Arc<Mutex<Vec<LLMResponse>>>;
+
+	fn completions(b: Body, log: StreamingUsageGuard) -> Body {
+		to_completions::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		)
+	}
+
+	/// Settles once, on the first report or on drop, like the gateway's reporter
+	struct Recorder {
+		info: Arc<Mutex<LLMInfo>>,
+		reports: Reports,
+		reported: bool,
+	}
+
+	impl StreamingUsageReporter for Recorder {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.info.lock().unwrap())
+		}
+		fn report_usage(&mut self) {
+			if !std::mem::replace(&mut self.reported, true) {
+				let response = self.info.lock().unwrap().response.clone();
+				self.reports.lock().unwrap().push(response);
+			}
+		}
+	}
+
+	impl Drop for Recorder {
+		fn drop(&mut self) {
+			self.report_usage();
+		}
+	}
+
+	fn recorder() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>, Reports) {
+		let info = captured_info();
+		let reports = Arc::new(Mutex::new(Vec::new()));
+		let recorder = Recorder {
+			info: info.clone(),
+			reports: reports.clone(),
+			reported: false,
+		};
+		(StreamingUsageGuard::new(Box::new(recorder)), info, reports)
+	}
+
+	const FIRST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
+	const ERROR: &str = "data: {\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}\n\n";
+	const LAST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	#[derive(Clone, Copy)]
+	enum End {
+		Close,
+		Reset,
+		Hang,
+	}
+
+	fn upstream(frames: &[&'static str], end: End) -> Body {
+		use futures_util::StreamExt as _;
+		let frames = frames
+			.iter()
+			.map(|f| Ok::<_, std::io::Error>(bytes::Bytes::from_static(f.as_bytes())))
+			.chain(matches!(end, End::Reset).then(|| Err(std::io::Error::other("connection reset"))));
+		let frames = futures_util::stream::iter(frames.collect::<Vec<_>>());
+		match end {
+			End::Hang => Body::from_stream(frames.chain(futures_util::stream::pending())),
+			End::Close | End::Reset => Body::from_stream(frames),
+		}
+	}
+
+	/// What the client got, and whether its body ended with an error
+	async fn drain(mut body: Body) -> (String, bool) {
+		let mut text = String::new();
+		while let Some(frame) = body.frame().await {
+			match frame {
+				Ok(frame) => text.push_str(std::str::from_utf8(frame.data_ref().unwrap()).unwrap()),
+				Err(_) => return (text, true),
+			}
+		}
+		(text, false)
+	}
+
+	fn last_event(text: &str) -> &str {
+		text.trim_end().rsplit("\n\n").next().unwrap()
+	}
+
+	const SUCCESS_ENDINGS: [&str; 4] = [
+		"[DONE]",
+		"message_stop",
+		"response.completed",
+		"\"finish_reason\":\"stop\"",
+	];
+
+	/// Gemini's error ends the body after its error event, however upstream then ends. A stream cut
+	/// off without one ends with a body error. Usage seen before the failure is reported once
+	#[rstest::rstest]
+	#[case::error_event(&[FIRST, ERROR, LAST], End::Close)]
+	#[case::error_on_an_open_stream(&[FIRST, ERROR], End::Hang)]
+	#[case::error_then_connection_drop(&[FIRST, ERROR], End::Reset)]
+	#[case::no_finish_reason(&[FIRST], End::Close)]
+	#[case::connection_drop(&[FIRST], End::Reset)]
+	#[tokio::test]
+	async fn a_failed_stream_never_ends_as_a_success(
+		#[values(completions)] chain: Chain,
+		#[case] frames: &[&'static str],
+		#[case] end: End,
+	) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = tokio::time::timeout(
+			Duration::from_secs(5),
+			drain(chain(upstream(frames, end), log)),
+		)
+		.await
+		.expect("the stream should end once Gemini reports an error");
+		let reported = frames.contains(&ERROR);
+		assert_eq!(failed, !reported, "body error:\n{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(
+			!text.contains('!'),
+			"a reply after the error reached the client:\n{text}"
+		);
+		if reported {
+			assert!(
+				last_event(&text).contains("The model is overloaded."),
+				"Gemini's error should be the last event:\n{text}"
+			);
+		}
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(r.input_tokens, r.output_tokens, r.total_tokens),
+			(Some(7), Some(1), Some(8))
+		);
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_geminis_error() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, ERROR], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"The model is overloaded.","code":"UNAVAILABLE"}}"#
+		);
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn a_finished_stream_ends_as_a_success(#[values(completions)] chain: Chain) {
+		let (text, failed) = drain(chain(
+			upstream(&[FIRST, LAST], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert!(!failed);
+		assert!(
+			SUCCESS_ENDINGS.iter().any(|ending| text.contains(ending)),
+			"{text}"
+		);
 	}
 }

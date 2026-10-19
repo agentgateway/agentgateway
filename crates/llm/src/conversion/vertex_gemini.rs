@@ -1269,6 +1269,7 @@ pub mod from_completions {
 
 pub mod to_completions {
 	use std::collections::HashMap;
+	use std::sync::Arc;
 	use std::time::Instant;
 
 	use agent_http::Body;
@@ -1638,12 +1639,16 @@ pub mod to_completions {
 		let mut last_token_at: Option<Instant> = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
+		let end = Arc::new(parse::sse::StreamEnd::default());
+		let seen_end = end.clone();
+		let mut failed = false;
 		let body = parse::sse::json_transform_multi::<
 			vg::GenerateContentResponse,
-			completions::StreamResponse,
+			CompletionsStreamEvent,
 			_,
 		>(b, buffer_limit, move |ev| {
 			let chunk = match ev {
+				_ if failed => return vec![],
 				parse::sse::SseJsonEvent::Data(Ok(c)) => c,
 				parse::sse::SseJsonEvent::Data(Err(e)) => {
 					tracing::debug!("failed to parse gemini stream chunk: {e}");
@@ -1653,6 +1658,12 @@ pub mod to_completions {
 				| parse::sse::SseJsonEvent::Eof
 				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
+			if let Some(error) = chunk.rest.get("error") {
+				tracing::warn!(%error, "gemini stream failed");
+				failed = true;
+				seen_end.fail();
+				return vec![("", CompletionsStreamEvent::Error(stream_error(error)))];
+			}
 
 			let now = Instant::now();
 			if !saw_token {
@@ -1693,6 +1704,9 @@ pub mod to_completions {
 						sr.model = model.to_string();
 					}
 					if let Some(choice) = sr.choices.first() {
+						if choice.finish_reason.is_some() {
+							seen_end.finish();
+						}
 						if let Some(content) = &choice.delta.content
 							&& let Some(completion) = completion.as_mut()
 						{
@@ -1742,12 +1756,37 @@ pub mod to_completions {
 							});
 						}
 					}
-					vec![("", sr)]
+					vec![("", CompletionsStreamEvent::Chunk(sr))]
 				},
 				None => vec![],
 			}
 		});
-		parse::sse::append_done_on_success(body)
+		parse::sse::append_done_if_finished(body, end)
+	}
+
+	/// A chunk, or the error event an OpenAI stream sends in its place
+	#[allow(clippy::large_enum_variant)] // Almost every event is a chunk.
+	#[derive(serde::Serialize)]
+	#[serde(untagged)]
+	enum CompletionsStreamEvent {
+		Chunk(completions::StreamResponse),
+		Error(completions::ChatCompletionErrorResponse),
+	}
+
+	fn stream_error(error: &Value) -> completions::ChatCompletionErrorResponse {
+		match serde_json::from_value::<completions::GoogleError>(error.clone()) {
+			Ok(error) => crate::conversion::completions::chat_error_from_google(&error),
+			Err(_) => completions::ChatCompletionErrorResponse {
+				event_id: None,
+				error: completions::ChatCompletionError {
+					r#type: Some("api_error".to_string()),
+					message: error.to_string(),
+					param: None,
+					code: None,
+					event_id: None,
+				},
+			},
+		}
 	}
 
 	/// Maps Gemini service tiers and Vertex traffic types to OpenAI service tiers.
