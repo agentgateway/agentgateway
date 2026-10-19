@@ -372,10 +372,25 @@ struct ChatStreamContext {
 /// supported by the selected provider/model. Put cheaper or more native
 /// translations before broader fallbacks.
 static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
+	let flag = |name: &str, default: bool| match std::env::var(name).as_deref() {
+		Ok("true") => true,
+		Ok("false") => false,
+		Ok(value) => {
+			warn!("ignoring {name}={value:?}, expected true or false; using {default}");
+			default
+		},
+		Err(_) => default,
+	};
+	// false goes back to Google's OpenAI compat endpoint
+	chat_translations(flag("AGENTGATEWAY_GEMINI_PREFER_NATIVE", true))
+});
+
+fn chat_translations(prefer_gemini_native: bool) -> Vec<ChatTranslation> {
 	const fn chat(input: InputFormat, output: ChatFormat) -> ChatTranslation {
 		ChatTranslation { input, output }
 	}
-	vec![
+	let gemini_native = |input| prefer_gemini_native.then(|| chat(input, ChatFormat::VertexGemini));
+	[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Gemini, ChatFormat::VertexGemini),
@@ -386,6 +401,11 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
+	]
+	.into_iter()
+	.chain(gemini_native(InputFormat::Messages))
+	.chain(gemini_native(InputFormat::Responses))
+	.chain([
 		// Missing: Bedrock --> Bedrock
 		//
 		// Completions
@@ -399,8 +419,9 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
 		// Missing: Responses -> Messages
-	]
-});
+	])
+	.collect()
+}
 
 fn render_openai_completions(
 	req: types::ChatRequest,
@@ -495,19 +516,30 @@ fn render_anthropic_messages(
 fn render_vertex_gemini(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
-) -> Result<Vec<u8>, AIError> {
-	match req {
+) -> Result<RenderedChatRequest, AIError> {
+	let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
+	let mut namespaces = None;
+	let body = match req {
 		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
 		// not depend on Vertex specifics; the Gemini API provider renders through here too.
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
 			conversion::vertex_gemini::from_completions::translate(&req, is_vertex, ctx.catalog)
 		},
-		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"vertex gemini only supports completions or native gemini input"
-		))),
-	}
+		types::ChatRequest::Messages(req) => {
+			conversion::vertex_gemini::from_messages::translate(&req, is_vertex, ctx.catalog)
+		},
+		types::ChatRequest::Responses(req) => {
+			let translated =
+				conversion::vertex_gemini::from_responses::translate(&req, is_vertex, ctx.catalog)?;
+			namespaces = (!translated.namespaces.is_empty()).then(|| Arc::new(translated.namespaces));
+			Ok(translated.body)
+		},
+	}?;
+	Ok(RenderedChatRequest {
+		body,
+		provider_state: Some(ProviderState::VertexGemini { namespaces }),
+	})
 }
 
 fn render_bedrock_converse(
@@ -590,12 +622,7 @@ impl ChatTranslation {
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
-			ChatFormat::VertexGemini => {
-				return Ok(RenderedChatRequest {
-					body: render_vertex_gemini(req, ctx)?,
-					provider_state: Some(ProviderState::VertexGemini),
-				});
-			},
+			ChatFormat::VertexGemini => return render_vertex_gemini(req, ctx),
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -673,6 +700,14 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				},
+				InputFormat::Messages => {
+					conversion::vertex_gemini::from_messages::translate_response(bytes)
+				},
+				InputFormat::Responses => conversion::vertex_gemini::from_responses::translate_response(
+					bytes,
+					ctx.model,
+					ctx.namespaces,
+				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -802,6 +837,25 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Messages => resp.map(|b| {
+					conversion::vertex_gemini::from_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
+				InputFormat::Responses => resp.map(|b| {
+					conversion::vertex_gemini::from_responses::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+						ctx.log_content,
+						ctx.namespaces,
+					)
+				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::vertex_gemini::to_completions::translate_stream(
 						b,
@@ -895,8 +949,11 @@ impl ChatTranslation {
 
 			ChatFormat::VertexGemini => match format {
 				// Native Gemini clients expect the Google error shape; pass it through unchanged.
-				ChatErrorFormat::Google if self.input == InputFormat::Gemini => Ok(bytes.clone()),
-				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
+				ChatErrorFormat::Google => match self.input {
+					InputFormat::Gemini => Ok(bytes.clone()),
+					InputFormat::Messages => conversion::messages::translate_google_error(bytes),
+					_ => conversion::completions::translate_google_error(bytes),
+				},
 				_ => unsupported(),
 			},
 		}
@@ -1121,14 +1178,15 @@ impl AIProvider {
 		}
 	}
 
-	fn chat_translation(
+	fn chat_translation<'t>(
 		&self,
+		table: &'t [ChatTranslation],
 		input_format: InputFormat,
 		request_model: &str,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
-	) -> Result<&'static ChatTranslation, AIError> {
+	) -> Result<&'t ChatTranslation, AIError> {
 		let supported = self.supported_chat_formats(request_model, catalog);
-		CHAT_TRANSLATIONS
+		table
 			.iter()
 			.find(|translation| {
 				translation.input == input_format && supported.contains(&translation.output)
@@ -1390,7 +1448,8 @@ impl AIProvider {
 		// client's `alt` on both native routes (same gate as the render below). Stripping it here
 		// rather than at parse time keeps `alt` intact on the paths above.
 		if route_type == RouteType::GeminiCountTokens
-			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
+			|| llm_request
+				.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini { .. })))
 		{
 			strip_alt_query(req);
 		}
@@ -1443,7 +1502,7 @@ impl AIProvider {
 				let native = llm_request
 					.filter(|l| {
 						route_type == RouteType::GeminiCountTokens
-							|| matches!(l.provider_state, Some(ProviderState::VertexGemini))
+							|| matches!(l.provider_state, Some(ProviderState::VertexGemini { .. }))
 					})
 					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
 				http::modify_req(req, |req| {
@@ -1465,7 +1524,7 @@ impl AIProvider {
 				let native_gemini = llm_request
 					.provider_state
 					.as_ref()
-					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
+					.is_some_and(|s| matches!(s, ProviderState::VertexGemini { .. }));
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						let path =
@@ -1655,8 +1714,9 @@ impl AIProvider {
 				if matches!(
 					route_type,
 					RouteType::GenerateContent | RouteType::GeminiCountTokens
-				) || llm_request
-					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
+				) || llm_request.is_some_and(|l| {
+					matches!(l.provider_state, Some(ProviderState::VertexGemini { .. }))
+				}) =>
 			{
 				http::modify_req(req, |req| {
 					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
@@ -2393,7 +2453,8 @@ impl AIProvider {
 			.model()
 			.as_deref()
 			.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
-		let chat_translation = self.chat_translation(original_format, request_model, catalog)?;
+		let chat_translation =
+			self.chat_translation(&CHAT_TRANSLATIONS, original_format, request_model, catalog)?;
 		let provider_format = chat_translation.provider_format();
 		let prepared = self
 			.prepare_request(
@@ -3061,7 +3122,12 @@ impl AIProvider {
 			));
 		}
 
-		let translation = self.chat_translation(req.input_format, &req.request_model, catalog)?;
+		let translation = self.chat_translation(
+			&CHAT_TRANSLATIONS,
+			req.input_format,
+			&req.request_model,
+			catalog,
+		)?;
 		translation.render_response(
 			bytes,
 			&ChatResponseContext {
@@ -3094,6 +3160,7 @@ impl AIProvider {
 		let namespaces = namespace_tool_map(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
+				&CHAT_TRANSLATIONS,
 				input_format,
 				&model,
 				model_catalog.as_deref().map(|c| c.as_handle()),
@@ -3375,7 +3442,12 @@ impl AIProvider {
 			return None;
 		}
 		let translation = self
-			.chat_translation(req.input_format, &req.request_model, catalog)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				req.input_format,
+				&req.request_model,
+				catalog,
+			)
 			.ok()?;
 		if translation.output != ChatFormat::VertexGemini {
 			return None;
@@ -3391,7 +3463,12 @@ impl AIProvider {
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Bytes, AIError> {
 		if req.input_format.is_chat() {
-			let translation = self.chat_translation(req.input_format, &req.request_model, catalog)?;
+			let translation = self.chat_translation(
+				&CHAT_TRANSLATIONS,
+				req.input_format,
+				&req.request_model,
+				catalog,
+			)?;
 			return translation.error(
 				bytes,
 				status,
@@ -3491,6 +3568,7 @@ fn namespace_tool_map(
 		Some(
 			ProviderState::Bedrock { namespaces, .. } | ProviderState::OpenAICompletions { namespaces },
 		) => Some(namespaces),
+		Some(ProviderState::VertexGemini { namespaces }) => namespaces.as_ref(),
 		_ => None,
 	}
 }

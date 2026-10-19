@@ -276,7 +276,9 @@ pub enum ProviderState {
 	OpenAICompletions {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
-	VertexGemini,
+	VertexGemini {
+		namespaces: Option<Arc<conversion::namespace_tools::NamespaceToolMap>>,
+	},
 	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
 	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
 }
