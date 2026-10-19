@@ -387,6 +387,22 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 		},
 		{
+			name: "extra-init-containers",
+			filterKinds: []string{
+				"Deployment",
+			},
+			valuesYAML: `controller:
+  extraInitContainers:
+    - name: sleep
+      image: docker.io/curlimages/curl
+      command:
+        - /bin/sleep
+        - infinity
+      imagePullPolicy: IfNotPresent
+      restartPolicy: Always
+`,
+		},
+		{
 			name: "extra-env",
 			filterKinds: []string{
 				"Deployment",

@@ -186,6 +186,9 @@ session:
 # -- Additional containers to run in the agentgateway proxy pod, such as a sidecar.
 extraContainers: []
 
+# -- Additional init containers to run in the agentgateway proxy pod.
+extraInitContainers: []
+
 # -- Additional environment variables to set on the agentgateway proxy container.
 extraEnv: []
 
