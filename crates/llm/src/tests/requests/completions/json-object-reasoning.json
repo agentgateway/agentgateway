@@ -1,0 +1,9 @@
+{
+  "model": "replaceme",
+  "messages": [
+    {"role": "user", "content": "Is 2+2=4? Give {\"score\": 0 or 1}."}
+  ],
+  "max_tokens": 8192,
+  "reasoning_effort": "low",
+  "response_format": {"type": "json_object"}
+}

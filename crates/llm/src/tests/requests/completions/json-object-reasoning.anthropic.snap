@@ -1,0 +1,64 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/json-object-reasoning.json
+info:
+  model: replaceme
+  messages:
+    - role: user
+      content: "Is 2+2=4? Give {\"score\": 0 or 1}."
+  max_tokens: 8192
+  reasoning_effort: low
+  response_format:
+    type: json_object
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Is 2+2=4? Give {\"score\": 0 or 1}."
+          }
+        ]
+      }
+    ],
+    "model": "replaceme",
+    "max_tokens": 8192,
+    "tools": [
+      {
+        "name": "json_object_response",
+        "description": "Give your answer as a JSON object by calling this tool.",
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "auto",
+      "disable_parallel_tool_use": true
+    },
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 1024
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "replaceme",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "max_tokens": 8192
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Is 2+2=4? Give {\"score\": 0 or 1}."
+      }
+    ]
+  }
+}

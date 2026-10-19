@@ -163,6 +163,9 @@ mod requests {
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI]),
+		("json-object", &[ANTHROPIC]),
+		("json-object-reasoning", &[ANTHROPIC]),
+		("json-object-with-tools", &[ANTHROPIC]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
 		(
@@ -923,6 +926,7 @@ mod responses {
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
 		("multiple_text_blocks", ALL_ANTHROPIC),
+		("json_object", &[MESSAGES_TO_COMPLETIONS]),
 	];
 	const ALL_COMPLETIONS: &[&str] = &[
 		COMPLETIONS_TO_COMPLETIONS,
@@ -1040,6 +1044,7 @@ mod responses {
 			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
+		("stream_json_object", &[MESSAGES_TO_COMPLETIONS]),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
