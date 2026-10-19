@@ -1358,6 +1358,7 @@ pub mod from_messages {
 	use crate::conversion::completions::from_messages as completions;
 	use crate::model_catalog::Catalog;
 	use crate::types::ResponseType;
+	use crate::types::completions::typed::ReasoningEffort;
 	use crate::types::messages::typed as messages;
 	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
 
@@ -1373,7 +1374,13 @@ pub mod from_messages {
 			.iter_mut()
 			.filter(|m| m.role == messages::Role::Assistant)
 			.for_each(|m| restore_signatures(&mut m.content));
-		let req = completions::translate_internal(req);
+		let off = matches!(req.thinking, Some(messages::ThinkingInput::Disabled {}));
+		let mut req = completions::translate_internal(req);
+		if off {
+			// The shared conversion drops an explicit off, as other Chat Completions upstreams may
+			// reject "none"
+			req.reasoning_effort = Some(ReasoningEffort::None);
+		}
 		super::from_completions::translate(&super::loose(&req)?, is_vertex, catalog)
 	}
 
@@ -1456,6 +1463,7 @@ pub mod from_responses {
 	use crate::conversion::openai_compat as compat;
 	use crate::model_catalog::Catalog;
 	use crate::types::ResponseType;
+	use crate::types::completions::typed::ReasoningEffort;
 	use crate::types::responses::typed as responses;
 	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
 
@@ -1474,7 +1482,14 @@ pub mod from_responses {
 		if let responses::InputParam::Items(items) = &mut req.input {
 			restore_signatures(items);
 		}
-		let completions = compat::from_responses::translate_typed(req)?;
+		let off = matches!(
+			req.reasoning.as_ref().and_then(|r| r.effort.as_ref()),
+			Some(responses::ReasoningEffort::None)
+		);
+		let mut completions = compat::from_responses::translate_typed(req)?;
+		if off {
+			completions.request.reasoning_effort = Some(ReasoningEffort::None);
+		}
 		let body =
 			super::from_completions::translate(&super::loose(&completions.request)?, is_vertex, catalog)?;
 		Ok(TranslatedRequest {

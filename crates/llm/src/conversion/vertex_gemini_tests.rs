@@ -1781,6 +1781,46 @@ fn replayed_signature_survives_the_chain(
 	assert!(!String::from_utf8(bytes).unwrap().contains("__thought__"));
 }
 
+/// Explicit off uses the model's minimum; omitting it keeps the default
+#[rstest::rstest]
+#[case::flash("gemini-2.5-flash", true, Some(json!({ "thinkingBudget": 0 })))]
+#[case::gemini_3("gemini-3.8-flash", true, Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::omitted("gemini-2.5-flash", false, None)]
+fn an_explicit_off_reaches_gemini(
+	#[values("messages", "responses")] client: &str,
+	#[case] model: &str,
+	#[case] off: bool,
+	#[case] expected: Option<Value>,
+) {
+	let body = match client {
+		"messages" => {
+			let mut req = json!({
+				"model": model,
+				"max_tokens": 256,
+				"messages": [{ "role": "user", "content": "hi" }]
+			});
+			if off {
+				req["thinking"] = json!({ "type": "disabled" });
+			}
+			from_messages::translate(&serde_json::from_value(req).unwrap(), true, None).unwrap()
+		},
+		_ => {
+			let mut req = json!({ "model": model, "input": "hi" });
+			if off {
+				req["reasoning"] = json!({ "effort": "none" });
+			}
+			from_responses::translate(&serde_json::from_value(req).unwrap(), true, None)
+				.unwrap()
+				.body
+		},
+	};
+	let g: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		g["generationConfig"].get("thinkingConfig").cloned(),
+		expected
+	);
+}
+
 #[test]
 fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
 	let req: types::messages::Request = serde_json::from_value(json!({
