@@ -1156,12 +1156,16 @@ pub mod from_completions {
 			return vg::ThinkingConfig::deserialize(tc).ok();
 		}
 
-		let effort = req
-			.reasoning_effort
-			.as_ref()
-			.filter(|e| **e != ReasoningEffort::None)?;
+		let effort = req.reasoning_effort.as_ref()?;
 		let level = select_thinking_level(effort, model, is_vertex, catalog);
 		if let Some(level) = level {
+			if *effort == ReasoningEffort::None {
+				tracing::debug!(
+					model,
+					level,
+					"thinking can't be turned off; using the lowest level"
+				);
+			}
 			return Some(vg::ThinkingConfig {
 				thinking_level: Some(level.into()),
 				thinking_budget: None,
@@ -1174,6 +1178,9 @@ pub mod from_completions {
 			return None;
 		}
 
+		if *effort == ReasoningEffort::None {
+			return minimum_thinking_config(model);
+		}
 		let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
 		Some(vg::ThinkingConfig {
 			thinking_level: None,
@@ -1215,6 +1222,38 @@ pub mod from_completions {
 
 	fn uses_thinking_levels(model: &str) -> bool {
 		model.contains("gemini-3") || model.contains("gemini-4")
+	}
+
+	/// Gemini 2.5 Pro requires its minimum budget; Flash and Flash-Lite can use zero
+	fn minimum_thinking_config(model: &str) -> Option<vg::ThinkingConfig> {
+		let (budget, include_thoughts) = match gemini_2_5_thinking_variant(model)? {
+			"pro" => {
+				tracing::debug!(
+					model,
+					"thinking can't be turned off; using the minimum budget"
+				);
+				(128, Some(true))
+			},
+			_ => (0, None),
+		};
+		Some(vg::ThinkingConfig {
+			thinking_level: None,
+			thinking_budget: Some(budget),
+			include_thoughts,
+			rest: Default::default(),
+		})
+	}
+
+	fn gemini_2_5_thinking_variant(model: &str) -> Option<&'static str> {
+		let (_, rest) = model.split_once("gemini-2.5-")?;
+		let variant = ["flash-lite", "flash", "pro"]
+			.into_iter()
+			.find(|v| rest.starts_with(v))?;
+		rest[variant.len()..]
+			.split('-')
+			.filter(|part| !part.is_empty())
+			.all(|part| part == "preview" || part.bytes().all(|b| b.is_ascii_digit()))
+			.then_some(variant)
 	}
 
 	fn gemini_level(effort: &ReasoningEffort) -> Option<&'static str> {
