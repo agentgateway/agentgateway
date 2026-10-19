@@ -1350,20 +1350,21 @@ pub mod to_completions {
 			let blocked = resp
 				.prompt_feedback
 				.as_ref()
-				.and_then(|pf| pf.block_reason.as_ref())
-				.is_some();
-			let finish = if blocked {
+				.filter(|pf| pf.block_reason.is_some());
+			let finish = if blocked.is_some() {
 				completions::FinishReason::ContentFilter
 			} else {
 				completions::FinishReason::Stop
 			};
+			let mut message = completions::ResponseMessage {
+				content: Some(String::new()),
+				..completions::ResponseMessage::assistant()
+			};
+			message.refusal = blocked.map(prompt_block_message);
 			vec![completions::ChatChoice {
 				rest: Default::default(),
 				index: 0,
-				message: completions::ResponseMessage {
-					content: Some(String::new()),
-					..completions::ResponseMessage::assistant()
-				},
+				message,
 				finish_reason: Some(finish),
 				logprobs: None,
 			}]
@@ -1418,7 +1419,12 @@ pub mod to_completions {
 			.collect();
 
 		let has_tool_calls = !tool_calls.is_empty();
-		let finish = finish_with_tool_override(cand.finish_reason.as_deref(), has_tool_calls);
+		// The gateway answers a failed reply with `failure`'s error, so its finish reason isn't seen
+		let finish = finish_reason(
+			cand.finish_reason.as_deref().unwrap_or("STOP"),
+			has_tool_calls,
+		)
+		.unwrap_or(completions::FinishReason::Stop);
 		let content = if decoded.content.is_empty() && (has_tool_calls || !decoded.reasoning.is_empty())
 		{
 			None
@@ -1428,57 +1434,120 @@ pub mod to_completions {
 		let reasoning = (!decoded.reasoning.is_empty()).then_some(decoded.reasoning);
 		let tool_calls = has_tool_calls.then_some(tool_calls);
 
+		let mut message = completions::ResponseMessage {
+			content,
+			tool_calls,
+			reasoning_content: reasoning,
+			..completions::ResponseMessage::assistant()
+		};
+		if finish == completions::FinishReason::ContentFilter {
+			message.refusal = Some(reply_block_message(cand));
+		}
 		completions::ChatChoice {
 			rest: Default::default(),
 			index,
-			message: completions::ResponseMessage {
-				content,
-				tool_calls,
-				reasoning_content: reasoning,
-				// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
-				// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
-				// Tool-call signatures still round-trip via the tool_call id.
-				reasoning_signature: None,
-				..completions::ResponseMessage::assistant()
-			},
+			message,
 			finish_reason: Some(finish),
 			logprobs: None,
 		}
 	}
 
-	fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
+	enum Finish {
+		Reason(completions::FinishReason),
+		/// Gemini produced no usable reply; the client gets an error with this HTTP status and
+		/// Google status instead
+		Failed(::http::StatusCode, &'static str),
+		Unknown,
+	}
+
+	fn classify_finish_reason(reason: &str) -> Finish {
+		use ::http::StatusCode;
 		use completions::FinishReason;
 		match reason {
-			Some("MAX_TOKENS") => FinishReason::Length,
-			Some(
-				"SAFETY"
-				| "RECITATION"
-				| "LANGUAGE"
-				| "BLOCKLIST"
-				| "PROHIBITED_CONTENT"
-				| "SPII"
-				| "UNEXPECTED_TOOL_CALL"
-				| "TOO_MANY_TOOL_CALLS"
-				| "IMAGE_SAFETY"
-				| "IMAGE_PROHIBITED_CONTENT"
-				| "IMAGE_RECITATION",
-			) => FinishReason::ContentFilter,
-			// STOP, MALFORMED_FUNCTION_CALL, IMAGE_OTHER, NO_IMAGE, OTHER,
-			// FINISH_REASON_UNSPECIFIED, None, and any future value.
-			_ => FinishReason::Stop,
+			"STOP" => Finish::Reason(FinishReason::Stop),
+			"MAX_TOKENS" | "CONTINUATION" => Finish::Reason(FinishReason::Length),
+			"SAFETY"
+			| "RECITATION"
+			| "LANGUAGE"
+			| "BLOCKLIST"
+			| "PROHIBITED_CONTENT"
+			| "SPII"
+			| "IMAGE_SAFETY"
+			| "IMAGE_PROHIBITED_CONTENT"
+			| "IMAGE_RECITATION"
+			| "MODEL_ARMOR"
+			| "ESCALATION" => Finish::Reason(FinishReason::ContentFilter),
+			"MISSING_THOUGHT_SIGNATURE" => Finish::Failed(StatusCode::BAD_REQUEST, "INVALID_ARGUMENT"),
+			"PUP_LIMITED_DISABLED" => Finish::Failed(StatusCode::FORBIDDEN, "PERMISSION_DENIED"),
+			"MALFORMED_FUNCTION_CALL"
+			| "UNEXPECTED_TOOL_CALL"
+			| "TOO_MANY_TOOL_CALLS"
+			| "MALFORMED_RESPONSE"
+			| "OTHER"
+			| "NO_IMAGE"
+			| "IMAGE_OTHER" => Finish::Failed(StatusCode::BAD_GATEWAY, "INTERNAL"),
+			_ => Finish::Unknown,
 		}
 	}
 
-	fn finish_with_tool_override(
-		reason: Option<&str>,
-		saw_tool_call: bool,
-	) -> completions::FinishReason {
-		let mapped = map_finish_reason(reason);
-		if saw_tool_call && matches!(mapped, completions::FinishReason::Stop) {
-			completions::FinishReason::ToolCalls
-		} else {
-			mapped
+	fn finish_reason(reason: &str, saw_tool_call: bool) -> Option<completions::FinishReason> {
+		match classify_finish_reason(reason) {
+			Finish::Reason(completions::FinishReason::Stop) if saw_tool_call => {
+				Some(completions::FinishReason::ToolCalls)
+			},
+			Finish::Reason(reason) => Some(reason),
+			Finish::Failed(..) | Finish::Unknown => None,
 		}
+	}
+
+	/// The error to answer with when Gemini ended its reply with a failure: its HTTP status and a
+	/// Google error body
+	pub fn failure(bytes: &[u8]) -> Option<(::http::StatusCode, Bytes)> {
+		let resp: vg::GenerateContentResponse = serde_json::from_slice(bytes).ok()?;
+		let (status, error) = reply_failure(&resp)?;
+		let body = serde_json::to_vec(&serde_json::json!({ "error": error })).ok()?;
+		Some((status, Bytes::from(body)))
+	}
+
+	fn reply_failure(resp: &vg::GenerateContentResponse) -> Option<(::http::StatusCode, Value)> {
+		let cand = resp.candidates.first()?;
+		let reason = cand.finish_reason.as_deref()?;
+		let (status, google_status) = match classify_finish_reason(reason) {
+			Finish::Reason(_) => return None,
+			Finish::Failed(status, google_status) => (status, google_status),
+			Finish::Unknown => {
+				tracing::warn!(
+					reason,
+					"unknown Gemini finish reason; reporting it as a failure"
+				);
+				(::http::StatusCode::BAD_GATEWAY, "INTERNAL")
+			},
+		};
+		let message = match &cand.finish_message {
+			Some(detail) => format!("Gemini stopped with {reason}: {detail}"),
+			None => format!("Gemini stopped with {reason}"),
+		};
+		let error = serde_json::json!({
+			"code": status.as_u16(),
+			"message": message,
+			"status": google_status,
+		});
+		Some((status, error))
+	}
+
+	fn reply_block_message(cand: &vg::Candidate) -> String {
+		cand.finish_message.clone().unwrap_or_else(|| {
+			let reason = cand.finish_reason.as_deref().unwrap_or_default();
+			format!("Gemini blocked the reply: {reason}")
+		})
+	}
+
+	/// The Gemini API gives only a reason; Vertex adds a message
+	fn prompt_block_message(feedback: &vg::PromptFeedback) -> String {
+		feedback.block_reason_message.clone().unwrap_or_else(|| {
+			let reason = feedback.block_reason.as_deref().unwrap_or_default();
+			format!("Gemini blocked the prompt: {reason}")
+		})
 	}
 
 	/// Per-stream state for translating native Gemini SSE chunks into OpenAI
@@ -1556,22 +1625,23 @@ pub mod to_completions {
 
 			// `saw_function_call` carries across chunks, so a finish reason in a later chunk still
 			// upgrades to `tool_calls` when an earlier chunk emitted the call.
-			let finish = match cand.and_then(|c| c.finish_reason.as_deref()) {
-				Some(reason) => Some(finish_with_tool_override(
-					Some(reason),
-					self.saw_function_call,
-				)),
-				None
-					if chunk.candidates.is_empty()
-						&& chunk
-							.prompt_feedback
-							.as_ref()
-							.and_then(|pf| pf.block_reason.as_ref())
-							.is_some() =>
-				{
-					Some(completions::FinishReason::ContentFilter)
+			let blocked_prompt = chunk
+				.prompt_feedback
+				.as_ref()
+				.filter(|pf| chunk.candidates.is_empty() && pf.block_reason.is_some());
+			// A failed reply has no finish reason here; `translate_stream` sends its error
+			let finish = match (cand, cand.and_then(|c| c.finish_reason.as_deref())) {
+				(Some(cand), Some(reason)) => {
+					let finish = finish_reason(reason, self.saw_function_call);
+					if finish == Some(completions::FinishReason::ContentFilter) {
+						delta.refusal = Some(reply_block_message(cand));
+					}
+					finish
 				},
-				None => None,
+				_ => blocked_prompt.map(|pf| {
+					delta.refusal = Some(prompt_block_message(pf));
+					completions::FinishReason::ContentFilter
+				}),
 			};
 
 			if !decoded.content.is_empty() {
@@ -1697,6 +1767,12 @@ pub mod to_completions {
 				});
 			}
 
+			if let Some((_, error)) = reply_failure(&chunk) {
+				failed = true;
+				seen_end.fail();
+				return vec![("", CompletionsStreamEvent::Error(stream_error(&error)))];
+			}
+
 			match state.translate(&chunk) {
 				// Gemini may omit modelVersion on a chunk
 				Some(mut sr) => {
@@ -1765,7 +1841,7 @@ pub mod to_completions {
 	}
 
 	/// A chunk, or the error event an OpenAI stream sends in its place
-	#[allow(clippy::large_enum_variant)] // Almost every event is a chunk.
+	#[allow(clippy::large_enum_variant)] // Almost every event is a chunk
 	#[derive(serde::Serialize)]
 	#[serde(untagged)]
 	enum CompletionsStreamEvent {

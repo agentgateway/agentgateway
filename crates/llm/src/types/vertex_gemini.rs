@@ -363,6 +363,9 @@ pub struct Candidate {
 	pub content: Option<Content>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub finish_reason: Option<String>,
+	/// Why generation stopped, in more detail; only set with `finish_reason`
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub finish_message: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub index: Option<u32>,
 	#[serde(flatten, default)]
@@ -375,6 +378,9 @@ pub struct PromptFeedback {
 	/// Set when the prompt is blocked before any candidate is produced.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub block_reason: Option<String>,
+	/// Vertex only: a readable explanation of `block_reason`
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub block_reason_message: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }

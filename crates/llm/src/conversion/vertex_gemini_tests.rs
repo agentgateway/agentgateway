@@ -1791,34 +1791,118 @@ fn response_synthesizes_tool_call_id_when_absent() {
 
 // ---------- Response: finishReason table / usage ----------
 
-#[test]
-fn finish_reason_mapping_table() {
-	let cases = [
-		("MAX_TOKENS", "length"),
-		("SAFETY", "content_filter"),
-		("RECITATION", "content_filter"),
-		("LANGUAGE", "content_filter"),
-		("BLOCKLIST", "content_filter"),
-		("PROHIBITED_CONTENT", "content_filter"),
-		("SPII", "content_filter"),
-		("UNEXPECTED_TOOL_CALL", "content_filter"),
-		("TOO_MANY_TOOL_CALLS", "content_filter"),
-		("IMAGE_SAFETY", "content_filter"),
-		("MALFORMED_FUNCTION_CALL", "stop"),
-		("OTHER", "stop"),
-		("FINISH_REASON_UNSPECIFIED", "stop"),
-		("SOME_FUTURE_VALUE", "stop"),
-	];
-	for (gemini, openai) in cases {
-		let r = resp(json!({
-			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
-				"finishReason": gemini }]
-		}));
-		assert_eq!(
-			r["choices"][0]["finish_reason"], openai,
-			"{gemini} should map to {openai}"
-		);
+#[rstest::rstest]
+#[case("STOP", "stop")]
+#[case("MAX_TOKENS", "length")]
+#[case("CONTINUATION", "length")]
+#[case("SAFETY", "content_filter")]
+#[case("RECITATION", "content_filter")]
+#[case("LANGUAGE", "content_filter")]
+#[case("BLOCKLIST", "content_filter")]
+#[case("PROHIBITED_CONTENT", "content_filter")]
+#[case("SPII", "content_filter")]
+#[case("IMAGE_SAFETY", "content_filter")]
+#[case("IMAGE_PROHIBITED_CONTENT", "content_filter")]
+#[case("IMAGE_RECITATION", "content_filter")]
+#[case("MODEL_ARMOR", "content_filter")]
+#[case("ESCALATION", "content_filter")]
+fn finish_reasons(#[case] gemini: &str, #[case] openai: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini }]
+	});
+	assert_eq!(resp(reply.clone())["choices"][0]["finish_reason"], openai);
+	assert!(to_completions::failure(&gemini_response_bytes(reply)).is_none());
+}
+
+#[rstest::rstest]
+fn a_tool_call_reply_finishes_with_tool_calls(#[values(Some("STOP"), None)] reason: Option<&str>) {
+	let mut cand = json!({ "content": { "role": "model", "parts": [
+		{ "functionCall": { "name": "a", "args": {} } }
+	]}});
+	if let Some(reason) = reason {
+		cand["finishReason"] = reason.into();
 	}
+	let r = resp(json!({ "candidates": [cand] }));
+	assert_eq!(r["choices"][0]["finish_reason"], "tool_calls");
+}
+
+#[rstest::rstest]
+#[case("MALFORMED_FUNCTION_CALL", 502, "INTERNAL")]
+#[case("UNEXPECTED_TOOL_CALL", 502, "INTERNAL")]
+#[case("TOO_MANY_TOOL_CALLS", 502, "INTERNAL")]
+#[case("MALFORMED_RESPONSE", 502, "INTERNAL")]
+#[case("OTHER", 502, "INTERNAL")]
+#[case("NO_IMAGE", 502, "INTERNAL")]
+#[case("IMAGE_OTHER", 502, "INTERNAL")]
+#[case("FINISH_REASON_UNSPECIFIED", 502, "INTERNAL")]
+#[case("SOME_FUTURE_VALUE", 502, "INTERNAL")]
+#[case("MISSING_THOUGHT_SIGNATURE", 400, "INVALID_ARGUMENT")]
+#[case("PUP_LIMITED_DISABLED", 403, "PERMISSION_DENIED")]
+fn failed_replies_become_errors(#[case] gemini: &str, #[case] code: u16, #[case] status: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini, "finishMessage": "details" }]
+	});
+	let (got, body) = to_completions::failure(&gemini_response_bytes(reply)).expect("a failure");
+	assert_eq!(got.as_u16(), code);
+	assert_eq!(
+		serde_json::from_slice::<Value>(&body).unwrap(),
+		json!({ "error": {
+			"code": code,
+			"message": format!("Gemini stopped with {gemini}: details"),
+			"status": status,
+		}})
+	);
+}
+
+#[test]
+fn a_failure_without_a_finish_message_names_the_reason() {
+	let reply = json!({ "candidates": [{ "finishReason": "OTHER" }] });
+	let (_, body) = to_completions::failure(&gemini_response_bytes(reply)).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["error"]["message"], "Gemini stopped with OTHER");
+}
+
+#[test]
+fn a_blocked_reply_is_a_refusal() {
+	let reply = |extra: Value| {
+		let mut cand = json!({ "finishReason": "SAFETY" });
+		cand
+			.as_object_mut()
+			.unwrap()
+			.extend(extra.as_object().unwrap().clone());
+		resp(json!({ "candidates": [cand] }))["choices"][0]["message"]["refusal"].clone()
+	};
+	assert_eq!(
+		reply(json!({ "finishMessage": "Unsafe reply" })),
+		"Unsafe reply"
+	);
+	assert_eq!(reply(json!({})), "Gemini blocked the reply: SAFETY");
+	assert_eq!(
+		resp(
+			json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": "STOP" }] })
+		)["choices"][0]["message"]["refusal"],
+		Value::Null
+	);
+}
+
+#[test]
+fn a_blocked_prompt_is_a_refusal() {
+	let refusal = |feedback: Value| {
+		resp(json!({ "candidates": [], "promptFeedback": feedback }))["choices"][0]["message"]
+			["refusal"]
+			.clone()
+	};
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY", "blockReasonMessage": "Unsafe prompt" })),
+		"Unsafe prompt"
+	);
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY" })),
+		"Gemini blocked the prompt: SAFETY"
+	);
 }
 
 #[test]
@@ -1951,6 +2035,30 @@ fn streaming_tool_call_id_embeds_thought_signature() {
 	assert!(
 		id1.contains(sig1),
 		"second streamed tool_call id must embed its signature, got {id1:?}"
+	);
+}
+
+#[test]
+fn streaming_blocks_are_refusals() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "finishReason": "SAFETY", "finishMessage": "Unsafe reply" }] }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(c["choices"][0]["delta"]["refusal"], "Unsafe reply");
+
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "promptFeedback": { "blockReason": "PROHIBITED_CONTENT" } }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(
+		c["choices"][0]["delta"]["refusal"],
+		"Gemini blocked the prompt: PROHIBITED_CONTENT"
 	);
 }
 
@@ -2398,6 +2506,43 @@ mod chain {
 		assert_eq!(
 			last_event(&text),
 			r#"data: {"event_id":null,"error":{"type":"api_error","message":"The model is overloaded.","code":"UNAVAILABLE"}}"#
+		);
+	}
+
+	const MALFORMED: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"MALFORMED_FUNCTION_CALL\",\"finishMessage\":\"Bad call\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	/// The failed reply's own text is dropped, and its usage still counts
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn a_failed_reply_ends_with_an_error(#[values(completions)] chain: Chain) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = drain(chain(upstream(&[FIRST, MALFORMED], End::Close), log)).await;
+		assert!(!failed, "{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(!text.contains('!'), "{text}");
+		assert!(
+			last_event(&text).contains("Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call"),
+			"{text}"
+		);
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(r.total_tokens, Some(9));
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_the_failed_reason() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, MALFORMED], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call","code":"INTERNAL"}}"#
 		);
 	}
 

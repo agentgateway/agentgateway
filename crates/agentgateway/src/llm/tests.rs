@@ -2666,6 +2666,81 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+const FAILED_GEMINI_REPLY: &str = r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]},"finishReason":"MALFORMED_FUNCTION_CALL","finishMessage":"Bad call"}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":2,"totalTokenCount":9}}"#;
+
+#[tokio::test]
+async fn a_failed_native_gemini_reply_is_an_error() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Completions;
+	req.request_model = "gemini-3.8-flash".into();
+	req.streaming = false;
+	let upstream = ::http::Response::new(Body::from(FAILED_GEMINI_REPLY));
+
+	let response = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			upstream,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), ::http::StatusCode::BAD_GATEWAY);
+	let llm = response
+		.extensions()
+		.get::<crate::cel::LLMContext>()
+		.unwrap();
+	assert_eq!(llm.total_tokens, Some(9));
+	let body: Value =
+		serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(
+		body["error"]["message"],
+		"Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call"
+	);
+}
+
+#[tokio::test]
+async fn a_failed_reply_passes_through_to_native_gemini_clients() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Gemini;
+	req.request_model = "gemini-3.8-flash".into();
+	req.streaming = false;
+	let upstream = ::http::Response::new(Body::from(FAILED_GEMINI_REPLY));
+
+	let response = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			upstream,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), ::http::StatusCode::OK);
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(body, FAILED_GEMINI_REPLY.as_bytes());
+}
+
 #[tokio::test]
 async fn upstream_encoding_is_applied_after_messages_response_translation() {
 	use crate::proxy::httpproxy::PolicyClient;
