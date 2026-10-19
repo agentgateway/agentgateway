@@ -507,31 +507,49 @@ struct UpstreamRequest {
 }
 
 /// Headers sent to MCP targets, for the access log.
-#[derive(Debug, Clone, Default)]
-pub struct UpstreamRequests(Arc<std::sync::Mutex<Vec<UpstreamRequest>>>);
+#[derive(Debug, Clone)]
+pub struct UpstreamRequests(Arc<UpstreamRequestsInner>);
+
+#[derive(Debug)]
+struct UpstreamRequestsInner {
+	single_target: bool,
+	requests: std::sync::Mutex<Vec<UpstreamRequest>>,
+}
 
 impl UpstreamRequests {
+	pub fn new(single_target: bool) -> Self {
+		Self(Arc::new(UpstreamRequestsInner {
+			single_target,
+			requests: Default::default(),
+		}))
+	}
+
 	pub fn record(&self, call: &UpstreamCall, headers: &::http::HeaderMap) {
-		self.0.lock().unwrap().push(UpstreamRequest {
+		self.0.requests.lock().unwrap().push(UpstreamRequest {
 			target: call.target().map(str::to_owned),
 			method: call.0.method_name.clone(),
 			headers: headers.clone(),
 		});
 	}
 
-	pub fn take_single_target_headers(&self, method: &str) -> Option<::http::HeaderMap> {
-		let requests = std::mem::take(&mut *self.0.lock().unwrap());
-		let mut matching = requests
-			.into_iter()
-			.filter(|r| r.method.as_deref() == Some(method));
-		let mut last = matching.next()?;
-		for request in matching {
-			if request.target != last.target {
-				return None;
-			}
-			last = request;
+	/// Only targets on some transports are recorded, so the request must be known to reach one
+	/// target: the backend has a single target, or the operation names its target.
+	pub fn take_headers(
+		&self,
+		method: Option<&str>,
+		target: Option<&str>,
+	) -> Option<::http::HeaderMap> {
+		if target.is_none() && !self.0.single_target {
+			return None;
 		}
-		Some(last.headers)
+		let requests = std::mem::take(&mut *self.0.requests.lock().unwrap());
+		requests
+			.into_iter()
+			.rev()
+			.find(|r| {
+				r.method.as_deref() == method && (target.is_none() || r.target.as_deref() == target)
+			})
+			.map(|r| r.headers)
 	}
 }
 

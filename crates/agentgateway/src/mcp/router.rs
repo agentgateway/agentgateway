@@ -143,7 +143,7 @@ impl App {
 				.insert(crate::telemetry::log::McpUpstreamLogging::new(log));
 		}
 		if log.cel.cel_context.needs_log_request() {
-			let upstreams = mcp::UpstreamRequests::default();
+			let upstreams = mcp::UpstreamRequests::new(backends.targets.len() == 1);
 			req.extensions_mut().insert(upstreams.clone());
 			log.mcp_upstream_requests = Some(upstreams);
 		}

@@ -1595,9 +1595,13 @@ impl Drop for DropOnLog {
 			let mcp = log.mcp_status.take();
 			// Show the target's headers when the request went to one target.
 			if let Some(upstreams) = log.mcp_upstream_requests.take()
-				&& let Some(method) = mcp.as_ref().and_then(|m| m.method_name.as_deref())
-				&& let Some(headers) = upstreams.take_single_target_headers(method)
-				&& let Some(req) = log.request_snapshot.as_mut()
+				&& let Some(headers) = upstreams.take_headers(
+					mcp.as_ref().and_then(|m| m.method_name.as_deref()),
+					mcp.as_ref().and_then(|m| {
+						m.target_name()
+							.or(m.target.as_ref().map(|t| t.name.as_str()))
+					}),
+				) && let Some(req) = log.request_snapshot.as_mut()
 			{
 				Arc::make_mut(req).headers = headers;
 			}

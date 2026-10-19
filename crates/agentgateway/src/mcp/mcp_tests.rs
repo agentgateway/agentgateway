@@ -4632,6 +4632,231 @@ async fn target_token_exchange_is_visible_to_access_log_cel() {
 }
 
 #[tokio::test]
+async fn mixed_transport_fanout_access_log_keeps_inbound_headers() {
+	use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
+	// Only the streamable target's call is recorded, which must not count as a single target.
+	let mock_stream = mock_streamable_http_server(true).await;
+	let mock_sse = mock_sse_server().await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![
+				("sse", mock_sse.addr, true),
+				("mcp", mock_stream.addr, false),
+			],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let name = ResourceName::new(strng::format!("basic-{}", mock_stream.addr), "".into());
+	t.pi.stores.binds.write().insert_backend(
+		name.to_string().into(),
+		BackendWithPolicies {
+			backend: Backend::Opaque(name, Target::Address(mock_stream.addr)),
+			inline_policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
+				value: SecretString::from(EXCHANGED_JWT).into(),
+				location: None,
+			})],
+		},
+	);
+	add_backend_auth_access_log(&mut t);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let trace_id = "8bf92f3577b34da6a3ce929d0e0e473a";
+	let traceparent = format!("00-{trace_id}-00f067aa0ba902b7-01");
+	let client = inbound_auth_client(
+		format!("http://{io}/mcp"),
+		&[
+			("authorization", "Bearer inbound-mixed"),
+			("traceparent", &traceparent),
+		],
+	)
+	.await;
+
+	client.list_tools(None).await.unwrap();
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("trace.id", trace_id),
+		("mcp.method.name", "tools/list"),
+	])
+	.await
+	.unwrap();
+	assert_eq!(
+		log.get("auth"),
+		Some(&serde_json::json!("Bearer inbound-mixed")),
+		"{log}"
+	);
+
+	let log = call_tool_and_find_log(&client, "mcp_echo").await;
+	assert_eq!(
+		log.get("auth"),
+		Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
+		"{log}"
+	);
+}
+
+#[tokio::test]
+async fn client_reply_access_log_uses_target_headers() {
+	use std::collections::HashMap;
+
+	use ::http::{HeaderName, HeaderValue};
+	use rmcp::ServiceExt;
+	use rmcp::model::{
+		ClientCapabilities, ClientConfig, ElicitRequestParams, ElicitResult, ElicitationAction,
+		Implementation, ProtocolVersion,
+	};
+	use rmcp::service::RequestContext;
+	use rmcp::transport::StreamableHttpClientTransport;
+	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+	struct ElicitingClient {
+		reject: bool,
+	}
+	impl rmcp::ClientHandler for ElicitingClient {
+		async fn create_elicitation(
+			&self,
+			_request: ElicitRequestParams,
+			_context: RequestContext<RoleClient>,
+		) -> Result<ElicitResult, rmcp::ErrorData> {
+			if self.reject {
+				return Err(rmcp::ErrorData::internal_error("rejected", None));
+			}
+			Ok(
+				ElicitResult::new(ElicitationAction::Accept)
+					.with_content(serde_json::json!({"confirm": "yes"})),
+			)
+		}
+		fn get_info(&self) -> ClientConfig {
+			let mut info = ClientConfig::new(
+				ClientCapabilities::default(),
+				Implementation::new("test client".to_string(), "0.0.1".to_string()),
+			);
+			info.protocol_version = ProtocolVersion::V_2025_06_18;
+			info.capabilities.elicitation = Some(Default::default());
+			info
+		}
+	}
+
+	let key = |token: &str| {
+		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
+			value: SecretString::from(token).into(),
+			location: None,
+		})]
+	};
+	// The eliciting tool is on the first target, and each target has its own credential. A rejected
+	// elicitation is replied to with a JSON-RPC error.
+	for (multiplex, reject, trace_id) in [
+		(false, false, "9bf92f3577b34da6a3ce929d0e0e473b"),
+		(true, false, "9bf92f3577b34da6a3ce929d0e0e473c"),
+		(false, true, "9bf92f3577b34da6a3ce929d0e0e473d"),
+		(true, true, "9bf92f3577b34da6a3ce929d0e0e473e"),
+	] {
+		let mock = mock_streamable_http_server(true).await;
+		let other = mock_streamable_http_server(true).await;
+		let (mut t, io, tool) = if multiplex {
+			use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_multiplex_mcp_backend(
+					"mcp",
+					vec![("a", mock.addr, false), ("b", other.addr, false)],
+					true,
+				)
+				.with_bind(simple_bind())
+				.with_route(basic_named_route(strng::new("/mcp")));
+			for (addr, token) in [(mock.addr, EXCHANGED_JWT), (other.addr, "other-token")] {
+				let name = ResourceName::new(strng::format!("basic-{addr}"), "".into());
+				t.pi.stores.binds.write().insert_backend(
+					name.to_string().into(),
+					BackendWithPolicies {
+						backend: Backend::Opaque(name, Target::Address(addr)),
+						inline_policies: key(token),
+					},
+				);
+			}
+			let io = t.serve_real_listener(strng::new("bind")).await;
+			(t, io, "a_elicit")
+		} else {
+			let (t, io) =
+				setup_proxy_policies_with_target(&mock, true, false, vec![], key(EXCHANGED_JWT)).await;
+			(t, io, "elicit")
+		};
+		add_backend_auth_access_log(&mut t);
+		let headers: HashMap<_, _> = [
+			("authorization", "Bearer inbound-reply".to_string()),
+			("traceparent", format!("00-{trace_id}-00f067aa0ba902b7-01")),
+		]
+		.into_iter()
+		.map(|(k, v)| {
+			(
+				HeaderName::from_static(k),
+				HeaderValue::from_str(&v).unwrap(),
+			)
+		})
+		.collect();
+		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{io}/mcp"))
+			.custom_headers(headers);
+		let client = ElicitingClient { reject }
+			.serve(StreamableHttpClientTransport::from_config(config))
+			.await
+			.unwrap();
+		let result = client
+			.call_tool(rmcp::model::CallToolRequestParams::new(tool))
+			.await;
+		assert_eq!(result.is_err(), reject, "{result:?}");
+
+		// The elicitation reply is a POST without an MCP method.
+		agent_core::telemetry::testing::eventually_find(&[
+			("scope", "request"),
+			("trace.id", trace_id),
+			("mcp.method.name", "tools/call"),
+		])
+		.await
+		.unwrap();
+		let replies: Vec<_> =
+			agent_core::telemetry::testing::find(&[("scope", "request"), ("trace.id", trace_id)])
+				.into_iter()
+				.filter(|l| l.get("http.method") == Some(&serde_json::json!("POST")))
+				.filter(|l| l.get("mcp.method.name").is_none())
+				.collect();
+		assert!(
+			!replies.is_empty(),
+			"multiplex={multiplex} reject={reject}: no reply log"
+		);
+		for reply in replies {
+			assert_eq!(
+				reply.get("auth"),
+				Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
+				"multiplex={multiplex} reject={reject}: {reply}"
+			);
+		}
+
+		// Session GET and DELETE requests are not replies and keep the client's headers.
+		client.cancel().await.unwrap();
+		for method in ["GET", "DELETE"] {
+			agent_core::telemetry::testing::eventually_find(&[
+				("scope", "request"),
+				("trace.id", trace_id),
+				("http.method", method),
+			])
+			.await
+			.unwrap_or_else(|| panic!("multiplex={multiplex}: no {method} log"));
+			for line in agent_core::telemetry::testing::find(&[
+				("scope", "request"),
+				("trace.id", trace_id),
+				("http.method", method),
+			]) {
+				assert_eq!(
+					line.get("auth"),
+					Some(&serde_json::json!("Bearer inbound-reply")),
+					"multiplex={multiplex}: {line}"
+				);
+			}
+		}
+	}
+}
+
+#[tokio::test]
 async fn fanout_access_log_keeps_inbound_headers() {
 	use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
 	agent_core::telemetry::testing::setup_test_logging();
