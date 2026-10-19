@@ -153,9 +153,7 @@ const (
 
 type Settings struct {
 	// AdminBindAddress is an IP address or the literal localhost, without a port (always 9095).
-	// Defaults to localhost. A non-loopback bind exposes pprof heap/goroutine data,
-	// log-level control and KRT snapshots to anyone who can reach the pod. Use
-	// NetworkPolicy and enable this only in performance or debug environments.
+	// Defaults to localhost. A non-loopback address makes the admin server network-accessible.
 	AdminBindAddress string `split_words:"true" default:"localhost"`
 
 	// Controls the DnsLookupFamily for all static clusters created via Backend resources.

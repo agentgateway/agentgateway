@@ -75,7 +75,7 @@ controller:
   logLevel: info
   # -- Configure the controller admin server (port 9095).
   adminServer:
-    # -- IP address or literal localhost without a port; empty preserves the loopback-only default (localhost). Setting a non-loopback address (e.g. 0.0.0.0 or ::) exposes pprof heap/goroutine data, log-level control and KRT snapshots to anything that can reach the pod. Restrict access with NetworkPolicy and enable only in performance or debug environments.
+    # -- IP address or literal localhost without a port; empty preserves the loopback-only default (localhost). A non-loopback address (e.g. 0.0.0.0 or ::) makes the admin server network-accessible.
     bindAddress: ""
   # -- Configure the controller container image.
   image:
