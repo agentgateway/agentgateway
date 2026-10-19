@@ -743,6 +743,13 @@ impl Client {
 			}
 			let version = req.version();
 			let transport_name = connection.transport.name();
+			if let Some(upstreams) = req.extensions().get::<crate::mcp::UpstreamRequests>()
+				&& let Some(call) = req.extensions().get::<crate::mcp::UpstreamCall>()
+			{
+				upstreams.record(call, req.headers());
+			}
+			// MCP target calls add the access log fields to the record below.
+			let mcp_record = crate::telemetry::log::McpUpstreamLogging::evaluate(&mut req);
 			// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
 			// in the connect layer, but here we need to merge it into the request
 			if let Transport::Tunnel(app, tc) = &connection.transport
@@ -797,23 +804,44 @@ impl Client {
 			let dur = format!("{}ms", start.elapsed().as_millis());
 			// If version changed due to ALPN negotiation, make sure we get the real version
 			let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);
-			event!(
-				target: "upstream request",
-				parent: None,
-				tracing::Level::DEBUG,
+			if let Some(record) = mcp_record {
+				use agent_core::telemetry::{debug as debug_value, display as display_value, quoted};
+				let path_owned = path.to_owned();
+				let status = resp
+					.as_ref()
+					.ok()
+					.map(|s| s.status().as_u16())
+					.unwrap_or_default();
+				record.log([
+					("target", Some(display_value(&target))),
+					("endpoint", Some(display_value(&dest))),
+					("transport", Some(display_value(&transport_name))),
+					("http.method", Some(display_value(&method))),
+					("http.host", host.map(display_value)),
+					("http.path", Some(display_value(&path_owned))),
+					("http.version", Some(debug_value(&version))),
+					("http.status", Some(status.into())),
+					("duration", Some(quoted(&dur))),
+				]);
+			} else {
+				event!(
+					target: "upstream request",
+					parent: None,
+					tracing::Level::DEBUG,
 
-				target = %target,
-				endpoint = %dest,
-				transport = %transport_name,
+					target = %target,
+					endpoint = %dest,
+					transport = %transport_name,
 
-				http.method = %method,
-				http.host = host.as_ref().map(display),
-				http.path = %path,
-				http.version = ?version,
-				http.status = resp.as_ref().ok().map(|s| s.status().as_u16()).unwrap_or_default(),
+					http.method = %method,
+					http.host = host.as_ref().map(display),
+					http.path = %path,
+					http.version = ?version,
+					http.status = resp.as_ref().ok().map(|s| s.status().as_u16()).unwrap_or_default(),
 
-				duration = dur,
-			);
+					duration = dur,
+				);
+			}
 			let mut resp = resp?;
 
 			event!(

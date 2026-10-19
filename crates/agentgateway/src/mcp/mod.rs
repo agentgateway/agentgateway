@@ -489,6 +489,52 @@ pub struct MCPTask {
 	pub name: String,
 }
 
+/// The MCP message sent to a target. The session ID is the target's.
+#[derive(Debug, Clone)]
+pub struct UpstreamCall(pub MCPInfo);
+
+impl UpstreamCall {
+	pub fn target(&self) -> Option<&str> {
+		self.0.target.as_ref().map(|t| t.name.as_str())
+	}
+}
+
+#[derive(Debug)]
+struct UpstreamRequest {
+	target: Option<String>,
+	method: Option<Strng>,
+	headers: ::http::HeaderMap,
+}
+
+/// Headers sent to MCP targets, for the access log.
+#[derive(Debug, Clone, Default)]
+pub struct UpstreamRequests(Arc<std::sync::Mutex<Vec<UpstreamRequest>>>);
+
+impl UpstreamRequests {
+	pub fn record(&self, call: &UpstreamCall, headers: &::http::HeaderMap) {
+		self.0.lock().unwrap().push(UpstreamRequest {
+			target: call.target().map(str::to_owned),
+			method: call.0.method_name.clone(),
+			headers: headers.clone(),
+		});
+	}
+
+	pub fn take_single_target_headers(&self, method: &str) -> Option<::http::HeaderMap> {
+		let requests = std::mem::take(&mut *self.0.lock().unwrap());
+		let mut matching = requests
+			.into_iter()
+			.filter(|r| r.method.as_deref() == Some(method));
+		let mut last = matching.next()?;
+		for request in matching {
+			if request.target != last.target {
+				return None;
+			}
+			last = request;
+		}
+		Some(last.headers)
+	}
+}
+
 #[apply(schema!)]
 #[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]

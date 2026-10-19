@@ -15,7 +15,9 @@ use sse_stream::SseStream;
 use crate::client::ResolvedDestination;
 use crate::http::Request;
 use crate::mcp::ClientError;
-use crate::mcp::streamablehttp::{StreamableHttpPostResponse, emit_standard_headers};
+use crate::mcp::streamablehttp::{
+	StreamableHttpPostResponse, emit_standard_headers, message_method,
+};
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::*;
 
@@ -103,6 +105,51 @@ impl Client {
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
 		emit_standard_headers(req.headers_mut(), &message);
+		let mut info = crate::mcp::MCPInfo {
+			method_name: message_method(&message).map(strng::new),
+			target: Some(crate::mcp::MCPTarget {
+				name: self.http_client.target_name().to_string(),
+			}),
+			session_id: req
+				.headers()
+				.get(HEADER_SESSION_ID)
+				.and_then(|v| v.to_str().ok())
+				.map(str::to_owned),
+			..Default::default()
+		};
+
+		if req
+			.extensions()
+			.get::<crate::telemetry::log::McpUpstreamLogging>()
+			.is_some()
+		{
+			let target = self.http_client.target_name().to_string();
+			if let ClientJsonRpcMessage::Request(request) = &message {
+				match &request.request {
+					ClientRequest::CallToolRequest(r) => {
+						info.set_tool(target, r.params.name.to_string());
+						info.capture_call_arguments(r.params.arguments.clone());
+					},
+					ClientRequest::GetPromptRequest(r) => info.set_prompt(target, r.params.name.to_string()),
+					ClientRequest::ReadResourceRequest(r) => {
+						info.set_resource(target, r.params.uri.to_string())
+					},
+					ClientRequest::SubscribeRequest(r) => info.set_resource(target, r.params.uri.to_string()),
+					ClientRequest::UnsubscribeRequest(r) => {
+						info.set_resource(target, r.params.uri.to_string())
+					},
+					ClientRequest::GetTaskRequest(r) => info.set_task(target, r.params.task_id.to_string()),
+					ClientRequest::UpdateTaskRequest(r) => {
+						info.set_task(target, r.params.task_id.to_string())
+					},
+					ClientRequest::CancelTaskRequest(r) => {
+						info.set_task(target, r.params.task_id.to_string())
+					},
+					_ => {},
+				}
+			}
+		}
+		req.extensions_mut().insert(crate::mcp::UpstreamCall(info));
 
 		let resp = self.http_client.call(req).await?;
 

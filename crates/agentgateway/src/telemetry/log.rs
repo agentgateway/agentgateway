@@ -383,6 +383,120 @@ pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 /// Per-request accumulator of mcpGuardrails dynamic metadata.
 pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
 
+const UPSTREAM_REQUEST_LOG_TARGET: &str = "upstream request";
+
+pub(crate) fn upstream_request_log_enabled() -> bool {
+	agent_core::telemetry::enabled(UPSTREAM_REQUEST_LOG_TARGET, &Level::DEBUG)
+}
+
+/// Access log settings passed to MCP target calls.
+#[derive(Debug, Clone)]
+pub(crate) struct McpUpstreamLogging {
+	filter: Option<Arc<cel::Expression>>,
+	fields: LoggingFields,
+	proxy: Arc<cel::ProxyContext>,
+	trace_id: Option<String>,
+}
+
+impl McpUpstreamLogging {
+	pub fn new(log: &RequestLog) -> Self {
+		Self {
+			filter: log.cel.filter.clone(),
+			fields: log.cel.fields.clone(),
+			proxy: Arc::new(cel::ProxyContext {
+				error: None,
+				request_processing_duration: None,
+				upstream_duration: None,
+				response_processing_duration: None,
+				..proxy_context(log)
+			}),
+			trace_id: log
+				.outgoing_span
+				.as_ref()
+				.or(log.incoming_span.as_ref())
+				.map(|s| s.trace_id()),
+		}
+	}
+
+	/// Runs before sending so credentials aren't kept until the response.
+	pub fn evaluate(req: &mut Request) -> Option<McpUpstreamRecord> {
+		if req.extensions().get::<Self>().is_none() || !upstream_request_log_enabled() {
+			return None;
+		}
+		let mut snapshot = cel::snapshot_request(req, false);
+		let logging = req.extensions().get::<Self>()?;
+		let call = req.extensions().get::<mcp::UpstreamCall>()?;
+		snapshot.body = None;
+		snapshot.recorded_body = None;
+		snapshot.backend = None;
+		snapshot.start_time = None;
+		let executor = cel::Executor::new_logger(
+			Some(&snapshot),
+			None,
+			None,
+			Some(&call.0),
+			None,
+			None,
+			Some(&logging.proxy),
+		);
+		Some(McpUpstreamRecord {
+			fields: logging.fields.clone(),
+			trace_id: logging.trace_id.clone(),
+			target: call.target().map(str::to_owned),
+			method: call.0.method_name.clone(),
+			// The filter only gates the configured fields.
+			additions: logging
+				.filter
+				.as_ref()
+				.is_none_or(|f| executor.eval_bool(f))
+				.then(|| {
+					CelLoggingExecutor::eval_fields(&executor, &logging.fields.add, false)
+						.into_iter()
+						.map(|(k, v)| (k.into_owned(), v))
+						.collect()
+				}),
+		})
+	}
+}
+
+pub(crate) struct McpUpstreamRecord {
+	fields: LoggingFields,
+	trace_id: Option<String>,
+	target: Option<String>,
+	method: Option<Strng>,
+	additions: Option<Vec<(String, Option<Value>)>>,
+}
+
+impl McpUpstreamRecord {
+	/// Same rules as the access log: `remove` drops a default field and a configured field replaces it.
+	pub fn log<'a>(&'a self, completion: impl IntoIterator<Item = (&'a str, Option<ValueBag<'a>>)>) {
+		let replaced = |k: &str| {
+			self.fields.remove.contains(k)
+				|| (self.additions.is_some() && self.fields.add.contains_key(k))
+		};
+		// Not a tracing event, so add the connection and request IDs here.
+		let ids = [
+			("connection.id", current_connection_id().map(Into::into)),
+			("request.id", current_request_id().map(Into::into)),
+		];
+		let call = [
+			("trace.id", self.trace_id.display()),
+			("mcp.target", self.target.display()),
+			("mcp.method.name", self.method.display()),
+		];
+		let mut kv: Vec<(&str, Option<ValueBag>)> = ids
+			.into_iter()
+			.chain(completion)
+			.chain(call)
+			.map(|(k, v)| (k, v.filter(|_| !replaced(k))))
+			.collect();
+		for (k, v) in self.additions.iter().flatten() {
+			kv.push((k.as_str(), v.as_ref().map(json_value_to_value_bag)));
+		}
+		agent_core::telemetry::log("debug", UPSTREAM_REQUEST_LOG_TARGET, &kv);
+	}
+}
+
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: MetricFields,
@@ -615,9 +729,17 @@ impl<'a> CelLoggingExecutor<'a> {
 		fields: &'a OrderedStringMap<Arc<Expression>>,
 		keep_empty: bool,
 	) -> Vec<(Cow<str>, Option<Value>)> {
+		Self::eval_fields(&self.executor, fields, keep_empty)
+	}
+
+	fn eval_fields(
+		executor: &cel::Executor<'_>,
+		fields: &'a OrderedStringMap<Arc<Expression>>,
+		keep_empty: bool,
+	) -> Vec<(Cow<'a, str>, Option<Value>)> {
 		let mut raws = Vec::with_capacity(fields.len());
 		for (k, v) in fields.iter() {
-			let field = self.executor.eval(v.as_ref());
+			let field = executor.eval(v.as_ref());
 			if let Err(err) = &field {
 				trace!(target: "cel", ?err, expression=?v, "expression failed");
 			}
@@ -1156,6 +1278,7 @@ impl RequestLog {
 			error: None,
 			grpc_status: Default::default(),
 			mcp_status: Default::default(),
+			mcp_upstream_requests: None,
 			incoming_span: None,
 			outgoing_span: None,
 			llm_request: None,
@@ -1335,6 +1458,7 @@ pub struct RequestLog {
 
 	pub grpc_status: AsyncLog<u8>,
 	pub mcp_status: AsyncLog<mcp::MCPInfo>,
+	pub mcp_upstream_requests: Option<mcp::UpstreamRequests>,
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
@@ -1469,6 +1593,14 @@ impl Drop for DropOnLog {
 			}
 
 			let mcp = log.mcp_status.take();
+			// Show the target's headers when the request went to one target.
+			if let Some(upstreams) = log.mcp_upstream_requests.take()
+				&& let Some(method) = mcp.as_ref().and_then(|m| m.method_name.as_deref())
+				&& let Some(headers) = upstreams.take_single_target_headers(method)
+				&& let Some(req) = log.request_snapshot.as_mut()
+			{
+				Arc::make_mut(req).headers = headers;
+			}
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
 			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
