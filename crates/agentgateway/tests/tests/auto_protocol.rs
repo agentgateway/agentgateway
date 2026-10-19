@@ -253,13 +253,9 @@ async fn auto_protocol_raw_tcp_fallback() {
 	let mut io = t.serve(strng::new("bind"));
 	// Not a TLS ClientHello (first byte != 0x16) and not a recognizable HTTP
 	// method token.
-	io.write_all(b"HELLO-RAW-TCP-PAYLOAD").await.unwrap();
-	let mut buf = [0u8; 32];
-	let n = tokio::time::timeout(Duration::from_secs(5), io.read(&mut buf))
-		.await
-		.expect("timed out waiting for echoed bytes")
-		.unwrap();
-	assert_eq!(&buf[..n], b"HELLO-RAW-TCP-PAYLOAD");
+	let payload = b"HELLO-RAW-TCP-PAYLOAD";
+	io.write_all(payload).await.unwrap();
+	assert_echoed(&mut io, payload).await;
 }
 
 /// A partial, non-HTTP, non-TLS prefix followed by the peer closing before the
@@ -287,14 +283,19 @@ async fn auto_protocol_raw_tcp_short_prefix() {
 	// HTTP method token. Shut down the write half so the peek's read sees EOF
 	// instead of waiting for the rest of the window to fill -- the read half
 	// stays open to receive the echoed bytes below.
-	io.write_all(b"AB").await.unwrap();
+	let payload = b"AB";
+	io.write_all(payload).await.unwrap();
 	io.shutdown().await.unwrap();
-	let mut buf = [0u8; 32];
-	let n = tokio::time::timeout(Duration::from_secs(5), io.read(&mut buf))
+	assert_echoed(&mut io, payload).await;
+}
+
+async fn assert_echoed(io: &mut tokio::io::DuplexStream, payload: &[u8]) {
+	let mut buf = vec![0; payload.len()];
+	tokio::time::timeout(Duration::from_secs(5), io.read_exact(&mut buf))
 		.await
 		.expect("timed out waiting for echoed bytes")
 		.unwrap();
-	assert_eq!(&buf[..n], b"AB");
+	assert_eq!(buf, payload);
 }
 
 async fn spawn_tcp_echo() -> std::net::SocketAddr {
