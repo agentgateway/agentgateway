@@ -32,6 +32,59 @@ mod tests {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
 		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
 	}
+
+	const OVERFLOW: &str =
+		"The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).";
+
+	#[rstest::rstest]
+	#[case::overflow(
+		400,
+		"INVALID_ARGUMENT",
+		OVERFLOW,
+		"invalid_request_error",
+		Some("capability_rejected: prompt_too_long ")
+	)]
+	#[case::other_invalid_argument(
+		400,
+		"INVALID_ARGUMENT",
+		"Request contains an invalid argument.",
+		"invalid_request_error",
+		None
+	)]
+	#[case::limit_wording_without_input_tokens(
+		400,
+		"INVALID_ARGUMENT",
+		"The requested max_output_tokens exceeds the maximum number of tokens allowed (65536).",
+		"invalid_request_error",
+		None
+	)]
+	#[case::overflow_wording_on_another_status(500, "INTERNAL", OVERFLOW, "api_error", None)]
+	#[case::marker_kept(
+		400,
+		"INVALID_ARGUMENT",
+		"capability_rejected: prompt_too_long The input token count (2) exceeds the maximum number of tokens allowed (1).",
+		"invalid_request_error",
+		None
+	)]
+	fn google_errors_reach_messages_clients(
+		#[case] code: u16,
+		#[case] status: &str,
+		#[case] message: &str,
+		#[case] r#type: &str,
+		#[case] prefix: Option<&str>,
+	) {
+		let body =
+			serde_json::json!({ "error": { "code": code, "message": message, "status": status } });
+		let out = translate_google_error(&Bytes::from(body.to_string())).unwrap();
+		let out: serde_json::Value = serde_json::from_slice(&out).unwrap();
+		assert_eq!(
+			out,
+			serde_json::json!({
+				"type": "error",
+				"error": { "type": r#type, "message": format!("{}{message}", prefix.unwrap_or_default()) }
+			})
+		);
+	}
 }
 
 fn anthropic_error_type(status: ::http::StatusCode) -> &'static str {
@@ -66,11 +119,20 @@ pub fn translate_anthropic_error(
 /// Translate a Google error response into an Anthropic Messages error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 	let res = super::completions::parse_google_error(bytes)?;
+	let mut message = res.error.message.clone();
+	let context_overflow = res.error.code == 400
+		&& res.error.status.as_deref() == Some("INVALID_ARGUMENT")
+		&& message.contains("input token count")
+		&& message.contains("exceeds the maximum number of tokens allowed");
+	// Claude Code uses this marker to compact and retry a rejected prompt
+	if context_overflow && !message.contains("capability_rejected:") {
+		message = format!("capability_rejected: prompt_too_long {message}");
+	}
 	let m = messages::MessagesErrorResponse {
 		r#type: "error".to_string(),
 		error: messages::MessagesError {
 			r#type: super::completions::google_error_type(&res.error).to_string(),
-			message: res.error.message.clone(),
+			message,
 		},
 	};
 	Ok(Bytes::from(
