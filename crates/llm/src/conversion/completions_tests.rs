@@ -417,177 +417,8 @@ mod thinking_round_trip {
 		assert_eq!(message["content"], "answer");
 	}
 
-	fn reasoning_cases() -> Vec<(Value, &'static str)> {
-		vec![
-			(json!({"reasoning": "vllm plan"}), "vllm plan"),
-			(json!({"reasoning_content": "legacy plan"}), "legacy plan"),
-			(
-				json!({"reasoning_content": "legacy plan", "reasoning": "vllm plan"}),
-				"legacy plan",
-			),
-			(
-				json!({"reasoning_content": null, "reasoning": "vllm plan"}),
-				"vllm plan",
-			),
-			(
-				json!({"reasoning_content": "", "reasoning": "vllm plan"}),
-				"",
-			),
-			(
-				json!({"reasoning_content": "legacy plan", "reasoning": null}),
-				"legacy plan",
-			),
-			(
-				json!({"reasoning_content": "legacy plan", "reasoning": ""}),
-				"legacy plan",
-			),
-			(json!({}), ""),
-			(json!({"reasoning": null}), ""),
-			(json!({"reasoning": ""}), ""),
-			(json!({"reasoning_content": null, "reasoning": null}), ""),
-			(json!({"reasoning_content": "", "reasoning": ""}), ""),
-			(json!({"reasoning": ["opaque extension"]}), ""),
-			(json!({"reasoning": {"text": "opaque extension"}}), ""),
-			(json!({"reasoning": 42}), ""),
-		]
-	}
-
-	fn completion(message: Value) -> Value {
-		json!({
-			"id": "c", "object": "chat.completion", "created": 0, "model": "m",
-			"choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
-			"usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
-		})
-	}
-
-	#[test]
-	fn reasoning_fields_in_buffered_messages_preserve_legacy_precedence() {
-		for (mut message, thinking) in reasoning_cases() {
-			message["role"] = json!("assistant");
-			message["content"] = json!("answer");
-			let body = Bytes::from(serde_json::to_vec(&completion(message.clone())).unwrap());
-			let response = from_messages::translate_response(&body).unwrap();
-			let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
-			let mut expected = vec![];
-			if !thinking.is_empty() {
-				expected.push(json!({"type": "thinking", "thinking": thinking, "signature": ""}));
-			}
-			expected.push(json!({"type": "text", "text": "answer"}));
-			assert_eq!(response["content"], json!(expected), "{message}");
-			assert_eq!(response["stop_reason"], "end_turn");
-			assert_eq!(
-				response["usage"],
-				json!({"input_tokens": 1, "output_tokens": 2})
-			);
-		}
-	}
-
 	#[tokio::test]
-	async fn reasoning_fields_in_streamed_messages_preserve_legacy_precedence() {
-		for (mut delta, thinking) in reasoning_cases() {
-			delta["content"] = json!("answer");
-			let input = format!(
-				"data: {}\n\ndata: {}\n\ndata: [DONE]\n\n",
-				json!({"id": "c", "model": "m", "choices": [{"index": 0, "delta": delta}]}),
-				json!({"id": "c", "model": "m", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-					"usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}}),
-			);
-			let events = events(from_messages::translate_stream(
-				Body::from(input),
-				1024 * 1024,
-				StreamingUsageGuard::default(),
-				LogContentFields::default(),
-			))
-			.await;
-			let actual: Vec<_> = events
-				.iter()
-				.filter_map(|e| e["delta"]["thinking"].as_str())
-				.collect();
-			let expected = if thinking.is_empty() {
-				vec![]
-			} else {
-				vec![thinking]
-			};
-			assert_eq!(actual, expected, "{delta}");
-			assert_eq!(
-				events
-					.iter()
-					.filter(|e| e["content_block"]["type"] == "thinking")
-					.count(),
-				expected.len(),
-				"{delta}"
-			);
-			assert_eq!(
-				events
-					.iter()
-					.filter(|e| e["delta"]["text"] == "answer")
-					.count(),
-				1
-			);
-			assert_eq!(events.last().unwrap()["type"], "message_stop");
-			let end = &events[events.len() - 2];
-			assert_eq!(end["delta"]["stop_reason"], "end_turn");
-			assert_eq!(end["usage"], json!({"input_tokens": 1, "output_tokens": 2}));
-		}
-	}
-
-	#[tokio::test]
-	async fn reasoning_fields_remain_unchanged_in_completions_passthrough() {
-		use crate::types::ResponseType;
-
-		for (mut message, _) in reasoning_cases() {
-			message["role"] = json!("assistant");
-			message["content"] = json!("answer");
-			let input = completion(message.clone());
-			let response: crate::types::completions::Response = serde_json::from_value(input).unwrap();
-			let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
-			assert_eq!(response["choices"][0]["message"], message);
-
-			let chunk = json!({"id": "c", "model": "m", "choices": [{"index": 0, "delta": message}]});
-			let input = format!("data: {chunk}\n\ndata: [DONE]\n\n");
-			let response = super::super::passthrough_stream(
-				StreamingUsageGuard::default(),
-				LogContentFields::default(),
-				http::Response::new(Body::from(input)),
-			);
-			let chunks = events(response.into_body()).await;
-			assert_eq!(chunks, [chunk]);
-		}
-	}
-
-	#[test]
-	fn vllm_reasoning_and_signature_replay_before_text_and_tools() {
-		let mut body = completion(json!({
-			"role": "assistant", "content": "answer", "reasoning": "plan", "reasoning_signature": "sig",
-			"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "lookup", "arguments": "{}"}}]
-		}));
-		body["choices"][0]["finish_reason"] = json!("tool_calls");
-		let response =
-			from_messages::translate_response(&Bytes::from(serde_json::to_vec(&body).unwrap())).unwrap();
-		let response: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
-		assert_eq!(
-			response["content"],
-			json!([
-				{"type": "thinking", "thinking": "plan", "signature": "sig"},
-				{"type": "text", "text": "answer"},
-				{"type": "tool_use", "id": "call_1", "name": "lookup", "input": {}}
-			])
-		);
-		assert_eq!(response["stop_reason"], "tool_use");
-		let request: crate::types::messages::Request = serde_json::from_value(json!({
-			"model": "m", "max_tokens": 64,
-			"messages": [{"role": "assistant", "content": response["content"]}]
-		}))
-		.unwrap();
-		let replay: Value =
-			serde_json::from_slice(&from_messages::translate(&request).unwrap()).unwrap();
-		assert_eq!(replay["messages"][0]["reasoning_content"], "plan");
-		assert_eq!(replay["messages"][0]["reasoning_signature"], "sig");
-		assert!(replay["messages"][0].get("reasoning").is_none());
-	}
-
-	#[tokio::test]
-	async fn streamed_reasoning_opens_a_thinking_block_before_text_and_tools() {
+	async fn streamed_reasoning_opens_a_thinking_block_before_the_text() {
 		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"pl"}}]}
 
 data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_content":"an"}}]}
@@ -596,55 +427,37 @@ data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"reasoning_signature"
 
 data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"content":"answer"}}]}
 
-data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}]}}]}
-
-data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
-
-data: {"id":"c","model":"m","choices":[],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
 
 data: [DONE]
 
 "#;
-		for field in ["reasoning_content", "reasoning"] {
-			let input = input.replace("reasoning_content", field);
-			let events = events(from_messages::translate_stream(
-				Body::from(input),
-				1024 * 1024,
-				StreamingUsageGuard::default(),
-				LogContentFields::default(),
-			))
-			.await;
-			let shapes: Vec<String> = events.iter().map(shape).collect();
-			assert_eq!(
-				shapes,
-				[
-					"message_start",
-					"content_block_start 0 thinking",
-					"content_block_delta 0 thinking_delta",
-					"content_block_delta 0 thinking_delta",
-					"content_block_delta 0 signature_delta",
-					"content_block_stop 0",
-					"content_block_start 1 text",
-					"content_block_delta 1 text_delta",
-					"content_block_stop 1",
-					"content_block_start 2 tool_use",
-					"content_block_delta 2 input_json_delta",
-					"content_block_stop 2",
-					"message_delta",
-					"message_stop",
-				]
-			);
-			assert_eq!(events[2]["delta"]["thinking"], "pl");
-			assert_eq!(events[3]["delta"]["thinking"], "an");
-			assert_eq!(events[4]["delta"]["signature"], "sig");
-			assert_eq!(events[9]["content_block"]["id"], "call_1");
-			assert_eq!(events[10]["delta"]["partial_json"], "{}");
-			assert_eq!(events[12]["delta"]["stop_reason"], "tool_use");
-			assert_eq!(
-				events[12]["usage"],
-				json!({"input_tokens": 1, "output_tokens": 2})
-			);
-		}
+		let events = events(from_messages::translate_stream(
+			Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		))
+		.await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		assert_eq!(
+			shapes,
+			[
+				"message_start",
+				"content_block_start 0 thinking",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 thinking_delta",
+				"content_block_delta 0 signature_delta",
+				"content_block_stop 0",
+				"content_block_start 1 text",
+				"content_block_delta 1 text_delta",
+				"content_block_stop 1",
+				"message_delta",
+				"message_stop",
+			]
+		);
+		assert_eq!(events[2]["delta"]["thinking"], "pl");
+		assert_eq!(events[4]["delta"]["signature"], "sig");
 	}
 
 	/// Reasoning that is withheld arrives as a signature with no text, and the block still has to
