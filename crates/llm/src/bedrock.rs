@@ -11,10 +11,14 @@ pub struct AwsRegion {
 #[apply(schema_enum!)]
 #[derive(Default)]
 pub enum BedrockEndpointPreference {
+	/// Use Runtime, except for models the catalog lists as available only on Mantle.
 	#[default]
 	RuntimePreferred,
+	/// Use Mantle, except for models the catalog lists as available only on Runtime.
 	MantlePreferred,
+	/// Always use Mantle for chat; unsupported models fail.
 	MantleOnly,
+	/// Always use Runtime for chat; unsupported models fail.
 	RuntimeOnly,
 }
 
@@ -66,9 +70,12 @@ impl Provider {
 	) -> BedrockEndpoint {
 		use super::RouteType as RT;
 		match route_type {
-			RT::Embeddings | RT::GeminiCountTokens | RT::Rerank | RT::Realtime => {
-				BedrockEndpoint::Runtime
-			},
+			RT::Embeddings
+			| RT::GeminiCountTokens
+			| RT::Rerank
+			| RT::Decisions
+			| RT::SystemOne
+			| RT::Realtime => BedrockEndpoint::Runtime,
 			RT::Models => BedrockEndpoint::Mantle,
 			RT::Detect | RT::Passthrough | RT::GenerateContent => BedrockEndpoint::Runtime,
 			// Chat, and Anthropic count-tokens, follow the model's endpoint: Runtime's Converse /
@@ -472,6 +479,8 @@ mod tests {
 			Embeddings,
 			Realtime,
 			Rerank,
+			Decisions,
+			SystemOne,
 			GeminiCountTokens,
 			GenerateContent,
 			Detect,
@@ -482,8 +491,8 @@ mod tests {
 				Completions | Messages | Responses | AnthropicTokenCount | Models => {
 					BedrockEndpoint::Mantle
 				},
-				Embeddings | Realtime | Rerank | GeminiCountTokens | GenerateContent | Detect
-				| Passthrough => BedrockEndpoint::Runtime,
+				Embeddings | Realtime | Rerank | Decisions | SystemOne | GeminiCountTokens
+				| GenerateContent | Detect | Passthrough => BedrockEndpoint::Runtime,
 			};
 			assert_eq!(
 				mantle.resolve_endpoint(rt, Some("m"), None),

@@ -86,8 +86,8 @@ impl TextPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			TextPart::Text { text, .. } => Some(text),
-			TextPart::Unknown(_) => None,
+			TextPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
 		}
 	}
 
@@ -109,8 +109,8 @@ impl ContentPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			ContentPart::Text { text, .. } => Some(text),
-			ContentPart::Unknown(_) => None,
+			ContentPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
 		}
 	}
 
@@ -162,6 +162,16 @@ pub struct Usage {
 	pub rest: serde_json::Value,
 }
 
+impl Usage {
+	pub fn cache_creation_1h_input_tokens(&self) -> Option<u64> {
+		self
+			.rest
+			.get("cache_creation")?
+			.get("ephemeral_1h_input_tokens")?
+			.as_u64()
+	}
+}
+
 pub fn get_messages_helper(
 	messages: &[RequestMessage],
 	system: &Option<TextBlock>,
@@ -201,6 +211,43 @@ pub fn get_messages_helper(
 	out
 }
 
+pub fn get_messages_v2_helper(
+	messages: &[RequestMessage],
+	system: &Option<TextBlock>,
+) -> Vec<NormalizedMessage> {
+	let mut out = system
+		.as_ref()
+		.map(|system| NormalizedMessage {
+			role: strng::literal!("system"),
+			parts: match system {
+				TextBlock::Text(text) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				TextBlock::Array(parts) => parts
+					.iter()
+					.filter_map(TextPart::text)
+					.map(|text| NormalizedMessagePart::text(strng::new(text)))
+					.collect(),
+			},
+		})
+		.into_iter()
+		.collect::<Vec<_>>();
+	out.extend(messages.iter().map(|message| NormalizedMessage {
+		role: strng::new(&message.role),
+		parts: match &message.content {
+			Some(ContentBlock::Text(text)) => {
+				vec![NormalizedMessagePart::text(strng::new(text))]
+			},
+			Some(ContentBlock::Array(parts)) => {
+				parts.iter().filter_map(normalized_anthropic_part).collect()
+			},
+			None => Vec::new(),
+		},
+	}));
+	crate::types::attach_tool_result_names(&mut out);
+	out
+}
+
 /// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
 const PRESERVED_REST_KEYS: &[&str] = &[
 	// Anthropic prompt-cache breakpoint
@@ -233,9 +280,16 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
-			Some(tokens)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self
+					.rest
+					.get("tools")
+					.and_then(serde_json::Value::as_array)
+					.into_iter()
+					.flatten(),
+			))
 		} else {
 			None
 		};
@@ -268,38 +322,7 @@ impl RequestType for Request {
 	}
 
 	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
-		let mut messages = self
-			.system
-			.as_ref()
-			.map(|system| NormalizedMessage {
-				role: strng::literal!("system"),
-				parts: match system {
-					TextBlock::Text(text) => {
-						vec![NormalizedMessagePart::text(strng::new(text))]
-					},
-					TextBlock::Array(parts) => parts
-						.iter()
-						.filter_map(TextPart::text)
-						.map(|text| NormalizedMessagePart::text(strng::new(text)))
-						.collect(),
-				},
-			})
-			.into_iter()
-			.collect::<Vec<_>>();
-		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
-			role: strng::new(&message.role),
-			parts: match &message.content {
-				Some(ContentBlock::Text(text)) => {
-					vec![NormalizedMessagePart::text(strng::new(text))]
-				},
-				Some(ContentBlock::Array(parts)) => {
-					parts.iter().filter_map(normalized_anthropic_part).collect()
-				},
-				None => Vec::new(),
-			},
-		}));
-		crate::types::attach_tool_result_names(&mut messages);
-		messages
+		get_messages_v2_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
@@ -405,6 +428,12 @@ fn visit_tool_part_text(
 	value: &mut serde_json::Value,
 	f: &mut dyn FnMut(ContentScope, &mut String),
 ) {
+	if !crate::types::has_signature(value) {
+		visit_part_text(value, f);
+	}
+}
+
+fn visit_part_text(value: &mut serde_json::Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
 	match value.get("type").and_then(|t| t.as_str()) {
 		Some(
 			"tool_result"
@@ -414,41 +443,133 @@ fn visit_tool_part_text(
 			| "text_editor_code_execution_tool_result"
 			| "tool_search_tool_result"
 			| "web_fetch_tool_result"
-			| "advisor_tool_result",
+			| "advisor_tool_result"
+			| "web_search_tool_result",
 		) => {
-			visit_json_at(value, &["content"], ContentScope::ToolOutput, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::ToolOutput, f);
+			}
+		},
+		Some("mcp_tool_listing") => {
+			if let Some(serde_json::Value::Array(tools)) = value.get_mut("tools") {
+				for tool in tools {
+					visit_json_at(tool, &["description"], ContentScope::ToolOutput, f);
+					if let Some(schema) = tool.get_mut("input_schema") {
+						crate::types::visit_json_schema_text(schema, &mut |text| {
+							f(ContentScope::ToolOutput, text)
+						});
+					}
+				}
+			}
 		},
 		Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
 			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
 		},
 		// User-provided context blocks: message content, not tool traffic.
-		Some("document") => {
-			visit_json_at(value, &["source"], ContentScope::Messages, f);
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["context"], ContentScope::Messages, f);
-		},
-		Some("search_result") => {
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
-		},
+		Some("document" | "search_result") => visit_content_text(value, ContentScope::Messages, f),
 		// Replayed conversation summary.
 		Some("compaction") => {
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
+			if value
+				.get("encrypted_content")
+				.is_none_or(serde_json::Value::is_null)
+			{
+				visit_json_at(value, &["content"], ContentScope::Messages, f);
+			}
 		},
+		Some("thinking") => visit_json_at(value, &["thinking"], ContentScope::Messages, f),
 		// Mid-conversation system instructions: text blocks under `content`.
 		Some("mid_conv_system") => {
-			visit_json_at(value, &["content"], ContentScope::SystemPrompt, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::SystemPrompt, f);
+			}
 		},
 		// No readable text: base64 payloads and file/tool references.
 		Some("image" | "container_upload" | "tool_addition" | "tool_removal" | "fallback") => {},
 		// Signature/encrypted content the API integrity-checks on replay; a mask would 400.
-		Some("thinking" | "redacted_thinking" | "web_search_tool_result") => {},
+		Some("redacted_thinking") => {},
 		other => {
 			tracing::debug!(
 				block_type = other.unwrap_or("<none>"),
 				"unrecognized content block; not scanned by prompt guards"
 			);
 		},
+	}
+}
+
+fn visit_content_text(
+	value: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	use serde_json::Value;
+	if crate::types::has_signature(value) {
+		return;
+	}
+	match value {
+		Value::String(text) => f(scope, text),
+		Value::Array(parts) => {
+			for part in parts {
+				visit_content_text(part, scope, f);
+			}
+		},
+		Value::Object(_) => match value.get("type").and_then(Value::as_str) {
+			Some("text" | "advisor_result") => visit_json_at(value, &["text"], scope, f),
+			Some("document") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["context"], scope, f);
+				if let Some(source) = value.get_mut("source") {
+					visit_document_source(source, scope, f);
+				}
+			},
+			Some("search_result" | "web_fetch_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["source"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+				if let Some(content) = value.get_mut("content") {
+					visit_content_text(content, scope, f);
+				}
+			},
+			Some("web_search_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+			},
+			Some(
+				"code_execution_result" | "bash_code_execution_result" | "encrypted_code_execution_result",
+			) => {
+				visit_json_at(value, &["stdout"], scope, f);
+				visit_json_at(value, &["stderr"], scope, f);
+			},
+			Some("text_editor_code_execution_view_result") => {
+				if value.get("file_type").and_then(Value::as_str) == Some("text") {
+					visit_json_at(value, &["content"], scope, f);
+				}
+			},
+			Some("text_editor_code_execution_str_replace_result") => {
+				visit_json_at(value, &["lines"], scope, f)
+			},
+			Some("text_editor_code_execution_tool_result_error" | "tool_search_tool_result_error") => {
+				visit_json_at(value, &["error_message"], scope, f);
+			},
+			// Other result variants carry IDs, status codes, media, or encrypted data.
+			_ => {},
+		},
+		_ => {},
+	}
+}
+
+fn visit_document_source(
+	source: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	match source.get("type").and_then(serde_json::Value::as_str) {
+		Some("text") => visit_json_at(source, &["data"], scope, f),
+		Some("content") => {
+			if let Some(content) = source.get_mut("content") {
+				visit_content_text(content, scope, f);
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -588,6 +709,7 @@ impl ResponseType for Response {
 			count_tokens: None,
 			reasoning_tokens: None,
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: self.usage.cache_creation_1h_input_tokens(),
 			cached_input_tokens: self.usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
 			completion: if log_content.completion {
@@ -638,10 +760,14 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.content {
-			if let Some(text) = &mut c.text {
-				f(text);
+			let signed = crate::types::has_signature(&c.rest);
+			let mut visit =
+				|scope, text: &mut String| f(crate::types::ResponseText { scope, signed }, text);
+			match &mut c.text {
+				Some(text) => visit(ContentScope::Messages, text),
+				None => visit_part_text(&mut c.rest, &mut visit),
 			}
 		}
 	}
@@ -1122,6 +1248,24 @@ pub mod typed {
 		/// Cumulative cache read tokens
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+		/// Cache creation tokens split by TTL
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
+	}
+
+	/// Cache creation tokens split by TTL.
+	#[derive(Clone, Serialize, Deserialize, Debug, Default, Eq, PartialEq)]
+	pub struct CacheCreation {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_5m_input_tokens: Option<usize>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_1h_input_tokens: Option<usize>,
+	}
+
+	impl CacheCreation {
+		pub fn ephemeral_1h(c: &Option<CacheCreation>) -> Option<u64> {
+			c.as_ref()?.ephemeral_1h_input_tokens.map(|i| i as u64)
+		}
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1192,6 +1336,10 @@ pub mod typed {
 		/// The number of input tokens read from the cache.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+
+		/// Cache creation tokens split by TTL.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
 
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -1363,6 +1511,7 @@ pub mod typed {
 				pages: None,
 				reasoning_tokens: None,
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.usage.cache_creation),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
@@ -1426,10 +1575,76 @@ pub mod typed {
 			serde_json::to_vec(&self)
 		}
 
-		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 			for block in &mut self.content {
-				if let ContentBlock::Text(t) = block {
-					f(&mut t.text);
+				if let ContentBlock::Thinking {
+					thinking,
+					signature,
+				} = block
+				{
+					f(
+						crate::types::ResponseText {
+							scope: crate::types::ContentScope::Messages,
+							signed: !signature.is_empty(),
+						},
+						thinking,
+					);
+					continue;
+				}
+				let mut plain =
+					|scope: crate::types::ContentScope, text: &mut String| f(scope.into(), text);
+				let f = &mut plain;
+				match block {
+					ContentBlock::Text(t) => f(crate::types::ContentScope::Messages, &mut t.text),
+					ContentBlock::ToolUse { input, .. } | ContentBlock::ServerToolUse { input, .. } => {
+						crate::types::visit_json_strings(input, &mut |text| {
+							f(crate::types::ContentScope::ToolInput, text)
+						});
+					},
+					ContentBlock::ToolResult { content, .. } => {
+						let scope = crate::types::ContentScope::ToolOutput;
+						match content {
+							ToolResultContent::Text(text) => f(scope, text),
+							ToolResultContent::Array(parts) => {
+								for part in parts {
+									match part {
+										ToolResultContentPart::Text { text, .. } => f(scope, text),
+										ToolResultContentPart::Document {
+											source,
+											title,
+											context,
+											..
+										} => {
+											super::visit_document_source(source, scope, f);
+											for text in title.iter_mut().chain(context.iter_mut()) {
+												f(scope, text);
+											}
+										},
+										ToolResultContentPart::SearchResult {
+											content,
+											source,
+											title,
+											..
+										} => {
+											f(scope, source);
+											f(scope, title);
+											for part in content {
+												super::visit_content_text(part, scope, f);
+											}
+										},
+										_ => {},
+									}
+								}
+							},
+						}
+					},
+					ContentBlock::WebSearchToolResult {
+						content: Some(content),
+						..
+					} => {
+						super::visit_content_text(content, crate::types::ContentScope::ToolOutput, f);
+					},
+					_ => {},
 				}
 			}
 		}
@@ -1486,6 +1701,7 @@ mod tests {
 			stop_reason: Some(typed::StopReason::ToolUse),
 			stop_sequence: None,
 			usage: typed::Usage {
+				cache_creation: None,
 				input_tokens: 100,
 				output_tokens: 50,
 				cache_creation_input_tokens: None,
@@ -1545,6 +1761,7 @@ mod tests {
 			stop_reason: Some(typed::StopReason::EndTurn),
 			stop_sequence: None,
 			usage: typed::Usage {
+				cache_creation: None,
 				input_tokens: 50,
 				output_tokens: 20,
 				cache_creation_input_tokens: None,

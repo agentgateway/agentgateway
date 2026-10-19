@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 pub use internal::{
-	DrainMode, ReleaseShutdown as DrainBlocker, Signal as DrainTrigger, Upgrader as DrainUpgrader,
-	Watch as DrainWatcher,
+	DrainMode, Observer as DrainObserver, ReleaseShutdown as DrainBlocker, Signal as DrainTrigger,
+	Upgrader as DrainUpgrader, Watch as DrainWatcher,
 };
 use tokio::sync::watch;
 use tracing::{Instrument, debug, info, warn};
@@ -139,6 +139,10 @@ mod internal {
 	pub struct Weak {
 		signal_rx: watch::Receiver<Option<DrainMode>>,
 	}
+	#[derive(Clone)]
+	pub struct Observer {
+		signal_rx: watch::Receiver<Option<DrainMode>>,
+	}
 	pub struct Upgrader {
 		drained_tx: Option<mpsc::Sender<Never>>,
 	}
@@ -161,6 +165,12 @@ mod internal {
 	}
 
 	impl Watch {
+		pub fn observer(&self) -> Observer {
+			Observer {
+				signal_rx: self.signal_rx.clone(),
+			}
+		}
+
 		pub fn into_weak(self) -> (Upgrader, Weak) {
 			let Self {
 				drained_tx,
@@ -172,6 +182,12 @@ mod internal {
 				},
 				Weak { signal_rx },
 			)
+		}
+	}
+
+	impl Observer {
+		pub fn is_draining(&self) -> bool {
+			self.signal_rx.borrow().is_some()
 		}
 	}
 

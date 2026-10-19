@@ -13,7 +13,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::{BackendAuth, BackendAuthKind};
+use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -286,6 +286,7 @@ pub struct BackendPolicies {
 	pub request_header_modifier: Option<filters::HeaderModifier>,
 	pub response_header_modifier: BackendPolicy<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
+	pub url_rewrite: Option<filters::UrlRewrite>,
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
@@ -341,6 +342,7 @@ impl BackendPolicies {
 				.response_header_modifier
 				.or(self.response_header_modifier),
 			request_redirect: other.request_redirect.or(self.request_redirect),
+			url_rewrite: other.url_rewrite.or(self.url_rewrite),
 			request_mirror: if other.request_mirror.is_empty() {
 				self.request_mirror
 			} else {
@@ -366,12 +368,8 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(BackendAuth {
-			kind: Some(BackendAuthKind::Aws(aws)),
-			..
-		}) = self.backend_auth.as_ref()
-		{
-			for expr in aws.cel_expressions() {
+		if let Some(backend_auth) = self.backend_auth.as_ref() {
+			for expr in backend_auth.cel_expressions() {
 				ctx.register_expression(expr);
 			}
 		}
@@ -386,6 +384,11 @@ impl BackendPolicies {
 		if let Some(session_affinity) = self.session_affinity.as_ref() {
 			session_affinity.register_expressions(ctx);
 		}
+		if let Some(guardrails) = self.mcp_guardrails.as_ref() {
+			for expr in guardrails.expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 	}
 }
 
@@ -393,7 +396,7 @@ impl BackendPolicies {
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
-	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub local_rate_limit: RequestPolicy<http::localratelimit::RateLimits>,
 	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
 	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
 	pub jwt: RequestPolicy<JwtAuthentication>,
@@ -504,7 +507,7 @@ impl RoutePolicies {
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub local_rate_limit: Option<Arc<http::localratelimit::RateLimits>>,
 	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
@@ -605,12 +608,6 @@ pub struct RoutePath<'a> {
 	pub service: Option<&'a NamespacedHostname>,
 	pub routes: Vec<&'a RouteName>,
 	pub route_inlines: Vec<&'a [TrafficPolicy]>,
-}
-
-impl<'a> RoutePath<'a> {
-	pub fn final_route(&self) -> Option<&'a RouteName> {
-		self.routes.last().copied()
-	}
 }
 
 impl Store {
@@ -818,6 +815,13 @@ impl Store {
 				agent::ModelRouteKind::Virtual(model) => virtual_models.push(model.clone()),
 			}
 		}
+
+		// Most specific patterns first, so a wildcard does not shadow exact or prefix matches.
+		models.sort_by_key(|model| {
+			std::cmp::Reverse(crate::llm::model_router::model_match_specificity(
+				&model.name,
+			))
+		});
 
 		if implicit_route && models.is_empty() && virtual_models.is_empty() {
 			return;
@@ -1410,6 +1414,9 @@ impl Store {
 				BackendTrafficPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
 				},
+				BackendTrafficPolicy::UrlRewrite(p) => {
+					pol.url_rewrite.get_or_insert_with(|| p.clone());
+				},
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
@@ -1477,25 +1484,6 @@ impl Store {
 				},
 				_ => None,
 			})
-			.collect_vec()
-	}
-
-	pub fn all_access_log_policies(&self) -> Vec<Arc<crate::types::agent::AccessLogPolicy>> {
-		self
-			.binds
-			.iter()
-			.flat_map(|(bind_key, bind)| {
-				self
-					.listeners
-					.get(bind_key)
-					.into_iter()
-					.flat_map(|listeners| listeners.iter())
-					.map(|listener| {
-						self.listener_frontend_policies(&listener.name, Some(bind.address.port()), None)
-					})
-			})
-			.filter_map(|fp| fp.access_log_otlp)
-			.unique_by(|p| Arc::as_ptr(p) as usize)
 			.collect_vec()
 	}
 
@@ -2571,6 +2559,7 @@ mod tests {
 						.expect("key has namespace")
 						.0
 						.to_string(),
+					kind: None,
 				}),
 				kind: Some(backend::Kind::Static(StaticBackend {
 					host: "backend.example.com".to_string(),
@@ -4386,6 +4375,7 @@ mod tests {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
 				section: None,
+				kind: None,
 			}),
 			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
@@ -4408,6 +4398,7 @@ mod tests {
 				name: strng::new("test-backend"),
 				namespace: strng::new("test-ns"),
 				section: Some(strng::new("target")),
+				kind: None,
 			}),
 			inheritance: Default::default(),
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
@@ -4435,6 +4426,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[&backend_inline_policies],
 			None,
@@ -4465,6 +4457,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: Some("target"),
+				kind: None,
 			},
 			&[&backend_inline_policies],
 			None,
@@ -4495,6 +4488,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[],
 			None,
@@ -4522,6 +4516,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: Some("target"),
+				kind: None,
 			},
 			&[],
 			None,
@@ -4587,6 +4582,7 @@ mod tests {
 				name: "test-backend",
 				namespace: "test-ns",
 				section: None,
+				kind: None,
 			},
 			&[&inline_policies],
 			None,

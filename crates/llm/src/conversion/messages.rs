@@ -533,6 +533,9 @@ pub mod from_completions {
 		let provider_usage = Some(super::super::ProviderUsage {
 			input_tokens: resp.usage.input_tokens as u64,
 			total_tokens: (resp.usage.input_tokens + resp.usage.output_tokens) as u64,
+			cache_creation_1h_input_tokens: messages::CacheCreation::ephemeral_1h(
+				&resp.usage.cache_creation,
+			),
 			..Default::default()
 		});
 		let openai = translate_response_internal(resp);
@@ -772,6 +775,8 @@ pub mod from_completions {
 							message.usage.cache_read_input_tokens.map(|i| i as u64);
 						r.response.cache_creation_input_tokens =
 							message.usage.cache_creation_input_tokens.map(|i| i as u64);
+						r.response.cache_creation_1h_input_tokens =
+							messages::CacheCreation::ephemeral_1h(&message.usage.cache_creation);
 						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 						r.response.provider_model = Some(strng::new(&message.model))
 					});
@@ -901,6 +906,9 @@ pub mod from_completions {
 						}
 						if let Some(cwt) = usage.cache_creation_input_tokens {
 							r.response.cache_creation_input_tokens = Some(cwt as u64);
+						}
+						if let Some(cw1h) = messages::CacheCreation::ephemeral_1h(&usage.cache_creation) {
+							r.response.cache_creation_1h_input_tokens = Some(cw1h);
 						}
 						if let Some(o) = usage.output_tokens {
 							r.response.output_tokens = Some(o as u64);
@@ -1139,6 +1147,8 @@ pub fn passthrough_stream(
 					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
 					r.response.cache_creation_input_tokens =
 						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_1h_input_tokens =
+						messages::CacheCreation::ephemeral_1h(&message.usage.cache_creation);
 					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
@@ -1193,6 +1203,9 @@ pub fn passthrough_stream(
 					}
 					if let Some(cwt) = usage.cache_creation_input_tokens {
 						r.response.cache_creation_input_tokens = Some(cwt as u64);
+					}
+					if let Some(cw1h) = messages::CacheCreation::ephemeral_1h(&usage.cache_creation) {
+						r.response.cache_creation_1h_input_tokens = Some(cw1h);
 					}
 					if let Some(inp) = r.response.input_tokens
 						&& let Some(o) = r.response.output_tokens

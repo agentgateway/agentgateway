@@ -92,6 +92,7 @@ output:
       concreteModel:
         backend:
           backend: default/gpt-5-mini/backend.http
+        discoveryProvider: openai
       key: default/gpt-5-mini.http
       listenerKey: default/mixed.http
       match:

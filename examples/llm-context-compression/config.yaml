@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+llm:
+  policies:
+    extAuthz:
+      conditional:
+      # Small requests are not worth the round trip.
+      - condition: 'size(request.body) >= 16384 && "messages" in json(request.body)'
+        host: 127.0.0.1:8787
+        protocol:
+          http:
+            path: '"/v1/compress"'
+            body: '{"messages": json(request.body).messages, "model": json(request.body).model}'
+            metadata:
+              messages: 'json(response.body).messages'
+        # Do not forward the client's Authorization header, which is the default.
+        includeRequestHeaders: ["content-type"]
+        failureMode: allow
+    transformations:
+      conditional:
+      - condition: 'size(request.body) >= 16384 && "messages" in json(request.body)'
+        request:
+          # Keep the original messages if Headroom could not be reached.
+          body: 'json(request.body).merge({"messages": default(extauthz.messages, json(request.body).messages)})'
+  models:
+  - name: "*"
+    provider: openai
+    params:
+      apiKey: "$OPENAI_API_KEY"

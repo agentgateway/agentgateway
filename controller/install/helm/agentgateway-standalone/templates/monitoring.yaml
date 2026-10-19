@@ -18,9 +18,27 @@ spec:
   selector:
     matchLabels:
       {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
+  scrapeNativeHistograms: {{ .Values.monitoring.podMonitor.scrapeNativeHistograms }}
+  scrapeClassicHistograms: {{ .Values.monitoring.podMonitor.scrapeClassicHistograms }}
+  scrapeProtocols:
+    {{- if .Values.monitoring.podMonitor.scrapeNativeHistograms }}
+    - PrometheusProto
+    {{- end }}
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText1.0.0
+    - PrometheusText0.0.4
   podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.podMonitor.interval }}
+    {{- with .Values.monitoring.podMonitor.relabelings }}
+    relabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.monitoring.podMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 {{- end }}
 {{- end }}

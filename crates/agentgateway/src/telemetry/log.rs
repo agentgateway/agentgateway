@@ -7,8 +7,7 @@ use std::time::{Duration, Instant, SystemTime};
 use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
-	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
-	quoted,
+	OptionExt, ValueBag, current_connection_id, current_request_id, debug, display, quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::{Buf, Bytes};
@@ -399,6 +398,9 @@ pub struct Config {
 	/// Compiled standard attributes, replaced on config reload and snapshotted per request.
 	#[serde(skip)]
 	pub database_fields: Arc<arc_swap::ArcSwap<LoggingFields>>,
+	/// Compiled `standardAttributes.session`, replaced on config reload.
+	#[serde(skip)]
+	pub session: Arc<arc_swap::ArcSwapOption<cel::Expression>>,
 	/// Level sets the level for logs
 	pub level: String,
 	/// Format sets the logging format (text or json)
@@ -522,21 +524,6 @@ fn json_value_to_value_bag(v: &Value) -> ValueBag<'_> {
 	} else {
 		ValueBag::capture_serde1(v)
 	}
-}
-
-fn original_model_from_metadata<'a>(
-	req: Option<&'a cel::RequestSnapshot>,
-	resp: Option<&'a cel::ResponseSnapshot>,
-) -> Option<&'a str> {
-	resp
-		.and_then(|snapshot| snapshot.metadata.as_ref())
-		.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		.or_else(|| {
-			req
-				.and_then(|snapshot| snapshot.metadata.as_ref())
-				.and_then(|metadata| metadata.0.get("agentgateway_user_model"))
-		})
-		.and_then(Value::as_str)
 }
 
 /// The incoming trace context picks which setting applies: `random_sampling` when the request has
@@ -842,8 +829,8 @@ impl DropOnLog {
 
 	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
-	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
-	/// gRPC status as unhealthy.
+	/// When no CEL expression is set, the default treats 5xx, connection failures, or server-side
+	/// gRPC failures as unhealthy.
 	#[cfg(test)]
 	fn default_unhealthy(log: &RequestLog) -> bool {
 		Self::default_unhealthy_for_status(log, log.status)
@@ -854,7 +841,18 @@ impl DropOnLog {
 		status: Option<crate::http::StatusCode>,
 	) -> bool {
 		status.is_none_or(|s| s.is_server_error())
-			|| log.grpc_status.load().is_some_and(|status| status != 0)
+			|| log.grpc_status.load().is_some_and(|status| {
+				// Only codes indicating a backend failure; client-induced codes (INVALID_ARGUMENT,
+				// NOT_FOUND, UNIMPLEMENTED, etc.) must not degrade backend health.
+				matches!(
+					tonic::Code::from(status as i32),
+					tonic::Code::Unknown
+						| tonic::Code::DeadlineExceeded
+						| tonic::Code::Internal
+						| tonic::Code::Unavailable
+						| tonic::Code::DataLoss
+				)
+			})
 	}
 
 	fn eviction_unhealthy(
@@ -1162,9 +1160,10 @@ impl RequestLog {
 			outgoing_span: None,
 			llm_request: None,
 			llm_response: Default::default(),
+			original_model: None,
 			guardrails: Default::default(),
 			mcp_guardrails: Default::default(),
-			budgets: None,
+			budgets: Vec::new(),
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
@@ -1342,9 +1341,10 @@ pub struct RequestLog {
 
 	pub llm_request: Option<llm::LLMRequest>,
 	pub llm_response: AsyncLog<llm::LLMInfo>,
+	pub original_model: Option<String>,
 	pub guardrails: GuardrailLog,
 	pub mcp_guardrails: McpGuardrailsLog,
-	pub budgets: Option<crate::http::budget::BudgetSettlement>,
+	pub budgets: Vec<crate::http::budget::BudgetSettlement>,
 
 	pub a2a_method: Option<Strng>,
 	pub a2a_response: Option<a2a::ResponseInfo>,
@@ -1389,6 +1389,7 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 		// These operations have no standard GenAI operation name. Keep the custom values bounded.
 		InputFormat::Realtime => "realtime",
 		InputFormat::Rerank => "rerank",
+		InputFormat::Decisions | InputFormat::SystemOne => "decisions",
 		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
 		// Detection has not identified the operation; do not assume it is chat.
 		InputFormat::Detect => "unknown",
@@ -1461,8 +1462,10 @@ impl Drop for DropOnLog {
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
-			if let (Some(budgets), Some(llm_response)) = (log.budgets.take(), llm_response.as_ref()) {
-				budgets.settle(llm_response);
+			if let Some(llm_response) = llm_response.as_ref() {
+				for budgets in std::mem::take(&mut log.budgets) {
+					budgets.settle(llm_response);
+				}
 			}
 
 			let mcp = log.mcp_status.take();
@@ -1639,6 +1642,10 @@ impl Drop for DropOnLog {
 						("agw.ai.usage.cost.output", b.output.to_string()),
 						("agw.ai.usage.cost.cache_read", b.cache_read.to_string()),
 						("agw.ai.usage.cost.cache_write", b.cache_write.to_string()),
+						(
+							"agw.ai.usage.cost.cache_write_1h",
+							b.cache_write_1h.to_string(),
+						),
 						("agw.ai.usage.cost.reasoning", b.reasoning.to_string()),
 						("agw.ai.usage.cost.input_audio", b.input_audio.to_string()),
 						("agw.ai.usage.cost.output_audio", b.output_audio.to_string()),
@@ -1834,13 +1841,10 @@ impl Drop for DropOnLog {
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",
-					log.llm_request.as_ref().map(|r| {
-						if r.input_format == InputFormat::Embeddings {
-							"embeddings".into()
-						} else {
-							"chat".into()
-						}
-					}),
+					log
+						.llm_request
+						.as_ref()
+						.map(|r| gen_ai_operation_name(r.input_format).into()),
 				),
 				(
 					"gen_ai.provider.name",
@@ -1855,6 +1859,10 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.response_model.display()),
+				),
+				(
+					"agw.ai.original_model",
+					log.original_model.as_deref().map(Into::into),
 				),
 				("gen_ai.usage.input_tokens", input_tokens.map(Into::into)),
 				(
@@ -2135,22 +2143,12 @@ impl Drop for DropOnLog {
 				}
 
 				if log_store_enabled {
-					let original_model = original_model_from_metadata(
-						log.request_snapshot.as_deref(),
-						log.response_snapshot.as_ref(),
-					)
-					.map(str::to_owned);
-
 					let mut db_kv = kv.clone();
 					let db_raws = cel_exec.eval_database_additions();
 					let default_db_raws = [
 						(
 							Cow::Borrowed("user_agent.name"),
 							user_agent_name(log.request_snapshot.as_deref()).map(Value::String),
-						),
-						(
-							Cow::Borrowed("agw.ai.original_model"),
-							original_model.clone().map(Value::String),
 						),
 						(
 							Cow::Borrowed("agw.api_key.name"),
@@ -2170,6 +2168,7 @@ impl Drop for DropOnLog {
 							("agw.ai.usage.cost.output", cost.output),
 							("agw.ai.usage.cost.cacheRead", cost.cache_read),
 							("agw.ai.usage.cost.cacheWrite", cost.cache_write),
+							("agw.ai.usage.cost.cacheWrite1h", cost.cache_write_1h),
 							("agw.ai.usage.cost.reasoning", cost.reasoning),
 							("agw.ai.usage.cost.inputAudio", cost.input_audio),
 							("agw.ai.usage.cost.outputAudio", cost.output_audio),
@@ -2457,9 +2456,7 @@ impl OtelAccessLogger {
 	pub fn shutdown(&self) {
 		let _ = self.inner.provider.shutdown();
 	}
-}
 
-impl OtelLogSink for OtelAccessLogger {
 	fn emit<'v>(&self, level: &str, _target: &str, kv: &[(&str, Option<ValueBag<'v>>)]) {
 		let severity = match level {
 			"error" => Severity::Error,
@@ -2522,10 +2519,6 @@ impl OtelLogSink for OtelAccessLogger {
 		}
 
 		self.inner.logger.emit(record);
-	}
-
-	fn shutdown(&self) {
-		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -3103,6 +3096,33 @@ mod tests {
 	}
 
 	#[test]
+	fn grpc_refusal_by_the_proxy_logs_its_grpc_status() {
+		use crate::http::jwt::TokenError;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
+
+		let refusal = || {
+			Err(ProxyError::JwtAuthenticationFailure(TokenError::UnknownKeyId("rotated".into())).into())
+		};
+
+		let mut log = test_request_log();
+		let (mut response, reason) = resolve_response(refusal(), &mut log, true);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::OK);
+		assert_eq!(
+			log.grpc_status.load(),
+			Some(tonic::Code::Unauthenticated as u8)
+		);
+
+		let mut log = test_request_log();
+		log.grpc_status.store(Some(tonic::Code::Internal as u8));
+		let (mut response, reason) = resolve_response(refusal(), &mut log, false);
+		set_final_response_fields(&mut log, &reason, &mut response);
+		assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
+		assert_eq!(log.grpc_status.load(), None);
+	}
+
+	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};
@@ -3232,6 +3252,7 @@ mod tests {
 			(InputFormat::Embeddings, "embeddings"),
 			(InputFormat::Realtime, "realtime"),
 			(InputFormat::Rerank, "rerank"),
+			(InputFormat::Decisions, "decisions"),
 			(InputFormat::CountTokens, "count_tokens"),
 			(InputFormat::GeminiCountTokens, "count_tokens"),
 			(InputFormat::Detect, "unknown"),
@@ -3440,11 +3461,14 @@ mod tests {
 	}
 
 	#[test]
-	fn default_health_treats_non_zero_grpc_status_as_unhealthy() {
+	fn default_health_treats_server_grpc_status_as_unhealthy() {
 		let mut log = test_request_log();
 		log.status = Some(http::StatusCode::OK);
 		log.grpc_status.store(Some(13));
 		assert!(DropOnLog::default_unhealthy(&log));
+
+		log.grpc_status.store(Some(3));
+		assert!(!DropOnLog::default_unhealthy(&log));
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
@@ -3759,6 +3783,39 @@ mod tests {
 				.iter()
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
+		);
+	}
+
+	#[test]
+	fn original_model_span_attribute() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(metric_test_llm_request());
+		log.original_model = Some("smart-model".to_string());
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| attr.value.to_string())
+		};
+		assert_eq!(value("gen_ai.request.model").as_deref(), Some("test-model"));
+		assert_eq!(
+			value("agw.ai.original_model").as_deref(),
+			Some("smart-model")
 		);
 	}
 

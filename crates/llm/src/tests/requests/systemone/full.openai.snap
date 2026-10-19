@@ -1,0 +1,96 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/systemone/full.json
+info:
+  model: jev-1.13.0
+  state:
+    - role: user
+      content: My order arrived with a cracked screen.
+    - role: user
+      content: I want my money back.
+  questions:
+    refund:
+      type: noul
+      instructions: Is the customer asking for a refund?
+      criteria:
+        "true": Explicitly requests money back
+        "false": Anything else
+    policy:
+      type: noul
+      instructions:
+        policy: Refunds within 30 days
+        question: Is this eligible?
+    category:
+      type: choice
+      instructions: What is the ticket about?
+      criteria:
+        damage: Item arrived damaged
+        shipping: ~
+    urgency:
+      type: score
+      instructions: How urgent is this ticket?
+      criteria:
+        - label: Low
+          description: Can wait
+        - Medium
+        - label: High
+          sla_minutes: 5
+---
+{
+  "request": {
+    "model": "jev-1.13.0",
+    "input": "[{\"role\":\"user\",\"content\":\"My order arrived with a cracked screen.\"},{\"role\":\"user\",\"content\":\"I want my money back.\"}]",
+    "questions": [
+      {
+        "type": "predicate",
+        "name": "refund",
+        "instructions": "Is the customer asking for a refund?\n\ntrue: Explicitly requests money back\nfalse: Anything else"
+      },
+      {
+        "type": "predicate",
+        "name": "policy",
+        "instructions": "{\"policy\":\"Refunds within 30 days\",\"question\":\"Is this eligible?\"}"
+      },
+      {
+        "type": "choice",
+        "name": "category",
+        "instructions": "What is the ticket about?",
+        "choices": [
+          {
+            "value": "damage",
+            "description": "Item arrived damaged"
+          },
+          {
+            "value": "shipping"
+          }
+        ]
+      },
+      {
+        "type": "score",
+        "name": "urgency",
+        "instructions": "How urgent is this ticket?",
+        "levels": [
+          {
+            "label": "Low",
+            "description": "Can wait"
+          },
+          {
+            "label": "Medium"
+          },
+          {
+            "label": "High",
+            "description": "{\"sla_minutes\":5}"
+          }
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "SystemOne",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "jev-1.13.0",
+    "provider": "openai",
+    "streaming": false,
+    "params": {}
+  }
+}

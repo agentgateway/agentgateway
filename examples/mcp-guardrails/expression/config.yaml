@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+mcp:
+  port: 3000
+  policies:
+    cors:
+      allowOrigins: ["*"]
+      allowHeaders: ["*"]
+      exposeHeaders: ["Mcp-Session-Id"]
+    mcpGuardrails:
+      processors:
+      # Deny before masking, so this rule sees the original message.
+      - kind: expression
+        methods: {"tools/call": request}
+        condition: >-
+          mcp.params.name == 'echo' &&
+          has(mcp.params.arguments) &&
+          has(mcp.params.arguments.message) &&
+          mcp.params.arguments.message.contains('DO_NOT_SEND')
+        reject: "Messages containing DO_NOT_SEND may not be sent upstream"
+
+      # Mask every email-like match in echo's message before sending it upstream.
+      - kind: expression
+        methods: {"tools/call": request}
+        condition: >-
+          mcp.params.name == 'echo' &&
+          has(mcp.params.arguments) &&
+          has(mcp.params.arguments.message)
+        transform: >-
+          mcp.params.with(p, p.merge({
+            'arguments': p.arguments.merge({
+              'message': p.arguments.message.regexReplaceAll(
+                '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}',
+                '[EMAIL]'
+              )
+            })
+          }))
+
+      # Mask demo secrets in all text blocks returned by tools.
+      - kind: expression
+        methods: {"tools/call": response}
+        condition: has(mcp.result.content)
+        transform: >-
+          mcp.result.with(r, r.merge({
+            'content': r.content.map(item,
+              item.type == 'text'
+                ? item.merge({'text': item.text.regexReplaceAll(
+                    'demo-secret-[A-Za-z0-9]+', '[SECRET]'
+                  )})
+                : item
+            )
+          }))
+  targets:
+  - name: everything
+    stdio:
+      cmd: npx
+      args: ["-y", "@modelcontextprotocol/server-everything"]

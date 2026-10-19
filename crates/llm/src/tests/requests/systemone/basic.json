@@ -1,0 +1,7 @@
+{
+  "model": "jev-1.13.0",
+  "state": "My order arrived with a cracked screen.",
+  "questions": {
+    "damaged": {"type": "noul", "instructions": "Did the item arrive damaged?"}
+  }
+}

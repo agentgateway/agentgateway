@@ -212,7 +212,7 @@ type NamedLLMProvider struct {
 }
 
 // Large language model provider that the backend routes requests to.
-// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock;custom
+// +kubebuilder:validation:ExactlyOneOf=openai;azureopenai;azure;anthropic;gemini;vertexai;bedrock;custom;copilot
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) ? has(self.custom.backendRef) != has(self.host) : true",message="custom providers must specify exactly one of backendRef or host and port"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
@@ -222,6 +222,10 @@ type LLMProvider struct {
 	// OpenAI provider settings.
 	// +optional
 	OpenAI *OpenAIConfig `json:"openai,omitempty"`
+
+	// GitHub Copilot provider settings.
+	// +optional
+	Copilot *CopilotConfig `json:"copilot,omitempty"`
 
 	// Azure OpenAI provider settings.
 	// +optional
@@ -387,6 +391,12 @@ const (
 
 	// ProviderFormatRerank is the Cohere-compatible rerank API.
 	ProviderFormatRerank ProviderFormat = "Rerank"
+
+	// ProviderFormatDecisions is the OpenAI decisions API.
+	ProviderFormatDecisions ProviderFormat = "Decisions"
+
+	// ProviderFormatSystemOne is the TypeSafe SystemOne API.
+	ProviderFormatSystemOne ProviderFormat = "SystemOne"
 )
 
 // Settings for the [OpenAI](https://developers.openai.com/api/docs/guides/streaming-responses) LLM provider.
@@ -510,6 +520,14 @@ type AzureConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
+// Settings for the GitHub Copilot LLM provider.
+type CopilotConfig struct {
+	// Model name override.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+}
+
 // Settings for the [Gemini](https://ai.google.dev/gemini-api/docs) LLM provider.
 type GeminiConfig struct {
 	// Model name override, such as `gemini-2.5-pro`.
@@ -619,6 +637,7 @@ type MCPBackend struct {
 	// +listMapKey=name
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=128
+	// +kubebuilder:validation:XValidation:rule="self.size() > 1 || self.all(t, !has(t.condition) || has(t.selector))",message="mcp target condition requires at least two targets unless the target uses selector"
 	// +required
 	Targets []McpTargetSelector `json:"targets"`
 
@@ -675,6 +694,9 @@ type McpTargetSelector struct {
 	Name gwv1.SectionName `json:"name"`
 
 	// Label selector used to select `Service` resources.
+	// Selected `Service` ports must set `appProtocol: agentgateway.dev/mcp` for
+	// streamable HTTP or `appProtocol: agentgateway.dev/mcp-sse` for SSE. Ports
+	// without a recognized MCP `appProtocol` value are ignored.
 	// If policies are needed on a per-service basis, `AgentgatewayPolicy` can
 	// target the desired `Service`.
 	// +optional
@@ -685,6 +707,12 @@ type McpTargetSelector struct {
 	// instead.
 	// +optional
 	Static *McpTarget `json:"static,omitempty"`
+
+	// CEL expression evaluated per request; when it evaluates to false, the
+	// target is excluded from the virtual MCP. `mcp.target.name` is available.
+	// With `selector`, the condition applies to each selected target.
+	// +optional
+	Condition *CELExpression `json:"condition,omitempty"`
 }
 
 const (

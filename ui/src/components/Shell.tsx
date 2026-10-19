@@ -91,6 +91,11 @@ export function Shell() {
 			(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 	);
 	const [mobileNavOpen, setMobileNavOpen] = useState(false);
+	const [mobileNavPathname, setMobileNavPathname] = useState(router.location.pathname);
+	if (mobileNavPathname !== router.location.pathname) {
+		setMobileNavPathname(router.location.pathname);
+		setMobileNavOpen(false);
+	}
 	const mobileNavRef = useDismissiblePopover<HTMLDivElement>(mobileNavOpen, () =>
 		setMobileNavOpen(false)
 	);
@@ -123,11 +128,6 @@ export function Shell() {
 	useEffect(() => {
 		document.documentElement.dataset.theme = theme;
 	}, [theme]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		setMobileNavOpen(false);
-	}, [router.location.pathname]);
 
 	return (
 		<div className="app-shell">
@@ -222,6 +222,12 @@ export function Shell() {
 					</div>
 				</header>
 				<main className="content">
+					{runtime.data?.configReload && !runtime.data.configReload.synchronized && (
+						<StatusBanner state="warn" title="Configuration reload failed">
+							The last configuration reload was rejected, so the gateway is still running the
+							previous configuration. Fix the configuration and save it to retry.
+						</StatusBanner>
+					)}
 					{runtime.data?.ui.configStoreMode === 'readOnly' && (
 						<StatusBanner state="info" title="Read-only mode">
 							The UI is configured as read-only. Editing is disabled.
@@ -368,7 +374,10 @@ function navigationGroups(options: {
 	} else {
 		groups.push({
 			title: 'LLM',
-			items: [{ to: '/llm/models', label: 'Models', icon: Bot }]
+			items: [
+				{ to: '/llm/models', label: 'Models', icon: Bot },
+				{ to: '/llm/client-setup', label: 'Client Setup', icon: Cable }
+			]
 		});
 	}
 	groups.push({

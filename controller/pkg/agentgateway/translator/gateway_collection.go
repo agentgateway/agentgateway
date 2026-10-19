@@ -426,10 +426,15 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 	}
 }
 
+// portProtocol is the state accumulated for one port from the listeners accepted on it so far.
 type portProtocol struct {
+	// hostnames are the served hostnames already claimed on this port, independent of
+	// allowed route namespaces. A listener without a hostname claims "*".
 	hostnames sets.String
-	protocol  gwv1.ProtocolType
-	internal  bool
+	// protocol is the protocol of the first listener accepted on this port.
+	protocol gwv1.ProtocolType
+	// internal is the bind mode of the first listener accepted on this port.
+	internal bool
 }
 
 type ListenerConflict string
@@ -440,36 +445,59 @@ const (
 	ListenerConflictBindMode = "bind-mode"
 )
 
+// usesSNI reports whether listeners of this protocol are selected by SNI. HTTPS and TLS
+// listeners both produce a TLS bind, where the dataplane picks the listener from the SNI and
+// then serves it as HTTP (HTTPS) or TCP (TLS), so the two may share a port.
+func usesSNI(p gwv1.ProtocolType) bool {
+	return p == gwv1.HTTPSProtocolType || p == gwv1.TLSProtocolType
+}
+
+// validateListenerConflicts marks each listener that cannot share its port with the listeners
+// before it. listeners must be sorted by Gateway API precedence: the first listener on a port
+// fixes the port's bind mode and protocol, and earlier listeners win hostname conflicts.
+// A conflicted listener claims nothing, so it never causes later listeners to conflict.
+//
+// For a listener on a port that already has accepted listeners, checks run in order:
+//  1. Bind mode differs (internal vs standard)             -> ListenerConflictBindMode
+//  2. Protocol differs, unless both are HTTPS/TLS           -> ListenerConflictProtocol
+//  3. Hostname already claimed (see portProtocol.hostnames) -> ListenerConflictHostname
 func validateListenerConflicts(listeners []*GatewayListener) {
-	// Precompute the final size to avoid incremental sizing
+	// Precompute the final size to avoid incremental sizing.
 	hostnameCounts := make(map[gwv1.PortNumber]int)
 	for _, listener := range listeners {
 		hostnameCounts[listener.ParentInfo.Port]++
 	}
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for i, listener := range listeners {
+		pi := &listener.ParentInfo
+		hostname := pi.OriginalHostname
+		if hostname == "" {
+			hostname = "*"
+		}
 		var conflict ListenerConflict
-		if p, ok := portMap[listener.ParentInfo.Port]; ok {
-			if p.internal != listener.ParentInfo.Internal {
+		if p, ok := portMap[pi.Port]; ok {
+			// The port already has an accepted listener; check this one against it.
+			if p.internal != pi.Internal {
 				// Listeners are ordered by Gateway API precedence before validation.
 				// Preserve the winning bind mode and reject only the later listener.
 				conflict = ListenerConflictBindMode
-			} else if p.protocol == listener.ParentInfo.Protocol {
-				if p.hostnames.Contains(listener.ParentInfo.OriginalHostname) {
-					conflict = ListenerConflictHostname
-				} else {
-					p.hostnames.Insert(listener.ParentInfo.OriginalHostname)
-				}
-			} else {
+			} else if p.protocol != pi.Protocol && !(usesSNI(pi.Protocol) && usesSNI(p.protocol)) {
+				// Different protocols cannot share a bind, except HTTPS with TLS.
 				conflict = ListenerConflictProtocol
+			} else if p.hostnames.Contains(hostname) {
+				conflict = ListenerConflictHostname
+			} else {
+				p.hostnames.Insert(hostname)
 			}
 		} else {
-			hostnames := sets.NewWithLength[string](hostnameCounts[listener.ParentInfo.Port])
-			hostnames.Insert(listener.ParentInfo.OriginalHostname)
-			portMap[listener.ParentInfo.Port] = &portProtocol{
+			// The first listener on a port is always accepted and fixes the port's protocol
+			// and bind mode for every later listener.
+			hostnames := sets.NewWithLength[string](hostnameCounts[pi.Port])
+			hostnames.Insert(hostname)
+			portMap[pi.Port] = &portProtocol{
 				hostnames: hostnames,
-				protocol:  listener.ParentInfo.Protocol,
-				internal:  listener.ParentInfo.Internal,
+				protocol:  pi.Protocol,
+				internal:  pi.Internal,
 			}
 		}
 		if conflict != listener.Conflict {

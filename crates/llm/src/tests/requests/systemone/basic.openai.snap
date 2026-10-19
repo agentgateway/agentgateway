@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/systemone/basic.json
+info:
+  model: jev-1.13.0
+  state: My order arrived with a cracked screen.
+  questions:
+    damaged:
+      type: noul
+      instructions: Did the item arrive damaged?
+---
+{
+  "request": {
+    "model": "jev-1.13.0",
+    "input": "My order arrived with a cracked screen.",
+    "questions": [
+      {
+        "type": "predicate",
+        "name": "damaged",
+        "instructions": "Did the item arrive damaged?"
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "SystemOne",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "jev-1.13.0",
+    "provider": "openai",
+    "streaming": false,
+    "params": {}
+  }
+}

@@ -176,7 +176,12 @@ func TestTranslateBackendTLSCAErrorUpdatesPolicyStatus(t *testing.T) {
 	collections := backendTLSContext(t, nil, nil).Collections
 	collections.Gateways = krt.NewStaticCollection[*gwv1.Gateway](nil, []*gwv1.Gateway{{
 		Name: "gateway", Namespace: "default",
+		Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"},
 	}}, krt.WithName("plugins/backendTLSStatusGateways"))
+	collections.GatewayClasses = krt.NewStaticCollection[*gwv1.GatewayClass](nil, []*gwv1.GatewayClass{{
+		Name: "agentgateway",
+		Spec: gwv1.GatewayClassSpec{ControllerName: gwv1.GatewayController(collections.ControllerName)},
+	}}, krt.WithName("plugins/backendTLSStatusGatewayClasses"))
 	policy := &agentgateway.AgentgatewayPolicy{
 		Name: "policy", Namespace: "default", Generation: 1,
 		Spec: agentgateway.AgentgatewayPolicySpec{

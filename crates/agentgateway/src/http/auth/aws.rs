@@ -595,6 +595,7 @@ fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'
 }
 
 pub(super) async fn sign_request(
+	client: &client::Client,
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
 ) -> Result<(), BackendAuthError> {
@@ -648,7 +649,7 @@ pub(super) async fn sign_request(
 				aws_region.region.as_str()
 			} else {
 				// Fall back to region from AWS config
-				let config = Box::pin(sdk_config()).await;
+				let config = Box::pin(sdk_config(client)).await;
 				config
 					.region()
 					.map(|r| r.as_ref())
@@ -662,6 +663,7 @@ pub(super) async fn sign_request(
 	let creds = tokio::time::timeout(
 		super::CLOUD_AUTH_TIMEOUT,
 		Box::pin(load_credentials(
+			client,
 			aws_auth,
 			region,
 			resolved_tags,
@@ -741,13 +743,19 @@ fn should_sign_header(name: &str) -> bool {
 }
 
 static SDK_CONFIG: OnceCell<SdkConfig> = OnceCell::const_new();
-async fn sdk_config<'a>() -> &'a SdkConfig {
+async fn sdk_config<'a>(client: &client::Client) -> &'a SdkConfig {
 	SDK_CONFIG
-		.get_or_init(|| async { aws_config::load_defaults(BehaviorVersion::v2026_01_12()).await })
+		.get_or_init(|| async {
+			aws_config::defaults(BehaviorVersion::v2026_01_12())
+				.http_client(client.clone())
+				.load()
+				.await
+		})
 		.await
 }
 
 async fn load_credentials(
+	client: &client::Client,
 	aws_auth: &AwsAuth,
 	signing_region: &str,
 	resolved_tags: Option<Arc<[(String, String)]>>,
@@ -755,6 +763,7 @@ async fn load_credentials(
 ) -> anyhow::Result<Credentials> {
 	if let (Some(assume_role), Some(cache)) = (aws_auth.assume_role(), aws_auth.assume_role_cache()) {
 		load_assumed_credentials(
+			client,
 			assume_role,
 			cache,
 			signing_region,
@@ -763,11 +772,14 @@ async fn load_credentials(
 		)
 		.await
 	} else {
-		load_source_credentials(aws_auth).await
+		load_source_credentials(client, aws_auth).await
 	}
 }
 
-async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentials> {
+async fn load_source_credentials(
+	client: &client::Client,
+	aws_auth: &AwsAuth,
+) -> anyhow::Result<Credentials> {
 	match aws_auth {
 		AwsAuth::ExplicitConfig {
 			access_key_id,
@@ -803,7 +815,7 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 			}
 
 			// Load AWS configuration and credentials from environment/IAM
-			let config = Box::pin(sdk_config()).await;
+			let config = Box::pin(sdk_config(client)).await;
 
 			// Get credentials from the config
 			let creds = config
@@ -846,13 +858,14 @@ fn effective_session_name(
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
 
 async fn load_assumed_credentials(
+	client: &client::Client,
 	assume_role: &AwsAssumeRole,
 	cache: &AwsAssumeRoleCache,
 	signing_region: &str,
 	resolved_tags: Option<Arc<[(String, String)]>>,
 	resolved_session_name: Option<String>,
 ) -> anyhow::Result<Credentials> {
-	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
+	let sts_region = resolve_sts_region(client, assume_role, signing_region).await?;
 	// resolved_tags and resolved_session_name are Some iff the corresponding
 	// dynamic config is set (see sign_request); static-only configs use the
 	// configured values directly.
@@ -868,7 +881,7 @@ async fn load_assumed_credentials(
 
 	cache
 		.get_or_fetch(key.clone(), || async move {
-			let config = Box::pin(sdk_config()).await;
+			let config = Box::pin(sdk_config(client)).await;
 			let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
 				.configure(config)
 				.region(Region::new(sts_region));
@@ -897,13 +910,14 @@ async fn load_assumed_credentials(
 }
 
 async fn resolve_sts_region(
+	client: &client::Client,
 	_assume_role: &AwsAssumeRole,
 	signing_region: &str,
 ) -> anyhow::Result<String> {
 	if !signing_region.is_empty() {
 		return Ok(signing_region.to_string());
 	}
-	let config = Box::pin(sdk_config()).await;
+	let config = Box::pin(sdk_config(client)).await;
 	config
 		.region()
 		.map(|r| r.as_ref().to_string())
@@ -1235,7 +1249,7 @@ mod resolve_tags_tests {
 		};
 		// No x-app header: resolution fails before any credential loading or STS call.
 		let mut req = request(&[], None);
-		let err = sign_request(&mut req, &auth)
+		let err = sign_request(&crate::test_helpers::test_client(), &mut req, &auth)
 			.await
 			.expect_err("must reject the request rather than sign it unattributed");
 		assert!(
@@ -1268,7 +1282,7 @@ mod resolve_tags_tests {
 			assume_role_cache: Default::default(),
 		};
 		let mut req = request(&[("x-app", "invoicer")], None);
-		let err = sign_request(&mut req, &auth)
+		let err = sign_request(&crate::test_helpers::test_client(), &mut req, &auth)
 			.await
 			.expect_err("uncompilable expression must fail the request");
 		assert!(
@@ -1396,7 +1410,7 @@ mod resolve_session_name_tests {
 		};
 		// No x-team header: resolution fails before any credential loading or STS call.
 		let mut req = request(&[], None);
-		let err = sign_request(&mut req, &auth)
+		let err = sign_request(&crate::test_helpers::test_client(), &mut req, &auth)
 			.await
 			.expect_err("must reject the request rather than sign it misattributed");
 		assert!(

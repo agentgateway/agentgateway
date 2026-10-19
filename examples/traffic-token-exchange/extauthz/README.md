@@ -1,6 +1,6 @@
 ## Token exchange with `extAuthz`
 
-This example uses `extAuthz` to get OAuth access tokens from Keycloak before forwarding requests upstream, building the token request by hand with CEL. For the built-in `backendAuth.oauth` policy that does the same job, see the sibling [oauth-rfc8693](../oauth-rfc8693/README.md) and [jwt-authz-grant](../jwt-authz-grant/README.md) examples.
+This example uses `extAuthz` to get OAuth access tokens from Keycloak before forwarding requests upstream, building the token request by hand with CEL. For the built-in `backendAuth.oauthTokenExchange` policy that does the same job, see the sibling [oauth-rfc8693](../oauth-rfc8693/README.md) and [jwt-authz-grant](../jwt-authz-grant/README.md) examples.
 
 It includes two backend auth flows:
 

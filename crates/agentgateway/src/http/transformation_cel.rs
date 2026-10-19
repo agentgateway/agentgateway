@@ -330,6 +330,10 @@ impl store::BackendPolicyTrait for Transformation {
 			.map_err(crate::proxy::ProxyError::Processing)?;
 		Ok(crate::http::PolicyResponse::default())
 	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		crate::store::RequestPolicyTrait::expressions(self)
+	}
 }
 
 impl store::ResponsePolicyTrait for Transformation {

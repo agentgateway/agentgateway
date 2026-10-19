@@ -122,6 +122,7 @@ pub mod from_messages {
 				.completion_tokens_details
 				.as_ref()
 				.and_then(|d| d.reasoning_tokens),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
@@ -240,6 +241,7 @@ pub mod from_messages {
 			stop_reason: Some(stop_reason),
 			stop_sequence,
 			usage: messages::Usage {
+				cache_creation: None,
 				input_tokens: usage
 					.as_ref()
 					.map(|u| u.prompt_tokens as usize)
@@ -248,7 +250,7 @@ pub mod from_messages {
 					.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
 				output_tokens: usage
 					.as_ref()
-					.map(|u| u.completion_tokens as usize)
+					.map(|u| u.output_tokens() as usize)
 					.unwrap_or(0),
 				cache_creation_input_tokens,
 				cache_read_input_tokens,
@@ -521,7 +523,7 @@ pub mod from_messages {
 						(u.prompt_tokens as usize)
 							.saturating_sub(cache_creation_input_tokens.unwrap_or(0))
 							.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
-						u.completion_tokens as usize,
+						u.output_tokens() as usize,
 					)
 				})
 				.unwrap_or((0, 0));
@@ -534,6 +536,7 @@ pub mod from_messages {
 						stop_sequence: state.pending_stop_sequence.take(),
 					},
 					usage: messages::MessageDeltaUsage {
+						cache_creation: None,
 						input_tokens: Some(input_tokens),
 						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens,
@@ -547,7 +550,7 @@ pub mod from_messages {
 			if let Some(usage) = usage {
 				log.update(|r| {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
-					r.response.output_tokens = Some(usage.completion_tokens as u64);
+					r.response.output_tokens = Some(usage.output_tokens() as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
 					r.response.reasoning_tokens = usage
 						.completion_tokens_details
@@ -610,6 +613,7 @@ pub mod from_messages {
 									stop_reason: None,
 									stop_sequence: None,
 									usage: messages::Usage {
+										cache_creation: None,
 										input_tokens: 0,
 										output_tokens: 0,
 										cache_creation_input_tokens: None,
@@ -698,7 +702,9 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
-											entry.arguments.push_str(args);
+											if log_content.tool_calls {
+												entry.arguments.push_str(args);
+											}
 										}
 									}
 
@@ -877,19 +883,20 @@ pub mod from_messages {
 			Some(messages::ThinkingInput::Adaptive {}) => true,
 			_ => output_effort.is_some(),
 		};
-		let reasoning_effort = if reasoning_requested {
-			Some(match output_effort {
-				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
-				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
-				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
-				// Anthropic adaptive thinking defaults to high effort when omitted.
-				None => completions::ReasoningEffort::High,
-			})
-		} else {
-			None
-		};
+		let reasoning_effort =
+			if reasoning_requested && crate::conversion::supports_reasoning_effort(&model) {
+				Some(match output_effort {
+					Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+					Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+					Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+					Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
+					Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
+					// Anthropic adaptive thinking defaults to high effort when omitted.
+					None => completions::ReasoningEffort::High,
+				})
+			} else {
+				None
+			};
 		let response_format = output_config
 			.as_ref()
 			.and_then(|cfg| cfg.format.as_ref())
@@ -1429,7 +1436,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.audio_tokens);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_tokens = Some(u.output_tokens() as u64);
 								r.response.output_audio_tokens = u
 									.completion_tokens_details
 									.as_ref()

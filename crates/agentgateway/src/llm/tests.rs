@@ -2203,6 +2203,38 @@ async fn llm_transformations_can_set_missing_model() {
 	assert_eq!(llm_request.request_model, "transformed-model");
 }
 
+#[test]
+fn copilot_required_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider {
+		model_override: None,
+	});
+	let mut authorization = HeaderValue::from_static("Bearer configured-token");
+	authorization.set_sensitive(true);
+	let mut req = ::http::Request::builder()
+		.header(header::AUTHORIZATION, authorization)
+		.header("editor-version", "custom-editor")
+		.header("x-initiator", "incoming")
+		.body(Body::empty())
+		.unwrap();
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None, None)
+		.unwrap();
+
+	let headers = req.headers();
+	assert_eq!(headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(headers["openai-intent"], "conversation-agent");
+	assert_eq!(headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(headers["x-initiator"], "agent");
+	assert_eq!(headers["x-interaction-type"], "conversation-agent");
+	assert_eq!(headers[header::AUTHORIZATION], "Bearer configured-token");
+	assert!(headers[header::AUTHORIZATION].is_sensitive());
+}
+
 #[tokio::test]
 async fn copilot_anthropic_model_uses_messages_route() {
 	use crate::http::auth::BackendInfo;
@@ -2942,6 +2974,37 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 	assert_eq!(req.uri().query(), Some("trace=repro"));
 }
 
+#[rstest::rstest]
+#[case::v1("/v1", "/v1/systemone")]
+#[case::nested("/openai/v1", "/openai/v1/systemone")]
+#[case::root("/", "/v1/systemone")]
+fn setup_request_custom_detect_replaces_v1_with_path_prefix(
+	#[case] path_prefix: &str,
+	#[case] expected_path: &str,
+) {
+	let mut req =
+		crate::http::tests_common::request("https://example.com/v1/systemone", http::Method::POST, &[]);
+
+	AIProvider::Custom(custom::Provider {
+		model_override: None,
+		provider_override: None,
+		formats: vec![],
+	})
+	.setup_request(
+		&mut req,
+		RouteType::Detect,
+		None,
+		None,
+		Some(path_prefix),
+		true,
+		None,
+		None,
+	)
+	.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), expected_path);
+}
+
 #[test]
 fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 	let provider = AIProvider::OpenAI(openai::Provider {
@@ -3013,6 +3076,67 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 
 	assert_eq!(req.uri().path(), "/override/messages");
 	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
+fn setup_request_drops_inbound_query_only_when_translated() {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	for (provider, route_type, expected_query) in [
+		(
+			AIProvider::Gemini(gemini::Provider {
+				model_override: None,
+			}),
+			RouteType::Completions,
+			None,
+		),
+		(
+			AIProvider::Anthropic(anthropic::Provider {
+				model_override: None,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+		(
+			AIProvider::bedrock(bedrock::Provider {
+				model_override: None,
+				region: strng::new("us-east-1"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+				endpoint_preference: bedrock::BedrockEndpointPreference::MantleOnly,
+			}),
+			RouteType::Messages,
+			Some("beta=true"),
+		),
+	] {
+		let mut req = crate::http::tests_common::request(
+			"https://example.com/v1/messages?beta=true",
+			http::Method::POST,
+			&[],
+		);
+		provider
+			.setup_request(
+				&mut req,
+				route_type,
+				Some(&llm_request),
+				None,
+				None,
+				false,
+				None,
+				None,
+			)
+			.expect("setup_request should succeed");
+		assert_eq!(req.uri().query(), expected_query, "{route_type:?}");
+	}
 }
 
 #[test]
@@ -3220,7 +3344,7 @@ fn setup_request_gemini_native_streaming_adds_alt_sse_and_strips_client_api_keys
 	provider
 		.setup_request(
 			&mut req,
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			Some(&llm_request),
 			None,
 			None,
@@ -3289,6 +3413,7 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 		model_override: None,
 	});
 	let llm_request = LLMRequest {
+		input_format: InputFormat::Completions,
 		provider_state: None,
 		..native_gemini_llm_request("gemini-2.5-flash", false)
 	};
@@ -3353,7 +3478,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
-		Some("trace=repro"),
+		None,
 	);
 }
 
@@ -3398,6 +3523,97 @@ fn setup_request_bedrock_sets_signing_region_with_host_override() {
 	);
 }
 
+#[rstest::rstest]
+#[case::foundry(
+	azure::AzureResourceType::Foundry,
+	Some(custom::ProviderFormat::SystemOne)
+)]
+#[case::openai(azure::AzureResourceType::OpenAI, None)]
+fn azure_decisions_capability(
+	#[case] resource_type: azure::AzureResourceType,
+	#[case] expected: Option<custom::ProviderFormat>,
+) {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: None,
+		model_override: None,
+		project_name: None,
+		resource_name: strng::new("example"),
+		resource_type,
+	});
+	assert_eq!(
+		provider.non_chat_provider_format_for(InputFormat::Decisions, "deployment-alias"),
+		expected
+	);
+}
+
+#[tokio::test]
+async fn azure_foundry_uses_systemone_with_deployment_alias() {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: None,
+		model_override: Some(strng::new("deployment-alias")),
+		project_name: Some(strng::new("test-project")),
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+	});
+
+	// Decisions translates the body to SystemOne and applies the deployment alias.
+	let req = ::http::Request::builder()
+		.uri("/v1/decisions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			serde_json::to_vec(&json!({
+				"input": "I was charged twice for my subscription.",
+				"model": "foundry-decision",
+				"questions": [{"instructions": "Is this a billing issue?", "name": "billing", "type": "predicate"}]
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_decisions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Foundry Decisions should convert")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::SystemOneDecisions(_))
+	));
+	let body: Value = serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["model"], "deployment-alias");
+
+	// Native SystemOne preserves the body while applying the same deployment alias.
+	let mut native_body = body.clone();
+	native_body["model"] = json!("foundry-decision");
+	let req = ::http::Request::builder()
+		.uri("/v1/systemone")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(serde_json::to_vec(&native_body).unwrap()))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		request,
+		upstream_route_type,
+	} = provider
+		.process_systemone_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Foundry SystemOne should forward natively")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::SystemOne);
+	assert!(llm_request.provider_state.is_none());
+	let native_body: Value =
+		serde_json::from_slice(&request.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(native_body, body);
+}
+
 #[test]
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
@@ -3412,6 +3628,76 @@ fn setup_request_azure_applies_path_prefix_with_host_override() {
 		"/proxy/openai/deployments/gpt-4.1/chat/completions",
 		Some("api-version=2024-02-15-preview&trace=repro"),
 	);
+}
+
+#[rstest::rstest]
+#[case::default(
+	None,
+	None,
+	false,
+	"https://example.cognitiveservices.azure.com/providers/microsoft/v1/systemone?trace=repro"
+)]
+#[case::host_only(None, None, true, "https://proxy.example.com/v1/decisions?trace=repro")]
+#[case::path_override(
+	Some("/custom/systemone?version=42"),
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/custom/systemone?version=42"
+)]
+#[case::prefixed_base_url(
+	None,
+	Some("/proxy/"),
+	true,
+	"https://proxy.example.com/proxy/providers/microsoft/v1/systemone?trace=repro"
+)]
+#[case::root_base_url(
+	None,
+	Some("/"),
+	true,
+	"https://proxy.example.com/providers/microsoft/v1/systemone?trace=repro"
+)]
+fn setup_request_azure_foundry_systemone(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] has_host_override: bool,
+	#[case] expected_uri: &str,
+) {
+	let provider = AIProvider::azure(azure::Provider {
+		api_version: Some(strng::new("2024-02-15-preview")),
+		model_override: None,
+		project_name: Some(strng::new("test-project")),
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+	});
+	for route in [RouteType::Decisions, RouteType::SystemOne] {
+		assert_eq!(
+			provider.default_connector_target(route),
+			Some(Target::Hostname(
+				strng::new("example.cognitiveservices.azure.com"),
+				443
+			))
+		);
+	}
+	let mut llm_request = llm_request_for_path("deployment-alias");
+	llm_request.input_format = InputFormat::Decisions;
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/v1/decisions?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::SystemOne,
+			Some(&llm_request),
+			path_override,
+			path_prefix,
+			has_host_override,
+			None,
+			None,
+		)
+		.unwrap();
+	assert_eq!(req.uri().to_string(), expected_uri);
 }
 
 #[test]
@@ -4133,6 +4419,21 @@ fn fixed_providers_classify_by_family() {
 			"gpt-4o",
 			""
 		),
+		CacheTokenConvention::InputIncludesCache,
+	);
+	let foundry = AIProvider::azure(azure::Provider {
+		model_override: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+	});
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "claude-haiku-4-5", ""),
+		CacheTokenConvention::InputExcludesCache,
+	);
+	assert_eq!(
+		cache_convention_for(&foundry, None, None, "gpt-4o", ""),
 		CacheTokenConvention::InputIncludesCache,
 	);
 	let bedrock = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {

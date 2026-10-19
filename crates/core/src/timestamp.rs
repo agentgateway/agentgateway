@@ -35,10 +35,6 @@ impl Timestamp {
 		dt.with_nanosecond(micros).unwrap().fixed_offset()
 	}
 
-	pub fn now_system(&self) -> SystemTime {
-		self.system + self.instant.elapsed()
-	}
-
 	pub fn duration_since(&self, earlier: &Timestamp) -> Duration {
 		self.instant.duration_since(earlier.instant)
 	}

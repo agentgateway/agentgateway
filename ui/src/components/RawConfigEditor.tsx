@@ -82,6 +82,8 @@ export function RawConfigEditor({ invalid, onChange, onSave, value }: RawConfigE
 					fontSize: 13,
 					minimap: { enabled: false },
 					quickSuggestions: { other: true, comments: false, strings: false },
+					wordBasedSuggestions: 'off',
+					fixedOverflowWidgets: true,
 					scrollBeyondLastLine: false,
 					tabSize: 2,
 					wordWrap: 'off'

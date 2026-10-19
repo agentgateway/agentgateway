@@ -338,10 +338,12 @@ func TestBuildRouteStatus(t *testing.T) {
 		status := rm.BuildRouteStatus(ctx, route, wellknown.DefaultAgwControllerName)
 
 		assert.Equal(t, true, status != nil)
-		// 1 parent is ours, 1 parent is other.
+		// 1 parent is ours, 1 parent is other. The other controller's entry keeps its position and ours is appended.
 		assert.Equal(t, 2, len(status.Parents))
-		// Ours will be first due to alphabetical ordering of controller name ('k' vs. 'o').
-		assert.Equal(t, 2, len(status.Parents[0].Conditions))
+		assert.Equal(t, gwv1.GatewayController("other.io/controller"), status.Parents[0].ControllerName)
+		assert.Equal(t, 1, len(status.Parents[0].Conditions))
+		assert.Equal(t, gwv1.GatewayController(wellknown.DefaultAgwControllerName), status.Parents[1].ControllerName)
+		assert.Equal(t, 2, len(status.Parents[1].Conditions))
 	})
 
 	t.Run("set negative route conditions from report and not add extra conditions", func(t *testing.T) {

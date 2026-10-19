@@ -1,0 +1,210 @@
+import { useEffect, useMemo, useState } from 'react';
+
+import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { ConfirmDialog, Dropdown, Panel, StatusBanner } from '@/components/Primitives';
+import type { LocalUIConfig } from '@/gateway-config';
+import { useEffectiveGatewayConfig, useUpdateConfig } from '@/hooks';
+import { PolicyCatalogPage } from '@/pages/Policies';
+import type { PolicyKey } from '@/policies/types';
+import type { GatewayConfig, TrafficGateway } from '@/types';
+
+const noneGateway = '__none__';
+
+const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
+	{
+		title: 'UI access policies',
+		keys: [
+			'oidc',
+			'jwtAuth',
+			'authorization',
+			'extAuthz',
+			'basicAuth',
+			'apiKey',
+			'csrf',
+			'cors'
+		] as PolicyKey[]
+	}
+];
+
+export function UiSettingsPage() {
+	return (
+		<PolicyCatalogPage
+			title="UI"
+			description="Expose the UI on a traffic gateway and configure policies that protect the UI."
+			schemaRoot="LocalUIPolicy"
+			resourceKind="ui.policy"
+			sections={uiPolicySections}
+			yamlDescription="Read-only view of effective UI policies, including database-backed resources in hybrid mode."
+			policies={config => config.data?.ui?.policies as Record<string, unknown> | null | undefined}
+			policiesDisabled={config => !uiGateway(config.data)}
+			policiesDisabledReason="UI policies require the UI to be exposed on a gateway."
+			beforePolicies={<UiGatewayPanel />}
+			onSavePolicy={(next, key, value) => {
+				next.ui ??= {};
+				next.ui.policies ??= {};
+				(next.ui.policies as Record<string, unknown>)[key] = value;
+			}}
+			onDisablePolicy={(next, key) => {
+				if (next.ui?.policies) {
+					delete (next.ui.policies as Record<string, unknown>)[key];
+					if (Object.keys(next.ui.policies).length === 0) {
+						delete next.ui.policies;
+					}
+				}
+			}}
+		/>
+	);
+}
+
+function UiGatewayPanel() {
+	const config = useEffectiveGatewayConfig();
+	const update = useUpdateConfig();
+	const gatewayOptions = useMemo(() => gatewayReferenceOptions(config.data), [config.data]);
+	const selectedGateway = uiGateway(config.data);
+	const [draftGateway, setDraftGateway] = useState(selectedGateway ?? noneGateway);
+	const [confirming, setConfirming] = useState(false);
+
+	useEffect(() => {
+		setDraftGateway(selectedGateway ?? noneGateway);
+	}, [selectedGateway]);
+
+	function save() {
+		setConfirming(false);
+		update.mutate(next => {
+			applyUiGateway(next);
+		});
+	}
+
+	function applyUiGateway(next: GatewayConfig) {
+		if (draftGateway === noneGateway) {
+			delete next.ui;
+			return;
+		}
+		next.ui ??= {};
+		if (implicitDefaultUiGateway(next, draftGateway)) {
+			delete next.ui.gateways;
+		} else {
+			next.ui.gateways = draftGateway;
+		}
+	}
+
+	const dirty = draftGateway !== (selectedGateway ?? noneGateway);
+
+	return (
+		<section className="policy-page-section">
+			<h3>Gateway</h3>
+			<Panel className="settings-row">
+				<div className="settings-row-label">
+					<strong>Public gateway</strong>
+					<p>
+						{gatewayOptions.length
+							? 'Serve the UI on a traffic gateway in addition to the admin interface.'
+							: 'Add a traffic gateway to serve the UI outside the admin interface.'}
+					</p>
+				</div>
+				<div className="settings-row-control">
+					<Dropdown
+						ariaLabel="Public UI gateway"
+						value={draftGateway}
+						options={[{ value: noneGateway, label: 'None' }, ...gatewayOptions]}
+						disabled={update.isPending || !gatewayOptions.length}
+						onChange={setDraftGateway}
+					/>
+					{dirty ? (
+						<div className="button-row">
+							<ConfigDiffSaveActions
+								config={config.data}
+								diffTitle="UI gateway config diff"
+								saveLabel="Save UI gateway"
+								saving={update.isPending}
+								saveDisabled={!config.data}
+								onSave={() => (selectedGateway ? setConfirming(true) : save())}
+								applyDiff={applyUiGateway}
+							/>
+						</div>
+					) : null}
+				</div>
+			</Panel>
+			{update.isError ? (
+				<StatusBanner state="bad" title="Save failed">
+					{update.error.message}
+				</StatusBanner>
+			) : null}
+			{confirming ? (
+				<ConfirmDialog
+					title="Change UI gateway?"
+					destructive
+					confirmLabel="Save UI gateway"
+					onCancel={() => setConfirming(false)}
+					onConfirm={save}
+				>
+					<p>
+						The UI will no longer be served on <strong>{selectedGateway}</strong>. If you are
+						accessing the UI through that gateway, you will lose access to this page.
+					</p>
+					{draftGateway === noneGateway ? (
+						<p>
+							The UI will only be reachable on the admin interface, which listens on localhost by
+							default and may not be reachable when running in a container.
+						</p>
+					) : (
+						<p>
+							The UI will be served on <strong>{draftGateway}</strong> instead.
+						</p>
+					)}
+				</ConfirmDialog>
+			) : null}
+		</section>
+	);
+}
+
+function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
+	return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
+		const listeners = gateway.listeners ?? [];
+		if (!listeners.length) {
+			return [
+				{
+					value: name,
+					label: name,
+					description: gateway.port ? `Port ${gateway.port}` : undefined
+				}
+			];
+		}
+		return [
+			{
+				value: name,
+				label: `${name} (all listeners)`,
+				description: gatewayDescription(gateway)
+			},
+			...listeners.map((listener, index) => {
+				const listenerName = listener.name ?? `listener${index}`;
+				return {
+					value: `${name}/${listenerName}`,
+					label: `${name}/${listenerName}`,
+					description: listener.hostname || gatewayDescription(gateway)
+				};
+			})
+		];
+	});
+}
+
+function gatewayDescription(gateway: TrafficGateway) {
+	return gateway.port ? `Port ${gateway.port}` : undefined;
+}
+
+function firstGatewayRef(gateways: LocalUIConfig['gateways'] | undefined) {
+	if (Array.isArray(gateways)) return gateways[0];
+	return gateways;
+}
+
+function uiGateway(config: GatewayConfig | null | undefined) {
+	return firstGatewayRef(config?.ui?.gateways) ?? implicitDefaultUiGatewayRef(config);
+}
+
+function implicitDefaultUiGatewayRef(config: GatewayConfig | null | undefined) {
+	return config?.ui && config.gateways?.default ? 'default' : undefined;
+}
+
+function implicitDefaultUiGateway(config: GatewayConfig, gateway: string) {
+	return Boolean(config.gateways?.default) && gateway === 'default';
+}

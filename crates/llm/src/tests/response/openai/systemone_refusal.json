@@ -1,0 +1,8 @@
+{
+  "model": "gpt-6-luna",
+  "answers": [
+    {"type": "predicate", "name": "refund", "probability": 0.93},
+    {"type": "refusal", "name": "policy"}
+  ],
+  "usage": {"input_tokens": 212, "output_tokens": 0, "total_tokens": 212}
+}

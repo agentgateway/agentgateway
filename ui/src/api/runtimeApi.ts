@@ -23,6 +23,13 @@ export interface RuntimeInfo {
 		gatewayMode: 'standalone' | 'xds';
 		configStoreMode: 'file' | 'hybrid' | 'readOnly';
 	};
+	/** Standalone config reload state; mirrors the config_synchronized metric. */
+	configReload: {
+		/** False when the most recent reload failed and the runtime kept the previous config. */
+		synchronized: boolean;
+		/** Error of the most recent failed reload, if any. */
+		lastError: string | null;
+	};
 }
 
 export function getRuntimeInfo() {

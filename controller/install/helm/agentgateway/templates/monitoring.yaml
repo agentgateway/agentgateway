@@ -24,10 +24,28 @@ spec:
   namespaceSelector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  scrapeNativeHistograms: {{ .Values.monitoring.proxy.podMonitor.scrapeNativeHistograms }}
+  scrapeClassicHistograms: {{ .Values.monitoring.proxy.podMonitor.scrapeClassicHistograms }}
+  scrapeProtocols:
+    {{- if .Values.monitoring.proxy.podMonitor.scrapeNativeHistograms }}
+    - PrometheusProto
+    {{- end }}
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText1.0.0
+    - PrometheusText0.0.4
   podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
+    {{- with .Values.monitoring.proxy.podMonitor.relabelings }}
+    relabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.monitoring.proxy.podMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   {{- with .Values.monitoring.proxy.podMonitor.podTargetLabels }}
   podTargetLabels:
     {{- toYaml . | nindent 4 }}
@@ -52,10 +70,28 @@ spec:
   namespaceSelector:
     matchNames:
     - {{ .Release.Namespace }}
+  scrapeNativeHistograms: {{ .Values.monitoring.serviceMonitor.scrapeNativeHistograms }}
+  scrapeClassicHistograms: {{ .Values.monitoring.serviceMonitor.scrapeClassicHistograms }}
+  scrapeProtocols:
+    {{- if .Values.monitoring.serviceMonitor.scrapeNativeHistograms }}
+    - PrometheusProto
+    {{- end }}
+    - OpenMetricsText1.0.0
+    - OpenMetricsText0.0.1
+    - PrometheusText1.0.0
+    - PrometheusText0.0.4
   endpoints:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
+    {{- with .Values.monitoring.serviceMonitor.relabelings }}
+    relabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with .Values.monitoring.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 {{- end }}
 {{- if .Values.monitoring.grafanaDashboard.enabled }}
 ---

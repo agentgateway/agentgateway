@@ -36,12 +36,10 @@ on:
         type: string
 
 env:
-  # Disable the Go cache program injected by Blacksmith runners.
-  GOCACHEPROG: ""
   CARGO_TERM_COLOR: always
   CI: true
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
   VEX_FILE: .github/vex/openvex.json

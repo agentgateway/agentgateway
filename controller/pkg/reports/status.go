@@ -355,21 +355,14 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		newStatus.Parents = append(newStatus.Parents, routeParentStatus)
 	}
 
-	// now we have a status object reflecting the state of translation according to our reportMap
-	// let's add status from other controllers on the current object status
-	var kgwStatus = &newStatus
-	for _, rps := range existingStatus.Parents {
-		if rps.ControllerName != gwv1.GatewayController(controller) {
-			kgwStatus.Parents = append(kgwStatus.Parents, rps)
-		}
-	}
-
-	// sort all parents for consistency with Equals and for Update
-	// match sorting semantics of istio/istio, see:
-	// https://github.com/istio/istio/blob/6dcaa0206bcaf20e3e3b4e45e9376f0f96365571/pilot/pkg/config/kube/gateway/conditions.go#L188-L193
-	slices.SortStableFunc(kgwStatus.Parents, func(a, b gwv1.RouteParentStatus) int {
-		return strings.Compare(ParentString(a.ParentRef), ParentString(b.ParentRef))
-	})
+	// Keep existing entries, ours and other controllers', in their current positions so the desired order
+	// matches what the status syncer writes. Only entries new to the object are sorted and appended.
+	ours := gwv1.GatewayController(controller)
+	newStatus.Parents = MergeOwnedStatuses(existingStatus.Parents, newStatus.Parents,
+		func(p gwv1.RouteParentStatus) bool { return p.ControllerName == ours },
+		func(a, b gwv1.RouteParentStatus) bool { return CompareParentReference(a.ParentRef, b.ParentRef) == 0 },
+		func(a, b gwv1.RouteParentStatus) int { return CompareParentReference(a.ParentRef, b.ParentRef) },
+	)
 	if newStatus.Parents == nil {
 		// Kubernetes will not let us send "nil", so we need an empty
 		newStatus.Parents = []gwv1.RouteParentStatus{}

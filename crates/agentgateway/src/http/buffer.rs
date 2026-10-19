@@ -66,7 +66,7 @@ impl Buffer {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
 			},
 		}
-		// Preserve an unset limit so LLM processing can apply its own default later.
+		// Explicit policy limits override the request's default.
 		if let Some(limit) = request.max_bytes {
 			req
 				.extensions_mut()

@@ -179,7 +179,7 @@ impl crate::types::ResponseType for Response {
 		serde_json::to_vec(self)
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {}
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {}
 }
 
 /// Parse a rerank response, accepting either Cohere's `results` or Voyage's `data` key.

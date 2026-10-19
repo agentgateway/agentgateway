@@ -200,7 +200,9 @@ pub mod from_messages {
 		}
 
 		let output_config = output_config.unwrap_or_default();
-		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort) {
+		if crate::conversion::supports_reasoning_effort(&model)
+			&& let Some(reasoning) = translate_reasoning(thinking, output_config.effort)
+		{
 			rest.insert(
 				"reasoning".to_string(),
 				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
@@ -735,6 +737,7 @@ pub mod from_messages {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
@@ -873,7 +876,6 @@ pub mod from_messages {
 			index: Option<usize>,
 			id: Option<String>,
 			name: Option<String>,
-			arguments: String,
 			emitted_arguments: bool,
 			open: bool,
 		}
@@ -930,6 +932,7 @@ pub mod from_messages {
 						stop_reason: None,
 						stop_sequence: None,
 						usage: messages::Usage {
+							cache_creation: None,
 							input_tokens: 0,
 							output_tokens: 0,
 							cache_creation_input_tokens: None,
@@ -1349,9 +1352,11 @@ pub mod from_messages {
 							Some(delta.item_id.clone()),
 							None,
 						);
-						let block = state.tool_blocks.entry(delta.output_index).or_default();
-						block.arguments.push_str(&delta.delta);
-						block.emitted_arguments = true;
+						state
+							.tool_blocks
+							.entry(delta.output_index)
+							.or_default()
+							.emitted_arguments = true;
 						record_token(&mut state, &log);
 						push_event(
 							&mut events,
@@ -1373,9 +1378,6 @@ pub mod from_messages {
 							done.name.clone(),
 						);
 						let block = state.tool_blocks.entry(done.output_index).or_default();
-						if block.arguments.is_empty() {
-							block.arguments = done.arguments.clone();
-						}
 						if !block.emitted_arguments && !done.arguments.is_empty() {
 							block.emitted_arguments = true;
 							record_token(&mut state, &log);
@@ -1446,9 +1448,6 @@ pub mod from_messages {
 								Some(call.name.clone()),
 							);
 							let block = state.tool_blocks.entry(done.output_index).or_default();
-							if block.arguments.is_empty() {
-								block.arguments = call.arguments.clone();
-							}
 							if !block.emitted_arguments && !call.arguments.is_empty() {
 								block.emitted_arguments = true;
 								push_event(
@@ -1567,6 +1566,8 @@ pub mod from_messages {
 					responses::ResponseStreamEvent::ResponseInProgress(_) => {},
 					// Text finalization is handled by ResponseContentPartDone.
 					responses::ResponseStreamEvent::ResponseOutputTextDone(_) => {},
+					responses::ResponseStreamEvent::ResponseReasoningTextDelta(_)
+					| responses::ResponseStreamEvent::ResponseReasoningTextDone(_) => {},
 				},
 			}
 			if state.failed {
@@ -1609,6 +1610,7 @@ pub mod from_messages {
 	) -> messages::Usage {
 		let Some(usage) = usage else {
 			return messages::Usage {
+				cache_creation: None,
 				input_tokens: 0,
 				output_tokens: 0,
 				cache_creation_input_tokens: None,
@@ -1625,6 +1627,7 @@ pub mod from_messages {
 			.checked_sub(0)
 			.filter(|tokens| *tokens > 0);
 		messages::Usage {
+			cache_creation: None,
 			input_tokens: (usage.input_tokens as usize)
 				.saturating_sub(cache_creation_input_tokens.unwrap_or_default())
 				.saturating_sub(cache_read_input_tokens.unwrap_or_default()),
@@ -1640,6 +1643,7 @@ pub mod from_messages {
 	) -> messages::MessageDeltaUsage {
 		let usage = translate_usage(usage, None);
 		messages::MessageDeltaUsage {
+			cache_creation: None,
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,

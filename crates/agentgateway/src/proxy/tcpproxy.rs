@@ -99,6 +99,11 @@ impl TCPProxy {
 			connection
 		};
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
+		if let Some(actor) = connection.ext::<http::substrate::ActorIdentity>() {
+			log.ate_actor_name = Some(actor.actor_name.clone());
+			log.ate_actor_uid = actor.actor_uid.clone();
+			log.ate_atespace = Some(actor.atespace.clone());
+		}
 		let sni = log
 			.tls_info
 			.as_ref()
@@ -190,14 +195,24 @@ impl TCPProxy {
 			.ext::<WaypointService>()
 			.map(|_| crate::client::HboneSourceRole::Waypoint)
 			.or(Some(crate::client::HboneSourceRole::Gateway));
-		let mut backend_call = Self::build_backend_call(
-			&mut Some(log),
-			Some(&destination),
-			&inputs,
-			&selected_backend.backend.backend,
-			backend_policies,
-			hbone_source,
-		)?;
+		let mut backend_call =
+			if let Some(target) = connection.ext::<httpproxy::DynamicBackendOverride>() {
+				if !matches!(selected_backend.backend.backend, Backend::Dynamic(_, _)) {
+					return Err(ProxyError::SubstrateEgressDenied(
+						"substrate egress requires a dynamic TCP route backend".to_owned(),
+					));
+				}
+				BackendCall::new(target.0.clone(), backend_policies)
+			} else {
+				Self::build_backend_call(
+					&mut Some(log),
+					Some(&destination),
+					&inputs,
+					&selected_backend.backend.backend,
+					backend_policies,
+					hbone_source,
+				)?
+			};
 		if let Some(tunnel) = backend_call.backend_policies.tunnel.clone() {
 			backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(
 				&mut Some(log),

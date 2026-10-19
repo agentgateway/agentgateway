@@ -8,10 +8,15 @@ WD=$(cd "$(dirname "$0")"; pwd)
 
 if [ -n "${GOCACHEPROG:-}" ]; then
   # Keep each package's executable, preserving its name for generated-code headers.
-  TOOL="$WD/.bin/$1"
-  mkdir -p "$(dirname "$TOOL")" || exit 1
-  # Let Go validate build inputs and reuse cached compilation/linking results.
-  (cd "$WD" && go build -o "$TOOL" "$1") || exit $?
+  # Key the path on the tool versions so bumps trigger a rebuild.
+  VERSION=$(cat "$WD/go.mod" "$WD/go.sum" | cksum | cut -d' ' -f1)
+  TOOL="$WD/.bin/$VERSION/$1"
+  if [ ! -x "$TOOL" ]; then
+    mkdir -p "$(dirname "$TOOL")" || exit 1
+    # Build to a temporary path so concurrent callers never exec a partial binary.
+    (cd "$WD" && go build -o "$TOOL.$$" "$1") || exit $?
+    mv -f "$TOOL.$$" "$TOOL" || exit 1
+  fi
 else
   TOOL=$(cd "$WD"; go tool -n "$1") || exit $?
 fi

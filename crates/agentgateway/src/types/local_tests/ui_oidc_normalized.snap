@@ -64,6 +64,7 @@ listener_routes:
                 encoder: aes
               scopes:
                 - openid
+              credentials: sessionOrBearer
         key: gateway/default/ui
         matches:
           - path:

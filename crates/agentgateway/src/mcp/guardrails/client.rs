@@ -18,7 +18,7 @@ use crate::mcp::guardrails::wire::{
 	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
 };
 use crate::mcp::guardrails::{
-	FailureMode, HeaderFilter, McpGuardrailsDynamicMetadata, Outcome, Remote,
+	FailureMode, HeaderFilter, MCPBody, McpGuardrailsDynamicMetadata, Outcome, Remote,
 };
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
@@ -32,14 +32,23 @@ fn with_default_timeout<T>(msg: T) -> tonic::Request<T> {
 	req
 }
 
-pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
+pub(crate) async fn check_request<P: serde::Serialize + serde::de::DeserializeOwned>(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
-	body: Option<&mut Bytes>,
+	body: &mut MCPBody<'_, P>,
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<P> {
+	let body = match body.wire() {
+		Ok(body) => body,
+		Err(e) => {
+			return Outcome::Reject(ErrorData::internal_error(
+				format!("mcpGuardrails: serialize params: {e}"),
+				None,
+			));
+		},
+	};
 	let mcp_request = body.as_deref().cloned();
 	let metadata_context = build_metadata(&remote.metadata, req_ctx);
 	let headers = collect_headers(&remote.request_headers, &req_ctx.request);
@@ -210,10 +219,20 @@ pub(crate) async fn check_response(
 	remote: &Remote,
 	method: &str,
 	backends: &[String],
-	body: &mut Bytes,
+	body: &mut MCPBody<'_, ServerResult>,
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<ServerResult> {
+	let body = match body.wire() {
+		Ok(Some(body)) => body,
+		Ok(None) => unreachable!("response guardrails always have a result"),
+		Err(e) => {
+			return Outcome::Reject(ErrorData::internal_error(
+				format!("mcpGuardrails: serialize result: {e}"),
+				None,
+			));
+		},
+	};
 	let mcp_response = body.clone();
 	let metadata_context = (!remote.metadata.is_empty())
 		.then(|| build_metadata(&remote.metadata, req_ctx))
@@ -335,7 +354,7 @@ fn collect_headers(
 // mcpGuardrails authorization outcomes that have no standard JSON-RPC/MCP code map to
 // application-defined codes in the server-error range (-32000..=-32099).
 // -32002 is intentionally skipped: rmcp assigns it to RESOURCE_NOT_FOUND.
-const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
+pub(super) const PERMISSION_DENIED: ErrorCode = ErrorCode(-32001);
 
 fn translate_error(method: &str, backends: &[String], e: AuthorizationError) -> ErrorData {
 	use wire::authorization_error::Code as C;
