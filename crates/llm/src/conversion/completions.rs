@@ -188,6 +188,14 @@ pub mod from_messages {
 		if let Some(text) = choice.message.content {
 			content.push(messages::ContentBlock::text(text));
 		}
+		let (refusal, explanation) = split_refusal(choice.message.refusal, choice.finish_reason);
+		if let Some(text) = &refusal {
+			content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: text.clone(),
+				citations: None,
+				cache_control: None,
+			}));
+		}
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
 				completions::MessageToolCalls::Function(f) => {
@@ -220,6 +228,9 @@ pub mod from_messages {
 		if stop_sequence.is_some() {
 			stop_reason = messages::StopReason::StopSequence;
 		}
+		if refusal.is_some() {
+			stop_reason = messages::StopReason::Refusal;
+		}
 
 		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
 			u.prompt_tokens_details
@@ -239,6 +250,8 @@ pub mod from_messages {
 			content,
 			stop_reason: Some(stop_reason),
 			stop_sequence,
+			stop_details: (stop_reason == messages::StopReason::Refusal)
+				.then(|| messages::StopDetails::refusal(explanation)),
 			usage: messages::Usage {
 				input_tokens: usage
 					.as_ref()
@@ -300,6 +313,9 @@ pub mod from_messages {
 			pending_tool_calls: HashMap<u32, PendingToolCall>,
 			pending_stop_reason: Option<messages::StopReason>,
 			pending_stop_sequence: Option<String>,
+			pending_stop_details: Option<messages::StopDetails>,
+			refusal_sent_as_text: bool,
+			pending_refusal: String,
 			pending_usage: Option<completions::Usage>,
 		}
 
@@ -529,6 +545,7 @@ pub mod from_messages {
 					delta: messages::MessageDelta {
 						stop_reason: Some(stop_reason),
 						stop_sequence: state.pending_stop_sequence.take(),
+						stop_details: state.pending_stop_details.take(),
 					},
 					usage: messages::MessageDeltaUsage {
 						input_tokens: Some(input_tokens),
@@ -572,6 +589,30 @@ pub mod from_messages {
 			}
 		}
 
+		fn flush_refusal_as_text(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			log: &StreamingUsageGuard,
+		) {
+			if state.pending_refusal.is_empty() {
+				return;
+			}
+			if !std::mem::replace(&mut state.refusal_sent_as_text, true) {
+				close_text_block(state, events);
+			}
+			let index = open_text_block(state, events);
+			maybe_set_first_token(state, log);
+			push_event(
+				events,
+				messages::MessagesStreamEvent::ContentBlockDelta {
+					index,
+					delta: messages::ContentBlockDelta::TextDelta {
+						text: std::mem::take(&mut state.pending_refusal),
+					},
+				},
+			);
+		}
+
 		let mut state = StreamState::default();
 
 		crate::parse::sse::json_transform_multi::<
@@ -581,8 +622,12 @@ pub mod from_messages {
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
-				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
+				SseJsonEvent::Eof | SseJsonEvent::Error => {
+					flush_refusal_as_text(&mut state, &mut events, &log);
+					return events;
+				},
 				SseJsonEvent::Done => {
+					flush_refusal_as_text(&mut state, &mut events, &log);
 					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;
 				},
@@ -649,6 +694,12 @@ pub mod from_messages {
 									},
 								},
 							);
+						}
+						if let Some(refusal) = &choice.delta.refusal {
+							state.pending_refusal.push_str(refusal);
+							if state.refusal_sent_as_text || state.pending_refusal.len() > buffer_limit {
+								flush_refusal_as_text(&mut state, &mut events, &log);
+							}
 						}
 
 						if let Some(tool_calls) = &choice.delta.tool_calls {
@@ -726,6 +777,18 @@ pub mod from_messages {
 								stop_reason = messages::StopReason::StopSequence;
 								state.pending_stop_sequence = Some(seq);
 							}
+							let explanation = if *finish_reason == completions::FinishReason::ContentFilter {
+								Some(std::mem::take(&mut state.pending_refusal)).filter(|r| !r.is_empty())
+							} else {
+								flush_refusal_as_text(&mut state, &mut events, &log);
+								None
+							};
+							if state.refusal_sent_as_text {
+								stop_reason = messages::StopReason::Refusal;
+							}
+							if stop_reason == messages::StopReason::Refusal {
+								state.pending_stop_details = Some(messages::StopDetails::refusal(explanation));
+							}
 							state.pending_stop_reason = Some(stop_reason);
 						}
 					}
@@ -737,6 +800,20 @@ pub mod from_messages {
 			}
 			events
 		})
+	}
+
+	/// A refusal is the model's own reply, so Messages shows it as text. With `content_filter` it
+	/// instead explains why a filter blocked the reply, which Messages puts in `stop_details`
+	fn split_refusal(
+		refusal: Option<String>,
+		finish: Option<completions::FinishReason>,
+	) -> (Option<String>, Option<String>) {
+		let refusal = refusal.filter(|r| !r.is_empty());
+		if finish == Some(completions::FinishReason::ContentFilter) {
+			(None, refusal)
+		} else {
+			(refusal, None)
+		}
 	}
 
 	fn normalized_error_type(status: ::http::StatusCode, error_type: Option<&str>) -> &str {

@@ -499,6 +499,114 @@ data: [DONE]
 	}
 }
 
+mod refusal_streaming {
+	use agent_http::Body;
+	use http_body_util::BodyExt;
+	use serde_json::{Value, json};
+
+	use super::super::from_messages;
+	use crate::{LogContentFields, StreamingUsageGuard};
+
+	async fn messages_events(input: &str, buffer_limit: usize) -> Vec<Value> {
+		let body = from_messages::translate_stream(
+			Body::from(input.to_string()),
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		);
+		let bytes = body.collect().await.unwrap().to_bytes();
+		String::from_utf8(bytes.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.map(|data| serde_json::from_str(data).unwrap())
+			.collect()
+	}
+
+	fn refusal_chunk(refusal: &str) -> String {
+		format!(
+			"data: {}\n\n",
+			json!({"id":"c","model":"m","choices":[{"index":0,"delta":{"refusal":refusal}}]})
+		)
+	}
+
+	const FILTERED: &str = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+
+	/// Refusal text past the stream's buffer limit goes out as text rather than being held for
+	/// `stop_details`, and then isn't repeated there
+	#[tokio::test]
+	async fn a_long_streamed_refusal_is_sent_as_text_once() {
+		let part = "x".repeat(600);
+		let input = [
+			refusal_chunk(&part),
+			refusal_chunk(&part),
+			refusal_chunk(&part),
+		]
+		.concat()
+			+ FILTERED;
+		let events = messages_events(&input, 1024).await;
+		let text: String = events
+			.iter()
+			.filter_map(|e| e["delta"]["text"].as_str())
+			.collect();
+		assert_eq!(text, part.repeat(3));
+		let end = events
+			.iter()
+			.find(|e| e["type"] == "message_delta")
+			.unwrap();
+		assert_eq!(end["delta"]["stop_reason"], "refusal");
+		assert_eq!(end["delta"]["stop_details"]["explanation"], Value::Null);
+	}
+
+	#[tokio::test]
+	async fn a_streamed_model_refusal_follows_the_text_in_its_own_block() {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi. "}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"refusal":"I can't help "}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"refusal":"with that."}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = messages_events(input, 1024 * 1024).await;
+		let text = |index: u64| -> String {
+			events
+				.iter()
+				.filter(|e| e["index"] == index)
+				.filter_map(|e| e["delta"]["text"].as_str())
+				.collect()
+		};
+		assert_eq!(text(0), "Hi. ");
+		assert_eq!(text(1), "I can't help with that.");
+		let end = events
+			.iter()
+			.find(|e| e["type"] == "message_delta")
+			.unwrap();
+		assert_eq!(end["delta"]["stop_reason"], "refusal");
+	}
+
+	#[rstest::rstest]
+	#[case::done("data: [DONE]\n\n")]
+	#[case::eof("")]
+	#[tokio::test]
+	async fn a_held_refusal_survives_a_stream_that_ends_early(#[case] ending: &str) {
+		let input = refusal_chunk("I can't help ") + &refusal_chunk("with that.") + ending;
+		let events = messages_events(&input, 1024 * 1024).await;
+		let text: String = events
+			.iter()
+			.filter_map(|e| e["delta"]["text"].as_str())
+			.collect();
+		assert_eq!(text, "I can't help with that.");
+	}
+}
+
 mod usage_reporting_streaming {
 	use crate::types::completions::typed as completions;
 

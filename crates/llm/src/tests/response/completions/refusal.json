@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl_refusal",
+  "object": "chat.completion",
+  "created": 123,
+  "model": "gpt-5.6-luna",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": { "role": "assistant", "content": null, "refusal": "I'm sorry, I can't help with that." }
+    }
+  ],
+  "usage": { "prompt_tokens": 12, "completion_tokens": 9, "total_tokens": 21 }
+}

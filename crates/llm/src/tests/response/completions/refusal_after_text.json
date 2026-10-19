@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl_partial_refusal",
+  "object": "chat.completion",
+  "created": 123,
+  "model": "gpt-5.6-luna",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": { "role": "assistant", "content": "Here is the summary.", "refusal": "I can't include the second part." }
+    }
+  ],
+  "usage": { "prompt_tokens": 12, "completion_tokens": 13, "total_tokens": 25 }
+}
