@@ -428,8 +428,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 
 // portProtocol is the state accumulated for one port from the listeners accepted on it so far.
 type portProtocol struct {
-	// hostnames are the served hostnames already claimed on this port, independent of
-	// allowed route namespaces. A listener without a hostname claims "*".
+	// hostnames are the keys already claimed on this port; a later listener claiming any of
+	// them conflicts. Keys are bare listener hostnames, independent of allowed route namespaces:
+	//   - SNI ports (HTTPS/TLS): the bare listener hostname, e.g. "foo.example.com" or "*".
+	//     The listener is chosen from the TLS ClientHello, which carries no namespace, so two
+	//     listeners with the same hostname are indistinguishable regardless of allowedRoutes.
+	//   - Other ports: also the bare listener hostname, not the
+	//     "<allowed route namespace>/<hostname>" entries from buildHostnameMatch.
+	//     allowedRoutes controls route attachment, not which listener receives traffic.
 	hostnames sets.String
 	// protocol is the protocol of the first listener accepted on this port.
 	protocol gwv1.ProtocolType
@@ -462,7 +468,8 @@ func usesSNI(p gwv1.ProtocolType) bool {
 //  2. Protocol differs, unless both are HTTPS/TLS           -> ListenerConflictProtocol
 //  3. Hostname already claimed (see portProtocol.hostnames) -> ListenerConflictHostname
 func validateListenerConflicts(listeners []*GatewayListener) {
-	// Precompute the final size to avoid incremental sizing.
+	// Count how many hostname keys each port will hold so each set is allocated once at its
+	// final size: one bare hostname per listener, regardless of protocol or allowed namespaces.
 	hostnameCounts := make(map[gwv1.PortNumber]int)
 	for _, listener := range listeners {
 		hostnameCounts[listener.ParentInfo.Port]++
@@ -470,6 +477,8 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for i, listener := range listeners {
 		pi := &listener.ParentInfo
+		// The served hostname key. A listener without a hostname matches any host (any SNI
+		// on HTTPS/TLS ports), so it claims "*".
 		hostname := pi.OriginalHostname
 		if hostname == "" {
 			hostname = "*"
@@ -485,6 +494,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 				// Different protocols cannot share a bind, except HTTPS with TLS.
 				conflict = ListenerConflictProtocol
 			} else if p.hostnames.Contains(hostname) {
+				// Hostnames must be unique across the port, regardless of namespace.
 				conflict = ListenerConflictHostname
 			} else {
 				p.hostnames.Insert(hostname)
