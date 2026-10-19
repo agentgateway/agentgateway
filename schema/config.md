@@ -6969,7 +6969,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendPolicies>.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7026,6 +7026,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendPolicies>.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<BackendPolicies>.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<BackendPolicies>.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7093,6 +7094,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendPolicies>.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<BackendPolicies>.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<BackendPolicies>.backendAuth.credentials`|[]object||
 |`<BackendPolicies>.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendPolicies>.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -7269,7 +7271,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.mode`|enum|How requests are sent through the proxy.<br>Possible values: `auto`, `connect`.|
 |`<BackendAuth>.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`<BackendAuth>.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<BackendAuth>.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<BackendAuth>.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendAuth>.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7326,6 +7328,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendAuth>.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendAuth>.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<BackendAuth>.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<BackendAuth>.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<BackendAuth>.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<BackendAuth>.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7495,6 +7498,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<BackendAuth>.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<BackendAuth>.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<BackendAuth>.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<BackendAuth>.credentials`|[]object||
 |`<BackendAuth>.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<BackendAuth>.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -7646,7 +7650,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7703,6 +7707,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -7770,6 +7775,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].webhook.target.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -7934,7 +7940,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -7991,6 +7997,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8058,6 +8065,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].openAIModeration.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -8216,7 +8224,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8273,6 +8281,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8340,6 +8349,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -8498,7 +8508,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8555,6 +8565,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8622,6 +8633,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -8778,7 +8790,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -8835,6 +8847,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -8902,6 +8915,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.request[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -9082,7 +9096,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9139,6 +9153,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9206,6 +9221,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].webhook.target.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -9372,7 +9388,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9429,6 +9445,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9496,6 +9513,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -9654,7 +9672,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9711,6 +9729,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9778,6 +9797,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].googleModelArmor.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|
@@ -9934,7 +9954,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.policies`|any|Backend policies used when connecting to the service.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
-|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`, `clientCredentials`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken`|object|Where the subject token is read from, and its token type. Defaults to the<br>Authorization Bearer header with token type access_token.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source`|object|Where the token is read from in the incoming request. The CEL `expression`<br>source is permitted (extraction only).<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.subjectToken.source.header`|object|Read the credential from an HTTP header.|
@@ -9991,6 +10011,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess`|object|Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider`|object|The user's IdP authorization server, used for the RFC 8693 token exchange.<br>Exactly one of service, host, or backend may be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.identityProvider.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -10058,6 +10079,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache`|object|Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s<br>TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.maxEntries`|integer|Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.defaultTtl`|string|TTL used when the token endpoint omits `expires_in`. Defaults to 300s.|
+|`<Guardrails>.response[].azureContentSafety.policies.backendAuth.crossAppAccess.cache.backgroundRefresh`|boolean|Serve the cached token while a near-expiry entry is re-minted in the background,<br>so no request blocks on the refresh. Off by default.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials`|[]object||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location`|object|Where the credential is inserted on the backend request.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.credentials[].location.header`|object|Read the credential from an HTTP header.|

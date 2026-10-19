@@ -177,13 +177,16 @@ impl OAuthTokenExchangeAuth {
 		if !self.path.is_empty() && !self.path.starts_with('/') {
 			return Err(format!("path {:?} must start with /", self.path));
 		}
-		if self.grant_type == OAuthGrantType::JwtBearer {
+		if self.grant_type != OAuthGrantType::TokenExchange {
 			if self.requested_token_type.is_some() {
 				return Err("requested_token_type is only valid with the token-exchange grant".into());
 			}
 			if self.actor_token.is_some() {
 				return Err("actor_token is only valid with the token-exchange grant".into());
 			}
+		}
+		if self.grant_type == OAuthGrantType::ClientCredentials && self.client_auth.is_none() {
+			return Err("client_auth is required with the client-credentials grant".into());
 		}
 		if let Some(actor_token) = &self.actor_token {
 			actor_token.validate_load()?;
@@ -252,6 +255,7 @@ impl OAuthTokenExchangeAuth {
 		let grant_type = match GrantType::try_from(t.grant_type) {
 			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
 			Ok(GrantType::JwtBearer) => OAuthGrantType::JwtBearer,
+			Ok(GrantType::ClientCredentials) => OAuthGrantType::ClientCredentials,
 			Err(_) => return Err(ProtoError::EnumParse("unknown oauth grant type".into())),
 		};
 
@@ -325,7 +329,7 @@ impl OAuthTokenExchangeAuth {
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
 			OAuthGrantType::TokenExchange => self.requested_token_type.clone(),
-			OAuthGrantType::JwtBearer => None,
+			OAuthGrantType::JwtBearer | OAuthGrantType::ClientCredentials => None,
 		}
 	}
 
@@ -342,6 +346,16 @@ impl OAuthTokenExchangeAuth {
 	}
 
 	fn build_exchange_request(&self, req: &Request) -> Result<ExchangeRequest, ProxyError> {
+		if self.grant_type == OAuthGrantType::ClientCredentials {
+			// RFC 6749 §4.4 sends no incoming token; only the configured
+			// additional_params vary per request. With no subject token the cache
+			// key is constant, so one minted token is shared across callers.
+			let extra_params = self.evaluate_additional_params(req).map_err(|e| {
+				debug!("oauth client credentials additional parameter evaluation failed: {e}");
+				ProxyError::InvalidRequest
+			})?;
+			return Ok(ExchangeRequest::client_credentials(extra_params));
+		}
 		// Extract everything up front so a bad request fails before we touch it.
 		let subject_token =
 			extract_subject_token(&self.subject_token.source, req).ok_or_else(|| {
@@ -409,6 +423,11 @@ pub enum OAuthGrantType {
 	TokenExchange,
 	/// RFC 7523; the subject token is sent as the `assertion`.
 	JwtBearer,
+	/// RFC 6749 §4.4 client credentials. No incoming subject token is used; the
+	/// gateway authenticates as itself with the configured `client_auth` and mints
+	/// a backend token independent of the caller. The minted token is shared across
+	/// callers and refreshed from the token endpoint's `expires_in`.
+	ClientCredentials,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -530,6 +549,10 @@ struct TokenCacheConfig {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	default_ttl: Option<Duration>,
+	/// Serve the cached token while a near-expiry entry is re-minted in the background,
+	/// so no request blocks on the refresh. Off by default.
+	#[serde(default)]
+	background_refresh: bool,
 }
 
 impl TokenCacheConfig {
@@ -543,7 +566,11 @@ impl TokenCacheConfig {
 			.default_ttl
 			.filter(|d| !d.is_zero())
 			.unwrap_or(cache::DEFAULT_CACHE_TTL);
-		Some(InMemoryTokenCache::new(max_entries, default_ttl))
+		Some(InMemoryTokenCache::new(
+			max_entries,
+			default_ttl,
+			self.background_refresh,
+		))
 	}
 }
 
@@ -575,6 +602,7 @@ fn token_cache_config_from_proto(
 		default_ttl: in_memory
 			.default_ttl
 			.and_then(|d| Duration::try_from(d).ok()),
+		background_refresh: in_memory.background_refresh,
 	})
 }
 
@@ -725,6 +753,15 @@ impl ExchangeRequest {
 			..Default::default()
 		}
 	}
+
+	/// RFC 6749 §4.4: no subject or actor token, so the cache key depends only on
+	/// `extra_params` and is constant for a fixed configuration.
+	fn client_credentials(extra_params: Vec<(String, String)>) -> Self {
+		Self {
+			extra_params,
+			..Default::default()
+		}
+	}
 }
 
 pub(super) async fn apply_token_exchange(
@@ -869,9 +906,13 @@ async fn fetch_token(
 ) -> Result<SecretString, FetchError> {
 	let result = match auth.cache.as_ref() {
 		Some(cache) => {
-			cache
+			let (result, needs_refresh) = cache
 				.get_or_insert_with(&req, || fetch_token_uncached(client, auth, &req))
-				.await?
+				.await?;
+			if needs_refresh {
+				spawn_background_refresh(client.clone(), auth.clone(), req.clone(), cache.clone());
+			}
+			result
 		},
 		None => {
 			let transport::TokenEndpointResponse { access_token, .. } =
@@ -886,6 +927,27 @@ async fn fetch_token(
 		TokenCacheResult::Miss(_) => trace!("token exchange succeeded"),
 	}
 	Ok(result.into_token())
+}
+
+/// Re-mint a cached token out of band so no request blocks on the refresh. The cache
+/// already served the still-valid token and elected this one caller; on success we
+/// replace the entry, on failure we release the in-flight flag so a later request
+/// retries (the still-valid entry keeps being served until then).
+fn spawn_background_refresh(
+	client: PolicyClient,
+	auth: OAuthTokenExchangeAuth,
+	req: ExchangeRequest,
+	cache: InMemoryTokenCache,
+) {
+	tokio::spawn(async move {
+		match fetch_token_uncached(&client, &auth, &req).await {
+			Ok(response) => cache.store_refreshed(&req, response),
+			Err(e) => {
+				debug!("oauth background token refresh failed: {e}");
+				cache.clear_refreshing(&req);
+			},
+		}
+	});
 }
 
 async fn fetch_token_uncached(
