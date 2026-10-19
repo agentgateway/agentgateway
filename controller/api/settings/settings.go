@@ -3,6 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/kelseyhightower/envconfig"
@@ -151,6 +152,12 @@ const (
 )
 
 type Settings struct {
+	// AdminBindAddress is an IP address or the literal localhost, without a port (always 9095).
+	// Defaults to localhost. A non-loopback bind exposes pprof heap/goroutine data,
+	// log-level control and KRT snapshots to anyone who can reach the pod. Use
+	// NetworkPolicy and enable this only in performance or debug environments.
+	AdminBindAddress string `split_words:"true" default:"localhost"`
+
 	// Controls the DnsLookupFamily for all static clusters created via Backend resources.
 	// If not set, agentgateway will default to "V4_PREFERRED". Note that this is different
 	// from the Envoy default of "AUTO", which is effectively "V6_PREFERRED".
@@ -281,6 +288,9 @@ func BuildSettings() (*Settings, error) {
 	settings := &Settings{}
 	if err := envconfig.Process("AGW", settings); err != nil {
 		return settings, err
+	}
+	if settings.AdminBindAddress != "localhost" && net.ParseIP(settings.AdminBindAddress) == nil {
+		return settings, fmt.Errorf("invalid AGW_ADMIN_BIND_ADDRESS %q: expected an IP address or the literal localhost without a port", settings.AdminBindAddress)
 	}
 	return settings, nil
 }

@@ -122,6 +122,47 @@ func TestImageTagVPrefix(t *testing.T) {
 	}
 }
 
+func TestAdminBindAddress(t *testing.T) {
+	t.Parallel()
+	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name    string
+		setArgs []string
+		address string
+	}{
+		{name: "default"},
+		{
+			// Remove the new map to reproduce values retained from an older chart
+			// by helm upgrade --reuse-values.
+			name:    "missing adminServer",
+			setArgs: []string{"--set", "controller.adminServer=null"},
+		},
+		{
+			name:    "IPv4 wildcard",
+			setArgs: []string{"--set-string", "controller.adminServer.bindAddress=0.0.0.0"},
+			address: "0.0.0.0",
+		},
+		{
+			name:    "IPv6 wildcard",
+			setArgs: []string{"--set-string", "controller.adminServer.bindAddress=::"},
+			address: "::",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args := append([]string{"template", "test-release", chartPath}, tc.setArgs...)
+			output, err := helmCommand(t, args...).CombinedOutput()
+			require.NoError(t, err, "%s", output)
+			if tc.address == "" {
+				require.NotContains(t, string(output), "AGW_ADMIN_BIND_ADDRESS")
+			} else {
+				require.Contains(t, string(output), "- name: AGW_ADMIN_BIND_ADDRESS\n              value: \""+tc.address+"\"")
+			}
+		})
+	}
+}
+
 // extractImageLines extracts lines containing "image:" from the output for debugging
 func extractImageLines(output string) string {
 	var lines []string
