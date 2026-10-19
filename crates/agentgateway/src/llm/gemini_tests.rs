@@ -7,8 +7,9 @@ use serde_json::Value;
 use crate::http::Body;
 use crate::llm::policy::Policy;
 use crate::llm::{
-	AIError, AIProvider, CacheTokenConvention, InputFormat, LLMRequest, ProviderState, RequestResult,
-	RouteType, anthropic, bedrock, gemini, openai, vertex,
+	AIError, AIProvider, CacheTokenConvention, ChatFormat, ChatRequestContext, ChatTranslation,
+	InputFormat, LLMRequest, ProviderState, RequestResult, RouteType, anthropic, bedrock, gemini,
+	openai, types, vertex,
 };
 use crate::types::agent::Target;
 
@@ -1082,4 +1083,166 @@ async fn gemini_count_tokens_requires_a_gemini_upstream() {
 		.expect_err("countTokens must not reach a non-Gemini upstream");
 	assert!(matches!(err, AIError::UnsupportedConversion(_)), "{err}");
 	assert!(err.to_string().contains("GeminiCountTokens"), "{err}");
+}
+
+// ── signature carriers on other providers ───────────────────────────────────
+
+const CARRIER: &str =
+	r#"agentgateway.gemini.thought-signature.v1:{"call_id":"call_1","signature":"c2ln"}"#;
+
+fn bedrock_provider() -> AIProvider {
+	AIProvider::Bedrock(crate::llm::BedrockProvider::new(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	}))
+}
+
+fn messages_history() -> types::ChatRequest {
+	types::ChatRequest::Messages(
+		serde_json::from_value(serde_json::json!({
+			"model": "m",
+			"max_tokens": 64,
+			"messages": [
+				{"role": "user", "content": "weather?"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "", "signature": CARRIER},
+					{"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {}}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "call_1", "content": "sunny"}
+				]},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "checked", "signature": "real-signature"},
+					{"type": "text", "text": "Sunny."}
+				]},
+				{"role": "user", "content": "thanks"}
+			]
+		}))
+		.unwrap(),
+	)
+}
+
+fn responses_history() -> types::ChatRequest {
+	types::ChatRequest::Responses(
+		serde_json::from_value(serde_json::json!({
+			"model": "m",
+			"input": [
+				{"role": "user", "content": "weather?"},
+				{"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": CARRIER},
+				{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"},
+				{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
+				{"type": "reasoning", "id": "rs_2", "summary": [], "encrypted_content": "real-signature"},
+				{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Sunny."}]},
+				{"role": "user", "content": "thanks"}
+			]
+		}))
+		.unwrap(),
+	)
+}
+
+#[rstest::rstest]
+#[case::messages_to_anthropic(
+	messages_history(),
+	ChatFormat::AnthropicMessages,
+	AIProvider::Anthropic(anthropic::Provider { model_override: None })
+)]
+#[case::messages_to_bedrock(messages_history(), ChatFormat::BedrockConverse, bedrock_provider())]
+#[case::responses_to_openai_responses(
+	responses_history(),
+	ChatFormat::OpenAIResponses,
+	AIProvider::OpenAI(openai::Provider { model_override: None, moderation: None })
+)]
+#[case::responses_to_bedrock(responses_history(), ChatFormat::BedrockConverse, bedrock_provider())]
+fn other_providers_get_no_gemini_signature_carriers(
+	#[case] req: types::ChatRequest,
+	#[case] output: ChatFormat,
+	#[case] provider: AIProvider,
+) {
+	let input = match req {
+		types::ChatRequest::Messages(_) => InputFormat::Messages,
+		_ => InputFormat::Responses,
+	};
+	let rendered = ChatTranslation { input, output }
+		.render_request(
+			req,
+			&ChatRequestContext {
+				catalog: None,
+				provider: &provider,
+				headers: &::http::HeaderMap::new(),
+				prompt_caching: None,
+			},
+		)
+		.expect("render");
+	let body = String::from_utf8(rendered.body).unwrap();
+	assert!(!body.contains("agentgateway.gemini"), "{body}");
+	assert!(body.contains("real-signature"), "{body}");
+	assert!(body.contains("call_1"), "{body}");
+}
+
+#[test]
+fn a_reasoning_summary_outlives_its_gemini_carrier() {
+	let summary = serde_json::json!([{"type": "summary_text", "text": "a summary"}]);
+	let req = serde_json::from_value(serde_json::json!({
+		"model": "m",
+		"input": [
+			{"role": "user", "content": "weather?"},
+			{"type": "reasoning", "id": "rs_1", "summary": summary, "encrypted_content": CARRIER},
+			{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"}
+		]
+	}))
+	.unwrap();
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::OpenAIResponses,
+	}
+	.render_request(
+		types::ChatRequest::Responses(req),
+		&ChatRequestContext {
+			catalog: None,
+			provider: &provider,
+			headers: &::http::HeaderMap::new(),
+			prompt_caching: None,
+		},
+	)
+	.expect("render");
+	let body: Value = serde_json::from_slice(&rendered.body).unwrap();
+	assert_eq!(
+		body["input"][1],
+		serde_json::json!({"type": "reasoning", "id": "rs_1", "summary": summary})
+	);
+}
+
+#[rstest::rstest]
+#[case::anthropic(AIProvider::Anthropic(anthropic::Provider { model_override: None }))]
+#[case::bedrock(bedrock_provider())]
+#[case::vertex(vertex_provider(Some("us-east5"), None))]
+fn count_tokens_gets_no_gemini_signature_carriers(#[case] provider: AIProvider) {
+	let types::ChatRequest::Messages(history) = messages_history() else {
+		unreachable!()
+	};
+	let req: types::count_tokens::Request =
+		serde_json::from_value(serde_json::to_value(history).unwrap()).unwrap();
+	let body = provider
+		.render_count_tokens_request(&req, &::http::HeaderMap::new(), "claude-sonnet-4-5", None)
+		.expect("render");
+	let mut body: Value = serde_json::from_slice(&body).unwrap();
+	// Bedrock Runtime wraps the Messages body in base64
+	if let Some(inner) = body
+		.pointer("/input/invokeModel/body")
+		.and_then(Value::as_str)
+	{
+		use base64::Engine as _;
+		let inner = base64::prelude::BASE64_STANDARD.decode(inner).unwrap();
+		body = serde_json::from_slice(&inner).unwrap();
+	}
+	let body = body.to_string();
+	assert!(!body.contains("agentgateway.gemini"), "{body}");
+	assert!(body.contains("real-signature"), "{body}");
 }

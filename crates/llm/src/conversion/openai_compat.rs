@@ -20,8 +20,14 @@ pub mod from_responses {
 	}
 
 	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
-		let mut typed = json::convert::<_, responses::CreateResponse>(req)
+		let typed = json::convert::<_, responses::CreateResponse>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
+		translate_typed(typed)
+	}
+
+	pub fn translate_typed(
+		mut typed: responses::CreateResponse,
+	) -> Result<TranslatedRequest, AIError> {
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
@@ -511,22 +517,34 @@ pub mod to_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		Ok(Box::new(translate_completion(resp, model, namespaces)?))
+		Ok(Box::new(translate_completion(
+			resp,
+			model,
+			namespaces,
+			|id| (id, None),
+		)?))
 	}
 
+	/// `tool_id` maps an upstream tool-call id to the client's id and optional opaque state, sent
+	/// as the `encrypted_content` of a reasoning item just before the call
 	pub fn translate_completion(
 		resp: completions::Response,
 		model: &str,
 		namespaces: Option<&crate::conversion::namespace_tools::NamespaceToolMap>,
+		tool_id: fn(String) -> (String, Option<String>),
 	) -> Result<types::responses::Response, AIError> {
-		let mut typed = translate_response_internal(resp, model);
+		let mut typed = translate_response_internal(resp, model, tool_id);
 		if let Some(namespaces) = namespaces {
 			namespaces.restore_response(&mut typed);
 		}
 		json::convert(&typed).map_err(AIError::ResponseParsing)
 	}
 
-	fn translate_response_internal(resp: completions::Response, model: &str) -> responses::Response {
+	fn translate_response_internal(
+		resp: completions::Response,
+		model: &str,
+		tool_id: fn(String) -> (String, Option<String>),
+	) -> responses::Response {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 
@@ -582,13 +600,15 @@ pub mod to_responses {
 				for tc in tcs {
 					match tc {
 						completions::MessageToolCalls::Function(f) => {
+							let (call_id, state) = tool_id(f.id.clone());
+							tool_calls.extend(state.map(reasoning_item));
 							tool_calls.push(responses::OutputItem::FunctionCall(
 								responses::FunctionToolCall {
 									arguments: f.function.arguments.clone(),
-									call_id: f.id.clone(),
+									id: Some(call_id.clone()),
+									call_id,
 									name: f.function.name.clone(),
 									caller: None,
-									id: Some(f.id.clone()),
 									status: Some(item_status),
 									namespace: None,
 									r#async: None,
@@ -657,6 +677,21 @@ pub mod to_responses {
 		log_content: crate::LogContentFields,
 		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
 	) -> Body {
+		translate_stream_with_tool_id(b, buffer_limit, log, log_content, namespaces, |id| {
+			(id, None)
+		})
+	}
+
+	/// As [`translate_completion`]. A call's id is fixed when the call first appears, since
+	/// `output_item.added` has already published it; the reasoning item is sent then too
+	pub fn translate_stream_with_tool_id(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
+		tool_id: fn(String) -> (String, Option<String>),
+	) -> Body {
 		use responses::{
 			FunctionToolCall, OutputContent, OutputItem, OutputStatus, OutputTextContent, ReasoningItem,
 			RefusalContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
@@ -680,6 +715,7 @@ pub mod to_responses {
 		// (item_id, output_index, text)
 		let mut reasoning: Option<(String, u32, String)> = None;
 		let mut tool_calls: HashMap<u32, StreamedCall> = HashMap::new();
+		let mut reasoning_items: Vec<(u32, OutputItem)> = Vec::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
 		let mut message_content = MessageContent::default();
@@ -709,6 +745,7 @@ pub mod to_responses {
 								&mut events,
 								&mut sequence_number,
 								&mut tool_calls,
+								&mut reasoning_items,
 								&mut reasoning,
 								&mut pending_stop_reason,
 								&mut pending_usage,
@@ -944,19 +981,53 @@ pub mod to_responses {
 
 									let is_new = !tool_calls.contains_key(&tool_index);
 
-									let entry = tool_calls.entry(tool_index).or_insert_with(|| {
+									if is_new {
 										let item_id = format!("call_{:016x}", rand::rng().random::<u64>());
-										let output_index = next_output_index;
-										next_output_index += 1;
-										// call_id cannot change after output_item.added
-										StreamedCall {
-											call_id: tc.id.clone().unwrap_or_else(|| item_id.clone()),
-											item_id,
-											name: String::new(),
-											arguments: String::new(),
-											output_index,
+										let (call_id, state) = match &tc.id {
+											Some(id) => tool_id(id.clone()),
+											None => (item_id.clone(), None),
+										};
+										if let Some(state) = state {
+											let output_index = next_output_index;
+											next_output_index += 1;
+											let item = reasoning_item(state);
+											sequence_number += 1;
+											events.push((
+												"event",
+												ResponseStreamEvent::ResponseOutputItemAdded(
+													ResponseOutputItemAddedEvent {
+														sequence_number,
+														output_index,
+														item: item.clone(),
+													},
+												),
+											));
+											sequence_number += 1;
+											events.push((
+												"event",
+												ResponseStreamEvent::ResponseOutputItemDone(
+													responses::ResponseOutputItemDoneEvent {
+														sequence_number,
+														output_index,
+														item: item.clone(),
+													},
+												),
+											));
+											reasoning_items.push((output_index, item));
 										}
-									});
+										tool_calls.insert(
+											tool_index,
+											StreamedCall {
+												item_id,
+												call_id,
+												name: String::new(),
+												arguments: String::new(),
+												output_index: next_output_index,
+											},
+										);
+										next_output_index += 1;
+									}
+									let entry = tool_calls.get_mut(&tool_index).expect("inserted above");
 
 									if let Some(function) = &tc.function {
 										if let Some(name) = &function.name {
@@ -1024,6 +1095,7 @@ pub mod to_responses {
 								&mut events,
 								&mut sequence_number,
 								&mut tool_calls,
+								&mut reasoning_items,
 								&mut reasoning,
 								&mut pending_stop_reason,
 								&mut pending_usage,
@@ -1113,6 +1185,7 @@ pub mod to_responses {
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
 		sequence_number: &mut u64,
 		tool_calls: &mut HashMap<u32, StreamedCall>,
+		reasoning_items: &mut Vec<(u32, responses::OutputItem)>,
 		reasoning: &mut Option<(String, u32, String)>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
@@ -1166,7 +1239,7 @@ pub mod to_responses {
 		});
 
 		// Finished items, sorted into output order below — what `response.completed` carries.
-		let mut output: Vec<(u32, OutputItem)> = Vec::new();
+		let mut output: Vec<(u32, OutputItem)> = std::mem::take(reasoning_items);
 
 		if let Some((item_id, output_index, text)) = reasoning.take() {
 			*sequence_number += 1;
@@ -1471,6 +1544,16 @@ pub mod to_responses {
 		name: String,
 		arguments: String,
 		output_index: u32,
+	}
+
+	fn reasoning_item(encrypted_content: String) -> responses::OutputItem {
+		responses::OutputItem::Reasoning(responses::ReasoningItem {
+			id: Some(format!("rs_{:016x}", rand::rng().random::<u64>())),
+			summary: Vec::new(),
+			content: None,
+			encrypted_content: Some(encrypted_content),
+			status: Some(responses::OutputStatus::Completed),
+		})
 	}
 
 	fn incomplete_reason(finish: completions::FinishReason) -> Option<&'static str> {

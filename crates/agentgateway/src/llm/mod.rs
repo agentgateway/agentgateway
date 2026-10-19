@@ -576,9 +576,12 @@ impl ChatTranslation {
 
 	fn render_request(
 		&self,
-		req: types::ChatRequest,
+		mut req: types::ChatRequest,
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
+		if self.output != ChatFormat::VertexGemini {
+			conversion::vertex_gemini::strip_signature_carriers(&mut req);
+		}
 		let body = match self.output {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
@@ -2189,6 +2192,9 @@ impl AIProvider {
 		request_model: &str,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
+		let mut req = req.clone();
+		conversion::vertex_gemini::strip_message_carriers(&mut req.messages);
+		let req = &req;
 		match self {
 			AIProvider::Anthropic(_) | AIProvider::Custom(_) => {
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)

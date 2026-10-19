@@ -497,6 +497,74 @@ data: [DONE]
 		);
 		assert_eq!(events[2]["delta"]["signature"], "sig");
 	}
+
+	fn default_tool_ids(b: Body) -> Body {
+		from_messages::translate_stream(
+			b,
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+	}
+
+	fn split_tool_ids(b: Body) -> Body {
+		from_messages::translate_stream_with_tool_id(
+			b,
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			|id| {
+				let (base, signature) = id.split_once("__thought__").unwrap();
+				(base.to_string(), Some(signature.to_string()))
+			},
+		)
+	}
+
+	/// The id repeats on the second argument delta, as some engines send it
+	#[rstest::rstest]
+	#[case::unchanged_by_default(default_tool_ids, "call_1__thought__sig", &[
+		"content_block_start 0 tool_use",
+		"content_block_delta 0 input_json_delta",
+		"content_block_delta 0 input_json_delta",
+		"content_block_stop 0",
+	])]
+	#[case::signature_sent_once(split_tool_ids, "call_1", &[
+		"content_block_start 0 thinking",
+		"content_block_delta 0 signature_delta",
+		"content_block_stop 0",
+		"content_block_start 1 tool_use",
+		"content_block_delta 1 input_json_delta",
+		"content_block_delta 1 input_json_delta",
+		"content_block_stop 1",
+	])]
+	#[tokio::test]
+	async fn streamed_tool_ids(
+		#[case] convert: fn(Body) -> Body,
+		#[case] id: &str,
+		#[case] blocks: &[&str],
+	) {
+		let input = r#"data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1__thought__sig","type":"function","function":{"name":"f","arguments":"{\"a\""}}]}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1__thought__sig","function":{"arguments":":1}"}}]}}]}
+
+data: {"id":"c","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}
+
+data: [DONE]
+
+"#;
+		let events = events(convert(Body::from(input))).await;
+		let shapes: Vec<String> = events.iter().map(shape).collect();
+		let expected: Vec<&str> = std::iter::once("message_start")
+			.chain(blocks.iter().copied())
+			.chain(["message_delta", "message_stop"])
+			.collect();
+		assert_eq!(shapes, expected);
+		let tool = events
+			.iter()
+			.find(|e| e["content_block"]["type"] == "tool_use")
+			.unwrap();
+		assert_eq!(tool["content_block"]["id"], id);
+	}
 }
 
 mod refusal_streaming {

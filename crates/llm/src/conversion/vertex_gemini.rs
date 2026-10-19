@@ -31,6 +31,87 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 	}
 }
 
+/// Messages and Responses clients get the signature in their own opaque reasoning field instead,
+/// keyed by call id because Gemini signs only the first of parallel calls
+const SIGNATURE_CARRIER_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ThoughtSignature<S = String> {
+	call_id: S,
+	signature: S,
+}
+
+impl<'a> ThoughtSignature<&'a str> {
+	fn encode(call_id: &'a str, signature: &'a str) -> String {
+		let json = serde_json::to_string(&Self { call_id, signature })
+			.expect("serializing two strings cannot fail");
+		format!("{SIGNATURE_CARRIER_PREFIX}{json}")
+	}
+}
+
+impl ThoughtSignature {
+	fn decode(carrier: &str) -> Option<Self> {
+		serde_json::from_str(carrier.strip_prefix(SIGNATURE_CARRIER_PREFIX)?).ok()
+	}
+}
+
+/// Drop our carriers before a request goes to another provider, which can't use them
+pub fn strip_signature_carriers(req: &mut types::ChatRequest) {
+	use serde_json::Value;
+	match req {
+		types::ChatRequest::Messages(req) => strip_message_carriers(&mut req.messages),
+		types::ChatRequest::Responses(req) => {
+			if let types::responses::RequestInput::Items(items) = &mut req.input {
+				items.retain_mut(|types::responses::RawInputItem(item)| {
+					if item["type"] != "reasoning" || !is_carrier(&item["encrypted_content"]) {
+						return true;
+					}
+					let is_empty = |key: &str| match &item[key] {
+						Value::Null => true,
+						Value::Array(parts) => parts.is_empty(),
+						_ => false,
+					};
+					if is_empty("summary") && is_empty("content") {
+						return false;
+					}
+					item
+						.as_object_mut()
+						.expect("a reasoning item is an object")
+						.remove("encrypted_content");
+					true
+				});
+			}
+		},
+		types::ChatRequest::Completions(_) | types::ChatRequest::Gemini(_) => {},
+	}
+}
+
+/// The Messages half of [`strip_signature_carriers`], shared with count_tokens
+pub fn strip_message_carriers(messages: &mut [types::messages::RequestMessage]) {
+	for message in messages {
+		if let Some(types::messages::ContentBlock::Array(parts)) = &mut message.content {
+			parts.retain(|part| {
+				!matches!(part, types::messages::ContentPart::Unknown(block)
+					if block["type"] == "thinking" && is_carrier(&block["signature"]))
+			});
+		}
+	}
+}
+
+fn is_carrier(value: &serde_json::Value) -> bool {
+	value.as_str().and_then(ThoughtSignature::decode).is_some()
+}
+
+fn client_tool_id(id: String) -> (String, Option<String>) {
+	match split_tool_call_id(&id) {
+		(base, Some(signature)) => (
+			base.to_string(),
+			Some(ThoughtSignature::encode(base, signature)),
+		),
+		_ => (id, None),
+	}
+}
+
 /// Passthrough for native Gemini inbound: forward the `:streamGenerateContent?alt=sse` SSE
 /// bytes untouched while extracting usage for telemetry. Gemini attaches cumulative
 /// `usageMetadata` to chunks with the full totals on the final event, so updating on every
@@ -1268,21 +1349,32 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
+	use std::collections::HashMap;
+
 	use agent_core::prelude::Strng;
 	use agent_http::Body;
 	use bytes::Bytes;
 
+	use crate::conversion::completions::from_messages as completions;
 	use crate::model_catalog::Catalog;
 	use crate::types::ResponseType;
-	use crate::{AIError, LogContentFields, StreamingUsageGuard, types};
+	use crate::types::messages::typed as messages;
+	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
 
 	pub fn translate(
 		req: &types::messages::Request,
 		is_vertex: bool,
 		catalog: Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
-		let completions = crate::conversion::completions::from_messages::translate_request(req)?;
-		super::from_completions::translate(&super::loose(&completions)?, is_vertex, catalog)
+		let mut req = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(InputFormat::Messages, err))?;
+		req
+			.messages
+			.iter_mut()
+			.filter(|m| m.role == messages::Role::Assistant)
+			.for_each(|m| restore_signatures(&mut m.content));
+		let req = completions::translate_internal(req);
+		super::from_completions::translate(&super::loose(&req)?, is_vertex, catalog)
 	}
 
 	pub fn translate_stream(
@@ -1292,28 +1384,68 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		log_content: LogContentFields,
 	) -> Body {
-		let completions =
-			super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
-		crate::conversion::completions::from_messages::translate_stream(
-			completions,
+		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		completions::translate_stream_with_tool_id(
+			b,
 			buffer_limit,
 			StreamingUsageGuard::default(),
 			LogContentFields::default(),
+			super::client_tool_id,
 		)
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let (completions, provider_usage) = super::to_completions::translate(bytes)?;
-		let response =
-			crate::conversion::completions::from_messages::translate_response_internal(completions)?;
+		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let mut response = completions::translate_response_internal(reply)?;
+		response.content = move_signatures(response.content);
 		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
 			response,
 			provider_usage,
 		}))
 	}
+
+	fn move_signatures(content: Vec<messages::ContentBlock>) -> Vec<messages::ContentBlock> {
+		let mut out = Vec::with_capacity(content.len() + 1);
+		for mut block in content {
+			if let messages::ContentBlock::ToolUse { id, .. } = &mut block {
+				let (client_id, carrier) = super::client_tool_id(std::mem::take(id));
+				*id = client_id;
+				out.extend(carrier.map(|signature| messages::ContentBlock::Thinking {
+					thinking: String::new(),
+					signature,
+				}));
+			}
+			out.push(block);
+		}
+		out
+	}
+
+	pub fn restore_signatures(content: &mut Vec<messages::ContentBlock>) {
+		let mut signatures = HashMap::new();
+		content.retain(|block| match block {
+			messages::ContentBlock::Thinking { signature, .. } => {
+				match super::ThoughtSignature::decode(signature) {
+					Some(s) => {
+						signatures.insert(s.call_id, s.signature);
+						false
+					},
+					None => true,
+				}
+			},
+			_ => true,
+		});
+		for block in content {
+			if let messages::ContentBlock::ToolUse { id, .. } = block
+				&& let Some(signature) = signatures.remove(id.as_str())
+			{
+				*id = super::join_tool_call_id(std::mem::take(id), Some(&signature));
+			}
+		}
+	}
 }
 
 pub mod from_responses {
+	use std::collections::HashMap;
 	use std::sync::Arc;
 
 	use agent_core::prelude::Strng;
@@ -1321,9 +1453,11 @@ pub mod from_responses {
 	use bytes::Bytes;
 
 	use crate::conversion::namespace_tools::NamespaceToolMap;
+	use crate::conversion::openai_compat as compat;
 	use crate::model_catalog::Catalog;
 	use crate::types::ResponseType;
-	use crate::{AIError, LogContentFields, StreamingUsageGuard, types};
+	use crate::types::responses::typed as responses;
+	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
 
 	pub struct TranslatedRequest {
 		pub body: Vec<u8>,
@@ -1335,7 +1469,12 @@ pub mod from_responses {
 		is_vertex: bool,
 		catalog: Catalog<'_>,
 	) -> Result<TranslatedRequest, AIError> {
-		let completions = crate::conversion::openai_compat::from_responses::translate_request(req)?;
+		let mut req = json::convert::<_, responses::CreateResponse>(req)
+			.map_err(|err| AIError::RequestParsing(InputFormat::Responses, err))?;
+		if let responses::InputParam::Items(items) = &mut req.input {
+			restore_signatures(items);
+		}
+		let completions = compat::from_responses::translate_typed(req)?;
 		let body =
 			super::from_completions::translate(&super::loose(&completions.request)?, is_vertex, catalog)?;
 		Ok(TranslatedRequest {
@@ -1352,14 +1491,14 @@ pub mod from_responses {
 		log_content: LogContentFields,
 		namespaces: Option<Arc<NamespaceToolMap>>,
 	) -> Body {
-		let completions =
-			super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
-		crate::conversion::openai_compat::to_responses::translate_stream(
-			completions,
+		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		compat::to_responses::translate_stream_with_tool_id(
+			b,
 			buffer_limit,
 			StreamingUsageGuard::default(),
 			LogContentFields::default(),
 			namespaces,
+			super::client_tool_id,
 		)
 	}
 
@@ -1368,16 +1507,45 @@ pub mod from_responses {
 		model: &str,
 		namespaces: Option<&NamespaceToolMap>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		let (completions, provider_usage) = super::to_completions::translate(bytes)?;
-		let response = crate::conversion::openai_compat::to_responses::translate_completion(
-			completions,
-			model,
-			namespaces,
-		)?;
+		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let response =
+			compat::to_responses::translate_completion(reply, model, namespaces, super::client_tool_id)?;
 		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
 			response,
 			provider_usage,
 		}))
+	}
+
+	/// A turn is a run of reasoning items and calls; a carrier only applies to a call in its turn
+	pub fn restore_signatures(items: &mut Vec<responses::InputItem>) {
+		use responses::{InputItem, Item};
+		let mut signatures = HashMap::new();
+		items.retain_mut(|item| match item {
+			InputItem::Item(Item::Reasoning(reasoning)) => {
+				match reasoning
+					.encrypted_content
+					.as_deref()
+					.and_then(super::ThoughtSignature::decode)
+				{
+					Some(s) => {
+						signatures.insert(s.call_id, s.signature);
+						false
+					},
+					None => true,
+				}
+			},
+			InputItem::Item(Item::FunctionCall(call)) => {
+				if let Some(signature) = signatures.remove(&call.call_id) {
+					call.call_id =
+						super::join_tool_call_id(std::mem::take(&mut call.call_id), Some(&signature));
+				}
+				true
+			},
+			_ => {
+				signatures.clear();
+				true
+			},
+		});
 	}
 }
 

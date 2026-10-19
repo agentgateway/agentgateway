@@ -290,9 +290,22 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
 	) -> Body {
+		translate_stream_with_tool_id(b, buffer_limit, log, log_content, |id| (id, None))
+	}
+
+	/// `tool_id` maps an upstream tool-call id to the client's id and an optional signature, sent
+	/// in a thinking block just before the tool block
+	pub fn translate_stream_with_tool_id(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+		tool_id: fn(String) -> (String, Option<String>),
+	) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
+			signature: Option<String>,
 			name: Option<String>,
 			pending_json: String,
 			arguments: String,
@@ -437,17 +450,24 @@ pub mod from_messages {
 			tool_index: u32,
 			id: String,
 			name: String,
+			signature: Option<String>,
 		) -> usize {
 			close_text_block(state, events);
 			close_thinking_block(state, events);
-			let index = *state
-				.tool_block_indices
-				.entry(tool_index)
-				.or_insert_with(|| {
-					let idx = state.next_block_index;
+			let index = match state.tool_block_indices.get(&tool_index) {
+				Some(index) => *index,
+				None => {
+					if let Some(signature) = signature {
+						open_thinking_block(state, events);
+						state.thinking_signature = Some(signature);
+						close_thinking_block(state, events);
+					}
+					let index = state.next_block_index;
 					state.next_block_index += 1;
-					idx
-				});
+					state.tool_block_indices.insert(tool_index, index);
+					index
+				},
+			};
 
 			// Keep each tool-use block open across interleaved deltas to avoid
 			// emitting duplicate start events for the same block index.
@@ -736,19 +756,22 @@ pub mod from_messages {
 						if let Some(tool_calls) = &choice.delta.tool_calls {
 							for tool_call in tool_calls {
 								let tool_index = tool_call.index;
-								let (should_open, id, name, pending_json) = {
+								let (should_open, id, signature, name, pending_json) = {
 									let entry =
 										state
 											.pending_tool_calls
 											.entry(tool_index)
 											.or_insert(PendingToolCall {
 												id: None,
+												signature: None,
 												name: None,
 												pending_json: String::new(),
 												arguments: String::new(),
 											});
 									if let Some(id) = &tool_call.id {
-										entry.id = Some(id.clone());
+										let (id, signature) = tool_id(id.clone());
+										entry.id = Some(id);
+										entry.signature = signature;
 									}
 									if let Some(function) = &tool_call.function {
 										if let Some(name) = &function.name {
@@ -764,19 +787,25 @@ pub mod from_messages {
 
 									let should_open = entry.name.is_some();
 									let id = entry.id.clone();
+									let signature = if should_open {
+										entry.signature.take()
+									} else {
+										None
+									};
 									let name = entry.name.clone();
 									let pending_json = if should_open && !entry.pending_json.is_empty() {
 										Some(std::mem::take(&mut entry.pending_json))
 									} else {
 										None
 									};
-									(should_open, id, name, pending_json)
+									(should_open, id, signature, name, pending_json)
 								};
 
 								if should_open {
 									let id = id.unwrap_or_else(|| format!("tool_call_{tool_index}"));
 									let name = name.unwrap_or_default();
-									let index = open_tool_block(&mut state, &mut events, tool_index, id, name);
+									let index =
+										open_tool_block(&mut state, &mut events, tool_index, id, name, signature);
 
 									if let Some(pending_json) = pending_json {
 										maybe_set_first_token(&mut state, &log);
@@ -920,7 +949,7 @@ pub mod from_messages {
 	}
 
 	#[allow(deprecated)]
-	fn translate_internal(req: messages::Request) -> completions::Request {
+	pub fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
 			messages,
 			system,

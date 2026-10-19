@@ -1800,6 +1800,59 @@ fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
 	);
 }
 
+#[test]
+fn only_decoded_carriers_are_consumed() {
+	let mut content: Vec<types::messages::typed::ContentBlock> = serde_json::from_value(json!([
+		{ "type": "thinking", "thinking": "plan", "signature": "genuine" },
+		{ "type": "thinking", "thinking": "", "signature": ThoughtSignature::encode("call_1", "sig") },
+		{ "type": "tool_use", "id": "call_1", "name": "f", "input": {} },
+		{ "type": "tool_use", "id": "call_2", "name": "f", "input": {} }
+	]))
+	.unwrap();
+	from_messages::restore_signatures(&mut content);
+	assert_eq!(
+		serde_json::to_value(&content).unwrap(),
+		json!([
+			{ "type": "thinking", "thinking": "plan", "signature": "genuine" },
+			{ "type": "tool_use", "id": "call_1__thought__sig", "name": "f", "input": {} },
+			{ "type": "tool_use", "id": "call_2", "name": "f", "input": {} }
+		])
+	);
+}
+
+#[test]
+fn responses_carriers_apply_within_their_turn() {
+	let mut input: Vec<types::responses::typed::InputItem> = serde_json::from_value(json!([
+		{ "type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "genuine" },
+		{ "type": "reasoning", "id": "rs_2", "summary": [], "content": null,
+			"encrypted_content": ThoughtSignature::encode("call_1", "sig") },
+		{ "type": "function_call", "call_id": "call_1", "name": "f", "arguments": "{}" },
+		{ "type": "function_call_output", "call_id": "call_1", "output": "ok" },
+		{ "type": "function_call", "call_id": "call_1", "name": "f", "arguments": "{}" }
+	]))
+	.unwrap();
+	from_responses::restore_signatures(&mut input);
+	let input = serde_json::to_value(&input).unwrap();
+	let summary: Vec<_> = input
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|i| (&i["type"], i.get("call_id").or(i.get("encrypted_content"))))
+		.collect();
+	assert_eq!(
+		summary,
+		[
+			(&json!("reasoning"), Some(&json!("genuine"))),
+			(
+				&json!("function_call"),
+				Some(&json!("call_1__thought__sig"))
+			),
+			(&json!("function_call_output"), Some(&json!("call_1"))),
+			(&json!("function_call"), Some(&json!("call_1"))),
+		]
+	);
+}
+
 // ---------- Request: cachedContent / labels ----------
 
 #[test]
@@ -2642,6 +2695,110 @@ mod chain {
 			(Some(7), Some(1), Some(8))
 		);
 		assert!(r.first_token.is_some());
+	}
+
+	/// Codex replays the final event's output, so the carrier has to survive there on a cut-off
+	/// reply, and come back to Gemini on the signed call only
+	#[tokio::test]
+	async fn responses_replay_of_a_cut_off_output_restores_the_signature() {
+		let request: Value = serde_json::from_str(include_str!(
+			"../tests/requests/responses/namespace-tools.json"
+		))
+		.unwrap();
+		let translated = from_responses::translate(
+			&serde_json::from_value(request.clone()).unwrap(),
+			true,
+			None,
+		)
+		.unwrap();
+		let native_request: Value = serde_json::from_slice(&translated.body).unwrap();
+		let aliases: Vec<String> = native_request["tools"][0]["functionDeclarations"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.take(2)
+			.map(|d| d["name"].as_str().unwrap().to_string())
+			.collect();
+
+		let signature = "AY89".repeat(256);
+		let chunk = json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "id": "call_a", "name": aliases[0], "args": { "code": "1 + 1" } },
+					"thoughtSignature": signature },
+				{ "functionCall": { "id": "call_b", "name": aliases[1], "args": { "code": "2 + 2" } } }
+			]}, "finishReason": "MAX_TOKENS" }],
+			"usageMetadata": { "promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7 },
+			"modelVersion": "gemini-3.8-flash"
+		});
+		let body = from_responses::translate_stream(
+			Body::from(format!("data: {chunk}\n\n")),
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			Some(Arc::new(translated.namespaces)),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		assert!(!std::str::from_utf8(&body).unwrap().contains("__thought__"));
+
+		let events = client_events(&body);
+		let last = events.last().unwrap();
+		assert_eq!(last["type"], "response.incomplete");
+		let output = last["response"]["output"].as_array().unwrap();
+		let items: Vec<_> = output
+			.iter()
+			.map(|i| (i["type"].as_str().unwrap(), i["status"].as_str().unwrap()))
+			.collect();
+		assert_eq!(
+			items,
+			[
+				("message", "incomplete"),
+				("reasoning", "completed"),
+				("function_call", "incomplete"),
+				("function_call", "incomplete")
+			]
+		);
+		let added = events
+			.iter()
+			.find(|e| e["type"] == "response.output_item.added" && e["item"]["type"] == "reasoning")
+			.unwrap();
+		assert_eq!(added["output_index"], 1);
+		assert_eq!(added["item"]["id"], output[1]["id"]);
+
+		let mut replay = request;
+		let mut input = vec![json!({ "role": "user", "content": "Run JavaScript in both kernels." })];
+		input.extend(output.iter().cloned());
+		input[2]["content"] = Value::Null;
+		input.extend(output.iter().filter(|i| i["type"] == "function_call").map(
+			|call| json!({ "type": "function_call_output", "call_id": call["call_id"], "output": "ok" }),
+		));
+		replay["input"] = Value::Array(input);
+		let replayed =
+			from_responses::translate(&serde_json::from_value(replay).unwrap(), true, None).unwrap();
+		let native_replay: Value = serde_json::from_slice(&replayed.body).unwrap();
+		let calls: Vec<_> = native_replay["contents"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.flat_map(|c| c["parts"].as_array().unwrap())
+			.filter(|p| p.get("functionCall").is_some())
+			.map(|p| (&p["functionCall"]["name"], p.get("thoughtSignature")))
+			.collect();
+		assert_eq!(
+			calls,
+			[
+				(&json!(aliases[0]), Some(&json!(signature))),
+				(&json!(aliases[1]), None)
+			]
+		);
+		assert!(
+			!String::from_utf8(replayed.body)
+				.unwrap()
+				.contains("__thought__")
+		);
 	}
 
 	const FIRST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";

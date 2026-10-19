@@ -22,7 +22,7 @@ pub enum RequestInput {
 
 #[derive(Debug, Deserialize, Clone, Serialize, PartialEq)]
 #[serde(transparent)]
-pub struct RawInputItem(Value);
+pub struct RawInputItem(pub Value);
 
 impl RawInputItem {
 	fn from_typed(item: InputItem) -> Self {
