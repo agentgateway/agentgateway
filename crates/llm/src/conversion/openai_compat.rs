@@ -525,6 +525,16 @@ pub mod to_responses {
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 
 		let choice = resp.choices.into_iter().next();
+		let finish_reason = choice.as_ref().and_then(|c| c.finish_reason);
+
+		let status = match finish_reason {
+			Some(completions::FinishReason::Stop) | None => responses::Status::Completed,
+			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
+			Some(completions::FinishReason::ToolCalls)
+			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
+			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
+		};
+		let item_status = item_status(&status);
 
 		let mut outputs: Vec<responses::OutputItem> = Vec::new();
 		let mut text_parts: Vec<responses::OutputMessageContent> = Vec::new();
@@ -541,7 +551,7 @@ pub mod to_responses {
 						},
 					)]),
 					encrypted_content: None,
-					status: Some(responses::OutputStatus::Completed),
+					status: Some(item_status),
 				}));
 			}
 			if let Some(content) = &choice.message.content {
@@ -565,7 +575,7 @@ pub mod to_responses {
 									name: f.function.name.clone(),
 									caller: None,
 									id: Some(f.id.clone()),
-									status: Some(responses::OutputStatus::Completed),
+									status: Some(item_status),
 									namespace: None,
 									r#async: None,
 								},
@@ -583,24 +593,14 @@ pub mod to_responses {
 				role: responses::AssistantRole::Assistant,
 				phase: None,
 				content: text_parts,
-				status: responses::OutputStatus::Completed,
+				status: item_status,
 			}));
 		}
 		outputs.extend(tool_calls);
 
-		let finish_reason = choice.as_ref().and_then(|c| c.finish_reason.as_ref());
-
-		let status = match finish_reason {
-			Some(completions::FinishReason::Stop) | None => responses::Status::Completed,
-			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
-			Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
-			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
-		};
-
 		let incomplete_details = match finish_reason {
 			Some(completions::FinishReason::Length) => Some(responses::IncompleteDetails {
-				reason: "max_tokens".to_string(),
+				reason: "max_output_tokens".to_string(),
 			}),
 			_ => None,
 		};
@@ -675,7 +675,7 @@ pub mod to_responses {
 		let mut message_output_index: Option<u32> = None;
 		// (item_id, output_index, text)
 		let mut reasoning: Option<(String, u32, String)> = None;
-		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
+		let mut tool_calls: HashMap<u32, StreamedCall> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
 		// The full text, for `output_text.done` and the finished items: clients
@@ -883,15 +883,22 @@ pub mod to_responses {
 										let item_id = format!("call_{:016x}", rand::rng().random::<u64>());
 										let output_index = next_output_index;
 										next_output_index += 1;
-										(item_id, String::new(), String::new(), output_index)
+										// call_id cannot change after output_item.added
+										StreamedCall {
+											call_id: tc.id.clone().unwrap_or_else(|| item_id.clone()),
+											item_id,
+											name: String::new(),
+											arguments: String::new(),
+											output_index,
+										}
 									});
 
 									if let Some(function) = &tc.function {
 										if let Some(name) = &function.name {
-											entry.1 = name.clone();
+											entry.name = name.clone();
 										}
 										if let Some(args) = &function.arguments {
-											entry.2.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
 
@@ -903,14 +910,14 @@ pub mod to_responses {
 											"event",
 											ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
 												sequence_number,
-												output_index: entry.3,
+												output_index: entry.output_index,
 												item: OutputItem::FunctionCall(FunctionToolCall {
 													arguments: String::new(),
-													call_id: entry.0.clone(),
+													call_id: entry.call_id.clone(),
 													namespace: None,
-													name: entry.1.clone(),
+													name: entry.name.clone(),
 													caller: None,
-													id: Some(entry.0.clone()),
+													id: Some(entry.item_id.clone()),
 													status: Some(OutputStatus::InProgress),
 													r#async: None,
 												}),
@@ -928,8 +935,8 @@ pub mod to_responses {
 											ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
 												ResponseFunctionCallArgumentsDeltaEvent {
 													sequence_number,
-													item_id: entry.0.clone(),
-													output_index: entry.3,
+													item_id: entry.item_id.clone(),
+													output_index: entry.output_index,
 													delta: args.clone(),
 												},
 											),
@@ -1027,7 +1034,7 @@ pub mod to_responses {
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
 		sequence_number: &mut u64,
-		tool_calls: &mut HashMap<u32, (String, String, String, u32)>,
+		tool_calls: &mut HashMap<u32, StreamedCall>,
 		reasoning: &mut Option<(String, u32, String)>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
@@ -1043,11 +1050,10 @@ pub mod to_responses {
 	) {
 		use responses::{
 			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
-			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
-			ResponseContentPartDoneEvent, ResponseError, ResponseFunctionCallArgumentsDoneEvent,
-			ResponseOutputItemDoneEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
-			ResponseTextDoneEvent, ResponseUsage,
+			OutputItem, OutputMessage, OutputMessageContent, OutputTextContent, OutputTokenDetails,
+			ReasoningItem, ReasoningItemContent, ReasoningTextContent, ResponseContentPartDoneEvent,
+			ResponseError, ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent,
+			ResponseReasoningTextDoneEvent, ResponseStreamEvent, ResponseTextDoneEvent, ResponseUsage,
 		};
 
 		let stop_reason = pending_stop_reason.take();
@@ -1060,6 +1066,7 @@ pub mod to_responses {
 			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
 			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
 		};
+		let item_status = item_status(&response_status);
 		let finish_reason = crate::types::serialize_str(&response_status);
 		let tool_parts = logged_tool_calls.as_mut().and_then(|logged_tool_calls| {
 			crate::conversion::completions::finalize_streaming_tool_calls(
@@ -1103,7 +1110,7 @@ pub mod to_responses {
 					ReasoningTextContent { text },
 				)]),
 				encrypted_content: None,
-				status: Some(OutputStatus::Completed),
+				status: Some(item_status),
 			});
 			*sequence_number += 1;
 			events.push((
@@ -1126,9 +1133,19 @@ pub mod to_responses {
 		);
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
-		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		sorted_tools.sort_by_key(|(_, call)| call.output_index);
 
-		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
+		for (
+			_,
+			StreamedCall {
+				item_id,
+				call_id,
+				name,
+				arguments: buffer,
+				output_index,
+			},
+		) in sorted_tools
+		{
 			*sequence_number += 1;
 			events.push((
 				"event",
@@ -1145,12 +1162,12 @@ pub mod to_responses {
 
 			let item = OutputItem::FunctionCall(FunctionToolCall {
 				arguments: buffer,
-				call_id: item_id.clone(),
+				call_id,
 				namespace: None,
 				name,
 				caller: None,
 				id: Some(item_id),
-				status: Some(OutputStatus::Completed),
+				status: Some(item_status),
 				r#async: None,
 			});
 			*sequence_number += 1;
@@ -1206,7 +1223,7 @@ pub mod to_responses {
 			id: message_item_id.to_string(),
 			role: AssistantRole::Assistant,
 			phase: None,
-			status: OutputStatus::Completed,
+			status: item_status,
 		});
 		*sequence_number += 1;
 		events.push((
@@ -1278,7 +1295,7 @@ pub mod to_responses {
 				*sequence_number,
 				usage_obj,
 				IncompleteDetails {
-					reason: "max_tokens".to_string(),
+					reason: "max_output_tokens".to_string(),
 				},
 			),
 			Some(completions::FinishReason::ContentFilter) => response_builder.failed_event(
@@ -1300,5 +1317,22 @@ pub mod to_responses {
 		}
 
 		events.push(("event", done_event));
+	}
+
+	/// `item_id` names the output item and its argument events; `call_id` is the upstream call id
+	/// the client echoes in `function_call_output`
+	struct StreamedCall {
+		item_id: String,
+		call_id: String,
+		name: String,
+		arguments: String,
+		output_index: u32,
+	}
+
+	fn item_status(status: &responses::Status) -> responses::OutputStatus {
+		match status {
+			responses::Status::Incomplete => responses::OutputStatus::Incomplete,
+			_ => responses::OutputStatus::Completed,
+		}
 	}
 }
