@@ -19,17 +19,17 @@ const formats: ProviderFormat[] = [
 ];
 
 const formatLabels: Record<ProviderFormat, string> = {
-	completions: 'Chat completions (/v1/chat/completions)',
-	messages: 'Anthropic messages (/v1/messages)',
-	responses: 'Responses (/v1/responses)',
-	embeddings: 'Embeddings (/v1/embeddings)',
-	anthropicTokenCount: 'Anthropic token count (/v1/messages/count_tokens)',
+	completions: 'Chat completions (/chat/completions)',
+	messages: 'Anthropic messages (/messages)',
+	responses: 'Responses (/responses)',
+	embeddings: 'Embeddings (/embeddings)',
+	anthropicTokenCount: 'Anthropic token count (/messages/count_tokens)',
 	generateContent: 'Gemini chat (models/{model}:generateContent)',
 	geminiCountTokens: 'Gemini token count (models/{model}:countTokens)',
-	realtime: 'Realtime (/v1/realtime)',
-	rerank: 'Rerank (/v2/rerank)',
-	decisions: 'Decisions (/v1/decisions)',
-	systemOne: 'System One (/v1/systemone)'
+	realtime: 'Realtime (/realtime)',
+	rerank: 'Rerank (/rerank)',
+	decisions: 'Decisions (/decisions)',
+	systemOne: 'System One (/systemone)'
 };
 
 export function CustomFormats(props: {
