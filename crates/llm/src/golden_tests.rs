@@ -1157,7 +1157,8 @@ mod responses {
 			],
 		),
 	];
-	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool", "stream_max_tokens"];
+	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] =
+		&["stream_tool", "stream_max_tokens", "stream_blocked"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		(
 			"stream",

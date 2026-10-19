@@ -1181,6 +1181,49 @@ mod prefer_native {
 		);
 	}
 
+	/// With the flag off, Gemini's compat endpoint replies that #3868 fixed still reach both
+	/// clients: no message on a cut-off reply, no id, and a finish reason outside the OpenAI set
+	#[rstest::rstest]
+	#[case::cut_off(
+		json!({ "choices": [{ "index": 0, "finish_reason": "length" }],
+			"model": GEMINI, "usage": { "prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11 } }),
+		["max_tokens", "incomplete"]
+	)]
+	#[case::unknown_finish_reason(
+		json!({ "choices": [{ "index": 0, "finish_reason": "function_call_filter: MALFORMED_FUNCTION_CALL",
+			"message": { "role": "assistant" } }],
+			"model": GEMINI, "usage": { "prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11 } }),
+		["end_turn", "completed"]
+	)]
+	fn compat_replies_reach_both_clients(#[case] reply: Value, #[case] endings: [&str; 2]) {
+		let provider = gemini_provider(None);
+		let table = chat_translations(false);
+		for (input, ending) in CLIENTS.into_iter().zip(endings) {
+			let translation = provider
+				.chat_translation(&table, input, GEMINI, None)
+				.unwrap();
+			assert_eq!(Some(translation.output), COMPAT);
+			let response = translation
+				.render_response(
+					&bytes::Bytes::from(reply.to_string()),
+					&ChatResponseContext {
+						model: GEMINI,
+						tool_name_map: None,
+						namespaces: None,
+					},
+				)
+				.unwrap_or_else(|e| panic!("{input:?}: {e}"));
+			let usage = response.to_llm_response(Default::default());
+			assert_eq!(usage.total_tokens, Some(11), "{input:?}");
+			let body: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
+			let got = match input {
+				InputFormat::Messages => &body["stop_reason"],
+				_ => &body["status"],
+			};
+			assert_eq!(got, ending, "{input:?}: {body}");
+		}
+	}
+
 	fn render(
 		provider: &AIProvider,
 		input: InputFormat,

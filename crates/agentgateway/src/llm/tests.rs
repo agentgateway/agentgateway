@@ -2764,8 +2764,16 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 
 const FAILED_GEMINI_REPLY: &str = r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]},"finishReason":"MALFORMED_FUNCTION_CALL","finishMessage":"Bad call"}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":2,"totalTokenCount":9}}"#;
 
+#[rstest::rstest]
 #[tokio::test]
-async fn a_failed_native_gemini_reply_is_an_error() {
+async fn a_failed_native_gemini_reply_is_an_error(
+	#[values(
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses
+	)]
+	input_format: InputFormat,
+) {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
@@ -2773,7 +2781,7 @@ async fn a_failed_native_gemini_reply_is_an_error() {
 		model_override: None,
 	});
 	let mut req = llm_request_with_tokens(None);
-	req.input_format = InputFormat::Completions;
+	req.input_format = input_format;
 	req.request_model = "gemini-3.8-flash".into();
 	req.streaming = false;
 	let upstream = ::http::Response::new(Body::from(FAILED_GEMINI_REPLY));

@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_blocked.json
+---
+data: {"id":"blocked-stream-1","choices":[{"index":0,"delta":{"content":"Here is how","role":"assistant"}}],"created":123,"model":"gemini-3.8-flash","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"blocked-stream-1","choices":[{"index":0,"delta":{"content":null,"refusal":"The response was blocked for dangerous content."},"finish_reason":"content_filter"}],"created":123,"model":"gemini-3.8-flash","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":14,"completion_tokens":3,"total_tokens":17}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 14,
+  "output_tokens": 3,
+  "total_tokens": 17,
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    "Here is how"
+  ]
+}

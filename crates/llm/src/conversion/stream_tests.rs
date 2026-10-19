@@ -94,3 +94,27 @@ async fn an_upstream_error_event_ends_the_stream(
 	);
 	assert!(!text.contains("after"), "content after the error:\n{text}");
 }
+
+const FINISHED: &str = "data: {\"id\":\"c1\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n";
+
+/// The client already has the final event, so the error isn't sent, but the body still ends
+#[rstest::rstest]
+#[case::messages(messages, "message_stop")]
+#[case::responses(responses, "response.completed")]
+#[tokio::test]
+async fn an_error_after_the_final_event_ends_the_stream(
+	#[case] convert: fn(Body) -> Body,
+	#[case] last: &str,
+) {
+	let (text, failed) = tokio::time::timeout(
+		Duration::from_secs(5),
+		drain(convert(upstream(&[CHUNK, FINISHED, ERROR], End::Hang))),
+	)
+	.await
+	.expect("the stream should end at the error");
+	assert!(!failed, "{text}");
+	assert!(last_event(&text).contains(last), "{text}");
+	let finals = text.split("\n\n").filter(|e| e.contains(last)).count();
+	assert_eq!(finals, 1, "{text}");
+	assert!(!text.contains("The model is overloaded."), "{text}");
+}
