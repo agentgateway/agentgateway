@@ -489,8 +489,9 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 7] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 8] = [
 		&["usage", "input_tokens"],
+		&["message", "usage", "input_tokens"],
 		// Responses streaming
 		&["response", "usage", "input_tokens"],
 		&["usage", "prompt_tokens"],
@@ -550,7 +551,7 @@ mod lookups {
 		// Completions
 		&["usage", "completion_tokens_details", "reasoning_tokens"],
 	];
-	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 6] = [
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 7] = [
 		// Responses
 		&["usage", "input_tokens_details", "cache_write_tokens"],
 		// Responses streaming
@@ -564,13 +565,15 @@ mod lookups {
 		&["usage", "prompt_tokens_details", "cache_write_tokens"],
 		// Provider-specific compatibility fields
 		&["usage", "cache_creation_input_tokens"],
+		&["message", "usage", "cache_creation_input_tokens"],
 		&["usage", "cacheWriteInputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "cacheWriteInputTokensCount"],
 	];
-	pub const CACHED_INPUT_TOKENS: [&[&str]; 6] = [
+	pub const CACHED_INPUT_TOKENS: [&[&str]; 7] = [
 		// Message
 		&["usage", "cache_read_input_tokens"],
+		&["message", "usage", "cache_read_input_tokens"],
 		// Responses
 		&["usage", "input_tokens_details", "cached_tokens"],
 		// Responses streaming

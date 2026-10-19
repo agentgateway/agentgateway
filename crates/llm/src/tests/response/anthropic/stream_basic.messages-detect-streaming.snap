@@ -38,6 +38,9 @@ data: {"type":"message_stop"            }
 
 
 {
+  "input_tokens": 15,
   "output_tokens": 21,
+  "cache_creation_input_tokens": 13,
+  "cached_input_tokens": 12,
   "provider_model": "claude-haiku-4-5-20251001"
 }

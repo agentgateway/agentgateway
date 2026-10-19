@@ -1010,6 +1010,10 @@ mod responses {
 	const VERTEX_GEMINI_RESPONSES: &[&str] = &["basic", "tool", "reasoning", "blocked"];
 	const DETECT_RESPONSES: &[(&str, &str)] = &[
 		("response/detect/bedrock-invoke.bin", BEDROCK_TO_DETECT),
+		(
+			"response/detect/bedrock-invoke-anthropic.bin",
+			BEDROCK_TO_DETECT,
+		),
 		("response/detect/bedrock-basic.bin", BEDROCK_TO_DETECT),
 		("response/detect/bedrock-broken.bin", BEDROCK_TO_DETECT),
 		("response/detect/broken-sse", COMPLETIONS_TO_DETECT),
