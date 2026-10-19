@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use axum_core::response::IntoResponse;
 use bytes::Bytes;
+use heck::ToSnakeCase;
 use http::Method;
 use http::uri::PathAndQuery;
 use secrecy::ExposeSecret;
@@ -277,6 +278,82 @@ fn rewrite_authorization_server_issuer(
 	Ok(())
 }
 
+/// Scopes configured for this resource through `resourceMetadata.scopesSupported`.
+///
+/// The standalone configuration writes the list as an array, while the Kubernetes API models
+/// `resourceMetadata` as opaque JSON and its fixtures author the same list as a string containing
+/// a JSON array, so both forms are accepted. Keys are snake-cased and the last spelling wins, to
+/// match what `ResourceMetadata::to_rfc_json` publishes in the protected resource metadata.
+fn configured_resource_scopes(auth: &McpAuthentication) -> Option<Vec<serde_json::Value>> {
+	let configured = auth
+		.resource_metadata
+		.extra
+		.iter()
+		.filter(|(key, _)| key.to_snake_case() == "scopes_supported")
+		.map(|(_, value)| value)
+		.next_back()?;
+	let configured: Vec<serde_json::Value> = match configured {
+		serde_json::Value::Array(array) => array.clone(),
+		serde_json::Value::String(raw) => match serde_json::from_str(raw) {
+			Ok(serde_json::Value::Array(array)) => array,
+			_ => {
+				debug!("ignoring resourceMetadata.scopesSupported: string is not a JSON array");
+				return None;
+			},
+		},
+		_ => {
+			debug!("ignoring resourceMetadata.scopesSupported: not an array");
+			return None;
+		},
+	};
+	let mut scopes = Vec::with_capacity(configured.len());
+	for scope in configured {
+		match scope {
+			serde_json::Value::String(name) => scopes.push(serde_json::Value::String(name)),
+			other => debug!(
+				"ignoring non-string resourceMetadata.scopesSupported entry: {}",
+				other
+			),
+		}
+	}
+	Some(scopes)
+}
+
+/// RFC 8414 `scopes_supported` describes the authorization server. With a provider configured the
+/// gateway serves itself as the authorization server, so the document it returns must also
+/// advertise the scopes configured for this resource in `resourceMetadata.scopesSupported`.
+/// Without them, clients that select the scopes to request from this document rather than from the
+/// protected resource metadata never ask for the API scope; Entra then mints a token for the wrong
+/// audience, which the gateway rejects.
+fn merge_resource_scopes(metadata: &mut serde_json::Value, auth: &McpAuthentication) {
+	if auth.provider.is_none() {
+		// Without a provider the fetched document describes the upstream authorization server and
+		// is served unchanged.
+		return;
+	}
+	let Some(configured) = configured_resource_scopes(auth) else {
+		return;
+	};
+	let Some(metadata) = metadata.as_object_mut() else {
+		return;
+	};
+	let advertised = metadata
+		.entry("scopes_supported")
+		.or_insert(serde_json::Value::Array(Vec::new()));
+	let Some(advertised) = advertised.as_array_mut() else {
+		// The upstream document advertises scopes in another shape; leave it alone.
+		debug!(
+			"not advertising resource scopes: authorization server metadata serves a non-array scopes_supported"
+		);
+		return;
+	};
+	for scope in configured {
+		if !advertised.contains(&scope) {
+			advertised.push(scope);
+		}
+	}
+}
+
 fn issuer_path_from_metadata_path<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
 	if let Some(remaining_path) = path.strip_prefix(prefix)
 		&& (remaining_path.is_empty() || remaining_path.starts_with('/'))
@@ -481,6 +558,7 @@ pub(super) async fn authorization_server_metadata(
 	}
 
 	rewrite_authorization_server_issuer(req, auth, &mut resp)?;
+	merge_resource_scopes(&mut resp, auth);
 
 	let response = ::http::Response::builder()
 		.status(StatusCode::OK)
@@ -916,6 +994,71 @@ mod tests {
 	}
 
 	#[test]
+	fn authorization_server_metadata_merges_resource_scopes() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access", "openid"]),
+		);
+		let mut metadata = serde_json::json!({"scopes_supported": ["openid", "profile"]});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(
+			metadata["scopes_supported"],
+			serde_json::json!(["openid", "profile", "api://client-id/mcp_access"])
+		);
+	}
+
+	#[test]
+	fn authorization_server_metadata_inserts_resource_scopes_when_absent() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopes_supported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access"]),
+		);
+		let mut metadata = serde_json::json!({});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(
+			metadata["scopes_supported"],
+			serde_json::json!(["api://client-id/mcp_access"])
+		);
+	}
+
+	#[test]
+	fn authorization_server_metadata_leaves_scopes_without_provider() {
+		let mut auth = default_auth();
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access"]),
+		);
+		let mut metadata = serde_json::json!({"scopes_supported": ["openid"]});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(metadata["scopes_supported"], serde_json::json!(["openid"]));
+	}
+
+	#[test]
+	fn authorization_server_metadata_ignores_non_array_scopes() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::Value::String("api://client-id/mcp_access".to_string()),
+		);
+		let mut metadata = serde_json::json!({"scopes_supported": ["openid"]});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(metadata["scopes_supported"], serde_json::json!(["openid"]));
+	}
+
+	#[test]
 	fn well_known_endpoint_requires_root_and_slash_delimited_suffix() {
 		assert!(is_well_known_endpoint(
 			"/.well-known/oauth-protected-resource"
@@ -1284,5 +1427,112 @@ mod tests {
 			"urn:ietf:params:oauth:grant-type:jwt-bearer"
 		)));
 		assert!(!entra_grant_may_use_client_secret(None));
+	}
+
+	#[test]
+	fn authorization_server_metadata_merges_stringified_scopes() {
+		// The Kubernetes API takes `resourceMetadata` as opaque JSON and its fixtures author the
+		// list as a string, so the stringified form must merge too.
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::Value::String(r#"["api://client-id/mcp_access"]"#.to_string()),
+		);
+		let mut metadata = serde_json::json!({"scopes_supported": ["openid"]});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(
+			metadata["scopes_supported"],
+			serde_json::json!(["openid", "api://client-id/mcp_access"])
+		);
+	}
+
+	#[test]
+	fn authorization_server_metadata_skips_non_string_scopes() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access", 3]),
+		);
+		let mut metadata = serde_json::json!({});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(
+			metadata["scopes_supported"],
+			serde_json::json!(["api://client-id/mcp_access"])
+		);
+	}
+
+	#[test]
+	fn authorization_server_metadata_ignores_non_object_document() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access"]),
+		);
+		let mut metadata = serde_json::json!([]);
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(metadata, serde_json::json!([]));
+	}
+
+	#[test]
+	fn authorization_server_metadata_leaves_non_array_upstream_scopes() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"scopesSupported".to_string(),
+			serde_json::json!(["api://client-id/mcp_access"]),
+		);
+		let mut metadata = serde_json::json!({"scopes_supported": "openid"});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert_eq!(metadata["scopes_supported"], serde_json::json!("openid"));
+	}
+
+	#[test]
+	fn authorization_server_metadata_matches_to_rfc_json_for_duplicate_keys() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth
+			.resource_metadata
+			.extra
+			.insert("scopesSupported".to_string(), serde_json::json!(["camel"]));
+		auth
+			.resource_metadata
+			.extra
+			.insert("scopes_supported".to_string(), serde_json::json!(["snake"]));
+		let mut metadata = serde_json::json!({});
+
+		merge_resource_scopes(&mut metadata, &auth);
+		let protected = auth.resource_metadata.to_rfc_json(
+			"https://gateway.example.com/mcp".to_string(),
+			"https://gateway.example.com".to_string(),
+		);
+
+		assert_eq!(metadata["scopes_supported"], protected["scopes_supported"]);
+		assert_eq!(metadata["scopes_supported"], serde_json::json!(["snake"]));
+	}
+
+	#[test]
+	fn authorization_server_metadata_ignores_unrelated_config_keys() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth.resource_metadata.extra.insert(
+			"resource".to_string(),
+			serde_json::Value::String("https://gateway.example.com/mcp".to_string()),
+		);
+		let mut metadata = serde_json::json!({});
+
+		merge_resource_scopes(&mut metadata, &auth);
+
+		assert!(metadata.get("scopes_supported").is_none());
 	}
 }
