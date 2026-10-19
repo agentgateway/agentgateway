@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/cert"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/annotations"
@@ -104,6 +105,71 @@ func TestListenerSafetyDistinctHostnames(t *testing.T) {
 	ctx := testutils.BuildMockPolicyContext(t, safetyInputs(gw, wildcard, exact))
 	_, s := testutils.Syncer(t, ctx)
 	assert.ElementsMatch(t, []string{"default/example.http", "tenant/wildcard.http", "tenant/exact.http"}, listenerKeys(s))
+}
+
+func TestListenerSafetyHTTPSAndTLSSharedPort(t *testing.T) {
+	certPEM, keyPEM, err := cert.GenerateSelfSignedCertKey("https.example.com", nil, nil)
+	require.NoError(t, err)
+	for _, first := range []gwv1.ProtocolType{gwv1.HTTPSProtocolType, gwv1.TLSProtocolType} {
+		t.Run(string(first)+"-first", func(t *testing.T) {
+			gw := safetyGateway("")
+			gw.Spec.Listeners = []gwv1.Listener{
+				{
+					Name: "https", Port: 443, Protocol: gwv1.HTTPSProtocolType, Hostname: new(gwv1.Hostname("https.example.com")),
+					TLS: &gwv1.ListenerTLSConfig{Mode: new(gwv1.TLSModeTerminate), CertificateRefs: []gwv1.SecretObjectReference{{Name: "tls"}}},
+				},
+				{
+					Name: "tls", Port: 443, Protocol: gwv1.TLSProtocolType, Hostname: new(gwv1.Hostname("tls.example.com")),
+					TLS: &gwv1.ListenerTLSConfig{Mode: new(gwv1.TLSModePassthrough)},
+				},
+			}
+			if first == gwv1.TLSProtocolType {
+				slices.Reverse(gw.Spec.Listeners)
+			}
+			secret := &corev1.Secret{
+				Name: "tls", Namespace: "default", Type: corev1.SecretTypeTLS,
+				Data: map[string][]byte{corev1.TLSCertKey: certPEM, corev1.TLSPrivateKeyKey: keyPEM},
+			}
+			ctx := testutils.BuildMockPolicyContext(t, append(safetyInputs(gw), secret))
+			sq, s := testutils.Syncer(t, ctx, "Gateway")
+			assert.ElementsMatch(t, []string{"default/example.https", "default/example.tls"}, listenerKeys(s))
+			binds := 0
+			for _, resource := range s.Outputs.Resources.List() {
+				if bind := resource.Resource.GetBind(); bind != nil {
+					binds++
+					assert.EqualValues(t, 443, bind.Port)
+					assert.Equal(t, "TLS", bind.Protocol.String())
+				}
+				if listener := resource.Resource.GetListener(); listener != nil {
+					assert.Equal(t, "443/default/example", listener.BindKey)
+					if listener.Key == "default/example.https" {
+						require.NotNil(t, listener.Tls)
+						assert.Equal(t, secret.Data[corev1.TLSCertKey], listener.Tls.Cert)
+					}
+				}
+			}
+			assert.Equal(t, 1, binds)
+			dump, err := json.Marshal(sq.Dump())
+			require.NoError(t, err)
+			var statuses []struct {
+				Status gwv1.GatewayStatus `json:"status"`
+			}
+			require.NoError(t, json.Unmarshal(dump, &statuses))
+			require.Len(t, statuses, 1)
+			require.Len(t, statuses[0].Status.Listeners, 2)
+			for _, listener := range statuses[0].Status.Listeners {
+				for condition, want := range map[string]metav1.ConditionStatus{
+					"Conflicted": metav1.ConditionFalse,
+					"Accepted":   metav1.ConditionTrue,
+					"Programmed": metav1.ConditionTrue,
+				} {
+					got := meta.FindStatusCondition(listener.Conditions, condition)
+					require.NotNil(t, got)
+					assert.Equal(t, want, got.Status, "%s %s", listener.Name, condition)
+				}
+			}
+		})
+	}
 }
 
 func TestListenerSafetyGatewayConflictStatus(t *testing.T) {
