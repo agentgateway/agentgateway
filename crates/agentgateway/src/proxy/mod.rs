@@ -85,7 +85,7 @@ impl ProxyError {
 			ProxyError::AIResponse(error) => classify_ai_response(error).reason,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
 			ProxyError::OidcFailure(_) => ProxyResponseReason::Oidc,
-			ProxyError::McpJwtAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
+			ProxyError::McpAuthenticationFailure(_, _) => ProxyResponseReason::JwtAuth,
 			ProxyError::BasicAuthenticationFailure(_) => ProxyResponseReason::BasicAuth,
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
@@ -210,7 +210,7 @@ pub enum ProxyError {
 	#[error("oidc failure: {0}")]
 	OidcFailure(http::oidc::Error),
 	#[error("mcp authentication failure: {0}")]
-	McpJwtAuthenticationFailure(Box<ProxyError>, mcp::auth::McpResourceChallenge),
+	McpAuthenticationFailure(Box<ProxyError>, mcp::auth::McpResourceChallenge),
 	#[error("basic authentication failure: {0}")]
 	BasicAuthenticationFailure(http::basicauth::Error),
 	#[error("api key authentication failure: {0}")]
@@ -383,13 +383,13 @@ impl ProxyError {
 		}
 	}
 
-	pub fn is_client_authentication_failure(&self) -> bool {
-		let error = match self {
-			Self::McpJwtAuthenticationFailure(inner, _) => inner.as_ref(),
-			other => other,
-		};
-		matches!(error, Self::JwtAuthenticationFailure(error)
-			if !matches!(error, crate::http::jwt::TokenError::CredentialRemoval(_)))
+	pub fn is_client_bearer_token_rejection(&self) -> bool {
+		match self {
+			Self::JwtAuthenticationFailure(crate::http::jwt::TokenError::CredentialRemoval(_)) => false,
+			Self::JwtAuthenticationFailure(_) => true,
+			Self::McpAuthenticationFailure(inner, _) => inner.is_client_bearer_token_rejection(),
+			_ => false,
+		}
 	}
 
 	fn http_status(&self) -> StatusCode {
@@ -451,7 +451,7 @@ impl ProxyError {
 				}
 			},
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
-			ProxyError::McpJwtAuthenticationFailure(ref inner, _)
+			ProxyError::McpAuthenticationFailure(ref inner, _)
 				if matches!(
 					inner.as_ref(),
 					ProxyError::JwtAuthenticationFailure(http::jwt::TokenError::CredentialRemoval(_))
@@ -459,7 +459,7 @@ impl ProxyError {
 			{
 				StatusCode::INTERNAL_SERVER_ERROR
 			},
-			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
+			ProxyError::McpAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 			ProxyError::SubstrateEgressDenied(_) => StatusCode::FORBIDDEN,
 			ProxyError::SubstrateEgressUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -640,7 +640,7 @@ impl ProxyError {
 				.expect("budget exceeded response is valid");
 		}
 
-		if let ProxyError::McpJwtAuthenticationFailure(inner, challenge) = &this
+		if let ProxyError::McpAuthenticationFailure(inner, challenge) = &this
 			&& code == StatusCode::UNAUTHORIZED
 		{
 			let token_error = match inner.as_ref() {

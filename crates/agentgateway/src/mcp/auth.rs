@@ -164,7 +164,7 @@ pub(crate) fn create_auth_required_response(
 	req: &Request,
 	auth: &McpAuthentication,
 ) -> ProxyError {
-	ProxyError::McpJwtAuthenticationFailure(Box::new(inner), McpResourceChallenge::new(req, auth))
+	ProxyError::McpAuthenticationFailure(Box::new(inner), McpResourceChallenge::new(req, auth))
 }
 
 /// Saved by MCP auth so later token failures point clients to the original resource metadata URL.
@@ -202,9 +202,7 @@ impl McpResourceChallenge {
 
 	pub fn wrap(req: &Request, error: ProxyError) -> ProxyError {
 		match req.extensions().get::<Self>() {
-			Some(challenge) => {
-				ProxyError::McpJwtAuthenticationFailure(Box::new(error), challenge.clone())
-			},
+			Some(challenge) => ProxyError::McpAuthenticationFailure(Box::new(error), challenge.clone()),
 			None => error,
 		}
 	}

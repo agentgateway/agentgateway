@@ -499,7 +499,7 @@ impl Relay {
 				Ok(false) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen
-						&& !e.is_client_authentication_failure()
+						&& !e.is_client_bearer_token_rejection()
 					{
 						warn!(
 							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
@@ -1245,7 +1245,7 @@ impl Relay {
 					}
 					// Credential rejections must reach the client even when unavailable targets are skipped.
 					if self.upstreams.failure_mode == FailureMode::FailOpen
-						&& !e.is_client_authentication_failure()
+						&& !e.is_client_bearer_token_rejection()
 					{
 						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
 						last_error = Some(e);
@@ -1486,7 +1486,7 @@ impl Relay {
 						continue;
 					}
 					if self.upstreams.failure_mode == FailureMode::FailOpen
-						&& !e.is_client_authentication_failure()
+						&& !e.is_client_bearer_token_rejection()
 					{
 						if !is_405 {
 							// per spec, a 405 is a valid response to say a GET stream is not supported so avoid log spam.
@@ -1735,7 +1735,7 @@ impl Relay {
 				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen
-						&& !e.is_client_authentication_failure()
+						&& !e.is_client_bearer_token_rejection()
 					{
 						warn!(
 							"upstream '{}' failed during notification, skipping: {}",

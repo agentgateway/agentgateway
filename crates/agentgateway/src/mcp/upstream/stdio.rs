@@ -155,7 +155,7 @@ impl Process {
 						Some((msg, ctx, rejected)) => match proc.send(msg, &ctx).await {
 							Ok(()) => {},
 							// Rejected before anything was sent, so the transport is still usable.
-							Err(e) if e.is_client_authentication_failure() => {
+							Err(e) if e.is_client_bearer_token_rejection() => {
 								let _ = rejected.send(e);
 							},
 							Err(e) => {

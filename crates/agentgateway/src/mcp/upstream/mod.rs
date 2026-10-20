@@ -204,10 +204,10 @@ pub enum UpstreamError {
 }
 
 impl UpstreamError {
-	pub(super) fn is_client_authentication_failure(&self) -> bool {
+	pub(super) fn is_client_bearer_token_rejection(&self) -> bool {
 		match self {
 			Self::Proxy(err) | Self::Http(mcp::ClientError::Proxy(err)) => {
-				err.is_client_authentication_failure()
+				err.is_client_bearer_token_rejection()
 			},
 			_ => false,
 		}

@@ -410,7 +410,7 @@ impl Session {
 				p @ (ProxyError::InvalidRequest
 				| ProxyError::BackendAuthenticationFailed(_)
 				| ProxyError::JwtAuthenticationFailure(_)
-				| ProxyError::McpJwtAuthenticationFailure(_, _)),
+				| ProxyError::McpAuthenticationFailure(_, _)),
 			))) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,
