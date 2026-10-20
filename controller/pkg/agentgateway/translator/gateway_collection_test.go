@@ -33,7 +33,7 @@ func TestListenerConflictCopyOnWrite(t *testing.T) {
 			assert.Equal(t, conflict, listeners[1].Conflict)
 			assert.Empty(t, candidate.Conflict)
 
-			// Removing the winner lets the same collection-owned candidate recover.
+			// A fresh evaluation without the winner uses the unmodified candidate.
 			listeners = []*GatewayListener{&candidate.GatewayListener}
 			validateListenerConflicts(listeners)
 			assert.Same(t, &candidate.GatewayListener, listeners[0])
@@ -51,10 +51,13 @@ func (p fixedListenerParents) ParentsFor(krt.HandlerContext, utils.TypedNamespac
 func TestArbitratedParentResolver(t *testing.T) {
 	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
 	listener := &GatewayListener{
-		Name: "tenant/set.http", ParentGateway: gw, Conflict: ListenerConflictHostname,
-		ParentInfo: ParentInfo{ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: "tenant/set.http", Hostnames: []string{"tenant/*"}},
+		Name: "owner/gateway.http", ParentGateway: gw, Conflict: ListenerConflictHostname,
+		ParentInfo: ParentInfo{
+			ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: "owner/gateway.http",
+			Hostnames: []string{"owner/*"}, Port: 8080,
+			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "GRPCRoute"}},
+		},
 	}
-	listeners := krt.NewStaticCollection(nil, []*GatewayListener{listener})
 	stale := listener.ParentInfo
 	stale.Hostnames = []string{"*/*"}
 	stale.ParentGatewayClassName = "additional"
@@ -62,153 +65,75 @@ func TestArbitratedParentResolver(t *testing.T) {
 	wrongGateway.ParentGateway.Name = "other"
 	unknown := stale
 	unknown.ListenerKey = "unknown"
-	service := &ParentInfo{ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: "service"}, ServicePorts: []gwv1.PortNumber{80}}
 	listenerless := &ParentInfo{Hostnames: []string{"tenant/*"}}
-	p := ArbitratedParentResolver{
-		Listeners: listeners, Resolver: fixedListenerParents{nil, service, listenerless, &unknown, &wrongGateway, &stale, &stale},
-		Gateways: krt.NewStaticCollection(nil, []*gwv1.Gateway{
-			{Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
-			{Name: "other", Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
-		}),
-		AdditionalGatewayClasses: sets.New("additional"),
+	service := func(key, name string) *ParentInfo {
+		return &ParentInfo{
+			ParentGateway: gw, ListenerKey: key,
+			ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: name}, ServicePorts: []gwv1.PortNumber{80, 443},
+			Hostnames: []string{"tenant/api.example.com"}, AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
+		}
 	}
-	got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "ExtensionListenerSet"})
-	assert.Equal(t, []*ParentInfo{service, listenerless, &listener.ParentInfo}, got)
-	assert.Same(t, service, got[0])
-	assert.Same(t, listenerless, got[1])
-	assert.Equal(t, []string{"tenant/*"}, got[2].Hostnames)
-}
-
-func TestArbitratedParentResolverServiceMetadata(t *testing.T) {
-	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
-	listener := &GatewayListener{
-		Name: "owner/gateway.http", ParentGateway: gw,
-		ParentInfo: ParentInfo{
-			ParentGateway: gw, ListenerKey: "owner/gateway.http",
-			Hostnames: []string{"owner/*"}, Port: 8080,
-			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "GRPCRoute"}},
-		},
+	delegated := func(key, section, hostname string) *ParentInfo {
+		return &ParentInfo{
+			ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: key,
+			Hostnames: []string{hostname}, Port: 80,
+			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, SectionName: gwv1.SectionName(section),
+		}
+	}
+	type testCase struct {
+		name, gatewayClass string
+		parents, want      []*ParentInfo
+	}
+	cases := []testCase{
+		{name: "authoritative metadata and deduplication", gatewayClass: "agentgateway", parents: []*ParentInfo{nil, &unknown, &wrongGateway, &stale, &stale}, want: []*ParentInfo{&listener.ParentInfo}},
+		{name: "listenerless", parents: []*ParentInfo{listenerless}, want: []*ParentInfo{listenerless}},
+		{name: "missing gateway", parents: []*ParentInfo{&stale}},
 	}
 	for _, key := range []string{"", "plugin/listener", listener.Name} {
-		t.Run(key, func(t *testing.T) {
-			service := &ParentInfo{
-				ParentGateway: gw, ListenerKey: key,
-				ServiceKey:   &types.NamespacedName{Namespace: "tenant", Name: "service"},
-				ServicePorts: []gwv1.PortNumber{80, 443},
-				Hostnames:    []string{"tenant/api.example.com"},
-				AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
-			}
-			p := ArbitratedParentResolver{
-				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
-				Resolver:  fixedListenerParents{service},
-			}
-			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Service"})
-			require.Len(t, got, 1)
-			assert.Same(t, service, got[0])
-			assert.Equal(t, &types.NamespacedName{Namespace: "tenant", Name: "service"}, got[0].ServiceKey)
-			assert.Equal(t, []gwv1.PortNumber{80, 443}, got[0].ServicePorts)
-			assert.Equal(t, []string{"tenant/api.example.com"}, got[0].Hostnames)
-			assert.Equal(t, []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, got[0].AllowedKinds)
-		})
-	}
-}
-
-func TestArbitratedParentResolverDistinctServices(t *testing.T) {
-	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
-	listener := &GatewayListener{
-		Name: "owner/gateway.http", ParentGateway: gw,
-		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http"},
-	}
-	first := &ParentInfo{
-		ParentGateway: gw, ListenerKey: listener.Name,
-		ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: "first"}, ServicePorts: []gwv1.PortNumber{80},
-	}
-	second := *first
-	second.ServiceKey = &types.NamespacedName{Namespace: "tenant", Name: "second"}
-	p := ArbitratedParentResolver{
-		Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
-		Resolver:  fixedListenerParents{first, &second},
-	}
-	got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Service"})
-	assert.Equal(t, []*ParentInfo{first, &second}, got)
-}
-
-func TestArbitratedParentResolverDelegatedMetadata(t *testing.T) {
-	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
-	listener := &GatewayListener{
-		Name: "owner/gateway.http", ParentGateway: gw,
-		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http", Hostnames: []string{"owner/*"}},
+		first, second := service(key, "first"), service(key, "second")
+		cases = append(cases, testCase{name: "service metadata/" + key, parents: []*ParentInfo{first, second}, want: []*ParentInfo{first, second}})
 	}
 	for _, key := range []string{"plugin/listener", listener.Name} {
-		t.Run(key, func(t *testing.T) {
-			parent := &ParentInfo{
-				ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: key,
-				Hostnames: []string{"tenant/api.example.com"}, Port: 80,
-				AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, SectionName: "first",
+		first, second := delegated(key, "first", "tenant/api.example.com"), delegated(key, "second", "tenant/other.example.com")
+		cases = append(cases, testCase{name: "delegated metadata/" + key, gatewayClass: "additional", parents: []*ParentInfo{first, second}, want: []*ParentInfo{first, second}})
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gateways []*gwv1.Gateway
+			if tc.gatewayClass != "" {
+				gateways = []*gwv1.Gateway{
+					{Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(tc.gatewayClass)}},
+					{Name: "other", Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
+				}
 			}
-			second := *parent
-			second.SectionName = "second"
-			second.Hostnames = []string{"tenant/other.example.com"}
 			p := ArbitratedParentResolver{
-				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
-				Gateways: krt.NewStaticCollection(nil, []*gwv1.Gateway{{
-					Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "additional"},
-				}}),
-				AdditionalGatewayClasses: sets.New("additional"),
-				Resolver:                 fixedListenerParents{parent, &second},
+				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}), Resolver: fixedListenerParents(tc.parents),
+				Gateways: krt.NewStaticCollection(nil, gateways), AdditionalGatewayClasses: sets.New("additional"),
 			}
-			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Gateway"})
-			require.Len(t, got, 2)
-			assert.Same(t, parent, got[0])
-			assert.Same(t, &second, got[1])
-		})
-	}
-}
-
-func TestArbitratedParentResolverMissingGateway(t *testing.T) {
-	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
-	listener := &GatewayListener{
-		Name: "owner/gateway.http", ParentGateway: gw,
-		ParentInfo: ParentInfo{ParentGateway: gw, ListenerKey: "owner/gateway.http"},
-	}
-	p := ArbitratedParentResolver{
-		Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}),
-		Gateways:  krt.NewStaticCollection[*gwv1.Gateway](nil, nil),
-		Resolver:  fixedListenerParents{&listener.ParentInfo},
-	}
-	assert.Empty(t, p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "Gateway"}))
-}
-
-func TestListenerConflictsUseServedHostname(t *testing.T) {
-	for _, hostname := range []string{"", "example.com", "*.example.com"} {
-		t.Run(hostname, func(t *testing.T) {
-			winner := &GatewayListener{ParentInfo: ParentInfo{
-				Port: 8080, Protocol: gwv1.HTTPProtocolType,
-				OriginalHostname: hostname, Hostnames: []string{"*/" + hostname},
-			}}
-			loser := &GatewayListener{ParentInfo: ParentInfo{
-				Port: 8080, Protocol: gwv1.HTTPProtocolType,
-				OriginalHostname: hostname, Hostnames: []string{"tenant/" + hostname},
-			}}
-			listeners := []*GatewayListener{winner, loser}
-			validateListenerConflicts(listeners)
-			assert.Equal(t, ListenerConflict(ListenerConflictHostname), listeners[1].Conflict)
-			assert.Empty(t, loser.Conflict)
+			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "ExtensionListenerSet"})
+			require.Equal(t, tc.want, got)
+			for i := range tc.want {
+				assert.Same(t, tc.want[i], got[i])
+			}
 		})
 	}
 }
 
 func TestListenerDistinctHostnameSpecificity(t *testing.T) {
-	var listeners []*GatewayListener
-	for _, hostname := range []string{"", "*.example.com", "*.sub.example.com", "api.example.com", "other.example.com"} {
-		listeners = append(listeners, &GatewayListener{ParentInfo: ParentInfo{
-			Port: 8080, Protocol: gwv1.HTTPProtocolType, OriginalHostname: hostname,
-			Hostnames: []string{"tenant/" + hostname},
-		}})
-	}
-	validateListenerConflicts(listeners)
-	for _, listener := range listeners {
-		assert.Empty(t, listener.Conflict)
+	for _, protocol := range []gwv1.ProtocolType{gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType, gwv1.TLSProtocolType} {
+		t.Run(string(protocol), func(t *testing.T) {
+			var listeners []*GatewayListener
+			for _, hostname := range []string{"", "*.example.com", "*.sub.example.com", "api.example.com", "other.example.com"} {
+				listeners = append(listeners, &GatewayListener{ParentInfo: ParentInfo{
+					Port: 8080, Protocol: protocol, OriginalHostname: hostname,
+					Hostnames: []string{"tenant/" + hostname},
+				}})
+			}
+			validateListenerConflicts(listeners)
+			for _, listener := range listeners {
+				assert.Empty(t, listener.Conflict)
+			}
+		})
 	}
 }
 
@@ -240,63 +165,39 @@ func TestListenerConflictHTTPSAndTLS(t *testing.T) {
 }
 
 func TestListenerConflictSNIHostnameAcrossNamespaces(t *testing.T) {
-	listener := func(ns string, protocol gwv1.ProtocolType, hostname string) *GatewayListener {
-		key := hostname
-		if key == "" {
-			key = "*"
-		}
-		return &GatewayListener{ParentInfo: ParentInfo{
-			Port: 443, Protocol: protocol, Hostnames: []string{ns + "/" + key}, OriginalHostname: hostname,
-		}}
-	}
-	cases := []struct {
-		name   string
-		first  *GatewayListener
-		second *GatewayListener
-		want   ListenerConflict
-	}{
-		{
-			name:   "https then tls",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.TLSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "tls then https",
-			first:  listener("default", gwv1.TLSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "https then https",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "no hostname",
-			first:  listener("default", gwv1.HTTPSProtocolType, ""),
-			second: listener("team1", gwv1.TLSProtocolType, ""),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "different hostname",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.TLSProtocolType, "bar.example.com"),
-		},
-		{
-			name:   "http served hostname across namespaces",
-			first:  listener("default", gwv1.HTTPProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			listeners := []*GatewayListener{tc.first, tc.second}
-			validateListenerConflicts(listeners)
-			assert.Empty(t, listeners[0].Conflict)
-			assert.Equal(t, tc.want, listeners[1].Conflict)
+	for _, protocols := range [][2]gwv1.ProtocolType{
+		{gwv1.HTTPSProtocolType, gwv1.TLSProtocolType},
+		{gwv1.TLSProtocolType, gwv1.HTTPSProtocolType},
+		{gwv1.HTTPSProtocolType, gwv1.HTTPSProtocolType},
+		{gwv1.HTTPProtocolType, gwv1.HTTPProtocolType},
+	} {
+		t.Run(string(protocols[0])+"/"+string(protocols[1]), func(t *testing.T) {
+			for _, hostname := range []string{"", "example.com", "*.example.com"} {
+				t.Run(hostname, func(t *testing.T) {
+					key := hostname
+					if key == "" {
+						key = "*"
+					}
+					first := &GatewayListener{ParentInfo: ParentInfo{
+						Port: 443, Protocol: protocols[0], OriginalHostname: hostname, Hostnames: []string{"*/" + key},
+					}}
+					second := &GatewayListener{ParentInfo: ParentInfo{
+						Port: 443, Protocol: protocols[1], OriginalHostname: hostname, Hostnames: []string{"tenant/" + key},
+					}}
+					listeners := []*GatewayListener{first, second}
+					validateListenerConflicts(listeners)
+					assert.Empty(t, listeners[0].Conflict)
+					assert.Equal(t, ListenerConflict(ListenerConflictHostname), listeners[1].Conflict)
+					assert.Empty(t, second.Conflict)
+
+					// Distinct served hostnames do not conflict even across namespaces.
+					second.ParentInfo.OriginalHostname = "other.example.com"
+					second.ParentInfo.Hostnames = []string{"tenant/other.example.com"}
+					listeners = []*GatewayListener{first, second}
+					validateListenerConflicts(listeners)
+					assert.Empty(t, listeners[1].Conflict)
+				})
+			}
 		})
 	}
 }

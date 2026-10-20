@@ -674,6 +674,10 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 
 type ParentResolver = plugins.ParentResolver
 
+// ArbitratedParentResolver uses the aggregated listener's attachment metadata for
+// controller-owned parents, including conflicted listeners kept for route status.
+// Service and additional-class parents remain owned by the extension resolver.
+// This does not filter traffic: buildAgwResources filters programmed listeners.
 type ArbitratedParentResolver struct {
 	Resolver                 ParentResolver
 	Listeners                krt.Collection[*GatewayListener]

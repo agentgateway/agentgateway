@@ -18,6 +18,33 @@ spec:
         certificateRefs:
           - name: tls
             kind: Secret
+    # Native Gateway listeners must also support both protocol orders.
+    - name: tls-first
+      port: 8443
+      protocol: TLS
+      hostname: tls.example.com
+      tls:
+        mode: Passthrough
+    - name: https-second
+      port: 8443
+      protocol: HTTPS
+      hostname: https.example.com
+      tls:
+        certificateRefs:
+        - name: tls
+    - name: https-first
+      port: 9443
+      protocol: HTTPS
+      hostname: https.example.com
+      tls:
+        certificateRefs:
+        - name: tls
+    - name: tls-second
+      port: 9443
+      protocol: TLS
+      hostname: tls.example.com
+      tls:
+        mode: Passthrough
 ---
 kind: Secret
 apiVersion: v1
@@ -73,6 +100,22 @@ output:
     Name: example
     Namespace: default
   resource:
+    bind:
+      key: 8443/default/example
+      port: 8443
+      protocol: TLS
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 9443/default/example
+      port: 9443
+      protocol: TLS
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
     listener:
       bindKey: 443/default/example
       hostname: foo.example.com
@@ -85,6 +128,64 @@ output:
       tls:
         cert: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
         privateKey: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 9443/default/example
+      hostname: https.example.com
+      key: default/example.https-first
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: https-first
+      protocol: HTTPS
+      tls:
+        cert: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+        privateKey: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8443/default/example
+      hostname: https.example.com
+      key: default/example.https-second
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: https-second
+      protocol: HTTPS
+      tls:
+        cert: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJiakNDQVJPZ0F3SUJBZ0lVTFpDLzFkMEhpMlRFUGk5MUtwamVZbzgzZ1pBd0NnWUlLb1pJemowRUF3SXcKRERFS01BZ0dBMVVFQXd3QllUQWVGdzB5TlRFeE1qVXlNRFE0TURKYUZ3MHlOVEV4TWpZeU1EUTRNREphTUF3eApDakFJQmdOVkJBTU1BV0V3V1RBVEJnY3Foa2pPUFFJQkJnZ3Foa2pPUFFNQkJ3TkNBQVIvc1UybWRnbkhab2Z6CmR0b0tRZm5FMWdrVE9HY2JJaWFUeDdXUGpZcXF1c1p5ZWYybTBpbkgrcnJVRFBJY2tTRlQ5dnlzRVJFVTBKcGMKL3JTZmVVOG9vMU13VVRBZEJnTlZIUTRFRmdRVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dId1lEVlIwagpCQmd3Rm9BVWdNQ01qYnRKZnQ2VjAyT1JWMzZQcmpBWWNPd3dEd1lEVlIwVEFRSC9CQVV3QXdFQi96QUtCZ2dxCmhrak9QUVFEQWdOSkFEQkdBaUVBcW9ISTVENUt2VFR4YVVubW1mc0Nzem1vazZWR0dsZ3hpVm5HVmpKNHJ5VUMKSVFENExVcTRZMjVPbG4zQnNlbE1nT0M5VWNFS3dLRGlOTDZlMkc4S09EcU0wZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+        privateKey: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxRblhESm5qZFRianhhV2NKQkJOK0FDVjh3UDRxR3RZdVA0VjdZSXdJdGRvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFZjdGTnBuWUp4MmFIODNiYUNrSDV4TllKRXpobkd5SW1rOGUxajQyS3Fyckdjbm45cHRJcAp4L3E2MUF6eUhKRWhVL2I4ckJFUkZOQ2FYUDYwbjNsUEtBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8443/default/example
+      hostname: tls.example.com
+      key: default/example.tls-first
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: tls-first
+      protocol: TLS
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 9443/default/example
+      hostname: tls.example.com
+      key: default/example.tls-second
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: tls-second
+      protocol: TLS
 - gateway:
     Name: example
     Namespace: default
@@ -255,3 +356,111 @@ status:
         kind: HTTPRoute
       - group: gateway.networking.k8s.io
         kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: tls-first
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TLSRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: https-second
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: https-first
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: tls-second
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TLSRoute

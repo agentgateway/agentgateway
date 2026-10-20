@@ -1,0 +1,160 @@
+# The first listener on each port wins. Neither hostname nor protocol losers
+# should be programmed, and each loser must report all three conditions.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    port: 8080
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: duplicate
+    port: 8080
+    protocol: HTTP
+  - name: incompatible
+    port: 8080
+    protocol: TCP
+
+---
+# Output
+output:
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/example
+      port: 8080
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      key: default/example.http
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: example
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: 'Some listeners are not accepted: duplicate: Found conflicting hostnames
+        on listeners, all listeners on a single port must have unique hostnames; duplicate:
+        Found conflicting hostnames on listeners, all listeners on a single port must
+        have unique hostnames; incompatible: Found conflicting protocols on listeners,
+        a single port can only contain listeners with compatible protocols; incompatible:
+        Found conflicting protocols on listeners, a single port can only contain listeners
+        with compatible protocols'
+      reason: ListenersNotValid
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: duplicate
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: incompatible
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TCPRoute

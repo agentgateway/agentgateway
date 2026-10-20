@@ -163,7 +163,7 @@ func SyncerWithOptions(
 }
 
 func SyncerWithExtensions(
-	t *testing.T,
+	t testing.TB,
 	ctx plugins.PolicyCtx,
 	includeStatusKinds []string,
 	extensions plugins.AgwPlugin,

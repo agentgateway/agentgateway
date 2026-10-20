@@ -1,0 +1,404 @@
+# Conflicted parents retain route attachment/status, not dataplane listeners.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+  - name: hostname
+    port: 8080
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: protocol
+    port: 8081
+    protocol: TCP
+  - name: bind-mode
+    port: 8082
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: delegate
+  namespace: default
+  annotations:
+    agentgateway.dev/internal-ports: "8082"
+spec:
+  parentRef:
+    name: example
+  listeners:
+  - name: hostname
+    port: 8080
+    protocol: HTTP
+  - name: protocol
+    port: 8081
+    protocol: HTTP
+  - name: bind-mode
+    port: 8082
+    protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: dormant
+  namespace: default
+spec:
+  parentRefs:
+  - kind: ListenerSet
+    name: delegate
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+
+---
+# Output
+output:
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/example
+      port: 8080
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8081/default/example
+      port: 8081
+      protocol: TCP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8082/default/example
+      port: 8082
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8082/default/example
+      key: default/example.bind-mode
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: bind-mode
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      key: default/example.hostname
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: hostname
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8081/default/example
+      key: default/example.protocol
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: protocol
+      protocol: TCP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    route:
+      key: default/dormant.00.default.delegate.bind-mode
+      listenerKey: default/delegate.bind-mode
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: dormant
+        namespace: default
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    route:
+      key: default/dormant.00.default.delegate.hostname
+      listenerKey: default/delegate.hostname
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: dormant
+        namespace: default
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    route:
+      key: default/dormant.00.default.delegate.protocol
+      listenerKey: default/delegate.protocol
+      matches:
+      - path:
+          pathPrefix: /
+      name:
+        kind: HTTPRoute
+        name: dormant
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: delegate
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting hostnames on listeners, all listeners on a single
+          port must have unique hostnames
+        reason: HostnameConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting protocols on listeners, a single port can only
+          contain listeners with compatible protocols
+        reason: ProtocolConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: protocol
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "False"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "True"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "False"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: bind-mode
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: example
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: hostname
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: protocol
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TCPRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: bind-mode
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: dormant
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: ListenerSet
+        name: delegate
+        namespace: default
