@@ -1390,13 +1390,19 @@ pub mod from_messages {
 			.filter(|m| m.role == messages::Role::Assistant)
 			.for_each(|m| restore_signatures(&mut m.content));
 		let off = matches!(req.thinking, Some(messages::ThinkingInput::Disabled {}));
+		let top_k = req.top_k;
 		let mut req = completions::translate_internal(req);
 		if off {
 			// The shared conversion drops an explicit off, as other Chat Completions upstreams may
 			// reject "none"
 			req.reasoning_effort = Some(ReasoningEffort::None);
 		}
-		super::from_completions::translate(&super::loose(&req)?, is_vertex, catalog)
+		let mut req = super::loose(&req)?;
+		if let Some(top_k) = top_k {
+			// Chat Completions has no top_k, so the shared conversion drops it
+			req.rest["top_k"] = top_k.into();
+		}
+		super::from_completions::translate(&req, is_vertex, catalog)
 	}
 
 	pub fn translate_stream(

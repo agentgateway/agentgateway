@@ -1822,7 +1822,7 @@ fn an_explicit_off_reaches_gemini(
 }
 
 #[test]
-fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
+fn messages_top_k_is_sent_and_the_budget_becomes_an_effort() {
 	let req: types::messages::Request = serde_json::from_value(json!({
 		"model": "gemini-2.5-flash",
 		"max_tokens": 8192,
@@ -1833,7 +1833,7 @@ fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
 	.unwrap();
 	let bytes = from_messages::translate(&req, true, None).unwrap();
 	let g: Value = serde_json::from_slice(&bytes).unwrap();
-	assert_eq!(g["generationConfig"].get("topK"), None);
+	assert_eq!(g["generationConfig"]["topK"], 40);
 	assert_eq!(
 		g["generationConfig"]["thinkingConfig"],
 		json!({ "thinkingBudget": 2048, "includeThoughts": true })
