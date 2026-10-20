@@ -241,6 +241,7 @@ fn explicit_local_oidc_config() -> LocalOidcConfig {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: test_redirect_uri().redirect_uri,
 		scopes: vec!["profile".into(), "email".into()],
+		session_ttl: None,
 		login: None,
 		logout: None,
 		credentials: Default::default(),
@@ -267,6 +268,38 @@ async fn compile_local_policy(
 	config
 		.compile(&resources, policy_id, &test_oidc_cookie_encoder())
 		.await
+}
+
+#[tokio::test]
+async fn local_session_ttl_defaults_and_caps_expiry() {
+	for (session_ttl, expected_ttl, expected_expiry) in [
+		(None, 604800, 8200),
+		(Some("30m"), 1800, 2800),
+		(Some("24h"), 86400, 8200),
+	] {
+		let mut config = json!({
+			"issuer": TEST_ISSUER,
+			"authorizationEndpoint": "https://issuer.example.com/authorize",
+			"tokenEndpoint": "https://issuer.example.com/token",
+			"jwks": serde_json::to_string(&test_jwks()).expect("jwks"),
+			"clientId": TEST_CLIENT_ID,
+			"clientSecret": "client-secret",
+			"redirectURI": "http://localhost:3000/oauth/callback"
+		});
+		if let Some(ttl) = session_ttl {
+			config["sessionTtl"] = json!(ttl);
+		}
+		let config = serde_json::from_value(config).expect("oidc config");
+		let policy = compile_local_policy(config, translated_policy_id("session-ttl"))
+			.await
+			.expect("compile oidc policy");
+		assert_eq!(policy.session.ttl, Duration::from_secs(expected_ttl));
+		let claims = json!({"exp": 8200}).as_object().unwrap().clone();
+		assert_eq!(
+			cap_session_expiry(1000, policy.session.ttl, &claims),
+			expected_expiry,
+		);
+	}
 }
 
 #[test]
@@ -1902,6 +1935,7 @@ async fn local_oidc_config_compiles_supported_provider_sources() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				session_ttl: None,
 				login: None,
 				logout: None,
 				credentials: Default::default(),
@@ -1982,6 +2016,7 @@ async fn discovery_rejects_relative_provider_endpoints() {
 		client_secret: SecretString::new("client-secret".into()),
 		redirect_uri: "http://localhost:3000/oauth/callback".into(),
 		scopes: vec![],
+		session_ttl: None,
 		login: None,
 		logout: None,
 		credentials: Default::default(),
@@ -2050,6 +2085,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				session_ttl: None,
 				login: None,
 				logout: None,
 				credentials: Default::default(),
@@ -2081,6 +2117,7 @@ async fn local_oidc_config_rejects_invalid_configuration() {
 				client_secret: SecretString::new("client-secret".into()),
 				redirect_uri: "http://localhost:3000/oauth/callback".into(),
 				scopes: vec![],
+				session_ttl: None,
 				login: None,
 				logout: None,
 				credentials: Default::default(),

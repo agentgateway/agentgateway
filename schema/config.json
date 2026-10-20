@@ -6987,6 +6987,14 @@
           },
           "default": []
         },
+        "sessionTtl": {
+          "description": "Lifetime of the browser session cookie. Defaults to 7 days.\nThe effective expiry is capped at the ID token's `exp`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "login": {
           "description": "Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.",
           "anyOf": [

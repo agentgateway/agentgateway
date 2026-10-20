@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
 use secrecy::SecretString;
@@ -37,6 +38,7 @@ struct PreparedOidcPolicy {
 	client_secret: SecretString,
 	redirect_uri: RedirectUri,
 	scopes: Vec<String>,
+	session_ttl: Option<Duration>,
 	login: Option<OidcLogin>,
 	logout: Option<OidcLogout>,
 	credentials: OidcCredentials,
@@ -161,6 +163,12 @@ pub struct LocalOidcConfig {
 	#[serde(default)]
 	pub scopes: Vec<String>,
 
+	/// Lifetime of the browser session cookie. Defaults to 7 days.
+	/// The effective expiry is capped at the ID token's `exp`.
+	#[serde(default, with = "crate::serdes::serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub session_ttl: Option<Duration>,
+
 	/// Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.
 	#[serde(default)]
 	pub login: Option<OidcLogin>,
@@ -210,6 +218,7 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			session_ttl,
 			login,
 			logout,
 			credentials,
@@ -321,6 +330,7 @@ impl LocalOidcConfig {
 			client_secret,
 			redirect_uri,
 			scopes,
+			session_ttl,
 			login,
 			logout,
 			credentials: credentials.unwrap_or_default(),
@@ -460,6 +470,7 @@ impl PreparedOidcPolicy {
 			client_secret,
 			redirect_uri,
 			scopes,
+			session_ttl,
 			login,
 			logout,
 			credentials,
@@ -484,7 +495,7 @@ impl PreparedOidcPolicy {
 				transaction_cookie_prefix,
 				same_site: SameSiteMode::Lax,
 				secure: CookieSecureMode::Auto,
-				ttl: session::default_session_ttl(),
+				ttl: session_ttl.unwrap_or_else(session::default_session_ttl),
 				transaction_ttl: session::default_transaction_ttl(),
 				encoder: oidc_cookie_encoder.clone(),
 			},
