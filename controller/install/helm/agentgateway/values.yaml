@@ -73,10 +73,6 @@ controller:
   priorityClassName: ""
   # -- Set the log level for the controller.
   logLevel: info
-  # -- Configure the controller admin server (port 9095).
-  adminServer:
-    # -- IP address or literal localhost without a port; empty preserves the loopback-only default (localhost). A non-loopback address (e.g. 0.0.0.0 or ::) makes the admin server network-accessible.
-    bindAddress: ""
   # -- Configure the controller container image.
   image:
     # -- Set the image registry for the controller.

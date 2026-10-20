@@ -122,7 +122,7 @@ func TestImageTagVPrefix(t *testing.T) {
 	}
 }
 
-func TestAdminBindAddress(t *testing.T) {
+func TestUnsafeAdminBindAddress(t *testing.T) {
 	t.Parallel()
 	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
 	require.NoError(t, err)
@@ -133,19 +133,13 @@ func TestAdminBindAddress(t *testing.T) {
 	}{
 		{name: "default"},
 		{
-			// Remove the new map to reproduce values retained from an older chart
-			// by helm upgrade --reuse-values.
-			name:    "missing adminServer",
-			setArgs: []string{"--set", "controller.adminServer=null"},
-		},
-		{
 			name:    "IPv4 wildcard",
-			setArgs: []string{"--set-string", "controller.adminServer.bindAddress=0.0.0.0"},
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=0.0.0.0"},
 			address: "0.0.0.0",
 		},
 		{
 			name:    "IPv6 wildcard",
-			setArgs: []string{"--set-string", "controller.adminServer.bindAddress=::"},
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=::"},
 			address: "::",
 		},
 	} {
@@ -155,9 +149,9 @@ func TestAdminBindAddress(t *testing.T) {
 			output, err := helmCommand(t, args...).CombinedOutput()
 			require.NoError(t, err, "%s", output)
 			if tc.address == "" {
-				require.NotContains(t, string(output), "AGW_ADMIN_BIND_ADDRESS")
+				require.NotContains(t, string(output), "AGW_UNSAFE_ADMIN_BIND_ADDRESS")
 			} else {
-				require.Contains(t, string(output), "- name: AGW_ADMIN_BIND_ADDRESS\n              value: \""+tc.address+"\"")
+				require.Contains(t, string(output), "- name: AGW_UNSAFE_ADMIN_BIND_ADDRESS\n              value: \""+tc.address+"\"")
 			}
 		})
 	}

@@ -109,12 +109,6 @@ spec:
 
             - name: AGW_LOG_LEVEL
               value: {{ .Values.controller.logLevel | quote }}
-            {{- with .Values.controller.adminServer }}
-            {{- with .bindAddress }}
-            - name: AGW_ADMIN_BIND_ADDRESS
-              value: {{ . | quote }}
-            {{- end }}
-            {{- end }}
             - name: AGW_XDS_SERVICE_NAME
               value: {{ include "agentgateway.fullname" . }}
             - name: AGW_AGENTGATEWAY_XDS_SERVICE_PORT

@@ -23,7 +23,7 @@ func RunAdminServer(ctx context.Context, setupOpts *controller.SetupOpts) {
 	// serverHandlers defines the custom handlers that the Admin Server will support
 	serverHandlers := getServerHandlers(ctx, setupOpts.KrtDebugger)
 
-	startHandlers(ctx, setupOpts.GlobalSettings.AdminBindAddress, serverHandlers)
+	startHandlers(ctx, setupOpts.GlobalSettings.UnsafeAdminBindAddress, serverHandlers)
 }
 
 // use a function for the profile descriptions so that every time the admin page is displayed, it can show
