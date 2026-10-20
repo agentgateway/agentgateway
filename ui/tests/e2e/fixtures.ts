@@ -638,6 +638,8 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 		});
 	});
 
+	await page.route('**/v1/models', route => json(route, { data: [] }));
+
 	await page.route('**/v1/chat/completions', async route => {
 		chatUrls.push(route.request().url());
 		chatRequests.push(route.request().postDataJSON() as Record<string, unknown>);
