@@ -2320,14 +2320,17 @@ async fn apply_inference_routing(
 	inference_result
 		.policy_response
 		.apply(response_policies.headers())?;
-	let destination_for_log = inference_result.destination.clone();
-	log.add(move |l| l.inference_pool = destination_for_log);
+	log.add(|l| l.inference_pool = inference_result.destination.clone());
 
+	let destination_passthrough = inference_result.destination.is_some()
+		&& matches!(
+			inference_result.destination_mode,
+			InferenceRoutingDestinationMode::Passthrough
+		);
 	// Explicit inference and stateful MCP destinations take precedence over stateless affinity.
 	// In practice inference and MCP pinning do not conflict because they target different backends.
 	let destination = inference_result
 		.destination
-		.clone()
 		.or(policies.override_dest.map(Target::Address));
 	let affinity_key = if destination.is_none() {
 		policies
@@ -2339,11 +2342,7 @@ async fn apply_inference_routing(
 	};
 	let service_override = ServiceCallOverride {
 		destination,
-		destination_passthrough: inference_result.destination.is_some()
-			&& matches!(
-				inference_result.destination_mode,
-				InferenceRoutingDestinationMode::Passthrough
-			),
+		destination_passthrough,
 		inference_failed_open: inference_result.failed_open,
 		affinity_key,
 	};
@@ -3517,17 +3516,15 @@ pub fn build_service_call(
 		});
 	}
 
-	// Validated mode matches the destination against local service endpoints,
-	// which only IP destinations can satisfy. A hostname destination is an L7
-	// front door and must be trusted directly (destinationMode: Passthrough).
+	// Validated mode matches against local service endpoints, which only IP destinations can satisfy.
 	let validated_dest = match &service_override.destination {
+		None => None,
 		Some(Target::Address(addr)) => Some(*addr),
-		Some(Target::Hostname(host, port)) => {
+		Some(dest) => {
 			return Err(ProxyError::Processing(anyhow!(
-				"EPP returned hostname destination {host}:{port}, which requires destinationMode 'Passthrough'"
+				"destination {dest} requires destinationMode 'passthrough'"
 			)));
 		},
-		_ => None,
 	};
 
 	let discovery = inputs.stores.read_discovery();

@@ -223,6 +223,15 @@ impl InferenceRouting {
 	}
 }
 
+/// Parses the EPP destination header (host:port). unix: paths are rejected so an
+/// EPP cannot point the proxy at a local socket.
+fn parse_destination(v: &str) -> anyhow::Result<Target> {
+	match Target::try_from(v)? {
+		Target::UnixSocket(_) => anyhow::bail!("expected host:port"),
+		t => Ok(t),
+	}
+}
+
 impl InferencePoolRouter {
 	pub fn is_enabled(&self) -> bool {
 		self.ext_proc.is_some()
@@ -241,25 +250,12 @@ impl InferencePoolRouter {
 		let (new_req, pr) = ext_proc.mutate_request(r).await?;
 		let failed_open = ext_proc.skipped;
 		*req = new_req;
-		// The EPP destination is host:port. IPs parse to Target::Address; DNS names
-		// to Target::Hostname, allowing an EPP to steer to an L7 front door (e.g. a
-		// remote cluster's gateway) instead of a bare IP.
 		let dest = req
 			.headers_mut()
 			.remove(&INFERENCE_DESTINATION_HEADER)
-			.and_then(|v| v.to_str().ok().map(Target::try_from))
+			.and_then(|v| v.to_str().ok().map(parse_destination))
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
-		let dest = match dest {
-			// The header contract is host:port; a unix: destination would let the EPP
-			// point the proxy at a local socket.
-			Some(Target::UnixSocket(_)) => {
-				return Err(ProxyError::Processing(anyhow!(
-					"EPP returned invalid address: expected host:port"
-				)));
-			},
-			d => d,
-		};
 		Ok(InferenceRequestResult {
 			destination: dest,
 			destination_mode: self.destination_mode,
