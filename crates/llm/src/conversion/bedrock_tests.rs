@@ -1509,78 +1509,48 @@ fn test_completions_error_translation_wraps_non_json_body() {
 	);
 }
 
-fn make_message(role: types::bedrock::Role, text: &str) -> types::bedrock::Message {
-	types::bedrock::Message {
-		role,
-		content: vec![types::bedrock::ContentBlock::Text(text.to_string())],
+#[test]
+fn test_prompt_caching_message_offset() {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let roles = ["user", "assistant", "user", "assistant", "user"];
+	// (message count, offset, expected cached message index)
+	for (count, offset, expected) in [
+		(3, 0, Some(1)),
+		(5, 2, Some(1)),
+		(3, 100, Some(0)),
+		(1, 0, None),
+	] {
+		let messages: Vec<_> = roles[..count]
+			.iter()
+			.map(|role| json!({"role": role, "content": "hi"}))
+			.collect();
+		let req: types::messages::Request = serde_json::from_value(json!({
+			"model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+			"max_tokens": 100,
+			"messages": messages
+		}))
+		.unwrap();
+		let caching = crate::PromptCachingConfig {
+			cache_message_offset: offset,
+			..Default::default()
+		};
+		let out = from_messages::translate(&req, &provider, None, Some(&caching), None).unwrap();
+		let out: serde_json::Value = serde_json::from_slice(&out.body).unwrap();
+		let cached = out["messages"].as_array().unwrap().iter().position(|m| {
+			m["content"]
+				.as_array()
+				.unwrap()
+				.iter()
+				.any(|b| b.get("cachePoint").is_some())
+		});
+		assert_eq!(cached, expected, "count={count} offset={offset}");
 	}
-}
-
-fn has_cache_point(msg: &types::bedrock::Message) -> bool {
-	msg
-		.content
-		.iter()
-		.any(|b| matches!(b, types::bedrock::ContentBlock::CachePoint(_)))
-}
-
-#[test]
-fn test_insert_cache_point_default_offset() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "Hello"),
-		make_message(types::bedrock::Role::Assistant, "Hi"),
-		make_message(types::bedrock::Role::User, "How are you?"),
-	];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(has_cache_point(&msgs[1]));
-	assert!(!has_cache_point(&msgs[0]));
-	assert!(!has_cache_point(&msgs[2]));
-}
-
-#[test]
-fn test_insert_cache_point_offset_shifts_back() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "a"),
-		make_message(types::bedrock::Role::Assistant, "b"),
-		make_message(types::bedrock::Role::User, "c"),
-		make_message(types::bedrock::Role::Assistant, "d"),
-		make_message(types::bedrock::Role::User, "e"),
-	];
-	helpers::insert_message_cache_point(&mut msgs, 2);
-	// default position is index 3 (len-2), offset 2 → index 1
-	assert!(has_cache_point(&msgs[1]));
-	for (i, msg) in msgs.iter().enumerate() {
-		if i != 1 {
-			assert!(!has_cache_point(msg));
-		}
-	}
-}
-
-#[test]
-fn test_insert_cache_point_offset_clamps_to_zero() {
-	let mut msgs = vec![
-		make_message(types::bedrock::Role::User, "a"),
-		make_message(types::bedrock::Role::Assistant, "b"),
-		make_message(types::bedrock::Role::User, "c"),
-	];
-	// offset 100 should clamp to index 0
-	helpers::insert_message_cache_point(&mut msgs, 100);
-	assert!(has_cache_point(&msgs[0]));
-	assert!(!has_cache_point(&msgs[1]));
-	assert!(!has_cache_point(&msgs[2]));
-}
-
-#[test]
-fn test_insert_cache_point_single_message_noop() {
-	let mut msgs = vec![make_message(types::bedrock::Role::User, "only")];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(!has_cache_point(&msgs[0]));
-}
-
-#[test]
-fn test_insert_cache_point_empty_messages_noop() {
-	let mut msgs: Vec<types::bedrock::Message> = vec![];
-	helpers::insert_message_cache_point(&mut msgs, 0);
-	assert!(msgs.is_empty());
 }
 
 #[test]

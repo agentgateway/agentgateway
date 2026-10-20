@@ -4085,58 +4085,80 @@ mod helpers {
 		req: &mut bedrock::ConverseRequest,
 		caching: &crate::PromptCachingConfig,
 	) {
-		let supports_caching = supports_prompt_caching(&req.model_id);
+		let support = prompt_caching_support(&req.model_id);
 		tracing::debug!(
 			?caching,
 			model = req.model_id,
-			supports_caching,
+			?support,
 			"prompt caching policy"
 		);
 		// Client cache points take precedence over the policy.
-		if !supports_caching || has_cache_point(req) {
+		if support == CachingSupport::None || has_cache_point(req) {
 			return;
 		}
+		let mut cache_points_used = 0;
 		if caching.cache_system
 			&& let Some(system) = &mut req.system
 			&& caching
 				.min_tokens
 				.is_none_or(|min| estimate_system_tokens(system) >= min)
 		{
-			system.push_cache_point(create_cache_point());
+			maybe_insert_cache_point(system, create_cache_point(), &mut cache_points_used);
 		}
-		if caching.cache_messages {
-			insert_message_cache_point(&mut req.messages, caching.cache_message_offset);
+		// Cache the conversation history, not the current turn; the offset moves the point further
+		// back, clamped to the first message.
+		if caching.cache_messages
+			&& let Some(idx) = req.messages.len().checked_sub(2)
+		{
+			let idx = idx.saturating_sub(caching.cache_message_offset);
+			insert_cache_point_on_prefix(
+				&mut req.messages[idx].content,
+				create_cache_point(),
+				&mut cache_points_used,
+			);
 		}
-		// Nova models do not support cache points in tool definitions.
-		// https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 		if caching.cache_tools
-			&& !req.model_id.to_lowercase().contains("amazon.nova")
+			&& support == CachingSupport::Full
 			&& let Some(tool_config) = &mut req.tool_config
 			&& !tool_config.tools.is_empty()
 		{
-			tool_config.tools.push_cache_point(create_cache_point());
+			maybe_insert_cache_point(
+				&mut tool_config.tools,
+				create_cache_point(),
+				&mut cache_points_used,
+			);
 		}
 	}
 
-	fn supports_prompt_caching(model_id: &str) -> bool {
+	/// Where a model accepts cache points.
+	/// https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
+	#[derive(Debug, PartialEq)]
+	enum CachingSupport {
+		None,
+		/// System and messages only; Nova models do not support cache points in tool definitions.
+		NoTools,
+		Full,
+	}
+
+	fn prompt_caching_support(model_id: &str) -> CachingSupport {
 		let model_lower = model_id.to_lowercase();
 		if model_lower.contains("anthropic.claude") {
 			let excluded = ["claude-instant", "claude-v1", "claude-v2"];
 			if excluded.iter().any(|pattern| model_lower.contains(pattern)) {
-				return false;
+				return CachingSupport::None;
 			}
-			return true;
+			return CachingSupport::Full;
 		}
 		if model_lower.contains("amazon.nova") {
-			return true;
+			return CachingSupport::NoTools;
 		}
 		if model_lower.contains(":application-inference-profile/") {
 			// If they are using inference profiles, the model name is obscured; we have no clue whether
 			// It's supported or not.
 			// Instead, we assume true; if users want to use models without support they can turn off caching manually.
-			return true;
+			return CachingSupport::Full;
 		}
-		false
+		CachingSupport::None
 	}
 
 	fn estimate_system_tokens(system: &[bedrock::SystemContentBlock]) -> usize {
@@ -4144,45 +4166,6 @@ mod helpers {
 			bedrock::SystemContentBlock::Text { text } => Some(text.as_str()),
 			bedrock::SystemContentBlock::CachePoint { .. } => None,
 		}))
-	}
-
-	pub fn insert_message_cache_point(messages: &mut [bedrock::Message], offset: usize) {
-		// Strategy: Cache everything BEFORE the last message (not including it)
-		// This caches the conversation history but not the current turn's input
-		//
-		// Example:
-		//   [User: "Hello", Assistant: "Hi", User: "How are you?"]
-		//   Cache point goes after "Hi" (before current "How are you?")
-		//
-		// This way:
-		//   - Conversation history: cached (cheap reads on subsequent turns)
-		//   - Current input: full price (it's new each turn anyway)
-		//
-		// The `offset` parameter shifts the cache point further back:
-		//   offset 0 → second-to-last message (default)
-		//   offset N → N additional messages back from default, clamped to bounds
-
-		let len = messages.len();
-
-		// If we have 0-1 messages, no point caching (nothing to reuse yet)
-		if len < 2 {
-			return;
-		}
-
-		// Clamp so the index never goes below 0
-		let target_idx = (len - 2).saturating_sub(offset);
-		// The policy only runs when the request has no cache points, so the limit cannot be hit here.
-		insert_cache_point_on_prefix(
-			&mut messages[target_idx].content,
-			create_cache_point(),
-			&mut 0,
-		);
-
-		tracing::debug!(
-			"Inserted cachePoint in message at index {} (offset={})",
-			target_idx,
-			offset
-		);
 	}
 
 	/// Extract metadata from x-bedrock-metadata header.
