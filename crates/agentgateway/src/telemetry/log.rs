@@ -1611,7 +1611,11 @@ impl Drop for DropOnLog {
 					|| log
 						.listener_name
 						.as_ref()
-						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME));
+						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME)
+					|| log
+						.route_name
+						.as_ref()
+						.is_some_and(|route| route.name.as_str() == llm::LOCAL_ROUTE_NAME));
 			if !maybe_enable_log && !enable_trace && !log_store_enabled && !otlp_log_enabled {
 				return;
 			}

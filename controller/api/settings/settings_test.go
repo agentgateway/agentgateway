@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"regexp"
@@ -18,6 +19,7 @@ import (
 // with values set to a non-default value.
 func allEnvVarsSet() map[string]string {
 	return map[string]string{
+		"AGW_UNSAFE_ADMIN_BIND_ADDRESS":                "0.0.0.0",
 		"AGW_DNS_LOOKUP_FAMILY":                        string(DnsLookupFamilyV4Only),
 		"AGW_LISTENER_BIND_IPV6":                       "false",
 		"AGW_ISTIO_NAMESPACE":                          "my-istio-namespace",
@@ -72,6 +74,7 @@ func TestSettings(t *testing.T) {
 			name:    "defaults to empty or default values",
 			envVars: map[string]string{},
 			expectedSettings: &Settings{
+				UnsafeAdminBindAddress:               "localhost",
 				DnsLookupFamily:                      DnsLookupFamilyV4Preferred,
 				ListenerBindIpv6:                     true,
 				IstioNamespace:                       "istio-system",
@@ -106,6 +109,7 @@ func TestSettings(t *testing.T) {
 			name:    "all values set",
 			envVars: allEnvVarsSet(),
 			expectedSettings: &Settings{
+				UnsafeAdminBindAddress:               "0.0.0.0",
 				DnsLookupFamily:                      DnsLookupFamilyV4Only,
 				ListenerBindIpv6:                     false,
 				IstioNamespace:                       "my-istio-namespace",
@@ -205,6 +209,7 @@ func TestSettings(t *testing.T) {
 				"AGW_ENABLE_ISTIO_AUTO_MTLS": "true",
 			},
 			expectedSettings: &Settings{
+				UnsafeAdminBindAddress:               "localhost",
 				DnsLookupFamily:                      DnsLookupFamilyV4Preferred,
 				ListenerBindIpv6:                     true,
 				IstioNamespace:                       "istio-system",
@@ -257,6 +262,43 @@ func TestSettings(t *testing.T) {
 			require.Emptyf(t, diff, "Settings do not match expected values (-expected +got):\n%s", diff)
 		})
 	}
+}
+
+func TestUnsafeAdminBindAddressRejectsInvalidAddresses(t *testing.T) {
+	for _, address := range []string{"", " ", "http://localhost", "localhost:9095", "0.0.0.0:9095", "[::]", "[::]:9095", "bad host", "-localhost", "localhost/path", "agwadmin.local", "debug.example.com", "DEBUG.example.com.", "controller-0", "LOCALHOST", "localhost.", "999.999.1.1", "::gg"} {
+		t.Run(address, func(t *testing.T) {
+			t.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", address)
+			_, err := BuildSettings()
+			require.ErrorContains(t, err, "AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+		})
+	}
+}
+
+func TestUnsafeAdminBindAddress(t *testing.T) {
+	for _, address := range []string{"localhost", "0.0.0.0", "127.0.0.1", "::", "::1", "192.0.2.10", "2001:db8::10"} {
+		t.Run(address, func(t *testing.T) {
+			t.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", address)
+			settings, err := BuildSettings()
+			require.NoError(t, err)
+			require.Equal(t, address, settings.UnsafeAdminBindAddress)
+		})
+	}
+	t.Run("default is loopback", func(t *testing.T) {
+		original, present := os.LookupEnv("AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+		require.NoError(t, os.Unsetenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS"))
+		t.Cleanup(func() {
+			if present {
+				require.NoError(t, os.Setenv("AGW_UNSAFE_ADMIN_BIND_ADDRESS", original))
+			}
+		})
+		settings, err := BuildSettings()
+		require.NoError(t, err)
+		require.Equal(t, "localhost", settings.UnsafeAdminBindAddress)
+		address, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(settings.UnsafeAdminBindAddress, "9095"))
+		require.NoError(t, err)
+		require.True(t, address.IP.IsLoopback())
+		require.Equal(t, 9095, address.Port)
+	})
 }
 
 // TestEnvVarCoverage tests that all settings are tested with non-default values.

@@ -417,6 +417,10 @@ pub struct LLMResponse {
 	pub completion: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_messages: Option<Vec<types::OutputMessage>>,
+	/// Per-pass usage when the provider ran several inference passes for one request (Anthropic
+	/// `usage.iterations`). When set, cost is priced per line instead of from the totals above.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub usage_lines: Vec<UsageLine>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
 	/// Timestamp of the most recently observed output token, used to compute
@@ -427,6 +431,21 @@ pub struct LLMResponse {
 	/// the inter-chunk-latency histogram at request completion.
 	#[serde(skip)]
 	pub inter_chunk_latencies: TokenGapSummary,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct UsageLine {
+	/// Provider model that ran this pass; `None` means the response's model.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_1h_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cached_input_tokens: Option<u64>,
 }
 
 /// Upper bounds for bucketing inter-chunk gaps before they're replayed into the

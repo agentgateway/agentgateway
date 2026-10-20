@@ -1198,6 +1198,7 @@ impl ResponseType for Response {
 
 		LLMResponse {
 			cache_creation_1h_input_tokens: None,
+			usage_lines: Vec::new(),
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,

@@ -2196,6 +2196,7 @@ pub mod from_messages {
 								cache_creation_input_tokens: None,
 								cache_read_input_tokens: None,
 								service_tier: None,
+								iterations: vec![],
 							},
 							input_audio_tokens: None,
 							output_audio_tokens: None,
@@ -2477,6 +2478,7 @@ pub mod from_messages {
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			iterations: vec![],
 		}
 	}
 }
@@ -4679,6 +4681,7 @@ impl ConverseResponseAdapter {
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
 				service_tier: None,
+				iterations: vec![],
 			})
 			.unwrap_or(messagest::Usage {
 				cache_creation: None,
@@ -4687,6 +4690,7 @@ impl ConverseResponseAdapter {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				iterations: vec![],
 			});
 
 		Ok(messagest::MessagesResponse {

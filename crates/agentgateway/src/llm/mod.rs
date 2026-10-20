@@ -51,6 +51,7 @@ use crate::proxy::dtrace;
 use crate::store;
 
 pub const LOCAL_LISTENER_NAME: &str = "llm";
+pub const LOCAL_ROUTE_NAME: &str = "llm:request";
 
 fn set_default_anthropic_version(headers: &mut HeaderMap) {
 	headers

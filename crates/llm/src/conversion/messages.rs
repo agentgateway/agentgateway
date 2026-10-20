@@ -530,12 +530,12 @@ pub mod from_completions {
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<messages::MessagesResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let usage = resp.usage.accounting();
 		let provider_usage = Some(super::super::ProviderUsage {
-			input_tokens: resp.usage.input_tokens as u64,
-			total_tokens: (resp.usage.input_tokens + resp.usage.output_tokens) as u64,
-			cache_creation_1h_input_tokens: messages::CacheCreation::ephemeral_1h(
-				&resp.usage.cache_creation,
-			),
+			input_tokens: usage.input_tokens,
+			total_tokens: usage.input_tokens.saturating_add(usage.output_tokens),
+			cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+			usage_lines: crate::types::messages::usage_lines(&resp.usage.iterations),
 			..Default::default()
 		});
 		let openai = translate_response_internal(resp);
@@ -548,6 +548,7 @@ pub mod from_completions {
 	}
 
 	fn translate_response_internal(resp: messages::MessagesResponse) -> completions::Response {
+		let accounting = resp.usage.accounting();
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
@@ -639,27 +640,28 @@ pub mod from_completions {
 
 		let choices = vec![choice];
 		// Convert usage from Anthropic format to OpenAI format
-		let input_tokens = resp.usage.input_tokens
-			+ resp.usage.cache_read_input_tokens.unwrap_or_default()
-			+ resp.usage.cache_creation_input_tokens.unwrap_or_default();
+		let input_tokens = accounting
+			.input_tokens
+			.saturating_add(accounting.cache_read_input_tokens.unwrap_or_default())
+			.saturating_add(accounting.cache_creation_input_tokens.unwrap_or_default());
 		let usage = completions::Usage {
 			prompt_tokens: input_tokens as u32,
-			completion_tokens: resp.usage.output_tokens as u32,
-			total_tokens: (input_tokens + resp.usage.output_tokens) as u32,
-			cache_read_input_tokens: resp.usage.cache_read_input_tokens.map(|i| i as u64),
+			completion_tokens: accounting.output_tokens as u32,
+			total_tokens: input_tokens.saturating_add(accounting.output_tokens) as u32,
+			cache_read_input_tokens: accounting.cache_read_input_tokens,
 			prompt_tokens_details: match (
-				resp.usage.cache_read_input_tokens,
-				resp.usage.cache_creation_input_tokens,
+				accounting.cache_read_input_tokens,
+				accounting.cache_creation_input_tokens,
 			) {
 				(None, None) => None,
 				(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-					cached_tokens: cached_tokens.map(|i| i as u64),
+					cached_tokens,
 					audio_tokens: None,
-					cache_write_tokens: cache_write_tokens.map(|i| i as u64),
+					cache_write_tokens,
 					rest: Default::default(),
 				}),
 			},
-			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
+			cache_creation_input_tokens: accounting.cache_creation_input_tokens,
 
 			completion_tokens_details: None,
 		};
@@ -716,10 +718,7 @@ pub mod from_completions {
 		// role field — it belongs on `choices[].delta`, so hold it until there is a chunk for it.
 		let mut pending_role = None;
 		let mut service_tier = None;
-		let mut input_tokens = 0;
-		let mut output_tokens = 0;
-		let mut cache_read_input_tokens = None;
-		let mut cache_creation_input_tokens = None;
+		let mut usage_acc = crate::types::messages::AccountingUsage::default();
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
@@ -756,6 +755,7 @@ pub mod from_completions {
 			// Extract info we need
 			match f {
 				messages::MessagesStreamEvent::MessageStart { message } => {
+					usage_acc = message.usage.accounting();
 					message_id = Some(message.id);
 					pending_role = Some(match message.role {
 						messages::Role::Assistant => completions::Role::Assistant,
@@ -764,19 +764,8 @@ pub mod from_completions {
 					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
-					input_tokens = message.usage.input_tokens;
-					output_tokens = message.usage.output_tokens;
-					cache_read_input_tokens = message.usage.cache_read_input_tokens;
-					cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
 					log.update(|r| {
-						r.response.output_tokens = Some(message.usage.output_tokens as u64);
-						r.response.input_tokens = Some(message.usage.input_tokens as u64);
-						r.response.cached_input_tokens =
-							message.usage.cache_read_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_input_tokens =
-							message.usage.cache_creation_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_1h_input_tokens =
-							messages::CacheCreation::ephemeral_1h(&message.usage.cache_creation);
+						usage_acc.apply(&mut r.response);
 						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 						r.response.provider_model = Some(strng::new(&message.model))
 					});
@@ -892,31 +881,16 @@ pub mod from_completions {
 					}
 				},
 				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+					usage_acc = usage.accumulate(usage_acc);
 					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
 					let log_finish_reason = delta
 						.stop_reason
 						.as_ref()
 						.and_then(crate::types::serialize_str);
 					log.update(|r| {
-						if let Some(inp) = usage.input_tokens {
-							r.response.input_tokens = Some(inp as u64);
-						}
-						if let Some(crt) = usage.cache_read_input_tokens {
-							r.response.cached_input_tokens = Some(crt as u64);
-						}
-						if let Some(cwt) = usage.cache_creation_input_tokens {
-							r.response.cache_creation_input_tokens = Some(cwt as u64);
-						}
-						if let Some(cw1h) = messages::CacheCreation::ephemeral_1h(&usage.cache_creation) {
-							r.response.cache_creation_1h_input_tokens = Some(cw1h);
-						}
-						if let Some(o) = usage.output_tokens {
-							r.response.output_tokens = Some(o as u64);
-						}
-						if let Some(inp) = r.response.input_tokens
-							&& let Some(o) = r.response.output_tokens
-						{
-							r.response.total_tokens = Some(inp + o)
+						usage_acc.apply(&mut r.response);
+						if !usage.iterations.is_empty() {
+							r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
 						}
 						if let Some(completion) = completion.take() {
 							r.response.completion = Some(vec![completion]);
@@ -932,34 +906,32 @@ pub mod from_completions {
 							finish_reason: Some(finish_reason),
 						}]
 					});
-					input_tokens = usage.input_tokens.unwrap_or(input_tokens);
-					output_tokens = usage.output_tokens.unwrap_or(output_tokens);
-					cache_read_input_tokens = usage.cache_read_input_tokens.or(cache_read_input_tokens);
-					cache_creation_input_tokens = usage
-						.cache_creation_input_tokens
-						.or(cache_creation_input_tokens);
-					let prompt_tokens = input_tokens
-						+ cache_read_input_tokens.unwrap_or_default()
-						+ cache_creation_input_tokens.unwrap_or_default();
+					let cache_read_input_tokens = usage_acc.cache_read_input_tokens;
+					let cache_creation_input_tokens = usage_acc.cache_creation_input_tokens;
+					let prompt_tokens = usage_acc
+						.input_tokens
+						.saturating_add(cache_read_input_tokens.unwrap_or_default())
+						.saturating_add(cache_creation_input_tokens.unwrap_or_default());
+					let output_tokens = usage_acc.output_tokens;
 					mk(
 						choices,
 						Some(completions::Usage {
 							prompt_tokens: prompt_tokens as u32,
 							completion_tokens: output_tokens as u32,
 
-							total_tokens: (prompt_tokens + output_tokens) as u32,
+							total_tokens: prompt_tokens.saturating_add(output_tokens) as u32,
 
-							cache_read_input_tokens: cache_read_input_tokens.map(|i| i as u64),
+							cache_read_input_tokens,
 							prompt_tokens_details: match (cache_read_input_tokens, cache_creation_input_tokens) {
 								(None, None) => None,
 								(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-									cached_tokens: cached_tokens.map(|i| i as u64),
+									cached_tokens,
 									audio_tokens: None,
-									cache_write_tokens: cache_write_tokens.map(|i| i as u64),
+									cache_write_tokens,
 									rest: Default::default(),
 								}),
 							},
-							cache_creation_input_tokens: cache_creation_input_tokens.map(|i| i as u64),
+							cache_creation_input_tokens,
 
 							completion_tokens_details: None,
 						}),
@@ -1120,6 +1092,7 @@ pub fn passthrough_stream(
 	let mut last_token_at: Option<Instant> = None;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
+	let mut usage_acc = crate::types::messages::AccountingUsage::default();
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
@@ -1141,14 +1114,9 @@ pub fn passthrough_stream(
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
+				usage_acc = message.usage.accounting();
 				log.update(|r| {
-					r.response.output_tokens = Some(message.usage.output_tokens as u64);
-					r.response.input_tokens = Some(message.usage.input_tokens as u64);
-					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
-					r.response.cache_creation_input_tokens =
-						message.usage.cache_creation_input_tokens.map(|i| i as u64);
-					r.response.cache_creation_1h_input_tokens =
-						messages::CacheCreation::ephemeral_1h(&message.usage.cache_creation);
+					usage_acc.apply(&mut r.response);
 					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
@@ -1187,30 +1155,15 @@ pub fn passthrough_stream(
 				}
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+				usage_acc = usage.accumulate(usage_acc);
 				let finish_reason = delta
 					.stop_reason
 					.as_ref()
 					.and_then(crate::types::serialize_str);
 				log.update(|r| {
-					if let Some(inp) = usage.input_tokens {
-						r.response.input_tokens = Some(inp as u64);
-					}
-					if let Some(o) = usage.output_tokens {
-						r.response.output_tokens = Some(o as u64);
-					}
-					if let Some(crt) = usage.cache_read_input_tokens {
-						r.response.cached_input_tokens = Some(crt as u64);
-					}
-					if let Some(cwt) = usage.cache_creation_input_tokens {
-						r.response.cache_creation_input_tokens = Some(cwt as u64);
-					}
-					if let Some(cw1h) = messages::CacheCreation::ephemeral_1h(&usage.cache_creation) {
-						r.response.cache_creation_1h_input_tokens = Some(cw1h);
-					}
-					if let Some(inp) = r.response.input_tokens
-						&& let Some(o) = r.response.output_tokens
-					{
-						r.response.total_tokens = Some(inp + o)
+					usage_acc.apply(&mut r.response);
+					if !usage.iterations.is_empty() {
+						r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
 					}
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);

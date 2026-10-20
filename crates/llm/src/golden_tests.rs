@@ -920,6 +920,10 @@ mod responses {
 	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
+		(
+			"iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
 		("multiple_text_blocks", ALL_ANTHROPIC),
@@ -1027,6 +1031,10 @@ mod responses {
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
+		(
+			"stream_iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("stream_thinking", ALL_ANTHROPIC),
 		(
 			"stream_message_delta_usage",

@@ -158,8 +158,109 @@ pub struct Usage {
 	pub cache_read_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub iterations: Vec<UsageIteration>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq, Eq)]
+pub struct UsageIteration {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<String>,
+	#[serde(default)]
+	pub input_tokens: u64,
+	#[serde(default)]
+	pub output_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_read_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation: Option<UsageIterationCacheCreation>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq, Eq)]
+pub struct UsageIterationCacheCreation {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub ephemeral_1h_input_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct AccountingUsage {
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	pub cache_creation_input_tokens: Option<u64>,
+	pub cache_read_input_tokens: Option<u64>,
+	pub cache_creation_1h_input_tokens: Option<u64>,
+}
+
+impl AccountingUsage {
+	pub(crate) fn apply(&self, response: &mut crate::LLMResponse) {
+		response.input_tokens = Some(self.input_tokens);
+		response.output_tokens = Some(self.output_tokens);
+		response.total_tokens = Some(self.input_tokens.saturating_add(self.output_tokens));
+		response.cached_input_tokens = self.cache_read_input_tokens;
+		response.cache_creation_input_tokens = self.cache_creation_input_tokens;
+		response.cache_creation_1h_input_tokens = self.cache_creation_1h_input_tokens;
+	}
+
+	fn with_iterations(mut self, iterations: &[UsageIteration]) -> Self {
+		if iterations.is_empty() {
+			return self;
+		}
+
+		self.input_tokens = iterations
+			.iter()
+			.map(|usage| usage.input_tokens)
+			.fold(0, u64::saturating_add);
+		self.output_tokens = iterations
+			.iter()
+			.map(|usage| usage.output_tokens)
+			.fold(0, u64::saturating_add);
+		self.cache_creation_input_tokens = sum_optional(
+			iterations
+				.iter()
+				.map(|usage| usage.cache_creation_input_tokens),
+		)
+		.or(self.cache_creation_input_tokens);
+		self.cache_read_input_tokens =
+			sum_optional(iterations.iter().map(|usage| usage.cache_read_input_tokens))
+				.or(self.cache_read_input_tokens);
+		self.cache_creation_1h_input_tokens = sum_optional(iterations.iter().map(|usage| {
+			usage
+				.cache_creation
+				.as_ref()
+				.and_then(|cache| cache.ephemeral_1h_input_tokens)
+		}))
+		.or(self.cache_creation_1h_input_tokens);
+		self
+	}
+}
+
+pub(crate) fn usage_lines(iterations: &[UsageIteration]) -> Vec<crate::UsageLine> {
+	iterations
+		.iter()
+		.map(|i| crate::UsageLine {
+			model: i.model.as_deref().map(strng::new),
+			input_tokens: i.input_tokens,
+			output_tokens: i.output_tokens,
+			cache_creation_input_tokens: i.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: i
+				.cache_creation
+				.as_ref()
+				.and_then(|c| c.ephemeral_1h_input_tokens),
+			cached_input_tokens: i.cache_read_input_tokens,
+		})
+		.collect()
+}
+
+fn sum_optional(values: impl Iterator<Item = Option<u64>>) -> Option<u64> {
+	values.flatten().reduce(u64::saturating_add)
 }
 
 impl Usage {
@@ -169,6 +270,17 @@ impl Usage {
 			.get("cache_creation")?
 			.get("ephemeral_1h_input_tokens")?
 			.as_u64()
+	}
+
+	pub(crate) fn accounting(&self) -> AccountingUsage {
+		AccountingUsage {
+			input_tokens: self.input_tokens,
+			output_tokens: self.output_tokens,
+			cache_creation_input_tokens: self.cache_creation_input_tokens,
+			cache_read_input_tokens: self.cache_read_input_tokens,
+			cache_creation_1h_input_tokens: self.cache_creation_1h_input_tokens(),
+		}
+		.with_iterations(&self.iterations)
 	}
 }
 
@@ -688,6 +800,7 @@ fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let usage = self.usage.accounting();
 		let output_messages = if log_content.tool_calls {
 			extract_output_message(self)
 		} else {
@@ -695,23 +808,24 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
-			input_tokens: Some(self.usage.input_tokens),
+			input_tokens: Some(usage.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,
 			input_audio_tokens: self.input_audio_tokens,
-			output_tokens: Some(self.usage.output_tokens),
+			output_tokens: Some(usage.output_tokens),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.output_audio_tokens,
-			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
+			total_tokens: Some(usage.output_tokens.saturating_add(usage.input_tokens)),
 			pages: None,
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
-			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
-			cache_creation_1h_input_tokens: self.usage.cache_creation_1h_input_tokens(),
-			cached_input_tokens: self.usage.cache_read_input_tokens,
+			cache_creation_input_tokens: usage.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+			cached_input_tokens: usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
+			usage_lines: usage_lines(&self.usage.iterations),
 			completion: if log_content.completion {
 				Some(
 					self
@@ -1251,6 +1365,29 @@ pub mod typed {
 		/// Cache creation tokens split by TTL
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		pub cache_creation: Option<CacheCreation>,
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		pub iterations: Vec<super::UsageIteration>,
+	}
+
+	impl MessageDeltaUsage {
+		/// Merges this delta onto the usage accumulated so far; fields absent from the delta are kept.
+		pub(crate) fn accumulate(&self, prev: super::AccountingUsage) -> super::AccountingUsage {
+			super::AccountingUsage {
+				input_tokens: self.input_tokens.map_or(prev.input_tokens, |t| t as u64),
+				output_tokens: self.output_tokens.map_or(prev.output_tokens, |t| t as u64),
+				cache_creation_input_tokens: self
+					.cache_creation_input_tokens
+					.map(|t| t as u64)
+					.or(prev.cache_creation_input_tokens),
+				cache_read_input_tokens: self
+					.cache_read_input_tokens
+					.map(|t| t as u64)
+					.or(prev.cache_read_input_tokens),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.cache_creation)
+					.or(prev.cache_creation_1h_input_tokens),
+			}
+			.with_iterations(&self.iterations)
+		}
 	}
 
 	/// Cache creation tokens split by TTL.
@@ -1344,6 +1481,22 @@ pub mod typed {
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub service_tier: Option<String>,
+
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		pub iterations: Vec<super::UsageIteration>,
+	}
+
+	impl Usage {
+		pub(crate) fn accounting(&self) -> super::AccountingUsage {
+			super::AccountingUsage {
+				input_tokens: self.input_tokens as u64,
+				output_tokens: self.output_tokens as u64,
+				cache_creation_input_tokens: self.cache_creation_input_tokens.map(|tokens| tokens as u64),
+				cache_read_input_tokens: self.cache_read_input_tokens.map(|tokens| tokens as u64),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.cache_creation),
+			}
+			.with_iterations(&self.iterations)
+		}
 	}
 
 	/// Tool definition. A client-defined custom tool always carries `input_schema` and no `type`
@@ -1492,6 +1645,7 @@ pub mod typed {
 
 	impl super::ResponseType for MessagesResponse {
 		fn to_llm_response(&self, log_content: crate::LogContentFields) -> crate::LLMResponse {
+			let usage = self.usage.accounting();
 			let output_messages = if log_content.tool_calls {
 				extract_output_message_from_typed(self)
 			} else {
@@ -1499,21 +1653,22 @@ pub mod typed {
 			};
 
 			crate::LLMResponse {
-				input_tokens: Some(self.usage.input_tokens as u64),
+				input_tokens: Some(usage.input_tokens),
 				input_image_tokens: None,
 				input_text_tokens: None,
 				input_audio_tokens: self.input_audio_tokens.map(|i| i as u64),
-				output_tokens: Some(self.usage.output_tokens as u64),
+				output_tokens: Some(usage.output_tokens),
 				output_image_tokens: None,
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
-				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				total_tokens: Some(usage.input_tokens.saturating_add(usage.output_tokens)),
 				pages: None,
 				reasoning_tokens: None,
-				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
-				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.usage.cache_creation),
-				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
+				cache_creation_input_tokens: usage.cache_creation_input_tokens,
+				cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+				cached_input_tokens: usage.cache_read_input_tokens,
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
+				usage_lines: super::usage_lines(&self.usage.iterations),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if log_content.completion {
@@ -1707,6 +1862,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				iterations: vec![],
 			},
 			input_audio_tokens: None,
 			output_audio_tokens: None,
@@ -1767,6 +1923,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				iterations: vec![],
 			},
 			input_audio_tokens: None,
 			output_audio_tokens: None,
@@ -1794,6 +1951,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				iterations: vec![],
 				rest: Default::default(),
 			},
 			content: vec![

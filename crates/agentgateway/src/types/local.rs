@@ -4917,11 +4917,11 @@ async fn convert_llm_config(
 	});
 
 	routes.push(Route {
-		key: strng::new("llm:request"),
+		key: strng::new(llm::LOCAL_ROUTE_NAME),
 		service_key: None,
 		service_port: 0,
 		name: RouteName {
-			name: strng::new("llm:request"),
+			name: strng::new(llm::LOCAL_ROUTE_NAME),
 			namespace: strng::new("internal"),
 			rule_name: None,
 			kind: None,

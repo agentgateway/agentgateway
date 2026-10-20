@@ -625,6 +625,7 @@ impl ResponseType for Response {
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
 			output_messages: None,
+			usage_lines: Vec::new(),
 			// TODO: we could probably derive this
 			first_token: None,
 			last_token_at: None,
