@@ -395,6 +395,8 @@ pub mod from_completions {
 						.tool_call_id
 						.as_deref()
 						.map(|id| split_tool_call_id(id).0.to_string());
+					// TODO: return 400 for unmatched tool results, as #2784 does
+					// Gemini currently rejects the empty function name
 					let name = base_id
 						.as_deref()
 						.and_then(|id| call_meta.get(id))
@@ -1352,6 +1354,7 @@ pub mod from_messages {
 	use std::collections::HashMap;
 
 	use agent_core::prelude::Strng;
+	use agent_core::strng;
 	use agent_http::Body;
 	use bytes::Bytes;
 
@@ -1369,6 +1372,18 @@ pub mod from_messages {
 	) -> Result<Vec<u8>, AIError> {
 		let mut req = json::convert::<_, messages::Request>(req)
 			.map_err(|err| AIError::RequestParsing(InputFormat::Messages, err))?;
+		// Reject these before the shared Chat Completions conversion silently drops them
+		if req
+			.messages
+			.iter()
+			.flat_map(|m| &m.content)
+			.any(has_dropped_tool_result_part)
+		{
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"the native Gemini route doesn't support image, document or search_result content in a \
+				 tool_result, so this request fails while that result stays in the conversation history"
+			)));
+		}
 		req
 			.messages
 			.iter_mut()
@@ -1449,6 +1464,24 @@ pub mod from_messages {
 			}
 		}
 	}
+
+	fn has_dropped_tool_result_part(block: &messages::ContentBlock) -> bool {
+		let messages::ContentBlock::ToolResult {
+			content: messages::ToolResultContent::Array(parts),
+			..
+		} = block
+		else {
+			return false;
+		};
+		parts.iter().any(|p| {
+			matches!(
+				p,
+				messages::ToolResultContentPart::Image { .. }
+					| messages::ToolResultContentPart::Document { .. }
+					| messages::ToolResultContentPart::SearchResult { .. }
+			)
+		})
+	}
 }
 
 pub mod from_responses {
@@ -1456,6 +1489,7 @@ pub mod from_responses {
 	use std::sync::Arc;
 
 	use agent_core::prelude::Strng;
+	use agent_core::strng;
 	use agent_http::Body;
 	use bytes::Bytes;
 
@@ -1480,6 +1514,14 @@ pub mod from_responses {
 		let mut req = json::convert::<_, responses::CreateResponse>(req)
 			.map_err(|err| AIError::RequestParsing(InputFormat::Responses, err))?;
 		if let responses::InputParam::Items(items) = &mut req.input {
+			// Reject these before the shared Chat Completions conversion silently drops them
+			if items.iter().any(has_media_output) {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"the native Gemini route doesn't support image or file content in a \
+					 function_call_output, so this request fails while that output stays in the \
+					 conversation history"
+				)));
+			}
 			restore_signatures(items);
 		}
 		let off = matches!(
@@ -1561,6 +1603,14 @@ pub mod from_responses {
 				true
 			},
 		});
+	}
+
+	fn has_media_output(item: &responses::InputItem) -> bool {
+		let responses::InputItem::Item(responses::Item::FunctionCallOutput(output)) = item else {
+			return false;
+		};
+		matches!(&output.output, responses::FunctionCallOutput::Content(parts)
+			if parts.iter().any(|p| !matches!(p, responses::InputContent::InputText(_))))
 	}
 }
 

@@ -1840,6 +1840,78 @@ fn messages_top_k_is_dropped_and_the_budget_becomes_an_effort() {
 	);
 }
 
+#[rstest::rstest]
+fn messages_rejects_tool_result_parts_it_would_drop(
+	#[values(
+		json!({ "type": "image", "source": { "type": "url", "url": "https://example.com/result" } }),
+		json!({ "type": "document", "source": { "type": "url", "url": "https://example.com/result" } }),
+		json!({
+			"type": "search_result",
+			"source": "https://example.com/result",
+			"title": "Result",
+			"content": [{ "type": "text", "text": "Paris is 21°C." }]
+		})
+	)]
+	part: Value,
+	#[values(false, true)] is_vertex: bool,
+) {
+	let mut input: Value = serde_json::from_str(include_str!(
+		"../tests/requests/messages/tool_result_image.json"
+	))
+	.unwrap();
+	input["model"] = json!("gemini-3.8-flash");
+	input["messages"][2]["content"][0]["content"] =
+		json!([{ "type": "text", "text": "Tool output:" }, part]);
+	let request = serde_json::from_value(input).unwrap();
+	let error = from_messages::translate(&request, is_vertex, None).unwrap_err();
+	assert!(matches!(error, AIError::UnsupportedConversion(_)));
+}
+
+#[rstest::rstest]
+fn responses_rejects_tool_output_parts_it_would_drop(
+	#[values(
+		json!({ "type": "input_image", "image_url": "https://example.com/result.png" }),
+		json!({ "type": "input_file", "file_id": "file_1" })
+	)]
+	part: Value,
+	#[values(false, true)] is_vertex: bool,
+) {
+	let error = from_responses::translate(&tool_output_request(part), is_vertex, None)
+		.err()
+		.expect("media output is rejected");
+	assert!(matches!(error, AIError::UnsupportedConversion(_)));
+}
+
+#[test]
+fn responses_keeps_text_tool_output() {
+	let request = tool_output_request(json!({ "type": "input_text", "text": "15C" }));
+	let g: Value = serde_json::from_slice(
+		&from_responses::translate(&request, true, None)
+			.unwrap()
+			.body,
+	)
+	.unwrap();
+	assert_eq!(
+		g["contents"][2]["parts"][0]["functionResponse"]["response"],
+		json!({ "content": "Tool output:\n15C" })
+	);
+}
+
+fn tool_output_request(part: Value) -> types::responses::Request {
+	serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"input": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}" },
+			{ "type": "function_call_output", "call_id": "call_1", "output": [
+				{ "type": "input_text", "text": "Tool output:" },
+				part
+			] }
+		]
+	}))
+	.unwrap()
+}
+
 #[test]
 fn only_decoded_carriers_are_consumed() {
 	let mut content: Vec<types::messages::typed::ContentBlock> = serde_json::from_value(json!([
