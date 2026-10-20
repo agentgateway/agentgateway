@@ -1252,19 +1252,21 @@ mod tests {
 
 	#[test]
 	fn anthropic_prices_1h_cache_writes_at_1h_rate() {
+		use agent_llm::conversion::{bedrock as br, messages};
 		use agent_llm::types::ResponseType;
+		use agent_llm::types::messages::Response;
+		use agent_llm::types::messages::typed::MessagesResponse;
+
 		let snap = CatalogSnapshot::parse(
 			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWrite1h":"10"}}}}}}"#,
 		)
 		.unwrap();
 		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
 		let bedrock = br#"{"output":{"message":{"role":"assistant","content":[{"text":"hi"}]}},"stopReason":"end_turn","metrics":{"latencyMs":1},"usage":{"inputTokens":100,"outputTokens":0,"totalTokens":1000100,"cacheReadInputTokens":0,"cacheWriteInputTokens":1000000,"cacheDetails":[{"inputTokens":400000,"ttl":"5m"},{"inputTokens":600000,"ttl":"1h"}]}}"#;
-		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
-		let typed: agent_llm::types::messages::typed::MessagesResponse =
-			serde_json::from_str(body).unwrap();
+		let passthrough: Response = serde_json::from_str(body).unwrap();
+		let typed: MessagesResponse = serde_json::from_str(body).unwrap();
 		let body = bytes::Bytes::from_static(body.as_bytes());
 		let bedrock = bytes::Bytes::from_static(bedrock);
-		use agent_llm::conversion::{bedrock as br, messages};
 		for resp in [
 			Box::new(passthrough) as Box<dyn ResponseType>,
 			Box::new(typed),

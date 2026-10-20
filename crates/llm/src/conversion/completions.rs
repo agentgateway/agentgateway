@@ -180,11 +180,7 @@ pub mod from_messages {
 			});
 		}
 		if let Some(text) = choice.message.content {
-			content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-				text,
-				citations: None,
-				cache_control: None,
-			}));
+			content.push(messages::ContentBlock::text(text));
 		}
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
@@ -234,14 +230,10 @@ pub mod from_messages {
 				.map(|tokens| tokens as usize)
 		});
 		Ok(messages::MessagesResponse {
-			id,
-			r#type: "message".to_string(),
-			role: messages::Role::Assistant,
-			model,
+			content,
 			stop_reason: Some(stop_reason),
 			stop_sequence,
 			usage: messages::Usage {
-				cache_creation: None,
 				input_tokens: usage
 					.as_ref()
 					.map(|u| u.prompt_tokens as usize)
@@ -254,8 +246,8 @@ pub mod from_messages {
 					.unwrap_or(0),
 				cache_creation_input_tokens,
 				cache_read_input_tokens,
-				iterations: vec![],
 				service_tier,
+				..Default::default()
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
 				u.prompt_tokens_details
@@ -269,7 +261,7 @@ pub mod from_messages {
 					.and_then(|d| d.audio_tokens)
 					.map(|t| t as usize)
 			}),
-			content,
+			..messages::MessagesResponse::start(id, model)
 		})
 	}
 
@@ -411,11 +403,7 @@ pub mod from_messages {
 				events,
 				messages::MessagesStreamEvent::ContentBlockStart {
 					index,
-					content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-						text: "".to_string(),
-						citations: None,
-						cache_control: None,
-					}),
+					content_block: messages::ContentBlock::text("".to_string()),
 				},
 			);
 			index
@@ -537,12 +525,11 @@ pub mod from_messages {
 						stop_sequence: state.pending_stop_sequence.take(),
 					},
 					usage: messages::MessageDeltaUsage {
-						cache_creation: None,
 						input_tokens: Some(input_tokens),
 						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens,
 						cache_read_input_tokens,
-						iterations: vec![],
+						..Default::default()
 					},
 				},
 			);
@@ -606,26 +593,7 @@ pub mod from_messages {
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::MessageStart {
-								message: messages::MessagesResponse {
-									id: f.id.clone(),
-									r#type: "message".to_string(),
-									role: messages::Role::Assistant,
-									content: vec![],
-									model: f.model.clone(),
-									stop_reason: None,
-									stop_sequence: None,
-									usage: messages::Usage {
-										cache_creation: None,
-										input_tokens: 0,
-										output_tokens: 0,
-										cache_creation_input_tokens: None,
-										cache_read_input_tokens: None,
-										service_tier: None,
-										iterations: vec![],
-									},
-									input_audio_tokens: None,
-									output_audio_tokens: None,
-								},
+								message: messages::MessagesResponse::start(f.id.clone(), f.model.clone()),
 							},
 						);
 
