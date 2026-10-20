@@ -1,0 +1,37 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/default-fallbacks-wildcard.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: "*"
+        provider: openAI
+        params: {}
+      - name: fast
+        provider: openAI
+        params:
+          model: gpt-4o-mini
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for *
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for fast
+  - sourcePath: router_settings.default_fallbacks
+    status: manual
+    message: "Default fallbacks cannot be attached to wildcard model \"*\": failover requires a virtual model and virtual model names match exactly; configure failover for requests served by this wildcard manually"
+  - sourcePath: router_settings.default_fallbacks
+    status: exact
+    message: default_fallbacks changed no routes; every chain already matches the explicit fallbacks or self-exclusion removed every candidate

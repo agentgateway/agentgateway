@@ -806,11 +806,7 @@ pub mod from_messages {
 							},
 							responses::OutputMessageContent::Refusal(refusal) => {
 								saw_refusal = true;
-								content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-									text: refusal.refusal,
-									citations: None,
-									cache_control: None,
-								}));
+								content.push(messages::ContentBlock::text(refusal.refusal));
 							},
 						}
 					}
@@ -853,16 +849,10 @@ pub mod from_messages {
 			saw_refusal,
 		)?;
 		Ok(messages::MessagesResponse {
-			id: resp.id,
-			r#type: "message".to_string(),
-			role: messages::Role::Assistant,
 			content,
-			model: resp.model,
 			stop_reason: Some(stop_reason),
-			stop_sequence: None,
 			usage,
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..messages::MessagesResponse::start(resp.id, resp.model)
 		})
 	}
 
@@ -924,26 +914,7 @@ pub mod from_messages {
 			push_event(
 				events,
 				messages::MessagesStreamEvent::MessageStart {
-					message: messages::MessagesResponse {
-						id,
-						r#type: "message".to_string(),
-						role: messages::Role::Assistant,
-						content: vec![],
-						model: model.clone(),
-						stop_reason: None,
-						stop_sequence: None,
-						usage: messages::Usage {
-							cache_creation: None,
-							input_tokens: 0,
-							output_tokens: 0,
-							cache_creation_input_tokens: None,
-							cache_read_input_tokens: None,
-							service_tier: None,
-							iterations: vec![],
-						},
-						input_audio_tokens: None,
-						output_audio_tokens: None,
-					},
+					message: messages::MessagesResponse::start(id, model.clone()),
 				},
 			);
 			if !model.is_empty() {
@@ -1088,11 +1059,7 @@ pub mod from_messages {
 					events,
 					messages::MessagesStreamEvent::ContentBlockStart {
 						index,
-						content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: String::new(),
-							citations: None,
-							cache_control: None,
-						}),
+						content_block: messages::ContentBlock::text(String::new()),
 					},
 				);
 			}
@@ -1612,13 +1579,8 @@ pub mod from_messages {
 	) -> messages::Usage {
 		let Some(usage) = usage else {
 			return messages::Usage {
-				cache_creation: None,
-				input_tokens: 0,
-				output_tokens: 0,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
 				service_tier,
-				iterations: vec![],
+				..Default::default()
 			};
 		};
 		let cache_creation_input_tokens = usage
@@ -1630,7 +1592,6 @@ pub mod from_messages {
 			.checked_sub(0)
 			.filter(|tokens| *tokens > 0);
 		messages::Usage {
-			cache_creation: None,
 			input_tokens: (usage.input_tokens as usize)
 				.saturating_sub(cache_creation_input_tokens.unwrap_or_default())
 				.saturating_sub(cache_read_input_tokens.unwrap_or_default()),
@@ -1638,7 +1599,7 @@ pub mod from_messages {
 			cache_creation_input_tokens,
 			cache_read_input_tokens,
 			service_tier,
-			iterations: vec![],
+			..Default::default()
 		}
 	}
 
@@ -1647,12 +1608,11 @@ pub mod from_messages {
 	) -> messages::MessageDeltaUsage {
 		let usage = translate_usage(usage, None);
 		messages::MessageDeltaUsage {
-			cache_creation: None,
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
-			iterations: vec![],
+			..Default::default()
 		}
 	}
 

@@ -1093,6 +1093,16 @@ pub mod typed {
 		Unknown,
 	}
 
+	impl ContentBlock {
+		pub fn text(text: String) -> Self {
+			Self::Text(ContentTextBlock {
+				text,
+				citations: None,
+				cache_control: None,
+			})
+		}
+	}
+
 	#[derive(Debug, Serialize, Deserialize, Clone)]
 	#[serde(untagged)]
 	pub enum ToolResultContent {
@@ -1372,6 +1382,24 @@ pub mod typed {
 		pub output_audio_tokens: Option<usize>,
 	}
 
+	impl MessagesResponse {
+		/// The empty assistant message carried by a stream's `message_start` event.
+		pub fn start(id: String, model: String) -> Self {
+			Self {
+				id,
+				model,
+				r#type: "message".to_string(),
+				role: Role::Assistant,
+				content: Vec::new(),
+				stop_reason: None,
+				stop_sequence: None,
+				usage: Usage::default(),
+				input_audio_tokens: None,
+				output_audio_tokens: None,
+			}
+		}
+	}
+
 	#[derive(Clone, Serialize, Deserialize, Debug)]
 	#[serde(rename_all = "snake_case", tag = "type")]
 	pub enum MessagesStreamEvent {
@@ -1448,7 +1476,7 @@ pub mod typed {
 		},
 	}
 
-	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[derive(Clone, Serialize, Deserialize, Debug, Default, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
 		/// Cumulative input tokens
 		pub input_tokens: Option<usize>,
@@ -1556,7 +1584,7 @@ pub mod typed {
 	}
 
 	/// Billing and rate-limit usage.
-	#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+	#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 	pub struct Usage {
 		/// The number of input tokens which were used.
 		pub input_tokens: usize,
@@ -1928,9 +1956,6 @@ mod tests {
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {
-			id: "msg_test".to_string(),
-			r#type: "message".to_string(),
-			role: typed::Role::Assistant,
 			content: vec![
 				typed::ContentBlock::Text(typed::ContentTextBlock {
 					text: "I'll call the tool.".to_string(),
@@ -1950,20 +1975,16 @@ mod tests {
 					cache_control: None,
 				},
 			],
-			model: "claude-sonnet-4-20250514".to_string(),
 			stop_reason: Some(typed::StopReason::ToolUse),
-			stop_sequence: None,
 			usage: typed::Usage {
-				cache_creation: None,
 				input_tokens: 100,
 				output_tokens: 50,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
-				iterations: vec![],
+				..Default::default()
 			},
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..typed::MessagesResponse::start(
+				"msg_test".to_string(),
+				"claude-sonnet-4-20250514".to_string(),
+			)
 		}
 	}
 
@@ -2003,28 +2024,21 @@ mod tests {
 	#[test]
 	fn test_typed_response_text_only_omits_output_messages() {
 		let response = typed::MessagesResponse {
-			id: "msg_test2".to_string(),
-			r#type: "message".to_string(),
-			role: typed::Role::Assistant,
 			content: vec![typed::ContentBlock::Text(typed::ContentTextBlock {
 				text: "Hello!".to_string(),
 				citations: None,
 				cache_control: None,
 			})],
-			model: "claude-sonnet-4-20250514".to_string(),
 			stop_reason: Some(typed::StopReason::EndTurn),
-			stop_sequence: None,
 			usage: typed::Usage {
-				cache_creation: None,
 				input_tokens: 50,
 				output_tokens: 20,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
-				iterations: vec![],
+				..Default::default()
 			},
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..typed::MessagesResponse::start(
+				"msg_test2".to_string(),
+				"claude-sonnet-4-20250514".to_string(),
+			)
 		};
 
 		let llm_response = response.to_llm_response(crate::LogContentFields {

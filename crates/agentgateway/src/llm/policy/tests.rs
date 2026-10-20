@@ -4123,10 +4123,11 @@ fn signed_response_text_is_scanned_but_never_masked(#[case] fmt: ChatFmt, #[case
 
 #[test]
 fn bedrock_signed_response_mask_rejects_without_changing_signed_text() {
+	use crate::llm::types::messages::typed::MessagesResponse;
+
 	let input = include_str!("../../../../llm/src/tests/response/anthropic/thinking.json");
 	for mask_signed in [false, true] {
-		let mut resp: crate::llm::types::messages::typed::MessagesResponse =
-			serde_json::from_str(input).unwrap();
+		let mut resp: MessagesResponse = serde_json::from_str(input).unwrap();
 		let original = serde_json::to_value(&resp).unwrap();
 		let (texts, in_scope) = Policy::scoped_response_texts(&mut resp, &default_response_scope());
 		let masked: Vec<_> = texts

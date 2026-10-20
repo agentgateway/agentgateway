@@ -342,11 +342,7 @@ pub mod from_completions {
 		match content {
 			completions::RequestUserMessageContent::Text(text) => {
 				if !text.trim().is_empty() {
-					out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-						text: text.clone(),
-						citations: None,
-						cache_control: None,
-					}));
+					out.push(messages::ContentBlock::text(text.clone()));
 				}
 			},
 			completions::RequestUserMessageContent::Array(parts) => {
@@ -405,11 +401,7 @@ pub mod from_completions {
 			match content {
 				completions::RequestAssistantMessageContent::Text(text) => {
 					if !text.trim().is_empty() {
-						out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: text.clone(),
-							citations: None,
-							cache_control: None,
-						}));
+						out.push(messages::ContentBlock::text(text.clone()));
 					}
 				},
 				completions::RequestAssistantMessageContent::Array(parts) => {
@@ -426,11 +418,7 @@ pub mod from_completions {
 							},
 							completions::RequestAssistantMessageContentPart::Refusal(refusal) => {
 								if !refusal.refusal.trim().is_empty() {
-									out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-										text: refusal.refusal.clone(),
-										citations: None,
-										cache_control: None,
-									}));
+									out.push(messages::ContentBlock::text(refusal.refusal.clone()));
 								}
 							},
 						}
@@ -441,11 +429,7 @@ pub mod from_completions {
 		if let Some(refusal) = &msg.refusal
 			&& !refusal.trim().is_empty()
 		{
-			out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-				text: refusal.clone(),
-				citations: None,
-				cache_control: None,
-			}));
+			out.push(messages::ContentBlock::text(refusal.clone()));
 		}
 		if let Some(tool_calls) = &msg.tool_calls {
 			for tool_call in tool_calls {
@@ -708,11 +692,7 @@ pub mod from_completions {
 						if let Some(text) = &function.content
 							&& !text.trim().is_empty()
 						{
-							blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-								text: text.clone(),
-								citations: None,
-								cache_control: None,
-							}));
+							blocks.push(messages::ContentBlock::text(text.clone()));
 						}
 						(messages::Role::User, blocks)
 					},
@@ -937,24 +917,16 @@ pub mod from_completions {
 				messages::ContentBlock::Unknown => continue,
 			}
 		}
+		let tool_calls = (!tool_calls.is_empty()).then_some(tool_calls);
 		let message = completions::ResponseMessage {
-			role: completions::Role::Assistant,
 			content,
-			tool_calls: if tool_calls.is_empty() {
-				None
-			} else {
-				Some(tool_calls)
-			},
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
+			tool_calls,
 			reasoning_content,
 			reasoning_signature: match reasoning_signatures.as_slice() {
 				[signature] if !signature.is_empty() => Some(signature.clone()),
 				_ => None,
 			},
-			extra: None,
+			..completions::ResponseMessage::assistant()
 		};
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
 		// Only one choice for anthropic
@@ -977,21 +949,12 @@ pub mod from_completions {
 			completion_tokens: accounting.output_tokens as u32,
 			total_tokens: input_tokens.saturating_add(accounting.output_tokens) as u32,
 			cache_read_input_tokens: accounting.cache_read_input_tokens,
-			prompt_tokens_details: match (
+			prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
 				accounting.cache_read_input_tokens,
 				accounting.cache_creation_input_tokens,
-			) {
-				(None, None) => None,
-				(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-					cached_tokens,
-					audio_tokens: None,
-					cache_write_tokens,
-					rest: Default::default(),
-				}),
-			},
+			),
 			cache_creation_input_tokens: accounting.cache_creation_input_tokens,
-
-			completion_tokens_details: None,
+			..Default::default()
 		};
 
 		completions::Response {
@@ -1123,12 +1086,9 @@ pub mod from_completions {
 							},
 						);
 
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: completions::StreamResponseDelta {
-								tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+						let choice = completions::ChatChoiceStream::with_delta(
+							completions::StreamResponseDelta::with_tool_calls(vec![
+								completions::ChatCompletionMessageToolCallChunk {
 									index: tool_index,
 									id: Some(id),
 									r#type: Some(completions::FunctionType::Function),
@@ -1136,11 +1096,9 @@ pub mod from_completions {
 										name: Some(name),
 										arguments: None,
 									}),
-								}]),
-								..Default::default()
-							},
-							finish_reason: None,
-						};
+								},
+							]),
+						);
 						mk(vec![choice], None)
 					},
 					_ => None,
@@ -1196,13 +1154,7 @@ pub mod from_completions {
 						},
 					};
 					if emit_chunk {
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: dr,
-							finish_reason: None,
-						};
+						let choice = completions::ChatChoiceStream::with_delta(dr);
 						mk(vec![choice], None)
 					} else {
 						None
@@ -1226,13 +1178,9 @@ pub mod from_completions {
 						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
 					});
 					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
-						vec![completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: completions::StreamResponseDelta::default(),
-							finish_reason: Some(finish_reason),
-						}]
+						vec![completions::ChatChoiceStream::with_finish_reason(
+							finish_reason,
+						)]
 					});
 					let cache_read_input_tokens = usage_acc.cache_read_input_tokens;
 					let cache_creation_input_tokens = usage_acc.cache_creation_input_tokens;
@@ -1246,22 +1194,14 @@ pub mod from_completions {
 						Some(completions::Usage {
 							prompt_tokens: prompt_tokens as u32,
 							completion_tokens: output_tokens as u32,
-
 							total_tokens: prompt_tokens.saturating_add(output_tokens) as u32,
-
 							cache_read_input_tokens,
-							prompt_tokens_details: match (cache_read_input_tokens, cache_creation_input_tokens) {
-								(None, None) => None,
-								(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-									cached_tokens,
-									audio_tokens: None,
-									cache_write_tokens,
-									rest: Default::default(),
-								}),
-							},
+							prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+								cache_read_input_tokens,
+								cache_creation_input_tokens,
+							),
 							cache_creation_input_tokens,
-
-							completion_tokens_details: None,
+							..Default::default()
 						}),
 					)
 				},
@@ -1270,12 +1210,9 @@ pub mod from_completions {
 						Some(ongoing) if !ongoing.emitted_arguments => {
 							// If no arguments were emitted for a tool call, send a synthetic `{}`
 							// for compatibility.
-							let choice = completions::ChatChoiceStream {
-								rest: Default::default(),
-								index: 0,
-								logprobs: None,
-								delta: completions::StreamResponseDelta {
-									tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+							let choice = completions::ChatChoiceStream::with_delta(
+								completions::StreamResponseDelta::with_tool_calls(vec![
+									completions::ChatCompletionMessageToolCallChunk {
 										index: ongoing.tool_index,
 										id: None,
 										r#type: None,
@@ -1283,11 +1220,9 @@ pub mod from_completions {
 											name: None,
 											arguments: Some("{}".to_string()),
 										}),
-									}]),
-									..Default::default()
-								},
-								finish_reason: None,
-							};
+									},
+								]),
+							);
 							mk(vec![choice], None)
 						},
 						_ => None,

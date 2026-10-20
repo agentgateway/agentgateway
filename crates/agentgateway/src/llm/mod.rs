@@ -375,13 +375,6 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 	const fn chat(input: InputFormat, output: ChatFormat) -> ChatTranslation {
 		ChatTranslation { input, output }
 	}
-	// AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS will be removed in v1.7.
-	let [messages_primary, messages_fallback] =
-		if std::env::var("AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS").is_ok_and(|v| v == "true") {
-			[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-		} else {
-			[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
-		};
 	vec![
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
@@ -399,8 +392,8 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
 		// Messages
-		chat(InputFormat::Messages, messages_primary),
-		chat(InputFormat::Messages, messages_fallback),
+		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
+		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
@@ -601,13 +594,7 @@ impl ChatTranslation {
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => {
-				let mut req = req;
-				if let AIProvider::Bedrock(p) = ctx.provider {
-					p.sanitize_messages_user_id(&mut req, ctx.catalog);
-				}
-				render_anthropic_messages(req, ctx)
-			},
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -1379,12 +1366,10 @@ impl AIProvider {
 
 		// The client's query belongs to the inbound API format (e.g. Anthropic's `?beta=true`), so
 		// drop it once the request is translated to another format; strict upstreams like Google
-		// reject unknown parameters. Bedrock Converse is always a translation, even though its route
-		// type mirrors the input format.
+		// reject unknown parameters. Bedrock Runtime always speaks its own APIs (Converse, etc), even
+		// though its route type mirrors the input format; Mantle serves the native formats.
 		let translated = llm_request.is_some_and(|l| {
-			if let (AIProvider::Bedrock(p), Some(endpoint)) = (self, bedrock_endpoint)
-				&& !p.native_chat(endpoint)
-			{
+			if matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Runtime)) {
 				return true;
 			}
 			let same_format = match l.input_format {
@@ -1727,17 +1712,13 @@ impl AIProvider {
 							service.to_string(),
 						));
 				}
-				// Native chat serves Messages via the Anthropic-native API; Mantle also serves count-tokens.
-				let anthropic_native = match (route_type, bedrock_endpoint) {
-					(RouteType::Messages, Some(endpoint)) => provider.native_chat(endpoint),
-					(RouteType::AnthropicTokenCount, endpoint) => {
-						endpoint == Some(bedrock::BedrockEndpoint::Mantle)
-					},
-					_ => false,
-				};
-				if anthropic_native {
+				// Mantle serves the Messages and count-tokens routes via the Anthropic-native API
+				if matches!(
+					route_type,
+					RouteType::Messages | RouteType::AnthropicTokenCount
+				) && matches!(bedrock_endpoint, Some(bedrock::BedrockEndpoint::Mantle))
+				{
 					set_default_anthropic_version(&mut req.headers);
-					conversion::bedrock::filter_native_beta_header(&mut req.headers)?;
 				}
 				Ok(())
 			}),

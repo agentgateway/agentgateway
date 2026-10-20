@@ -195,6 +195,23 @@ pub struct ConverseRequest {
 	/// Performance configuration.
 	#[serde(rename = "performanceConfig", skip_serializing_if = "Option::is_none")]
 	pub performance_config: Option<PerformanceConfiguration>,
+	/// Processing tier used to serve the request.
+	#[serde(rename = "serviceTier", skip_serializing_if = "Option::is_none")]
+	pub service_tier: Option<ServiceTier>,
+}
+
+#[derive(Clone, Copy, Serialize, Debug, PartialEq, Eq)]
+pub struct ServiceTier {
+	#[serde(rename = "type")]
+	pub tier_type: ServiceTierType,
+}
+
+#[derive(Clone, Copy, Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ServiceTierType {
+	Priority,
+	Default,
+	Flex,
 }
 
 #[derive(Clone, Serialize, Debug, PartialEq)]

@@ -1378,8 +1378,9 @@ pub mod typed {
 		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
 		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent,
 		ResponseReasoningTextDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role,
+		ServiceTierResponses, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

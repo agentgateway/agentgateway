@@ -1215,28 +1215,6 @@ pub mod to_completions {
 			.unwrap_or_else(|| format!("call_{seed}_{index}"))
 	}
 
-	fn assistant_message(
-		content: Option<String>,
-		reasoning_content: Option<String>,
-		tool_calls: Option<Vec<completions::MessageToolCalls>>,
-	) -> completions::ResponseMessage {
-		completions::ResponseMessage {
-			role: completions::Role::Assistant,
-			content,
-			reasoning_content,
-			// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
-			// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
-			// Tool-call signatures still round-trip via the tool_call id.
-			reasoning_signature: None,
-			tool_calls,
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
-			extra: None,
-		}
-	}
-
 	fn build_response(resp: &vg::GenerateContentResponse) -> completions::Response {
 		let model = resp.model_version.clone().unwrap_or_default();
 		let id = resp
@@ -1259,7 +1237,10 @@ pub mod to_completions {
 			vec![completions::ChatChoice {
 				rest: Default::default(),
 				index: 0,
-				message: assistant_message(Some(String::new()), None, None),
+				message: completions::ResponseMessage {
+					content: Some(String::new()),
+					..completions::ResponseMessage::assistant()
+				},
 				finish_reason: Some(finish),
 				logprobs: None,
 			}]
@@ -1327,7 +1308,16 @@ pub mod to_completions {
 		completions::ChatChoice {
 			rest: Default::default(),
 			index,
-			message: assistant_message(content, reasoning, tool_calls),
+			message: completions::ResponseMessage {
+				content,
+				tool_calls,
+				reasoning_content: reasoning,
+				// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
+				// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
+				// Tool-call signatures still round-trip via the tool_call id.
+				reasoning_signature: None,
+				..completions::ResponseMessage::assistant()
+			},
 			finish_reason: Some(finish),
 			logprobs: None,
 		}
@@ -1487,11 +1477,9 @@ pub mod to_completions {
 				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
-					rest: Default::default(),
-					index: 0,
 					delta,
 					finish_reason: finish,
-					logprobs: None,
+					..Default::default()
 				}]
 			} else {
 				vec![]
@@ -1661,20 +1649,16 @@ pub mod to_completions {
 			prompt_tokens_details: um.cached_content_token_count.map(|c| {
 				completions::UsagePromptDetails {
 					cached_tokens: Some(c),
-					audio_tokens: None,
-					cache_write_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
 			completion_tokens_details: um.thoughts_token_count.map(|t| {
 				completions::UsageCompletionDetails {
 					reasoning_tokens: Some(t),
-					audio_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
-			cache_read_input_tokens: None,
-			cache_creation_input_tokens: None,
+			..Default::default()
 		}
 	}
 }
