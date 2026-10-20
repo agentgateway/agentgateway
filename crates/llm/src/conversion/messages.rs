@@ -524,6 +524,7 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
+			speed: None,
 		}
 	}
 

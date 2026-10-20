@@ -186,7 +186,9 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
+			speed,
 		} = typed;
+		crate::conversion::warn_if_fast_mode_dropped(speed, "openai");
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are
 		// accepted and dropped rather than failing the conversion (see #2662).

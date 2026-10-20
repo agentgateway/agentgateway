@@ -1123,6 +1123,10 @@ pub mod from_completions {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req
+				.service_tier
+				.as_deref()
+				.and_then(helpers::service_tier_from_openai),
 		};
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages
@@ -1548,6 +1552,7 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
+		crate::conversion::warn_if_fast_mode_dropped(req.speed, "bedrock");
 		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&req.model, catalog);
 		if matches!(req.thinking, Some(messages::ThinkingInput::Enabled { .. }))
 			&& capabilities.adaptive
@@ -2063,6 +2068,7 @@ pub mod from_messages {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: None,
 		};
 		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		Ok((bedrock_request, tool_name_map))
@@ -3220,6 +3226,12 @@ pub mod from_responses {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req.service_tier.as_ref().and_then(|tier| {
+				serde_json::to_value(tier)
+					.ok()?
+					.as_str()
+					.and_then(service_tier_from_openai)
+			}),
 		};
 
 		// Apply user message and tool caching
@@ -4237,6 +4249,23 @@ mod helpers {
 		}
 
 		metadata
+	}
+
+	pub fn service_tier_from_openai(tier: &str) -> Option<bedrock::ServiceTier> {
+		let tier_type = match tier {
+			"priority" => bedrock::ServiceTierType::Priority,
+			"default" => bedrock::ServiceTierType::Default,
+			"flex" => bedrock::ServiceTierType::Flex,
+			"auto" => return None,
+			unsupported => {
+				tracing::warn!(
+					service_tier = unsupported,
+					"service tier is not supported by Bedrock; request is served at the default tier"
+				);
+				return None;
+			},
+		};
+		Some(bedrock::ServiceTier { tier_type })
 	}
 
 	/// Allowed betas for Converse's `additionalModelRequestFields.anthropic_beta`.

@@ -1174,6 +1174,16 @@ pub mod typed {
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub output_config: Option<OutputConfig>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub speed: Option<Speed>,
+	}
+
+	#[derive(Clone, Copy, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[serde(rename_all = "snake_case")]
+	pub enum Speed {
+		Standard,
+		Fast,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
@@ -1810,6 +1820,20 @@ pub mod typed {
 mod tests {
 	use super::*;
 	use crate::types::ResponseType;
+
+	#[test]
+	fn typed_request_preserves_speed() {
+		let raw = serde_json::json!({
+			"model": "claude-opus-5-5",
+			"max_tokens": 16,
+			"speed": "fast",
+			"messages": [{"role": "user", "content": "hi"}]
+		});
+		let parsed: typed::Request = serde_json::from_value(raw).expect("valid request");
+
+		assert_eq!(parsed.speed, Some(typed::Speed::Fast));
+		assert_eq!(serde_json::to_value(&parsed).unwrap()["speed"], "fast");
+	}
 
 	#[test]
 	fn tool_result_parts_accept_tool_reference_and_unknown_types() {

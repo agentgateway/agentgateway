@@ -169,6 +169,7 @@ fn test_metadata_from_header() {
 		tool_choice: None,
 		thinking: None,
 		output_config: None,
+		speed: None,
 	};
 
 	let (out, _) =
@@ -221,6 +222,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 			effort: Some(messages::typed::ThinkingEffort::High),
 			format: None,
 		}),
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -275,6 +277,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 			effort: None,
 			format: None,
 		}),
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -333,6 +336,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 			effort: Some(messages::typed::ThinkingEffort::High),
 			format: None,
 		}),
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -401,6 +405,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		}),
 		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
 		output_config: None,
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -522,6 +527,7 @@ fn enabled_thinking_request_with_tool_choice(
 			budget_tokens: 1024,
 		}),
 		output_config: None,
+		speed: None,
 	}
 }
 
@@ -561,6 +567,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		tool_choice: None,
 		thinking: None,
 		output_config: None,
+		speed: None,
 	};
 
 	let err = super::from_messages::translate_internal(req, &provider, None, None).unwrap_err();
@@ -1650,6 +1657,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		top_k: None,
 		thinking: None,
 		output_config: None,
+		speed: None,
 	};
 
 	let (out, tool_map) =
@@ -1709,6 +1717,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		top_k: None,
 		thinking: None,
 		output_config: None,
+		speed: None,
 	};
 
 	let (bedrock_req, tool_map) =
@@ -2086,4 +2095,84 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 			.contains("document format could not be determined"),
 		"unexpected error: {err}"
 	);
+}
+
+fn us_east_provider() -> Provider {
+	Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	}
+}
+
+#[test]
+fn test_completions_service_tier_maps_to_bedrock_service_tier() {
+	for (requested, expected) in [
+		("priority", Some(json!({ "type": "priority" }))),
+		("default", Some(json!({ "type": "default" }))),
+		("flex", Some(json!({ "type": "flex" }))),
+		("auto", None),
+		("scale", None),
+		("fast", None),
+	] {
+		let req: types::completions::Request = serde_json::from_value(json!({
+			"model": "anthropic.claude-sonnet-4",
+			"max_tokens": 16,
+			"service_tier": requested,
+			"messages": [{ "role": "user", "content": "hi" }]
+		}))
+		.expect("valid completions request");
+
+		let body = super::from_completions::translate(&req, &us_east_provider(), None, None, None)
+			.unwrap()
+			.body;
+		let translated: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+		assert_eq!(
+			translated.get("serviceTier").cloned(),
+			expected,
+			"service_tier {requested}"
+		);
+	}
+}
+
+#[test]
+fn test_responses_service_tier_maps_to_bedrock_service_tier() {
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "anthropic.claude-sonnet-4",
+		"max_output_tokens": 16,
+		"service_tier": "priority",
+		"input": "hi"
+	}))
+	.expect("valid responses request");
+
+	let body = super::from_responses::translate(&req, &us_east_provider(), None, None, None)
+		.unwrap()
+		.body;
+	let translated: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	assert_eq!(translated["serviceTier"], json!({ "type": "priority" }));
+}
+
+#[test]
+fn test_messages_fast_mode_is_not_forwarded_to_bedrock() {
+	let req: types::messages::Request = serde_json::from_value(json!({
+		"model": "anthropic.claude-opus-4-8",
+		"max_tokens": 16,
+		"speed": "fast",
+		"messages": [{ "role": "user", "content": "hi" }]
+	}))
+	.expect("valid messages request");
+	let mut headers = HeaderMap::new();
+	headers.insert("anthropic-beta", "fast-mode-2026-02-01".parse().unwrap());
+
+	let body = super::from_messages::translate(&req, &us_east_provider(), Some(&headers), None)
+		.unwrap()
+		.body;
+	let translated: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+	assert!(translated.get("additionalModelRequestFields").is_none());
+	assert!(translated.get("serviceTier").is_none());
 }

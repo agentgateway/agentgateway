@@ -75,6 +75,18 @@ pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {
 		.is_some_and(|version| version >= (5, 6))
 }
 
+pub(crate) fn warn_if_fast_mode_dropped(
+	speed: Option<crate::types::messages::typed::Speed>,
+	target: &str,
+) {
+	if speed == Some(crate::types::messages::typed::Speed::Fast) {
+		tracing::warn!(
+			target_provider = target,
+			"Anthropic fast mode is not supported for this provider; request is served at standard speed"
+		);
+	}
+}
+
 /// Translate an OpenAI `tool_calls[].function.arguments` string into an Anthropic
 /// `tool_use.input` value.
 ///
