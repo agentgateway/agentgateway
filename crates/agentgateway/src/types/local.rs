@@ -761,39 +761,42 @@ impl LocalExplicitOrConditional<Transformation> {
 	}
 }
 
+/// A list of rules, given either as the list itself or as conditional entries that each carry
+/// one rule.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
-enum LocalRateLimitPolicy {
-	Conditional(LocalConditionalPolicies<crate::http::localratelimit::RateLimit>),
-	Explicit(Vec<crate::http::localratelimit::RateLimit>),
+#[cfg_attr(
+	feature = "schema",
+	schemars(untagged, deny_unknown_fields, rename = "LocalPolicyList_{T}")
+)]
+enum LocalPolicyList<T> {
+	Conditional(LocalConditionalPolicies<T>),
+	Explicit(Vec<T>),
 }
 
-impl LocalRateLimitPolicy {
+type LocalRateLimitPolicy = LocalPolicyList<crate::http::localratelimit::RateLimit>;
+type LocalConcurrencyLimitPolicy = LocalPolicyList<crate::http::concurrencylimit::ConcurrencyLimit>;
+
+impl<T> LocalPolicyList<T> {
 	fn is_empty(&self) -> bool {
 		match self {
-			LocalRateLimitPolicy::Conditional(policies) => policies.conditional.is_empty(),
-			LocalRateLimitPolicy::Explicit(policies) => policies.is_empty(),
+			LocalPolicyList::Conditional(policies) => policies.conditional.is_empty(),
+			LocalPolicyList::Explicit(policies) => policies.is_empty(),
 		}
 	}
 
-	fn into_request_policy(
-		self,
-	) -> anyhow::Result<RequestPolicy<crate::http::localratelimit::RateLimits>> {
+	/// The rules as a request policy, each set of them turned into the policy type by `wrap`.
+	fn into_request_policy<P>(self, wrap: impl Fn(Vec<T>) -> P) -> anyhow::Result<RequestPolicy<P>> {
 		match self {
-			LocalRateLimitPolicy::Explicit(policies) => Ok(RequestPolicy::single(
-				crate::http::localratelimit::RateLimits(policies),
-			)),
-			LocalRateLimitPolicy::Conditional(policies) => {
+			LocalPolicyList::Explicit(policies) => Ok(RequestPolicy::single(wrap(policies))),
+			LocalPolicyList::Conditional(policies) => {
 				validate_local_conditional_policies(&policies)?;
 				Ok(RequestPolicy::from_policies(
-					policies.conditional.into_iter().map(|entry| {
-						(
-							crate::http::localratelimit::RateLimits(vec![entry.policy]),
-							entry.condition,
-						)
-					}),
+					policies
+						.conditional
+						.into_iter()
+						.map(|entry| (wrap(vec![entry.policy]), entry.condition)),
 				))
 			},
 		}
@@ -2602,6 +2605,9 @@ struct LocalLLMPolicy {
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Vec<crate::http::localratelimit::RateLimit>,
+	/// Limits on in-flight requests, counted per key on this proxy instance.
+	#[serde(default)]
+	concurrency_limit: Vec<crate::http::concurrencylimit::ConcurrencyLimit>,
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<crate::http::remoteratelimit::RemoteRateLimit>,
@@ -3105,6 +3111,9 @@ pub struct FilterOrPolicy {
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
+	/// Limits on in-flight requests, counted per key on this proxy instance.
+	#[serde(default)]
+	concurrency_limit: Option<LocalConcurrencyLimitPolicy>,
 	/// Remote rate limit checks for incoming requests.
 	#[serde(default)]
 	remote_rate_limit: Option<LocalRemoteRateLimitPolicy>,
@@ -4519,6 +4528,7 @@ async fn convert_llm_config(
 			gateway,
 			guardrails,
 			local_rate_limit,
+			concurrency_limit,
 			remote_rate_limit,
 			timeout,
 		} = pol;
@@ -4532,6 +4542,8 @@ async fn convert_llm_config(
 			FilterOrPolicy {
 				local_rate_limit: (!local_rate_limit.is_empty())
 					.then_some(LocalRateLimitPolicy::Explicit(local_rate_limit)),
+				concurrency_limit: (!concurrency_limit.is_empty())
+					.then_some(LocalConcurrencyLimitPolicy::Explicit(concurrency_limit)),
 				remote_rate_limit: remote_rate_limit.map(LocalExplicitOrConditional::Explicit),
 				timeout,
 				..Default::default()
@@ -5523,6 +5535,7 @@ pub(crate) async fn split_policies_for_target(
 		backend_auth,
 		authorization,
 		local_rate_limit,
+		concurrency_limit,
 		remote_rate_limit,
 		jwt_auth,
 		oidc: oidc_config,
@@ -5722,7 +5735,16 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()
 	{
-		route_policies.push(TrafficPolicy::LocalRateLimit(p.into_request_policy()?))
+		route_policies.push(TrafficPolicy::LocalRateLimit(
+			p.into_request_policy(crate::http::localratelimit::RateLimits)?,
+		))
+	}
+	if let Some(p) = concurrency_limit
+		&& !p.is_empty()
+	{
+		route_policies.push(TrafficPolicy::ConcurrencyLimit(
+			p.into_request_policy(crate::http::concurrencylimit::ConcurrencyLimits)?,
+		))
 	}
 	if let Some(p) = remote_rate_limit {
 		route_policies.push(TrafficPolicy::RemoteRateLimit(p.into_policy()?))
