@@ -33,6 +33,7 @@ span more than one agentgateway traffic type.
 
 ### LLM
 
+* [llm-active-health](llm-active-health/README.md): probe self-hosted model replicas on a timer, so one that is down takes no traffic and rejoins on its own.
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
 * [llm-context-compression](llm-context-compression/README.md): shrink LLM request context with Headroom through external authorization.
 * [llm-cost-routing](llm-cost-routing/README.md): classify LLM requests with CEL and route the same public model name to different upstream models.
