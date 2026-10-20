@@ -2843,6 +2843,37 @@ fn traffic_policy_from_proto(
 				rules,
 			)))
 		},
+		Some(tps::Kind::ConcurrencyLimit(cl)) => {
+			let rules = cl
+				.rules
+				.iter()
+				.enumerate()
+				.map(|(i, rule)| {
+					let key = rule
+						.key
+						.as_deref()
+						.filter(|k| !k.trim().is_empty())
+						.map(|k| {
+							permissive_cel_expression_arc(
+								diagnostics,
+								format!("concurrencyLimit.rules[{i}].key"),
+								k,
+							)
+						});
+					let failure_mode =
+						match tps::concurrency_limit::rule::FailureMode::try_from(rule.failure_mode) {
+							Ok(tps::concurrency_limit::rule::FailureMode::FailOpen) => {
+								http::concurrencylimit::FailureMode::FailOpen
+							},
+							_ => http::concurrencylimit::FailureMode::FailClosed,
+						};
+					http::concurrencylimit::ConcurrencyLimit::new(rule.limit, key, failure_mode)
+				})
+				.collect::<Vec<_>>();
+			TrafficPolicy::ConcurrencyLimit(RequestPolicy::single(
+				http::concurrencylimit::ConcurrencyLimits(rules),
+			))
+		},
 		Some(tps::Kind::ExtAuthz(ea)) => TrafficPolicy::ExtAuthz(RequestPolicy::single(
 			external_auth_from_proto(ea, diagnostics)?,
 		)),
@@ -4084,6 +4115,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::ExtAuthz(_) => build!(ExtAuthz),
 		TrafficPolicy::ExtProc(_) => build!(ExtProc),
 		TrafficPolicy::LocalRateLimit(_) => build!(LocalRateLimit),
+		TrafficPolicy::ConcurrencyLimit(_) => build!(ConcurrencyLimit),
 		TrafficPolicy::RemoteRateLimit(_) => build!(RemoteRateLimit),
 		TrafficPolicy::JwtAuth(_) => build!(JwtAuth),
 		TrafficPolicy::Oidc(_) => build!(Oidc),
@@ -4113,6 +4145,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::AI(_) => "ai",
 		TrafficPolicy::Authorization(_) => "authorization",
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
+		TrafficPolicy::ConcurrencyLimit(_) => "concurrencyLimit",
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
 		TrafficPolicy::SubstrateEgress(_) => "substrateEgress",

@@ -2974,6 +2974,7 @@ pub enum TrafficPolicy {
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),
 	LocalRateLimit(RequestPolicy<crate::http::localratelimit::RateLimits>),
+	ConcurrencyLimit(RequestPolicy<crate::http::concurrencylimit::ConcurrencyLimits>),
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
 	SubstrateEgress(RequestPolicy<crate::http::substrate::SubstrateEgress>),
