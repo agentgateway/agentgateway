@@ -235,6 +235,7 @@ mod requests {
 		("stop_sequences", &[COMPLETIONS, RESPONSES]),
 		("tool_result_empty", &[COMPLETIONS, RESPONSES]),
 		("tool_result_image", &[COMPLETIONS, RESPONSES]),
+		("tool_result_with_text", &[VERTEX_GEMINI]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("namespace-tools", &[BEDROCK, GEMINI]),
