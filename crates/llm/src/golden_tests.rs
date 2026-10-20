@@ -1157,8 +1157,12 @@ mod responses {
 			],
 		),
 	];
-	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] =
-		&["stream_tool", "stream_max_tokens", "stream_blocked"];
+	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &[
+		"stream_tool",
+		"stream_max_tokens",
+		"stream_blocked",
+		"stream_text_signature",
+	];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		(
 			"stream",
@@ -1696,6 +1700,7 @@ mod responses {
 						strng::literal!("input-model"),
 						reporter,
 						LOG_CONTENT,
+						conversion::vertex_gemini::to_completions::SignaturePlacement::Omit,
 					)
 				})
 			})

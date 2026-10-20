@@ -22,16 +22,17 @@ pub mod from_responses {
 	pub fn translate_request(req: &types::responses::Request) -> Result<TranslatedRequest, AIError> {
 		let typed = json::convert::<_, responses::CreateResponse>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
-		translate_typed(typed)
+		translate_typed(typed, false)
 	}
 
 	pub fn translate_typed(
 		mut typed: responses::CreateResponse,
+		preserve_reasoning: bool,
 	) -> Result<TranslatedRequest, AIError> {
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		Ok(TranslatedRequest {
-			request: translate_internal(typed),
+			request: translate_internal(typed, preserve_reasoning),
 			namespaces,
 		})
 	}
@@ -44,7 +45,10 @@ pub mod from_responses {
 		})
 	}
 
-	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
+	fn translate_internal(
+		req: responses::CreateResponse,
+		preserve_reasoning: bool,
+	) -> completions::Request {
 		use responses::{
 			EasyInputContent, InputContent, InputItem, InputMessage, InputParam, InputRole,
 			InputTextContent, Item, MessageItem, OutputMessageContent, Role as ResponsesRole,
@@ -269,16 +273,24 @@ pub mod from_responses {
 								.collect::<Vec<_>>()
 								.join("\n");
 
-							messages.push(completions::RequestMessage::Assistant(
-								completions::RequestAssistantMessage {
-									content: if text.is_empty() {
-										None
-									} else {
-										Some(completions::RequestAssistantMessageContent::Text(text))
+							let content = if text.is_empty() {
+								None
+							} else {
+								Some(completions::RequestAssistantMessageContent::Text(text))
+							};
+							if preserve_reasoning
+								&& let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+								&& message.reasoning_signature.is_some()
+							{
+								message.content = content;
+							} else {
+								messages.push(completions::RequestMessage::Assistant(
+									completions::RequestAssistantMessage {
+										content,
+										..Default::default()
 									},
-									..Default::default()
-								},
-							));
+								));
+							}
 						},
 					},
 					Item::FunctionCall(call) => {
@@ -290,13 +302,30 @@ pub mod from_responses {
 							},
 						});
 						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
-							&& let Some(tool_calls) = &mut message.tool_calls
+							&& (preserve_reasoning || message.tool_calls.is_some())
 						{
-							tool_calls.push(tool_call);
+							message
+								.tool_calls
+								.get_or_insert_with(Vec::new)
+								.push(tool_call);
 						} else {
 							messages.push(completions::RequestMessage::Assistant(
 								completions::RequestAssistantMessage {
 									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
+					},
+					Item::Reasoning(reasoning)
+						if preserve_reasoning && reasoning.encrypted_content.is_some() =>
+					{
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut() {
+							message.reasoning_signature = reasoning.encrypted_content;
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									reasoning_signature: reasoning.encrypted_content,
 									..Default::default()
 								},
 							));
@@ -566,16 +595,18 @@ pub mod to_responses {
 		let mut tool_calls: Vec<responses::OutputItem> = Vec::new();
 
 		if let Some(choice) = &choice {
-			if let Some(text) = choice.message.reasoning() {
+			if choice.message.reasoning().is_some() || choice.message.reasoning_signature.is_some() {
 				outputs.push(responses::OutputItem::Reasoning(responses::ReasoningItem {
 					id: Some(format!("rs_{:016x}", rand::rng().random::<u64>())),
 					summary: vec![],
-					content: Some(vec![responses::ReasoningItemContent::ReasoningText(
-						responses::ReasoningTextContent {
-							text: text.to_string(),
-						},
-					)]),
-					encrypted_content: None,
+					content: choice.message.reasoning().map(|text| {
+						vec![responses::ReasoningItemContent::ReasoningText(
+							responses::ReasoningTextContent {
+								text: text.to_string(),
+							},
+						)]
+					}),
+					encrypted_content: choice.message.reasoning_signature.clone(),
 					status: Some(item_status),
 				}));
 			}
@@ -714,6 +745,7 @@ pub mod to_responses {
 		let mut message_output_index: Option<u32> = None;
 		// (item_id, output_index, text)
 		let mut reasoning: Option<(String, u32, String)> = None;
+		let mut reasoning_signature: Option<String> = None;
 		let mut tool_calls: HashMap<u32, StreamedCall> = HashMap::new();
 		let mut reasoning_items: Vec<(u32, OutputItem)> = Vec::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
@@ -747,6 +779,7 @@ pub mod to_responses {
 								&mut tool_calls,
 								&mut reasoning_items,
 								&mut reasoning,
+								&mut reasoning_signature,
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
@@ -821,7 +854,10 @@ pub mod to_responses {
 						}
 
 						if let Some(choice) = chunk.choices.first() {
-							if let Some(delta) = choice.delta.reasoning() {
+							if let Some(signature) = &choice.delta.reasoning_signature {
+								reasoning_signature = Some(signature.clone());
+							}
+							if choice.delta.reasoning().is_some() || choice.delta.reasoning_signature.is_some() {
 								let (item_id, output_index, reasoning_text) = reasoning.get_or_insert_with(|| {
 									let item_id = format!("rs_{:016x}", rand::rng().random::<u64>());
 									let output_index = next_output_index;
@@ -843,23 +879,25 @@ pub mod to_responses {
 									));
 									(item_id, output_index, String::new())
 								});
-								reasoning_text.push_str(delta);
+								if let Some(delta) = choice.delta.reasoning() {
+									reasoning_text.push_str(delta);
 
-								record_token(&mut last_token_at, &log);
+									record_token(&mut last_token_at, &log);
 
-								sequence_number += 1;
-								events.push((
-									"event",
-									ResponseStreamEvent::ResponseReasoningTextDelta(
-										ResponseReasoningTextDeltaEvent {
-											sequence_number,
-											item_id: item_id.clone(),
-											output_index: *output_index,
-											content_index: 0,
-											delta: delta.to_string(),
-										},
-									),
-								));
+									sequence_number += 1;
+									events.push((
+										"event",
+										ResponseStreamEvent::ResponseReasoningTextDelta(
+											ResponseReasoningTextDeltaEvent {
+												sequence_number,
+												item_id: item_id.clone(),
+												output_index: *output_index,
+												content_index: 0,
+												delta: delta.to_string(),
+											},
+										),
+									));
+								}
 							}
 
 							if let Some(content) = choice.delta.content.as_ref().filter(|c| !c.is_empty()) {
@@ -1097,6 +1135,7 @@ pub mod to_responses {
 								&mut tool_calls,
 								&mut reasoning_items,
 								&mut reasoning,
+								&mut reasoning_signature,
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
@@ -1187,6 +1226,7 @@ pub mod to_responses {
 		tool_calls: &mut HashMap<u32, StreamedCall>,
 		reasoning_items: &mut Vec<(u32, responses::OutputItem)>,
 		reasoning: &mut Option<(String, u32, String)>,
+		reasoning_signature: &mut Option<String>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
@@ -1242,24 +1282,29 @@ pub mod to_responses {
 		let mut output: Vec<(u32, OutputItem)> = std::mem::take(reasoning_items);
 
 		if let Some((item_id, output_index, text)) = reasoning.take() {
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseReasoningTextDone(ResponseReasoningTextDoneEvent {
-					sequence_number: *sequence_number,
-					item_id: item_id.clone(),
-					output_index,
-					content_index: 0,
-					text: text.clone(),
-				}),
-			));
+			// A signature-only item has no text
+			if !text.is_empty() {
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseReasoningTextDone(ResponseReasoningTextDoneEvent {
+						sequence_number: *sequence_number,
+						item_id: item_id.clone(),
+						output_index,
+						content_index: 0,
+						text: text.clone(),
+					}),
+				));
+			}
 			let item = OutputItem::Reasoning(ReasoningItem {
 				id: Some(item_id),
 				summary: vec![],
-				content: Some(vec![ReasoningItemContent::ReasoningText(
-					ReasoningTextContent { text },
-				)]),
-				encrypted_content: None,
+				content: (!text.is_empty()).then(|| {
+					vec![ReasoningItemContent::ReasoningText(ReasoningTextContent {
+						text,
+					})]
+				}),
+				encrypted_content: reasoning_signature.take(),
 				status: Some(item_status),
 			});
 			*sequence_number += 1;

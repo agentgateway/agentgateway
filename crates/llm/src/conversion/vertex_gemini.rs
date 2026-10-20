@@ -99,7 +99,9 @@ pub fn strip_message_carriers(messages: &mut [types::messages::RequestMessage]) 
 }
 
 fn is_carrier(value: &serde_json::Value) -> bool {
-	value.as_str().and_then(ThoughtSignature::decode).is_some()
+	value.as_str().is_some_and(|s| {
+		ThoughtSignature::decode(s).is_some() || s.starts_with(TEXT_SIGNATURE_CARRIER_PREFIX)
+	})
 }
 
 fn client_tool_id(id: String) -> (String, Option<String>) {
@@ -109,6 +111,100 @@ fn client_tool_id(id: String) -> (String, Option<String>) {
 			Some(ThoughtSignature::encode(base, signature)),
 		),
 		_ => (id, None),
+	}
+}
+
+const TEXT_SIGNATURE_CARRIER_PREFIX: &str = "agentgateway.gemini.text-signatures.v1:";
+
+/// Keep the signed text boundaries and their positions among calls. Call arguments still come
+/// from the client's tool calls, rather than being duplicated in the carrier.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TextSignatures {
+	parts: Vec<ReplayPart>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", content = "part", rename_all = "snake_case")]
+enum ReplayPart {
+	Text(vg::TextPart),
+	FunctionCall,
+}
+
+impl TextSignatures {
+	fn encode(parts: &[vg::Part]) -> Option<String> {
+		let signed = parts.iter().any(|part| match part {
+			vg::Part::Text(text) => text
+				.thought_signature
+				.as_deref()
+				.is_some_and(|s| !s.is_empty()),
+			_ => false,
+		});
+		if !signed {
+			return None;
+		}
+		let parts = parts
+			.iter()
+			.filter_map(|p| match p {
+				vg::Part::Text(t) => Some(ReplayPart::Text(t.clone())),
+				vg::Part::FunctionCall(_) => Some(ReplayPart::FunctionCall),
+				_ => None,
+			})
+			.collect();
+		let json = serde_json::to_string(&Self { parts }).expect("serializing JSON parts cannot fail");
+		Some(format!("{TEXT_SIGNATURE_CARRIER_PREFIX}{json}"))
+	}
+
+	fn decode(carrier: &str) -> Result<Option<Self>, AIError> {
+		let Some(json) = carrier.strip_prefix(TEXT_SIGNATURE_CARRIER_PREFIX) else {
+			return Ok(None);
+		};
+		serde_json::from_str(json).map(Some).map_err(|_| {
+			AIError::UnsupportedConversion(strng::literal!("invalid Gemini text signature carrier"))
+		})
+	}
+
+	fn restore(self, text: &[vg::Part], calls: Vec<vg::Part>) -> Result<Vec<vg::Part>, AIError> {
+		let visible: String = text
+			.iter()
+			.filter_map(|part| match part {
+				vg::Part::Text(text) => Some(text.text.as_str()),
+				_ => None,
+			})
+			.collect();
+		let signed_visible: String = self
+			.parts
+			.iter()
+			.filter_map(|part| match part {
+				ReplayPart::Text(text) if text.thought != Some(true) => Some(text.text.as_str()),
+				_ => None,
+			})
+			.collect();
+		if visible != signed_visible {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"Gemini text signature carrier does not match assistant text"
+			)));
+		}
+		let signed_calls = self
+			.parts
+			.iter()
+			.filter(|part| matches!(part, ReplayPart::FunctionCall))
+			.count();
+		if signed_calls != calls.len() {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"Gemini text signature carrier does not match tool calls"
+			)));
+		}
+		let mut calls = calls.into_iter();
+		Ok(
+			self
+				.parts
+				.into_iter()
+				.map(|part| match part {
+					ReplayPart::Text(text) => vg::Part::Text(text),
+					ReplayPart::FunctionCall => calls.next().expect("counted above"),
+				})
+				.collect(),
+		)
 	}
 }
 
@@ -387,7 +483,24 @@ pub mod from_completions {
 							.collect(),
 						_ => vec![],
 					};
-					parts.extend(m.tool_calls.iter().flatten().map(function_call_part));
+					let calls: Vec<_> = m
+						.tool_calls
+						.iter()
+						.flatten()
+						.map(function_call_part)
+						.collect();
+					if let Some(replay) = m
+						.rest
+						.get("reasoning_signature")
+						.and_then(Value::as_str)
+						.map(TextSignatures::decode)
+						.transpose()?
+						.flatten()
+					{
+						parts = replay.restore(&parts, calls)?;
+					} else {
+						parts.extend(calls);
+					}
 					push_content(&mut contents, "model", parts);
 				},
 				"tool" | "function" => {
@@ -1412,7 +1525,14 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		log_content: LogContentFields,
 	) -> Body {
-		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		let b = super::to_completions::translate_stream(
+			b,
+			buffer_limit,
+			model,
+			log,
+			log_content,
+			super::to_completions::SignaturePlacement::Start,
+		);
 		completions::translate_stream_with_tool_id(
 			b,
 			buffer_limit,
@@ -1423,7 +1543,7 @@ pub mod from_messages {
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let (reply, provider_usage) = super::to_completions::translate(bytes, true)?;
 		let mut response = completions::translate_response_internal(reply)?;
 		response.content = move_signatures(response.content);
 		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
@@ -1449,6 +1569,14 @@ pub mod from_messages {
 	}
 
 	pub fn restore_signatures(content: &mut Vec<messages::ContentBlock>) {
+		let text_signature = content.iter().find_map(|block| match block {
+			messages::ContentBlock::Thinking { signature, .. }
+				if signature.starts_with(super::TEXT_SIGNATURE_CARRIER_PREFIX) =>
+			{
+				Some(signature.clone())
+			},
+			_ => None,
+		});
 		let mut signatures = HashMap::new();
 		content.retain(|block| match block {
 			messages::ContentBlock::Thinking { signature, .. } => {
@@ -1462,12 +1590,22 @@ pub mod from_messages {
 			},
 			_ => true,
 		});
-		for block in content {
+		for block in content.iter_mut() {
 			if let messages::ContentBlock::ToolUse { id, .. } = block
 				&& let Some(signature) = signatures.remove(id.as_str())
 			{
 				*id = super::join_tool_call_id(std::mem::take(id), Some(&signature));
 			}
+		}
+		if let Some(signature) = text_signature {
+			content.retain(|block| !matches!(block, messages::ContentBlock::Thinking { .. }));
+			content.insert(
+				0,
+				messages::ContentBlock::Thinking {
+					thinking: String::new(),
+					signature,
+				},
+			);
 		}
 	}
 
@@ -1534,7 +1672,7 @@ pub mod from_responses {
 			req.reasoning.as_ref().and_then(|r| r.effort.as_ref()),
 			Some(responses::ReasoningEffort::None)
 		);
-		let mut completions = compat::from_responses::translate_typed(req)?;
+		let mut completions = compat::from_responses::translate_typed(req, true)?;
 		if off {
 			completions.request.reasoning_effort = Some(ReasoningEffort::None);
 		}
@@ -1554,7 +1692,14 @@ pub mod from_responses {
 		log_content: LogContentFields,
 		namespaces: Option<Arc<NamespaceToolMap>>,
 	) -> Body {
-		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		let b = super::to_completions::translate_stream(
+			b,
+			buffer_limit,
+			model,
+			log,
+			log_content,
+			super::to_completions::SignaturePlacement::End,
+		);
 		compat::to_responses::translate_stream_with_tool_id(
 			b,
 			buffer_limit,
@@ -1570,7 +1715,7 @@ pub mod from_responses {
 		model: &str,
 		namespaces: Option<&NamespaceToolMap>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let (reply, provider_usage) = super::to_completions::translate(bytes, true)?;
 		let response =
 			compat::to_responses::translate_completion(reply, model, namespaces, super::client_tool_id)?;
 		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
@@ -1640,7 +1785,7 @@ pub mod to_completions {
 	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let (response, provider_usage) = translate(bytes)?;
+		let (response, provider_usage) = translate(bytes, false)?;
 		let response = json::convert::<_, types::completions::Response>(&response)
 			.map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(super::super::ResponseWithProviderUsage {
@@ -1652,13 +1797,20 @@ pub mod to_completions {
 	/// The Chat Completions reply, and the accounting taken from Gemini's own usage
 	pub(super) fn translate(
 		bytes: &Bytes,
+		preserve_text_signatures: bool,
 	) -> Result<(completions::Response, Option<super::super::ProviderUsage>), AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-		Ok((
-			build_response(&resp),
-			resp.usage_metadata.as_ref().map(provider_usage),
-		))
+		let mut response = build_response(&resp);
+		if preserve_text_signatures {
+			for (choice, candidate) in response.choices.iter_mut().zip(&resp.candidates) {
+				choice.message.reasoning_signature = candidate
+					.content
+					.as_ref()
+					.and_then(|content| TextSignatures::encode(&content.parts));
+			}
+		}
+		Ok((response, resp.usage_metadata.as_ref().map(provider_usage)))
 	}
 
 	fn provider_usage(um: &vg::UsageMetadata) -> super::super::ProviderUsage {
@@ -1947,6 +2099,7 @@ pub mod to_completions {
 		role_emitted: bool,
 		saw_function_call: bool,
 		tool_index: u32,
+		text_parts: Option<Vec<vg::Part>>,
 	}
 
 	impl StreamState {
@@ -1958,6 +2111,7 @@ pub mod to_completions {
 				role_emitted: false,
 				saw_function_call: false,
 				tool_index: 0,
+				text_parts: None,
 			}
 		}
 		pub(super) fn translate(
@@ -1988,6 +2142,23 @@ pub mod to_completions {
 			// Use only the first answer; streaming multiple `candidates` is rare (most models return
 			// one, some reject asking for more) and unsupported here. Non-streaming returns all.
 			let cand = chunk.candidates.first();
+			if let Some(parts) = &mut self.text_parts
+				&& let Some(content) = cand.and_then(|c| c.content.as_ref())
+			{
+				for part in &content.parts {
+					match (parts.last_mut(), part) {
+						(Some(vg::Part::Text(previous)), vg::Part::Text(next))
+							if previous.thought_signature.is_none() && previous.thought == next.thought =>
+						{
+							previous.text.push_str(&next.text);
+							previous
+								.thought_signature
+								.clone_from(&next.thought_signature);
+						},
+						_ => parts.push(part.clone()),
+					}
+				}
+			}
 			let decoded = decode_parts(cand.and_then(|c| c.content.as_ref()));
 
 			let mut tool_calls = Vec::new();
@@ -2039,10 +2210,14 @@ pub mod to_completions {
 			if !tool_calls.is_empty() {
 				delta.tool_calls = Some(tool_calls);
 			}
+			if finish.is_some() {
+				delta.reasoning_signature = self.text_parts.as_deref().and_then(TextSignatures::encode);
+			}
 
 			let has_delta = delta.role.is_some()
 				|| delta.content.is_some()
 				|| delta.reasoning_content.is_some()
+				|| delta.reasoning_signature.is_some()
 				|| delta.tool_calls.is_some();
 			// Gemini attaches cumulative usageMetadata to interim content chunks too; only surface it
 			// on a terminal chunk (one carrying finish_reason, or a usage-only chunk with no delta) so
@@ -2083,14 +2258,25 @@ pub mod to_completions {
 	/// Translate a native Gemini `:streamGenerateContent?alt=sse` stream into OpenAI
 	/// `chat.completion.chunk` SSE. Gemini ends the HTTP stream without a `[DONE]`
 	/// sentinel, so one is appended on successful close.
+	/// Where a stream puts the text signature carrier, if anywhere
+	pub enum SignaturePlacement {
+		Omit,
+		Start,
+		End,
+	}
+
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
 		model: Strng,
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
+		signatures: SignaturePlacement,
 	) -> Body {
 		let mut state = StreamState::new();
+		state.text_parts = (!matches!(signatures, SignaturePlacement::Omit)).then(Vec::new);
+		// Claude Code needs the carrier before the answer, but Gemini may sign the final chunk
+		let mut held = matches!(signatures, SignaturePlacement::Start).then(HeldReply::default);
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut completion = log_content.completion.then(String::new);
@@ -2110,15 +2296,19 @@ pub mod to_completions {
 					tracing::debug!("failed to parse gemini stream chunk: {e}");
 					return vec![];
 				},
-				parse::sse::SseJsonEvent::Done
-				| parse::sse::SseJsonEvent::Eof
-				| parse::sse::SseJsonEvent::Error => return vec![],
+				parse::sse::SseJsonEvent::Done => return vec![],
+				parse::sse::SseJsonEvent::Eof | parse::sse::SseJsonEvent::Error => {
+					return held.as_mut().map(HeldReply::drain).unwrap_or_default();
+				},
 			};
 			if let Some(error) = chunk.rest.get("error") {
 				tracing::warn!(%error, "gemini stream failed");
 				failed = true;
 				seen_end.fail();
-				return vec![("", completions::StreamEvent::Error(stream_error(error)))];
+				state.text_parts = None;
+				let mut events = held.as_mut().map(HeldReply::drain).unwrap_or_default();
+				events.push(("", completions::StreamEvent::Error(stream_error(error))));
+				return events;
 			}
 
 			let now = Instant::now();
@@ -2156,7 +2346,10 @@ pub mod to_completions {
 			if let Some((_, error)) = reply_failure(&chunk) {
 				failed = true;
 				seen_end.fail();
-				return vec![("", completions::StreamEvent::Error(stream_error(&error)))];
+				state.text_parts = None;
+				let mut events = held.as_mut().map(HeldReply::drain).unwrap_or_default();
+				events.push(("", completions::StreamEvent::Error(stream_error(&error))));
+				return events;
 			}
 
 			match state.translate(&chunk) {
@@ -2218,12 +2411,89 @@ pub mod to_completions {
 							});
 						}
 					}
-					vec![("", completions::StreamEvent::Chunk(sr))]
+					let Some(reply) = held.as_mut() else {
+						return vec![("", completions::StreamEvent::Chunk(sr))];
+					};
+					reply.push(sr, buffer_limit).unwrap_or_else(|mut events| {
+						failed = true;
+						seen_end.fail();
+						state.text_parts = None;
+						events.push((
+							"",
+							completions::StreamEvent::Error(stream_error(&serde_json::json!({
+								"code": 502, "status": "INTERNAL",
+								"message": "Gemini response exceeded the Messages buffer limit"
+							}))),
+						));
+						events
+					})
 				},
 				None => vec![],
 			}
 		});
 		parse::sse::append_done_if_finished(body, end)
+	}
+
+	type Events = Vec<(&'static str, completions::StreamEvent)>;
+
+	/// A reply held until its finish chunk, whose text signature then leads it
+	#[derive(Default)]
+	struct HeldReply {
+		chunks: Vec<completions::StreamResponse>,
+		bytes: usize,
+		released: bool,
+	}
+
+	impl HeldReply {
+		/// Sends the role at once. Errs with the held chunks once they pass the buffer limit.
+		fn push(
+			&mut self,
+			mut sr: completions::StreamResponse,
+			limit: usize,
+		) -> Result<Events, Events> {
+			if self.released {
+				return Ok(vec![("", completions::StreamEvent::Chunk(sr))]);
+			}
+			self.bytes += serde_json::to_vec(&sr)
+				.expect("translated Gemini chunks are JSON")
+				.len();
+			if self.bytes > limit {
+				return Err(self.drain());
+			}
+			let mut events = Vec::new();
+			if self.chunks.is_empty() {
+				let mut start = sr.clone();
+				let [choice] = start.choices.as_mut_slice() else {
+					panic!("a translated Gemini chunk has exactly one choice");
+				};
+				choice.delta = completions::StreamResponseDelta {
+					role: sr.choices[0].delta.role.take(),
+					..Default::default()
+				};
+				choice.finish_reason = None;
+				start.usage = None;
+				events.push(("", completions::StreamEvent::Chunk(start)));
+			}
+			let finish_signature = sr
+				.choices
+				.first_mut()
+				.filter(|c| c.finish_reason.is_some())
+				.map(|c| c.delta.reasoning_signature.take());
+			self.chunks.push(sr);
+			if let Some(signature) = finish_signature {
+				self.chunks[0].choices[0].delta.reasoning_signature = signature;
+				events.extend(self.drain());
+				self.released = true;
+			}
+			Ok(events)
+		}
+
+		fn drain(&mut self) -> Events {
+			std::mem::take(&mut self.chunks)
+				.into_iter()
+				.map(|chunk| ("", completions::StreamEvent::Chunk(chunk)))
+				.collect()
+		}
 	}
 
 	fn stream_error(error: &Value) -> completions::ChatCompletionErrorResponse {

@@ -1965,6 +1965,99 @@ fn responses_carriers_apply_within_their_turn() {
 	);
 }
 
+#[rstest::rstest]
+#[case::thinking(json!([
+	{ "text": "first thought", "thought": true, "thoughtSignature": "sig-a" },
+	{ "text": "second thought", "thought": true, "thoughtSignature": "sig-b" },
+	{ "text": "answer" }
+]))]
+#[case::answer(json!([
+	{ "text": "first answer part", "thoughtSignature": "sig-a" },
+	{ "text": "second answer part", "thoughtSignature": "sig-b" }
+]))]
+#[case::with_call(json!([
+    { "text": "thought", "thought": true, "thoughtSignature": "sig-thought" },
+    { "functionCall": { "name": "get_weather", "args": { "location": "Paris" } }, "thoughtSignature": "sig-call" },
+    { "text": "answer", "thoughtSignature": "sig-answer" }
+]))]
+#[case::empty_text(json!([{ "text": "", "thoughtSignature": "sig-empty" }]))]
+fn buffered_text_signatures_survive_replay(
+	#[values("messages", "responses")] client: &str,
+	#[values(false, true)] is_vertex: bool,
+	#[case] parts: Value,
+) {
+	let native = gemini_response_bytes(json!({
+		"candidates": [{ "content": { "role": "model", "parts": parts }, "finishReason": "STOP" }],
+		"modelVersion": "gemini-3.8-flash"
+	}));
+	let reply = match client {
+		"messages" => from_messages::translate_response(&native).unwrap(),
+		_ => from_responses::translate_response(&native, "gemini-3.8-flash", None).unwrap(),
+	};
+	let reply: Value = serde_json::from_slice(&reply.serialize().unwrap()).unwrap();
+	let replay = replay_text_reply(client, &reply, is_vertex);
+	assert_eq!(replay["contents"][1]["parts"], parts);
+}
+
+fn replay_text_reply(client: &str, reply: &Value, is_vertex: bool) -> Value {
+	let bytes = match client {
+		"messages" => {
+			let request = serde_json::from_value(json!({
+				"model": "gemini-3.8-flash", "max_tokens": 1024,
+				"messages": [
+					{ "role": "user", "content": "hi" },
+					{ "role": "assistant", "content": reply["content"] },
+					{ "role": "user", "content": "continue" }
+				]
+			}))
+			.unwrap();
+			from_messages::translate(&request, is_vertex, None).unwrap()
+		},
+		_ => {
+			let mut input = vec![json!({ "role": "user", "content": "hi" })];
+			input.extend(reply["output"].as_array().unwrap().iter().cloned());
+			input.push(json!({ "role": "user", "content": "continue" }));
+			let request = serde_json::from_value(json!({
+				"model": "gemini-3.8-flash", "input": input
+			}))
+			.unwrap();
+			from_responses::translate(&request, is_vertex, None)
+				.unwrap()
+				.body
+		},
+	};
+	serde_json::from_slice(&bytes).unwrap()
+}
+
+#[rstest::rstest]
+#[case::malformed("not-json", "invalid Gemini text signature carrier")]
+#[case::missing_call(
+	r#"{"parts":[{"type":"function_call"},{"type":"function_call"}]}"#,
+	"does not match tool calls"
+)]
+#[case::extra_call(r#"{"parts":[]}"#, "does not match tool calls")]
+#[case::changed_text(
+	r#"{"parts":[{"type":"text","part":{"text":"original","thoughtSignature":"sig"}}]}"#,
+	"does not match assistant text"
+)]
+fn invalid_text_signature_carriers_are_request_errors(
+	#[case] payload: &str,
+	#[case] message: &str,
+) {
+	let request = req(json!({
+		"model": "gemini-3.8-flash",
+		"messages": [{
+			"role": "assistant",
+			"content": "",
+			"tool_calls": [{ "id": "call_1", "type": "function", "function": { "name": "f", "arguments": "{}" } }],
+			"reasoning_signature": format!("{TEXT_SIGNATURE_CARRIER_PREFIX}{payload}")
+		}]
+	}));
+	let error = from_completions::translate(&request, true, None).unwrap_err();
+	assert!(matches!(error, AIError::UnsupportedConversion(_)));
+	assert!(error.to_string().contains(message), "{error}");
+}
+
 // ---------- Request: cachedContent / labels ----------
 
 #[test]
@@ -2606,6 +2699,7 @@ mod chain {
 			strng::new("gemini-3.8-flash"),
 			log,
 			LogContentFields::default(),
+			to_completions::SignaturePlacement::Omit,
 		)
 	}
 
@@ -2664,6 +2758,146 @@ mod chain {
 			reported: false,
 		};
 		(StreamingUsageGuard::new(Box::new(recorder)), info, reports)
+	}
+
+	#[rstest::rstest]
+	#[case::thinking("messages", messages, true)]
+	#[case::answer("messages", messages, false)]
+	#[case::thinking_responses("responses", responses, true)]
+	#[case::answer_responses("responses", responses, false)]
+	#[tokio::test]
+	async fn streamed_text_signatures_survive_replay(
+		#[case] client: &str,
+		#[case] chain: Chain,
+		#[case] thought: bool,
+		#[values(false, true)] with_call: bool,
+		#[values("STOP", "MAX_TOKENS")] finish: &str,
+	) {
+		let mut parts = vec![
+			json!({ "text": "first part", "thoughtSignature": "sig-a" }),
+			json!({ "text": "second part", "thoughtSignature": "sig-b" }),
+		];
+		if thought {
+			for part in &mut parts {
+				part["thought"] = json!(true);
+			}
+			parts.push(json!({ "text": "answer" }));
+		}
+		if with_call {
+			parts.insert(1, json!({ "functionCall": { "name": "get_weather", "args": { "location": "Paris" } }, "thoughtSignature": "sig-call" }));
+		}
+
+		let mut chunks = Vec::new();
+		for part in &parts {
+			let mut text = part.clone();
+			let signature = if text.get("text").is_some() {
+				text.as_object_mut().unwrap().remove("thoughtSignature")
+			} else {
+				None
+			};
+			chunks.push(json!({ "candidates": [{ "content": { "role": "model", "parts": [text] } }] }));
+			if let Some(signature) = signature {
+				let mut closing = part.clone();
+				closing["text"] = json!("");
+				closing["thoughtSignature"] = signature;
+				chunks
+					.push(json!({ "candidates": [{ "content": { "role": "model", "parts": [closing] } }] }));
+			}
+		}
+		let last = chunks.last_mut().unwrap();
+		last["candidates"][0]["finishReason"] = json!(finish);
+		last["usageMetadata"] =
+			json!({ "promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7 });
+		let input = chunks
+			.iter()
+			.map(|chunk| format!("data: {chunk}\n\n"))
+			.collect::<String>();
+		let (log, _, reports) = recorder();
+		let out = chain(Body::from(input), log)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+		let reports = reports.lock().unwrap();
+		let [report] = reports.as_slice() else {
+			panic!("expected one usage report")
+		};
+		assert_eq!(
+			(
+				report.input_tokens,
+				report.output_tokens,
+				report.total_tokens
+			),
+			(Some(5), Some(2), Some(7))
+		);
+
+		let events = client_events(&out);
+		let reply = if client == "messages" {
+			let mut blocks = std::collections::BTreeMap::new();
+			let mut arguments: std::collections::BTreeMap<u64, String> =
+				std::collections::BTreeMap::new();
+			for event in &events {
+				let index = event["index"].as_u64();
+				match event["type"].as_str() {
+					Some("content_block_start") => {
+						blocks.insert(index.unwrap(), event["content_block"].clone());
+					},
+					Some("content_block_delta") => {
+						let block = blocks.get_mut(&index.unwrap()).unwrap();
+						if event["delta"]["type"] == "input_json_delta" {
+							arguments
+								.entry(index.unwrap())
+								.or_default()
+								.push_str(event["delta"]["partial_json"].as_str().unwrap());
+							continue;
+						}
+						let field = match event["delta"]["type"].as_str().unwrap() {
+							"text_delta" => "text",
+							"thinking_delta" => "thinking",
+							"signature_delta" => "signature",
+							other => panic!("unexpected delta {other}"),
+						};
+						let text = format!(
+							"{}{}",
+							block[field].as_str().unwrap(),
+							event["delta"][field].as_str().unwrap()
+						);
+						block[field] = json!(text);
+					},
+					Some("content_block_stop") => {
+						if let Some(arguments) = arguments.remove(&index.unwrap()) {
+							blocks.get_mut(&index.unwrap()).unwrap()["input"] =
+								serde_json::from_str(&arguments).unwrap();
+						}
+					},
+					_ => {},
+				}
+			}
+			let content: Vec<_> = blocks.into_values().collect();
+			assert_eq!(
+				content.last().unwrap()["type"],
+				"text",
+				"Claude Code uses the last block as its final answer: {content:?}"
+			);
+			json!({ "content": content })
+		} else {
+			events
+				.iter()
+				.find(|e| {
+					e["type"]
+						== if finish == "STOP" {
+							"response.completed"
+						} else {
+							"response.incomplete"
+						}
+				})
+				.unwrap()["response"]
+				.clone()
+		};
+		assert_eq!(
+			replay_text_reply(client, &reply, true)["contents"][1]["parts"],
+			json!(parts)
+		);
 	}
 
 	/// One upstream frame per SSE event, so the chain sees the chunks arrive separately
@@ -2809,6 +3043,54 @@ mod chain {
 		assert!(r.first_token.is_some());
 	}
 
+	#[tokio::test]
+	async fn messages_buffer_limit_ends_an_open_stream() {
+		let chunk = |text: &str, output| {
+			format!(
+				"data: {}\n\n",
+				json!({
+					"candidates": [{ "content": { "role": "model", "parts": [{ "text": text }] } }],
+					"usageMetadata": { "promptTokenCount": 7, "candidatesTokenCount": output, "totalTokenCount": 7 + output }
+				})
+			)
+		};
+		let first = "a".repeat(900);
+		let frames = [chunk(&first, 1), chunk(&"b".repeat(900), 2)];
+		let stream = futures_util::StreamExt::chain(
+			futures_util::stream::iter(
+				frames.map(|frame| Ok::<_, std::io::Error>(bytes::Bytes::from(frame))),
+			),
+			futures_util::stream::pending(),
+		);
+		let (log, _, reports) = recorder();
+		let body = from_messages::translate_stream(
+			Body::from_stream(stream),
+			2048,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		);
+		let (text, failed) = tokio::time::timeout(Duration::from_secs(1), drain(body))
+			.await
+			.expect("the buffer limit must end the stream");
+		assert!(!failed, "{text}");
+		assert!(text.contains(&first), "{text}");
+		assert!(last_event(&text).contains("buffer limit"), "{text}");
+		assert!(!text.contains("message_stop"), "{text}");
+		let reports = reports.lock().unwrap();
+		let [report] = reports.as_slice() else {
+			panic!("want one usage report")
+		};
+		assert_eq!(
+			(
+				report.input_tokens,
+				report.output_tokens,
+				report.total_tokens
+			),
+			(Some(7), Some(2), Some(9))
+		);
+	}
+
 	/// Codex replays the final event's output, so the carrier has to survive there on a cut-off
 	/// reply, and come back to Gemini on the signed call only
 	#[tokio::test]
@@ -2946,6 +3228,10 @@ mod chain {
 		.await
 		.expect("the stream should end once Gemini reports an error");
 		let reported = frames.contains(&ERROR);
+		assert!(
+			text.contains("Hi"),
+			"partial text must survive the failure: {text}"
+		);
 		assert_eq!(failed, !reported, "body error:\n{text}");
 		for ending in SUCCESS_ENDINGS {
 			assert!(!text.contains(ending), "{ending} in:\n{text}");

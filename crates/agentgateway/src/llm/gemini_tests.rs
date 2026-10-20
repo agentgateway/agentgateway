@@ -1398,6 +1398,7 @@ mod prefer_native {
 
 const CARRIER: &str =
 	r#"agentgateway.gemini.thought-signature.v1:{"call_id":"call_1","signature":"c2ln"}"#;
+const TEXT_CARRIER: &str = r#"agentgateway.gemini.text-signatures.v1:{"parts":[]}"#;
 
 fn bedrock_provider() -> AIProvider {
 	AIProvider::Bedrock(crate::llm::BedrockProvider::new(bedrock::Provider {
@@ -1424,6 +1425,7 @@ fn messages_history() -> types::ChatRequest {
 					{"type": "tool_result", "tool_use_id": "call_1", "content": "sunny"}
 				]},
 				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "", "signature": TEXT_CARRIER},
 					{"type": "thinking", "thinking": "checked", "signature": "real-signature"},
 					{"type": "text", "text": "Sunny."}
 				]},
@@ -1444,6 +1446,7 @@ fn responses_history() -> types::ChatRequest {
 				{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"},
 				{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
 				{"type": "reasoning", "id": "rs_2", "summary": [], "encrypted_content": "real-signature"},
+				{"type": "reasoning", "id": "rs_3", "summary": [], "encrypted_content": TEXT_CARRIER},
 				{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Sunny."}]},
 				{"role": "user", "content": "thanks"}
 			]

@@ -863,6 +863,7 @@ impl ChatTranslation {
 						strng::new(&ctx.model),
 						ctx.logger,
 						ctx.log_content,
+						conversion::vertex_gemini::to_completions::SignaturePlacement::Omit,
 					)
 				}),
 				_ => resp,
