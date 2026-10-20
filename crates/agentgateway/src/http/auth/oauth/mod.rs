@@ -349,14 +349,15 @@ impl OAuthTokenExchangeAuth {
 				debug!(source=?self.subject_token.source, "oauth token exchange subject token missing");
 				ProxyError::InvalidRequest
 			})?;
-		// Reject known-expired credentials using claims verified for this token, despite ingress clock skew.
-		// Return a 401 so the client refreshes; RFC 8693's 400 `invalid_request` looks like misconfiguration.
-		// Without a numeric `exp` there is no known expiry, so the token endpoint decides.
-		let expired = req
-			.extensions()
-			.get::<Claims>()
-			.filter(|claims| claims.jwt.expose_secret() == subject_token)
-			.and_then(|claims| claims.inner.get("exp")?.as_f64())
+		// The subject token need not pass through a JWT policy. Decode JWT-shaped tokens directly so
+		// an expired credential still produces the 401 clients use to refresh. This is only a local
+		// expiry check, not a trust decision; the authorization server still validates the token.
+		#[derive(serde::Deserialize)]
+		struct ExpClaim {
+			exp: Option<f64>,
+		}
+		let expired = decode_unverified_jwt_claims::<ExpClaim>(&subject_token)
+			.and_then(|claims| claims.exp)
 			.is_some_and(|exp| exp <= jsonwebtoken::get_current_timestamp() as f64);
 		if expired {
 			let err = ProxyError::JwtAuthenticationFailure(jwt::TokenError::Invalid(

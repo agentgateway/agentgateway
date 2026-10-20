@@ -2661,28 +2661,29 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 }
 
 #[rstest]
-#[case::past("subj", |now| Some(json!(now - 30)), true)]
-#[case::past_fractional("subj", |now| Some(json!(now as f64 - 30.5)), true)]
-#[case::exactly_now("subj", |now| Some(json!(now)), true)]
-#[case::future("subj", |now| Some(json!(now + 600)), false)]
-#[case::future_fractional("subj", |now| Some(json!(now as f64 + 600.5)), false)]
-#[case::missing_exp("subj", |_| None, false)]
-#[case::different_token("different-token", |now| Some(json!(now - 30)), false)]
-fn rejects_only_expired_validated_subject_tokens(
-	#[case] validated_subject: &str,
+#[case::past(|now| Some(json!(now - 30)), true)]
+#[case::past_fractional(|now| Some(json!(now as f64 - 30.5)), true)]
+#[case::exactly_now(|now| Some(json!(now)), true)]
+#[case::future(|now| Some(json!(now + 600)), false)]
+#[case::future_fractional(|now| Some(json!(now as f64 + 600.5)), false)]
+#[case::missing_exp(|_| None, false)]
+#[case::nonnumeric_exp(|_| Some(json!("expired")), false)]
+fn rejects_only_expired_jwt_subject_tokens(
 	#[case] exp: fn(u64) -> Option<serde_json::Value>,
 	#[case] rejected: bool,
 ) {
 	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
 	let mut req = incoming_request();
-	let mut inner = serde_json::Map::new();
+	let mut payload = serde_json::Map::new();
 	if let Some(exp) = exp(jsonwebtoken::get_current_timestamp()) {
-		inner.insert("exp".into(), exp);
+		payload.insert("exp".into(), exp);
 	}
-	req.extensions_mut().insert(Claims {
-		inner,
-		jwt: validated_subject.to_string().into(),
-	});
+	let token =
+		crate::http::jwt::tests::build_signed_token_with_payload("untrusted-key", payload.into());
+	req.headers_mut().insert(
+		::http::header::AUTHORIZATION,
+		format!("Bearer {token}").parse().unwrap(),
+	);
 	let result = auth.build_exchange_request(&req);
 	if rejected {
 		assert!(matches!(result, Err(ProxyError::JwtAuthenticationFailure(
@@ -2694,22 +2695,7 @@ fn rejects_only_expired_validated_subject_tokens(
 }
 
 #[test]
-fn allows_subject_token_without_claims() {
+fn allows_opaque_subject_token() {
 	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
 	assert!(auth.build_exchange_request(&incoming_request()).is_ok());
-}
-
-#[test]
-fn ignores_exp_on_unverified_subject_token() {
-	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
-	let mut unverified = incoming_request();
-	let token = crate::http::jwt::tests::build_signed_token_with_payload(
-		"untrusted-key",
-		json!({"exp": jsonwebtoken::get_current_timestamp() - 30}),
-	);
-	unverified.headers_mut().insert(
-		::http::header::AUTHORIZATION,
-		format!("Bearer {token}").parse().unwrap(),
-	);
-	assert!(auth.build_exchange_request(&unverified).is_ok());
 }
