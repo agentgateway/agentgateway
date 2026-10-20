@@ -456,6 +456,16 @@ impl Upstream {
 	}
 }
 
+fn target_condition_passes(target: &McpTarget, ctx: &IncomingRequestContext) -> bool {
+	target.condition.as_ref().is_none_or(|condition| {
+		ctx
+			.clone()
+			.with_mcp_target(&target.name)
+			.executor()
+			.eval_bool(condition)
+	})
+}
+
 #[derive(Debug)]
 pub(crate) struct UpstreamGroup {
 	backend: McpBackendGroup,
@@ -496,15 +506,9 @@ impl UpstreamGroup {
 			.then(|| backend.targets[0].name.to_string());
 		let configured_targets = backend.targets.len();
 		let all_targets_conditioned_out = configured_targets > 0 && {
-			backend.targets.retain(|target| {
-				target.condition.as_ref().is_none_or(|condition| {
-					ctx
-						.clone()
-						.with_mcp_target(&target.name)
-						.executor()
-						.eval_bool(condition)
-				})
-			});
+			backend
+				.targets
+				.retain(|target| target_condition_passes(target, ctx));
 			backend.targets.is_empty()
 		};
 		let mut s = Self {
@@ -533,6 +537,24 @@ impl UpstreamGroup {
 			return Err(mcp::Error::NoBackends);
 		}
 		Ok(s)
+	}
+
+	/// Whether the session's target set still matches the target conditions evaluated against
+	/// this request. Only conditioned targets are compared, so unrelated config changes do not
+	/// invalidate existing sessions.
+	pub(crate) fn conditions_match(
+		&self,
+		backend: &McpBackendGroup,
+		ctx: &IncomingRequestContext,
+	) -> bool {
+		backend
+			.targets
+			.iter()
+			.filter(|target| target.condition.is_some())
+			.all(|target| {
+				let in_session = self.backend.targets.iter().any(|t| t.name == target.name);
+				in_session == target_condition_passes(target, ctx)
+			})
 	}
 
 	pub(crate) fn setup_connections(&mut self) -> Result<(), mcp::Error> {

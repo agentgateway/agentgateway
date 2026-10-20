@@ -4,15 +4,17 @@ use std::time::Instant;
 use anyhow::Context;
 use serde_json::Value;
 use sqlx::types::Json;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{FromRow, PgPool, Postgres, QueryBuilder, Row};
 use tracing::{error, info, warn};
 
 use super::{
-	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
-	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
-	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
+	ANALYTICS_TOTALS_SELECT, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
+	AnalyticsTotals, GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry,
+	LogFilters, MIGRATIONS_TABLE, OUTPUT_TOKENS_PER_SECOND_BOUNDS, PayloadEntry, SearchRequest,
+	SearchResponse, StoredRequestLog, StoredRequestLogPayload, TTFT_BOUNDS_MS, TailRequest,
 	TailResponse, TimeRange, TurnEntry, UsageEntry, analytics_window, attr_filter_values,
-	decode_cursor, encode_cursor, limit, promoted_attribute_column, prompt_preview, turn_kind,
+	decode_cursor, encode_cursor, groups_from_buckets, histogram_bucket_sql, limit,
+	promoted_attribute_column, prompt_preview, turn_kind,
 };
 
 pub struct PostgresLogStore {
@@ -21,7 +23,6 @@ pub struct PostgresLogStore {
 
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
 const SCHEMA_LOCK_TIMEOUT: &str = "10s";
-const MIGRATIONS_TABLE: &str = "_agentgateway_request_log_migrations";
 
 impl PostgresLogStore {
 	pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
@@ -117,7 +118,9 @@ impl PostgresLogStore {
 			qb.push(", ");
 			push_group_select(&mut qb, &request.group_by);
 		}
-		qb.push(", COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0)::BIGINT AS total_tokens, COALESCE(SUM(cost), 0.0)::DOUBLE PRECISION AS cost FROM request_logs WHERE 1=1");
+		qb.push(", ");
+		qb.push(ANALYTICS_TOTALS_SELECT);
+		qb.push(" FROM request_logs WHERE 1=1");
 		push_filters(&mut qb, Some(&time_range), &request.filters);
 		qb.push(" GROUP BY bucket_index");
 		if !request.group_by.is_empty() {
@@ -308,6 +311,11 @@ fn push_request_log_copy_row(buf: &mut String, record: &StoredRequestLog) -> any
 	push_copy_display_column(buf, &mut first, record.input_tokens);
 	push_copy_display_column(buf, &mut first, record.output_tokens);
 	push_copy_display_column(buf, &mut first, record.total_tokens);
+	push_copy_display_column(buf, &mut first, record.cache_read_input_tokens);
+	push_copy_display_column(buf, &mut first, record.cache_creation_input_tokens);
+	push_copy_display_column(buf, &mut first, record.reasoning_tokens);
+	push_copy_display_column(buf, &mut first, record.time_to_first_token_ms);
+	push_copy_display_column(buf, &mut first, record.time_per_output_token_ms);
 	push_copy_display_column(buf, &mut first, record.cost);
 	push_copy_text_column(buf, &mut first, record.agentgateway_user.as_deref());
 	push_copy_text_column(buf, &mut first, record.agentgateway_group.as_deref());
@@ -380,23 +388,6 @@ fn push_copy_escaped(buf: &mut String, value: &str) {
 			_ => buf.push(ch),
 		}
 	}
-}
-
-fn groups_from_buckets(buckets: &[AnalyticsTimeBucket]) -> Vec<AnalyticsGroup> {
-	let mut groups = std::collections::BTreeMap::<String, AnalyticsGroup>::new();
-	for bucket in buckets {
-		let key = serde_json::to_string(&bucket.group).unwrap_or_default();
-		let group = groups.entry(key).or_insert_with(|| AnalyticsGroup {
-			group: bucket.group.clone(),
-			requests: 0,
-			total_tokens: 0,
-			cost: 0.0,
-		});
-		group.requests += bucket.requests;
-		group.total_tokens += bucket.total_tokens;
-		group.cost += bucket.cost;
-	}
-	groups.into_values().collect()
 }
 
 fn analytics_filter_option_map() -> std::collections::BTreeMap<String, Vec<String>> {
@@ -511,6 +502,17 @@ fn push_group_select(qb: &mut QueryBuilder<Postgres>, group_by: &[GroupBy]) {
 			GroupByField::HttpStatus => {
 				qb.push(format!("http_status::TEXT AS g{idx}"));
 			},
+			GroupByField::Ttft => {
+				let bucket = histogram_bucket_sql("time_to_first_token_ms", TTFT_BOUNDS_MS);
+				qb.push(format!("{bucket} AS g{idx}"));
+			},
+			GroupByField::OutputTokensPerSecond => {
+				let bucket = histogram_bucket_sql(
+					"1000.0 / NULLIF(time_per_output_token_ms, 0)",
+					OUTPUT_TOKENS_PER_SECOND_BOUNDS,
+				);
+				qb.push(format!("{bucket} AS g{idx}"));
+			},
 			GroupByField::Attributes => {
 				if let Some(column) = group.key.as_deref().and_then(promoted_attribute_column) {
 					qb.push(format!("{column} AS g{idx}"));
@@ -542,9 +544,7 @@ fn row_to_analytics_bucket(
 	Ok(AnalyticsTimeBucket {
 		start: from + chrono::Duration::seconds(bucket_index * bucket_seconds),
 		group,
-		requests: row.try_get("requests")?,
-		total_tokens: row.try_get("total_tokens")?,
-		cost: row.try_get("cost")?,
+		totals: AnalyticsTotals::from_row(&row)?,
 	})
 }
 
@@ -608,6 +608,8 @@ fn group_key(group: &GroupBy) -> String {
 			.key
 			.clone()
 			.unwrap_or_else(|| "attributes".to_string()),
+		GroupByField::Ttft => "ttft".to_string(),
+		GroupByField::OutputTokensPerSecond => "outputTokensPerSecond".to_string(),
 	}
 }
 
@@ -615,8 +617,9 @@ const COPY_REQUEST_LOGS: &str = r#"
 COPY request_logs (
 	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
 	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
-	input_tokens, output_tokens, total_tokens, cost, agentgateway_user, agentgateway_group,
-	user_agent_name, has_payload, attributes_json
+	input_tokens, output_tokens, total_tokens, cache_read_input_tokens, cache_creation_input_tokens,
+	reasoning_tokens, time_to_first_token_ms, time_per_output_token_ms, cost, agentgateway_user,
+	agentgateway_group, user_agent_name, has_payload, attributes_json
 ) FROM STDIN
 "#;
 

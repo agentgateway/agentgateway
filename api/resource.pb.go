@@ -15565,7 +15565,8 @@ type BackendPolicySpec_Ai_RequestGuard struct {
 	//	*BackendPolicySpec_Ai_RequestGuard_AzureContentSafety
 	Kind isBackendPolicySpec_Ai_RequestGuard_Kind `protobuf_oneof:"kind"`
 	// Which parts of the request this guard inspects. When empty, defaults to the
-	// system prompt and regular message text; tool inputs/outputs are opt-in.
+	// system prompt, regular message text, and tool outputs; tool inputs are opt-in.
+	// Webhook guards always inspect the system prompt and regular message text.
 	Scope         []BackendPolicySpec_Ai_ContentScope `protobuf:"varint,8,rep,packed,name=scope,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_Ai_ContentScope" json:"scope,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

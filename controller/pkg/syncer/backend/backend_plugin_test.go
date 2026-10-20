@@ -54,6 +54,29 @@ func TestBuildMCP(t *testing.T) {
 			},
 		},
 		{
+			name: "Static MCPBackend target with invalid condition",
+			backend: &agentgateway.AgentgatewayBackend{
+				Name:      "static-mcp-backend-invalid-condition",
+				Namespace: "test-ns",
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name:      "static-target",
+								Condition: new(agentgateway.CELExpression(`request.headers["x-team"] ==`)),
+								Static: &agentgateway.McpTarget{
+									Host: shortStringPtr("mcp-server.example.com"),
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectError:   true,
+			errorContains: `MCP target condition is not a valid CEL expression: request.headers["x-team"] ==`,
+		},
+		{
 			name: "Static MCPBackend backend with prefixMode Never",
 			backend: &agentgateway.AgentgatewayBackend{
 				Name:      "never-prefix-mcp-backend",

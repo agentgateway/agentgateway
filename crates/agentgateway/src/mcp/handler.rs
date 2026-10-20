@@ -373,12 +373,14 @@ impl Relay {
 			policy_client: client,
 		})
 	}
-	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
+	/// Rebind a reused session to the current route's policies; the session may have been
+	/// created on a different route to the same backend group.
+	pub fn with_inputs(&self, inputs: RelayInputs) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
-			policies,
-			mcp_guardrails: self.mcp_guardrails.clone(),
-			policy_client: self.policy_client.clone(),
+			policies: inputs.policies,
+			mcp_guardrails: inputs.mcp_guardrails,
+			policy_client: PolicyClient::new(inputs.client.inputs.clone()),
 		}
 	}
 

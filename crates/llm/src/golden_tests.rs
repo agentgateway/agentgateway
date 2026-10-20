@@ -1056,6 +1056,10 @@ mod responses {
 				COMPLETIONS_TO_RESPONSES,
 			],
 		),
+		(
+			"stream-vllm_reasoning",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[

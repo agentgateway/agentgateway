@@ -8,7 +8,7 @@ use sqlx::postgres::PgListener;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Sqlite, SqlitePool, Transaction};
 use tokio::sync::watch;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::database::DatabasePool;
 use crate::telemetry::log_store;
@@ -29,6 +29,27 @@ pub struct ConfigResource {
 	pub revision: i64,
 	pub created_at: DateTime<Utc>,
 	pub updated_at: DateTime<Utc>,
+	/// Set on resources returned from an upsert.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub result: Option<WriteResult>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WriteResult {
+	Created,
+	Updated,
+	Unchanged,
+}
+
+impl WriteResult {
+	fn of(written: bool, revision: i64) -> Self {
+		match (written, revision) {
+			(false, _) => Self::Unchanged,
+			(true, 1) => Self::Created,
+			(true, _) => Self::Updated,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,9 +110,29 @@ pub enum ConfigResourceKind {
 	UiPolicy,
 	#[serde(rename = "frontend.policy")]
 	FrontendPolicy,
+	#[serde(rename = "session.key")]
+	SessionKey,
 }
 
 impl ConfigResourceKind {
+	pub(crate) const ALL: [Self; 15] = [
+		Self::ModelCatalog,
+		Self::LlmProvider,
+		Self::LlmModel,
+		Self::LlmVirtualModel,
+		Self::LlmApiKey,
+		Self::LlmPolicy,
+		Self::McpTarget,
+		Self::McpPolicy,
+		Self::LlmSettings,
+		Self::McpSettings,
+		Self::TrafficGateway,
+		Self::TrafficRoute,
+		Self::TrafficTcpRoute,
+		Self::UiPolicy,
+		Self::FrontendPolicy,
+	];
+
 	pub(crate) fn settings_fields(self) -> Option<(&'static str, &'static [&'static str])> {
 		match self {
 			Self::LlmSettings => Some(("llm", &["gateways", "port", "tls"])),
@@ -117,6 +158,7 @@ impl ConfigResourceKind {
 			Self::TrafficTcpRoute => "traffic.tcpRoute",
 			Self::UiPolicy => "ui.policy",
 			Self::FrontendPolicy => "frontend.policy",
+			Self::SessionKey => "session.key",
 		}
 	}
 }
@@ -147,6 +189,7 @@ impl FromStr for ConfigResourceKind {
 			"traffic.tcpRoute" => Ok(Self::TrafficTcpRoute),
 			"ui.policy" => Ok(Self::UiPolicy),
 			"frontend.policy" => Ok(Self::FrontendPolicy),
+			"session.key" => Ok(Self::SessionKey),
 			_ => Err(ConfigResourceError::InvalidRequest(format!(
 				"unsupported config resource kind: {kind}"
 			))),
@@ -165,6 +208,11 @@ pub struct ConfigResourceUpsertRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResourceUpsert {
 	pub value: Value,
+}
+
+/// Generates a random AES-256-GCM key, hex encoded.
+pub fn generate_session_key() -> anyhow::Result<String> {
+	Ok(hex::encode(crate::crypto::rand::bytes(32)?))
 }
 
 pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
@@ -230,6 +278,45 @@ impl ConfigResourceStore {
 		self.change_tx.subscribe()
 	}
 
+	/// Returns the stored session key, generating and storing one if none exists yet.
+	pub async fn session_key(&self) -> anyhow::Result<String> {
+		loop {
+			let snapshot = self.snapshot(Some(ConfigResourceKind::SessionKey)).await?;
+			if let Some(key) = snapshot
+				.resources
+				.first()
+				.and_then(|r| r.value.get("key"))
+				.and_then(Value::as_str)
+			{
+				return Ok(key.to_string());
+			}
+			let key = generate_session_key()?;
+			let prepared = PreparedResource {
+				kind: ConfigResourceKind::SessionKey,
+				id: "default".to_string(),
+				value: serde_json::json!({ "key": key }),
+			};
+			match self
+				.upsert_prepared(vec![prepared], Some(snapshot.generation))
+				.await
+			{
+				Ok(_) => {
+					info!(
+						"generated a session key and stored it in the database; we recommend setting SESSION_KEY instead"
+					);
+					return Ok(key);
+				},
+				// Another writer (possibly another replica generating its own key) won; re-read.
+				Err(err)
+					if matches!(
+						err.downcast_ref(),
+						Some(ConfigResourceError::GenerationConflict { .. })
+					) => {},
+				Err(err) => return Err(err),
+			}
+		}
+	}
+
 	pub async fn list(
 		&self,
 		kind: Option<ConfigResourceKind>,
@@ -237,6 +324,8 @@ impl ConfigResourceStore {
 		Ok(self.snapshot(kind).await?.resources)
 	}
 
+	/// Unfiltered snapshots exclude the internal `session.key` resource; it is only read through
+	/// `session_key`.
 	pub async fn snapshot(&self, kind: Option<ConfigResourceKind>) -> anyhow::Result<Snapshot> {
 		match &self.pool {
 			DatabasePool::Sqlite(pool) => list_sqlite(pool, kind).await,
@@ -282,7 +371,10 @@ impl ConfigResourceStore {
 				.await?
 			},
 		};
-		if !resources.is_empty() {
+		if resources
+			.iter()
+			.any(|resource| resource.result != Some(WriteResult::Unchanged))
+		{
 			self.notify_changed();
 		}
 		Ok(ConfigResourcesResponse {
@@ -452,8 +544,55 @@ fn file_resource_collection(kind: ConfigResourceKind) -> Option<FileResourceColl
 		ConfigResourceKind::ModelCatalog
 		| ConfigResourceKind::LlmApiKey
 		| ConfigResourceKind::McpSettings
-		| ConfigResourceKind::LlmSettings => None,
+		| ConfigResourceKind::LlmSettings
+		| ConfigResourceKind::SessionKey => None,
 	}
+}
+
+/// Lists the resources defined in a file-backed config. API keys are listed as `llm.apiKey`
+/// resources rather than inside `llm.policy/apiKey`; singleton settings are not listed.
+pub(crate) fn file_config_resources(
+	config: &Value,
+	kind: Option<ConfigResourceKind>,
+) -> Vec<PreparedResource> {
+	let array = |path: &[&str]| {
+		crate::json::traverse(config, path)
+			.and_then(Value::as_array)
+			.into_iter()
+			.flatten()
+	};
+	let kinds = kind.map_or(ConfigResourceKind::ALL.to_vec(), |kind| vec![kind]);
+	let mut resources = Vec::new();
+	for kind in kinds {
+		let items: Vec<(String, Value)> = match file_resource_collection(kind) {
+			Some(FileResourceCollection::List(path)) => array(path)
+				.filter_map(|value| Some((resource_id(kind, value).ok()?, value.clone())))
+				.collect(),
+			Some(FileResourceCollection::Map(path)) => crate::json::traverse(config, path)
+				.and_then(Value::as_object)
+				.into_iter()
+				.flatten()
+				.map(|(id, value)| (id.clone(), value.clone()))
+				.collect(),
+			None if kind == ConfigResourceKind::LlmApiKey => {
+				array(&["llm", "policies", "apiKey", "keys"])
+					.enumerate()
+					.map(|(index, value)| (file_api_key_id(value, index), value.clone()))
+					.collect()
+			},
+			None => Vec::new(),
+		};
+		for (id, mut value) in items {
+			if kind == ConfigResourceKind::LlmPolicy
+				&& id == "apiKey"
+				&& let Some(policy) = value.as_object_mut()
+			{
+				policy.remove("keys");
+			}
+			resources.push(PreparedResource { kind, id, value });
+		}
+	}
+	resources
 }
 
 pub(crate) fn file_config_resource<'a>(
@@ -500,6 +639,7 @@ pub(crate) fn upsert_file_config_resource(
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			upsert_file_settings(config, prepared.kind, &prepared.value)
 		},
+		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -531,6 +671,7 @@ pub(crate) fn delete_file_config_resource(
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => {
 			delete_file_settings(config, kind)
 		},
+		ConfigResourceKind::SessionKey => Err(session_key_file_error()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmModel
 		| ConfigResourceKind::LlmVirtualModel
@@ -763,6 +904,13 @@ fn delete_file_api_key(config: &mut Value, id: &str) -> anyhow::Result<bool> {
 }
 
 /// Projects the singleton surface settings resource onto its top-level fields.
+fn session_key_file_error() -> anyhow::Error {
+	ConfigResourceError::InvalidRequest(
+		"session.key is stored in the database; use config.session.key in file mode".to_string(),
+	)
+	.into()
+}
+
 fn upsert_file_settings(
 	config: &mut Value,
 	kind: ConfigResourceKind,
@@ -824,9 +972,10 @@ pub(crate) fn prepare_file_api_key_update(
 	id: String,
 	mut value: Value,
 	created_at: Option<i64>,
+	existing: Option<&Value>,
 ) -> anyhow::Result<PreparedResource> {
 	validate_id(&id)?;
-	validate_api_key_metadata(&value)?;
+	validate_api_key_update_metadata(&mut value, &id, created_at, existing)?;
 	if !id.starts_with("@index:") {
 		set_api_key_managed_metadata(&mut value, id.clone(), created_at)?;
 	}
@@ -851,9 +1000,10 @@ pub(crate) fn prepare_api_key_update(
 	id: String,
 	mut value: Value,
 	created_at: Option<i64>,
+	existing: Option<&Value>,
 ) -> anyhow::Result<PreparedResource> {
 	validate_id(&id)?;
-	validate_api_key_metadata(&value)?;
+	validate_api_key_update_metadata(&mut value, &id, created_at, existing)?;
 	set_api_key_managed_metadata(&mut value, id.clone(), created_at)?;
 	Ok(PreparedResource {
 		kind: ConfigResourceKind::LlmApiKey,
@@ -948,6 +1098,7 @@ pub(crate) fn apply_prepared_upsert(
 			revision: 1,
 			created_at: Utc::now(),
 			updated_at: Utc::now(),
+			result: None,
 		});
 	}
 	Ok(resources)
@@ -1447,6 +1598,14 @@ pub(crate) fn prepare_resource(
 				ConfigResourceError::InvalidRequest(format!("{kind} resources require an item ID")).into(),
 			);
 		},
+		ConfigResourceKind::SessionKey => {
+			return Err(
+				ConfigResourceError::InvalidRequest(
+					"session.key is generated by agentgateway and cannot be written".to_string(),
+				)
+				.into(),
+			);
+		},
 		_ => resource_id(kind, &value)?,
 	};
 	Ok(PreparedResource { kind, id, value })
@@ -1454,7 +1613,7 @@ pub(crate) fn prepare_resource(
 
 fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String> {
 	match kind {
-		ConfigResourceKind::ModelCatalog => Ok("default".to_string()),
+		ConfigResourceKind::ModelCatalog | ConfigResourceKind::SessionKey => Ok("default".to_string()),
 		ConfigResourceKind::McpSettings | ConfigResourceKind::LlmSettings => Ok("default".to_string()),
 		ConfigResourceKind::LlmProvider
 		| ConfigResourceKind::LlmVirtualModel
@@ -1509,6 +1668,44 @@ fn validate_api_key_metadata(value: &Value) -> anyhow::Result<()> {
 			))
 			.into(),
 		);
+	}
+	Ok(())
+}
+
+/// Updates may echo back server-managed metadata from a previous read, as long as it is unchanged.
+/// Echoed fields are removed so the server-owned values are re-applied.
+fn validate_api_key_update_metadata(
+	value: &mut Value,
+	id: &str,
+	created_at: Option<i64>,
+	existing: Option<&Value>,
+) -> anyhow::Result<()> {
+	let Some(metadata) = value.get_mut("metadata").and_then(Value::as_object_mut) else {
+		return Ok(());
+	};
+	let reserved = metadata
+		.keys()
+		.filter(|field| field.starts_with(API_KEY_METADATA_PREFIX) && *field != API_KEY_HINT_METADATA)
+		.cloned()
+		.collect::<Vec<_>>();
+	for field in reserved {
+		let current = match field.as_str() {
+			API_KEY_ID_METADATA if !id.starts_with("@index:") => Some(Value::String(id.to_string())),
+			API_KEY_CREATED_AT_METADATA => created_at.map(Value::from),
+			_ => existing
+				.and_then(api_key_metadata)
+				.and_then(|existing| existing.get(&field))
+				.cloned(),
+		};
+		if metadata.get(&field) != current.as_ref() {
+			return Err(
+				ConfigResourceError::InvalidRequest(format!(
+					"llm.apiKey metadata field {field} cannot be changed"
+				))
+				.into(),
+			);
+		}
+		metadata.remove(&field);
 	}
 	Ok(())
 }
@@ -1580,7 +1777,7 @@ async fn list_sqlite(
 		sqlx::query(
 			"SELECT kind, id, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
-			 WHERE deleted_at IS NULL \
+			 WHERE deleted_at IS NULL AND kind <> 'session.key' \
 			 ORDER BY kind, id",
 		)
 		.fetch_all(&mut *tx)
@@ -1621,7 +1818,7 @@ async fn list_postgres(
 		sqlx::query(
 			"SELECT kind, id, value_json, revision, created_at, updated_at \
 			 FROM agw_config_resources \
-			 WHERE deleted_at IS NULL \
+			 WHERE deleted_at IS NULL AND kind <> 'session.key' \
 			 ORDER BY kind, id",
 		)
 		.fetch_all(&mut *tx)
@@ -1708,10 +1905,18 @@ async fn upsert_sqlite(
 	let mut tx = pool.begin_with(SQLITE_BEGIN_IMMEDIATE).await?;
 	let generation = bump_generation_sqlite(&mut tx, expected_generation).await?;
 	let mut changed = Vec::with_capacity(prepared.len());
-	for PreparedResource { kind, id, value } in prepared {
+	for PreparedResource {
+		kind,
+		id,
+		mut value,
+	} in prepared
+	{
 		validate_id(&id)?;
+		// Sorted keys make the text comparison below independent of key order.
+		value.sort_all_objects();
 		let now = Utc::now().to_rfc3339();
-		sqlx::query(
+		// Unchanged resources are left alone so their revision only moves on real changes.
+		let written = sqlx::query(
 			"INSERT INTO agw_config_resources \
 			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
 			 VALUES (?, ?, ?, 1, ?, ?, NULL) \
@@ -1719,7 +1924,9 @@ async fn upsert_sqlite(
 				value_json = excluded.value_json, \
 				revision = agw_config_resources.revision + 1, \
 				updated_at = excluded.updated_at, \
-				deleted_at = NULL",
+				deleted_at = NULL \
+			 WHERE agw_config_resources.deleted_at IS NOT NULL \
+				OR agw_config_resources.value_json IS NOT excluded.value_json",
 		)
 		.bind(kind.as_str())
 		.bind(&id)
@@ -1727,13 +1934,16 @@ async fn upsert_sqlite(
 		.bind(&now)
 		.bind(&now)
 		.execute(&mut *tx)
-		.await?;
-		changed.push((kind, id));
+		.await?
+		.rows_affected()
+			> 0;
+		changed.push((kind, id, written));
 	}
 
 	let mut resources = Vec::with_capacity(changed.len());
-	for (kind, id) in changed {
-		if let Some(resource) = fetch_sqlite_resource(&mut tx, kind, &id).await? {
+	for (kind, id, written) in changed {
+		if let Some(mut resource) = fetch_sqlite_resource(&mut tx, kind, &id).await? {
+			resource.result = Some(WriteResult::of(written, resource.revision));
 			resources.push(resource);
 		}
 	}
@@ -1750,10 +1960,12 @@ async fn upsert_postgres(
 	let mut tx = pool.begin().await?;
 	let generation = bump_generation_postgres(&mut tx, expected_generation).await?;
 	let mut changed = Vec::with_capacity(prepared.len());
+	let mut wrote = false;
 	for PreparedResource { kind, id, value } in prepared {
 		validate_id(&id)?;
 		let now = Utc::now();
-		sqlx::query(
+		// Unchanged resources are left alone so their revision only moves on real changes.
+		let result = sqlx::query(
 			"INSERT INTO agw_config_resources \
 			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
 			 VALUES ($1, $2, $3, 1, $4, $4, NULL) \
@@ -1761,7 +1973,9 @@ async fn upsert_postgres(
 				value_json = excluded.value_json, \
 				revision = agw_config_resources.revision + 1, \
 				updated_at = excluded.updated_at, \
-				deleted_at = NULL",
+				deleted_at = NULL \
+			 WHERE agw_config_resources.deleted_at IS NOT NULL \
+				OR agw_config_resources.value_json IS DISTINCT FROM excluded.value_json",
 		)
 		.bind(kind.as_str())
 		.bind(&id)
@@ -1769,16 +1983,19 @@ async fn upsert_postgres(
 		.bind(now)
 		.execute(&mut *tx)
 		.await?;
-		changed.push((kind, id));
+		let written = result.rows_affected() > 0;
+		wrote |= written;
+		changed.push((kind, id, written));
 	}
 
 	let mut resources = Vec::with_capacity(changed.len());
-	for (kind, id) in changed {
-		if let Some(resource) = fetch_postgres_resource(&mut tx, kind, &id).await? {
+	for (kind, id, written) in changed {
+		if let Some(mut resource) = fetch_postgres_resource(&mut tx, kind, &id).await? {
+			resource.result = Some(WriteResult::of(written, resource.revision));
 			resources.push(resource);
 		}
 	}
-	if !resources.is_empty() {
+	if wrote {
 		notify_postgres(&mut tx, notification_id).await?;
 	}
 	tx.commit().await?;
@@ -2037,6 +2254,7 @@ fn sqlite_row_to_resource(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<Config
 		revision: row.try_get("revision")?,
 		created_at: created_at.parse()?,
 		updated_at: updated_at.parse()?,
+		result: None,
 	})
 }
 
@@ -2050,6 +2268,7 @@ fn postgres_row_to_resource(row: sqlx::postgres::PgRow) -> anyhow::Result<Config
 		revision: row.try_get("revision")?,
 		created_at: row.try_get("created_at")?,
 		updated_at: row.try_get("updated_at")?,
+		result: None,
 	})
 }
 
@@ -2115,6 +2334,7 @@ mod tests {
 			revision: 1,
 			created_at: Utc::now(),
 			updated_at: Utc::now(),
+			result: None,
 		}
 	}
 
@@ -2227,6 +2447,35 @@ mod tests {
 			start + 3,
 			"every mutation advances the generation"
 		);
+	}
+
+	#[tokio::test]
+	async fn upsert_reports_write_result() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let store = file_backed_store(&dir).await;
+		let upsert = |prepared: PreparedResource| async {
+			let resource = store
+				.upsert_prepared(vec![prepared], None)
+				.await
+				.expect("upsert")
+				.resources
+				.remove(0);
+			(resource.result, resource.revision)
+		};
+		assert_eq!(
+			upsert(test_provider("a")).await,
+			(Some(WriteResult::Created), 1)
+		);
+		// Same value with keys in a different order.
+		let same = PreparedResource {
+			kind: ConfigResourceKind::LlmProvider,
+			id: "a".to_string(),
+			value: json!({"provider": "openAI", "name": "a"}),
+		};
+		assert_eq!(upsert(same).await, (Some(WriteResult::Unchanged), 1));
+		let mut different = test_provider("a");
+		different.value["provider"] = json!("anthropic");
+		assert_eq!(upsert(different).await, (Some(WriteResult::Updated), 2));
 	}
 
 	#[tokio::test]
@@ -2427,6 +2676,7 @@ mod tests {
 			created.id.clone(),
 			json!({"metadata": {"name": "updated"}}),
 			Some(created_at),
+			Some(&created.value),
 		)
 		.expect("API key update");
 		assert_eq!(api_key_created_at(&updated.value), Some(created_at));
@@ -2444,14 +2694,31 @@ mod tests {
 				.to_string()
 				.contains("reserved agentgateway.dev/ prefix")
 		);
-		assert!(
-			prepare_api_key_update(
-				"key-id".to_string(),
-				json!({"metadata": {"agentgateway.dev/owner": "client"}}),
-				None,
-			)
-			.is_err()
+		let existing = json!({"metadata": {"agentgateway.dev/owner": "client"}});
+		let updated = prepare_api_key_update(
+			"key-id".to_string(),
+			json!({"metadata": {"agentgateway.dev/owner": "client", "agentgateway.dev/id": "key-id"}}),
+			None,
+			Some(&existing),
+		)
+		.expect("API key update with unchanged managed metadata");
+		assert_eq!(
+			updated.value["metadata"],
+			json!({"agentgateway.dev/id": "key-id"})
 		);
+		for metadata in [
+			json!({"agentgateway.dev/owner": "other"}),
+			json!({"agentgateway.dev/id": "other"}),
+		] {
+			let err = prepare_api_key_update(
+				"key-id".to_string(),
+				json!({"metadata": metadata}),
+				None,
+				Some(&existing),
+			)
+			.expect_err("changed managed metadata should fail");
+			assert!(err.to_string().contains("cannot be changed"));
+		}
 		assert!(
 			prepare_policy_upsert(
 				ConfigResourceKind::LlmPolicy,
@@ -2884,9 +3151,13 @@ routes:
 		assert_eq!(config.pointer("/gateways/public/port"), Some(&json!(8080)));
 		assert_eq!(config.pointer("/gateways/private/port"), Some(&json!(8081)));
 
-		let missing_key =
-			prepare_file_api_key_update("missing".to_string(), json!({"key": "agw_missing"}), None)
-				.expect("prepare API key update");
+		let missing_key = prepare_file_api_key_update(
+			"missing".to_string(),
+			json!({"key": "agw_missing"}),
+			None,
+			None,
+		)
+		.expect("prepare API key update");
 		let err = upsert_file_config_resource(&mut config, &missing_key, Some("missing"))
 			.expect_err("missing API key update must fail");
 		assert!(err.to_string().contains("not found"));

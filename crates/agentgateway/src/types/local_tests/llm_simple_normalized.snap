@@ -155,6 +155,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
   - backend:
       ai:
         name: "llm:model:fireworks-llama:1"
@@ -209,6 +210,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
   - backend:
       ai:
         name: "llm:model:claude-3-haiku:2"
@@ -263,6 +265,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
               - regex:
                   action: reject
                   rules:
@@ -273,6 +276,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
             response:
               - regex:
                   action: mask
@@ -329,6 +333,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
   - backend:
       ai:
         name: "llm:model:gpt-7-max:4"
@@ -373,6 +378,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
   - backend:
       ai:
         name: "llm:model:*:5"
@@ -420,6 +426,7 @@ backends:
                 scope:
                   - systemPrompt
                   - messages
+                  - toolOutput
   - backend:
       llmRouter:
         name: "llm:router"

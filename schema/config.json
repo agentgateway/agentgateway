@@ -423,7 +423,8 @@
             "poolIdleTimeout": "1m30s",
             "poolMaxSize": null,
             "h2KeepaliveInterval": "0s",
-            "h2KeepaliveTimeout": "5s"
+            "h2KeepaliveTimeout": "5s",
+            "allowDynamicLoopback": false
           }
         },
         "callouts": {
@@ -1067,7 +1068,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, a key is generated when the config file or database is writable.\nSet to `disabled` to leave sessions unencrypted.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },
@@ -1356,6 +1357,11 @@
           "description": "Timeout waiting for a PING ACK before considering the connection dead and closing it.\nOnly applies when h2_keepalive_interval is set. Defaults to 5s.",
           "type": "string",
           "default": "5s"
+        },
+        "allowDynamicLoopback": {
+          "description": "Allow dynamic backends to connect to loopback and link-local addresses (such as cloud\nmetadata servers). Disabled by default, as this lets requests reach services local to the\ngateway.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -5466,7 +5472,8 @@
           "minItems": 1,
           "default": [
             "systemPrompt",
-            "messages"
+            "messages",
+            "toolOutput"
           ]
         }
       },

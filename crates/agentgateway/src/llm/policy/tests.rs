@@ -1318,7 +1318,7 @@ fn bedrock_blocked_intervention_records_guardrail_info() {
 }
 
 #[test]
-fn bedrock_default_scope_skips_tool_texts_and_keeps_mask_aligned() {
+fn bedrock_scope_skips_tool_texts_and_keeps_mask_aligned() {
 	let mut req: crate::llm::types::completions::Request =
 		serde_json::from_value(serde_json::json!({
 			"model": "gpt-4o",
@@ -1330,7 +1330,7 @@ fn bedrock_default_scope_skips_tool_texts_and_keeps_mask_aligned() {
 		}))
 		.unwrap();
 
-	let (sent, in_scope) = Policy::scoped_request_texts(&mut req, &default_content_scope());
+	let (sent, in_scope) = Policy::scoped_request_texts(&mut req, &message_scopes());
 	assert_eq!(sent, vec!["be helpful", "email jane@example.com please"]);
 	assert_eq!(in_scope, vec![true, false, true]);
 
@@ -2470,6 +2470,12 @@ fn ssn_only() -> Vec<RegexRule> {
 	}]
 }
 
+/// No tool content: only the system prompt and regular messages.
+#[cfg(test)]
+fn message_scopes() -> Vec<ContentScope> {
+	vec![ContentScope::SystemPrompt, ContentScope::Messages]
+}
+
 /// Opted in to also scanning tool call inputs and results.
 #[cfg(test)]
 fn all_scopes() -> Vec<ContentScope> {
@@ -2825,7 +2831,7 @@ fn run_apply_regex_response(
 	Expect::Unchanged
 )]
 // Gemini tool traffic: function args, a function response, and a code-execution round trip
-// all stay untouched under the default scope; system and visible text are still guarded.
+// all stay untouched without the tool scopes; system and visible text are still guarded.
 #[case::gemini_mask_tool_output_untouched(
 	ChatFmt::Gemini,
 	Action::Mask,
@@ -2878,7 +2884,7 @@ fn test_apply_regex_preserves_tool_structure(
 	#[case] input: serde_json::Value,
 	#[case] expected: Expect,
 ) {
-	let (action, actual) = run_apply_regex(fmt, action, rules, input);
+	let (action, actual) = run_apply_regex_scoped(fmt, action, rules, message_scopes(), input);
 	match expected {
 		Expect::Masked(expected) => {
 			assert_eq!(action, GuardrailAction::Mask);
@@ -3283,9 +3289,9 @@ fn responses_mcp_request() -> serde_json::Value {
 		]
 	}))
 )]
-#[case::anthropic_mcp_untouched_by_default(
+#[case::anthropic_mcp_untouched_without_tool_scopes(
 	ChatFmt::Anthropic,
-	default_content_scope(),
+	message_scopes(),
 	anthropic_mcp_request(),
 	Expect::Unchanged
 )]
@@ -3329,9 +3335,9 @@ fn responses_mcp_request() -> serde_json::Value {
 		]
 	}))
 )]
-#[case::completions_legacy_function_untouched_by_default(
+#[case::completions_legacy_function_untouched_without_tool_scopes(
 	ChatFmt::Completions,
-	default_content_scope(),
+	message_scopes(),
 	completions_legacy_function_request(),
 	Expect::Unchanged
 )]
@@ -3359,9 +3365,9 @@ fn responses_mcp_request() -> serde_json::Value {
 		]
 	}))
 )]
-#[case::responses_mcp_untouched_by_default(
+#[case::responses_mcp_untouched_without_tool_scopes(
 	ChatFmt::Responses,
-	default_content_scope(),
+	message_scopes(),
 	responses_mcp_request(),
 	Expect::Unchanged
 )]
@@ -3403,20 +3409,31 @@ fn prompt_guard_scope_support() {
 	// claiming tool coverage on a guard that only ever sees message text must fail validation
 	let err = serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
-			"openAIModeration": {},
+			"webhook": {"target": {"host": "localhost:8080"}},
 			"scope": ["messages", "toolInput"],
 		}]
 	}))
 	.unwrap()
 	.validate()
 	.unwrap_err();
-	assert!(err.to_string().contains("non-default scope"), "{err}");
+	assert!(err.to_string().contains("do not support scope"), "{err}");
 
-	// spelling out the default is honest, in any order
+	// omitting scope, or spelling out what webhooks inspect (in any order), is honest
+	for scope in [None, Some(serde_json::json!(["messages", "systemPrompt"]))] {
+		let mut guard = serde_json::json!({"webhook": {"target": {"host": "localhost:8080"}}});
+		if let Some(scope) = scope {
+			guard["scope"] = scope;
+		}
+		serde_json::from_value::<PromptGuard>(serde_json::json!({"request": [guard]}))
+			.unwrap()
+			.validate()
+			.unwrap();
+	}
+
 	serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
 			"openAIModeration": {},
-			"scope": ["messages", "systemPrompt"],
+			"scope": ["messages", "toolOutput"],
 		}]
 	}))
 	.unwrap()

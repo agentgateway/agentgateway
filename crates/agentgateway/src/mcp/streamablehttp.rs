@@ -265,19 +265,20 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidAcceptGet.into();
 		}
 
-		let Some(session_id) = request
-			.headers()
+		let (parts, _) = request.into_parts();
+		let Some(session_id) = parts
+			.headers
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 		else {
 			return mcp::Error::SessionIdRequired.into();
 		};
 
-		let Some(session) = self.session_manager.get_session(session_id, inputs) else {
+		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		let Some(session) = self.session_manager.get_session(session_id, inputs, &ctx) else {
 			return mcp::Error::UnknownSession.into();
 		};
 
-		let (parts, _) = request.into_parts();
 		session.get_stream(parts).await
 	}
 

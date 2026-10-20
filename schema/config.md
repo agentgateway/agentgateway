@@ -90,7 +90,7 @@
 |`config.histograms`|enum|Histogram representation to collect. Native histograms are exposed only through the<br>Prometheus protobuf format. Defaults to classic.<br>Possible values: `classic`, `native`, `both`.|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|
-|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
+|`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, a key is generated when the config file or database is writable.<br>Set to `disabled` to leave sessions unencrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.mcp`|object|MCP gateway settings.|
 |`config.mcp.sessionTtl`|string|Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.|
 |`config.sensitiveHeaders`|[]string|Additional request headers whose values should be redacted from trace and debug output.|
@@ -133,6 +133,7 @@
 |`config.backend.poolMaxSize`|integer|The maximum number of connections allowed in the pool, per hostname. If set, this will limit<br>the total number of connections kept alive to any given host.<br>Note: excess connections will still be created, they will just not remain idle.<br>If unset, there is no limit|
 |`config.backend.h2KeepaliveInterval`|string|Interval between HTTP/2 PING frames sent to upstream connections for liveness detection.<br>PINGs are sent even on idle connections to proactively evict dead connections from the pool.<br>Disabled by default ("0s"). Note: many gRPC servers enforce a minimum ping interval<br>and will reject connections that ping more frequently.|
 |`config.backend.h2KeepaliveTimeout`|string|Timeout waiting for a PING ACK before considering the connection dead and closing it.<br>Only applies when h2_keepalive_interval is set. Defaults to 5s.|
+|`config.backend.allowDynamicLoopback`|boolean|Allow dynamic backends to connect to loopback and link-local addresses (such as cloud<br>metadata servers). Disabled by default, as this lets requests reach services local to the<br>gateway.|
 |`config.callouts`|object|Configuration for calls the gateway makes on its own behalf, such as cloud provider credential<br>fetches, JWKS fetches, OIDC discovery, and external authorization.|
 |`config.callouts.tunnel`|object|HTTP proxy to tunnel callouts through. If unset, the `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,<br>and `NO_PROXY` environment variables are used.<br>Callouts to backends with their own tunnel policy, Kubernetes services, and loopback or<br>link-local addresses (such as cloud metadata servers) are sent directly.|
 |`config.callouts.tunnel.url`|string|URL of the proxy, for example `http://proxy.example.com:3128`.|

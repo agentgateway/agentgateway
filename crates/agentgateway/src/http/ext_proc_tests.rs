@@ -4215,20 +4215,6 @@ mod connect_authority_mutation {
 		}
 	}
 
-	/// Design question from the substrate atenet-router bug report: switching
-	/// `frontendPolicies.connect.mode` from `route` to `tunnel` would run
-	/// ext_proc on every request inside the tunnel (not just the CONNECT),
-	/// which would fix the target-port propagation gap Route mode has. But it
-	/// needs the *original* CONNECT authority (which carries both the actor
-	/// identity and the target port) available to ext_proc for each re-entered
-	/// request -- the re-entered request's own Host header is whatever the
-	/// client happens to send inside the tunnel, unrelated to the actor.
-	///
-	/// This reproduces the full topology: an outer bind terminates the CONNECT
-	/// tunnel and re-enters an inner wildcard bind, whose route's ext_proc
-	/// resolves `source.connectHeaders["host"]` (the original CONNECT
-	/// authority) instead of `request.host`, then rewrites `:authority` to the
-	/// worker exactly like the existing (working) Route-mode mutation does.
 	#[tokio::test]
 	async fn tunnel_mode_reentry_carries_connect_authority_to_ext_proc() {
 		use crate::types::agent::{BindMode, TunnelProtocol};

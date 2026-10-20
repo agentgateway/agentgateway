@@ -984,8 +984,7 @@ pub mod typed {
 		/// LiteLLM: `reasoning_content` and `thinking_blocks` (https://docs.litellm.ai/docs/reasoning_content)
 		///
 		/// Since 3/4 of these use `reasoning_content`, it seems like a reasonable default.
-		/// Note: due to 'extra' below we still get other fields passed through, too; we just won't do anything
-		/// specific with them.
+		/// vLLM also uses `reasoning`; `reasoning()` reads either.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub reasoning_content: Option<String>,
 
@@ -1294,6 +1293,30 @@ pub mod typed {
 				Some(Stop::StringArray(s)) => s.clone(),
 				_ => vec![],
 			}
+		}
+	}
+
+	/// Reasoning text from `reasoning_content`, or `reasoning` (vLLM, OpenRouter).
+	fn reasoning_text<'a>(
+		reasoning_content: &'a Option<String>,
+		extra: &'a Option<serde_json::Value>,
+	) -> Option<&'a str> {
+		reasoning_content
+			.as_deref()
+			.filter(|s| !s.is_empty())
+			.or_else(|| extra.as_ref()?.get("reasoning")?.as_str())
+			.filter(|s| !s.is_empty())
+	}
+
+	impl ResponseMessage {
+		pub fn reasoning(&self) -> Option<&str> {
+			reasoning_text(&self.reasoning_content, &self.extra)
+		}
+	}
+
+	impl StreamResponseDelta {
+		pub fn reasoning(&self) -> Option<&str> {
+			reasoning_text(&self.reasoning_content, &self.extra)
 		}
 	}
 }

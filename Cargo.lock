@@ -5680,7 +5680,6 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-types",
- "prost-wkt-build",
  "prost-wkt-types",
  "protox 0.10.0",
  "tonic",

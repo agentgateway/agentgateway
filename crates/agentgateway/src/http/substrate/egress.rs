@@ -122,16 +122,6 @@ impl RequestPolicyTrait for SubstrateEgress {
 		log.ate_actor_name = Some(identity.actor_name.clone());
 		log.ate_actor_uid = identity.actor_uid.clone();
 		log.ate_atespace = Some(identity.atespace.clone());
-		if req.method() == ::http::Method::CONNECT
-			|| req.headers().contains_key(::http::header::UPGRADE)
-		{
-			return Err(
-				ProxyError::SubstrateEgressDenied(
-					"HTTP upgrades, including CONNECT, are denied for actor egress".to_owned(),
-				)
-				.into(),
-			);
-		}
 		let policy = fetch_policy(&self.target, client, &identity).await?;
 		let matched_rule = matching_rule(&policy, req)?;
 		// Dynamic forwarding uses the authorized name and the original destination
@@ -166,6 +156,30 @@ impl RequestPolicyTrait for SubstrateEgress {
 			.await?;
 		Ok(PolicyResponse::default())
 	}
+}
+
+pub(crate) fn reject_upgrade(req: &Request) -> Result<(), ProxyError> {
+	if req.method() != ::http::Method::CONNECT && !req.headers().contains_key(::http::header::UPGRADE)
+	{
+		return Ok(());
+	}
+	let websocket = req
+		.headers()
+		.get_all(::http::header::UPGRADE)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.any(|token| token.trim().eq_ignore_ascii_case("websocket"));
+	Err(ProxyError::SubstrateEgressDenied(
+		if websocket {
+			"WebSocket egress is not supported"
+		} else if req.method() == ::http::Method::CONNECT {
+			"CONNECT egress is not supported"
+		} else {
+			"HTTP upgrades, including CONNECT, are denied for actor egress"
+		}
+		.to_owned(),
+	))
 }
 
 impl SubstrateEgress {

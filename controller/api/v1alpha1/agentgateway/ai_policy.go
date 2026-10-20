@@ -304,7 +304,7 @@ type GoogleModelArmor struct {
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
-// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: webhook guards do not support scope; they always inspect SystemPrompt + Messages"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
@@ -312,8 +312,9 @@ type PromptguardRequest struct {
 	CustomResponse *CustomResponse `json:"response,omitempty"`
 
 	// Which parts of the request this guard inspects. When unset, defaults to
-	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
-	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+	// `SystemPrompt`, `Messages`, and `ToolOutput`. Tool call inputs are not
+	// inspected unless `ToolInput` is listed explicitly. Webhook guards do not
+	// support scope and always inspect `SystemPrompt` and `Messages`.
 	// In APIs that send tool arguments as opaque JSON, such as Completions, the
 	// arguments are masked as a single string, meaning a prompt guard has the
 	// potential to rewrite the arguments into invalid JSON.
@@ -349,7 +350,7 @@ type PromptguardRequest struct {
 
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
-// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 1 && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (Messages)"
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || !has(self.webhook) || (self.scope.size() == 1 && 'Messages' in self.scope)",message="scope: webhook guards do not support a non-default scope; they always inspect the default (Messages)"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The response was rejected due to inappropriate content`.

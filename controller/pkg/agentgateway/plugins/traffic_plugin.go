@@ -2198,6 +2198,10 @@ func isCEL(expr agentgateway.CELExpression) bool {
 	return valid
 }
 
+func IsValidCELExpression(expr agentgateway.CELExpression) bool {
+	return isCEL(expr)
+}
+
 func attachmentName(target *api.PolicyTarget) string {
 	if target == nil {
 		return ""

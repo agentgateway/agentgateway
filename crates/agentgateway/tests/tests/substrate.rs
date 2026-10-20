@@ -1778,6 +1778,17 @@ async fn substrate_egress_actor_resolution_refreshes_on_long_lived_tunnel() {
 }
 
 async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::DuplexStream {
+	match open_actor_egress_tunnel_protocol(gateway, port, false).await {
+		tokio_util::either::Either::Left(io) => io,
+		tokio_util::either::Either::Right(_) => unreachable!(),
+	}
+}
+
+async fn open_actor_egress_tunnel_protocol(
+	gateway: &TestBind,
+	port: u16,
+	http2: bool,
+) -> tokio_util::either::Either<tokio::io::DuplexStream, TokioIo<hyper::upgrade::Upgraded>> {
 	let mut io = gateway.serve_tunnel_with_tls_info(
 		strng::literal!("outer"),
 		Some(TLSConnectionInfo {
@@ -1790,6 +1801,28 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 			..Default::default()
 		}),
 	);
+	if http2 {
+		let (mut sender, connection) =
+			hyper::client::conn::http2::Builder::new(hyper_util::rt::TokioExecutor::new())
+				.handshake(TokioIo::new(io))
+				.await
+				.unwrap();
+		tokio::spawn(connection);
+		let mut response = sender
+			.send_request(
+				::http::Request::builder()
+					.method(Method::CONNECT)
+					.uri(format!("127.0.0.2:{port}"))
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(response.status(), StatusCode::OK);
+		return tokio_util::either::Either::Right(TokioIo::new(
+			hyper::upgrade::on(&mut response).await.unwrap(),
+		));
+	}
 	io.write_all(
 		format!("CONNECT 127.0.0.2:{port} HTTP/1.1\r\nHost: 127.0.0.2:{port}\r\n\r\n").as_bytes(),
 	)
@@ -1803,7 +1836,7 @@ async fn open_actor_egress_tunnel(gateway: &TestBind, port: u16) -> tokio::io::D
 		response.extend_from_slice(&buf[..n]);
 	}
 	assert!(String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"));
-	io
+	tokio_util::either::Either::Left(io)
 }
 
 #[cfg(feature = "crypto-aws-lc")]
@@ -1819,6 +1852,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	#[case] placeholder: bool,
 	#[case] actor_jwt: bool,
 	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
+	#[values(false, true)] outer_http2: bool,
 ) {
 	let delayed_actor_jwt = actor_jwt && state == ActorState::Running;
 	let jwt_expiration_seconds = if delayed_actor_jwt { 3 } else { 600 };
@@ -1971,7 +2005,12 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		.with_connect_mode_on_port(agentgateway::types::frontend::ConnectMode::Tunnel, 15013);
 	gateway
 		.attach_frontend_policy(json!({
-			"substrateEgressActorResolution": { "host": api.address.to_string() }
+			"substrateEgressActorResolution": { "host": api.address.to_string() },
+			"accessLog": {
+				"add": {
+					"substrate.connect.authority": "destination.address + \":\" + string(destination.port)"
+				}
+			}
 		}))
 		.await;
 	gateway
@@ -1986,9 +2025,9 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		}))
 		.await;
 
-	let io = open_actor_egress_tunnel(&gateway, port).await;
+	let io = open_actor_egress_tunnel_protocol(&gateway, port, outer_http2).await;
 
-	let path = format!("/substrate-egress-credentials-{https}-{placeholder}");
+	let path = format!("/substrate-egress-credentials-{https}-{placeholder}-{port}-{outer_http2}");
 	let authorization = if placeholder {
 		"AuThOrIzAtIoN: Bearer actor-supplied\r\n"
 	} else {
@@ -2045,7 +2084,7 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	);
 	if delayed_actor_jwt {
 		tokio::time::sleep(Duration::from_millis(700)).await;
-		let io = open_actor_egress_tunnel(&gateway, port).await;
+		let io = open_actor_egress_tunnel_protocol(&gateway, port, outer_http2).await;
 		exchange(io, &request).await;
 		assert_eq!(mint_calls.load(Ordering::Relaxed), 2);
 	}
@@ -2072,6 +2111,12 @@ async fn substrate_egress_replaces_only_requested_credentials(
 	assert_eq!(log["ate.actor.uid"].as_str(), Some("uid-1"), "{log:#?}");
 	assert_eq!(log["ate.actor.name"].as_str(), Some("my-actor"), "{log:#?}");
 	assert_eq!(log["ate.atespace"].as_str(), Some("demo"), "{log:#?}");
+	assert_eq!(
+		log["substrate.connect.authority"].as_str(),
+		Some(format!("127.0.0.2:{port}").as_str()),
+		"{log:#?}"
+	);
+	assert_eq!(log["http.status"].as_u64(), Some(200), "{log:#?}");
 }
 
 // Provide both TLS paths for the same name. The policy must choose between them,
@@ -2302,12 +2347,20 @@ async fn substrate_egress_selects_tls_from_policy_and_rechecks_http(
 #[rstest::rstest]
 #[case(false, "websocket")]
 #[case(true, "websocket")]
+#[case(false, "WebSocket")]
+#[case(true, "WebSocket")]
+#[case(false, "h2c\r\nUpgrade: websocket")]
+#[case(true, "h2c\r\nUpgrade: websocket")]
+#[case(false, "CONNECT")]
+#[case(true, "CONNECT")]
 #[case(false, "custom-protocol")]
 #[case(true, "custom-protocol")]
 #[tokio::test]
 async fn substrate_egress_denies_http_upgrades_without_dialing(
 	#[case] https: bool,
 	#[case] upgrade: &str,
+	#[values(false, true)] rejection_route: bool,
+	#[values(false, true)] policy_allowed: bool,
 ) {
 	let (upstream, root) = if https {
 		let (upstream, certs) = tls_mock().await;
@@ -2353,9 +2406,9 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			..Default::default()
 		}
 	};
-	let (gateway, _api) = substrate_tls_gateway(
+	let (mut gateway, _api) = substrate_tls_gateway(
 		Ok(EgressPolicy {
-			rules: vec![rule],
+			rules: if policy_allowed { vec![rule] } else { vec![] },
 			..Default::default()
 		}),
 		ActorState::Running,
@@ -2363,6 +2416,23 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 		root,
 	)
 	.await;
+	if rejection_route {
+		gateway
+			.attach_route(json!({
+				"name": "reject-upgrades",
+				"matches": if upgrade == "CONNECT" { json!([{ "method": "CONNECT" }]) } else { json!([{
+					"path": { "exact": format!("/upgrade-{port}-true") },
+					"headers": [{ "name": "upgrade", "value": { "regex": ".+" } }]
+				}]) },
+				"policies": {
+					"directResponse": {
+						"status": 403,
+						"body": "WebSocket egress is not supported"
+					}
+				}
+			}))
+			.await;
+	}
 	let gateway = if https {
 		gateway
 	} else {
@@ -2382,19 +2452,38 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			assert_ne!(n, 0, "connection closed before HTTP response headers");
 			response.extend_from_slice(&buf[..n]);
 		}
+		let headers_end = response.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4;
+		let content_length = std::str::from_utf8(&response[..headers_end])
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.split_once(':'))
+			.find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+			.map(|(_, value)| value.trim().parse::<usize>().unwrap())
+			.expect("response has a content length");
+		let received = response.len();
+		response.resize(headers_end + content_length, 0);
+		io.read_exact(&mut response[received..]).await.unwrap();
 		response
 	}
 
 	for upgrading in [false, true] {
+		let path = format!("/upgrade-{port}-{upgrading}");
+		let connect_host = format!("connect-{port}.example");
 		let io = open_actor_egress_tunnel(&gateway, port).await;
 		let headers = if upgrading {
 			format!(
-				"Connection: keep-alive, UpGrAdE\r\nUpGrAdE: {upgrade}\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+				"Connection: close, UpGrAdE\r\nUpGrAdE: {upgrade}\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
 			)
 		} else {
 			"Connection: close\r\n".to_owned()
 		};
-		let request = format!("GET /upgrade HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n");
+		let request = if upgrading && upgrade == "CONNECT" {
+			format!(
+				"CONNECT {connect_host}:443 HTTP/1.1\r\nHost: {connect_host}:443\r\nConnection: close\r\n\r\n"
+			)
+		} else {
+			format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n{headers}\r\n")
+		};
 		let response = tokio::time::timeout(Duration::from_secs(3), async {
 			if https {
 				let tls: agentgateway::http::backendtls::BackendTLS =
@@ -2419,7 +2508,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 		})
 		.await
 		.expect("timed out waiting for HTTP response");
-		let expected = if upgrading {
+		let expected = if upgrading || !policy_allowed {
 			"HTTP/1.1 403 Forbidden\r\n"
 		} else {
 			"HTTP/1.1 200 OK\r\n"
@@ -2430,6 +2519,16 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			String::from_utf8_lossy(&response)
 		);
 		if upgrading {
+			let body = response
+				.split_at(response.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4)
+				.1;
+			if upgrade.to_ascii_lowercase().contains("websocket") {
+				assert_eq!(body, b"WebSocket egress is not supported");
+			} else if upgrade == "CONNECT" {
+				assert_eq!(body, b"CONNECT egress is not supported");
+			}
+		}
+		if upgrading || !policy_allowed {
 			assert!(
 				tokio::time::timeout(Duration::from_millis(50), connections.recv())
 					.await
@@ -2439,7 +2538,46 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 		} else {
 			connections.recv().await.unwrap();
 		}
-		assert_eq!(upstream.received_requests().await.unwrap().len(), 1);
+		assert_eq!(
+			upstream.received_requests().await.unwrap().len(),
+			usize::from(policy_allowed)
+		);
+		if https && !policy_allowed {
+			let connect = upgrading && upgrade == "CONNECT";
+			let log = if connect {
+				agent_core::telemetry::testing::eventually_find(&[
+					("scope", "request"),
+					("http.host", &connect_host),
+					("http.method", "CONNECT"),
+				])
+				.await
+				.unwrap()
+			} else {
+				find_request_log(&path).await
+			};
+			assert_eq!(
+				log["http.host"].as_str(),
+				Some(if connect {
+					connect_host.as_str()
+				} else {
+					"localhost"
+				}),
+				"{log:#?}"
+			);
+			assert_eq!(
+				log["http.method"].as_str(),
+				Some(if connect { "CONNECT" } else { "GET" }),
+				"{log:#?}"
+			);
+			assert_eq!(
+				log["http.path"].as_str(),
+				Some(if connect { "/" } else { path.as_str() }),
+				"{log:#?}"
+			);
+			assert_eq!(log["http.version"].as_str(), Some("HTTP/1.1"), "{log:#?}");
+			assert_eq!(log["gateway"].as_str(), Some("default/default"), "{log:#?}");
+			assert_eq!(log["listener"].as_str(), Some("default"), "{log:#?}");
+		}
 	}
 	forwarder.abort();
 }

@@ -181,7 +181,7 @@ impl Session {
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
-		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
+		self.relay = Arc::new(self.relay.with_inputs(inputs));
 		self
 	}
 
@@ -886,10 +886,21 @@ impl SessionManager {
 			.get_or_init(|| tokio::spawn(run_idle_reaper(self.sessions.clone())).abort_handle());
 	}
 
-	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
+	pub fn get_session(
+		&self,
+		id: &str,
+		builder: RelayInputs,
+		ctx: &IncomingRequestContext,
+	) -> Option<Session> {
 		let mut sessions = self.sessions.write().ok()?;
 		let entry = sessions.get_mut(id)?;
-		if entry.backend_id != builder.backend_id {
+		if entry.backend_id != builder.backend_id
+			|| !entry
+				.session
+				.relay
+				.upstreams
+				.conditions_match(&builder.backend, ctx)
+		{
 			return None;
 		}
 		entry.last_access = Instant::now();
@@ -903,7 +914,13 @@ impl SessionManager {
 		ctx: &IncomingRequestContext,
 	) -> Result<Option<Session>, mcp::Error> {
 		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
-			if s.backend_id != builder.backend_id {
+			if s.backend_id != builder.backend_id
+				|| !s
+					.session
+					.relay
+					.upstreams
+					.conditions_match(&builder.backend, ctx)
+			{
 				return Ok(None);
 			}
 			s.last_access = Instant::now();

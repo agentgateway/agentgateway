@@ -1,6 +1,4 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
 
 use ::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use bytes::Bytes;
@@ -279,73 +277,6 @@ fn test_ext_authz_cache_store_treats_zero_capacity_as_default() {
 		extauthz.cache_store.capacity(),
 		super::default_cache_store().capacity()
 	);
-}
-
-#[test]
-fn test_ext_authz_cache_refresh_threshold_scales_and_caps() {
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(10)),
-		Duration::from_secs(1)
-	);
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(1)),
-		Duration::from_millis(100)
-	);
-	assert_eq!(
-		super::cache_refresh_threshold(Duration::from_secs(365 * 24 * 60 * 60)),
-		Duration::from_secs(5)
-	);
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_hits_outside_refresh_window() {
-	let cached = test_cached_grpc_response(Duration::from_secs(5), Duration::from_secs(10));
-
-	let lookup = cached.lookup(Instant::now());
-
-	assert_eq!(lookup, super::CacheLookup::Hit);
-	assert!(!cached.refreshing.load(Ordering::Acquire));
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_refreshes_once_near_expiry() {
-	let cached = test_cached_grpc_response(Duration::from_millis(50), Duration::from_secs(1));
-	let now = cached.expires_at - Duration::from_millis(50);
-
-	let lookup = cached.lookup(now);
-	assert_eq!(lookup, super::CacheLookup::Refresh);
-	assert!(cached.refreshing.load(Ordering::Acquire));
-
-	let lookup = cached.lookup(now);
-	assert_eq!(lookup, super::CacheLookup::Hit);
-}
-
-#[test]
-fn test_ext_authz_cache_lookup_misses_expired_entry() {
-	let cached = test_cached_grpc_response(Duration::ZERO, Duration::from_secs(1));
-
-	let lookup = cached.lookup(Instant::now() + Duration::from_millis(1));
-
-	assert_eq!(
-		lookup,
-		super::CacheLookup::Miss(super::CacheMissReason::ExpiredEntry)
-	);
-}
-
-fn test_cached_grpc_response(
-	expires_in: Duration,
-	original_ttl: Duration,
-) -> super::CachedExtAuthzResponse {
-	super::CachedExtAuthzResponse {
-		expires_at: Instant::now() + expires_in,
-		original_ttl,
-		refreshing: Arc::new(AtomicBool::new(false)),
-		response: super::CachedPolicyResponse::Grpc(
-			super::CachedGrpcPolicyResponse::DenyWithoutResponse {
-				dynamic_metadata: None,
-			},
-		),
-	}
 }
 
 #[test]

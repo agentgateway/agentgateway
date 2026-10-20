@@ -171,7 +171,7 @@ pub mod from_messages {
 		// Engines report reasoning beside the text; the Messages contract puts it first. A turn whose
 		// reasoning text is withheld carries the signature alone, so the signature is enough to send
 		// the block: it is what the next turn has to replay.
-		let thinking = choice.message.reasoning_content.unwrap_or_default();
+		let thinking = choice.message.reasoning().unwrap_or_default().to_string();
 		let signature = choice.message.reasoning_signature.unwrap_or_default();
 		if !thinking.is_empty() || !signature.is_empty() {
 			content.push(messages::ContentBlock::Thinking {
@@ -634,12 +634,7 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(thinking) = choice
-							.delta
-							.reasoning_content
-							.as_deref()
-							.filter(|s| !s.is_empty())
-						{
+						if let Some(thinking) = choice.delta.reasoning() {
 							let index = open_thinking_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
