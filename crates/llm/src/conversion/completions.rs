@@ -853,9 +853,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
-			speed,
 		} = req;
-		crate::conversion::warn_if_fast_mode_dropped(speed, "openai");
 
 		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
 		let supports_prompt_cache_breakpoint =

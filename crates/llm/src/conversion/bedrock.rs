@@ -1552,7 +1552,6 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
-		crate::conversion::warn_if_fast_mode_dropped(req.speed, "bedrock");
 		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&req.model, catalog);
 		if matches!(req.thinking, Some(messages::ThinkingInput::Enabled { .. }))
 			&& capabilities.adaptive
@@ -3227,10 +3226,14 @@ pub mod from_responses {
 			request_metadata: metadata,
 			performance_config: None,
 			service_tier: req.service_tier.as_ref().and_then(|tier| {
-				serde_json::to_value(tier)
-					.ok()?
-					.as_str()
-					.and_then(service_tier_from_openai)
+				use responses::ServiceTierResponses as Tier;
+				let tier_type = match tier {
+					Tier::Priority => bedrock::ServiceTierType::Priority,
+					Tier::Default => bedrock::ServiceTierType::Default,
+					Tier::Flex => bedrock::ServiceTierType::Flex,
+					Tier::Auto | Tier::Scale | Tier::Fast | Tier::Ultrafast => return None,
+				};
+				Some(bedrock::ServiceTier { tier_type })
 			}),
 		};
 
