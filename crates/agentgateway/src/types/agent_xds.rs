@@ -1342,9 +1342,8 @@ fn backend_auth_kind_from_proto(
 			} else {
 				Some(a.region.clone())
 			};
-			let assume_role = a
-				.assume_role
-				.map(|assume_role| -> Result<_, ProtoError> {
+			let assume_role = match a.assume_role {
+				Some(assume_role) => {
 					let tags = assume_role
 						.tags
 						.into_iter()
@@ -1408,15 +1407,28 @@ fn backend_auth_kind_from_proto(
 							.map_err(|e| ProtoError::Generic(format!("assumeRole externalId: {e}")))?;
 						Some(assume_role.external_id)
 					};
-					Ok(auth::AwsAssumeRole {
+					let tags = match auth::aws::AwsSessionTags::try_new(tags) {
+						Ok(tags) => tags,
+						Err(error) => {
+							let reason = error.to_string();
+							diagnostics.add_warning(format!(
+								"AWS session tags are invalid; requests using this policy will be rejected: {reason}"
+							));
+							return Ok(Some(BackendAuthKind::Invalid {
+								kind: "aws",
+								reason,
+							}));
+						},
+					};
+					Some(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
 						session_name,
-						tags: auth::aws::AwsSessionTags::try_new(tags)
-							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+						tags,
 						external_id,
 					})
-				})
-				.transpose()?;
+				},
+				None => None,
+			};
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
 					if assume_role.is_some() {
@@ -5700,6 +5712,60 @@ mod tests {
 		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
 		assert_eq!(region.as_deref(), Some("us-east-1"));
 		Ok(())
+	}
+
+	#[test]
+	fn aws_session_tag_validation_warns_and_fails_closed() {
+		for (key, value, invalid) in [
+			("cost-center", "cc#42", true),
+			("cost-center", "R&D", true),
+			("cost-center", "Team (Payments)", true),
+			("cost-center", "a,b", true),
+			("cost#center", "payments", true),
+			("cost-center", "payments", false),
+			("cost-center", "", false),
+			("équipe", "研发 Payments_1.:/=+-@", false),
+		] {
+			let mut diagnostics = Diagnostics::default();
+			let auth = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::Aws(
+						proto::agent::Aws {
+							kind: Some(proto::agent::aws::Kind::Implicit(
+								proto::agent::AwsImplicit {},
+							)),
+							assume_role: Some(proto::agent::AwsAssumeRole {
+								role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+								tags: vec![proto::agent::AwsSessionTag {
+									key: key.to_string(),
+									value: value.to_string(),
+									..Default::default()
+								}],
+								..Default::default()
+							}),
+							..Default::default()
+						},
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid tags should not reject the resource")
+			.expect("AWS auth must be retained");
+			let warnings = diagnostics.into_warnings();
+			if invalid {
+				let BackendAuthKind::Invalid { kind, reason } = auth else {
+					panic!("invalid tags must reject requests");
+				};
+				assert_eq!(kind, "aws");
+				assert!(reason.contains("contains characters STS does not accept"));
+				assert_eq!(warnings.len(), 1);
+				assert!(warnings[0].contains(&reason));
+			} else {
+				assert!(matches!(auth, BackendAuthKind::Aws(_)));
+				assert!(warnings.is_empty());
+			}
+		}
 	}
 
 	#[test]
