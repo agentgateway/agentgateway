@@ -758,8 +758,7 @@ pub mod from_completions {
 	// Authoritative field list: google/ai/generativelanguage/v1beta/content.proto — Schema message.
 	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
 
-	/// Schema fields Gemini accepts. `format` is further pruned to enum/date-time and `enum` is
-	/// dropped on non-string types.
+	/// Schema fields Gemini accepts. `enum` is dropped on non-string types.
 	const ALLOWED_SCHEMA_FIELDS: &[&str] = &[
 		"type",
 		"format",
@@ -1081,15 +1080,6 @@ pub mod from_completions {
 		// Default any remaining typeless, non-union, non-enum node to an object.
 		if !map.contains_key("type") && !map.contains_key("anyOf") && !map.contains_key("enum") {
 			map.insert("type".to_string(), "object".into());
-		}
-
-		let drop_format = map
-			.get("format")
-			.and_then(Value::as_str)
-			.map(|f| f != "enum" && f != "date-time")
-			.unwrap_or(false);
-		if drop_format {
-			map.remove("format");
 		}
 
 		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));

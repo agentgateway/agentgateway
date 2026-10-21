@@ -1054,31 +1054,74 @@ fn gemini_schema_rewrites_oneof_of_refs() {
 	assert_eq!(any_of[1]["properties"]["key"]["type"], "string", "{txt}");
 }
 
-// Case 5: only `enum` and `date-time` string formats are safe; others (uri, email, int64, uuid, ...)
-// must be stripped.
+// Case 5: string formats pass through to Gemini.
 #[test]
-fn gemini_schema_strips_unsupported_formats_keeps_datetime() {
-	let s = response_schema(json!({
+fn gemini_schema_keeps_formats() {
+	let schema = json!({
 		"type": "object",
 		"additionalProperties": false,
 		"properties": {
-			"link": { "type": "string", "format": "uri" },
 			"when": { "type": "string", "format": "date-time" },
+			"day": { "type": "string", "format": "date" },
+			"at": { "type": "string", "format": "time" },
+			"id": { "type": "string", "format": "uuid" },
+			"mail": { "type": "string", "format": "email" },
 			"big": { "type": "integer", "format": "int64" }
 		}
+	});
+	for is_vertex in [true, false] {
+		let g = from_completions::translate(
+			&req(json!({
+				"model": "gemini-2.5-flash",
+				"messages": [{ "role": "user", "content": "x" }],
+				"response_format": {
+					"type": "json_schema",
+					"json_schema": { "name": "T", "strict": true, "schema": schema }
+				}
+			})),
+			is_vertex,
+		)
+		.expect("translate ok");
+		let g: Value = serde_json::from_slice(&g).expect("valid json");
+		let props = &g["generationConfig"]["responseSchema"]["properties"];
+		for (field, format) in [
+			("when", "date-time"),
+			("day", "date"),
+			("at", "time"),
+			("id", "uuid"),
+			("mail", "email"),
+			("big", "int64"),
+		] {
+			assert_eq!(
+				props[field]["format"], format,
+				"is_vertex={is_vertex}: {props}"
+			);
+		}
+	}
+}
+
+#[test]
+fn tool_parameters_keep_string_formats() {
+	let g = to_gemini_api(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": {
+				"name": "book",
+				"parameters": {
+					"type": "object",
+					"properties": {
+						"day": { "type": "string", "format": "date" },
+						"id": { "type": "string", "format": "uuid" }
+					}
+				}
+			}
+		}]
 	}));
-	assert!(
-		s["properties"]["link"].get("format").is_none(),
-		"unsupported string format must be dropped: {s}"
-	);
-	assert_eq!(
-		s["properties"]["when"]["format"], "date-time",
-		"date-time format must be kept: {s}"
-	);
-	assert!(
-		s["properties"]["big"].get("format").is_none(),
-		"unsupported numeric format must be dropped: {s}"
-	);
+	let props = &g["tools"][0]["functionDeclarations"][0]["parameters"]["properties"];
+	assert_eq!(props["day"]["format"], "date", "{props}");
+	assert_eq!(props["id"]["format"], "uuid", "{props}");
 }
 
 // Case 6: JSON Schema `type` arrays are not allowed. A `null` member becomes `nullable`; a genuine
