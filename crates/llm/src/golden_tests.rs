@@ -1982,6 +1982,35 @@ fn messages_to_responses_rejects_malformed_image_source() {
 }
 
 #[test]
+fn completions_to_messages_rejects_non_inline_file() {
+	let error_files = [
+		// OpenAI Files API reference
+		json!({"file_id": "file-abc123"}),
+		// raw base64 without a data: URI
+		json!({"file_data": "JVBERi0xLjQK", "filename": "report.pdf"}),
+		// remote URL
+		json!({"file_data": "https://example.com/report.pdf"}),
+		// no content
+		json!({"filename": "report.pdf"}),
+	];
+	for (i, file) in error_files.iter().enumerate() {
+		let input: types::completions::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "file", "file": file}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::messages::from_completions::translate(&input, None, None).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error file #{i} ({file}), got {err:?}"
+		);
+	}
+}
+
+#[test]
 fn messages_to_responses_maps_anthropic_runtime_features() {
 	let input: types::messages::Request = serde_json::from_value(json!({
 		"model": "gpt-5.6-terra",

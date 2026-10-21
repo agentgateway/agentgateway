@@ -29,7 +29,8 @@ info:
               "type": "base64",
               "media_type": "application/pdf",
               "data": "JVBERi0xLjQK"
-            }
+            },
+            "title": "report.pdf"
           }
         ]
       }
