@@ -2,7 +2,7 @@ use ::http::Uri;
 use ::http::header::{ACCEPT, CONTENT_TYPE};
 use anyhow::anyhow;
 use futures_core::stream::BoxStream;
-use futures_util::{StreamExt, TryFutureExt};
+use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use http_body_util::BodyExt as _;
 use rmcp::model::{
@@ -15,7 +15,7 @@ use crate::client::ResolvedDestination;
 use crate::mcp::ClientError;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
-use crate::mcp::upstream::stdio::Process;
+use crate::mcp::upstream::stdio::{Process, SendError};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::*;
 
@@ -66,10 +66,21 @@ impl crate::mcp::upstream::stdio::MCPTransport for SseClient {
 		&mut self,
 		item: ClientJsonRpcMessage,
 		ctx: &IncomingRequestContext,
-	) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
+	) -> impl Future<Output = Result<(), SendError>> + Send + 'static {
 		let ctx = ctx.clone();
 		let client = self.client.clone();
-		Box::pin(async move { client.send_message(item, &ctx).map_err(Into::into).await })
+		Box::pin(async move {
+			client.send_message(item, &ctx).await.map_err(|e| {
+				let e = UpstreamError::from(e);
+				// The gateway rejected this request's credential before the POST was sent. The event
+				// stream and session remain usable, so a retry with refreshed credentials can reuse them.
+				if e.is_client_authentication_failure() {
+					SendError::Request(e)
+				} else {
+					SendError::Terminal(e)
+				}
+			})
+		})
 	}
 	async fn close(&mut self) -> Result<(), UpstreamError> {
 		Ok(())
@@ -93,7 +104,7 @@ impl ClientCore {
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
 
-		let resp = self.http_client.call(req).await.map_err(ClientError::new)?;
+		let resp = self.http_client.call(req).await?;
 
 		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));

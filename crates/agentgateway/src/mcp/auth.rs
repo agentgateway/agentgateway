@@ -151,7 +151,9 @@ pub(crate) async fn handle_mcp_request(
 			))
 		},
 		_ => {
-			// Not handled
+			// Backend requests may use a different URI; retain the client's discovery URL.
+			let challenge = McpResourceChallenge::new(req, auth);
+			req.extensions_mut().insert(challenge);
 			Ok(None)
 		},
 	}
@@ -162,27 +164,50 @@ pub(crate) fn create_auth_required_response(
 	req: &Request,
 	auth: &McpAuthentication,
 ) -> ProxyError {
-	let request_path = req.uri().path();
-	// If the `resource` is explicitly configured, use that as the base. otherwise, derive it from the
-	// the request URL
-	let proxy_url = auth
-		.resource_metadata
-		.extra
-		.get("resource")
-		.and_then(|v| v.as_str())
-		.and_then(|u| http::uri::Uri::try_from(u).ok())
-		.and_then(|uri| {
-			let mut parts = uri.into_parts();
-			parts.path_and_query = Some(PathAndQuery::from_static("/"));
-			Uri::from_parts(parts).ok()
-		})
-		.and_then(|uri| uri.to_string().strip_suffix("/").map(ToString::to_string))
-		.unwrap_or_else(|| get_redirect_url(req, request_path));
-	let www_authenticate_value = format!(
-		"Bearer resource_metadata=\"{proxy_url}/.well-known/oauth-protected-resource{request_path}\""
-	);
+	ProxyError::McpJwtAuthenticationFailure(Box::new(inner), McpResourceChallenge::new(req, auth))
+}
 
-	ProxyError::McpJwtAuthenticationFailure(Box::new(inner), www_authenticate_value)
+/// Saved by MCP auth so later token failures point clients to the original resource metadata URL.
+#[derive(Clone, Debug)]
+pub struct McpResourceChallenge {
+	metadata_url: String,
+}
+
+impl McpResourceChallenge {
+	pub fn new(req: &Request, auth: &McpAuthentication) -> Self {
+		let request_path = req.uri().path();
+		// If the `resource` is explicitly configured, use that as the base.
+		// Otherwise, derive it from the the request URL
+		let proxy_url = auth
+			.resource_metadata
+			.extra
+			.get("resource")
+			.and_then(|v| v.as_str())
+			.and_then(|u| http::uri::Uri::try_from(u).ok())
+			.and_then(|uri| {
+				let mut parts = uri.into_parts();
+				parts.path_and_query = Some(PathAndQuery::from_static("/"));
+				Uri::from_parts(parts).ok()
+			})
+			.and_then(|uri| uri.to_string().strip_suffix("/").map(ToString::to_string))
+			.unwrap_or_else(|| get_redirect_url(req, request_path));
+		Self {
+			metadata_url: format!("{proxy_url}/.well-known/oauth-protected-resource{request_path}"),
+		}
+	}
+
+	pub fn metadata_url(&self) -> &str {
+		&self.metadata_url
+	}
+
+	pub fn wrap(req: &Request, error: ProxyError) -> ProxyError {
+		match req.extensions().get::<Self>() {
+			Some(challenge) => {
+				ProxyError::McpJwtAuthenticationFailure(Box::new(error), challenge.clone())
+			},
+			None => error,
+		}
+	}
 }
 
 pub(super) async fn protected_resource_metadata(
@@ -769,6 +794,8 @@ async fn build_mock_dcr_response(
 mod tests {
 	use std::sync::Arc;
 
+	use http::header::WWW_AUTHENTICATE;
+
 	use super::*;
 
 	#[test]
@@ -998,6 +1025,83 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn credential_removal_failure_is_not_an_mcp_challenge() {
+		let auth = default_auth();
+		let req = auth_request("https://example.com/mcp", auth.clone());
+		let response = create_auth_required_response(
+			ProxyError::JwtAuthenticationFailure(crate::http::jwt::TokenError::CredentialRemoval(
+				"failed to update URI".into(),
+			)),
+			&req,
+			&auth,
+		)
+		.into_response_with_grpc(false);
+		assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+		assert!(
+			!response
+				.headers()
+				.contains_key(::http::header::WWW_AUTHENTICATE)
+		);
+	}
+
+	#[tokio::test]
+	async fn invalid_token_response_preserves_metadata_and_challenge() {
+		let auth = default_auth();
+		let req = auth_request("https://example.com/mcp", auth.clone());
+		for error in [
+			crate::http::jwt::TokenError::Invalid(
+				jsonwebtoken::errors::ErrorKind::ExpiredSignature.into(),
+			),
+			crate::http::jwt::TokenError::MissingKeyId,
+		] {
+			let response =
+				create_auth_required_response(ProxyError::JwtAuthenticationFailure(error), &req, &auth)
+					.into_response_with_grpc(false);
+			assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+			let challenge = response.headers()[::http::header::WWW_AUTHENTICATE]
+				.to_str()
+				.unwrap();
+			assert!(challenge.contains(
+				"resource_metadata=\"https://example.com/.well-known/oauth-protected-resource/mcp\""
+			));
+			assert!(challenge.contains("error=\"invalid_token\""));
+			assert!(challenge.contains("error_description="));
+			let body = response_body_to_json(response).await;
+			assert_eq!(body["error"], "invalid_token");
+		}
+		let response = create_auth_required_response(
+			ProxyError::JwtAuthenticationFailure(crate::http::jwt::TokenError::Missing),
+			&req,
+			&auth,
+		)
+		.into_response_with_grpc(false);
+		assert!(
+			!response.headers()[::http::header::WWW_AUTHENTICATE]
+				.to_str()
+				.unwrap()
+				.contains("error=")
+		);
+		assert_eq!(
+			response_body_to_json(response).await["error_description"],
+			"JWT token required"
+		);
+	}
+
+	#[test]
+	fn http_jwt_failure_has_bearer_challenge() {
+		let response = ProxyError::JwtAuthenticationFailure(crate::http::jwt::TokenError::Invalid(
+			jsonwebtoken::errors::ErrorKind::ExpiredSignature.into(),
+		))
+		.into_response_with_grpc(false);
+		assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+		let challenge = response.headers()[::http::header::WWW_AUTHENTICATE]
+			.to_str()
+			.unwrap();
+		assert!(challenge.contains("error=\"invalid_token\""));
+		assert!(!challenge.contains("resource_metadata="));
+	}
+
 	fn auth_request(uri: &'static str, auth: McpAuthentication) -> Request {
 		let mut req = ::http::Request::builder()
 			.uri(uri)
@@ -1028,19 +1132,19 @@ mod tests {
 	}
 
 	fn www_authenticate_resource_metadata(req: &Request) -> String {
-		let err = create_auth_required_response(
+		let resp = create_auth_required_response(
 			ProxyError::ProcessingString("test auth failure".to_string()),
 			req,
 			req
 				.extensions()
 				.get::<McpAuthentication>()
 				.expect("auth should be set"),
-		);
-
-		match err {
-			ProxyError::McpJwtAuthenticationFailure(_, www_authenticate) => www_authenticate,
-			other => panic!("expected MCP JWT authentication failure, got {other:?}"),
-		}
+		)
+		.into_response_with_grpc(false);
+		resp.headers()[WWW_AUTHENTICATE]
+			.to_str()
+			.unwrap()
+			.to_string()
 	}
 
 	async fn response_body_to_json(resp: Response) -> serde_json::Value {
