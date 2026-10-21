@@ -1471,7 +1471,7 @@
       }
     },
     "upstreamCalls": {
-      "description": "`upstreamCalls` records outbound calls made for this request, including policy and MCP calls.\nAvailable after the request completes when referenced by an access log expression.\nRequest headers reflect backend authentication; inbound `request.headers` is unchanged.",
+      "description": "`upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.\nIt's only filled in for access log expressions that reference it.\nIts request headers are the ones sent to the backend. `request.headers` still has the client's headers.",
       "type": [
         "array",
         "null"
@@ -1488,14 +1488,14 @@
             "type": "string"
           },
           "target": {
-            "description": "MCP target name; connection address (host:port) for other calls.",
+            "description": "The MCP target name for MCP calls, otherwise the connection address (host:port).",
             "type": "string"
           },
           "request": {
             "type": "object",
             "properties": {
               "headers": {
-                "description": "Outbound request headers after backend authentication, excluding tunnel proxy credentials.",
+                "description": "Headers sent to the backend, after backend auth. Tunnel proxy credentials are left out.",
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
@@ -1510,7 +1510,7 @@
             "type": "object",
             "properties": {
               "code": {
-                "description": "HTTP response status code; null when no HTTP response was received or for gRPC calls.",
+                "description": "HTTP status code. Empty for gRPC calls or when no response came back.",
                 "type": [
                   "integer",
                   "null"

@@ -15,7 +15,7 @@ pub struct UpstreamCall {
 	/// Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,
 	/// `Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.
 	pub subtype: String,
-	/// MCP target name; connection address (host:port) for other calls.
+	/// The MCP target name for MCP calls, otherwise the connection address (host:port).
 	pub target: String,
 	pub request: UpstreamRequest,
 	pub response: UpstreamResponse,
@@ -30,7 +30,7 @@ pub struct UpstreamCall {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct UpstreamRequest {
-	/// Outbound request headers after backend authentication, excluding tunnel proxy credentials.
+	/// Headers sent to the backend, after backend auth. Tunnel proxy credentials are left out.
 	#[dynamic(with_value = "headers_to_value")]
 	#[serde(with = "http_serde::header_map")]
 	#[cfg_attr(
@@ -51,7 +51,7 @@ fn headers_to_value(headers: &http::HeaderMap) -> cel::Value<'_> {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[dynamic(rename_all = "camelCase")]
 pub struct UpstreamResponse {
-	/// HTTP response status code; null when no HTTP response was received or for gRPC calls.
+	/// HTTP status code. Empty for gRPC calls or when no response came back.
 	pub code: Option<u16>,
 	pub grpc_status: Option<i32>,
 }
@@ -76,7 +76,7 @@ pub(crate) struct UpstreamTarget(pub String);
 
 impl SpanWriter {
 	pub(crate) fn record_outbound(&self, req: &mut crate::http::Request, labels: OutboundCallLabels) {
-		// Only record calls within the request lifetime; detached mirrors can outlive its log.
+		// Mirrors run detached and can finish after the request is logged, so they aren't recorded.
 		if matches!(labels.kind, OutboundCallKind::Mirror) {
 			req.extensions_mut().remove::<OutboundRequest>();
 			return;
@@ -250,7 +250,6 @@ mod tests {
 				subtype: OutboundCallSubtype::Oidc,
 			},
 		);
-		// Exercise the shared capture used by gRPC as well as the HTTP record.
 		let mut grpc = PendingCall::new(
 			calls.clone(),
 			OutboundCallLabels {

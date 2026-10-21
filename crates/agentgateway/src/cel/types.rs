@@ -2334,9 +2334,9 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrails: Option<Vec<GuardrailInfo>>,
 
-	/// `upstreamCalls` records outbound calls made for this request, including policy and MCP calls.
-	/// Available after the request completes when referenced by an access log expression.
-	/// Request headers reflect backend authentication; inbound `request.headers` is unchanged.
+	/// `upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.
+	/// It's only filled in for access log expressions that reference it.
+	/// Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub upstream_calls: Option<Vec<crate::telemetry::upstream::UpstreamCall>>,
 

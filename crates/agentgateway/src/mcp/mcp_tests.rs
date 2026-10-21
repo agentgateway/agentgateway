@@ -9345,7 +9345,6 @@ async fn modern_multi_target_resolve_propagates_meta() {
 	}
 }
 
-// Recording is enabled only for tests that explicitly exercise outbound call logs.
 fn enable_upstream_call_logs(t: &mut TestBind) {
 	let listener = t
 		.pi

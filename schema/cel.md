@@ -209,14 +209,14 @@
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|
 |`guardrails[].assessments`|array|Assessment detail reported by the guardrail provider, redacted to metadata<br>only. Content-bearing fields (such as the matched text) are never included.|
-|`upstreamCalls`|[]object|`upstreamCalls` records outbound calls made for this request, including policy and MCP calls.<br>Available after the request completes when referenced by an access log expression.<br>Request headers reflect backend authentication; inbound `request.headers` is unchanged.|
+|`upstreamCalls`|[]object|`upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.<br>It's only filled in for access log expressions that reference it.<br>Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.|
 |`upstreamCalls[].kind`|string|Call category: `Primary` (backend request) or `Policy` (policy callout).|
 |`upstreamCalls[].subtype`|string|Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,<br>`Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.|
-|`upstreamCalls[].target`|string|MCP target name; connection address (host:port) for other calls.|
+|`upstreamCalls[].target`|string|The MCP target name for MCP calls, otherwise the connection address (host:port).|
 |`upstreamCalls[].request`|object||
-|`upstreamCalls[].request.headers`|object|Outbound request headers after backend authentication, excluding tunnel proxy credentials.|
+|`upstreamCalls[].request.headers`|object|Headers sent to the backend, after backend auth. Tunnel proxy credentials are left out.|
 |`upstreamCalls[].response`|object||
-|`upstreamCalls[].response.code`|integer|HTTP response status code; null when no HTTP response was received or for gRPC calls.|
+|`upstreamCalls[].response.code`|integer|HTTP status code. Empty for gRPC calls or when no response came back.|
 |`upstreamCalls[].response.grpcStatus`|integer||
 |`upstreamCalls[].duration`|string|Time from before DNS resolution through response headers, including connection setup.|
 |`upstreamCalls[].error`|string|Error description when the call fails. Exact wording may change between versions.|
