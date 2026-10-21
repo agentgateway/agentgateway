@@ -4426,698 +4426,6 @@ async fn tool_call_exposes_payload_fields_to_access_log_cel() {
 	assert!(log.get("gen_ai.tool.call.result").is_none());
 }
 
-async fn target_backend_auth_access_logs(
-	stateful: bool,
-	target_policies: Vec<BackendTrafficPolicy>,
-	calls: usize,
-) -> Vec<serde_json::Value> {
-	let mock = mock_streamable_http_server(stateful).await;
-	let (mut t, io) =
-		setup_proxy_policies_with_target(&mock, stateful, false, vec![], target_policies).await;
-	add_backend_auth_access_log(&mut t);
-	let client = inbound_auth_client(
-		format!("http://{io}/mcp"),
-		&[("authorization", "Bearer inbound-token")],
-	)
-	.await;
-	let mut logs = vec![];
-	for _ in 0..calls {
-		logs.push(call_tool_and_find_log(&client, "echo").await);
-	}
-	logs
-}
-
-fn add_backend_auth_access_log(t: &mut TestBind) {
-	add_access_log(
-		t,
-		serde_json::json!({
-			"add": {
-				"mcp_trace": "mcp.tool.arguments.traceId",
-				"auth": "request.headers.authorization",
-				"custom_auth": r#"request.headers["x-custom-auth"]"#,
-				"exchanged_sub": r#"default(unvalidatedJwtPayload(request.headers.authorization.split(" ")[1]).sub, "-")"#,
-				"tools_list": "mcp.toolsList",
-			}
-		}),
-	);
-}
-
-fn add_access_log(t: &mut TestBind, policy: serde_json::Value) {
-	let mut policy: crate::types::frontend::LoggingPolicy = serde_json::from_value(policy).unwrap();
-	policy.init_access_log_policy();
-	let target = PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
-		gateway_name: t.pi.cfg.xds.gateway.clone(),
-		gateway_namespace: t.pi.cfg.xds.namespace.clone(),
-		listener_name: None,
-		port: None,
-	});
-	t.with_policy(TargetedPolicy {
-		key: "frontend/accessLog".into(),
-		name: None,
-		target,
-		creation_timestamp: 0,
-		inheritance: Default::default(),
-		policy: FrontendPolicy::AccessLog(policy).into(),
-	});
-}
-
-async fn inbound_auth_client(
-	url: String,
-	extra_headers: &[(&'static str, &str)],
-) -> RunningService<RoleClient, InitializeRequestParams> {
-	use std::collections::HashMap;
-
-	use ::http::{HeaderName, HeaderValue};
-	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
-	use rmcp::transport::StreamableHttpClientTransport;
-	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-
-	let headers: HashMap<_, _> = extra_headers
-		.iter()
-		.map(|(k, v)| {
-			(
-				HeaderName::from_static(k),
-				HeaderValue::from_str(v).unwrap(),
-			)
-		})
-		.collect();
-	let config = StreamableHttpClientTransportConfig::with_uri(url).custom_headers(headers);
-	ClientConfig::new(
-		ClientCapabilities::default(),
-		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	)
-	.serve(StreamableHttpClientTransport::from_config(config))
-	.await
-	.unwrap()
-}
-
-async fn call_tool_and_find_log(
-	client: &RunningService<RoleClient, InitializeRequestParams>,
-	tool: &'static str,
-) -> serde_json::Value {
-	let trace_id = format!("mcp-e2e-{}", uuid::Uuid::new_v4());
-	client
-		.call_tool(
-			rmcp::model::CallToolRequestParams::new(tool).with_arguments(
-				serde_json::json!({"traceId": trace_id})
-					.as_object()
-					.cloned()
-					.unwrap(),
-			),
-		)
-		.await
-		.unwrap();
-	agent_core::telemetry::testing::eventually_find(&[("scope", "request"), ("mcp_trace", &trace_id)])
-		.await
-		.unwrap()
-}
-
-// JWT with payload {"sub":"exchanged-user"}. The signature isn't checked.
-const EXCHANGED_JWT: &str = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJleGNoYW5nZWQtdXNlciJ9.sig";
-
-#[tokio::test]
-async fn target_backend_auth_header_is_visible_to_access_log_cel() {
-	for stateful in [true, false] {
-		let [log] = target_backend_auth_access_logs(
-			stateful,
-			vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-				value: SecretString::from(EXCHANGED_JWT).into(),
-				location: None,
-			})],
-			1,
-		)
-		.await
-		.try_into()
-		.unwrap();
-		assert_eq!(
-			log.get("auth"),
-			Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
-			"stateful={stateful}: {log}"
-		);
-		assert_eq!(
-			log.get("exchanged_sub"),
-			Some(&serde_json::json!("exchanged-user")),
-			"stateful={stateful}: {log}"
-		);
-	}
-}
-
-#[tokio::test]
-async fn target_backend_auth_custom_header_is_visible_to_access_log_cel() {
-	for stateful in [true, false] {
-		let [log] = target_backend_auth_access_logs(
-			stateful,
-			vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-				value: SecretString::from(EXCHANGED_JWT).into(),
-				location: Some(crate::http::auth::AuthorizationLocation::Header {
-					name: ::http::HeaderName::from_static("x-custom-auth"),
-					prefix: Some(strng::new("Bearer ")),
-				}),
-			})],
-			1,
-		)
-		.await
-		.try_into()
-		.unwrap();
-		assert_eq!(
-			log.get("custom_auth"),
-			Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
-			"stateful={stateful}: {log}"
-		);
-	}
-}
-
-#[tokio::test]
-async fn target_token_exchange_is_visible_to_access_log_cel() {
-	use wiremock::matchers::{method, path};
-	use wiremock::{Mock, ResponseTemplate};
-	for stateful in [true, false] {
-		let token = wiremock::MockServer::start().await;
-		Mock::given(method("POST"))
-			.and(path("/token"))
-			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-				"access_token": EXCHANGED_JWT,
-				"token_type": "Bearer",
-				"issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
-				"expires_in": 3600,
-			})))
-			.mount(&token)
-			.await;
-		let auth = serde_json::from_value(serde_json::json!({
-			"host": token.address().to_string(), "path": "/token",
-		}))
-		.unwrap();
-		let logs = target_backend_auth_access_logs(
-			stateful,
-			vec![BackendTrafficPolicy::backend_auth(
-				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
-			)],
-			2,
-		)
-		.await;
-		assert_eq!(
-			token.received_requests().await.unwrap().len(),
-			1,
-			"stateful={stateful}: second call should hit the token cache"
-		);
-		for log in logs {
-			assert_eq!(
-				log.get("exchanged_sub"),
-				Some(&serde_json::json!("exchanged-user")),
-				"stateful={stateful}: {log}"
-			);
-		}
-	}
-}
-
-#[tokio::test]
-async fn mixed_transport_fanout_access_log_keeps_inbound_headers() {
-	use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
-	// Only the streamable target's call is recorded, which must not count as a single target.
-	let mock_stream = mock_streamable_http_server(true).await;
-	let mock_sse = mock_sse_server().await;
-	let mut t = setup_proxy_test("{}")
-		.unwrap()
-		.with_multiplex_mcp_backend(
-			"mcp",
-			vec![
-				("sse", mock_sse.addr, true),
-				("mcp", mock_stream.addr, false),
-			],
-			true,
-		)
-		.with_bind(simple_bind())
-		.with_route(basic_named_route(strng::new("/mcp")));
-	let name = ResourceName::new(strng::format!("basic-{}", mock_stream.addr), "".into());
-	t.pi.stores.binds.write().insert_backend(
-		name.to_string().into(),
-		BackendWithPolicies {
-			backend: Backend::Opaque(name, Target::Address(mock_stream.addr)),
-			inline_policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-				value: SecretString::from(EXCHANGED_JWT).into(),
-				location: None,
-			})],
-		},
-	);
-	add_backend_auth_access_log(&mut t);
-	let io = t.serve_real_listener(strng::new("bind")).await;
-	let trace_id = "8bf92f3577b34da6a3ce929d0e0e473a";
-	let traceparent = format!("00-{trace_id}-00f067aa0ba902b7-01");
-	let client = inbound_auth_client(
-		format!("http://{io}/mcp"),
-		&[
-			("authorization", "Bearer inbound-mixed"),
-			("traceparent", &traceparent),
-		],
-	)
-	.await;
-
-	client.list_tools(None).await.unwrap();
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("trace.id", trace_id),
-		("mcp.method.name", "tools/list"),
-	])
-	.await
-	.unwrap();
-	assert_eq!(
-		log.get("auth"),
-		Some(&serde_json::json!("Bearer inbound-mixed")),
-		"{log}"
-	);
-
-	let log = call_tool_and_find_log(&client, "mcp_echo").await;
-	assert_eq!(
-		log.get("auth"),
-		Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
-		"{log}"
-	);
-}
-
-#[tokio::test]
-async fn client_reply_access_log_uses_target_headers() {
-	use std::collections::HashMap;
-
-	use ::http::{HeaderName, HeaderValue};
-	use rmcp::ServiceExt;
-	use rmcp::model::{
-		ClientCapabilities, ClientConfig, ElicitRequestParams, ElicitResult, ElicitationAction,
-		Implementation, ProtocolVersion,
-	};
-	use rmcp::service::RequestContext;
-	use rmcp::transport::StreamableHttpClientTransport;
-	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
-
-	struct ElicitingClient {
-		reject: bool,
-	}
-	impl rmcp::ClientHandler for ElicitingClient {
-		async fn create_elicitation(
-			&self,
-			_request: ElicitRequestParams,
-			_context: RequestContext<RoleClient>,
-		) -> Result<ElicitResult, rmcp::ErrorData> {
-			if self.reject {
-				return Err(rmcp::ErrorData::internal_error("rejected", None));
-			}
-			Ok(
-				ElicitResult::new(ElicitationAction::Accept)
-					.with_content(serde_json::json!({"confirm": "yes"})),
-			)
-		}
-		fn get_info(&self) -> ClientConfig {
-			let mut info = ClientConfig::new(
-				ClientCapabilities::default(),
-				Implementation::new("test client".to_string(), "0.0.1".to_string()),
-			);
-			info.protocol_version = ProtocolVersion::V_2025_06_18;
-			info.capabilities.elicitation = Some(Default::default());
-			info
-		}
-	}
-
-	let key = |token: &str| {
-		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::from(token).into(),
-			location: None,
-		})]
-	};
-	// The eliciting tool is on the first target, and each target has its own credential. A rejected
-	// elicitation is replied to with a JSON-RPC error.
-	for (multiplex, reject, trace_id) in [
-		(false, false, "9bf92f3577b34da6a3ce929d0e0e473b"),
-		(true, false, "9bf92f3577b34da6a3ce929d0e0e473c"),
-		(false, true, "9bf92f3577b34da6a3ce929d0e0e473d"),
-		(true, true, "9bf92f3577b34da6a3ce929d0e0e473e"),
-	] {
-		let mock = mock_streamable_http_server(true).await;
-		let other = mock_streamable_http_server(true).await;
-		let (mut t, io, tool) = if multiplex {
-			use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
-			let t = setup_proxy_test("{}")
-				.unwrap()
-				.with_multiplex_mcp_backend(
-					"mcp",
-					vec![("a", mock.addr, false), ("b", other.addr, false)],
-					true,
-				)
-				.with_bind(simple_bind())
-				.with_route(basic_named_route(strng::new("/mcp")));
-			for (addr, token) in [(mock.addr, EXCHANGED_JWT), (other.addr, "other-token")] {
-				let name = ResourceName::new(strng::format!("basic-{addr}"), "".into());
-				t.pi.stores.binds.write().insert_backend(
-					name.to_string().into(),
-					BackendWithPolicies {
-						backend: Backend::Opaque(name, Target::Address(addr)),
-						inline_policies: key(token),
-					},
-				);
-			}
-			let io = t.serve_real_listener(strng::new("bind")).await;
-			(t, io, "a_elicit")
-		} else {
-			let (t, io) =
-				setup_proxy_policies_with_target(&mock, true, false, vec![], key(EXCHANGED_JWT)).await;
-			(t, io, "elicit")
-		};
-		add_backend_auth_access_log(&mut t);
-		let headers: HashMap<_, _> = [
-			("authorization", "Bearer inbound-reply".to_string()),
-			("traceparent", format!("00-{trace_id}-00f067aa0ba902b7-01")),
-		]
-		.into_iter()
-		.map(|(k, v)| {
-			(
-				HeaderName::from_static(k),
-				HeaderValue::from_str(&v).unwrap(),
-			)
-		})
-		.collect();
-		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{io}/mcp"))
-			.custom_headers(headers);
-		let client = ElicitingClient { reject }
-			.serve(StreamableHttpClientTransport::from_config(config))
-			.await
-			.unwrap();
-		let result = client
-			.call_tool(rmcp::model::CallToolRequestParams::new(tool))
-			.await;
-		assert_eq!(result.is_err(), reject, "{result:?}");
-
-		// The elicitation reply is a POST without an MCP method.
-		agent_core::telemetry::testing::eventually_find(&[
-			("scope", "request"),
-			("trace.id", trace_id),
-			("mcp.method.name", "tools/call"),
-		])
-		.await
-		.unwrap();
-		let replies: Vec<_> =
-			agent_core::telemetry::testing::find(&[("scope", "request"), ("trace.id", trace_id)])
-				.into_iter()
-				.filter(|l| l.get("http.method") == Some(&serde_json::json!("POST")))
-				.filter(|l| l.get("mcp.method.name").is_none())
-				.collect();
-		assert!(
-			!replies.is_empty(),
-			"multiplex={multiplex} reject={reject}: no reply log"
-		);
-		for reply in replies {
-			assert_eq!(
-				reply.get("auth"),
-				Some(&serde_json::json!(format!("Bearer {EXCHANGED_JWT}"))),
-				"multiplex={multiplex} reject={reject}: {reply}"
-			);
-		}
-
-		// Session GET and DELETE requests are not replies and keep the client's headers.
-		client.cancel().await.unwrap();
-		for method in ["GET", "DELETE"] {
-			agent_core::telemetry::testing::eventually_find(&[
-				("scope", "request"),
-				("trace.id", trace_id),
-				("http.method", method),
-			])
-			.await
-			.unwrap_or_else(|| panic!("multiplex={multiplex}: no {method} log"));
-			for line in agent_core::telemetry::testing::find(&[
-				("scope", "request"),
-				("trace.id", trace_id),
-				("http.method", method),
-			]) {
-				assert_eq!(
-					line.get("auth"),
-					Some(&serde_json::json!("Bearer inbound-reply")),
-					"multiplex={multiplex}: {line}"
-				);
-			}
-		}
-	}
-}
-
-#[tokio::test]
-async fn fanout_access_log_keeps_inbound_headers() {
-	use crate::types::agent::{Backend, BackendWithPolicies, ResourceName, Target};
-	agent_core::telemetry::testing::setup_test_logging();
-	agent_core::telemetry::set_level(false, "upstream request=debug").unwrap();
-	for (stateful, inbound, trace_id) in [
-		(
-			true,
-			"Bearer inbound-fanout-stateful",
-			"4bf92f3577b34da6a3ce929d0e0e4736",
-		),
-		(
-			false,
-			"Bearer inbound-fanout-stateless",
-			"5bf92f3577b34da6a3ce929d0e0e4737",
-		),
-	] {
-		let mock_a = mock_streamable_http_server(stateful).await;
-		let mock_b = mock_streamable_http_server(stateful).await;
-		let mut t = setup_proxy_test("{}")
-			.unwrap()
-			.with_multiplex_mcp_backend(
-				"mcp",
-				vec![("a", mock_a.addr, false), ("b", mock_b.addr, false)],
-				stateful,
-			)
-			.with_bind(simple_bind())
-			.with_route(basic_named_route(strng::new("/mcp")));
-		let token_a = format!("token-a-{stateful}");
-		let token_b = format!("token-b-{stateful}");
-		for (addr, token) in [(mock_a.addr, &token_a), (mock_b.addr, &token_b)] {
-			let name = ResourceName::new(strng::format!("basic-{addr}"), "".into());
-			t.pi.stores.binds.write().insert_backend(
-				name.to_string().into(),
-				BackendWithPolicies {
-					backend: Backend::Opaque(name, Target::Address(addr)),
-					inline_policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-						value: SecretString::from(token.clone()).into(),
-						location: None,
-					})],
-				},
-			);
-		}
-		add_backend_auth_access_log(&mut t);
-		let io = t.serve_real_listener(strng::new("bind")).await;
-		let traceparent = format!("00-{trace_id}-00f067aa0ba902b7-01");
-		let client = inbound_auth_client(
-			format!("http://{io}/mcp"),
-			&[("authorization", inbound), ("traceparent", &traceparent)],
-		)
-		.await;
-
-		client.list_tools(None).await.unwrap();
-		let log = agent_core::telemetry::testing::eventually_find(&[
-			("scope", "request"),
-			("trace.id", trace_id),
-			("mcp.method.name", "tools/list"),
-			("auth", inbound),
-		])
-		.await;
-		let log =
-			log.unwrap_or_else(|| panic!("stateful={stateful}: tools/list log keeps inbound auth"));
-		assert!(log.get("tools_list").is_some(), "{log}");
-		for (target, token) in [("a", &token_a), ("b", &token_b)] {
-			let auth = format!("Bearer {token}");
-			let call = agent_core::telemetry::testing::eventually_find(&[
-				("scope", "upstream request"),
-				("trace.id", trace_id),
-				("mcp.target", target),
-				("mcp.method.name", "tools/list"),
-				("auth", &auth),
-			])
-			.await;
-			let call =
-				call.unwrap_or_else(|| panic!("stateful={stateful}: debug line for target {target}"));
-			assert_eq!(call.get("tools_list"), None, "{call}");
-		}
-
-		let log = call_tool_and_find_log(&client, "a_echo").await;
-		assert_eq!(
-			log.get("auth"),
-			Some(&serde_json::json!(format!("Bearer {token_a}"))),
-			"stateful={stateful}: {log}"
-		);
-	}
-}
-
-async fn find_upstream_line(trace_id: &str, method: &str) -> serde_json::Value {
-	agent_core::telemetry::testing::eventually_find(&[
-		("scope", "upstream request"),
-		("trace.id", trace_id),
-		("mcp.method.name", method),
-	])
-	.await
-	.unwrap_or_else(|| panic!("no {method} line for trace {trace_id}"))
-}
-
-#[tokio::test]
-async fn upstream_debug_lines_use_target_call_context() {
-	agent_core::telemetry::testing::setup_test_logging();
-	agent_core::telemetry::set_level(false, "upstream request=debug").unwrap();
-	let key = BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-		value: SecretString::from(EXCHANGED_JWT).into(),
-		location: None,
-	});
-
-	let mock = mock_streamable_http_server(false).await;
-	let (mut t, io) =
-		setup_proxy_policies_with_target(&mock, false, false, vec![], vec![key.clone()]).await;
-	add_access_log(
-		&mut t,
-		serde_json::json!({
-			"filter": r#"mcp.methodName != "notifications/initialized""#,
-			"remove": ["http.path"],
-			"add": {
-				"call_method": "mcp.methodName",
-				"call_tool": "mcp.tool.name",
-				"call_target": "mcp.target.name",
-				"route": "proxy.route.name",
-				"status": "response.code",
-				"upstream_duration": "proxy.upstreamDuration",
-				"request_duration": "proxy.requestProcessingDuration",
-				"response_duration": "proxy.responseProcessingDuration",
-				"proxy_error": "proxy.error",
-				"duration": r#""configured-duration""#,
-				"http.status": "299",
-				"transport": r#"request.headers["x-missing"]"#,
-				"target_session": "mcp.sessionId",
-				"start_time": "request.startTime",
-				"end_time": "request.endTime",
-				"uri": "request.uri",
-				"body": "string(request.body)",
-				"backend": "backend.name",
-				"exchanged_sub": r#"unvalidatedJwtPayload(request.headers.authorization.split(" ")[1]).sub"#,
-			}
-		}),
-	);
-	let trace_id = "6bf92f3577b34da6a3ce929d0e0e4738";
-	let traceparent = format!("00-{trace_id}-00f067aa0ba902b7-01");
-	// Use a different client path to tell the request lines apart.
-	let client = inbound_auth_client(
-		format!("http://{io}/gateway-mcp"),
-		&[
-			("authorization", "Bearer inbound-token"),
-			("traceparent", &traceparent),
-		],
-	)
-	.await;
-	client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo"))
-		.await
-		.unwrap();
-	let init = find_upstream_line(trace_id, "initialize").await;
-	// Configured fields replace defaults, even when empty. Removed fields are dropped.
-	assert_eq!(init.get("http.status"), Some(&serde_json::json!(299)));
-	assert_eq!(
-		init.get("duration"),
-		Some(&serde_json::json!("configured-duration"))
-	);
-	assert_eq!(init.get("transport"), None, "{init}");
-	assert_eq!(init.get("http.path"), None, "{init}");
-	assert_eq!(
-		init.get("endpoint"),
-		Some(&serde_json::json!(mock.addr.to_string()))
-	);
-	let records = agent_core::telemetry::testing::find(&[
-		("scope", "upstream request"),
-		("endpoint", &mock.addr.to_string()),
-	]);
-	assert!(
-		!records.is_empty() && records.iter().all(|r| r.get("mcp.target").is_some()),
-		"MCP calls only emit the enriched record: {records:?}"
-	);
-
-	assert_eq!(
-		init.get("call_method"),
-		Some(&serde_json::json!("initialize"))
-	);
-	assert_eq!(init.get("call_tool"), None, "{init}");
-	assert_eq!(init.get("call_target"), Some(&serde_json::json!("mcp")));
-	assert_eq!(
-		init.get("exchanged_sub"),
-		Some(&serde_json::json!("exchanged-user"))
-	);
-	assert!(init.get("route").is_some(), "{init}");
-	for absent in [
-		"status",
-		"upstream_duration",
-		"request_duration",
-		"response_duration",
-		"proxy_error",
-		"target_session",
-		"start_time",
-		"end_time",
-		"body",
-		"backend",
-	] {
-		assert_eq!(init.get(absent), None, "{absent}: {init}");
-	}
-	assert_eq!(
-		init.get("uri"),
-		Some(&serde_json::json!(format!("http://{io}/mcp"))),
-		"{init}"
-	);
-	let downstream = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("trace.id", trace_id),
-		("mcp.method.name", "tools/call"),
-	])
-	.await
-	.unwrap();
-	for present in ["start_time", "end_time", "body", "backend", "status"] {
-		assert!(downstream.get(present).is_some(), "{present}: {downstream}");
-	}
-	assert_eq!(
-		downstream.get("uri"),
-		Some(&serde_json::json!(format!("http://{io}/gateway-mcp"))),
-		"{downstream}"
-	);
-	let call = find_upstream_line(trace_id, "tools/call").await;
-	assert_eq!(call.get("call_tool"), Some(&serde_json::json!("echo")));
-	assert_eq!(
-		call.get("exchanged_sub"),
-		Some(&serde_json::json!("exchanged-user"))
-	);
-	// A filtered call keeps the defaults but not the configured fields. Removed fields stay removed.
-	let filtered = find_upstream_line(trace_id, "notifications/initialized").await;
-	assert_eq!(filtered.get("http.status"), Some(&serde_json::json!(202)));
-	assert_ne!(
-		filtered.get("duration"),
-		Some(&serde_json::json!("configured-duration"))
-	);
-	assert!(filtered.get("duration").is_some(), "{filtered}");
-	assert!(filtered.get("transport").is_some(), "{filtered}");
-	assert_eq!(filtered.get("http.path"), None, "{filtered}");
-	assert!(filtered.get("call_method").is_none(), "{filtered}");
-	assert!(filtered.get("exchanged_sub").is_none(), "{filtered}");
-
-	// A response filter can't match before sending, so the record is still logged.
-	let mock = mock_streamable_http_server(false).await;
-	let (mut t, io) = setup_proxy_policies_with_target(&mock, false, false, vec![], vec![key]).await;
-	add_access_log(
-		&mut t,
-		serde_json::json!({
-			"filter": "response.code >= 400",
-			"add": { "call_method": "mcp.methodName" },
-		}),
-	);
-	let trace_id = "7bf92f3577b34da6a3ce929d0e0e4739";
-	let traceparent = format!("00-{trace_id}-00f067aa0ba902b7-01");
-	let client =
-		inbound_auth_client(format!("http://{io}/mcp"), &[("traceparent", &traceparent)]).await;
-	client
-		.call_tool(rmcp::model::CallToolRequestParams::new("echo"))
-		.await
-		.unwrap();
-	let line = find_upstream_line(trace_id, "tools/call").await;
-	assert!(line.get("call_method").is_none(), "{line}");
-	assert_eq!(line.get("http.status"), Some(&serde_json::json!(200)));
-	assert!(line.get("duration").is_some(), "{line}");
-}
-
 fn assert_duration_log_field(log: &serde_json::Value, field: &str) {
 	assert!(
 		log
@@ -9882,5 +9190,172 @@ async fn modern_multi_target_resolve_propagates_meta() {
 		.unwrap();
 	for (key, value) in meta.as_object().unwrap() {
 		assert_eq!(&probe["params"]["_meta"][key], value, "{key}");
+	}
+}
+
+// Recording is enabled only for tests that explicitly exercise outbound call logs.
+fn enable_upstream_call_logs(t: &mut TestBind) {
+	let listener = t
+		.pi
+		.stores
+		.read_binds()
+		.bind(&BIND_KEY)
+		.unwrap()
+		.listeners
+		.iter()
+		.next()
+		.unwrap()
+		.name
+		.clone();
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {"upstream_test_id": "request.headers['x-upstream-test-id']",
+				"upstream_calls": "upstreamCalls", "inbound_auth": "request.headers.authorization"}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/upstreamCalls".into(),
+		name: None,
+		target: PolicyTarget::Gateway(listener.into()),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+}
+
+async fn upstream_call_test_request(
+	io: SocketAddr,
+	method: &str,
+	params: serde_json::Value,
+) -> serde_json::Value {
+	let id = uuid::Uuid::new_v4().to_string();
+	let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+	let client = reqwest::Client::new();
+	let mut request = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.bearer_auth("subject-token")
+		.header("x-upstream-test-id", &id)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", method);
+	if method == "tools/call" {
+		request = request.header("mcp-name", "echo");
+	}
+	let response = request.send().await.unwrap();
+	let _ = response.bytes().await.unwrap();
+	agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("upstream_test_id", &id),
+	])
+	.await
+	.unwrap()
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_token_exchange_and_cache() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, ResponseTemplate};
+	let token = wiremock::MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+			"access_token": "exchanged-token", "token_type": "Bearer",
+			"issued_token_type": "urn:ietf:params:oauth:token-type:access_token", "expires_in": 3600
+		})))
+		.expect(1)
+		.mount(&token)
+		.await;
+	let upstream = mock_streamable_http_server(true).await;
+	let auth = serde_json::from_value(
+		serde_json::json!({"host": token.address().to_string(), "path": "/token"}),
+	)
+	.unwrap();
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(
+			upstream.addr,
+			false,
+			false,
+			vec![],
+			vec![BackendTrafficPolicy::backend_auth(
+				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+			)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(upstream.addr));
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	for cached in [false, true] {
+		let log = upstream_call_test_request(
+			io,
+			"tools/call",
+			serde_json::json!({"name": "echo", "arguments": {}, "_meta": task_meta()}),
+		)
+		.await;
+		assert_eq!(log["inbound_auth"], "Bearer subject-token");
+		let calls = log["upstream_calls"].as_array().unwrap();
+		let policy = calls.iter().filter(|c| c["kind"] == "Policy").collect_vec();
+		assert_eq!(policy.len(), if cached { 0 } else { 1 }, "{log}");
+		if !cached {
+			assert_eq!(policy[0]["target"], token.address().to_string());
+			assert_eq!(policy[0]["response"]["code"], 200);
+		}
+		let mcp = calls.iter().find(|c| c["subtype"] == "Mcp").unwrap();
+		assert_eq!(mcp["target"], "mcp");
+		assert_eq!(
+			mcp["request"]["headers"]["authorization"],
+			"Bearer exchanged-token"
+		);
+		assert_eq!(mcp["response"]["code"], 200);
+	}
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_failed_mcp_transport() {
+	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+	let addr = listener.local_addr().unwrap();
+	drop(listener);
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(addr, false, false, vec![], vec![], false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(addr));
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let log = upstream_call_test_request(
+		io,
+		"tools/call",
+		serde_json::json!({"name": "echo", "arguments": {}, "_meta": task_meta()}),
+	)
+	.await;
+	let calls = log["upstream_calls"].as_array().unwrap();
+	assert!(!calls.is_empty(), "{log}");
+	for call in calls {
+		assert_eq!(call["subtype"], "Mcp");
+		assert!(
+			call["error"].as_str().is_some_and(|s| !s.is_empty()),
+			"{call}"
+		);
+		assert!(call["response"]["code"].is_null(), "{call}");
+	}
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_fanout() {
+	let a = mock_streamable_http_server(true).await;
+	let b = mock_streamable_http_server(true).await;
+	let mut t = never_prefix_proxy(vec![("a", a.addr, false), ("b", b.addr, false)], false);
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let log =
+		upstream_call_test_request(io, "tools/list", serde_json::json!({"_meta": task_meta()})).await;
+	let calls = log["upstream_calls"].as_array().unwrap();
+	for target in ["a", "b"] {
+		assert!(
+			calls
+				.iter()
+				.any(|c| c["target"] == target && c["subtype"] == "Mcp" && c["response"]["code"] == 200),
+			"{log}"
+		);
 	}
 }

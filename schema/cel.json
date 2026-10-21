@@ -1470,6 +1470,88 @@
         ]
       }
     },
+    "upstreamCalls": {
+      "description": "`upstreamCalls` records outbound calls made for this request, including policy and MCP calls.\nAvailable after the request completes when referenced by an access log expression.\nRequest headers reflect backend authentication; inbound `request.headers` is unchanged.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "description": "Call category: `Primary` (backend request) or `Policy` (policy callout).",
+            "type": "string"
+          },
+          "subtype": {
+            "description": "Call subtype: `Http`, `Llm`, `Mcp`, `ExtAuthz`, `Substrate`, `ExtProc`,\n`Guardrail`, `RateLimit`, `Oidc`, `Callout`, or a custom subtype name.",
+            "type": "string"
+          },
+          "target": {
+            "description": "MCP target name; connection address (host:port) for other calls.",
+            "type": "string"
+          },
+          "request": {
+            "type": "object",
+            "properties": {
+              "headers": {
+                "description": "Outbound request headers after backend authentication, excluding tunnel proxy credentials.",
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "headers"
+            ]
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "description": "HTTP response status code; null when no HTTP response was received or for gRPC calls.",
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint16",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              "grpcStatus": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            }
+          },
+          "duration": {
+            "description": "Time from before DNS resolution through response headers, including connection setup.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "description": "Error description when the call fails. Exact wording may change between versions.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "subtype",
+          "target",
+          "request",
+          "response"
+        ]
+      }
+    },
     "metadata": {
       "description": "`metadata` contains values set by transformation metadata expressions.",
       "type": [

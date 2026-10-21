@@ -1660,12 +1660,6 @@ impl Relay {
 		};
 
 		let us = self.upstreams.get(upstream.as_str())?;
-		let (log, _) = setup_request_log(&ctx);
-		log.non_atomic_mutate(|l| {
-			l.target = Some(mcp::MCPTarget {
-				name: upstream.to_string(),
-			})
-		});
 		us.generic_client_message(upstream.as_str(), message, &ctx)
 			.await?;
 		Ok(accepted_response())

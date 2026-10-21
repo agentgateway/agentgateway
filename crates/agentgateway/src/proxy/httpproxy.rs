@@ -1522,8 +1522,8 @@ impl HTTPProxy {
 			ns.set_sampled(true);
 			ns.insert_header(req);
 			log.outgoing_span = Some(ns);
-			log.insert_span_writer(req.extensions_mut());
 		}
+		log.insert_span_writer(req.extensions_mut());
 	}
 
 	fn detect_misdirected(
@@ -3215,6 +3215,11 @@ async fn make_backend_call(
 		kind: OutboundCallKind::Primary,
 		subtype: outbound_subtype,
 	};
+	if let Some(log) = log.as_ref() {
+		log
+			.span_writer()
+			.record_outbound(&mut call.req, outbound_labels);
+	}
 	let mut span = log.as_ref().and_then(|log| {
 		let writer = log.span_writer();
 		writer.is_enabled().then(|| {
@@ -5179,6 +5184,7 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
+		writer.record_outbound(req, labels);
 		if !writer.is_enabled() {
 			return None;
 		}
@@ -5211,18 +5217,20 @@ impl PolicyClient {
 				.as_ref()
 				.map(|context| context.span_writer.clone())
 		})?;
-		if !writer.is_enabled() {
+		if !writer.is_enabled() && writer.upstream_calls.is_none() {
 			return None;
 		}
 		let mut span = Box::new(writer.start_outbound(labels));
 		span.add_attribute(KeyValue::new("http.method", "POST"));
-		if let Ok(backend) = resolve_simple_backend(backend_ref, self.inputs.as_ref()) {
-			let hostport = backend.backend.hostport();
-			if let Ok(authority) = Authority::try_from(hostport.as_str()) {
-				span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
-			}
+		let hostport = resolve_simple_backend(backend_ref, self.inputs.as_ref())
+			.ok()
+			.map(|backend| backend.backend.hostport())
+			.unwrap_or_default();
+		if let Ok(authority) = Authority::try_from(hostport.as_str()) {
+			span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
 		}
 		span.add_attribute(KeyValue::new("http.path", path));
+		span.record_grpc_call(req, hostport, labels);
 		span.inject_grpc_context(req);
 		Some(span)
 	}
@@ -5345,10 +5353,15 @@ impl PolicyClient {
 
 	pub(crate) async fn call_with_explicit_policies_untraced(
 		&self,
-		req: Request,
+		mut req: Request,
 		backend: &SimpleBackend,
 		policies: BackendPolicies,
 	) -> Result<Response, ProxyError> {
+		if let Some(labels) = self.outbound()
+			&& let Some(writer) = req.extensions().get::<SpanWriter>().cloned()
+		{
+			writer.record_outbound(&mut req, labels);
+		}
 		let start = std::time::Instant::now();
 		let backend = Backend::from(backend.clone());
 		let res = self

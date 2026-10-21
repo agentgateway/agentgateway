@@ -44,8 +44,19 @@ impl McpHttpClient {
 
 	pub async fn call(
 		&self,
-		req: crate::http::Request,
+		mut req: crate::http::Request,
 	) -> Result<http::Response<crate::http::Body>, ProxyError> {
+		if req
+			.extensions()
+			.get::<crate::telemetry::log::SpanWriter>()
+			.is_some_and(|writer| writer.upstream_calls.is_some())
+		{
+			req
+				.extensions_mut()
+				.insert(crate::telemetry::upstream::UpstreamTarget(
+					self.target_name.clone(),
+				));
+		}
 		let client = self.client.with_parent(&req);
 		let mut policies = self.base_policies.clone();
 
@@ -106,5 +117,75 @@ impl McpHttpClient {
 
 	pub fn backend(&self) -> &SimpleBackend {
 		&self.backend
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::http::Body;
+	use crate::telemetry::log::SpanWriter;
+	use crate::telemetry::upstream::UpstreamCalls;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	#[tokio::test]
+	async fn upstream_calls_capture_mcp_fanout_credentials_after_backend_auth() {
+		use crate::http::auth::{BackendAuth, BackendAuthKind};
+		use crate::store::BackendPolicies;
+		use crate::types::agent::{ResourceName, SimpleBackend, Target};
+
+		let server = wiremock::MockServer::start().await;
+		wiremock::Mock::given(wiremock::matchers::method("POST"))
+			.respond_with(wiremock::ResponseTemplate::new(200))
+			.mount(&server)
+			.await;
+		let calls = UpstreamCalls::default();
+		let mut writer = SpanWriter::default();
+		writer.upstream_calls = Some(calls.clone());
+		let policy_client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+		let make_client = |name: &str| {
+			McpHttpClient::new(
+				policy_client.clone(),
+				SimpleBackend::Opaque(
+					ResourceName::new(name.into(), "".into()),
+					Target::Address(*server.address()),
+				),
+				BackendPolicies {
+					backend_auth: Some(BackendAuth::new(BackendAuthKind::Key {
+						value: secrecy::SecretString::from(name.to_owned()).into(),
+						location: None,
+					})),
+					..Default::default()
+				},
+				false,
+				name.to_owned(),
+			)
+		};
+		let make_request = || {
+			let mut req = http::Request::builder()
+				.method("POST")
+				.uri(server.uri())
+				.header("authorization", "Bearer inbound")
+				.body(Body::empty())
+				.unwrap();
+			req.extensions_mut().insert(writer.clone());
+			req
+		};
+		let search = make_client("search");
+		let tickets = make_client("tickets");
+		let (a, b) = tokio::join!(search.call(make_request()), tickets.call(make_request()));
+		assert_eq!(a.unwrap().status(), 200);
+		assert_eq!(b.unwrap().status(), 200);
+		let calls = calls.take();
+		assert_eq!(calls.len(), 2);
+		for name in ["search", "tickets"] {
+			let call = calls.iter().find(|c| c.target == name).unwrap();
+			assert_eq!(call.kind, "Primary");
+			assert_eq!(call.subtype, "Mcp");
+			assert_eq!(
+				call.request.headers["authorization"],
+				format!("Bearer {name}")
+			);
+		}
 	}
 }

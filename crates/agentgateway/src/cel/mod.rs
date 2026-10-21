@@ -183,8 +183,8 @@ impl ContextBuilder {
 		self.any_has(Attributes::LlmToolCalls)
 	}
 
-	pub fn needs_log_request(&self) -> bool {
-		self.logging_attributes.contains(Attributes::Request)
+	pub fn needs_upstream_calls(&self) -> bool {
+		self.any_has(Attributes::UpstreamCalls)
 	}
 
 	pub fn needs_mcp(&self) -> bool {

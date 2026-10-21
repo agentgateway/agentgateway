@@ -137,16 +137,6 @@ impl App {
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
 		req.extensions_mut().insert(log.mcp_guardrails.clone());
-		if crate::telemetry::log::upstream_request_log_enabled() {
-			req
-				.extensions_mut()
-				.insert(crate::telemetry::log::McpUpstreamLogging::new(log));
-		}
-		if log.cel.cel_context.needs_log_request() {
-			let upstreams = mcp::UpstreamRequests::new(backends.targets.len() == 1);
-			req.extensions_mut().insert(upstreams.clone());
-			log.mcp_upstream_requests = Some(upstreams);
-		}
 
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)

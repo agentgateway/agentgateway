@@ -383,120 +383,6 @@ pub type GuardrailLog = AsyncLog<Vec<cel::GuardrailInfo>>;
 /// Per-request accumulator of mcpGuardrails dynamic metadata.
 pub type McpGuardrailsLog = AsyncLog<mcp::guardrails::McpGuardrailsDynamicMetadata>;
 
-const UPSTREAM_REQUEST_LOG_TARGET: &str = "upstream request";
-
-pub(crate) fn upstream_request_log_enabled() -> bool {
-	agent_core::telemetry::enabled(UPSTREAM_REQUEST_LOG_TARGET, &Level::DEBUG)
-}
-
-/// Access log settings passed to MCP target calls.
-#[derive(Debug, Clone)]
-pub(crate) struct McpUpstreamLogging {
-	filter: Option<Arc<cel::Expression>>,
-	fields: LoggingFields,
-	proxy: Arc<cel::ProxyContext>,
-	trace_id: Option<String>,
-}
-
-impl McpUpstreamLogging {
-	pub fn new(log: &RequestLog) -> Self {
-		Self {
-			filter: log.cel.filter.clone(),
-			fields: log.cel.fields.clone(),
-			proxy: Arc::new(cel::ProxyContext {
-				error: None,
-				request_processing_duration: None,
-				upstream_duration: None,
-				response_processing_duration: None,
-				..proxy_context(log)
-			}),
-			trace_id: log
-				.outgoing_span
-				.as_ref()
-				.or(log.incoming_span.as_ref())
-				.map(|s| s.trace_id()),
-		}
-	}
-
-	/// Runs before sending so credentials aren't kept until the response.
-	pub fn evaluate(req: &mut Request) -> Option<McpUpstreamRecord> {
-		if req.extensions().get::<Self>().is_none() || !upstream_request_log_enabled() {
-			return None;
-		}
-		let mut snapshot = cel::snapshot_request(req, false);
-		let logging = req.extensions().get::<Self>()?;
-		let call = req.extensions().get::<mcp::UpstreamCall>()?;
-		snapshot.body = None;
-		snapshot.recorded_body = None;
-		snapshot.backend = None;
-		snapshot.start_time = None;
-		let executor = cel::Executor::new_logger(
-			Some(&snapshot),
-			None,
-			None,
-			Some(&call.0),
-			None,
-			None,
-			Some(&logging.proxy),
-		);
-		Some(McpUpstreamRecord {
-			fields: logging.fields.clone(),
-			trace_id: logging.trace_id.clone(),
-			target: call.target().map(str::to_owned),
-			method: call.0.method_name.clone(),
-			// The filter only gates the configured fields.
-			additions: logging
-				.filter
-				.as_ref()
-				.is_none_or(|f| executor.eval_bool(f))
-				.then(|| {
-					CelLoggingExecutor::eval_fields(&executor, &logging.fields.add, false)
-						.into_iter()
-						.map(|(k, v)| (k.into_owned(), v))
-						.collect()
-				}),
-		})
-	}
-}
-
-pub(crate) struct McpUpstreamRecord {
-	fields: LoggingFields,
-	trace_id: Option<String>,
-	target: Option<String>,
-	method: Option<Strng>,
-	additions: Option<Vec<(String, Option<Value>)>>,
-}
-
-impl McpUpstreamRecord {
-	/// Same rules as the access log: `remove` drops a default field and a configured field replaces it.
-	pub fn log<'a>(&'a self, completion: impl IntoIterator<Item = (&'a str, Option<ValueBag<'a>>)>) {
-		let replaced = |k: &str| {
-			self.fields.remove.contains(k)
-				|| (self.additions.is_some() && self.fields.add.contains_key(k))
-		};
-		// Not a tracing event, so add the connection and request IDs here.
-		let ids = [
-			("connection.id", current_connection_id().map(Into::into)),
-			("request.id", current_request_id().map(Into::into)),
-		];
-		let call = [
-			("trace.id", self.trace_id.display()),
-			("mcp.target", self.target.display()),
-			("mcp.method.name", self.method.display()),
-		];
-		let mut kv: Vec<(&str, Option<ValueBag>)> = ids
-			.into_iter()
-			.chain(completion)
-			.chain(call)
-			.map(|(k, v)| (k, v.filter(|_| !replaced(k))))
-			.collect();
-		for (k, v) in self.additions.iter().flatten() {
-			kv.push((k.as_str(), v.as_ref().map(json_value_to_value_bag)));
-		}
-		agent_core::telemetry::log("debug", UPSTREAM_REQUEST_LOG_TARGET, &kv);
-	}
-}
-
 #[derive(serde::Serialize, Debug, Default, Clone)]
 pub struct MetricsConfig {
 	pub metric_fields: MetricFields,
@@ -729,17 +615,9 @@ impl<'a> CelLoggingExecutor<'a> {
 		fields: &'a OrderedStringMap<Arc<Expression>>,
 		keep_empty: bool,
 	) -> Vec<(Cow<str>, Option<Value>)> {
-		Self::eval_fields(&self.executor, fields, keep_empty)
-	}
-
-	fn eval_fields(
-		executor: &cel::Executor<'_>,
-		fields: &'a OrderedStringMap<Arc<Expression>>,
-		keep_empty: bool,
-	) -> Vec<(Cow<'a, str>, Option<Value>)> {
 		let mut raws = Vec::with_capacity(fields.len());
 		for (k, v) in fields.iter() {
-			let field = executor.eval(v.as_ref());
+			let field = self.executor.eval(v.as_ref());
 			if let Err(err) = &field {
 				trace!(target: "cel", ?err, expression=?v, "expression failed");
 			}
@@ -903,6 +781,7 @@ impl CelLogging {
 				inputs.proxy,
 			)
 		};
+		executor.upstream_calls = inputs.upstream_calls;
 		if let Some(md) = inputs.mcp_guardrails {
 			executor.mcp_guardrails = cel::ExtensionOrDirect::Direct(Some(md));
 		}
@@ -928,6 +807,7 @@ pub struct CelLoggingBuildInputs<'a> {
 	pub end_time: &'a cel::RequestTime,
 	pub proxy: Option<&'a cel::ProxyContext>,
 	pub source_context: Option<&'a cel::SourceContext>,
+	pub upstream_calls: Option<&'a Vec<crate::telemetry::upstream::UpstreamCall>>,
 }
 
 #[derive(Debug)]
@@ -1236,6 +1116,7 @@ impl RequestLog {
 		tcp_info: TCPConnectionInfo,
 	) -> Self {
 		RequestLog {
+			upstream_calls: Default::default(),
 			cel,
 			access_log_preset: None,
 			database_llm: Default::default(),
@@ -1278,7 +1159,6 @@ impl RequestLog {
 			error: None,
 			grpc_status: Default::default(),
 			mcp_status: Default::default(),
-			mcp_upstream_requests: None,
 			incoming_span: None,
 			outgoing_span: None,
 			llm_request: None,
@@ -1306,13 +1186,20 @@ impl RequestLog {
 
 	pub fn span_writer(&self) -> SpanWriter {
 		let inner = self.span_writer_inner().map(Arc::new);
-		SpanWriter { inner }
+		let upstream_calls = self
+			.cel
+			.cel_context
+			.needs_upstream_calls()
+			.then(|| self.upstream_calls.get_or_init(Default::default).clone());
+		SpanWriter {
+			inner,
+			upstream_calls,
+		}
 	}
 	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
-		if let Some(inner) = self.span_writer_inner() {
-			extensions.insert(SpanWriter {
-				inner: Some(Arc::new(inner)),
-			});
+		let writer = self.span_writer();
+		if writer.is_enabled() || writer.upstream_calls.is_some() {
+			extensions.insert(writer);
 		}
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
@@ -1384,6 +1271,7 @@ impl RequestLog {
 			mcp_guardrails: None,
 			end_time: &cel_end_time,
 			source_context: self.source_context.as_ref(),
+			upstream_calls: None,
 			proxy: Some(&proxy_timing),
 		});
 		let Some(rh) = self.request_handle.take() else {
@@ -1395,6 +1283,7 @@ impl RequestLog {
 
 #[derive(Debug)]
 pub struct RequestLog {
+	pub upstream_calls: std::sync::OnceLock<crate::telemetry::upstream::UpstreamCalls>,
 	pub cel: CelLogging,
 	pub access_log_preset: Option<crate::types::frontend::AccessLogPreset>,
 	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
@@ -1458,7 +1347,6 @@ pub struct RequestLog {
 
 	pub grpc_status: AsyncLog<u8>,
 	pub mcp_status: AsyncLog<mcp::MCPInfo>,
-	pub mcp_upstream_requests: Option<mcp::UpstreamRequests>,
 
 	pub incoming_span: Option<trc::TraceParent>,
 	pub outgoing_span: Option<trc::TraceParent>,
@@ -1593,18 +1481,6 @@ impl Drop for DropOnLog {
 			}
 
 			let mcp = log.mcp_status.take();
-			// Show the target's headers when the request went to one target.
-			if let Some(upstreams) = log.mcp_upstream_requests.take()
-				&& let Some(headers) = upstreams.take_headers(
-					mcp.as_ref().and_then(|m| m.method_name.as_deref()),
-					mcp.as_ref().and_then(|m| {
-						m.target_name()
-							.or(m.target.as_ref().map(|t| t.name.as_str()))
-					}),
-				) && let Some(req) = log.request_snapshot.as_mut()
-			{
-				Arc::make_mut(req).headers = headers;
-			}
 			let guardrails = log.guardrails.take().filter(|g| !g.is_empty());
 			let mcp_guardrails = log.mcp_guardrails.take();
 			let request_handle = log.request_handle.take();
@@ -1621,6 +1497,11 @@ impl Drop for DropOnLog {
 			if let Some(resp) = log.response_snapshot.as_mut() {
 				resp.proxy = Some(proxy_timing.clone());
 			}
+			let upstream_calls = log
+				.upstream_calls
+				.get()
+				.map(|calls| calls.take())
+				.unwrap_or_default();
 			let cel_exec = log.cel.build(CelLoggingBuildInputs {
 				req: log.request_snapshot.as_deref(),
 				resp: log.response_snapshot.as_ref(),
@@ -1631,6 +1512,7 @@ impl Drop for DropOnLog {
 				end_time: &cel_end_time,
 				proxy: Some(&proxy_timing),
 				source_context: log.source_context.as_ref(),
+				upstream_calls: Some(&upstream_calls),
 			});
 			if let Some(rh) = request_handle {
 				log.finish_request_handle(rh, end_time, &cel_exec);
@@ -2661,6 +2543,7 @@ impl OtelAccessLogger {
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
+	pub(crate) upstream_calls: Option<crate::telemetry::upstream::UpstreamCalls>,
 	inner: Option<Arc<SpanWriterInner>>,
 }
 
@@ -2676,14 +2559,16 @@ impl SpanWriter {
 	}
 
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
-		match &self.inner {
+		let mut span = match &self.inner {
 			Some(i) => i.start(name),
 			None => SpanWriteOnDrop::default(),
-		}
+		};
+		span.upstream_calls = self.upstream_calls.clone();
+		span
 	}
 
 	pub fn start_outbound(&self, labels: OutboundCallLabels) -> SpanWriteOnDrop {
-		match &self.inner {
+		let mut span = match &self.inner {
 			Some(i) => i.start_with_details(
 				labels.subtype.as_str(),
 				SpanKind::Client,
@@ -2693,7 +2578,9 @@ impl SpanWriter {
 				],
 			),
 			None => SpanWriteOnDrop::default(),
-		}
+		};
+		span.upstream_calls = self.upstream_calls.clone();
+		span
 	}
 }
 
@@ -2718,6 +2605,8 @@ impl SpanWriterInner {
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
+			pending_call: None,
+			upstream_calls: None,
 			name: Some(name.into()),
 			span_kind,
 			start_time: Some(SystemTime::now()),
@@ -2731,6 +2620,8 @@ impl SpanWriterInner {
 }
 
 pub struct SpanWriteOnDrop {
+	pending_call: Option<crate::telemetry::upstream::PendingCall>,
+	upstream_calls: Option<crate::telemetry::upstream::UpstreamCalls>,
 	name: Option<Cow<'static, str>>,
 	span_kind: SpanKind,
 	start_time: Option<SystemTime>,
@@ -2743,6 +2634,8 @@ pub struct SpanWriteOnDrop {
 impl Default for SpanWriteOnDrop {
 	fn default() -> Self {
 		Self {
+			pending_call: None,
+			upstream_calls: None,
 			name: None,
 			span_kind: SpanKind::Internal,
 			start_time: None,
@@ -2762,7 +2655,10 @@ impl SpanWriteOnDrop {
 				inner: self.inner.clone(),
 			})
 		});
-		SpanWriter { inner }
+		SpanWriter {
+			inner,
+			upstream_calls: self.upstream_calls.clone(),
+		}
 	}
 
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
@@ -2780,6 +2676,24 @@ impl SpanWriteOnDrop {
 	pub fn inject_headers(&self, headers: &mut ::http::HeaderMap) {
 		if let Some(span) = &self.span {
 			span.insert_headers(headers);
+		}
+	}
+
+	pub(crate) fn record_grpc_call<T>(
+		&mut self,
+		req: &mut tonic::Request<T>,
+		target: String,
+		labels: OutboundCallLabels,
+	) {
+		if let Some(calls) = &self.upstream_calls {
+			let mut call = crate::telemetry::upstream::PendingCall::new(
+				calls.clone(),
+				labels,
+				target,
+				&req.metadata().clone().into_headers(),
+			);
+			req.extensions_mut().insert(call.share_headers());
+			self.pending_call = Some(call);
 		}
 	}
 
@@ -2819,17 +2733,23 @@ impl SpanWriteOnDrop {
 
 	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
 		match result {
-			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
+			Ok(_) => self.record_grpc_status(tonic::Code::Ok),
 			Err(status) => self.record_grpc_error(status),
 		}
 	}
 
 	pub fn record_grpc_status(&mut self, code: tonic::Code) {
+		if let Some(call) = self.pending_call.as_mut() {
+			call.set_grpc_status(code as i32);
+		}
 		self.add_attribute(KeyValue::new("grpc.status", i64::from(code as i32)));
 	}
 
 	pub fn record_grpc_error(&mut self, status: &tonic::Status) {
 		self.record_grpc_status(status.code());
+		if let Some(call) = self.pending_call.as_mut() {
+			call.set_error(status.to_string());
+		}
 		self.set_error(format!("{:?}", status.code()), status.to_string());
 	}
 }
@@ -3608,6 +3528,40 @@ mod tests {
 
 		log.grpc_status.store(Some(0));
 		assert!(!DropOnLog::default_unhealthy(&log));
+	}
+
+	#[test]
+	fn upstream_calls_are_enabled_by_late_logging_policy_without_tracing() {
+		let mut log = test_request_log();
+		assert!(log.span_writer().upstream_calls.is_none());
+		let expr = Expression::new_strict("size(upstreamCalls)").unwrap();
+		assert!(expr.attributes().contains(cel::Attributes::UpstreamCalls));
+		log.cel.ctx().register_log_expression(&expr);
+		let mut extensions = ::http::Extensions::new();
+		log.insert_span_writer(&mut extensions);
+		let writer = extensions.get::<SpanWriter>().unwrap();
+		assert!(!writer.is_enabled());
+		assert!(writer.upstream_calls.is_some());
+		let labels = OutboundCallLabels {
+			kind: OutboundCallKind::Policy,
+			subtype: OutboundCallSubtype::ExtAuthz,
+		};
+		let mut span = writer.start_outbound(labels);
+		let mut req = tonic::Request::new(());
+		span.record_grpc_call(&mut req, "authz".into(), labels);
+		let mut outgoing = ::http::Request::new(crate::http::Body::empty());
+		outgoing.extensions_mut().extend(req.extensions().clone());
+		outgoing
+			.headers_mut()
+			.insert("authorization", "Bearer backend".parse().unwrap());
+		crate::telemetry::upstream::CapturedHeaders::update(&outgoing);
+		span.record_grpc_result(&Ok::<_, tonic::Status>(tonic::Response::new(())));
+		drop(span);
+		let calls = log.upstream_calls.get().unwrap().take();
+		assert_eq!(calls.len(), 1);
+		assert_eq!(calls[0].response.grpc_status, Some(0));
+		assert_eq!(calls[0].request.headers["authorization"], "Bearer backend");
+		assert!(calls[0].error.is_none());
 	}
 
 	#[test]
