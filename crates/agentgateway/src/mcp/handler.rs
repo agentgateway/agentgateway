@@ -1389,6 +1389,20 @@ impl Relay {
 		for (name, result) in fut_results {
 			match result {
 				Ok(_) => {},
+				// per spec, a 405 means the server does not allow clients to terminate sessions, and a
+				// 404 means the session is already gone. Either way there is nothing left to close.
+				Err(UpstreamError::Http(ClientError::Status(ref r)))
+					if matches!(
+						r.status(),
+						StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+					) =>
+				{
+					debug!(
+						"upstream '{}' returned {} for session deletion, skipping",
+						name,
+						r.status()
+					);
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!(

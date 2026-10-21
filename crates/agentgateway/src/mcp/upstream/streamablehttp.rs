@@ -173,11 +173,7 @@ impl Client {
 
 		let resp = self.http_client.call(req).await?;
 
-		let status = resp.status();
-		if !status.is_success()
-			&& status != http::StatusCode::NOT_FOUND
-			&& status != http::StatusCode::METHOD_NOT_ALLOWED
-		{
+		if !resp.status().is_success() {
 			return Err(ClientError::Status(Box::new(resp)));
 		}
 		Ok(StreamableHttpPostResponse::Accepted)
