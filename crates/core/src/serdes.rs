@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Display};
-use std::io;
 use std::path::PathBuf;
 
 #[cfg(feature = "schema")]
@@ -355,32 +354,6 @@ pub fn de_bytes<S: Serializer, T: AsRef<[u8]>>(t: &T, serializer: S) -> Result<S
 	}
 }
 
-pub fn deser_key_from_file<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let input = FileOrInline::deserialize(deserializer)?;
-	load_secret(input).map_err(serde::de::Error::custom)
-}
-
-pub fn deser_key_from_file_option<'de, D>(deserializer: D) -> Result<Option<SecretString>, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	let input = Option::<FileOrInline>::deserialize(deserializer)?;
-	let Some(input) = input else {
-		return Ok(None);
-	};
-	load_secret(input)
-		.map(Some)
-		.map_err(serde::de::Error::custom)
-}
-
-fn load_secret(input: FileOrInline) -> Result<SecretString, String> {
-	let key = input.load().map_err(|e| e.to_string())?;
-	Ok(SecretString::from(key.trim().to_string()))
-}
-
 pub fn deser_key<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
 where
 	D: Deserializer<'de>,
@@ -399,15 +372,6 @@ pub enum FileOrInline {
 		file: PathBuf,
 	},
 	Inline(String),
-}
-
-impl FileOrInline {
-	pub fn load(&self) -> io::Result<String> {
-		match self {
-			FileOrInline::File { file } => fs_err::read_to_string(file),
-			FileOrInline::Inline(s) => Ok(s.clone()),
-		}
-	}
 }
 
 #[derive(Clone, Default, Debug)]

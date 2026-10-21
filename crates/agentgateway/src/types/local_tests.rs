@@ -2833,6 +2833,142 @@ binds:
 		.expect("resource change channel should stay open");
 }
 
+async fn assert_referenced_file_is_watched(
+	contents: &str,
+	rewritten: &str,
+	yaml: impl FnOnce(&Path) -> String,
+) {
+	let dir = tempfile::tempdir().unwrap();
+	let file = dir.path().join("referenced");
+	fs::write(&file, contents).unwrap();
+
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager.clone());
+	let mut changes = manager.subscribe_changes();
+
+	NormalizedLocalConfig::from(
+		&test_config(),
+		&resources,
+		ListenerTarget {
+			gateway_name: "name".into(),
+			gateway_namespace: "ns".into(),
+			listener_name: None,
+			port: None,
+		},
+		&yaml(&file),
+	)
+	.await
+	.expect("config with a referenced file should load");
+
+	let _ = changes.borrow_and_update();
+
+	fs::write(&file, rewritten).unwrap();
+	tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+		.await
+		.expect("a change to the referenced file should notify the resource manager")
+		.expect("resource change channel should stay open");
+}
+
+#[tokio::test]
+async fn basic_auth_htpasswd_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched(
+		"alice:$apr1$saltsalt$X8aAqtalfR6pZ6Jbhuyx1/\n",
+		"bob:$apr1$saltsalt$X8aAqtalfR6pZ6Jbhuyx1/\n",
+		|file| {
+			format!(
+				r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        basicAuth:
+          htpasswd:
+            file: {}
+      backends:
+      - host: 127.0.0.1:8080
+"#,
+				file.display()
+			)
+		},
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn llm_api_key_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched("first-key\n", "second-key\n", |file| {
+		format!(
+			r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    params:
+      apiKey:
+        file: {}
+"#,
+			file.display()
+		)
+	})
+	.await;
+}
+
+#[tokio::test]
+async fn gcp_credential_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched(
+		r#"{"type":"gdch_service_account"}"#,
+		r#"{"type":"gdch_service_account","project":"rotated"}"#,
+		|file| {
+			format!(
+				r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            gcp:
+              type: idToken
+              audience: https://aud.example
+              credential:
+                file: {}
+"#,
+				file.display()
+			)
+		},
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn oauth_client_secret_file_is_a_tracked_resource() {
+	assert_referenced_file_is_watched("first-secret\n", "second-secret\n", |file| {
+		format!(
+			r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
+                clientSecret:
+                  file: {}
+"#,
+			file.display()
+		)
+	})
+	.await;
+}
+
 /// A backend TLS file resolved by a serde hook during the parse is watched like a
 /// file the load fetched itself.
 #[tokio::test]

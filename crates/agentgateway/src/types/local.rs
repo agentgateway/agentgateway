@@ -934,7 +934,7 @@ pub struct SecretFromFile(
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 	#[serde(
 		serialize_with = "ser_redact",
-		deserialize_with = "deser_key_from_file"
+		deserialize_with = "deser_watched_secret"
 	)]
 	SecretString,
 );
@@ -5663,7 +5663,7 @@ pub(crate) async fn split_policies_for_target(
 	};
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(RequestPolicy::single(
-			p.try_into()?,
+			p.try_into(resources).await?,
 		)));
 	}
 	if let Some(p) = api_key {
