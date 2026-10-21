@@ -167,8 +167,7 @@ pub enum Error {
 	/// request was well-formed.
 	#[error("{1}")]
 	Unavailable(Option<RequestId>, String),
-	// Intentionally do NOT say its not authorized; we hide the existence of the tool
-	#[error("Unknown {1}: {2}")]
+	#[error("authorization denied for {1}: {2}")]
 	Authorization(RequestId, String, String),
 	#[error("mcpGuardrails rejected: {}", .rej.message)]
 	McpGuardrails {

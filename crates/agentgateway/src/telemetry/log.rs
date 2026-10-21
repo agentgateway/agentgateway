@@ -3141,6 +3141,44 @@ mod tests {
 	}
 
 	#[test]
+	fn mcp_authorization_denial_sets_internal_error_context() {
+		use crate::mcp;
+		use crate::proxy::ProxyError;
+		use crate::proxy::httpproxy::resolve_response;
+
+		let error = ProxyError::MCP(mcp::Error::Authorization(
+			rmcp::model::RequestId::Number(7),
+			"tool".to_string(),
+			"private-item".to_string(),
+		));
+		let mut log = test_request_log();
+		let (response, reason) = resolve_response(Err(error.into()), &mut log, false);
+		let detail = "mcp: authorization denied for tool: private-item";
+		assert_eq!(reason, ProxyResponseReason::Authorization);
+		assert_eq!(log.reason, Some(ProxyResponseReason::Authorization));
+		assert_eq!(log.error.as_deref(), Some(detail));
+		let context = response
+			.extensions()
+			.get::<crate::cel::ProxyContext>()
+			.unwrap();
+		let error = context.error.as_ref().unwrap();
+		assert_eq!(error.reason, "Authorization");
+		assert_eq!(error.message, detail);
+	}
+
+	#[test]
+	fn mcp_non_authorization_errors_keep_their_reason() {
+		use crate::mcp;
+		use crate::proxy::ProxyError;
+
+		let error = ProxyError::MCP(mcp::Error::InvalidParams(
+			Some(rmcp::model::RequestId::Number(8)),
+			"unknown tool: absent".to_string(),
+		));
+		assert_eq!(error.as_reason(), ProxyResponseReason::MCP);
+	}
+
+	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};

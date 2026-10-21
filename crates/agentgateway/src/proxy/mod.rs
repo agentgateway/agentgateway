@@ -91,6 +91,7 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => ProxyResponseReason::RateLimit,
+			ProxyError::MCP(mcp::Error::Authorization(..)) => ProxyResponseReason::Authorization,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed
 			| ProxyError::SubstrateEgressDenied(_)
@@ -714,7 +715,7 @@ impl ProxyError {
 impl From<ProxyError> for tonic::Status {
 	fn from(error: ProxyError) -> Self {
 		let code = proxy_error_to_grpc_status(&error, error.http_status());
-		tonic::Status::new(code, error.to_string())
+		tonic::Status::new(code, error.external_message().into_owned())
 	}
 }
 
@@ -903,8 +904,16 @@ mod tests {
 			(ProxyError::UpstreamCallTimeout, Code::Unavailable),
 			(ProxyError::NoValidBackends, Code::Unavailable),
 			(ProxyError::AuthorizationFailed, Code::PermissionDenied),
+			(
+				ProxyError::MCP(mcp::Error::Authorization(
+					rmcp::model::RequestId::Number(7),
+					"tool".into(),
+					"private-item".into(),
+				)),
+				Code::Internal,
+			),
 		] {
-			let message = error.to_string();
+			let message = error.external_message().into_owned();
 			let status = tonic::Status::from(error);
 			assert_eq!(status.code(), code, "{message}");
 			assert_eq!(status.message(), message);
