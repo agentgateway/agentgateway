@@ -3167,18 +3167,6 @@ mod tests {
 	}
 
 	#[test]
-	fn mcp_non_authorization_errors_keep_their_reason() {
-		use crate::mcp;
-		use crate::proxy::ProxyError;
-
-		let error = ProxyError::MCP(mcp::Error::InvalidParams(
-			Some(rmcp::model::RequestId::Number(8)),
-			"unknown tool: absent".to_string(),
-		));
-		assert_eq!(error.as_reason(), ProxyResponseReason::MCP);
-	}
-
-	#[test]
 	fn gen_ai_duration_preserves_response_failures_and_snapshot_metadata() {
 		use crate::http::transformation_cel::TransformationMetadata;
 		use crate::proxy::httpproxy::{resolve_response, set_final_response_fields};

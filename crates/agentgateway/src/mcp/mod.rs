@@ -220,7 +220,9 @@ impl Error {
 	/// A client-safe message; Display retains the internal diagnostic details.
 	pub fn external_message(&self) -> Cow<'static, str> {
 		let msg = match self {
-			// Hides whether the resource exists, so it is never exposed.
+			// A denial is deliberately reported as "unknown resource", indistinguishable from a
+			// nonexistent one, so clients cannot probe which tools/prompts/resources exist. Display
+			// says "authorization denied" for logs, so this must stay ahead of EXPOSE_ERROR_DETAILS.
 			Error::Authorization(_, _, _) => "unknown resource",
 			_ if *crate::proxy::EXPOSE_ERROR_DETAILS => return self.to_string().into(),
 			// Client request errors only describe the client's own request, so keep their detail.
