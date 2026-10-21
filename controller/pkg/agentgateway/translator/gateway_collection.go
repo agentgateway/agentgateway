@@ -674,49 +674,6 @@ func reportNotAllowedListenerSet(status *gwv1.ListenerSetStatus, obj *gwv1.Liste
 
 type ParentResolver = plugins.ParentResolver
 
-// ArbitratedParentResolver uses the aggregated listener's attachment metadata for
-// controller-owned parents, including conflicted listeners kept for route status.
-// Service and additional-class parents remain owned by the extension resolver.
-// This does not filter traffic: buildAgwResources filters programmed listeners.
-type ArbitratedParentResolver struct {
-	Resolver                 ParentResolver
-	Listeners                krt.Collection[*GatewayListener]
-	Gateways                 krt.Collection[*gwv1.Gateway]
-	AdditionalGatewayClasses sets.Set[string]
-}
-
-func (p ArbitratedParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
-	var result []*ParentInfo
-	seen := sets.New[string]()
-	for _, parent := range p.Resolver.ParentsFor(ctx, pk) {
-		if parent == nil {
-			continue
-		}
-		if parent.ServiceKey != nil || parent.ListenerKey == "" {
-			result = append(result, parent)
-			continue
-		}
-		gateway := ptr.Flatten(krt.FetchOne(ctx, p.Gateways, krt.FilterKey(parent.ParentGateway.String())))
-		if gateway == nil {
-			continue
-		}
-		if p.AdditionalGatewayClasses.Contains(string(gateway.Spec.GatewayClassName)) {
-			result = append(result, parent)
-			continue
-		}
-		if seen.Contains(parent.ListenerKey) {
-			continue
-		}
-		listener := ptr.Flatten(krt.FetchOne(ctx, p.Listeners, krt.FilterKey(parent.ListenerKey)))
-		if listener == nil || listener.ParentGateway != parent.ParentGateway {
-			continue
-		}
-		seen.Insert(parent.ListenerKey)
-		result = append(result, &listener.ParentInfo)
-	}
-	return result
-}
-
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
 	Parents     krt.Collection[*RouteParent]

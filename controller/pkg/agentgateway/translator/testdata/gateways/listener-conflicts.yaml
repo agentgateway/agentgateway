@@ -55,10 +55,7 @@ status:
     conditions:
     - lastTransitionTime: fake
       message: 'Some listeners are not accepted: duplicate: Found conflicting hostnames
-        on listeners, all listeners on a single port must have unique hostnames; duplicate:
-        Found conflicting hostnames on listeners, all listeners on a single port must
-        have unique hostnames; incompatible: Found conflicting protocols on listeners,
-        a single port can only contain listeners with compatible protocols; incompatible:
+        on listeners, all listeners on a single port must have unique hostnames; incompatible:
         Found conflicting protocols on listeners, a single port can only contain listeners
         with compatible protocols'
       reason: ListenersNotValid

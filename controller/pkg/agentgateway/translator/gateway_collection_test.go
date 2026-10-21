@@ -4,13 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-
-	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 )
 
 func TestListenerConflictCopyOnWrite(t *testing.T) {
@@ -38,83 +32,6 @@ func TestListenerConflictCopyOnWrite(t *testing.T) {
 			validateListenerConflicts(listeners)
 			assert.Same(t, &candidate.GatewayListener, listeners[0])
 			assert.Empty(t, listeners[0].Conflict)
-		})
-	}
-}
-
-type fixedListenerParents []*ParentInfo
-
-func (p fixedListenerParents) ParentsFor(krt.HandlerContext, utils.TypedNamespacedName) []*ParentInfo {
-	return p
-}
-
-func TestArbitratedParentResolver(t *testing.T) {
-	gw := types.NamespacedName{Namespace: "owner", Name: "gateway"}
-	listener := &GatewayListener{
-		Name: "owner/gateway.http", ParentGateway: gw, Conflict: ListenerConflictHostname,
-		ParentInfo: ParentInfo{
-			ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: "owner/gateway.http",
-			Hostnames: []string{"owner/*"}, Port: 8080,
-			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "GRPCRoute"}},
-		},
-	}
-	stale := listener.ParentInfo
-	stale.Hostnames = []string{"*/*"}
-	stale.ParentGatewayClassName = "additional"
-	wrongGateway := stale
-	wrongGateway.ParentGateway.Name = "other"
-	unknown := stale
-	unknown.ListenerKey = "unknown"
-	listenerless := &ParentInfo{Hostnames: []string{"tenant/*"}}
-	service := func(key, name string) *ParentInfo {
-		return &ParentInfo{
-			ParentGateway: gw, ListenerKey: key,
-			ServiceKey: &types.NamespacedName{Namespace: "tenant", Name: name}, ServicePorts: []gwv1.PortNumber{80, 443},
-			Hostnames: []string{"tenant/api.example.com"}, AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
-		}
-	}
-	delegated := func(key, section, hostname string) *ParentInfo {
-		return &ParentInfo{
-			ParentGateway: gw, ParentGatewayClassName: "agentgateway", ListenerKey: key,
-			Hostnames: []string{hostname}, Port: 80,
-			AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}}, SectionName: gwv1.SectionName(section),
-		}
-	}
-	type testCase struct {
-		name, gatewayClass string
-		parents, want      []*ParentInfo
-	}
-	cases := []testCase{
-		{name: "authoritative metadata and deduplication", gatewayClass: "agentgateway", parents: []*ParentInfo{nil, &unknown, &wrongGateway, &stale, &stale}, want: []*ParentInfo{&listener.ParentInfo}},
-		{name: "listenerless", parents: []*ParentInfo{listenerless}, want: []*ParentInfo{listenerless}},
-		{name: "missing gateway", parents: []*ParentInfo{&stale}},
-	}
-	for _, key := range []string{"", "plugin/listener", listener.Name} {
-		first, second := service(key, "first"), service(key, "second")
-		cases = append(cases, testCase{name: "service metadata/" + key, parents: []*ParentInfo{first, second}, want: []*ParentInfo{first, second}})
-	}
-	for _, key := range []string{"plugin/listener", listener.Name} {
-		first, second := delegated(key, "first", "tenant/api.example.com"), delegated(key, "second", "tenant/other.example.com")
-		cases = append(cases, testCase{name: "delegated metadata/" + key, gatewayClass: "additional", parents: []*ParentInfo{first, second}, want: []*ParentInfo{first, second}})
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			var gateways []*gwv1.Gateway
-			if tc.gatewayClass != "" {
-				gateways = []*gwv1.Gateway{
-					{Name: gw.Name, Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(tc.gatewayClass)}},
-					{Name: "other", Namespace: gw.Namespace, Spec: gwv1.GatewaySpec{GatewayClassName: "agentgateway"}},
-				}
-			}
-			p := ArbitratedParentResolver{
-				Listeners: krt.NewStaticCollection(nil, []*GatewayListener{listener}), Resolver: fixedListenerParents(tc.parents),
-				Gateways: krt.NewStaticCollection(nil, gateways), AdditionalGatewayClasses: sets.New("additional"),
-			}
-			got := p.ParentsFor(krt.TestingDummyContext{}, utils.TypedNamespacedName{Kind: "ExtensionListenerSet"})
-			require.Equal(t, tc.want, got)
-			for i := range tc.want {
-				assert.Same(t, tc.want[i], got[i])
-			}
 		})
 	}
 }

@@ -50,19 +50,15 @@ func safetyGateway() *gwv1.Gateway {
 
 func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 	for _, tc := range []struct {
-		name, gatewayClass, returnedClass, listenerKey string
-		missing                                        bool
-		wantRoutes                                     int
+		name, returnedClass, listenerKey string
 	}{
-		{name: "additional class listener", gatewayClass: "additional", returnedClass: "additional", listenerKey: "default/example.http", wantRoutes: 1},
-		{name: "delegated listener", gatewayClass: "additional", returnedClass: "additional", listenerKey: "plugin/listener", wantRoutes: 1},
-		{name: "ownership comes from gateway", gatewayClass: "additional", returnedClass: "agentgateway", listenerKey: "plugin/listener", wantRoutes: 1},
-		{name: "controller owned gateway", gatewayClass: "agentgateway", returnedClass: "additional", listenerKey: "plugin/listener"},
-		{name: "deleted gateway", gatewayClass: "additional", returnedClass: "additional", listenerKey: "plugin/listener", missing: true},
+		{name: "additional class listener", returnedClass: "additional", listenerKey: "default/example.http"},
+		{name: "delegated listener", returnedClass: "additional", listenerKey: "plugin/listener"},
+		{name: "resolver supplied class", returnedClass: "agentgateway", listenerKey: "plugin/listener"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gw := safetyGateway()
-			gw.Spec.GatewayClassName = gwv1.ObjectName(tc.gatewayClass)
+			gw.Spec.GatewayClassName = "additional"
 			class := &gwv1.GatewayClass{Name: "additional", Spec: gwv1.GatewayClassSpec{ControllerName: "agentgateway.dev/agentgateway"}}
 			route := &gwv1.HTTPRoute{
 				Name: "additional", Namespace: "default",
@@ -71,11 +67,7 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 					Rules:           []gwv1.HTTPRouteRule{{}},
 				},
 			}
-			inputs := []any{gatewayClassYAML, class, route, &corev1.Namespace{Name: "default"}}
-			if !tc.missing {
-				inputs = append(inputs, gw)
-			}
-			ctx := testutils.BuildMockPolicyContext(t, inputs)
+			ctx := testutils.BuildMockPolicyContext(t, []any{gatewayClassYAML, class, route, gw, &corev1.Namespace{Name: "default"}})
 			parent := &plugins.ParentInfo{
 				ParentGateway: exampleGateway, ParentGatewayClassName: tc.returnedClass, ListenerKey: tc.listenerKey,
 				Hostnames: []string{"default/*"}, AllowedKinds: []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}},
@@ -83,16 +75,14 @@ func TestListenerSafetyAdditionalGatewayClassResolver(t *testing.T) {
 			_, s := testutils.SyncerWithExtensions(t, ctx, nil, plugins.AgwPlugin{
 				AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{testExtensionResolver{parents: []*plugins.ParentInfo{parent}, kind: "Gateway"}}},
 			}, map[string]*deployer.GatewayClassInfo{"additional": {}})
-			if tc.gatewayClass == "additional" {
-				assert.Empty(t, listenerKeys(s))
-			}
+			assert.Empty(t, listenerKeys(s))
 			var routeKeys []string
 			for _, resource := range s.Outputs.Resources.List() {
 				if r := resource.Resource.GetRoute(); r != nil && r.ListenerKey == tc.listenerKey {
 					routeKeys = append(routeKeys, r.ListenerKey)
 				}
 			}
-			assert.Len(t, routeKeys, tc.wantRoutes)
+			assert.Equal(t, []string{tc.listenerKey}, routeKeys)
 		})
 	}
 }
@@ -145,50 +135,87 @@ func TestListenerSafetyServiceParentResolver(t *testing.T) {
 }
 
 func TestListenerSafetyExtensionResolverAndDormantRoutes(t *testing.T) {
-	ls := contributedListenerSet("extension", "http", 8080, gwv1.HTTPProtocolType, false)
-	ls.ParentInfo.Hostnames = []string{"default/*"}
-	ls.ParentInfo.AllowedKinds = []gwv1.RouteGroupKind{{Group: new(gwv1.Group("gateway.networking.k8s.io")), Kind: "HTTPRoute"}}
-	route := &gwv1.HTTPRoute{
-		Name: "dormant", Namespace: "default",
-		Spec: gwv1.HTTPRouteSpec{
-			CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Group: new(gwv1.Group("test.example.com")), Kind: new(gwv1.Kind("TestListenerSet")), Name: "extension", SectionName: new(gwv1.SectionName("http"))}}},
-			Rules:           []gwv1.HTTPRouteRule{{}},
-		},
-	}
-	ctx := testutils.BuildMockPolicyContext(t, []any{gatewayClassYAML, safetyGateway(), route, &corev1.Namespace{Name: "default"}})
-	stale := ls.ParentInfo
-	stale.AllowedKinds = nil
-	sq, s := testutils.SyncerWithExtensions(t, ctx, []string{"HTTPRoute"}, plugins.AgwPlugin{
-		AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{nil, testExtensionResolver{parents: []*plugins.ParentInfo{&stale}, kind: "TestListenerSet"}}},
-	}, nil,
-		syncer.WithExtraListenerSets(func(_ *plugins.AgwCollections, opts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
-			return krt.NewStaticCollection(nil, []*translator.ListenerSet{ls}, opts.ToOptions("test/ExtensionListeners")...)
-		}),
-		syncer.WithBuildReferenceTypes(func(_ *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes {
-			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example.com", Kind: "TestListenerSet"})
-			return base
-		}),
-	)
-	assert.Empty(t, ls.Conflict)
-	assert.Equal(t, []string{"default/example.http"}, listenerKeys(s))
-	var routeKeys []string
-	for _, resource := range s.Outputs.Resources.List() {
-		if r := resource.Resource.GetRoute(); r != nil {
-			routeKeys = append(routeKeys, r.ListenerKey)
+	for _, conflicted := range []bool{false, true} {
+		name := "programmed"
+		port := gwv1.PortNumber(8081)
+		if conflicted {
+			name = "conflicted"
+			port = 8080
 		}
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name, routeKind, hostname, reason string
+				accepted                          bool
+			}{
+				{name: "accepted", routeKind: "HTTPRoute", hostname: "api.example.com", accepted: true, reason: "Accepted"},
+				{name: "resolver restricts route kind", routeKind: "GRPCRoute", hostname: "api.example.com", reason: "NotAllowedByListeners"},
+				{name: "resolver restricts hostname", routeKind: "HTTPRoute", hostname: "other.example.com", reason: "NoMatchingListenerHostname"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ls := contributedListenerSet("extension", "http", port, gwv1.HTTPProtocolType, false)
+					ls.ParentInfo.Hostnames = []string{"default/*"}
+					ls.ParentInfo.AllowedKinds = []gwv1.RouteGroupKind{{Kind: "HTTPRoute"}, {Kind: "GRPCRoute"}}
+					route := &gwv1.HTTPRoute{
+						Name: "extension-route", Namespace: "default",
+						Spec: gwv1.HTTPRouteSpec{
+							CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{{Group: new(gwv1.Group("test.example.com")), Kind: new(gwv1.Kind("TestListenerSet")), Name: "extension", SectionName: new(gwv1.SectionName("http"))}}},
+							Hostnames:       []gwv1.Hostname{gwv1.Hostname(tc.hostname)},
+							Rules:           []gwv1.HTTPRouteRule{{}},
+						},
+					}
+					// Resolver-owned attachment restrictions must not be replaced with
+					// the contributed listener's broader permissions, even if it loses.
+					parent := ls.ParentInfo
+					parent.Hostnames = []string{"default/api.example.com"}
+					parent.AllowedKinds = []gwv1.RouteGroupKind{{Kind: gwv1.Kind(tc.routeKind)}}
+					ctx := testutils.BuildMockPolicyContext(t, []any{gatewayClassYAML, safetyGateway(), route, &corev1.Namespace{Name: "default"}})
+					sq, s := testutils.SyncerWithExtensions(t, ctx, []string{"HTTPRoute"}, plugins.AgwPlugin{
+						AddResourceExtension: &plugins.AddResourcesPlugin{ParentResolvers: []plugins.ParentResolver{nil, testExtensionResolver{parents: []*plugins.ParentInfo{&parent}, kind: "TestListenerSet"}}},
+					}, nil,
+						syncer.WithExtraListenerSets(func(_ *plugins.AgwCollections, opts krtutil.KrtOptions) krt.Collection[*translator.ListenerSet] {
+							return krt.NewStaticCollection(nil, []*translator.ListenerSet{ls}, opts.ToOptions("test/ExtensionListeners")...)
+						}),
+						syncer.WithBuildReferenceTypes(func(_ *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes {
+							base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example.com", Kind: "TestListenerSet"})
+							return base
+						}),
+					)
+					assert.Empty(t, ls.Conflict)
+					if conflicted {
+						assert.Equal(t, []string{"default/example.http"}, listenerKeys(s))
+					} else {
+						assert.ElementsMatch(t, []string{"default/example.http", ls.Name}, listenerKeys(s))
+					}
+					var routeKeys []string
+					for _, resource := range s.Outputs.Resources.List() {
+						if r := resource.Resource.GetRoute(); r != nil {
+							routeKeys = append(routeKeys, r.ListenerKey)
+						}
+					}
+					if tc.accepted {
+						assert.Equal(t, []string{ls.Name}, routeKeys)
+					} else {
+						assert.Empty(t, routeKeys)
+					}
+					dump, err := json.Marshal(sq.Dump())
+					require.NoError(t, err)
+					var statuses []struct {
+						Status gwv1.HTTPRouteStatus `json:"status"`
+					}
+					require.NoError(t, json.Unmarshal(dump, &statuses))
+					require.Len(t, statuses, 1)
+					require.Len(t, statuses[0].Status.Parents, 1)
+					assert.Equal(t, "TestListenerSet", string(*statuses[0].Status.Parents[0].ParentRef.Kind))
+					accepted := meta.FindStatusCondition(statuses[0].Status.Parents[0].Conditions, "Accepted")
+					require.NotNil(t, accepted)
+					want := metav1.ConditionFalse
+					if tc.accepted {
+						want = metav1.ConditionTrue
+					}
+					assert.Equal(t, want, accepted.Status)
+					assert.Equal(t, tc.reason, accepted.Reason)
+				})
+			}
+		})
 	}
-	assert.Equal(t, []string{ls.Name}, routeKeys)
-	dump, err := json.Marshal(sq.Dump())
-	require.NoError(t, err)
-	var statuses []struct {
-		Status gwv1.HTTPRouteStatus `json:"status"`
-	}
-	require.NoError(t, json.Unmarshal(dump, &statuses))
-	require.Len(t, statuses, 1)
-	require.Len(t, statuses[0].Status.Parents, 1)
-	assert.Equal(t, "TestListenerSet", string(*statuses[0].Status.Parents[0].ParentRef.Kind))
-	accepted := meta.FindStatusCondition(statuses[0].Status.Parents[0].Conditions, "Accepted")
-	require.NotNil(t, accepted)
-	assert.Equal(t, metav1.ConditionTrue, accepted.Status)
-	assert.Equal(t, "Accepted", accepted.Reason)
 }
