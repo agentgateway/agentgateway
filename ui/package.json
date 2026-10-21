@@ -46,7 +46,7 @@
 		"ajv": "=8.20.0",
 		"json-schema-to-typescript": "=15.0.4",
 		"typescript": "=7.0.2",
-		"vite": "=8.2.0"
+		"vite": "=8.2.4"
 	},
 	"packageManager": "pnpm@11.20.0",
 	"engines": {
