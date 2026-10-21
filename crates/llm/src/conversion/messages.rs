@@ -265,6 +265,26 @@ mod tests {
 				.get("cache_control")
 				.is_none()
 		);
+		let mut web_fetch = request(serde_json::Value::Null);
+		web_fetch["messages"][1]["content"] = serde_json::json!([{
+			"type": "web_fetch_tool_result",
+			"tool_use_id": "t2",
+			"content": {
+				"type": "web_fetch_result",
+				"url": "https://example.com",
+				"content": {
+					"type": "document",
+					"source": {"type": "text", "media_type": "text/plain", "data": "page"},
+					"cache_control": {"type": "ephemeral", "ttl": "1h"}
+				}
+			}
+		}]);
+		let out = apply(web_fetch, &caching);
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
 	}
 }
 

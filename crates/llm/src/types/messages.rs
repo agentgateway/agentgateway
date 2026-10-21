@@ -96,7 +96,14 @@ pub(crate) fn cache_control_children(
 ) -> &'static [&'static str] {
 	match block.get("type").and_then(serde_json::Value::as_str) {
 		None if block.contains_key("role") => &["content"],
-		Some("tool_result" | "mcp_tool_result" | "search_result" | "content") => &["content"],
+		Some(
+			"tool_result"
+			| "mcp_tool_result"
+			| "search_result"
+			| "web_fetch_tool_result"
+			| "web_fetch_result"
+			| "content",
+		) => &["content"],
 		Some("document") => &["source"],
 		_ => &[],
 	}
