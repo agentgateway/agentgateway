@@ -31,6 +31,87 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 	}
 }
 
+/// Messages and Responses clients get the signature in their own opaque reasoning field instead,
+/// keyed by call id because Gemini signs only the first of parallel calls
+const SIGNATURE_CARRIER_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ThoughtSignature<S = String> {
+	call_id: S,
+	signature: S,
+}
+
+impl<'a> ThoughtSignature<&'a str> {
+	fn encode(call_id: &'a str, signature: &'a str) -> String {
+		let json = serde_json::to_string(&Self { call_id, signature })
+			.expect("serializing two strings cannot fail");
+		format!("{SIGNATURE_CARRIER_PREFIX}{json}")
+	}
+}
+
+impl ThoughtSignature {
+	fn decode(carrier: &str) -> Option<Self> {
+		serde_json::from_str(carrier.strip_prefix(SIGNATURE_CARRIER_PREFIX)?).ok()
+	}
+}
+
+/// Drop our carriers before a request goes to another provider, which can't use them
+pub fn strip_signature_carriers(req: &mut types::ChatRequest) {
+	use serde_json::Value;
+	match req {
+		types::ChatRequest::Messages(req) => strip_message_carriers(&mut req.messages),
+		types::ChatRequest::Responses(req) => {
+			if let types::responses::RequestInput::Items(items) = &mut req.input {
+				items.retain_mut(|types::responses::RawInputItem(item)| {
+					if item["type"] != "reasoning" || !is_carrier(&item["encrypted_content"]) {
+						return true;
+					}
+					let is_empty = |key: &str| match &item[key] {
+						Value::Null => true,
+						Value::Array(parts) => parts.is_empty(),
+						_ => false,
+					};
+					if is_empty("summary") && is_empty("content") {
+						return false;
+					}
+					item
+						.as_object_mut()
+						.expect("a reasoning item is an object")
+						.remove("encrypted_content");
+					true
+				});
+			}
+		},
+		types::ChatRequest::Completions(_) | types::ChatRequest::Gemini(_) => {},
+	}
+}
+
+/// The Messages half of [`strip_signature_carriers`], shared with count_tokens
+pub fn strip_message_carriers(messages: &mut [types::messages::RequestMessage]) {
+	for message in messages {
+		if let Some(types::messages::ContentBlock::Array(parts)) = &mut message.content {
+			parts.retain(|part| {
+				!matches!(part, types::messages::ContentPart::Unknown(block)
+					if block["type"] == "thinking" && is_carrier(&block["signature"]))
+			});
+		}
+	}
+}
+
+fn is_carrier(value: &serde_json::Value) -> bool {
+	value.as_str().and_then(ThoughtSignature::decode).is_some()
+}
+
+fn client_tool_id(id: String) -> (String, Option<String>) {
+	match split_tool_call_id(&id) {
+		(base, Some(signature)) => (
+			base.to_string(),
+			Some(ThoughtSignature::encode(base, signature)),
+		),
+		_ => (id, None),
+	}
+}
+
 /// Passthrough for native Gemini inbound: forward the `:streamGenerateContent?alt=sse` SSE
 /// bytes untouched while extracting usage for telemetry. Gemini attaches cumulative
 /// `usageMetadata` to chunks with the full totals on the final event, so updating on every
@@ -110,7 +191,10 @@ pub mod from_completions {
 	use serde_json::{Value, json};
 
 	use super::*;
+	use crate::Provider as _;
 	use crate::conversion::completions::parse_data_url;
+	use crate::model_catalog::{Catalog, nearest_effort};
+	use crate::types::completions::typed::ReasoningEffort;
 
 	fn canonical_mime(mime: &str) -> &str {
 		match mime {
@@ -154,14 +238,19 @@ pub mod from_completions {
 			mime_from_ext_token(hint).map(str::to_string)
 		}
 	}
-	pub fn translate(req: &types::completions::Request, is_vertex: bool) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req, is_vertex)?;
+	pub fn translate(
+		req: &types::completions::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let out = build_request(req, is_vertex, catalog)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
 		is_vertex: bool,
+		catalog: Catalog<'_>,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = req
 			.model
@@ -183,13 +272,13 @@ pub mod from_completions {
 
 		let system_instruction = (!system_text.is_empty()).then(|| vg::Content {
 			role: None,
-			parts: vec![text_part(&system_text.join("\n"))],
+			parts: vec![text_part(system_text.join("\n"))],
 			rest: Value::Null,
 		});
 
 		let tools = build_tools(req);
 		let tool_config = build_tool_config(req);
-		let generation_config = build_generation_config(req, model, is_vertex);
+		let generation_config = build_generation_config(req, model, is_vertex, catalog);
 
 		let cached_content = req
 			.rest
@@ -255,11 +344,23 @@ pub mod from_completions {
 		let mut call_meta: std::collections::HashMap<String, (String, usize)> = Default::default();
 		let mut system_text: Vec<String> = Vec::new();
 		let mut contents: Vec<vg::Content> = Vec::new();
+		// Vertex rejects a reminder between the results of a parallel call
+		let mut reminders: Vec<vg::Part> = Vec::new();
 		for m in messages {
-			match m.role.as_str() {
-				"system" | "developer" => {
+			let role = m.role.as_str();
+			if !matches!(role, "system" | "developer" | "tool" | "function") {
+				push_content(&mut contents, "user", std::mem::take(&mut reminders));
+			}
+			match role {
+				// In systemInstruction, a later system message would change the cached prefix every turn
+				"system" | "developer" if contents.is_empty() => {
 					system_text.extend(content_text(&m.content).filter(|t| !t.is_empty()));
 				},
+				"system" | "developer" => reminders.extend(
+					content_text(&m.content)
+						.filter(|t| !t.is_empty())
+						.map(|t| text_part(format!("<system-reminder>\n{t}\n</system-reminder>"))),
+				),
 				"user" => push_content(&mut contents, "user", user_parts(&m.content)?),
 				"assistant" => {
 					if let Some(calls) = &m.tool_calls {
@@ -294,6 +395,8 @@ pub mod from_completions {
 						.tool_call_id
 						.as_deref()
 						.map(|id| split_tool_call_id(id).0.to_string());
+					// TODO: return 400 for unmatched tool results, as #2784 does
+					// Gemini currently rejects the empty function name
 					let name = base_id
 						.as_deref()
 						.and_then(|id| call_meta.get(id))
@@ -320,6 +423,7 @@ pub mod from_completions {
 				_ => {},
 			}
 		}
+		push_content(&mut contents, "user", reminders);
 
 		// Vertex rejects `id` and correlates functionResponse to functionCall positionally, so each
 		// response group must follow the assistant's tool_calls order even when a client returns the
@@ -531,9 +635,9 @@ pub mod from_completions {
 		)))
 	}
 
-	fn text_part(text: &str) -> vg::Part {
+	fn text_part(text: impl Into<String>) -> vg::Part {
 		vg::Part::Text(vg::TextPart {
-			text: text.to_string(),
+			text: text.into(),
 			thought: None,
 			thought_signature: None,
 			rest: Value::Null,
@@ -689,6 +793,7 @@ pub mod from_completions {
 		req: &types::completions::Request,
 		model: &str,
 		is_vertex: bool,
+		catalog: Catalog<'_>,
 	) -> Option<vg::GenerationConfig> {
 		let stop_sequences = match &req.stop {
 			Some(Value::String(s)) => vec![s.clone()],
@@ -701,7 +806,7 @@ pub mod from_completions {
 		};
 
 		let (response_mime_type, response_schema) = response_format(req, is_vertex);
-		let thinking_config = thinking_config(req, model);
+		let thinking_config = thinking_config(req, model, is_vertex, catalog);
 
 		let cfg = vg::GenerationConfig {
 			temperature: req.temperature,
@@ -777,8 +882,6 @@ pub mod from_completions {
 		"pattern",
 		"minimum",
 		"maximum",
-		"exclusiveMinimum",
-		"exclusiveMaximum",
 		"minItems",
 		"maxItems",
 		"minProperties",
@@ -1093,18 +1196,41 @@ pub mod from_completions {
 		}
 
 		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
+		convert_exclusive_bounds(map);
 		map.retain(|k, _| {
 			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
 		});
 	}
 
-	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
-	/// `thinkingBudget`. Detected by model name.
-	fn uses_thinking_levels(model: &str) -> bool {
-		model.contains("gemini-3")
+	fn convert_exclusive_bounds(map: &mut serde_json::Map<String, Value>) {
+		// Gemini rejects exclusive bounds
+		use std::cmp::Ordering;
+		for (exclusive, inclusive, tighter) in [
+			("exclusiveMinimum", "minimum", Ordering::Greater),
+			("exclusiveMaximum", "maximum", Ordering::Less),
+		] {
+			let Some(bound) = map.remove(exclusive).filter(Value::is_number) else {
+				continue;
+			};
+			let exclusive_value = bound.as_f64().expect("a JSON number converts to f64");
+			let is_tighter = match map.get(inclusive) {
+				None => true,
+				Some(current) => current.as_f64().is_some_and(|inclusive_value| {
+					exclusive_value.partial_cmp(&inclusive_value) == Some(tighter)
+				}),
+			};
+			if is_tighter {
+				map.insert(inclusive.to_string(), bound);
+			}
+		}
 	}
 
-	fn thinking_config(req: &types::completions::Request, model: &str) -> Option<vg::ThinkingConfig> {
+	fn thinking_config(
+		req: &types::completions::Request,
+		model: &str,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Option<vg::ThinkingConfig> {
 		if let Some(tc) = req
 			.rest
 			.get("thinking_config")
@@ -1114,39 +1240,393 @@ pub mod from_completions {
 		}
 
 		let effort = req.reasoning_effort.as_ref()?;
-		if uses_thinking_levels(model) {
-			let level = match effort {
-				types::completions::typed::ReasoningEffort::None => return None,
-				types::completions::typed::ReasoningEffort::Minimal => "minimal",
-				types::completions::typed::ReasoningEffort::Low => "low",
-				types::completions::typed::ReasoningEffort::Medium => "medium",
-				types::completions::typed::ReasoningEffort::High
-				| types::completions::typed::ReasoningEffort::Xhigh
-				| types::completions::typed::ReasoningEffort::Max => "high",
-			};
-			Some(vg::ThinkingConfig {
+		let level = select_thinking_level(effort, model, is_vertex, catalog);
+		if let Some(level) = level {
+			if *effort == ReasoningEffort::None {
+				tracing::debug!(
+					model,
+					level,
+					"thinking can't be turned off; using the lowest level"
+				);
+			}
+			return Some(vg::ThinkingConfig {
 				thinking_level: Some(level.into()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
 				rest: Default::default(),
-			})
+			});
+		}
+		if uses_thinking_levels(model) {
+			// Models using levels must not fall back to a thinking budget
+			return None;
+		}
+
+		if *effort == ReasoningEffort::None {
+			return minimum_thinking_config(model);
+		}
+		let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
+		Some(vg::ThinkingConfig {
+			thinking_level: None,
+			thinking_budget: Some(budget),
+			include_thoughts: Some(true),
+			rest: Default::default(),
+		})
+	}
+
+	fn select_thinking_level(
+		effort: &ReasoningEffort,
+		model: &str,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Option<&'static str> {
+		let provider = if is_vertex {
+			crate::vertex::Provider::NAME
 		} else {
-			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
-			// thinking budget at 32K; check every target model's limit before raising it.
-			// `none` omits thinkingConfig instead of sending budget 0.
-			let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
-			Some(vg::ThinkingConfig {
-				thinking_level: None,
-				thinking_budget: Some(budget),
-				include_thoughts: Some(true),
-				rest: Default::default(),
-			})
+			crate::gemini::Provider::NAME
+		};
+		let level_in = |accepted: &[ReasoningEffort]| {
+			let levels: Vec<_> = accepted
+				.iter()
+				.filter(|e| gemini_level(e).is_some())
+				.cloned()
+				.collect();
+			nearest_effort(effort, &levels).and_then(|e| gemini_level(&e))
+		};
+		match catalog.and_then(|c| c.reasoning_efforts(&provider, model)) {
+			Some(accepted) => level_in(&accepted),
+			None if uses_thinking_levels(model) => level_in(&[
+				ReasoningEffort::Low,
+				ReasoningEffort::Medium,
+				ReasoningEffort::High,
+			]),
+			None => None,
+		}
+	}
+
+	fn uses_thinking_levels(model: &str) -> bool {
+		model.contains("gemini-3") || model.contains("gemini-4")
+	}
+
+	/// Gemini 2.5 Pro requires its minimum budget; Flash and Flash-Lite can use zero
+	fn minimum_thinking_config(model: &str) -> Option<vg::ThinkingConfig> {
+		let (budget, include_thoughts) = match gemini_2_5_thinking_variant(model)? {
+			"pro" => {
+				tracing::debug!(
+					model,
+					"thinking can't be turned off; using the minimum budget"
+				);
+				(128, Some(true))
+			},
+			_ => (0, None),
+		};
+		Some(vg::ThinkingConfig {
+			thinking_level: None,
+			thinking_budget: Some(budget),
+			include_thoughts,
+			rest: Default::default(),
+		})
+	}
+
+	fn gemini_2_5_thinking_variant(model: &str) -> Option<&'static str> {
+		let (_, rest) = model.split_once("gemini-2.5-")?;
+		let variant = ["flash-lite", "flash", "pro"]
+			.into_iter()
+			.find(|v| rest.starts_with(v))?;
+		rest[variant.len()..]
+			.split('-')
+			.filter(|part| !part.is_empty())
+			.all(|part| part == "preview" || part.bytes().all(|b| b.is_ascii_digit()))
+			.then_some(variant)
+	}
+
+	fn gemini_level(effort: &ReasoningEffort) -> Option<&'static str> {
+		match effort {
+			ReasoningEffort::Minimal => Some("minimal"),
+			ReasoningEffort::Low => Some("low"),
+			ReasoningEffort::Medium => Some("medium"),
+			ReasoningEffort::High => Some("high"),
+			ReasoningEffort::None | ReasoningEffort::Xhigh | ReasoningEffort::Max => None,
 		}
 	}
 }
 
+pub mod from_messages {
+	use std::collections::HashMap;
+
+	use agent_core::prelude::Strng;
+	use agent_core::strng;
+	use agent_http::Body;
+	use bytes::Bytes;
+
+	use crate::conversion::completions::from_messages as completions;
+	use crate::model_catalog::Catalog;
+	use crate::types::ResponseType;
+	use crate::types::completions::typed::ReasoningEffort;
+	use crate::types::messages::typed as messages;
+	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
+
+	pub fn translate(
+		req: &types::messages::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<Vec<u8>, AIError> {
+		let mut req = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(InputFormat::Messages, err))?;
+		// Reject these before the shared Chat Completions conversion silently drops them
+		if req
+			.messages
+			.iter()
+			.flat_map(|m| &m.content)
+			.any(has_dropped_tool_result_part)
+		{
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"the native Gemini route doesn't support image, document or search_result content in a \
+				 tool_result, so this request fails while that result stays in the conversation history"
+			)));
+		}
+		req
+			.messages
+			.iter_mut()
+			.filter(|m| m.role == messages::Role::Assistant)
+			.for_each(|m| restore_signatures(&mut m.content));
+		let off = matches!(req.thinking, Some(messages::ThinkingInput::Disabled {}));
+		let top_k = req.top_k;
+		let mut req = completions::translate_internal(req);
+		if off {
+			// The shared conversion drops an explicit off, as other Chat Completions upstreams may
+			// reject "none"
+			req.reasoning_effort = Some(ReasoningEffort::None);
+		}
+		let mut req = super::loose(&req)?;
+		if let Some(top_k) = top_k {
+			// Chat Completions has no top_k, so the shared conversion drops it
+			req.rest["top_k"] = top_k.into();
+		}
+		super::from_completions::translate(&req, is_vertex, catalog)
+	}
+
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+	) -> Body {
+		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		completions::translate_stream_with_tool_id(
+			b,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			super::client_tool_id,
+		)
+	}
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let mut response = completions::translate_response_internal(reply)?;
+		response.content = move_signatures(response.content);
+		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
+	}
+
+	fn move_signatures(content: Vec<messages::ContentBlock>) -> Vec<messages::ContentBlock> {
+		let mut out = Vec::with_capacity(content.len() + 1);
+		for mut block in content {
+			if let messages::ContentBlock::ToolUse { id, .. } = &mut block {
+				let (client_id, carrier) = super::client_tool_id(std::mem::take(id));
+				*id = client_id;
+				out.extend(carrier.map(|signature| messages::ContentBlock::Thinking {
+					thinking: String::new(),
+					signature,
+				}));
+			}
+			out.push(block);
+		}
+		out
+	}
+
+	pub fn restore_signatures(content: &mut Vec<messages::ContentBlock>) {
+		let mut signatures = HashMap::new();
+		content.retain(|block| match block {
+			messages::ContentBlock::Thinking { signature, .. } => {
+				match super::ThoughtSignature::decode(signature) {
+					Some(s) => {
+						signatures.insert(s.call_id, s.signature);
+						false
+					},
+					None => true,
+				}
+			},
+			_ => true,
+		});
+		for block in content {
+			if let messages::ContentBlock::ToolUse { id, .. } = block
+				&& let Some(signature) = signatures.remove(id.as_str())
+			{
+				*id = super::join_tool_call_id(std::mem::take(id), Some(&signature));
+			}
+		}
+	}
+
+	fn has_dropped_tool_result_part(block: &messages::ContentBlock) -> bool {
+		let messages::ContentBlock::ToolResult {
+			content: messages::ToolResultContent::Array(parts),
+			..
+		} = block
+		else {
+			return false;
+		};
+		parts.iter().any(|p| {
+			matches!(
+				p,
+				messages::ToolResultContentPart::Image { .. }
+					| messages::ToolResultContentPart::Document { .. }
+					| messages::ToolResultContentPart::SearchResult { .. }
+			)
+		})
+	}
+}
+
+pub mod from_responses {
+	use std::collections::HashMap;
+	use std::sync::Arc;
+
+	use agent_core::prelude::Strng;
+	use agent_core::strng;
+	use agent_http::Body;
+	use bytes::Bytes;
+
+	use crate::conversion::namespace_tools::NamespaceToolMap;
+	use crate::conversion::openai_compat as compat;
+	use crate::model_catalog::Catalog;
+	use crate::types::ResponseType;
+	use crate::types::completions::typed::ReasoningEffort;
+	use crate::types::responses::typed as responses;
+	use crate::{AIError, InputFormat, LogContentFields, StreamingUsageGuard, json, types};
+
+	pub struct TranslatedRequest {
+		pub body: Vec<u8>,
+		pub namespaces: NamespaceToolMap,
+	}
+
+	pub fn translate(
+		req: &types::responses::Request,
+		is_vertex: bool,
+		catalog: Catalog<'_>,
+	) -> Result<TranslatedRequest, AIError> {
+		let mut req = json::convert::<_, responses::CreateResponse>(req)
+			.map_err(|err| AIError::RequestParsing(InputFormat::Responses, err))?;
+		if let responses::InputParam::Items(items) = &mut req.input {
+			// Reject these before the shared Chat Completions conversion silently drops them
+			if items.iter().any(has_media_output) {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"the native Gemini route doesn't support image or file content in a \
+					 function_call_output, so this request fails while that output stays in the \
+					 conversation history"
+				)));
+			}
+			restore_signatures(items);
+		}
+		let off = matches!(
+			req.reasoning.as_ref().and_then(|r| r.effort.as_ref()),
+			Some(responses::ReasoningEffort::None)
+		);
+		let mut completions = compat::from_responses::translate_typed(req)?;
+		if off {
+			completions.request.reasoning_effort = Some(ReasoningEffort::None);
+		}
+		let body =
+			super::from_completions::translate(&super::loose(&completions.request)?, is_vertex, catalog)?;
+		Ok(TranslatedRequest {
+			body,
+			namespaces: completions.namespaces,
+		})
+	}
+
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+		log_content: LogContentFields,
+		namespaces: Option<Arc<NamespaceToolMap>>,
+	) -> Body {
+		let b = super::to_completions::translate_stream(b, buffer_limit, model, log, log_content);
+		compat::to_responses::translate_stream_with_tool_id(
+			b,
+			buffer_limit,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			namespaces,
+			super::client_tool_id,
+		)
+	}
+
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		namespaces: Option<&NamespaceToolMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
+		let (reply, provider_usage) = super::to_completions::translate(bytes)?;
+		let response =
+			compat::to_responses::translate_completion(reply, model, namespaces, super::client_tool_id)?;
+		Ok(Box::new(crate::conversion::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
+	}
+
+	/// A turn is a run of reasoning items and calls; a carrier only applies to a call in its turn
+	pub fn restore_signatures(items: &mut Vec<responses::InputItem>) {
+		use responses::{InputItem, Item};
+		let mut signatures = HashMap::new();
+		items.retain_mut(|item| match item {
+			InputItem::Item(Item::Reasoning(reasoning)) => {
+				match reasoning
+					.encrypted_content
+					.as_deref()
+					.and_then(super::ThoughtSignature::decode)
+				{
+					Some(s) => {
+						signatures.insert(s.call_id, s.signature);
+						false
+					},
+					None => true,
+				}
+			},
+			InputItem::Item(Item::FunctionCall(call)) => {
+				if let Some(signature) = signatures.remove(&call.call_id) {
+					call.call_id =
+						super::join_tool_call_id(std::mem::take(&mut call.call_id), Some(&signature));
+				}
+				true
+			},
+			_ => {
+				signatures.clear();
+				true
+			},
+		});
+	}
+
+	fn has_media_output(item: &responses::InputItem) -> bool {
+		let responses::InputItem::Item(responses::Item::FunctionCallOutput(output)) = item else {
+			return false;
+		};
+		matches!(&output.output, responses::FunctionCallOutput::Content(parts)
+			if parts.iter().any(|p| !matches!(p, responses::InputContent::InputText(_))))
+	}
+}
+
+fn loose(req: &types::completions::typed::Request) -> Result<types::completions::Request, AIError> {
+	crate::json::convert(req).map_err(AIError::RequestMarshal)
+}
+
 pub mod to_completions {
 	use std::collections::HashMap;
+	use std::sync::Arc;
 	use std::time::Instant;
 
 	use agent_http::Body;
@@ -1160,12 +1640,41 @@ pub mod to_completions {
 	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let (response, provider_usage) = translate(bytes)?;
+		let response = json::convert::<_, types::completions::Response>(&response)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response,
+			provider_usage,
+		}))
+	}
+
+	/// The Chat Completions reply, and the accounting taken from Gemini's own usage
+	pub(super) fn translate(
+		bytes: &Bytes,
+	) -> Result<(completions::Response, Option<super::super::ProviderUsage>), AIError> {
 		let resp: vg::GenerateContentResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-		let typed = build_response(&resp);
-		let inner =
-			json::convert::<_, types::completions::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(inner))
+		Ok((
+			build_response(&resp),
+			resp.usage_metadata.as_ref().map(provider_usage),
+		))
+	}
+
+	fn provider_usage(um: &vg::UsageMetadata) -> super::super::ProviderUsage {
+		let (input_tokens, _, total_tokens) = um.counts();
+		super::super::ProviderUsage {
+			input_tokens,
+			total_tokens,
+			reasoning_tokens: um.thoughts_token_count,
+			cached_input_tokens: um.cached_content_token_count,
+			service_tier: um
+				.service_tier
+				.as_deref()
+				.or(um.traffic_type.as_deref())
+				.map(strng::new),
+			..Default::default()
+		}
 	}
 
 	#[derive(Default)]
@@ -1227,20 +1736,21 @@ pub mod to_completions {
 			let blocked = resp
 				.prompt_feedback
 				.as_ref()
-				.and_then(|pf| pf.block_reason.as_ref())
-				.is_some();
-			let finish = if blocked {
+				.filter(|pf| pf.block_reason.is_some());
+			let finish = if blocked.is_some() {
 				completions::FinishReason::ContentFilter
 			} else {
 				completions::FinishReason::Stop
 			};
+			let mut message = completions::ResponseMessage {
+				content: Some(String::new()),
+				..completions::ResponseMessage::assistant()
+			};
+			message.refusal = blocked.map(prompt_block_message);
 			vec![completions::ChatChoice {
 				rest: Default::default(),
 				index: 0,
-				message: completions::ResponseMessage {
-					content: Some(String::new()),
-					..completions::ResponseMessage::assistant()
-				},
+				message,
 				finish_reason: Some(finish),
 				logprobs: None,
 			}]
@@ -1295,7 +1805,12 @@ pub mod to_completions {
 			.collect();
 
 		let has_tool_calls = !tool_calls.is_empty();
-		let finish = finish_with_tool_override(cand.finish_reason.as_deref(), has_tool_calls);
+		// The gateway answers a failed reply with `failure`'s error, so its finish reason isn't seen
+		let finish = finish_reason(
+			cand.finish_reason.as_deref().unwrap_or("STOP"),
+			has_tool_calls,
+		)
+		.unwrap_or(completions::FinishReason::Stop);
 		let content = if decoded.content.is_empty() && (has_tool_calls || !decoded.reasoning.is_empty())
 		{
 			None
@@ -1305,57 +1820,120 @@ pub mod to_completions {
 		let reasoning = (!decoded.reasoning.is_empty()).then_some(decoded.reasoning);
 		let tool_calls = has_tool_calls.then_some(tool_calls);
 
+		let mut message = completions::ResponseMessage {
+			content,
+			tool_calls,
+			reasoning_content: reasoning,
+			..completions::ResponseMessage::assistant()
+		};
+		if finish == completions::FinishReason::ContentFilter {
+			message.refusal = Some(reply_block_message(cand));
+		}
 		completions::ChatChoice {
 			rest: Default::default(),
 			index,
-			message: completions::ResponseMessage {
-				content,
-				tool_calls,
-				reasoning_content: reasoning,
-				// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
-				// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
-				// Tool-call signatures still round-trip via the tool_call id.
-				reasoning_signature: None,
-				..completions::ResponseMessage::assistant()
-			},
+			message,
 			finish_reason: Some(finish),
 			logprobs: None,
 		}
 	}
 
-	fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
+	enum Finish {
+		Reason(completions::FinishReason),
+		/// Gemini produced no usable reply; the client gets an error with this HTTP status and
+		/// Google status instead
+		Failed(::http::StatusCode, &'static str),
+		Unknown,
+	}
+
+	fn classify_finish_reason(reason: &str) -> Finish {
+		use ::http::StatusCode;
 		use completions::FinishReason;
 		match reason {
-			Some("MAX_TOKENS") => FinishReason::Length,
-			Some(
-				"SAFETY"
-				| "RECITATION"
-				| "LANGUAGE"
-				| "BLOCKLIST"
-				| "PROHIBITED_CONTENT"
-				| "SPII"
-				| "UNEXPECTED_TOOL_CALL"
-				| "TOO_MANY_TOOL_CALLS"
-				| "IMAGE_SAFETY"
-				| "IMAGE_PROHIBITED_CONTENT"
-				| "IMAGE_RECITATION",
-			) => FinishReason::ContentFilter,
-			// STOP, MALFORMED_FUNCTION_CALL, IMAGE_OTHER, NO_IMAGE, OTHER,
-			// FINISH_REASON_UNSPECIFIED, None, and any future value.
-			_ => FinishReason::Stop,
+			"STOP" => Finish::Reason(FinishReason::Stop),
+			"MAX_TOKENS" | "CONTINUATION" => Finish::Reason(FinishReason::Length),
+			"SAFETY"
+			| "RECITATION"
+			| "LANGUAGE"
+			| "BLOCKLIST"
+			| "PROHIBITED_CONTENT"
+			| "SPII"
+			| "IMAGE_SAFETY"
+			| "IMAGE_PROHIBITED_CONTENT"
+			| "IMAGE_RECITATION"
+			| "MODEL_ARMOR"
+			| "ESCALATION" => Finish::Reason(FinishReason::ContentFilter),
+			"MISSING_THOUGHT_SIGNATURE" => Finish::Failed(StatusCode::BAD_REQUEST, "INVALID_ARGUMENT"),
+			"PUP_LIMITED_DISABLED" => Finish::Failed(StatusCode::FORBIDDEN, "PERMISSION_DENIED"),
+			"MALFORMED_FUNCTION_CALL"
+			| "UNEXPECTED_TOOL_CALL"
+			| "TOO_MANY_TOOL_CALLS"
+			| "MALFORMED_RESPONSE"
+			| "OTHER"
+			| "NO_IMAGE"
+			| "IMAGE_OTHER" => Finish::Failed(StatusCode::BAD_GATEWAY, "INTERNAL"),
+			_ => Finish::Unknown,
 		}
 	}
 
-	fn finish_with_tool_override(
-		reason: Option<&str>,
-		saw_tool_call: bool,
-	) -> completions::FinishReason {
-		let mapped = map_finish_reason(reason);
-		if saw_tool_call && matches!(mapped, completions::FinishReason::Stop) {
-			completions::FinishReason::ToolCalls
-		} else {
-			mapped
+	fn finish_reason(reason: &str, saw_tool_call: bool) -> Option<completions::FinishReason> {
+		match classify_finish_reason(reason) {
+			Finish::Reason(completions::FinishReason::Stop) if saw_tool_call => {
+				Some(completions::FinishReason::ToolCalls)
+			},
+			Finish::Reason(reason) => Some(reason),
+			Finish::Failed(..) | Finish::Unknown => None,
 		}
+	}
+
+	/// The error to answer with when Gemini ended its reply with a failure: its HTTP status and a
+	/// Google error body
+	pub fn failure(bytes: &[u8]) -> Option<(::http::StatusCode, Bytes)> {
+		let resp: vg::GenerateContentResponse = serde_json::from_slice(bytes).ok()?;
+		let (status, error) = reply_failure(&resp)?;
+		let body = serde_json::to_vec(&serde_json::json!({ "error": error })).ok()?;
+		Some((status, Bytes::from(body)))
+	}
+
+	fn reply_failure(resp: &vg::GenerateContentResponse) -> Option<(::http::StatusCode, Value)> {
+		let cand = resp.candidates.first()?;
+		let reason = cand.finish_reason.as_deref()?;
+		let (status, google_status) = match classify_finish_reason(reason) {
+			Finish::Reason(_) => return None,
+			Finish::Failed(status, google_status) => (status, google_status),
+			Finish::Unknown => {
+				tracing::warn!(
+					reason,
+					"unknown Gemini finish reason; reporting it as a failure"
+				);
+				(::http::StatusCode::BAD_GATEWAY, "INTERNAL")
+			},
+		};
+		let message = match &cand.finish_message {
+			Some(detail) => format!("Gemini stopped with {reason}: {detail}"),
+			None => format!("Gemini stopped with {reason}"),
+		};
+		let error = serde_json::json!({
+			"code": status.as_u16(),
+			"message": message,
+			"status": google_status,
+		});
+		Some((status, error))
+	}
+
+	fn reply_block_message(cand: &vg::Candidate) -> String {
+		cand.finish_message.clone().unwrap_or_else(|| {
+			let reason = cand.finish_reason.as_deref().unwrap_or_default();
+			format!("Gemini blocked the reply: {reason}")
+		})
+	}
+
+	/// The Gemini API gives only a reason; Vertex adds a message
+	fn prompt_block_message(feedback: &vg::PromptFeedback) -> String {
+		feedback.block_reason_message.clone().unwrap_or_else(|| {
+			let reason = feedback.block_reason.as_deref().unwrap_or_default();
+			format!("Gemini blocked the prompt: {reason}")
+		})
 	}
 
 	/// Per-stream state for translating native Gemini SSE chunks into OpenAI
@@ -1433,22 +2011,23 @@ pub mod to_completions {
 
 			// `saw_function_call` carries across chunks, so a finish reason in a later chunk still
 			// upgrades to `tool_calls` when an earlier chunk emitted the call.
-			let finish = match cand.and_then(|c| c.finish_reason.as_deref()) {
-				Some(reason) => Some(finish_with_tool_override(
-					Some(reason),
-					self.saw_function_call,
-				)),
-				None
-					if chunk.candidates.is_empty()
-						&& chunk
-							.prompt_feedback
-							.as_ref()
-							.and_then(|pf| pf.block_reason.as_ref())
-							.is_some() =>
-				{
-					Some(completions::FinishReason::ContentFilter)
+			let blocked_prompt = chunk
+				.prompt_feedback
+				.as_ref()
+				.filter(|pf| chunk.candidates.is_empty() && pf.block_reason.is_some());
+			// A failed reply has no finish reason here; `translate_stream` sends its error
+			let finish = match (cand, cand.and_then(|c| c.finish_reason.as_deref())) {
+				(Some(cand), Some(reason)) => {
+					let finish = finish_reason(reason, self.saw_function_call);
+					if finish == Some(completions::FinishReason::ContentFilter) {
+						delta.refusal = Some(reply_block_message(cand));
+					}
+					finish
 				},
-				None => None,
+				_ => blocked_prompt.map(|pf| {
+					delta.refusal = Some(prompt_block_message(pf));
+					completions::FinishReason::ContentFilter
+				}),
 			};
 
 			if !decoded.content.is_empty() {
@@ -1516,12 +2095,16 @@ pub mod to_completions {
 		let mut last_token_at: Option<Instant> = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
+		let end = Arc::new(parse::sse::StreamEnd::default());
+		let seen_end = end.clone();
+		let mut failed = false;
 		let body = parse::sse::json_transform_multi::<
 			vg::GenerateContentResponse,
-			completions::StreamResponse,
+			completions::StreamEvent,
 			_,
 		>(b, buffer_limit, move |ev| {
 			let chunk = match ev {
+				_ if failed => return vec![],
 				parse::sse::SseJsonEvent::Data(Ok(c)) => c,
 				parse::sse::SseJsonEvent::Data(Err(e)) => {
 					tracing::debug!("failed to parse gemini stream chunk: {e}");
@@ -1531,6 +2114,12 @@ pub mod to_completions {
 				| parse::sse::SseJsonEvent::Eof
 				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
+			if let Some(error) = chunk.rest.get("error") {
+				tracing::warn!(%error, "gemini stream failed");
+				failed = true;
+				seen_end.fail();
+				return vec![("", completions::StreamEvent::Error(stream_error(error)))];
+			}
 
 			let now = Instant::now();
 			if !saw_token {
@@ -1564,6 +2153,12 @@ pub mod to_completions {
 				});
 			}
 
+			if let Some((_, error)) = reply_failure(&chunk) {
+				failed = true;
+				seen_end.fail();
+				return vec![("", completions::StreamEvent::Error(stream_error(&error)))];
+			}
+
 			match state.translate(&chunk) {
 				// Gemini may omit modelVersion on a chunk
 				Some(mut sr) => {
@@ -1571,6 +2166,9 @@ pub mod to_completions {
 						sr.model = model.to_string();
 					}
 					if let Some(choice) = sr.choices.first() {
+						if choice.finish_reason.is_some() {
+							seen_end.finish();
+						}
 						if let Some(content) = &choice.delta.content
 							&& let Some(completion) = completion.as_mut()
 						{
@@ -1620,12 +2218,28 @@ pub mod to_completions {
 							});
 						}
 					}
-					vec![("", sr)]
+					vec![("", completions::StreamEvent::Chunk(sr))]
 				},
 				None => vec![],
 			}
 		});
-		parse::sse::append_done_on_success(body)
+		parse::sse::append_done_if_finished(body, end)
+	}
+
+	fn stream_error(error: &Value) -> completions::ChatCompletionErrorResponse {
+		match serde_json::from_value::<completions::GoogleError>(error.clone()) {
+			Ok(error) => crate::conversion::completions::chat_error_from_google(&error),
+			Err(_) => completions::ChatCompletionErrorResponse {
+				event_id: None,
+				error: completions::ChatCompletionError {
+					r#type: Some("api_error".to_string()),
+					message: error.to_string(),
+					param: None,
+					code: None,
+					event_id: None,
+				},
+			},
+		}
 	}
 
 	/// Maps Gemini service tiers and Vertex traffic types to OpenAI service tiers.

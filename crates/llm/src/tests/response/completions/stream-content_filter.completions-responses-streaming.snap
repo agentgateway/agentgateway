@@ -1,0 +1,30 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-content_filter.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":4,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}}
+
+event: event
+data: {"type":"response.incomplete","sequence_number":5,"response":{"created_at":123,"id":"resp_xxx","incomplete_details":{"reason":"content_filter"},"model":"gpt-5.6-luna","object":"response","output":[{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}],"status":"incomplete","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":0,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":10}}}
+
+
+
+{
+  "input_tokens": 10,
+  "output_tokens": 0,
+  "total_tokens": 10,
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    ""
+  ]
+}

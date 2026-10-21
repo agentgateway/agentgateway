@@ -1,0 +1,2 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"","thoughtSignature":"AY89a1/R6X3uXMmfRZuRjU2HSLegjI+U3dYIzzdzkkLUBajaZwnZ5tM3XZwT9BJEpbh9mwF3aEA1YbfW3duscUME2sRgViR6VPhFG6z7HnwqE5Ef/VT2MbuVcvjKcjGOVrl5jwOkloMMsAsHUI2fnX2RMwWms+o8Pw=="}]},"finishReason":"MAX_TOKENS"}],"usageMetadata":{"promptTokenCount":23,"totalTokenCount":28,"trafficType":"ON_DEMAND","promptTokensDetails":[{"modality":"TEXT","tokenCount":23}],"thoughtsTokenCount":5},"modelVersion":"gemini-3.8-flash","createTime":"2026-10-19T03:52:35.510756Z","responseId":"A5TVaqSWH4eDz_IPhe-X8Qk"}
+

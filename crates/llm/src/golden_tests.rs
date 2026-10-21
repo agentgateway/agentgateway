@@ -51,6 +51,8 @@ const SYSTEMONE: &str = "systemone";
 mod requests {
 	use super::*;
 
+	const GEMINI_MODEL: &str = "gemini-3.8-flash";
+
 	fn test_request<I>(
 		provider: &str,
 		relative_path: &str,
@@ -183,7 +185,14 @@ mod requests {
 		),
 		(
 			"reasoning",
-			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+			&[
+				ANTHROPIC,
+				COMPLETIONS,
+				BEDROCK,
+				VERTEX,
+				RESPONSES,
+				VERTEX_GEMINI,
+			],
 		),
 		(
 			"metadata",
@@ -205,7 +214,10 @@ mod requests {
 		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
-		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
+		(
+			"reasoning_replay",
+			&[BEDROCK, COMPLETIONS, RESPONSES, VERTEX_GEMINI],
+		),
 		(
 			"tool_history_without_tools",
 			&[BEDROCK, COMPLETIONS, RESPONSES],
@@ -222,7 +234,11 @@ mod requests {
 		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
 		("stop_sequences", &[COMPLETIONS, RESPONSES]),
 		("tool_result_empty", &[COMPLETIONS, RESPONSES]),
-		("tool_result_image", &[COMPLETIONS, RESPONSES]),
+		(
+			"tool_result_image",
+			&[COMPLETIONS, RESPONSES, VERTEX_GEMINI],
+		),
+		("tool_result_with_text", &[VERTEX_GEMINI]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("namespace-tools", &[BEDROCK, GEMINI]),
@@ -230,7 +246,7 @@ mod requests {
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
-		("codex-assistant-history", &[BEDROCK, GEMINI]),
+		("codex-assistant-history", &[BEDROCK, GEMINI, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
@@ -311,7 +327,7 @@ mod requests {
 						|i: &mut types::completions::Request| {
 							let mut resolved = i.clone();
 							resolved.model = Some("gemini-2.5-pro".into());
-							conversion::vertex_gemini::from_completions::translate(&resolved, true)
+							conversion::vertex_gemini::from_completions::translate(&resolved, true, None)
 						},
 					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
@@ -384,6 +400,12 @@ mod requests {
 					RESPONSES => test_request(RESPONSES, &path, |i| {
 						conversion::responses::from_messages::translate(i)
 					}),
+					VERTEX_GEMINI => {
+						test_request(VERTEX_GEMINI, &path, |i: &mut types::messages::Request| {
+							i.model = Some(GEMINI_MODEL.into());
+							conversion::vertex_gemini::from_messages::translate(i, true, None)
+						})
+					},
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
 			}
@@ -410,6 +432,12 @@ mod requests {
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
 					}),
+					VERTEX_GEMINI => {
+						test_request(VERTEX_GEMINI, &path, |i: &mut types::responses::Request| {
+							i.model = Some(GEMINI_MODEL.into());
+							conversion::vertex_gemini::from_responses::translate(i, true, None).map(|r| r.body)
+						})
+					},
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
 			}
@@ -872,9 +900,9 @@ mod responses {
 			filters => vec![
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
-				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
+				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"${1}_xxx""#),
 				(r#""id":"rs_[0-9a-f]{16}""#, r#""id":"rs_xxx""#),
-				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"${1}_xxx""#),
 				(r#""item_id":"rs_[0-9a-f]{16}""#, r#""item_id":"rs_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
@@ -898,6 +926,8 @@ mod responses {
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
 	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
+	const VERTEX_GEMINI_TO_MESSAGES: &str = "vertex-gemini-messages";
+	const VERTEX_GEMINI_TO_RESPONSES: &str = "vertex-gemini-responses";
 
 	const ALL_BEDROCK: &[&str] = &[
 		BEDROCK_TO_COMPLETIONS,
@@ -935,7 +965,22 @@ mod responses {
 		COMPLETIONS_TO_DETECT,
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		("content_filter", &[COMPLETIONS_TO_MESSAGES]),
+		(
+			"content_filter",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"content_filter_explained",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"refusal",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"refusal_after_text",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("basic", ALL_COMPLETIONS),
 		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
@@ -951,6 +996,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_length_no_message",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"gemini_malformed_function_call",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		(
 			"gemini_thinking",
 			&[
@@ -1011,7 +1064,15 @@ mod responses {
 		("response/vertex/rerank-no-details.json", VERTEX),
 		("response/cohere/rerank.json", COHERE),
 	];
-	const VERTEX_GEMINI_RESPONSES: &[&str] = &["basic", "tool", "reasoning", "blocked"];
+	const VERTEX_GEMINI_RESPONSES: &[&str] = &[
+		"basic",
+		"cached",
+		"tool",
+		"reasoning",
+		"blocked",
+		"max_tokens",
+		"malformed_function_call",
+	];
 	const DETECT_RESPONSES: &[(&str, &str)] = &[
 		("response/detect/bedrock-invoke.bin", BEDROCK_TO_DETECT),
 		(
@@ -1054,7 +1115,22 @@ mod responses {
 		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
+		(
+			"stream-content_filter",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-content_filter_explained",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-refusal",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-refusal_after_text",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("stream", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
@@ -1072,8 +1148,17 @@ mod responses {
 			"stream-vllm_reasoning",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
+		(
+			"stream-gemini_malformed_function_call",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 	];
-	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
+	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] =
+		&["stream_tool", "stream_max_tokens", "stream_blocked"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		(
 			"stream",
@@ -1302,6 +1387,12 @@ mod responses {
 			let path = format!("response/vertex-gemini/{name}.json");
 			test_response(VERTEX_GEMINI_TO_COMPLETIONS, &path, |i| {
 				conversion::vertex_gemini::to_completions::translate_response(&i)
+			});
+			test_response(VERTEX_GEMINI_TO_MESSAGES, &path, |i| {
+				conversion::vertex_gemini::from_messages::translate_response(&i)
+			});
+			test_response(VERTEX_GEMINI_TO_RESPONSES, &path, |i| {
+				conversion::vertex_gemini::from_responses::translate_response(&i, "input-model", None)
 			});
 			// The same responses served to a native Gemini client: body untouched, usage extracted.
 			test_response(GEMINI_NATIVE, &path, |i| {
@@ -1605,6 +1696,31 @@ mod responses {
 						strng::literal!("input-model"),
 						reporter,
 						LOG_CONTENT,
+					)
+				})
+			})
+			.await;
+			test_streaming(VERTEX_GEMINI_TO_MESSAGES, &path, |response, reporter| {
+				response.map(|body| {
+					conversion::vertex_gemini::from_messages::translate_stream(
+						body,
+						BUFFER_LIMIT,
+						strng::literal!("input-model"),
+						reporter,
+						LOG_CONTENT,
+					)
+				})
+			})
+			.await;
+			test_streaming(VERTEX_GEMINI_TO_RESPONSES, &path, |response, reporter| {
+				response.map(|body| {
+					conversion::vertex_gemini::from_responses::translate_stream(
+						body,
+						BUFFER_LIMIT,
+						strng::literal!("input-model"),
+						reporter,
+						LOG_CONTENT,
+						None,
 					)
 				})
 			})

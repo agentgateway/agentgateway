@@ -7,12 +7,12 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), true).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), true, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
 fn to_gemini_api(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), false).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), false, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -57,6 +57,105 @@ fn consecutive_same_role_messages_merge() {
 	assert_eq!(g["contents"][1]["role"], "model");
 }
 
+#[rstest::rstest]
+fn system_messages_keep_the_prefix_stable(#[values("system", "developer")] role: &str) {
+	let turn = |n: usize| {
+		let messages: Vec<Value> = [system("You are Claude Code."), user("read the files")]
+			.into_iter()
+			.chain((0..n).flat_map(|i| {
+				let id = format!("call_{i}");
+				[
+					calls(&[&id]),
+					result(&id),
+					json!({ "role": role, "content": format!("<total_tokens>{i}</total_tokens>") }),
+				]
+			}))
+			.collect();
+		to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }))
+	};
+	let (prev, next) = (turn(2), turn(3));
+	assert_eq!(prev["systemInstruction"], next["systemInstruction"]);
+	let (prev, next) = (
+		prev["contents"].as_array().unwrap(),
+		next["contents"].as_array().unwrap(),
+	);
+	assert_eq!(prev[..], next[..prev.len()]);
+}
+
+#[rstest::rstest]
+#[case::leading(vec![system("s"), user("hi")], &["system:text", "user:text"])]
+#[case::between_turns(
+	vec![user("hi"), system("s"), assistant("ok")],
+	&["user:text,reminder", "model:text"]
+)]
+#[case::after_single_call(
+	vec![user("hi"), calls(&["a"]), system("s"), result("a"), user("next")],
+	&["user:text", "model:call", "user:result", "user:reminder,text"]
+)]
+#[case::between_parallel_results(
+	vec![user("hi"), calls(&["a", "b"]), result("a"), system("s"), result("b")],
+	&["user:text", "model:call,call", "user:result,result", "user:reminder"]
+)]
+#[case::trailing(
+	vec![user("hi"), calls(&["a"]), result("a"), system("s")],
+	&["user:text", "model:call", "user:result", "user:reminder"]
+)]
+fn system_message_placement(#[case] messages: Vec<Value>, #[case] expected: &[&str]) {
+	let g = to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }));
+	let system = g
+		.get("systemInstruction")
+		.map(|_| "system:text".to_string());
+	let contents = g["contents"].as_array().unwrap().iter().map(|c| {
+		let parts: Vec<&str> = c["parts"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|p| match p {
+				_ if p.get("functionCall").is_some() => "call",
+				_ if p.get("functionResponse").is_some() => "result",
+				_ if p["text"]
+					.as_str()
+					.is_some_and(|t| t.starts_with("<system-reminder>")) =>
+				{
+					"reminder"
+				},
+				_ => "text",
+			})
+			.collect();
+		format!("{}:{}", c["role"].as_str().unwrap(), parts.join(","))
+	});
+	assert_eq!(
+		system.into_iter().chain(contents).collect::<Vec<_>>(),
+		expected
+	);
+}
+
+fn user(text: &str) -> Value {
+	json!({ "role": "user", "content": text })
+}
+
+fn assistant(text: &str) -> Value {
+	json!({ "role": "assistant", "content": text })
+}
+
+fn system(text: &str) -> Value {
+	json!({ "role": "system", "content": text })
+}
+
+fn calls(ids: &[&str]) -> Value {
+	let calls: Vec<Value> = ids
+		.iter()
+		.map(
+			|id| json!({ "id": id, "type": "function", "function": { "name": "Read", "arguments": "{}" } }),
+		)
+		.collect();
+	json!({ "role": "assistant", "tool_calls": calls })
+}
+
+fn result(id: &str) -> Value {
+	json!({ "role": "tool", "tool_call_id": id, "content": "file" })
+}
+
 #[test]
 fn empty_messages_get_synthetic_user_entry() {
 	let g = to_gemini(json!({ "model": "gemini-2.5-flash", "messages": [] }));
@@ -76,6 +175,7 @@ fn gs_url_without_extension_or_hint_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -140,6 +240,7 @@ fn file_gs_uri_without_extension_or_hint_is_rejected() {
 			"file_data": "gs://bucket/object"
 		}))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -166,6 +267,7 @@ fn data_url_without_media_type_or_filename_is_rejected() {
 			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
 		)),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -189,6 +291,7 @@ fn raw_base64_file_data_without_a_mime_source_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -213,6 +316,7 @@ fn file_id_is_rejected_rather_than_dropped() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_id": "file-abc123" }))),
 		true,
+		None,
 	);
 	let err = err.expect_err("opaque file_id must be rejected");
 	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
@@ -231,6 +335,7 @@ fn file_part_without_data_or_id_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "filename": "report.pdf" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -245,6 +350,7 @@ fn rejected_signed_url_omits_query_from_error() {
 			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
 		}))),
 		true,
+		None,
 	)
 	.expect_err("extension-less URL without a MIME hint must be rejected");
 	let msg = err.to_string();
@@ -276,6 +382,7 @@ fn http_image_url_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
@@ -786,6 +893,52 @@ fn tool_parameters_inline_defs_and_refs() {
 		"tool parameters must drop additionalProperties: {txt}"
 	);
 	assert_eq!(params["properties"]["events"]["items"]["type"], "object");
+}
+
+#[rstest::rstest]
+#[case::minimum(
+	json!({ "type": "integer", "exclusiveMinimum": 0 }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+#[case::maximum(
+	json!({ "type": "number", "exclusiveMaximum": 1 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 0.5 }),
+	json!({ "type": "number", "maximum": 0.5 })
+)]
+#[case::exclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 2 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 0, "minimum": 1 }),
+	json!({ "type": "integer", "minimum": 1 })
+)]
+#[case::exclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 5, "minimum": 2 }),
+	json!({ "type": "integer", "minimum": 5 })
+)]
+#[case::draft4_boolean(
+	json!({ "type": "integer", "minimum": 0, "exclusiveMinimum": true }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+fn exclusive_bounds_become_inclusive(#[case] property: Value, #[case] expected: Value) {
+	let params = tool_parameters(json!({ "type": "object", "properties": { "x": property } }));
+	assert_eq!(params["properties"]["x"], expected);
+}
+
+fn tool_parameters(parameters: Value) -> Value {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": { "name": "t", "parameters": parameters }
+		}]
+	}));
+	g["tools"][0]["functionDeclarations"][0]["parameters"].clone()
 }
 
 // Case 3: Pydantic wraps a described nested-model field as {allOf:[{$ref}], description} (or a
@@ -1484,43 +1637,332 @@ fn gemini_schema_non_string_const_typed_by_value_kind() {
 	);
 }
 
-#[test]
-fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
-	let g = to_gemini(json!({
-		"model": "gemini-3-pro",
+#[rstest::rstest]
+#[case::none_takes_the_lowest_level("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "none", Some(json!({ "thinkingLevel": "minimal", "includeThoughts": true })))]
+#[case::none_falls_back_to_low("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "none", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_none("gemini-3.1-pro-preview", false, None, "none", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::none_on_a_known_model_without_levels("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "none", None)]
+#[case::none_on_a_known_budget_only_model("gemini-2.5-flash", true, Some(("gcp.vertex_ai", &[][..])), "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_turns_flash_off("gemini-2.5-flash", true, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_turns_flash_lite_off("gemini-2.5-flash-lite", false, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_on_pro_is_its_minimum_budget("gemini-2.5-pro", false, None, "none", Some(json!({ "thinkingBudget": 128, "includeThoughts": true })))]
+#[case::none_on_a_dated_preview("gemini-2.5-flash-lite-preview-06-17", true, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_on_a_publisher_path("publishers/google/models/gemini-2.5-pro", true, None, "none", Some(json!({ "thinkingBudget": 128, "includeThoughts": true })))]
+#[case::none_on_an_image_model("gemini-2.5-flash-image", false, None, "none", None)]
+#[case::none_on_a_tts_model("gemini-2.5-flash-preview-tts", false, None, "none", None)]
+#[case::none_on_another_model("gemma-3-27b-it", false, None, "none", None)]
+#[case::minimal_kept("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "minimal", "includeThoughts": true })))]
+#[case::minimal_rounds_up("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::max_is_high("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "max", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_4_gets_a_level("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_api_provider("gemini-4-argon", false, Some(("gcp.gemini", &["low", "medium", "high"][..])), "low", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::unusable_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["max"][..])), "high", None)]
+#[case::known_without_levels_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "low", None)]
+#[case::known_without_levels_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "medium", None)]
+#[case::known_without_levels_high("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "high", None)]
+#[case::only_high_from_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "low", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::only_high_from_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "medium", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::mixed_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "max"][..])), "high", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::other_provider_ignored("gemini-3-flash-preview", true, Some(("gcp.gemini", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_minimal("gemini-3.8-flash", true, None, "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_gemini_4("gemini-4-argon", true, None, "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::budget_high("gemini-2.5-flash", true, None, "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+#[case::budget_xhigh("gemini-2.5-flash", true, None, "xhigh", Some(json!({ "thinkingBudget": 8192, "includeThoughts": true })))]
+#[case::budget_max("gemini-2.5-flash", true, None, "max", Some(json!({ "thinkingBudget": 16384, "includeThoughts": true })))]
+#[case::budget_only_catalog_entry("gemini-2.5-pro", true, Some(("gcp.vertex_ai", &[][..])), "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+fn thinking_config(
+	#[case] model: &str,
+	#[case] is_vertex: bool,
+	#[case] entry: Option<(&str, &[&str])>,
+	#[case] effort: &str,
+	#[case] expected: Option<Value>,
+) {
+	let catalog = entry.map(|(provider, efforts)| {
+		let efforts: Vec<_> = efforts
+			.iter()
+			.map(|e| serde_json::from_value(json!(e)).unwrap())
+			.collect();
+		crate::model_catalog::TestCatalog::new([]).with_efforts(provider, model, efforts)
+	});
+	let request = req(json!({
+		"model": model,
 		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "high"
+		"reasoning_effort": effort
 	}));
+	let bytes = from_completions::translate(
+		&request,
+		is_vertex,
+		catalog
+			.as_ref()
+			.map(|c| c as &dyn crate::model_catalog::ModelCatalogHandle),
+	)
+	.unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
 	assert_eq!(
-		g["generationConfig"]["thinkingConfig"]["thinkingLevel"],
-		"high"
+		g["generationConfig"].get("thinkingConfig").cloned(),
+		expected
 	);
 }
 
 #[test]
-fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
-	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
-		let g = to_gemini(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": "x" }],
-			"reasoning_effort": effort
-		}));
-		assert_eq!(
-			g["generationConfig"]["thinkingConfig"]["thinkingBudget"],
-			budget
-		);
-	}
+fn client_thinking_config_wins_over_the_catalog() {
+	let catalog = crate::model_catalog::TestCatalog::new([]).with_efforts(
+		"gcp.vertex_ai",
+		"gemini-3.8-flash",
+		vec![crate::types::completions::typed::ReasoningEffort::Low],
+	);
+	let request = req(json!({
+		"model": "gemini-3.8-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"reasoning_effort": "low",
+		"thinkingConfig": { "thinkingLevel": "high" }
+	}));
+	let bytes = from_completions::translate(&request, true, Some(&catalog)).unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(
+		g["generationConfig"]["thinkingConfig"],
+		json!({ "thinkingLevel": "high" })
+	);
+}
+
+// ---------- Request: Messages and Responses through Chat Completions ----------
+
+fn messages_tool_replay(call_id: &str) -> Vec<u8> {
+	let req: types::messages::Request = serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"max_tokens": 256,
+		"messages": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": call_id, "name": "get_weather", "input": { "location": "Columbus" } }
+			] },
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "call_1", "content": "15C" }
+			] }
+		],
+		"tools": [{ "name": "get_weather", "input_schema": { "type": "object" } }]
+	}))
+	.unwrap();
+	from_messages::translate(&req, true, None).unwrap()
+}
+
+fn responses_tool_replay(call_id: &str) -> Vec<u8> {
+	let req: types::responses::Request = serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"input": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "type": "function_call", "call_id": call_id, "name": "get_weather", "arguments": "{\"location\":\"Columbus\"}" },
+			{ "type": "function_call_output", "call_id": "call_1", "output": "15C" }
+		],
+		"tools": [{ "type": "function", "name": "get_weather", "parameters": { "type": "object" } }]
+	}))
+	.unwrap();
+	from_responses::translate(&req, true, None).unwrap().body
+}
+
+#[rstest::rstest]
+fn replayed_signature_survives_the_chain(
+	#[values(messages_tool_replay, responses_tool_replay)] replay: fn(&str) -> Vec<u8>,
+) {
+	let signature = "AY89".repeat(1024);
+	let bytes = replay(&format!("call_1__thought__{signature}"));
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(
+		g["contents"][1]["parts"][0],
+		json!({
+			"functionCall": { "name": "get_weather", "args": { "location": "Columbus" } },
+			"thoughtSignature": signature
+		})
+	);
+	assert_eq!(
+		g["contents"][2]["parts"][0]["functionResponse"]["name"],
+		"get_weather"
+	);
+	assert!(!String::from_utf8(bytes).unwrap().contains("__thought__"));
+}
+
+/// Explicit off uses the model's minimum; omitting it keeps the default
+#[rstest::rstest]
+#[case::flash("gemini-2.5-flash", true, Some(json!({ "thinkingBudget": 0 })))]
+#[case::gemini_3("gemini-3.8-flash", true, Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::omitted("gemini-2.5-flash", false, None)]
+fn an_explicit_off_reaches_gemini(
+	#[values("messages", "responses")] client: &str,
+	#[case] model: &str,
+	#[case] off: bool,
+	#[case] expected: Option<Value>,
+) {
+	let body = match client {
+		"messages" => {
+			let mut req = json!({
+				"model": model,
+				"max_tokens": 256,
+				"messages": [{ "role": "user", "content": "hi" }]
+			});
+			if off {
+				req["thinking"] = json!({ "type": "disabled" });
+			}
+			from_messages::translate(&serde_json::from_value(req).unwrap(), true, None).unwrap()
+		},
+		_ => {
+			let mut req = json!({ "model": model, "input": "hi" });
+			if off {
+				req["reasoning"] = json!({ "effort": "none" });
+			}
+			from_responses::translate(&serde_json::from_value(req).unwrap(), true, None)
+				.unwrap()
+				.body
+		},
+	};
+	let g: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		g["generationConfig"].get("thinkingConfig").cloned(),
+		expected
+	);
 }
 
 #[test]
-fn reasoning_effort_none_omits_thinking_config() {
-	let g = to_gemini(json!({
+fn messages_top_k_is_sent_and_the_budget_becomes_an_effort() {
+	let req: types::messages::Request = serde_json::from_value(json!({
 		"model": "gemini-2.5-flash",
-		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "none"
-	}));
-	let gc = g.get("generationConfig");
-	assert!(gc.is_none() || gc.unwrap().get("thinkingConfig").is_none());
+		"max_tokens": 8192,
+		"top_k": 40,
+		"thinking": { "type": "enabled", "budget_tokens": 3000 },
+		"messages": [{ "role": "user", "content": "hi" }]
+	}))
+	.unwrap();
+	let bytes = from_messages::translate(&req, true, None).unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(g["generationConfig"]["topK"], 40);
+	assert_eq!(
+		g["generationConfig"]["thinkingConfig"],
+		json!({ "thinkingBudget": 2048, "includeThoughts": true })
+	);
+}
+
+#[rstest::rstest]
+fn messages_rejects_tool_result_parts_it_would_drop(
+	#[values(
+		json!({ "type": "image", "source": { "type": "url", "url": "https://example.com/result" } }),
+		json!({ "type": "document", "source": { "type": "url", "url": "https://example.com/result" } }),
+		json!({
+			"type": "search_result",
+			"source": "https://example.com/result",
+			"title": "Result",
+			"content": [{ "type": "text", "text": "Paris is 21°C." }]
+		})
+	)]
+	part: Value,
+	#[values(false, true)] is_vertex: bool,
+) {
+	let mut input: Value = serde_json::from_str(include_str!(
+		"../tests/requests/messages/tool_result_image.json"
+	))
+	.unwrap();
+	input["model"] = json!("gemini-3.8-flash");
+	input["messages"][2]["content"][0]["content"] =
+		json!([{ "type": "text", "text": "Tool output:" }, part]);
+	let request = serde_json::from_value(input).unwrap();
+	let error = from_messages::translate(&request, is_vertex, None).unwrap_err();
+	assert!(matches!(error, AIError::UnsupportedConversion(_)));
+}
+
+#[rstest::rstest]
+fn responses_rejects_tool_output_parts_it_would_drop(
+	#[values(
+		json!({ "type": "input_image", "image_url": "https://example.com/result.png" }),
+		json!({ "type": "input_file", "file_id": "file_1" })
+	)]
+	part: Value,
+	#[values(false, true)] is_vertex: bool,
+) {
+	let error = from_responses::translate(&tool_output_request(part), is_vertex, None)
+		.err()
+		.expect("media output is rejected");
+	assert!(matches!(error, AIError::UnsupportedConversion(_)));
+}
+
+#[test]
+fn responses_keeps_text_tool_output() {
+	let request = tool_output_request(json!({ "type": "input_text", "text": "15C" }));
+	let g: Value = serde_json::from_slice(
+		&from_responses::translate(&request, true, None)
+			.unwrap()
+			.body,
+	)
+	.unwrap();
+	assert_eq!(
+		g["contents"][2]["parts"][0]["functionResponse"]["response"],
+		json!({ "content": "Tool output:\n15C" })
+	);
+}
+
+fn tool_output_request(part: Value) -> types::responses::Request {
+	serde_json::from_value(json!({
+		"model": "gemini-3.8-flash",
+		"input": [
+			{ "role": "user", "content": "Weather in Columbus?" },
+			{ "type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}" },
+			{ "type": "function_call_output", "call_id": "call_1", "output": [
+				{ "type": "input_text", "text": "Tool output:" },
+				part
+			] }
+		]
+	}))
+	.unwrap()
+}
+
+#[test]
+fn only_decoded_carriers_are_consumed() {
+	let mut content: Vec<types::messages::typed::ContentBlock> = serde_json::from_value(json!([
+		{ "type": "thinking", "thinking": "plan", "signature": "genuine" },
+		{ "type": "thinking", "thinking": "", "signature": ThoughtSignature::encode("call_1", "sig") },
+		{ "type": "tool_use", "id": "call_1", "name": "f", "input": {} },
+		{ "type": "tool_use", "id": "call_2", "name": "f", "input": {} }
+	]))
+	.unwrap();
+	from_messages::restore_signatures(&mut content);
+	assert_eq!(
+		serde_json::to_value(&content).unwrap(),
+		json!([
+			{ "type": "thinking", "thinking": "plan", "signature": "genuine" },
+			{ "type": "tool_use", "id": "call_1__thought__sig", "name": "f", "input": {} },
+			{ "type": "tool_use", "id": "call_2", "name": "f", "input": {} }
+		])
+	);
+}
+
+#[test]
+fn responses_carriers_apply_within_their_turn() {
+	let mut input: Vec<types::responses::typed::InputItem> = serde_json::from_value(json!([
+		{ "type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "genuine" },
+		{ "type": "reasoning", "id": "rs_2", "summary": [], "content": null,
+			"encrypted_content": ThoughtSignature::encode("call_1", "sig") },
+		{ "type": "function_call", "call_id": "call_1", "name": "f", "arguments": "{}" },
+		{ "type": "function_call_output", "call_id": "call_1", "output": "ok" },
+		{ "type": "function_call", "call_id": "call_1", "name": "f", "arguments": "{}" }
+	]))
+	.unwrap();
+	from_responses::restore_signatures(&mut input);
+	let input = serde_json::to_value(&input).unwrap();
+	let summary: Vec<_> = input
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|i| (&i["type"], i.get("call_id").or(i.get("encrypted_content"))))
+		.collect();
+	assert_eq!(
+		summary,
+		[
+			(&json!("reasoning"), Some(&json!("genuine"))),
+			(
+				&json!("function_call"),
+				Some(&json!("call_1__thought__sig"))
+			),
+			(&json!("function_call_output"), Some(&json!("call_1"))),
+			(&json!("function_call"), Some(&json!("call_1"))),
+		]
+	);
 }
 
 // ---------- Request: cachedContent / labels ----------
@@ -1589,34 +2031,118 @@ fn response_synthesizes_tool_call_id_when_absent() {
 
 // ---------- Response: finishReason table / usage ----------
 
-#[test]
-fn finish_reason_mapping_table() {
-	let cases = [
-		("MAX_TOKENS", "length"),
-		("SAFETY", "content_filter"),
-		("RECITATION", "content_filter"),
-		("LANGUAGE", "content_filter"),
-		("BLOCKLIST", "content_filter"),
-		("PROHIBITED_CONTENT", "content_filter"),
-		("SPII", "content_filter"),
-		("UNEXPECTED_TOOL_CALL", "content_filter"),
-		("TOO_MANY_TOOL_CALLS", "content_filter"),
-		("IMAGE_SAFETY", "content_filter"),
-		("MALFORMED_FUNCTION_CALL", "stop"),
-		("OTHER", "stop"),
-		("FINISH_REASON_UNSPECIFIED", "stop"),
-		("SOME_FUTURE_VALUE", "stop"),
-	];
-	for (gemini, openai) in cases {
-		let r = resp(json!({
-			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
-				"finishReason": gemini }]
-		}));
-		assert_eq!(
-			r["choices"][0]["finish_reason"], openai,
-			"{gemini} should map to {openai}"
-		);
+#[rstest::rstest]
+#[case("STOP", "stop")]
+#[case("MAX_TOKENS", "length")]
+#[case("CONTINUATION", "length")]
+#[case("SAFETY", "content_filter")]
+#[case("RECITATION", "content_filter")]
+#[case("LANGUAGE", "content_filter")]
+#[case("BLOCKLIST", "content_filter")]
+#[case("PROHIBITED_CONTENT", "content_filter")]
+#[case("SPII", "content_filter")]
+#[case("IMAGE_SAFETY", "content_filter")]
+#[case("IMAGE_PROHIBITED_CONTENT", "content_filter")]
+#[case("IMAGE_RECITATION", "content_filter")]
+#[case("MODEL_ARMOR", "content_filter")]
+#[case("ESCALATION", "content_filter")]
+fn finish_reasons(#[case] gemini: &str, #[case] openai: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini }]
+	});
+	assert_eq!(resp(reply.clone())["choices"][0]["finish_reason"], openai);
+	assert!(to_completions::failure(&gemini_response_bytes(reply)).is_none());
+}
+
+#[rstest::rstest]
+fn a_tool_call_reply_finishes_with_tool_calls(#[values(Some("STOP"), None)] reason: Option<&str>) {
+	let mut cand = json!({ "content": { "role": "model", "parts": [
+		{ "functionCall": { "name": "a", "args": {} } }
+	]}});
+	if let Some(reason) = reason {
+		cand["finishReason"] = reason.into();
 	}
+	let r = resp(json!({ "candidates": [cand] }));
+	assert_eq!(r["choices"][0]["finish_reason"], "tool_calls");
+}
+
+#[rstest::rstest]
+#[case("MALFORMED_FUNCTION_CALL", 502, "INTERNAL")]
+#[case("UNEXPECTED_TOOL_CALL", 502, "INTERNAL")]
+#[case("TOO_MANY_TOOL_CALLS", 502, "INTERNAL")]
+#[case("MALFORMED_RESPONSE", 502, "INTERNAL")]
+#[case("OTHER", 502, "INTERNAL")]
+#[case("NO_IMAGE", 502, "INTERNAL")]
+#[case("IMAGE_OTHER", 502, "INTERNAL")]
+#[case("FINISH_REASON_UNSPECIFIED", 502, "INTERNAL")]
+#[case("SOME_FUTURE_VALUE", 502, "INTERNAL")]
+#[case("MISSING_THOUGHT_SIGNATURE", 400, "INVALID_ARGUMENT")]
+#[case("PUP_LIMITED_DISABLED", 403, "PERMISSION_DENIED")]
+fn failed_replies_become_errors(#[case] gemini: &str, #[case] code: u16, #[case] status: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini, "finishMessage": "details" }]
+	});
+	let (got, body) = to_completions::failure(&gemini_response_bytes(reply)).expect("a failure");
+	assert_eq!(got.as_u16(), code);
+	assert_eq!(
+		serde_json::from_slice::<Value>(&body).unwrap(),
+		json!({ "error": {
+			"code": code,
+			"message": format!("Gemini stopped with {gemini}: details"),
+			"status": status,
+		}})
+	);
+}
+
+#[test]
+fn a_failure_without_a_finish_message_names_the_reason() {
+	let reply = json!({ "candidates": [{ "finishReason": "OTHER" }] });
+	let (_, body) = to_completions::failure(&gemini_response_bytes(reply)).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["error"]["message"], "Gemini stopped with OTHER");
+}
+
+#[test]
+fn a_blocked_reply_is_a_refusal() {
+	let reply = |extra: Value| {
+		let mut cand = json!({ "finishReason": "SAFETY" });
+		cand
+			.as_object_mut()
+			.unwrap()
+			.extend(extra.as_object().unwrap().clone());
+		resp(json!({ "candidates": [cand] }))["choices"][0]["message"]["refusal"].clone()
+	};
+	assert_eq!(
+		reply(json!({ "finishMessage": "Unsafe reply" })),
+		"Unsafe reply"
+	);
+	assert_eq!(reply(json!({})), "Gemini blocked the reply: SAFETY");
+	assert_eq!(
+		resp(
+			json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": "STOP" }] })
+		)["choices"][0]["message"]["refusal"],
+		Value::Null
+	);
+}
+
+#[test]
+fn a_blocked_prompt_is_a_refusal() {
+	let refusal = |feedback: Value| {
+		resp(json!({ "candidates": [], "promptFeedback": feedback }))["choices"][0]["message"]
+			["refusal"]
+			.clone()
+	};
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY", "blockReasonMessage": "Unsafe prompt" })),
+		"Unsafe prompt"
+	);
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY" })),
+		"Gemini blocked the prompt: SAFETY"
+	);
 }
 
 #[test]
@@ -1753,6 +2279,30 @@ fn streaming_tool_call_id_embeds_thought_signature() {
 }
 
 #[test]
+fn streaming_blocks_are_refusals() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "finishReason": "SAFETY", "finishMessage": "Unsafe reply" }] }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(c["choices"][0]["delta"]["refusal"], "Unsafe reply");
+
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "promptFeedback": { "blockReason": "PROHIBITED_CONTENT" } }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(
+		c["choices"][0]["delta"]["refusal"],
+		"Gemini blocked the prompt: PROHIBITED_CONTENT"
+	);
+}
+
+#[test]
 fn streaming_trailing_usage_chunk_has_empty_choices() {
 	let mut s = to_completions::StreamState::new();
 	// Consume the role on a content chunk, then a usage-only trailing chunk.
@@ -1835,7 +2385,7 @@ mod passthrough {
 		fn report_usage(&mut self) {}
 	}
 
-	fn captured_info() -> Arc<Mutex<LLMInfo>> {
+	pub(super) fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
 				input_tokens: None,
@@ -2027,5 +2577,480 @@ mod passthrough {
 			);
 			assert_eq!(captured.lock().unwrap().response.total_tokens, None);
 		}
+	}
+}
+
+// ---------- Messages and Responses streams through Chat Completions ----------
+
+mod chain {
+	use std::sync::{Arc, Mutex};
+	use std::time::Duration;
+
+	use agent_http::Body;
+	use http_body_util::BodyExt;
+
+	use super::passthrough::captured_info;
+	use super::*;
+	use crate::conversion::stream_tests::{End, drain, last_event, upstream};
+	use crate::{
+		LLMInfo, LLMResponse, LogContentFields, StreamingUsageGuard, StreamingUsageReporter,
+	};
+
+	type Chain = fn(Body, StreamingUsageGuard) -> Body;
+	type Reports = Arc<Mutex<Vec<LLMResponse>>>;
+
+	fn completions(b: Body, log: StreamingUsageGuard) -> Body {
+		to_completions::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		)
+	}
+
+	fn messages(b: Body, log: StreamingUsageGuard) -> Body {
+		from_messages::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		)
+	}
+
+	fn responses(b: Body, log: StreamingUsageGuard) -> Body {
+		from_responses::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+			None,
+		)
+	}
+
+	/// Settles once, on the first report or on drop, like the gateway's reporter
+	struct Recorder {
+		info: Arc<Mutex<LLMInfo>>,
+		reports: Reports,
+		reported: bool,
+	}
+
+	impl StreamingUsageReporter for Recorder {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.info.lock().unwrap())
+		}
+		fn report_usage(&mut self) {
+			if !std::mem::replace(&mut self.reported, true) {
+				let response = self.info.lock().unwrap().response.clone();
+				self.reports.lock().unwrap().push(response);
+			}
+		}
+	}
+
+	impl Drop for Recorder {
+		fn drop(&mut self) {
+			self.report_usage();
+		}
+	}
+
+	fn recorder() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>, Reports) {
+		let info = captured_info();
+		let reports = Arc::new(Mutex::new(Vec::new()));
+		let recorder = Recorder {
+			info: info.clone(),
+			reports: reports.clone(),
+			reported: false,
+		};
+		(StreamingUsageGuard::new(Box::new(recorder)), info, reports)
+	}
+
+	/// One upstream frame per SSE event, so the chain sees the chunks arrive separately
+	fn sse_frames(input: &'static str) -> Body {
+		let frames = input
+			.split_inclusive("\n\n")
+			.map(|event| Ok::<_, std::convert::Infallible>(bytes::Bytes::from(event)));
+		Body::from_stream(futures_util::stream::iter(frames.collect::<Vec<_>>()))
+	}
+
+	fn client_events(body: &[u8]) -> Vec<Value> {
+		std::str::from_utf8(body)
+			.unwrap()
+			.lines()
+			.filter_map(|l| l.strip_prefix("data: "))
+			.filter(|d| *d != "[DONE]")
+			.map(|d| serde_json::from_str(d).unwrap())
+			.collect()
+	}
+
+	fn gaps(r: &LLMResponse) -> u64 {
+		r.inter_chunk_latencies.iter().map(|(count, _)| count).sum()
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn reports_native_usage_once(#[values(messages, responses)] chain: Chain) {
+		let (log, info, reports) = recorder();
+		let input = include_str!("../tests/response/vertex-gemini/stream_tool.json");
+		let mut body = chain(sse_frames(input), log);
+		body.frame().await.expect("first frame").unwrap();
+		let first_token = info.lock().unwrap().response.first_token;
+		assert!(first_token.is_some());
+		body.collect().await.unwrap();
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(
+				r.input_tokens,
+				r.output_tokens,
+				r.total_tokens,
+				r.reasoning_tokens
+			),
+			(Some(39), Some(132), Some(171), Some(100))
+		);
+		assert_eq!(r.service_tier.as_deref(), Some("ON_DEMAND"));
+		assert_eq!(r.provider_model.as_deref(), Some("gemini-3.8-flash"));
+		assert_eq!(
+			r.first_token, first_token,
+			"later chunks keep the first-token time"
+		);
+		assert_eq!(gaps(r), 3, "one gap per native chunk after the first");
+	}
+
+	#[rstest::rstest]
+	#[case::messages(
+		messages,
+		"message_delta",
+		"/usage",
+		json!({ "input_tokens": 2, "output_tokens": 3, "cache_read_input_tokens": 3 })
+	)]
+	#[case::responses(
+		responses,
+		"response.completed",
+		"/response/usage",
+		json!({
+			"input_tokens": 5, "input_tokens_details": { "cached_tokens": 3 },
+			"output_tokens": 3, "output_tokens_details": { "reasoning_tokens": 1 },
+			"total_tokens": 8
+		})
+	)]
+	#[tokio::test]
+	async fn records_a_usage_only_final_chunk(
+		#[case] chain: Chain,
+		#[case] terminal: &str,
+		#[case] usage: &str,
+		#[case] expected: Value,
+	) {
+		let (log, _, reports) = recorder();
+		let input = concat!(
+			"data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"hi\"}]},\"finishReason\":\"STOP\"}]}\n\n",
+			"data: {\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":2,\"totalTokenCount\":8,",
+			"\"thoughtsTokenCount\":1,\"cachedContentTokenCount\":3}}\n\n",
+		);
+		let out = chain(Body::from(input), log)
+			.collect()
+			.await
+			.unwrap()
+			.to_bytes();
+
+		let events = client_events(&out);
+		let terminals: Vec<_> = events.iter().filter(|e| e["type"] == terminal).collect();
+		let [end] = terminals.as_slice() else {
+			panic!("want one {terminal}, got {}", terminals.len())
+		};
+		assert_eq!(end.pointer(usage), Some(&expected));
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(
+				r.input_tokens,
+				r.output_tokens,
+				r.cached_input_tokens,
+				r.reasoning_tokens,
+				r.total_tokens
+			),
+			(Some(5), Some(3), Some(3), Some(1), Some(8))
+		);
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn reports_usage_seen_before_a_disconnect(#[values(messages, responses)] chain: Chain) {
+		let (log, _, reports) = recorder();
+		let first = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
+		let upstream = futures_util::StreamExt::chain(
+			futures_util::stream::iter([Ok::<_, std::convert::Infallible>(bytes::Bytes::from(first))]),
+			futures_util::stream::pending(),
+		);
+		let mut body = chain(Body::from_stream(upstream), log);
+		tokio::time::timeout(Duration::from_secs(5), body.frame())
+			.await
+			.expect("first frame in time")
+			.expect("stream still open")
+			.unwrap();
+		assert!(reports.lock().unwrap().is_empty());
+		drop(body);
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(r.input_tokens, r.output_tokens, r.total_tokens),
+			(Some(7), Some(1), Some(8))
+		);
+		assert!(r.first_token.is_some());
+	}
+
+	/// Codex replays the final event's output, so the carrier has to survive there on a cut-off
+	/// reply, and come back to Gemini on the signed call only
+	#[tokio::test]
+	async fn responses_replay_of_a_cut_off_output_restores_the_signature() {
+		let request: Value = serde_json::from_str(include_str!(
+			"../tests/requests/responses/namespace-tools.json"
+		))
+		.unwrap();
+		let translated = from_responses::translate(
+			&serde_json::from_value(request.clone()).unwrap(),
+			true,
+			None,
+		)
+		.unwrap();
+		let native_request: Value = serde_json::from_slice(&translated.body).unwrap();
+		let aliases: Vec<String> = native_request["tools"][0]["functionDeclarations"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.take(2)
+			.map(|d| d["name"].as_str().unwrap().to_string())
+			.collect();
+
+		let signature = "AY89".repeat(256);
+		let chunk = json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "id": "call_a", "name": aliases[0], "args": { "code": "1 + 1" } },
+					"thoughtSignature": signature },
+				{ "functionCall": { "id": "call_b", "name": aliases[1], "args": { "code": "2 + 2" } } }
+			]}, "finishReason": "MAX_TOKENS" }],
+			"usageMetadata": { "promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7 },
+			"modelVersion": "gemini-3.8-flash"
+		});
+		let body = from_responses::translate_stream(
+			Body::from(format!("data: {chunk}\n\n")),
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			Some(Arc::new(translated.namespaces)),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		assert!(!std::str::from_utf8(&body).unwrap().contains("__thought__"));
+
+		let events = client_events(&body);
+		let last = events.last().unwrap();
+		assert_eq!(last["type"], "response.incomplete");
+		let output = last["response"]["output"].as_array().unwrap();
+		let items: Vec<_> = output
+			.iter()
+			.map(|i| (i["type"].as_str().unwrap(), i["status"].as_str().unwrap()))
+			.collect();
+		assert_eq!(
+			items,
+			[
+				("message", "incomplete"),
+				("reasoning", "completed"),
+				("function_call", "incomplete"),
+				("function_call", "incomplete")
+			]
+		);
+		let added = events
+			.iter()
+			.find(|e| e["type"] == "response.output_item.added" && e["item"]["type"] == "reasoning")
+			.unwrap();
+		assert_eq!(added["output_index"], 1);
+		assert_eq!(added["item"]["id"], output[1]["id"]);
+
+		let mut replay = request;
+		let mut input = vec![json!({ "role": "user", "content": "Run JavaScript in both kernels." })];
+		input.extend(output.iter().cloned());
+		input[2]["content"] = Value::Null;
+		input.extend(output.iter().filter(|i| i["type"] == "function_call").map(
+			|call| json!({ "type": "function_call_output", "call_id": call["call_id"], "output": "ok" }),
+		));
+		replay["input"] = Value::Array(input);
+		let replayed =
+			from_responses::translate(&serde_json::from_value(replay).unwrap(), true, None).unwrap();
+		let native_replay: Value = serde_json::from_slice(&replayed.body).unwrap();
+		let calls: Vec<_> = native_replay["contents"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.flat_map(|c| c["parts"].as_array().unwrap())
+			.filter(|p| p.get("functionCall").is_some())
+			.map(|p| (&p["functionCall"]["name"], p.get("thoughtSignature")))
+			.collect();
+		assert_eq!(
+			calls,
+			[
+				(&json!(aliases[0]), Some(&json!(signature))),
+				(&json!(aliases[1]), None)
+			]
+		);
+		assert!(
+			!String::from_utf8(replayed.body)
+				.unwrap()
+				.contains("__thought__")
+		);
+	}
+
+	const FIRST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
+	const ERROR: &str = "data: {\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}\n\n";
+	const LAST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	const SUCCESS_ENDINGS: [&str; 4] = [
+		"[DONE]",
+		"message_stop",
+		"response.completed",
+		"\"finish_reason\":\"stop\"",
+	];
+
+	/// Gemini's error ends the body after its error event, however upstream then ends. A stream cut
+	/// off without one ends with a body error. Usage seen before the failure is reported once
+	#[rstest::rstest]
+	#[case::error_event(&[FIRST, ERROR, LAST], End::Close)]
+	#[case::error_on_an_open_stream(&[FIRST, ERROR], End::Hang)]
+	#[case::error_then_connection_drop(&[FIRST, ERROR], End::Reset)]
+	#[case::no_finish_reason(&[FIRST], End::Close)]
+	#[case::connection_drop(&[FIRST], End::Reset)]
+	#[tokio::test]
+	async fn a_failed_stream_never_ends_as_a_success(
+		#[values(completions, messages, responses)] chain: Chain,
+		#[case] frames: &[&'static str],
+		#[case] end: End,
+	) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = tokio::time::timeout(
+			Duration::from_secs(5),
+			drain(chain(upstream(frames, end), log)),
+		)
+		.await
+		.expect("the stream should end once Gemini reports an error");
+		let reported = frames.contains(&ERROR);
+		assert_eq!(failed, !reported, "body error:\n{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(
+			!text.contains('!'),
+			"a reply after the error reached the client:\n{text}"
+		);
+		if reported {
+			assert!(
+				last_event(&text).contains("The model is overloaded."),
+				"Gemini's error should be the last event:\n{text}"
+			);
+		}
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(r.input_tokens, r.output_tokens, r.total_tokens),
+			(Some(7), Some(1), Some(8))
+		);
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_geminis_error() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, ERROR], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"The model is overloaded.","code":"UNAVAILABLE"}}"#
+		);
+	}
+
+	const MALFORMED: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"MALFORMED_FUNCTION_CALL\",\"finishMessage\":\"Bad call\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	/// The failed reply's own text is dropped, and its usage still counts
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn a_failed_reply_ends_with_an_error(
+		#[values(completions, messages, responses)] chain: Chain,
+	) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = drain(chain(upstream(&[FIRST, MALFORMED], End::Close), log)).await;
+		assert!(!failed, "{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(!text.contains('!'), "{text}");
+		assert!(
+			last_event(&text).contains("Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call"),
+			"{text}"
+		);
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(r.total_tokens, Some(9));
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_the_failed_reason() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, MALFORMED], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call","code":"INTERNAL"}}"#
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::unavailable(ERROR, "overloaded_error", "The model is overloaded.")]
+	#[case::permission_denied(
+		"data: {\"error\":{\"code\":403,\"message\":\"Permission denied.\",\"status\":\"PERMISSION_DENIED\"}}\n\n",
+		"permission_error",
+		"Permission denied."
+	)]
+	#[case::unauthenticated(
+		"data: {\"error\":{\"code\":401,\"message\":\"API key not valid.\",\"status\":\"UNAUTHENTICATED\"}}\n\n",
+		"authentication_error",
+		"API key not valid."
+	)]
+	#[tokio::test]
+	async fn messages_clients_get_geminis_error(
+		#[case] error: &'static str,
+		#[case] r#type: &str,
+		#[case] message: &str,
+	) {
+		let (text, _) = drain(messages(
+			upstream(&[FIRST, error], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			format!(
+				"event: error\ndata: {{\"type\":\"error\",\"error\":{{\"type\":\"{type}\",\"message\":\"{message}\"}}}}"
+			)
+		);
 	}
 }

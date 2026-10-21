@@ -1,0 +1,50 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/max_tokens.json
+info:
+  candidates:
+    - finishReason: MAX_TOKENS
+  usageMetadata:
+    promptTokenCount: 23
+    totalTokenCount: 28
+    trafficType: ON_DEMAND
+    promptTokensDetails:
+      - modality: TEXT
+        tokenCount: 23
+    thoughtsTokenCount: 5
+  modelVersion: gemini-3.8-flash
+  createTime: "2026-10-17T05:13:45.056791Z"
+  responseId: CQTTate7A9jZxs0P8f-z-AQ
+---
+{
+  "response": {
+    "candidates": [
+      {
+        "finishReason": "MAX_TOKENS"
+      }
+    ],
+    "usageMetadata": {
+      "trafficType": "ON_DEMAND",
+      "promptTokenCount": 23,
+      "totalTokenCount": 28,
+      "thoughtsTokenCount": 5,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 23
+        }
+      ]
+    },
+    "responseId": "CQTTate7A9jZxs0P8f-z-AQ",
+    "modelVersion": "gemini-3.8-flash",
+    "createTime": "2026-10-17T05:13:45.056791Z"
+  },
+  "parsed": {
+    "input_tokens": 23,
+    "output_tokens": 5,
+    "total_tokens": 28,
+    "reasoning_tokens": 5,
+    "service_tier": "ON_DEMAND",
+    "provider_model": "gemini-3.8-flash"
+  }
+}

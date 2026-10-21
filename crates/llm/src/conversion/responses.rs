@@ -1202,6 +1202,7 @@ pub mod from_messages {
 					delta: messages::MessageDelta {
 						stop_reason: Some(stop_reason),
 						stop_sequence: None,
+						stop_details: None,
 					},
 					usage: message_usage,
 				},

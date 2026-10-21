@@ -22,7 +22,8 @@ info:
       {
         "message": {
           "content": "",
-          "role": "assistant"
+          "role": "assistant",
+          "refusal": "Gemini blocked the prompt: SAFETY"
         },
         "index": 0,
         "finish_reason": "content_filter"

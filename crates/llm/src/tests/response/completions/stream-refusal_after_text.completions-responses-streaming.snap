@@ -1,0 +1,54 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-refusal_after_text.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"msg_xxx","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"msg_xxx","output_index":0,"content_index":0,"delta":"Here is the summary."}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":6,"item_id":"msg_xxx","output_index":0,"content_index":1,"part":{"type":"refusal","refusal":""}}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":7,"item_id":"msg_xxx","output_index":0,"content_index":1,"delta":"I can't include the second part."}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":8,"item_id":"msg_xxx","output_index":0,"content_index":0,"text":"Here is the summary.","logprobs":null}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":9,"item_id":"msg_xxx","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is the summary."}}
+
+event: event
+data: {"type":"response.refusal.done","sequence_number":10,"item_id":"msg_xxx","output_index":0,"content_index":1,"refusal":"I can't include the second part."}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":11,"item_id":"msg_xxx","output_index":0,"content_index":1,"part":{"type":"refusal","refusal":"I can't include the second part."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":12,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is the summary."},{"type":"refusal","refusal":"I can't include the second part."}],"id":"msg_xxx","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":13,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is the summary."},{"type":"refusal","refusal":"I can't include the second part."}],"id":"msg_xxx","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":13,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":25}}}
+
+
+
+{
+  "input_tokens": 12,
+  "output_tokens": 13,
+  "total_tokens": 25,
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    "Here is the summary.I can't include the second part."
+  ]
+}

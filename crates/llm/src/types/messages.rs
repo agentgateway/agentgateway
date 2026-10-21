@@ -1265,6 +1265,8 @@ pub mod typed {
 		/// Which custom stop sequence was generated, if any.
 		/// This value will be a non-null string if one of your custom stop sequences was generated.
 		pub stop_sequence: Option<String>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub stop_details: Option<StopDetails>,
 		/// Billing and rate-limit usage.
 		/// Anthropic's API bills and rate-limits by token counts, as tokens represent the underlying
 		/// cost to our systems.
@@ -1295,6 +1297,7 @@ pub mod typed {
 				content: Vec::new(),
 				stop_reason: None,
 				stop_sequence: None,
+				stop_details: None,
 				usage: Usage::default(),
 				input_audio_tokens: None,
 				output_audio_tokens: None,
@@ -1450,6 +1453,28 @@ pub mod typed {
 		/// Which custom stop sequence was generated, if any.
 		/// This value will be a non-null string if one of your custom stop sequences was generated.
 		pub stop_sequence: Option<String>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub stop_details: Option<StopDetails>,
+	}
+
+	/// Why a reply stopped with `refusal`; null for every other stop reason
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	pub struct StopDetails {
+		pub r#type: String,
+		#[serde(default)]
+		pub category: Option<String>,
+		#[serde(default)]
+		pub explanation: Option<String>,
+	}
+
+	impl StopDetails {
+		pub fn refusal(explanation: Option<String>) -> Self {
+			Self {
+				r#type: "refusal".to_string(),
+				category: None,
+				explanation,
+			}
+		}
 	}
 
 	/// Response body for the Messages API.

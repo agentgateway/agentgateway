@@ -1,0 +1,48 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/malformed_function_call.json
+info:
+  candidates:
+    - finishReason: MALFORMED_FUNCTION_CALL
+      finishMessage: "Malformed function call: call:get_weather{location:Columbus"
+  usageMetadata:
+    promptTokenCount: 39
+    totalTokenCount: 120
+    trafficType: ON_DEMAND
+    promptTokensDetails:
+      - modality: TEXT
+        tokenCount: 39
+    thoughtsTokenCount: 81
+  modelVersion: gemini-3.8-flash
+  createTime: "2026-10-17T05:20:00.000000Z"
+  responseId: malformed-function-call
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": ""
+      }
+    ],
+    "model": "gemini-3.8-flash",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 81,
+      "service_tier": "default"
+    }
+  },
+  "parsed": {
+    "input_tokens": 39,
+    "output_tokens": 81,
+    "total_tokens": 120,
+    "reasoning_tokens": 81,
+    "service_tier": "ON_DEMAND",
+    "provider_model": "gemini-3.8-flash"
+  }
+}

@@ -52,19 +52,25 @@ pub(crate) fn parse_chat_completion_error(
 /// Translate a Google error response into an OpenAI Chat Completions error response.
 pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
 	let res = parse_google_error(bytes)?;
-	let m = types::completions::typed::ChatCompletionErrorResponse {
-		event_id: None,
-		error: types::completions::typed::ChatCompletionError {
-			r#type: Some(google_error_type(&res.error).to_string()),
-			message: res.error.message.clone(),
-			param: None,
-			code: res.error.status.clone().map(serde_json::Value::String),
-			event_id: None,
-		},
-	};
+	let m = chat_error_from_google(&res.error);
 	Ok(Bytes::from(
 		serde_json::to_vec(&m).map_err(crate::AIError::ResponseMarshal)?,
 	))
+}
+
+pub(crate) fn chat_error_from_google(
+	error: &types::completions::typed::GoogleError,
+) -> types::completions::typed::ChatCompletionErrorResponse {
+	types::completions::typed::ChatCompletionErrorResponse {
+		event_id: None,
+		error: types::completions::typed::ChatCompletionError {
+			r#type: Some(google_error_type(error).to_string()),
+			message: error.message.clone(),
+			param: None,
+			code: error.status.clone().map(serde_json::Value::String),
+			event_id: None,
+		},
+	}
 }
 
 pub(crate) fn parse_data_url(url: &str) -> Option<(&str, &str)> {
@@ -182,6 +188,14 @@ pub mod from_messages {
 		if let Some(text) = choice.message.content {
 			content.push(messages::ContentBlock::text(text));
 		}
+		let (refusal, explanation) = split_refusal(choice.message.refusal, choice.finish_reason);
+		if let Some(text) = &refusal {
+			content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: text.clone(),
+				citations: None,
+				cache_control: None,
+			}));
+		}
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
 				completions::MessageToolCalls::Function(f) => {
@@ -214,6 +228,9 @@ pub mod from_messages {
 		if stop_sequence.is_some() {
 			stop_reason = messages::StopReason::StopSequence;
 		}
+		if refusal.is_some() {
+			stop_reason = messages::StopReason::Refusal;
+		}
 
 		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
 			u.prompt_tokens_details
@@ -233,6 +250,8 @@ pub mod from_messages {
 			content,
 			stop_reason: Some(stop_reason),
 			stop_sequence,
+			stop_details: (stop_reason == messages::StopReason::Refusal)
+				.then(|| messages::StopDetails::refusal(explanation)),
 			usage: messages::Usage {
 				input_tokens: usage
 					.as_ref()
@@ -271,9 +290,22 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
 	) -> Body {
+		translate_stream_with_tool_id(b, buffer_limit, log, log_content, |id| (id, None))
+	}
+
+	/// `tool_id` maps an upstream tool-call id to the client's id and an optional signature, sent
+	/// in a thinking block just before the tool block
+	pub fn translate_stream_with_tool_id(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+		tool_id: fn(String) -> (String, Option<String>),
+	) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
+			signature: Option<String>,
 			name: Option<String>,
 			pending_json: String,
 			arguments: String,
@@ -294,6 +326,9 @@ pub mod from_messages {
 			pending_tool_calls: HashMap<u32, PendingToolCall>,
 			pending_stop_reason: Option<messages::StopReason>,
 			pending_stop_sequence: Option<String>,
+			pending_stop_details: Option<messages::StopDetails>,
+			refusal_sent_as_text: bool,
+			pending_refusal: String,
 			pending_usage: Option<completions::Usage>,
 		}
 
@@ -415,17 +450,24 @@ pub mod from_messages {
 			tool_index: u32,
 			id: String,
 			name: String,
+			signature: Option<String>,
 		) -> usize {
 			close_text_block(state, events);
 			close_thinking_block(state, events);
-			let index = *state
-				.tool_block_indices
-				.entry(tool_index)
-				.or_insert_with(|| {
-					let idx = state.next_block_index;
+			let index = match state.tool_block_indices.get(&tool_index) {
+				Some(index) => *index,
+				None => {
+					if let Some(signature) = signature {
+						open_thinking_block(state, events);
+						state.thinking_signature = Some(signature);
+						close_thinking_block(state, events);
+					}
+					let index = state.next_block_index;
 					state.next_block_index += 1;
-					idx
-				});
+					state.tool_block_indices.insert(tool_index, index);
+					index
+				},
+			};
 
 			// Keep each tool-use block open across interleaved deltas to avoid
 			// emitting duplicate start events for the same block index.
@@ -523,6 +565,7 @@ pub mod from_messages {
 					delta: messages::MessageDelta {
 						stop_reason: Some(stop_reason),
 						stop_sequence: state.pending_stop_sequence.take(),
+						stop_details: state.pending_stop_details.take(),
 					},
 					usage: messages::MessageDeltaUsage {
 						input_tokens: Some(input_tokens),
@@ -566,17 +609,49 @@ pub mod from_messages {
 			}
 		}
 
+		fn flush_refusal_as_text(
+			state: &mut StreamState,
+			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+			log: &StreamingUsageGuard,
+		) {
+			if state.pending_refusal.is_empty() {
+				return;
+			}
+			if !std::mem::replace(&mut state.refusal_sent_as_text, true) {
+				close_text_block(state, events);
+			}
+			let index = open_text_block(state, events);
+			maybe_set_first_token(state, log);
+			push_event(
+				events,
+				messages::MessagesStreamEvent::ContentBlockDelta {
+					index,
+					delta: messages::ContentBlockDelta::TextDelta {
+						text: std::mem::take(&mut state.pending_refusal),
+					},
+				},
+			);
+		}
+
 		let mut state = StreamState::default();
 
-		crate::parse::sse::json_transform_multi::<
-			completions::StreamResponse,
+		let end = std::sync::Arc::new(crate::parse::sse::StreamEnd::default());
+		let seen_end = end.clone();
+		let mut failed = false;
+		let body = crate::parse::sse::json_transform_multi::<
+			completions::StreamEvent,
 			messages::MessagesStreamEvent,
 			_,
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
-				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
+				_ if failed => return events,
+				SseJsonEvent::Eof | SseJsonEvent::Error => {
+					flush_refusal_as_text(&mut state, &mut events, &log);
+					return events;
+				},
 				SseJsonEvent::Done => {
+					flush_refusal_as_text(&mut state, &mut events, &log);
 					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;
 				},
@@ -587,7 +662,34 @@ pub mod from_messages {
 					);
 					return events;
 				},
-				SseJsonEvent::Data(Ok(f)) => {
+				SseJsonEvent::Data(Ok(completions::StreamEvent::Error(e))) => {
+					failed = true;
+					seen_end.fail();
+					if !state.sent_message_stop {
+						state.sent_message_stop = true;
+						flush_refusal_as_text(&mut state, &mut events, &log);
+						push_event(
+							&mut events,
+							messages::MessagesStreamEvent::Error {
+								error: messages::MessagesError {
+									// In the native Gemini chain, `code` carries Google's status.
+									r#type: e
+										.error
+										.code
+										.as_ref()
+										.and_then(serde_json::Value::as_str)
+										.and_then(crate::conversion::messages::messages_error_type_for_google_status)
+										.map(str::to_string)
+										.or(e.error.r#type)
+										.unwrap_or_else(|| "api_error".to_string()),
+									message: e.error.message,
+								},
+							},
+						);
+					}
+					return events;
+				},
+				SseJsonEvent::Data(Ok(completions::StreamEvent::Chunk(f))) => {
 					if !state.sent_message_start {
 						state.sent_message_start = true;
 						push_event(
@@ -644,23 +746,32 @@ pub mod from_messages {
 								},
 							);
 						}
+						if let Some(refusal) = &choice.delta.refusal {
+							state.pending_refusal.push_str(refusal);
+							if state.refusal_sent_as_text || state.pending_refusal.len() > buffer_limit {
+								flush_refusal_as_text(&mut state, &mut events, &log);
+							}
+						}
 
 						if let Some(tool_calls) = &choice.delta.tool_calls {
 							for tool_call in tool_calls {
 								let tool_index = tool_call.index;
-								let (should_open, id, name, pending_json) = {
+								let (should_open, id, signature, name, pending_json) = {
 									let entry =
 										state
 											.pending_tool_calls
 											.entry(tool_index)
 											.or_insert(PendingToolCall {
 												id: None,
+												signature: None,
 												name: None,
 												pending_json: String::new(),
 												arguments: String::new(),
 											});
 									if let Some(id) = &tool_call.id {
-										entry.id = Some(id.clone());
+										let (id, signature) = tool_id(id.clone());
+										entry.id = Some(id);
+										entry.signature = signature;
 									}
 									if let Some(function) = &tool_call.function {
 										if let Some(name) = &function.name {
@@ -676,19 +787,25 @@ pub mod from_messages {
 
 									let should_open = entry.name.is_some();
 									let id = entry.id.clone();
+									let signature = if should_open {
+										entry.signature.take()
+									} else {
+										None
+									};
 									let name = entry.name.clone();
 									let pending_json = if should_open && !entry.pending_json.is_empty() {
 										Some(std::mem::take(&mut entry.pending_json))
 									} else {
 										None
 									};
-									(should_open, id, name, pending_json)
+									(should_open, id, signature, name, pending_json)
 								};
 
 								if should_open {
 									let id = id.unwrap_or_else(|| format!("tool_call_{tool_index}"));
 									let name = name.unwrap_or_default();
-									let index = open_tool_block(&mut state, &mut events, tool_index, id, name);
+									let index =
+										open_tool_block(&mut state, &mut events, tool_index, id, name, signature);
 
 									if let Some(pending_json) = pending_json {
 										maybe_set_first_token(&mut state, &log);
@@ -720,6 +837,18 @@ pub mod from_messages {
 								stop_reason = messages::StopReason::StopSequence;
 								state.pending_stop_sequence = Some(seq);
 							}
+							let explanation = if *finish_reason == completions::FinishReason::ContentFilter {
+								Some(std::mem::take(&mut state.pending_refusal)).filter(|r| !r.is_empty())
+							} else {
+								flush_refusal_as_text(&mut state, &mut events, &log);
+								None
+							};
+							if state.refusal_sent_as_text {
+								stop_reason = messages::StopReason::Refusal;
+							}
+							if stop_reason == messages::StopReason::Refusal {
+								state.pending_stop_details = Some(messages::StopDetails::refusal(explanation));
+							}
 							state.pending_stop_reason = Some(stop_reason);
 						}
 					}
@@ -730,7 +859,22 @@ pub mod from_messages {
 				},
 			}
 			events
-		})
+		});
+		crate::parse::sse::end_after_error(body, end)
+	}
+
+	/// A refusal is the model's own reply, so Messages shows it as text. With `content_filter` it
+	/// instead explains why a filter blocked the reply, which Messages puts in `stop_details`
+	fn split_refusal(
+		refusal: Option<String>,
+		finish: Option<completions::FinishReason>,
+	) -> (Option<String>, Option<String>) {
+		let refusal = refusal.filter(|r| !r.is_empty());
+		if finish == Some(completions::FinishReason::ContentFilter) {
+			(None, refusal)
+		} else {
+			(refusal, None)
+		}
 	}
 
 	fn normalized_error_type(status: ::http::StatusCode, error_type: Option<&str>) -> &str {
@@ -805,7 +949,7 @@ pub mod from_messages {
 	}
 
 	#[allow(deprecated)]
-	fn translate_internal(req: messages::Request) -> completions::Request {
+	pub fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
 			messages,
 			system,

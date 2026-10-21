@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_max_tokens.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":4,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}}
+
+event: event
+data: {"type":"response.incomplete","sequence_number":5,"response":{"created_at":123,"id":"resp_xxx","incomplete_details":{"reason":"max_output_tokens"},"model":"gemini-3.8-flash","object":"response","output":[{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}],"status":"incomplete","usage":{"input_tokens":23,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":5},"total_tokens":28}}}
+
+
+
+{
+  "input_tokens": 23,
+  "output_tokens": 5,
+  "total_tokens": 28,
+  "reasoning_tokens": 5,
+  "service_tier": "ON_DEMAND",
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ]
+}

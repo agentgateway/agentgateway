@@ -6,6 +6,8 @@ use url::Position;
 
 use crate::common::prelude::*;
 
+mod gemini_native;
+
 macro_rules! llm_body {
 	($path:literal) => {
 		include_bytes!(concat!("../../../llm/src/tests/", $path))

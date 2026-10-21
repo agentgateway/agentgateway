@@ -1,0 +1,57 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-refusal.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.reasoning_text.delta","sequence_number":4,"item_id":"rs_xxx","output_index":0,"content_index":0,"delta":"The user asks for something I won't do."}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":5,"output_index":1,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":6,"item_id":"msg_xxx","output_index":1,"content_index":0,"part":{"type":"refusal","refusal":""}}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":7,"item_id":"msg_xxx","output_index":1,"content_index":0,"delta":"I'm sorry, "}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":8,"item_id":"msg_xxx","output_index":1,"content_index":0,"delta":"I can't help with that."}
+
+event: event
+data: {"type":"response.reasoning_text.done","sequence_number":9,"item_id":"rs_xxx","output_index":0,"content_index":0,"text":"The user asks for something I won't do."}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"The user asks for something I won't do."}],"status":"completed"}}
+
+event: event
+data: {"type":"response.refusal.done","sequence_number":11,"item_id":"msg_xxx","output_index":1,"content_index":0,"refusal":"I'm sorry, I can't help with that."}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":12,"item_id":"msg_xxx","output_index":1,"content_index":0,"part":{"type":"refusal","refusal":"I'm sorry, I can't help with that."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":1,"item":{"type":"message","content":[{"type":"refusal","refusal":"I'm sorry, I can't help with that."}],"id":"msg_xxx","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":14,"response":{"created_at":123,"id":"resp_xxx","model":"gpt-5.6-luna","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"The user asks for something I won't do."}],"status":"completed"},{"type":"message","content":[{"type":"refusal","refusal":"I'm sorry, I can't help with that."}],"id":"msg_xxx","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":9,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":21}}}
+
+
+
+{
+  "input_tokens": 12,
+  "output_tokens": 9,
+  "total_tokens": 21,
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    "I'm sorry, I can't help with that."
+  ]
+}

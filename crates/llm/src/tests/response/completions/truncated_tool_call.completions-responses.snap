@@ -34,7 +34,7 @@ info:
         "call_id": "call_1",
         "name": "get_weather",
         "id": "[id]",
-        "status": "completed"
+        "status": "incomplete"
       }
     ],
     "model": "input-model",
@@ -51,7 +51,7 @@ info:
     },
     "created_at": "[date]",
     "incomplete_details": {
-      "reason": "max_tokens"
+      "reason": "max_output_tokens"
     },
     "object": "response"
   },

@@ -7,8 +7,9 @@ use serde_json::Value;
 use crate::http::Body;
 use crate::llm::policy::Policy;
 use crate::llm::{
-	AIError, AIProvider, CacheTokenConvention, InputFormat, LLMRequest, ProviderState, RequestResult,
-	RouteType, anthropic, bedrock, gemini, openai, vertex,
+	AIError, AIProvider, CHAT_TRANSLATIONS, CacheTokenConvention, ChatFormat, ChatRequestContext,
+	ChatTranslation, InputFormat, LLMRequest, ProviderState, RequestResult, RouteType, anthropic,
+	bedrock, gemini, openai, types, vertex,
 };
 use crate::types::agent::Target;
 
@@ -41,7 +42,7 @@ fn native_chat_request(model: &str, streaming: bool) -> LLMRequest {
 		streaming,
 		params: Default::default(),
 		prompt: None,
-		provider_state: Some(ProviderState::VertexGemini),
+		provider_state: Some(ProviderState::VertexGemini { namespaces: None }),
 	}
 }
 
@@ -450,7 +451,7 @@ async fn generate_content_keeps_its_route_type_upstream() {
 		assert_eq!(llm_request.input_format, InputFormat::Gemini);
 		assert!(matches!(
 			llm_request.provider_state,
-			Some(ProviderState::VertexGemini)
+			Some(ProviderState::VertexGemini { .. })
 		));
 	}
 }
@@ -488,7 +489,7 @@ async fn completions_inbound_to_the_gemini_provider_renders_native() {
 	assert_eq!(upstream_route_type, RouteType::GenerateContent);
 	assert!(matches!(
 		llm_request.provider_state,
-		Some(ProviderState::VertexGemini)
+		Some(ProviderState::VertexGemini { .. })
 	));
 
 	provider
@@ -914,7 +915,12 @@ fn a_client_alt_query_is_stripped_from_count_tokens() {
 
 fn native_translation() -> &'static crate::llm::ChatTranslation {
 	vertex_provider(None, None)
-		.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+		.chat_translation(
+			&CHAT_TRANSLATIONS,
+			InputFormat::Gemini,
+			"gemini-2.5-flash",
+			None,
+		)
 		.expect("gemini inbound on a gemini upstream")
 }
 
@@ -1082,4 +1088,470 @@ async fn gemini_count_tokens_requires_a_gemini_upstream() {
 		.expect_err("countTokens must not reach a non-Gemini upstream");
 	assert!(matches!(err, AIError::UnsupportedConversion(_)), "{err}");
 	assert!(err.to_string().contains("GeminiCountTokens"), "{err}");
+}
+
+mod prefer_native {
+	use std::sync::Arc;
+
+	use ::http::HeaderMap;
+	use serde_json::json;
+
+	use super::*;
+	use crate::llm::{
+		ChatFormat, ChatRequestContext, ChatResponseContext, ChatStreamContext, chat_translations,
+		custom, namespace_tool_map, types,
+	};
+
+	const GEMINI: &str = "gemini-3.8-flash";
+	const CLIENTS: [InputFormat; 2] = [InputFormat::Messages, InputFormat::Responses];
+	const NATIVE: Option<ChatFormat> = Some(ChatFormat::VertexGemini);
+	const COMPAT: Option<ChatFormat> = Some(ChatFormat::OpenAICompletions);
+
+	fn custom_provider(formats: &[custom::ProviderFormat]) -> AIProvider {
+		AIProvider::Custom(custom::Provider {
+			model_override: None,
+			provider_override: None,
+			formats: formats
+				.iter()
+				.map(|&format| custom::ProviderFormatConfig { format, path: None })
+				.collect(),
+		})
+	}
+
+	fn routes(provider: &AIProvider, model: &str, prefer_native: bool) -> [Option<ChatFormat>; 2] {
+		let table = chat_translations(prefer_native);
+		CLIENTS.map(|input| {
+			provider
+				.chat_translation(&table, input, model, None)
+				.ok()
+				.map(|t| t.output)
+		})
+	}
+
+	#[rstest::rstest]
+	#[case::gemini(gemini_provider(None), GEMINI, [NATIVE; 2], [COMPAT; 2])]
+	#[case::vertex_gemini(vertex_provider(None, None), GEMINI, [NATIVE; 2], [COMPAT; 2])]
+	#[case::custom_with_completions(
+		custom_provider(&[custom::ProviderFormat::GenerateContent, custom::ProviderFormat::Completions]),
+		GEMINI,
+		[NATIVE; 2],
+		[COMPAT; 2]
+	)]
+	#[case::custom_generate_content_only(
+		custom_provider(&[custom::ProviderFormat::GenerateContent]),
+		GEMINI,
+		[NATIVE; 2],
+		[None; 2]
+	)]
+	#[case::custom_speaking_the_client_formats(
+		custom_provider(&[
+			custom::ProviderFormat::GenerateContent,
+			custom::ProviderFormat::Messages,
+			custom::ProviderFormat::Responses,
+		]),
+		GEMINI,
+		[Some(ChatFormat::AnthropicMessages), Some(ChatFormat::OpenAIResponses)],
+		[Some(ChatFormat::AnthropicMessages), Some(ChatFormat::OpenAIResponses)]
+	)]
+	#[case::vertex_claude(
+		vertex_provider(None, None),
+		"anthropic/claude-sonnet-4-5",
+		[Some(ChatFormat::AnthropicMessages), None],
+		[Some(ChatFormat::AnthropicMessages), None]
+	)]
+	fn the_flag_routes_gemini_providers_natively(
+		#[case] provider: AIProvider,
+		#[case] model: &str,
+		#[case] on: [Option<ChatFormat>; 2],
+		#[case] off: [Option<ChatFormat>; 2],
+	) {
+		assert_eq!(routes(&provider, model, true), on);
+		assert_eq!(routes(&provider, model, false), off);
+	}
+
+	#[rstest::rstest]
+	fn openai_routes_ignore_the_gemini_flag(#[values(false, true)] prefer_native: bool) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model_override: None,
+			moderation: None,
+		});
+		assert_eq!(
+			routes(&provider, "gpt-4o", prefer_native),
+			[Some(ChatFormat::OpenAIResponses); 2]
+		);
+	}
+
+	/// With the flag off, Gemini's compat endpoint replies that #3868 fixed still reach both
+	/// clients: no message on a cut-off reply, no id, and a finish reason outside the OpenAI set
+	#[rstest::rstest]
+	#[case::cut_off(
+		json!({ "choices": [{ "index": 0, "finish_reason": "length" }],
+			"model": GEMINI, "usage": { "prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11 } }),
+		["max_tokens", "incomplete"]
+	)]
+	#[case::unknown_finish_reason(
+		json!({ "choices": [{ "index": 0, "finish_reason": "function_call_filter: MALFORMED_FUNCTION_CALL",
+			"message": { "role": "assistant" } }],
+			"model": GEMINI, "usage": { "prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11 } }),
+		["end_turn", "completed"]
+	)]
+	fn compat_replies_reach_both_clients(#[case] reply: Value, #[case] endings: [&str; 2]) {
+		let provider = gemini_provider(None);
+		let table = chat_translations(false);
+		for (input, ending) in CLIENTS.into_iter().zip(endings) {
+			let translation = provider
+				.chat_translation(&table, input, GEMINI, None)
+				.unwrap();
+			assert_eq!(Some(translation.output), COMPAT);
+			let response = translation
+				.render_response(
+					&bytes::Bytes::from(reply.to_string()),
+					&ChatResponseContext {
+						model: GEMINI,
+						tool_name_map: None,
+						namespaces: None,
+					},
+				)
+				.unwrap_or_else(|e| panic!("{input:?}: {e}"));
+			let usage = response.to_llm_response(Default::default());
+			assert_eq!(usage.total_tokens, Some(11), "{input:?}");
+			let body: Value = serde_json::from_slice(&response.serialize().unwrap()).unwrap();
+			let got = match input {
+				InputFormat::Messages => &body["stop_reason"],
+				_ => &body["status"],
+			};
+			assert_eq!(got, ending, "{input:?}: {body}");
+		}
+	}
+
+	fn render(
+		provider: &AIProvider,
+		input: InputFormat,
+		body: Value,
+		streaming: bool,
+	) -> (LLMRequest, Value) {
+		let table = chat_translations(true);
+		let translation = provider
+			.chat_translation(&table, input, GEMINI, None)
+			.unwrap();
+		assert_eq!(translation.output, ChatFormat::VertexGemini);
+		let req = match input {
+			InputFormat::Messages => types::ChatRequest::Messages(serde_json::from_value(body).unwrap()),
+			InputFormat::Responses => {
+				types::ChatRequest::Responses(serde_json::from_value(body).unwrap())
+			},
+			_ => unreachable!("only Messages and Responses here"),
+		};
+		let rendered = translation
+			.render_request(
+				req,
+				&ChatRequestContext {
+					catalog: None,
+					provider,
+					headers: &HeaderMap::new(),
+					prompt_caching: None,
+				},
+			)
+			.expect("render");
+		let llm_request = LLMRequest {
+			input_format: input,
+			provider_state: rendered.provider_state,
+			..native_chat_request(GEMINI, streaming)
+		};
+		(llm_request, serde_json::from_slice(&rendered.body).unwrap())
+	}
+
+	#[rstest::rstest]
+	#[case::gemini_api(
+		gemini_provider(None),
+		false,
+		"/v1beta/models/gemini-3.8-flash:generateContent",
+		None
+	)]
+	#[case::gemini_api_streaming(
+		gemini_provider(None),
+		true,
+		"/v1beta/models/gemini-3.8-flash:streamGenerateContent",
+		Some("alt=sse")
+	)]
+	#[case::vertex(
+		vertex_provider(None, None),
+		false,
+		"/v1/projects/test-project/locations/global/publishers/google/models/gemini-3.8-flash:generateContent",
+		None
+	)]
+	#[case::vertex_streaming(
+		vertex_provider(None, None),
+		true,
+		"/v1/projects/test-project/locations/global/publishers/google/models/gemini-3.8-flash:streamGenerateContent",
+		Some("alt=sse")
+	)]
+	fn messages_render_to_the_native_endpoint(
+		#[case] provider: AIProvider,
+		#[case] streaming: bool,
+		#[case] path: &str,
+		#[case] query: Option<&str>,
+	) {
+		let (llm_request, body) = render(
+			&provider,
+			InputFormat::Messages,
+			json!({
+				"model": GEMINI, "max_tokens": 256, "stream": streaming,
+				"messages": [{ "role": "user", "content": "hi" }]
+			}),
+			streaming,
+		);
+		assert_eq!(body["contents"][0]["parts"][0]["text"], "hi");
+		assert!(body.get("messages").is_none(), "{body}");
+
+		let req = setup(
+			&provider,
+			"https://example.com/v1/messages?beta=true",
+			RouteType::GenerateContent,
+			&llm_request,
+		);
+		assert_eq!((req.uri().path(), req.uri().query()), (path, query));
+	}
+
+	#[tokio::test]
+	async fn responses_namespaces_come_back_on_native_replies() {
+		let provider = gemini_provider(None);
+		let (llm_request, body) = render(
+			&provider,
+			InputFormat::Responses,
+			json!({
+				"model": GEMINI,
+				"input": "Run 1 + 1.",
+				"tools": [{
+					"type": "namespace", "name": "mcp__node_repl", "description": "Node kernel.",
+					"tools": [{ "type": "function", "name": "js", "parameters": { "type": "object" }, "strict": false }]
+				}]
+			}),
+			false,
+		);
+		let alias = body["tools"][0]["functionDeclarations"][0]["name"]
+			.as_str()
+			.unwrap()
+			.to_string();
+		assert_ne!(alias, "js");
+		let reply = json!({
+			"candidates": [{ "content": { "role": "model", "parts": [
+				{ "functionCall": { "name": alias, "args": { "code": "1 + 1" } } }
+			]}, "finishReason": "STOP" }],
+			"usageMetadata": { "promptTokenCount": 5, "candidatesTokenCount": 2, "totalTokenCount": 7 }
+		});
+		let translation = crate::llm::ChatTranslation {
+			input: InputFormat::Responses,
+			output: ChatFormat::VertexGemini,
+		};
+		let restored = (json!("mcp__node_repl"), json!("js"));
+
+		let buffered = translation
+			.render_response(
+				&bytes::Bytes::from(reply.to_string()),
+				&ChatResponseContext {
+					model: GEMINI,
+					tool_name_map: None,
+					namespaces: namespace_tool_map(&llm_request).map(Arc::as_ref),
+				},
+			)
+			.unwrap();
+		let buffered: Value = serde_json::from_slice(&buffered.serialize().unwrap()).unwrap();
+		let call = &buffered["output"][0];
+		assert_eq!((call["namespace"].clone(), call["name"].clone()), restored);
+
+		let streamed = translation.stream(
+			::http::Response::new(Body::from(format!("data: {reply}\n\n"))),
+			ChatStreamContext {
+				buffer_limit: 1 << 20,
+				logger: Default::default(),
+				model: GEMINI.to_string(),
+				log_content: Default::default(),
+				tool_name_map: None,
+				namespaces: namespace_tool_map(&llm_request).cloned(),
+			},
+		);
+		let streamed = streamed.into_body().collect().await.unwrap().to_bytes();
+		let events: Vec<Value> = std::str::from_utf8(&streamed)
+			.unwrap()
+			.lines()
+			.filter_map(|l| l.strip_prefix("data: "))
+			.map(|d| serde_json::from_str(d).unwrap())
+			.collect();
+		let calls: Vec<_> = events
+			.iter()
+			.filter_map(|e| match e["type"].as_str() {
+				Some("response.output_item.added" | "response.output_item.done") => Some(&e["item"]),
+				Some("response.completed") => e["response"]["output"]
+					.as_array()
+					.and_then(|o| o.iter().find(|i| i["type"] == "function_call")),
+				_ => None,
+			})
+			.filter(|i| i["type"] == "function_call")
+			.map(|i| (i["namespace"].clone(), i["name"].clone()))
+			.collect();
+		assert_eq!(calls, [restored.clone(), restored.clone(), restored]);
+	}
+}
+
+// ── signature carriers on other providers ───────────────────────────────────
+
+const CARRIER: &str =
+	r#"agentgateway.gemini.thought-signature.v1:{"call_id":"call_1","signature":"c2ln"}"#;
+
+fn bedrock_provider() -> AIProvider {
+	AIProvider::Bedrock(crate::llm::BedrockProvider::new(bedrock::Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	}))
+}
+
+fn messages_history() -> types::ChatRequest {
+	types::ChatRequest::Messages(
+		serde_json::from_value(serde_json::json!({
+			"model": "m",
+			"max_tokens": 64,
+			"messages": [
+				{"role": "user", "content": "weather?"},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "", "signature": CARRIER},
+					{"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {}}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "call_1", "content": "sunny"}
+				]},
+				{"role": "assistant", "content": [
+					{"type": "thinking", "thinking": "checked", "signature": "real-signature"},
+					{"type": "text", "text": "Sunny."}
+				]},
+				{"role": "user", "content": "thanks"}
+			]
+		}))
+		.unwrap(),
+	)
+}
+
+fn responses_history() -> types::ChatRequest {
+	types::ChatRequest::Responses(
+		serde_json::from_value(serde_json::json!({
+			"model": "m",
+			"input": [
+				{"role": "user", "content": "weather?"},
+				{"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": CARRIER},
+				{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"},
+				{"type": "function_call_output", "call_id": "call_1", "output": "sunny"},
+				{"type": "reasoning", "id": "rs_2", "summary": [], "encrypted_content": "real-signature"},
+				{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Sunny."}]},
+				{"role": "user", "content": "thanks"}
+			]
+		}))
+		.unwrap(),
+	)
+}
+
+#[rstest::rstest]
+#[case::messages_to_anthropic(
+	messages_history(),
+	ChatFormat::AnthropicMessages,
+	AIProvider::Anthropic(anthropic::Provider { model_override: None })
+)]
+#[case::messages_to_bedrock(messages_history(), ChatFormat::BedrockConverse, bedrock_provider())]
+#[case::responses_to_openai_responses(
+	responses_history(),
+	ChatFormat::OpenAIResponses,
+	AIProvider::OpenAI(openai::Provider { model_override: None, moderation: None })
+)]
+#[case::responses_to_bedrock(responses_history(), ChatFormat::BedrockConverse, bedrock_provider())]
+fn other_providers_get_no_gemini_signature_carriers(
+	#[case] req: types::ChatRequest,
+	#[case] output: ChatFormat,
+	#[case] provider: AIProvider,
+) {
+	let input = match req {
+		types::ChatRequest::Messages(_) => InputFormat::Messages,
+		_ => InputFormat::Responses,
+	};
+	let rendered = ChatTranslation { input, output }
+		.render_request(
+			req,
+			&ChatRequestContext {
+				catalog: None,
+				provider: &provider,
+				headers: &::http::HeaderMap::new(),
+				prompt_caching: None,
+			},
+		)
+		.expect("render");
+	let body = String::from_utf8(rendered.body).unwrap();
+	assert!(!body.contains("agentgateway.gemini"), "{body}");
+	assert!(body.contains("real-signature"), "{body}");
+	assert!(body.contains("call_1"), "{body}");
+}
+
+#[test]
+fn a_reasoning_summary_outlives_its_gemini_carrier() {
+	let summary = serde_json::json!([{"type": "summary_text", "text": "a summary"}]);
+	let req = serde_json::from_value(serde_json::json!({
+		"model": "m",
+		"input": [
+			{"role": "user", "content": "weather?"},
+			{"type": "reasoning", "id": "rs_1", "summary": summary, "encrypted_content": CARRIER},
+			{"type": "function_call", "call_id": "call_1", "name": "get_weather", "arguments": "{}"}
+		]
+	}))
+	.unwrap();
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model_override: None,
+		moderation: None,
+	});
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::OpenAIResponses,
+	}
+	.render_request(
+		types::ChatRequest::Responses(req),
+		&ChatRequestContext {
+			catalog: None,
+			provider: &provider,
+			headers: &::http::HeaderMap::new(),
+			prompt_caching: None,
+		},
+	)
+	.expect("render");
+	let body: Value = serde_json::from_slice(&rendered.body).unwrap();
+	assert_eq!(
+		body["input"][1],
+		serde_json::json!({"type": "reasoning", "id": "rs_1", "summary": summary})
+	);
+}
+
+#[rstest::rstest]
+#[case::anthropic(AIProvider::Anthropic(anthropic::Provider { model_override: None }))]
+#[case::bedrock(bedrock_provider())]
+#[case::vertex(vertex_provider(Some("us-east5"), None))]
+fn count_tokens_gets_no_gemini_signature_carriers(#[case] provider: AIProvider) {
+	let types::ChatRequest::Messages(history) = messages_history() else {
+		unreachable!()
+	};
+	let req: types::count_tokens::Request =
+		serde_json::from_value(serde_json::to_value(history).unwrap()).unwrap();
+	let body = provider
+		.render_count_tokens_request(&req, &::http::HeaderMap::new(), "claude-sonnet-4-5", None)
+		.expect("render");
+	let mut body: Value = serde_json::from_slice(&body).unwrap();
+	// Bedrock Runtime wraps the Messages body in base64
+	if let Some(inner) = body
+		.pointer("/input/invokeModel/body")
+		.and_then(Value::as_str)
+	{
+		use base64::Engine as _;
+		let inner = base64::prelude::BASE64_STANDARD.decode(inner).unwrap();
+		body = serde_json::from_slice(&inner).unwrap();
+	}
+	let body = body.to_string();
+	assert!(!body.contains("agentgateway.gemini"), "{body}");
+	assert!(body.contains("real-signature"), "{body}");
 }

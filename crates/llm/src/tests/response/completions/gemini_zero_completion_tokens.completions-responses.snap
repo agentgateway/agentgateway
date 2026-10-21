@@ -35,7 +35,7 @@ info:
     },
     "created_at": "[date]",
     "incomplete_details": {
-      "reason": "max_tokens"
+      "reason": "max_output_tokens"
     },
     "object": "response"
   },
