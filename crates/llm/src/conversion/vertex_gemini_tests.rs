@@ -7,12 +7,12 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), true).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), true, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
 fn to_gemini_api(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), false).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), false, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -57,6 +57,105 @@ fn consecutive_same_role_messages_merge() {
 	assert_eq!(g["contents"][1]["role"], "model");
 }
 
+#[rstest::rstest]
+fn system_messages_keep_the_prefix_stable(#[values("system", "developer")] role: &str) {
+	let turn = |n: usize| {
+		let messages: Vec<Value> = [system("You are Claude Code."), user("read the files")]
+			.into_iter()
+			.chain((0..n).flat_map(|i| {
+				let id = format!("call_{i}");
+				[
+					calls(&[&id]),
+					result(&id),
+					json!({ "role": role, "content": format!("<total_tokens>{i}</total_tokens>") }),
+				]
+			}))
+			.collect();
+		to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }))
+	};
+	let (prev, next) = (turn(2), turn(3));
+	assert_eq!(prev["systemInstruction"], next["systemInstruction"]);
+	let (prev, next) = (
+		prev["contents"].as_array().unwrap(),
+		next["contents"].as_array().unwrap(),
+	);
+	assert_eq!(prev[..], next[..prev.len()]);
+}
+
+#[rstest::rstest]
+#[case::leading(vec![system("s"), user("hi")], &["system:text", "user:text"])]
+#[case::between_turns(
+	vec![user("hi"), system("s"), assistant("ok")],
+	&["user:text,reminder", "model:text"]
+)]
+#[case::after_single_call(
+	vec![user("hi"), calls(&["a"]), system("s"), result("a"), user("next")],
+	&["user:text", "model:call", "user:result", "user:reminder,text"]
+)]
+#[case::between_parallel_results(
+	vec![user("hi"), calls(&["a", "b"]), result("a"), system("s"), result("b")],
+	&["user:text", "model:call,call", "user:result,result", "user:reminder"]
+)]
+#[case::trailing(
+	vec![user("hi"), calls(&["a"]), result("a"), system("s")],
+	&["user:text", "model:call", "user:result", "user:reminder"]
+)]
+fn system_message_placement(#[case] messages: Vec<Value>, #[case] expected: &[&str]) {
+	let g = to_gemini(json!({ "model": "gemini-3.8-flash", "messages": messages }));
+	let system = g
+		.get("systemInstruction")
+		.map(|_| "system:text".to_string());
+	let contents = g["contents"].as_array().unwrap().iter().map(|c| {
+		let parts: Vec<&str> = c["parts"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|p| match p {
+				_ if p.get("functionCall").is_some() => "call",
+				_ if p.get("functionResponse").is_some() => "result",
+				_ if p["text"]
+					.as_str()
+					.is_some_and(|t| t.starts_with("<system-reminder>")) =>
+				{
+					"reminder"
+				},
+				_ => "text",
+			})
+			.collect();
+		format!("{}:{}", c["role"].as_str().unwrap(), parts.join(","))
+	});
+	assert_eq!(
+		system.into_iter().chain(contents).collect::<Vec<_>>(),
+		expected
+	);
+}
+
+fn user(text: &str) -> Value {
+	json!({ "role": "user", "content": text })
+}
+
+fn assistant(text: &str) -> Value {
+	json!({ "role": "assistant", "content": text })
+}
+
+fn system(text: &str) -> Value {
+	json!({ "role": "system", "content": text })
+}
+
+fn calls(ids: &[&str]) -> Value {
+	let calls: Vec<Value> = ids
+		.iter()
+		.map(
+			|id| json!({ "id": id, "type": "function", "function": { "name": "Read", "arguments": "{}" } }),
+		)
+		.collect();
+	json!({ "role": "assistant", "tool_calls": calls })
+}
+
+fn result(id: &str) -> Value {
+	json!({ "role": "tool", "tool_call_id": id, "content": "file" })
+}
+
 #[test]
 fn empty_messages_get_synthetic_user_entry() {
 	let g = to_gemini(json!({ "model": "gemini-2.5-flash", "messages": [] }));
@@ -76,6 +175,7 @@ fn gs_url_without_extension_or_hint_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -140,6 +240,7 @@ fn file_gs_uri_without_extension_or_hint_is_rejected() {
 			"file_data": "gs://bucket/object"
 		}))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -166,6 +267,7 @@ fn data_url_without_media_type_or_filename_is_rejected() {
 			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
 		)),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -189,6 +291,7 @@ fn raw_base64_file_data_without_a_mime_source_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -213,6 +316,7 @@ fn file_id_is_rejected_rather_than_dropped() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "file_id": "file-abc123" }))),
 		true,
+		None,
 	);
 	let err = err.expect_err("opaque file_id must be rejected");
 	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
@@ -231,6 +335,7 @@ fn file_part_without_data_or_id_is_rejected() {
 	let err = from_completions::translate(
 		&req(file_content(json!({ "filename": "report.pdf" }))),
 		true,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -245,6 +350,7 @@ fn rejected_signed_url_omits_query_from_error() {
 			"file_id": "https://storage.googleapis.com/bucket/object?X-Goog-Signature=secret"
 		}))),
 		true,
+		None,
 	)
 	.expect_err("extension-less URL without a MIME hint must be rejected");
 	let msg = err.to_string();
@@ -276,6 +382,7 @@ fn http_image_url_is_rejected() {
 			]}]
 		})),
 		true,
+		None,
 	);
 	assert!(err.is_err(), "http(s) image_url must be rejected");
 }
@@ -786,6 +893,52 @@ fn tool_parameters_inline_defs_and_refs() {
 		"tool parameters must drop additionalProperties: {txt}"
 	);
 	assert_eq!(params["properties"]["events"]["items"]["type"], "object");
+}
+
+#[rstest::rstest]
+#[case::minimum(
+	json!({ "type": "integer", "exclusiveMinimum": 0 }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+#[case::maximum(
+	json!({ "type": "number", "exclusiveMaximum": 1 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 0.5 }),
+	json!({ "type": "number", "maximum": 0.5 })
+)]
+#[case::exclusive_maximum_tighter(
+	json!({ "type": "number", "exclusiveMaximum": 1, "maximum": 2 }),
+	json!({ "type": "number", "maximum": 1 })
+)]
+#[case::inclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 0, "minimum": 1 }),
+	json!({ "type": "integer", "minimum": 1 })
+)]
+#[case::exclusive_minimum_tighter(
+	json!({ "type": "integer", "exclusiveMinimum": 5, "minimum": 2 }),
+	json!({ "type": "integer", "minimum": 5 })
+)]
+#[case::draft4_boolean(
+	json!({ "type": "integer", "minimum": 0, "exclusiveMinimum": true }),
+	json!({ "type": "integer", "minimum": 0 })
+)]
+fn exclusive_bounds_become_inclusive(#[case] property: Value, #[case] expected: Value) {
+	let params = tool_parameters(json!({ "type": "object", "properties": { "x": property } }));
+	assert_eq!(params["properties"]["x"], expected);
+}
+
+fn tool_parameters(parameters: Value) -> Value {
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{ "role": "user", "content": "x" }],
+		"tools": [{
+			"type": "function",
+			"function": { "name": "t", "parameters": parameters }
+		}]
+	}));
+	g["tools"][0]["functionDeclarations"][0]["parameters"].clone()
 }
 
 // Case 3: Pydantic wraps a described nested-model field as {allOf:[{$ref}], description} (or a
@@ -1484,43 +1637,92 @@ fn gemini_schema_non_string_const_typed_by_value_kind() {
 	);
 }
 
-#[test]
-fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
-	let g = to_gemini(json!({
-		"model": "gemini-3-pro",
+#[rstest::rstest]
+#[case::none_takes_the_lowest_level("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "none", Some(json!({ "thinkingLevel": "minimal", "includeThoughts": true })))]
+#[case::none_falls_back_to_low("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "none", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_none("gemini-3.1-pro-preview", false, None, "none", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::none_on_a_known_model_without_levels("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "none", None)]
+#[case::none_on_a_known_budget_only_model("gemini-2.5-flash", true, Some(("gcp.vertex_ai", &[][..])), "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_turns_flash_off("gemini-2.5-flash", true, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_turns_flash_lite_off("gemini-2.5-flash-lite", false, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_on_pro_is_its_minimum_budget("gemini-2.5-pro", false, None, "none", Some(json!({ "thinkingBudget": 128, "includeThoughts": true })))]
+#[case::none_on_a_dated_preview("gemini-2.5-flash-lite-preview-06-17", true, None, "none", Some(json!({ "thinkingBudget": 0 })))]
+#[case::none_on_a_publisher_path("publishers/google/models/gemini-2.5-pro", true, None, "none", Some(json!({ "thinkingBudget": 128, "includeThoughts": true })))]
+#[case::none_on_an_image_model("gemini-2.5-flash-image", false, None, "none", None)]
+#[case::none_on_a_tts_model("gemini-2.5-flash-preview-tts", false, None, "none", None)]
+#[case::none_on_another_model("gemma-3-27b-it", false, None, "none", None)]
+#[case::minimal_kept("gemini-3-flash-preview", true, Some(("gcp.vertex_ai", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "minimal", "includeThoughts": true })))]
+#[case::minimal_rounds_up("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::max_is_high("gemini-3.8-flash", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "max", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_4_gets_a_level("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "medium", "high"][..])), "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::gemini_api_provider("gemini-4-argon", false, Some(("gcp.gemini", &["low", "medium", "high"][..])), "low", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::unusable_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["max"][..])), "high", None)]
+#[case::known_without_levels_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "low", None)]
+#[case::known_without_levels_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "medium", None)]
+#[case::known_without_levels_high("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &[][..])), "high", None)]
+#[case::only_high_from_low("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "low", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::only_high_from_medium("gemini-3-pro-image", true, Some(("gcp.vertex_ai", &["high"][..])), "medium", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::mixed_catalog_list("gemini-4-argon", true, Some(("gcp.vertex_ai", &["low", "max"][..])), "high", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::other_provider_ignored("gemini-3-flash-preview", true, Some(("gcp.gemini", &["minimal", "low", "medium", "high"][..])), "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_minimal("gemini-3.8-flash", true, None, "minimal", Some(json!({ "thinkingLevel": "low", "includeThoughts": true })))]
+#[case::no_catalog_gemini_4("gemini-4-argon", true, None, "high", Some(json!({ "thinkingLevel": "high", "includeThoughts": true })))]
+#[case::budget_high("gemini-2.5-flash", true, None, "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+#[case::budget_xhigh("gemini-2.5-flash", true, None, "xhigh", Some(json!({ "thinkingBudget": 8192, "includeThoughts": true })))]
+#[case::budget_max("gemini-2.5-flash", true, None, "max", Some(json!({ "thinkingBudget": 16384, "includeThoughts": true })))]
+#[case::budget_only_catalog_entry("gemini-2.5-pro", true, Some(("gcp.vertex_ai", &[][..])), "high", Some(json!({ "thinkingBudget": 4096, "includeThoughts": true })))]
+fn thinking_config(
+	#[case] model: &str,
+	#[case] is_vertex: bool,
+	#[case] entry: Option<(&str, &[&str])>,
+	#[case] effort: &str,
+	#[case] expected: Option<Value>,
+) {
+	let catalog = entry.map(|(provider, efforts)| {
+		let efforts: Vec<_> = efforts
+			.iter()
+			.map(|e| serde_json::from_value(json!(e)).unwrap())
+			.collect();
+		crate::model_catalog::TestCatalog::new([]).with_efforts(provider, model, efforts)
+	});
+	let request = req(json!({
+		"model": model,
 		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "high"
+		"reasoning_effort": effort
 	}));
+	let bytes = from_completions::translate(
+		&request,
+		is_vertex,
+		catalog
+			.as_ref()
+			.map(|c| c as &dyn crate::model_catalog::ModelCatalogHandle),
+	)
+	.unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
 	assert_eq!(
-		g["generationConfig"]["thinkingConfig"]["thinkingLevel"],
-		"high"
+		g["generationConfig"].get("thinkingConfig").cloned(),
+		expected
 	);
 }
 
 #[test]
-fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
-	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
-		let g = to_gemini(json!({
-			"model": "gemini-2.5-flash",
-			"messages": [{ "role": "user", "content": "x" }],
-			"reasoning_effort": effort
-		}));
-		assert_eq!(
-			g["generationConfig"]["thinkingConfig"]["thinkingBudget"],
-			budget
-		);
-	}
-}
-
-#[test]
-fn reasoning_effort_none_omits_thinking_config() {
-	let g = to_gemini(json!({
-		"model": "gemini-2.5-flash",
+fn client_thinking_config_wins_over_the_catalog() {
+	let catalog = crate::model_catalog::TestCatalog::new([]).with_efforts(
+		"gcp.vertex_ai",
+		"gemini-3.8-flash",
+		vec![crate::types::completions::typed::ReasoningEffort::Low],
+	);
+	let request = req(json!({
+		"model": "gemini-3.8-flash",
 		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "none"
+		"reasoning_effort": "low",
+		"thinkingConfig": { "thinkingLevel": "high" }
 	}));
-	let gc = g.get("generationConfig");
-	assert!(gc.is_none() || gc.unwrap().get("thinkingConfig").is_none());
+	let bytes = from_completions::translate(&request, true, Some(&catalog)).unwrap();
+	let g: Value = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(
+		g["generationConfig"]["thinkingConfig"],
+		json!({ "thinkingLevel": "high" })
+	);
 }
 
 // ---------- Request: cachedContent / labels ----------
@@ -1589,34 +1791,118 @@ fn response_synthesizes_tool_call_id_when_absent() {
 
 // ---------- Response: finishReason table / usage ----------
 
-#[test]
-fn finish_reason_mapping_table() {
-	let cases = [
-		("MAX_TOKENS", "length"),
-		("SAFETY", "content_filter"),
-		("RECITATION", "content_filter"),
-		("LANGUAGE", "content_filter"),
-		("BLOCKLIST", "content_filter"),
-		("PROHIBITED_CONTENT", "content_filter"),
-		("SPII", "content_filter"),
-		("UNEXPECTED_TOOL_CALL", "content_filter"),
-		("TOO_MANY_TOOL_CALLS", "content_filter"),
-		("IMAGE_SAFETY", "content_filter"),
-		("MALFORMED_FUNCTION_CALL", "stop"),
-		("OTHER", "stop"),
-		("FINISH_REASON_UNSPECIFIED", "stop"),
-		("SOME_FUTURE_VALUE", "stop"),
-	];
-	for (gemini, openai) in cases {
-		let r = resp(json!({
-			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
-				"finishReason": gemini }]
-		}));
-		assert_eq!(
-			r["choices"][0]["finish_reason"], openai,
-			"{gemini} should map to {openai}"
-		);
+#[rstest::rstest]
+#[case("STOP", "stop")]
+#[case("MAX_TOKENS", "length")]
+#[case("CONTINUATION", "length")]
+#[case("SAFETY", "content_filter")]
+#[case("RECITATION", "content_filter")]
+#[case("LANGUAGE", "content_filter")]
+#[case("BLOCKLIST", "content_filter")]
+#[case("PROHIBITED_CONTENT", "content_filter")]
+#[case("SPII", "content_filter")]
+#[case("IMAGE_SAFETY", "content_filter")]
+#[case("IMAGE_PROHIBITED_CONTENT", "content_filter")]
+#[case("IMAGE_RECITATION", "content_filter")]
+#[case("MODEL_ARMOR", "content_filter")]
+#[case("ESCALATION", "content_filter")]
+fn finish_reasons(#[case] gemini: &str, #[case] openai: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini }]
+	});
+	assert_eq!(resp(reply.clone())["choices"][0]["finish_reason"], openai);
+	assert!(to_completions::failure(&gemini_response_bytes(reply)).is_none());
+}
+
+#[rstest::rstest]
+fn a_tool_call_reply_finishes_with_tool_calls(#[values(Some("STOP"), None)] reason: Option<&str>) {
+	let mut cand = json!({ "content": { "role": "model", "parts": [
+		{ "functionCall": { "name": "a", "args": {} } }
+	]}});
+	if let Some(reason) = reason {
+		cand["finishReason"] = reason.into();
 	}
+	let r = resp(json!({ "candidates": [cand] }));
+	assert_eq!(r["choices"][0]["finish_reason"], "tool_calls");
+}
+
+#[rstest::rstest]
+#[case("MALFORMED_FUNCTION_CALL", 502, "INTERNAL")]
+#[case("UNEXPECTED_TOOL_CALL", 502, "INTERNAL")]
+#[case("TOO_MANY_TOOL_CALLS", 502, "INTERNAL")]
+#[case("MALFORMED_RESPONSE", 502, "INTERNAL")]
+#[case("OTHER", 502, "INTERNAL")]
+#[case("NO_IMAGE", 502, "INTERNAL")]
+#[case("IMAGE_OTHER", 502, "INTERNAL")]
+#[case("FINISH_REASON_UNSPECIFIED", 502, "INTERNAL")]
+#[case("SOME_FUTURE_VALUE", 502, "INTERNAL")]
+#[case("MISSING_THOUGHT_SIGNATURE", 400, "INVALID_ARGUMENT")]
+#[case("PUP_LIMITED_DISABLED", 403, "PERMISSION_DENIED")]
+fn failed_replies_become_errors(#[case] gemini: &str, #[case] code: u16, #[case] status: &str) {
+	let reply = json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": gemini, "finishMessage": "details" }]
+	});
+	let (got, body) = to_completions::failure(&gemini_response_bytes(reply)).expect("a failure");
+	assert_eq!(got.as_u16(), code);
+	assert_eq!(
+		serde_json::from_slice::<Value>(&body).unwrap(),
+		json!({ "error": {
+			"code": code,
+			"message": format!("Gemini stopped with {gemini}: details"),
+			"status": status,
+		}})
+	);
+}
+
+#[test]
+fn a_failure_without_a_finish_message_names_the_reason() {
+	let reply = json!({ "candidates": [{ "finishReason": "OTHER" }] });
+	let (_, body) = to_completions::failure(&gemini_response_bytes(reply)).unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["error"]["message"], "Gemini stopped with OTHER");
+}
+
+#[test]
+fn a_blocked_reply_is_a_refusal() {
+	let reply = |extra: Value| {
+		let mut cand = json!({ "finishReason": "SAFETY" });
+		cand
+			.as_object_mut()
+			.unwrap()
+			.extend(extra.as_object().unwrap().clone());
+		resp(json!({ "candidates": [cand] }))["choices"][0]["message"]["refusal"].clone()
+	};
+	assert_eq!(
+		reply(json!({ "finishMessage": "Unsafe reply" })),
+		"Unsafe reply"
+	);
+	assert_eq!(reply(json!({})), "Gemini blocked the reply: SAFETY");
+	assert_eq!(
+		resp(
+			json!({ "candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
+			"finishReason": "STOP" }] })
+		)["choices"][0]["message"]["refusal"],
+		Value::Null
+	);
+}
+
+#[test]
+fn a_blocked_prompt_is_a_refusal() {
+	let refusal = |feedback: Value| {
+		resp(json!({ "candidates": [], "promptFeedback": feedback }))["choices"][0]["message"]
+			["refusal"]
+			.clone()
+	};
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY", "blockReasonMessage": "Unsafe prompt" })),
+		"Unsafe prompt"
+	);
+	assert_eq!(
+		refusal(json!({ "blockReason": "SAFETY" })),
+		"Gemini blocked the prompt: SAFETY"
+	);
 }
 
 #[test]
@@ -1753,6 +2039,30 @@ fn streaming_tool_call_id_embeds_thought_signature() {
 }
 
 #[test]
+fn streaming_blocks_are_refusals() {
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "finishReason": "SAFETY", "finishMessage": "Unsafe reply" }] }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(c["choices"][0]["delta"]["refusal"], "Unsafe reply");
+
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "promptFeedback": { "blockReason": "PROHIBITED_CONTENT" } }),
+	)
+	.unwrap();
+	assert_eq!(c["choices"][0]["finish_reason"], "content_filter");
+	assert_eq!(
+		c["choices"][0]["delta"]["refusal"],
+		"Gemini blocked the prompt: PROHIBITED_CONTENT"
+	);
+}
+
+#[test]
 fn streaming_trailing_usage_chunk_has_empty_choices() {
 	let mut s = to_completions::StreamState::new();
 	// Consume the role on a content chunk, then a usage-only trailing chunk.
@@ -1835,7 +2145,7 @@ mod passthrough {
 		fn report_usage(&mut self) {}
 	}
 
-	fn captured_info() -> Arc<Mutex<LLMInfo>> {
+	pub(super) fn captured_info() -> Arc<Mutex<LLMInfo>> {
 		Arc::new(Mutex::new(LLMInfo {
 			request: LLMRequest {
 				input_tokens: None,
@@ -2027,5 +2337,227 @@ mod passthrough {
 			);
 			assert_eq!(captured.lock().unwrap().response.total_tokens, None);
 		}
+	}
+}
+
+mod chain {
+	use std::sync::{Arc, Mutex};
+	use std::time::Duration;
+
+	use agent_http::Body;
+	use http_body_util::BodyExt;
+
+	use super::passthrough::captured_info;
+	use super::*;
+	use crate::{
+		LLMInfo, LLMResponse, LogContentFields, StreamingUsageGuard, StreamingUsageReporter,
+	};
+
+	type Chain = fn(Body, StreamingUsageGuard) -> Body;
+	type Reports = Arc<Mutex<Vec<LLMResponse>>>;
+
+	fn completions(b: Body, log: StreamingUsageGuard) -> Body {
+		to_completions::translate_stream(
+			b,
+			1 << 20,
+			strng::new("gemini-3.8-flash"),
+			log,
+			LogContentFields::default(),
+		)
+	}
+
+	/// Settles once, on the first report or on drop, like the gateway's reporter
+	struct Recorder {
+		info: Arc<Mutex<LLMInfo>>,
+		reports: Reports,
+		reported: bool,
+	}
+
+	impl StreamingUsageReporter for Recorder {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.info.lock().unwrap())
+		}
+		fn report_usage(&mut self) {
+			if !std::mem::replace(&mut self.reported, true) {
+				let response = self.info.lock().unwrap().response.clone();
+				self.reports.lock().unwrap().push(response);
+			}
+		}
+	}
+
+	impl Drop for Recorder {
+		fn drop(&mut self) {
+			self.report_usage();
+		}
+	}
+
+	fn recorder() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>, Reports) {
+		let info = captured_info();
+		let reports = Arc::new(Mutex::new(Vec::new()));
+		let recorder = Recorder {
+			info: info.clone(),
+			reports: reports.clone(),
+			reported: false,
+		};
+		(StreamingUsageGuard::new(Box::new(recorder)), info, reports)
+	}
+
+	const FIRST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hi\"}]}}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":1,\"totalTokenCount\":8}}\n\n";
+	const ERROR: &str = "data: {\"error\":{\"code\":503,\"message\":\"The model is overloaded.\",\"status\":\"UNAVAILABLE\"}}\n\n";
+	const LAST: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	#[derive(Clone, Copy)]
+	enum End {
+		Close,
+		Reset,
+		Hang,
+	}
+
+	fn upstream(frames: &[&'static str], end: End) -> Body {
+		use futures_util::StreamExt as _;
+		let frames = frames
+			.iter()
+			.map(|f| Ok::<_, std::io::Error>(bytes::Bytes::from_static(f.as_bytes())))
+			.chain(matches!(end, End::Reset).then(|| Err(std::io::Error::other("connection reset"))));
+		let frames = futures_util::stream::iter(frames.collect::<Vec<_>>());
+		match end {
+			End::Hang => Body::from_stream(frames.chain(futures_util::stream::pending())),
+			End::Close | End::Reset => Body::from_stream(frames),
+		}
+	}
+
+	/// What the client got, and whether its body ended with an error
+	async fn drain(mut body: Body) -> (String, bool) {
+		let mut text = String::new();
+		while let Some(frame) = body.frame().await {
+			match frame {
+				Ok(frame) => text.push_str(std::str::from_utf8(frame.data_ref().unwrap()).unwrap()),
+				Err(_) => return (text, true),
+			}
+		}
+		(text, false)
+	}
+
+	fn last_event(text: &str) -> &str {
+		text.trim_end().rsplit("\n\n").next().unwrap()
+	}
+
+	const SUCCESS_ENDINGS: [&str; 4] = [
+		"[DONE]",
+		"message_stop",
+		"response.completed",
+		"\"finish_reason\":\"stop\"",
+	];
+
+	/// Gemini's error ends the body after its error event, however upstream then ends. A stream cut
+	/// off without one ends with a body error. Usage seen before the failure is reported once
+	#[rstest::rstest]
+	#[case::error_event(&[FIRST, ERROR, LAST], End::Close)]
+	#[case::error_on_an_open_stream(&[FIRST, ERROR], End::Hang)]
+	#[case::error_then_connection_drop(&[FIRST, ERROR], End::Reset)]
+	#[case::no_finish_reason(&[FIRST], End::Close)]
+	#[case::connection_drop(&[FIRST], End::Reset)]
+	#[tokio::test]
+	async fn a_failed_stream_never_ends_as_a_success(
+		#[values(completions)] chain: Chain,
+		#[case] frames: &[&'static str],
+		#[case] end: End,
+	) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = tokio::time::timeout(
+			Duration::from_secs(5),
+			drain(chain(upstream(frames, end), log)),
+		)
+		.await
+		.expect("the stream should end once Gemini reports an error");
+		let reported = frames.contains(&ERROR);
+		assert_eq!(failed, !reported, "body error:\n{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(
+			!text.contains('!'),
+			"a reply after the error reached the client:\n{text}"
+		);
+		if reported {
+			assert!(
+				last_event(&text).contains("The model is overloaded."),
+				"Gemini's error should be the last event:\n{text}"
+			);
+		}
+
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(
+			(r.input_tokens, r.output_tokens, r.total_tokens),
+			(Some(7), Some(1), Some(8))
+		);
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_geminis_error() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, ERROR], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"The model is overloaded.","code":"UNAVAILABLE"}}"#
+		);
+	}
+
+	const MALFORMED: &str = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"!\"}]},\"finishReason\":\"MALFORMED_FUNCTION_CALL\",\"finishMessage\":\"Bad call\"}],\"usageMetadata\":{\"promptTokenCount\":7,\"candidatesTokenCount\":2,\"totalTokenCount\":9}}\n\n";
+
+	/// The failed reply's own text is dropped, and its usage still counts
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn a_failed_reply_ends_with_an_error(#[values(completions)] chain: Chain) {
+		let (log, _, reports) = recorder();
+		let (text, failed) = drain(chain(upstream(&[FIRST, MALFORMED], End::Close), log)).await;
+		assert!(!failed, "{text}");
+		for ending in SUCCESS_ENDINGS {
+			assert!(!text.contains(ending), "{ending} in:\n{text}");
+		}
+		assert!(!text.contains('!'), "{text}");
+		assert!(
+			last_event(&text).contains("Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call"),
+			"{text}"
+		);
+		let reports = reports.lock().unwrap();
+		let [r] = reports.as_slice() else {
+			panic!("want one report, got {}", reports.len())
+		};
+		assert_eq!(r.total_tokens, Some(9));
+	}
+
+	#[tokio::test]
+	async fn completions_clients_get_the_failed_reason() {
+		let (text, _) = drain(completions(
+			upstream(&[FIRST, MALFORMED], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert_eq!(
+			last_event(&text),
+			r#"data: {"event_id":null,"error":{"type":"api_error","message":"Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call","code":"INTERNAL"}}"#
+		);
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn a_finished_stream_ends_as_a_success(#[values(completions)] chain: Chain) {
+		let (text, failed) = drain(chain(
+			upstream(&[FIRST, LAST], End::Close),
+			StreamingUsageGuard::default(),
+		))
+		.await;
+		assert!(!failed);
+		assert!(
+			SUCCESS_ENDINGS.iter().any(|ending| text.contains(ending)),
+			"{text}"
+		);
 	}
 }

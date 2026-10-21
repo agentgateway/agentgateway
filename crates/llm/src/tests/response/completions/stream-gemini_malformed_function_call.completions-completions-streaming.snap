@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-gemini_malformed_function_call.json
+---
+data: {"choices":[{"delta":{"role":"assistant"},"index":0}],"created":123,"id":"4tTEaqrlEeeKvdIPv7bgyAw","model":"gemini-3.8-flash","object":"chat.completion.chunk"}
+
+data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":"function_call_filter: MALFORMED_FUNCTION_CALL","index":0}],"created":123,"id":"4tTEaqrlEeeKvdIPv7bgyAw","model":"gemini-3.8-flash","object":"chat.completion.chunk","usage":{"completion_tokens":22,"prompt_tokens":106,"total_tokens":289}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 106,
+  "output_tokens": 183,
+  "total_tokens": 289,
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ]
+}

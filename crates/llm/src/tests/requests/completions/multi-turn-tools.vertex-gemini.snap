@@ -4,6 +4,8 @@ description: src/tests/requests/completions/multi-turn-tools.json
 info:
   model: gemini-2.5-pro
   messages:
+    - role: system
+      content: You are a weather assistant.
     - role: user
       content: Weather in Columbus and Berlin?
     - role: assistant
@@ -14,6 +16,8 @@ info:
           function:
             name: get_weather
             arguments: "{\"location\":\"Columbus\"}"
+    - role: system
+      content: Report temperatures in celsius.
     - role: tool
       tool_call_id: call_1
       name: get_weather
@@ -30,6 +34,8 @@ info:
       tool_call_id: call_2
       name: get_weather
       content: "{\"temp\":9}"
+    - role: system
+      content: 2 tool calls used.
   tools:
     - type: function
       function:
@@ -40,6 +46,16 @@ info:
           properties:
             location:
               type: string
+            days:
+              type: integer
+              exclusiveMinimum: 0
+              maximum: 14
+            hours:
+              type: array
+              items:
+                type: integer
+                minimum: 0
+                exclusiveMaximum: 24
           required:
             - location
 ---
@@ -81,6 +97,14 @@ info:
         ]
       },
       {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<system-reminder>\nReport temperatures in celsius.\n</system-reminder>"
+          }
+        ]
+      },
+      {
         "role": "model",
         "parts": [
           {
@@ -105,8 +129,23 @@ info:
             }
           }
         ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<system-reminder>\n2 tool calls used.\n</system-reminder>"
+          }
+        ]
       }
     ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "You are a weather assistant."
+        }
+      ]
+    },
     "tools": [
       {
         "functionDeclarations": [
@@ -118,6 +157,19 @@ info:
               "properties": {
                 "location": {
                   "type": "string"
+                },
+                "days": {
+                  "type": "integer",
+                  "maximum": 14,
+                  "minimum": 0
+                },
+                "hours": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 24
+                  }
                 }
               },
               "required": [
@@ -138,12 +190,20 @@ info:
     "params": {},
     "prompt": [
       {
+        "role": "system",
+        "content": "You are a weather assistant."
+      },
+      {
         "role": "user",
         "content": "Weather in Columbus and Berlin?"
       },
       {
         "role": "assistant",
         "content": ""
+      },
+      {
+        "role": "system",
+        "content": "Report temperatures in celsius."
       },
       {
         "role": "tool",
@@ -156,6 +216,10 @@ info:
       {
         "role": "tool",
         "content": "{\"temp\":9}"
+      },
+      {
+        "role": "system",
+        "content": "2 tool calls used."
       }
     ]
   }

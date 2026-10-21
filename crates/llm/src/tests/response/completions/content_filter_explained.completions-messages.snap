@@ -1,0 +1,51 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/content_filter_explained.json
+info:
+  id: chatcmpl_filter_explained
+  object: chat.completion
+  created: 123
+  model: gemini-3.8-flash
+  choices:
+    - index: 0
+      finish_reason: content_filter
+      message:
+        role: assistant
+        content: ""
+        refusal: The response was blocked for dangerous content.
+  usage:
+    prompt_tokens: 14
+    completion_tokens: 3
+    total_tokens: 17
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": ""
+      }
+    ],
+    "model": "gemini-3.8-flash",
+    "stop_reason": "refusal",
+    "stop_sequence": null,
+    "stop_details": {
+      "type": "refusal",
+      "category": null,
+      "explanation": "The response was blocked for dangerous content."
+    },
+    "usage": {
+      "input_tokens": 14,
+      "output_tokens": 3
+    }
+  },
+  "parsed": {
+    "input_tokens": 14,
+    "output_tokens": 3,
+    "total_tokens": 17,
+    "provider_model": "gemini-3.8-flash"
+  }
+}

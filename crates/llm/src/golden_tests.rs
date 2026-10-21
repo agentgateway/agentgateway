@@ -311,7 +311,7 @@ mod requests {
 						|i: &mut types::completions::Request| {
 							let mut resolved = i.clone();
 							resolved.model = Some("gemini-2.5-pro".into());
-							conversion::vertex_gemini::from_completions::translate(&resolved, true)
+							conversion::vertex_gemini::from_completions::translate(&resolved, true, None)
 						},
 					),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
@@ -872,9 +872,9 @@ mod responses {
 			filters => vec![
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
-				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
+				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"${1}_xxx""#),
 				(r#""id":"rs_[0-9a-f]{16}""#, r#""id":"rs_xxx""#),
-				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"${1}_xxx""#),
 				(r#""item_id":"rs_[0-9a-f]{16}""#, r#""item_id":"rs_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
@@ -935,7 +935,22 @@ mod responses {
 		COMPLETIONS_TO_DETECT,
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		("content_filter", &[COMPLETIONS_TO_MESSAGES]),
+		(
+			"content_filter",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"content_filter_explained",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"refusal",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"refusal_after_text",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("basic", ALL_COMPLETIONS),
 		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
@@ -951,6 +966,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_length_no_message",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"gemini_malformed_function_call",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		(
 			"gemini_thinking",
 			&[
@@ -1054,7 +1077,22 @@ mod responses {
 		),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream-content_filter", &[COMPLETIONS_TO_MESSAGES]),
+		(
+			"stream-content_filter",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-content_filter_explained",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-refusal",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-refusal_after_text",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("stream", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
@@ -1071,6 +1109,14 @@ mod responses {
 		(
 			"stream-vllm_reasoning",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-gemini_malformed_function_call",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];

@@ -3,6 +3,7 @@ use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use agent_llm::types::completions::typed::ReasoningEffort;
 use anyhow::Context;
 use arc_swap::ArcSwap;
 pub use model::{
@@ -309,6 +310,25 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	}
 	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
 		self.state.load().snapshot.get_model_tags(model_id)
+	}
+
+	fn reasoning_efforts(&self, provider: &str, model_id: &str) -> Option<Vec<ReasoningEffort>> {
+		let state = self.state.load();
+		Some(
+			state
+				.snapshot
+				.model(provider, model_id)?
+				.reasoning
+				.effort
+				.iter()
+				.filter_map(|e| {
+					ReasoningEffort::deserialize(serde::de::value::BorrowedStrDeserializer::<
+						serde::de::value::Error,
+					>::new(e))
+					.ok()
+				})
+				.collect(),
+		)
 	}
 }
 
@@ -1114,6 +1134,59 @@ mod tests {
 		// A model with rates but no tags has no entry.
 		assert!(snapshot.get_model_tags("gpt-4o").is_none());
 		assert!(snapshot.get_model_tags("unknown.model").is_none());
+	}
+
+	#[rstest::rstest]
+	#[case::vertex_prefixed(
+		"gcp.vertex_ai",
+		"publishers/google/models/gemini-4-argon",
+		Some(vec![ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High])
+	)]
+	#[case::budget_only("gcp.gemini", "gemini-2.5-pro", Some(vec![]))]
+	#[case::other_provider("gcp.vertex_ai", "gemini-3.5-flash", None)]
+	#[case::unknown_effort_skipped("copilot", "gemini-3.5-flash", Some(vec![ReasoningEffort::Low]))]
+	#[case::all_unknown("copilot", "gemini-3.6-flash", Some(vec![]))]
+	#[case::no_reasoning("gcp.gemini", "gemini-2.5-flash-tts", Some(vec![]))]
+	fn reasoning_efforts_come_from_the_provider_entry(
+		#[case] provider: &str,
+		#[case] model: &str,
+		#[case] expected: Option<Vec<ReasoningEffort>>,
+	) {
+		let catalog = ModelCatalog::from_json(
+			r#"{"providers":{
+				"gcp.vertex_ai":{"models":{
+					"gemini-4-argon":{"reasoning":{"effort":["low","medium","high"]}}
+				}},
+				"gcp.gemini":{"models":{
+					"gemini-2.5-pro":{"reasoning":{"budgetTokens":{"min":128,"max":32768}}},
+					"gemini-2.5-flash-tts":{"rates":{"input":"0.5"}}
+				}},
+				"copilot":{"models":{
+					"gemini-3.5-flash":{"reasoning":{"effort":["low","turbo"]}},
+					"gemini-3.6-flash":{"reasoning":{"effort":["turbo"]}}
+				}}
+			}}"#,
+		);
+		assert_eq!(
+			catalog.as_handle().reasoning_efforts(provider, model),
+			expected
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::vertex_gemini_3("gcp.vertex_ai", "gemini-3.8-flash")]
+	#[case::vertex_gemini_4("gcp.vertex_ai", "gemini-4-argon")]
+	#[case::gemini_api_gemini_4("gcp.gemini", "gemini-4-argon")]
+	fn builtin_catalog_lists_gemini_thinking_levels(#[case] provider: &str, #[case] model: &str) {
+		let catalog = ModelCatalog::from_json(BUILTIN_CATALOG_JSON);
+		assert_eq!(
+			catalog.as_handle().reasoning_efforts(provider, model),
+			Some(vec![
+				ReasoningEffort::Low,
+				ReasoningEffort::Medium,
+				ReasoningEffort::High
+			])
+		);
 	}
 
 	#[test]

@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl_refusal","object":"chat.completion.chunk","created":123,"model":"gpt-5.6-luna","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"The user asks for something I won't do."}}]}
+
+data: {"id":"chatcmpl_refusal","object":"chat.completion.chunk","created":123,"model":"gpt-5.6-luna","choices":[{"index":0,"delta":{"refusal":"I'm sorry, "}}]}
+
+data: {"id":"chatcmpl_refusal","object":"chat.completion.chunk","created":123,"model":"gpt-5.6-luna","choices":[{"index":0,"delta":{"refusal":"I can't help with that."}}]}
+
+data: {"id":"chatcmpl_refusal","object":"chat.completion.chunk","created":123,"model":"gpt-5.6-luna","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":9,"total_tokens":21}}
+
+data: [DONE]
+

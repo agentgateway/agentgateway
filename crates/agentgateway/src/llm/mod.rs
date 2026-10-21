@@ -502,7 +502,7 @@ fn render_vertex_gemini(
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
 			let is_vertex = matches!(ctx.provider, AIProvider::Vertex(_));
-			conversion::vertex_gemini::from_completions::translate(&req, is_vertex)
+			conversion::vertex_gemini::from_completions::translate(&req, is_vertex, ctx.catalog)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"
@@ -2636,7 +2636,20 @@ impl AIProvider {
 			mut managed_body,
 		} = buffered;
 
-		let (llm_resp, body) = if !parts.status.is_success() {
+		let failure = parts
+			.status
+			.is_success()
+			.then(|| self.native_gemini_failure(&req, &bytes, model_catalog.map(|c| c.as_handle())))
+			.flatten();
+		let (llm_resp, body) = if let Some((status, error)) = failure {
+			// The failed reply still used tokens
+			let llm_resp = self
+				.translate_chat_or_detect_response(&req, &bytes, model_catalog.map(|c| c.as_handle()))?
+				.to_llm_response(log_content);
+			parts.status = status;
+			let body = self.process_error(&req, status, &error, model_catalog.map(|c| c.as_handle()))?;
+			(llm_resp, body)
+		} else if !parts.status.is_success() {
 			let body = self.process_error(
 				&req,
 				parts.status,
@@ -3339,6 +3352,29 @@ impl AIProvider {
 			return Err(AIError::MissingField("model not specified".into()));
 		}
 		Ok(())
+	}
+
+	/// A native Gemini reply that ended with a failure, as the upstream error it stands for. Native
+	/// Gemini clients get the reply as Gemini sent it
+	fn native_gemini_failure(
+		&self,
+		req: &LLMRequest,
+		bytes: &Bytes,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Option<(::http::StatusCode, Bytes)> {
+		if !matches!(
+			req.input_format,
+			InputFormat::Completions | InputFormat::Messages | InputFormat::Responses
+		) {
+			return None;
+		}
+		let translation = self
+			.chat_translation(req.input_format, &req.request_model, catalog)
+			.ok()?;
+		if translation.output != ChatFormat::VertexGemini {
+			return None;
+		}
+		conversion::vertex_gemini::to_completions::failure(bytes)
 	}
 
 	fn process_error(

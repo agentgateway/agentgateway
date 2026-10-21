@@ -1,0 +1,21 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-content_filter_explained.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"chatcmpl_filter_explained","type":"message","role":"assistant","content":[],"model":"gemini-3.8-flash","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null,"stop_details":{"type":"refusal","category":null,"explanation":"The response was blocked for dangerous content."}},"usage":{"input_tokens":14,"output_tokens":3}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 14,
+  "output_tokens": 3,
+  "total_tokens": 17,
+  "provider_model": "gemini-3.8-flash"
+}

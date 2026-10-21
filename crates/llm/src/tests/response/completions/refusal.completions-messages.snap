@@ -1,0 +1,51 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/refusal.json
+info:
+  id: chatcmpl_refusal
+  object: chat.completion
+  created: 123
+  model: gpt-5.6-luna
+  choices:
+    - index: 0
+      finish_reason: stop
+      message:
+        role: assistant
+        content: ~
+        refusal: "I'm sorry, I can't help with that."
+  usage:
+    prompt_tokens: 12
+    completion_tokens: 9
+    total_tokens: 21
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'm sorry, I can't help with that."
+      }
+    ],
+    "model": "gpt-5.6-luna",
+    "stop_reason": "refusal",
+    "stop_sequence": null,
+    "stop_details": {
+      "type": "refusal",
+      "category": null,
+      "explanation": null
+    },
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 9
+    }
+  },
+  "parsed": {
+    "input_tokens": 12,
+    "output_tokens": 9,
+    "total_tokens": 21,
+    "provider_model": "gpt-5.6-luna"
+  }
+}

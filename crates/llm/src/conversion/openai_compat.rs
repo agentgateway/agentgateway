@@ -525,6 +525,17 @@ pub mod to_responses {
 		let response_builder = types::responses::ResponseBuilder::new(response_id, model.to_string());
 
 		let choice = resp.choices.into_iter().next();
+		let finish_reason = choice.as_ref().and_then(|c| c.finish_reason);
+
+		let status = match finish_reason {
+			Some(completions::FinishReason::Stop) | None => responses::Status::Completed,
+			Some(completions::FinishReason::Length | completions::FinishReason::ContentFilter) => {
+				responses::Status::Incomplete
+			},
+			Some(completions::FinishReason::ToolCalls)
+			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
+		};
+		let item_status = item_status(&status);
 
 		let mut outputs: Vec<responses::OutputItem> = Vec::new();
 		let mut text_parts: Vec<responses::OutputMessageContent> = Vec::new();
@@ -541,7 +552,7 @@ pub mod to_responses {
 						},
 					)]),
 					encrypted_content: None,
-					status: Some(responses::OutputStatus::Completed),
+					status: Some(item_status),
 				}));
 			}
 			if let Some(content) = &choice.message.content {
@@ -550,6 +561,13 @@ pub mod to_responses {
 						annotations: vec![],
 						logprobs: None,
 						text: content.clone(),
+					},
+				));
+			}
+			if let Some(refusal) = choice.message.refusal.as_ref().filter(|r| !r.is_empty()) {
+				text_parts.push(responses::OutputMessageContent::Refusal(
+					responses::RefusalContent {
+						refusal: refusal.clone(),
 					},
 				));
 			}
@@ -565,7 +583,7 @@ pub mod to_responses {
 									name: f.function.name.clone(),
 									caller: None,
 									id: Some(f.id.clone()),
-									status: Some(responses::OutputStatus::Completed),
+									status: Some(item_status),
 									namespace: None,
 									r#async: None,
 								},
@@ -583,36 +601,17 @@ pub mod to_responses {
 				role: responses::AssistantRole::Assistant,
 				phase: None,
 				content: text_parts,
-				status: responses::OutputStatus::Completed,
+				status: item_status,
 			}));
 		}
 		outputs.extend(tool_calls);
 
-		let finish_reason = choice.as_ref().and_then(|c| c.finish_reason.as_ref());
-
-		let status = match finish_reason {
-			Some(completions::FinishReason::Stop) | None => responses::Status::Completed,
-			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
-			Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall) => responses::Status::Completed,
-			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
-		};
-
-		let incomplete_details = match finish_reason {
-			Some(completions::FinishReason::Length) => Some(responses::IncompleteDetails {
-				reason: "max_tokens".to_string(),
-			}),
-			_ => None,
-		};
-
-		let error = match finish_reason {
-			Some(completions::FinishReason::ContentFilter) => Some(responses::ResponseError {
-				code: responses::ResponseErrorCode::Other("content_filter".to_string()),
-				message: "Content filtered".to_string(),
-				misalignment: None,
-			}),
-			_ => None,
-		};
+		let incomplete_details =
+			finish_reason
+				.and_then(incomplete_reason)
+				.map(|reason| responses::IncompleteDetails {
+					reason: reason.to_string(),
+				});
 
 		let usage = resp.usage.map(|u| responses::ResponseUsage {
 			input_tokens: u.prompt_tokens,
@@ -640,7 +639,7 @@ pub mod to_responses {
 			},
 		});
 
-		let mut response = response_builder.response(status, usage, error, incomplete_details);
+		let mut response = response_builder.response(status, usage, None, incomplete_details);
 		response.output = outputs;
 		response
 	}
@@ -654,14 +653,13 @@ pub mod to_responses {
 	) -> Body {
 		use responses::{
 			FunctionToolCall, OutputContent, OutputItem, OutputStatus, OutputTextContent, ReasoningItem,
-			ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
-			ResponseOutputItemAddedEvent, ResponseReasoningTextDeltaEvent, ResponseStreamEvent,
-			ResponseTextDeltaEvent,
+			RefusalContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+			ResponseOutputItemAddedEvent, ResponseReasoningTextDeltaEvent, ResponseRefusalDeltaEvent,
+			ResponseStreamEvent, ResponseTextDeltaEvent,
 		};
 
 		let mut last_token_at: Option<Instant> = None;
 		let mut sent_created = false;
-		let mut sent_content_part = false;
 		let mut flushed = false;
 
 		let mut sequence_number: u64 = 0;
@@ -675,12 +673,10 @@ pub mod to_responses {
 		let mut message_output_index: Option<u32> = None;
 		// (item_id, output_index, text)
 		let mut reasoning: Option<(String, u32, String)> = None;
-		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
+		let mut tool_calls: HashMap<u32, StreamedCall> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
-		// The full text, for `output_text.done` and the finished items: clients
-		// (the SDKs' `get_final_response()`) read those, not the deltas.
-		let mut text = String::new();
+		let mut message_content = MessageContent::default();
 		let mut pending_stop_reason: Option<completions::FinishReason> = None;
 		let mut pending_usage: Option<completions::Usage> = None;
 
@@ -709,8 +705,7 @@ pub mod to_responses {
 								&message_item_id,
 								&mut message_output_index,
 								&mut next_output_index,
-								&sent_content_part,
-								&text,
+								&message_content,
 								&log,
 								response_builder,
 								&mut completion,
@@ -808,7 +803,7 @@ pub mod to_responses {
 								if let Some(completion) = completion.as_mut() {
 									completion.push_str(content);
 								}
-								text.push_str(content);
+								message_content.text.push_str(content);
 								let message_output_index = open_message(
 									&mut events,
 									&mut sequence_number,
@@ -816,8 +811,8 @@ pub mod to_responses {
 									&mut next_output_index,
 									&message_item_id,
 								);
-								if !sent_content_part {
-									sent_content_part = true;
+								let (content_index, opened) = message_content.text_index();
+								if opened {
 									sequence_number += 1;
 									events.push((
 										"event",
@@ -825,7 +820,7 @@ pub mod to_responses {
 											sequence_number,
 											item_id: message_item_id.clone(),
 											output_index: message_output_index,
-											content_index: 0,
+											content_index,
 											part: OutputContent::OutputText(OutputTextContent {
 												text: String::new(),
 												annotations: Vec::new(),
@@ -844,9 +839,53 @@ pub mod to_responses {
 										sequence_number,
 										item_id: message_item_id.clone(),
 										output_index: message_output_index,
-										content_index: 0,
+										content_index,
 										delta: content.clone(),
 										logprobs: None,
+									}),
+								));
+							}
+
+							if let Some(refusal) = choice.delta.refusal.as_ref().filter(|r| !r.is_empty()) {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(refusal);
+								}
+								message_content.refusal.push_str(refusal);
+								let message_output_index = open_message(
+									&mut events,
+									&mut sequence_number,
+									&mut message_output_index,
+									&mut next_output_index,
+									&message_item_id,
+								);
+								let (content_index, opened) = message_content.refusal_index();
+								if opened {
+									sequence_number += 1;
+									events.push((
+										"event",
+										ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
+											sequence_number,
+											item_id: message_item_id.clone(),
+											output_index: message_output_index,
+											content_index,
+											part: OutputContent::Refusal(RefusalContent {
+												refusal: String::new(),
+											}),
+										}),
+									));
+								}
+
+								record_token(&mut last_token_at, &log);
+
+								sequence_number += 1;
+								events.push((
+									"event",
+									ResponseStreamEvent::ResponseRefusalDelta(ResponseRefusalDeltaEvent {
+										sequence_number,
+										item_id: message_item_id.clone(),
+										output_index: message_output_index,
+										content_index,
+										delta: refusal.clone(),
 									}),
 								));
 							}
@@ -883,15 +922,22 @@ pub mod to_responses {
 										let item_id = format!("call_{:016x}", rand::rng().random::<u64>());
 										let output_index = next_output_index;
 										next_output_index += 1;
-										(item_id, String::new(), String::new(), output_index)
+										// call_id cannot change after output_item.added
+										StreamedCall {
+											call_id: tc.id.clone().unwrap_or_else(|| item_id.clone()),
+											item_id,
+											name: String::new(),
+											arguments: String::new(),
+											output_index,
+										}
 									});
 
 									if let Some(function) = &tc.function {
 										if let Some(name) = &function.name {
-											entry.1 = name.clone();
+											entry.name = name.clone();
 										}
 										if let Some(args) = &function.arguments {
-											entry.2.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
 
@@ -903,14 +949,14 @@ pub mod to_responses {
 											"event",
 											ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
 												sequence_number,
-												output_index: entry.3,
+												output_index: entry.output_index,
 												item: OutputItem::FunctionCall(FunctionToolCall {
 													arguments: String::new(),
-													call_id: entry.0.clone(),
+													call_id: entry.call_id.clone(),
 													namespace: None,
-													name: entry.1.clone(),
+													name: entry.name.clone(),
 													caller: None,
-													id: Some(entry.0.clone()),
+													id: Some(entry.item_id.clone()),
 													status: Some(OutputStatus::InProgress),
 													r#async: None,
 												}),
@@ -928,8 +974,8 @@ pub mod to_responses {
 											ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
 												ResponseFunctionCallArgumentsDeltaEvent {
 													sequence_number,
-													item_id: entry.0.clone(),
-													output_index: entry.3,
+													item_id: entry.item_id.clone(),
+													output_index: entry.output_index,
 													delta: args.clone(),
 												},
 											),
@@ -958,8 +1004,7 @@ pub mod to_responses {
 								&message_item_id,
 								&mut message_output_index,
 								&mut next_output_index,
-								&sent_content_part,
-								&text,
+								&message_content,
 								&log,
 								response_builder,
 								&mut completion,
@@ -1027,27 +1072,24 @@ pub mod to_responses {
 	fn flush_end(
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
 		sequence_number: &mut u64,
-		tool_calls: &mut HashMap<u32, (String, String, String, u32)>,
+		tool_calls: &mut HashMap<u32, StreamedCall>,
 		reasoning: &mut Option<(String, u32, String)>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
 		message_output_index: &mut Option<u32>,
 		next_output_index: &mut u32,
-		sent_content_part: &bool,
-		text: &str,
+		message_content: &MessageContent,
 		log: &StreamingUsageGuard,
 		response_builder: &types::responses::ResponseBuilder,
 		completion: &mut Option<String>,
 		logged_tool_calls: &mut Option<LoggedToolCalls>,
 	) {
 		use responses::{
-			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
-			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
-			ResponseContentPartDoneEvent, ResponseError, ResponseFunctionCallArgumentsDoneEvent,
-			ResponseOutputItemDoneEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
-			ResponseTextDoneEvent, ResponseUsage,
+			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputItem,
+			OutputMessage, OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
+			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent,
+			ResponseReasoningTextDoneEvent, ResponseStreamEvent, ResponseUsage,
 		};
 
 		let stop_reason = pending_stop_reason.take();
@@ -1057,9 +1099,11 @@ pub mod to_responses {
 			| Some(completions::FinishReason::ToolCalls)
 			| Some(completions::FinishReason::FunctionCall)
 			| None => responses::Status::Completed,
-			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
-			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
+			Some(completions::FinishReason::Length | completions::FinishReason::ContentFilter) => {
+				responses::Status::Incomplete
+			},
 		};
+		let item_status = item_status(&response_status);
 		let finish_reason = crate::types::serialize_str(&response_status);
 		let tool_parts = logged_tool_calls.as_mut().and_then(|logged_tool_calls| {
 			crate::conversion::completions::finalize_streaming_tool_calls(
@@ -1103,7 +1147,7 @@ pub mod to_responses {
 					ReasoningTextContent { text },
 				)]),
 				encrypted_content: None,
-				status: Some(OutputStatus::Completed),
+				status: Some(item_status),
 			});
 			*sequence_number += 1;
 			events.push((
@@ -1126,9 +1170,19 @@ pub mod to_responses {
 		);
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
-		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		sorted_tools.sort_by_key(|(_, call)| call.output_index);
 
-		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
+		for (
+			_,
+			StreamedCall {
+				item_id,
+				call_id,
+				name,
+				arguments: buffer,
+				output_index,
+			},
+		) in sorted_tools
+		{
 			*sequence_number += 1;
 			events.push((
 				"event",
@@ -1145,12 +1199,12 @@ pub mod to_responses {
 
 			let item = OutputItem::FunctionCall(FunctionToolCall {
 				arguments: buffer,
-				call_id: item_id.clone(),
+				call_id,
 				namespace: None,
 				name,
 				caller: None,
 				id: Some(item_id),
-				status: Some(OutputStatus::Completed),
+				status: Some(item_status),
 				r#async: None,
 			});
 			*sequence_number += 1;
@@ -1165,48 +1219,19 @@ pub mod to_responses {
 			output.push((output_index, item));
 		}
 
-		let mut content = Vec::new();
-		if *sent_content_part {
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
-					sequence_number: *sequence_number,
-					item_id: message_item_id.to_string(),
-					output_index: message_output_index,
-					content_index: 0,
-					text: text.to_string(),
-					logprobs: None,
-				}),
-			));
-			*sequence_number += 1;
-			events.push((
-				"event",
-				ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
-					sequence_number: *sequence_number,
-					item_id: message_item_id.to_string(),
-					output_index: message_output_index,
-					content_index: 0,
-					part: OutputContent::OutputText(OutputTextContent {
-						annotations: Vec::new(),
-						logprobs: None,
-						text: text.to_string(),
-					}),
-				}),
-			));
-			content.push(OutputMessageContent::OutputText(OutputTextContent {
-				annotations: Vec::new(),
-				logprobs: None,
-				text: text.to_string(),
-			}));
-		}
+		let content = message_content.finish(
+			events,
+			sequence_number,
+			message_item_id,
+			message_output_index,
+		);
 
 		let message = OutputItem::Message(OutputMessage {
 			content,
 			id: message_item_id.to_string(),
 			role: AssistantRole::Assistant,
 			phase: None,
-			status: OutputStatus::Completed,
+			status: item_status,
 		});
 		*sequence_number += 1;
 		events.push((
@@ -1269,27 +1294,15 @@ pub mod to_responses {
 		});
 
 		*sequence_number += 1;
-		let mut done_event = match stop_reason {
-			Some(completions::FinishReason::Stop)
-			| Some(completions::FinishReason::ToolCalls)
-			| Some(completions::FinishReason::FunctionCall)
-			| None => response_builder.completed_event(*sequence_number, usage_obj),
-			Some(completions::FinishReason::Length) => response_builder.incomplete_event(
+		let mut done_event = match stop_reason.and_then(incomplete_reason) {
+			Some(reason) => response_builder.incomplete_event(
 				*sequence_number,
 				usage_obj,
 				IncompleteDetails {
-					reason: "max_tokens".to_string(),
+					reason: reason.to_string(),
 				},
 			),
-			Some(completions::FinishReason::ContentFilter) => response_builder.failed_event(
-				*sequence_number,
-				usage_obj,
-				ResponseError {
-					code: responses::ResponseErrorCode::Other("content_filter".to_string()),
-					message: "Content filtered".to_string(),
-					misalignment: None,
-				},
-			),
+			None => response_builder.completed_event(*sequence_number, usage_obj),
 		};
 
 		match &mut done_event {
@@ -1300,5 +1313,140 @@ pub mod to_responses {
 		}
 
 		events.push(("event", done_event));
+	}
+
+	/// Keep full content for final items, which clients may use instead of deltas
+	#[derive(Default)]
+	struct MessageContent {
+		text: String,
+		text_index: Option<u32>,
+		refusal: String,
+		refusal_index: Option<u32>,
+	}
+
+	impl MessageContent {
+		fn text_index(&mut self) -> (u32, bool) {
+			let next = self.next_index();
+			Self::index(&mut self.text_index, next)
+		}
+
+		fn refusal_index(&mut self) -> (u32, bool) {
+			let next = self.next_index();
+			Self::index(&mut self.refusal_index, next)
+		}
+
+		fn next_index(&self) -> u32 {
+			u32::from(self.text_index.is_some()) + u32::from(self.refusal_index.is_some())
+		}
+
+		fn index(slot: &mut Option<u32>, next: u32) -> (u32, bool) {
+			match *slot {
+				Some(index) => (index, false),
+				None => (*slot.insert(next), true),
+			}
+		}
+
+		fn finish(
+			&self,
+			events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
+			sequence_number: &mut u64,
+			item_id: &str,
+			output_index: u32,
+		) -> Vec<responses::OutputMessageContent> {
+			use responses::{
+				OutputContent, OutputMessageContent, OutputTextContent, RefusalContent,
+				ResponseContentPartDoneEvent, ResponseRefusalDoneEvent, ResponseStreamEvent,
+				ResponseTextDoneEvent,
+			};
+
+			let mut content = Vec::new();
+			if let Some(index) = self.text_index {
+				content.push((
+					index,
+					OutputMessageContent::OutputText(OutputTextContent {
+						annotations: Vec::new(),
+						logprobs: None,
+						text: self.text.clone(),
+					}),
+				));
+			}
+			if let Some(index) = self.refusal_index {
+				content.push((
+					index,
+					OutputMessageContent::Refusal(RefusalContent {
+						refusal: self.refusal.clone(),
+					}),
+				));
+			}
+			content.sort_by_key(|(index, _)| *index);
+
+			for (content_index, part) in &content {
+				let content_index = *content_index;
+				*sequence_number += 1;
+				let (done, part) = match part {
+					OutputMessageContent::OutputText(text) => (
+						ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
+							sequence_number: *sequence_number,
+							item_id: item_id.to_string(),
+							output_index,
+							content_index,
+							text: text.text.clone(),
+							logprobs: None,
+						}),
+						OutputContent::OutputText(text.clone()),
+					),
+					OutputMessageContent::Refusal(refusal) => (
+						ResponseStreamEvent::ResponseRefusalDone(ResponseRefusalDoneEvent {
+							sequence_number: *sequence_number,
+							item_id: item_id.to_string(),
+							output_index,
+							content_index,
+							refusal: refusal.refusal.clone(),
+						}),
+						OutputContent::Refusal(refusal.clone()),
+					),
+				};
+				events.push(("event", done));
+				*sequence_number += 1;
+				events.push((
+					"event",
+					ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
+						sequence_number: *sequence_number,
+						item_id: item_id.to_string(),
+						output_index,
+						content_index,
+						part,
+					}),
+				));
+			}
+			content.into_iter().map(|(_, part)| part).collect()
+		}
+	}
+
+	/// `item_id` names the output item and its argument events; `call_id` is the upstream call id
+	/// the client echoes in `function_call_output`
+	struct StreamedCall {
+		item_id: String,
+		call_id: String,
+		name: String,
+		arguments: String,
+		output_index: u32,
+	}
+
+	fn incomplete_reason(finish: completions::FinishReason) -> Option<&'static str> {
+		match finish {
+			completions::FinishReason::Length => Some("max_output_tokens"),
+			completions::FinishReason::ContentFilter => Some("content_filter"),
+			completions::FinishReason::Stop
+			| completions::FinishReason::ToolCalls
+			| completions::FinishReason::FunctionCall => None,
+		}
+	}
+
+	fn item_status(status: &responses::Status) -> responses::OutputStatus {
+		match status {
+			responses::Status::Incomplete => responses::OutputStatus::Incomplete,
+			_ => responses::OutputStatus::Completed,
+		}
 	}
 }
