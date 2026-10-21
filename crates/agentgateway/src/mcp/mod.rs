@@ -12,6 +12,7 @@ mod streamablehttp;
 mod subscriptions;
 mod upstream;
 
+use std::borrow::Cow;
 use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use rmcp::model::{
 };
 pub use router::App;
 use thiserror::Error;
+pub(crate) use upstream::openapi_server_prefix;
 
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
@@ -216,6 +218,48 @@ fn tool_error_body(
 }
 
 impl Error {
+	/// A client-safe message; Display retains the internal diagnostic details.
+	pub fn external_message(&self) -> Cow<'static, str> {
+		let msg = match self {
+			// Hides whether the resource exists, so it is never exposed.
+			Error::Authorization(_, _, _) => "unknown resource",
+			_ if *crate::proxy::EXPOSE_ERROR_DETAILS => return self.to_string().into(),
+			// Client request errors only describe the client's own request, so keep their detail.
+			Error::MethodNotAllowed
+			| Error::GetStreamNotSupported
+			| Error::InvalidAccept
+			| Error::InvalidAcceptGet
+			| Error::InvalidContentType
+			| Error::Deserialize(_)
+			| Error::UnknownSession
+			| Error::MissingSessionHeader
+			| Error::SessionIdRequired
+			| Error::InvalidSessionIdHeader
+			| Error::InvalidSessionIdQuery
+			| Error::InvalidProtocolVersion
+			| Error::UnsupportedVersion { .. }
+			| Error::VersionMismatch(_)
+			| Error::HeaderBodyMismatch(_, _)
+			| Error::InvalidRoutingHeader(_, _)
+			| Error::MethodNotFound(_, _)
+			| Error::InvalidParams(_, _) => return self.to_string().into(),
+			Error::PayloadTooLarge(_) => "request body too large",
+			Error::Unavailable(_, _) => "service unavailable",
+			Error::McpGuardrails { .. } => "request rejected by guardrail",
+			Error::RateLimited { .. } => "rate limit exceeded",
+			Error::StartSession(_) => "failed to create session",
+			Error::Stdio(_) => "failed to start stdio server",
+			Error::SendError(_, _) => "failed to send message",
+			Error::EstablishGetStream(_) => "failed to establish stream",
+			Error::ForwardLegacySse(_) => "failed to forward message",
+			Error::CreateSseUrl(_) => "failed to create sse url",
+			Error::OpenAPI(_) => "failed to parse openapi",
+			Error::UpstreamError(_) => "upstream error",
+			Error::NoBackends => "no backends available",
+		};
+		msg.into()
+	}
+
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		match self {
 			Error::RateLimited {
@@ -247,18 +291,23 @@ impl Error {
 			_ => {},
 		}
 		let (id, error) = match self {
+			// Policy rejections are explicit client responses; retain their message and data.
 			Error::McpGuardrails {
 				request_id, rej, ..
 			} => (request_id.clone(), rej.clone()),
 			Error::RateLimited {
 				request_id: id,
 				status,
+				message,
 				..
 			} => (
 				id.clone(),
 				ErrorData {
 					code: RESOURCE_EXHAUSTED,
-					message: self.to_string().into(),
+					message: message
+						.clone()
+						.unwrap_or_else(|| self.external_message().into_owned())
+						.into(),
 					data: status.map(|s| {
 						serde_json::json!({
 							"limit": s.limit,
@@ -276,7 +325,7 @@ impl Error {
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
-					message: self.to_string().into(),
+					message: self.external_message(),
 					// This gate runs before backend selection, so it reports the gateway set.
 					// With single-server discover passthrough, SEP-2575's supported/discover
 					// correlation holds only when the upstream advertises a superset of this list.
@@ -305,7 +354,7 @@ impl Error {
 					id,
 					ErrorData {
 						code,
-						message: self.to_string().into(),
+						message: self.external_message(),
 						data: None,
 					},
 				)
@@ -546,6 +595,37 @@ pub struct MCPInfo {
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub error: Option<MCPError>,
+}
+
+/// `mcp` in CEL; params and result are borrowed while guardrails evaluate.
+#[derive(Debug, Clone, Copy, ::cel::DynamicType)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+pub struct MCPView<'a> {
+	#[dynamic(flatten)]
+	#[cfg_attr(feature = "schema", schemars(flatten))]
+	pub info: &'a MCPInfo,
+	// TODO: Expose the selected targets as a list of MCPTarget in mcp.targets for CEL guardrails.
+	/// Current request parameters, with the same structure as the `params` object in an MCP request.
+	/// Available only during request-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
+	pub params: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+	/// Current response result, with the same structure as the `result` object in an MCP response.
+	/// Available only during response-phase CEL guardrails.
+	#[dynamic(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<serde_json::Value>"))]
+	pub result: Option<&'a dyn ::cel::types::dynamic::DynamicType>,
+}
+
+impl<'a> MCPView<'a> {
+	pub fn new(info: &'a MCPInfo) -> Self {
+		Self {
+			info,
+			params: None,
+			result: None,
+		}
+	}
 }
 
 impl MCPInfo {

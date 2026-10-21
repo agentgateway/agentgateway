@@ -35,9 +35,10 @@ info:
     }
   },
   "parsed": {
-    "input_tokens": 50,
+    "input_tokens": 100,
     "output_tokens": 5,
-    "total_tokens": 55,
+    "total_tokens": 105,
+    "reasoning_tokens": 3,
     "cache_creation_input_tokens": 30,
     "cached_input_tokens": 20,
     "provider_model": "gpt-5.6-luna"

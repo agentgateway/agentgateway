@@ -273,6 +273,7 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcChannel {
 						req,
 						target,
 						connection: transport.into(),
+						dynamic_backend: false,
 					})
 					.await?,
 			)

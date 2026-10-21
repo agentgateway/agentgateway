@@ -30,8 +30,6 @@ import (
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
 	"sigs.k8s.io/gateway-api/pkg/features"
 	"sigs.k8s.io/yaml"
-
-	_ "sigs.k8s.io/gateway-api-inference-extension/conformance"
 )
 
 func TestConformance(t *testing.T) {
@@ -262,7 +260,9 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 
 	var config struct {
 		AddressPools []struct {
-			Addresses []string `json:"addresses"`
+			Name       string   `json:"name"`
+			Addresses  []string `json:"addresses"`
+			AutoAssign *bool    `json:"auto-assign"`
 		} `json:"address-pools"`
 	}
 
@@ -273,7 +273,11 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 	var pools []metalLBAddressPool
 	for _, pool := range config.AddressPools {
 		if len(pool.Addresses) > 0 {
-			pools = append(pools, metalLBAddressPool{addresses: pool.Addresses, autoAssign: true})
+			pools = append(pools, metalLBAddressPool{
+				name:       pool.Name,
+				addresses:  pool.Addresses,
+				autoAssign: pool.AutoAssign == nil || *pool.AutoAssign,
+			})
 		}
 	}
 
@@ -281,7 +285,11 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 		return "", fmt.Errorf("no addresses found in ConfigMap")
 	}
 
-	return chooseMetallbAddress(pools, nil)
+	usedAddresses, err := usedLoadBalancerAddresses(cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to list used LoadBalancer addresses: %w", err)
+	}
+	return chooseMetallbAddress(pools, usedAddresses)
 }
 
 type metalLBAddressPool struct {
@@ -317,20 +325,22 @@ func chooseMetallbAddress(pools []metalLBAddressPool, usedAddresses map[string]s
 
 	var firstAutoAssigned string
 	for _, pool := range pools {
-		for _, address := range pool.addresses {
-			for _, candidate := range candidateIPv4Addresses(address) {
-				if _, used := usedAddresses[candidate]; used {
+		var candidates []string
+		for _, address := range slices.Backward(pool.addresses) {
+			candidates = append(candidates, candidateIPv4Addresses(address)...)
+		}
+		for _, candidate := range candidates {
+			if _, used := usedAddresses[candidate]; used {
+				continue
+			}
+			if !pool.autoAssign {
+				if _, overlaps := autoAssignedCandidates[candidate]; overlaps {
 					continue
 				}
-				if !pool.autoAssign {
-					if _, overlaps := autoAssignedCandidates[candidate]; overlaps {
-						continue
-					}
-					return candidate, nil
-				}
-				if firstAutoAssigned == "" {
-					firstAutoAssigned = candidate
-				}
+				return candidate, nil
+			}
+			if firstAutoAssigned == "" {
+				firstAutoAssigned = candidate
 			}
 		}
 	}

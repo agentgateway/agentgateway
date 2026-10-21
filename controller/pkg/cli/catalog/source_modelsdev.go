@@ -37,18 +37,20 @@ var modelsDevProviderIDs = map[string]string{
 	"azure":          "azure",
 	"github-copilot": "copilot",
 	// TODO: not yet exposed at cost time — proxy resolves these custom-backed providers as "custom".
-	"cohere":       "cohere",
-	"baseten":      "baseten",
-	"cerebras":     "cerebras",
-	"deepinfra":    "deepinfra",
-	"deepseek":     "deepseek",
-	"groq":         "groq",
-	"huggingface":  "huggingface",
-	"mistral":      "mistral",
-	"openrouter":   "openrouter",
-	"togetherai":   "togetherai",
-	"xai":          "xai",
-	"fireworks-ai": "fireworks",
+	"cohere":           "cohere",
+	"baseten":          "baseten",
+	"cerebras":         "cerebras",
+	"deepinfra":        "deepinfra",
+	"deepseek":         "deepseek",
+	"groq":             "groq",
+	"huggingface":      "huggingface",
+	"mistral":          "mistral",
+	"openrouter":       "openrouter",
+	"togetherai":       "togetherai",
+	"xai":              "xai",
+	"fireworks-ai":     "fireworks",
+	"meta":             "meta",
+	"perplexity-agent": "perplexity",
 }
 
 type modelsDevProvider struct {
@@ -62,12 +64,34 @@ type modelsDevModel struct {
 	Name             string                     `json:"name"`
 	Family           string                     `json:"family"`
 	Status           string                     `json:"status"`
+	ReleaseDate      string                     `json:"release_date"`
 	Cost             *modelsDevCost             `json:"cost"`
+	Reasoning        *bool                      `json:"reasoning"`
 	ReasoningOptions []modelsDevReasoningOption `json:"reasoning_options"`
+	ToolCall         *bool                      `json:"tool_call"`
+	StructuredOutput *bool                      `json:"structured_output"`
+	Temperature      *bool                      `json:"temperature"`
+	Limit            Limits                     `json:"limit"`
+	Modalities       Modalities                 `json:"modalities"`
+	Experimental     struct {
+		Modes map[string]modelsDevMode `json:"modes"`
+	} `json:"experimental"`
 }
 
 type modelsDevReasoningOption struct {
-	Type string `json:"type"`
+	Type   string    `json:"type"`
+	Values []*string `json:"values"`
+	Min    *int64    `json:"min"`
+	Max    *int64    `json:"max"`
+}
+
+type modelsDevMode struct {
+	Cost     *modelsDevRates `json:"cost"`
+	Provider struct {
+		Body struct {
+			ServiceTier string `json:"service_tier"`
+		} `json:"body"`
+	} `json:"provider"`
 }
 
 type modelsDevRates struct {
@@ -96,7 +120,7 @@ type modelsDevTierKind struct {
 }
 
 func modelsDevFetchAPI(ctx context.Context) (map[string]modelsDevProvider, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://models.dev/api.json", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://models.dev/api.json?type=all", nil)
 	if err != nil {
 		return nil, fmt.Errorf("build request for models.dev api.json: %w", err)
 	}
@@ -176,7 +200,8 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 			if err != nil {
 				return nil, warns, fmt.Errorf("%s/%s: %w", gwID, modelID, err)
 			}
-			if entry.IsZero() {
+			// Metadata alone does not earn a catalog entry; require pricing or tags.
+			if entry.Rates.IsZero() && len(entry.Tiers) == 0 && len(entry.Tags) == 0 {
 				continue
 			}
 			models[modelID] = entry
@@ -203,8 +228,45 @@ func modelsDevTransform(api map[string]modelsDevProvider, providers []string, le
 
 func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(format string, args ...any)) (Model, error) {
 	label := provider + "/" + model
-	var entry Model
-	if strings.HasPrefix(m.Family, "claude-") {
+	entry := Model{
+		Name:     m.Name,
+		Status:   m.Status,
+		Released: m.ReleaseDate,
+		Limits:   m.Limit,
+		Capabilities: Capabilities{
+			Reasoning:        m.Reasoning,
+			StructuredOutput: m.StructuredOutput,
+			ToolCall:         m.ToolCall,
+			Temperature:      m.Temperature,
+		},
+		Modalities: m.Modalities,
+	}
+	for _, option := range m.ReasoningOptions {
+		switch option.Type {
+		case "toggle":
+			entry.Reasoning.Toggle = new(true)
+		case "effort":
+			for _, v := range option.Values {
+				if v != nil {
+					entry.Reasoning.Effort = append(entry.Reasoning.Effort, *v)
+				}
+			}
+		case "budget_tokens":
+			budget := &BudgetTokens{}
+			// Some sources use -1 as a sentinel for a dynamic budget; treat it as unset.
+			if option.Min != nil && *option.Min >= 0 {
+				budget.Min = new(uint64(*option.Min))
+			}
+			if option.Max != nil && *option.Max >= 0 {
+				budget.Max = new(uint64(*option.Max))
+			}
+			entry.Reasoning.BudgetTokens = budget
+		default:
+			warn("%s: skipping unsupported reasoning option %q", label, option.Type)
+		}
+	}
+	claude := strings.HasPrefix(m.Family, "claude-")
+	if claude {
 		var effort, budgetTokens bool
 		for _, option := range m.ReasoningOptions {
 			switch option.Type {
@@ -235,7 +297,46 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 		entry.Tiers = tiers
 	}
 
+	// Only modes selected by an OpenAI-style service_tier map onto our service tiers.
+	for _, name := range slices.Sorted(maps.Keys(m.Experimental.Modes)) {
+		mode := m.Experimental.Modes[name]
+		serviceTier := mode.Provider.Body.ServiceTier
+		if mode.Cost == nil || (serviceTier != "priority" && serviceTier != "flex") {
+			continue
+		}
+		rates, err := modelsDevBuildRates(mode.Cost, label+" "+name+" mode")
+		if err != nil {
+			return Model{}, err
+		}
+		entry.Tiers = append(entry.Tiers, Tier{ServiceTier: serviceTier, Rates: rates})
+	}
+
+	if claude {
+		deriveCacheWrite1h(&entry.Rates)
+		for i := range entry.Tiers {
+			deriveCacheWrite1h(&entry.Tiers[i].Rates)
+		}
+	}
+
 	return entry, nil
+}
+
+// deriveCacheWrite1h fills the 1h cache write rate, which models.dev does not publish. Anthropic
+// prices 1h writes at 2x input and 5m writes at 1.25x; only derive when the 5m rate follows that
+// rule, so a source with a different pricing scheme is left to fall back to cacheWrite.
+func deriveCacheWrite1h(r *Rates) {
+	if r.CacheWrite == "" {
+		return
+	}
+	input, err := r.Input.Decimal()
+	if err != nil {
+		return
+	}
+	cacheWrite, err := r.CacheWrite.Decimal()
+	if err != nil || !cacheWrite.Equal(input.Mul(decimal.RequireFromString("1.25"))) {
+		return
+	}
+	r.CacheWrite1h = Money(input.Mul(decimal.NewFromInt(2)).String())
 }
 
 func modelsDevBuildTiers(src []modelsDevTier, label string, warn func(format string, args ...any)) ([]Tier, error) {

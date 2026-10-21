@@ -1,0 +1,46 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-gemini_thinking.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"google/gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"google/gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":"Neptune was found"}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":6,"item_id":"","output_index":0,"content_index":0,"delta":" by mathematics."}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":7,"item_id":"","output_index":0,"content_index":0,"text":"Neptune was found by mathematics.","logprobs":null}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":8,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"Neptune was found by mathematics."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":9,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Neptune was found by mathematics."}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":10,"response":{"created_at":123,"id":"","model":"google/gemini-3.8-flash","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Neptune was found by mathematics."}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":19,"input_tokens_details":{"cached_tokens":0},"output_tokens":50,"output_tokens_details":{"reasoning_tokens":20},"total_tokens":69}}}
+
+
+
+{
+  "input_tokens": 19,
+  "output_tokens": 50,
+  "total_tokens": 69,
+  "reasoning_tokens": 20,
+  "provider_model": "google/gemini-3.8-flash",
+  "completion": [
+    "Neptune was found by mathematics."
+  ]
+}

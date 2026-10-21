@@ -19,7 +19,7 @@ import {
 	Wrench
 } from 'lucide-react';
 import { marked } from 'marked';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { analyticsSummary, getLog, searchLogs, streamLogs } from '@/api/logsApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -129,14 +129,12 @@ export function LogsPage() {
 	const detailSeqRef = useRef(0);
 	const detailLoadingTimerRef = useRef<number | null>(null);
 	const filterOptionsSeqRef = useRef(0);
-	const logFiltersKey = analyticsFiltersKey(logFilters);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const filters = useMemo(
 		() => ({
 			...analyticsLogFilters(logFilters),
 			httpStatus: status ? [Number(status)] : []
 		}),
-		[logFiltersKey, status]
+		[logFilters, status]
 	);
 	const visibleLogs = useMemo(() => {
 		if (!expanded || !expandedId || response.logs.some(entry => entry.id === expandedId))
@@ -144,7 +142,7 @@ export function LogsPage() {
 		return [expanded, ...response.logs];
 	}, [expanded, expandedId, response.logs]);
 
-	async function load() {
+	const load = useCallback(async () => {
 		const loadSeq = loadSeqRef.current + 1;
 		loadSeqRef.current = loadSeq;
 		setError(null);
@@ -163,14 +161,12 @@ export function LogsPage() {
 		} finally {
 			if (loadSeq === loadSeqRef.current) setLoading(false);
 		}
-	}
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		void load();
 	}, [filters]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
+	useEffect(() => {
+		void load();
+	}, [load]);
+
 	useEffect(() => {
 		const loadSeq = filterOptionsSeqRef.current + 1;
 		filterOptionsSeqRef.current = loadSeq;
@@ -202,7 +198,7 @@ export function LogsPage() {
 				);
 			}
 		})();
-	}, [logFiltersKey, models]);
+	}, [logFilters, models]);
 
 	useEffect(() => {
 		abortRef.current?.abort();
@@ -248,7 +244,44 @@ export function LogsPage() {
 		});
 	}
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
+	const stopDeferredExpandedLoading = useCallback(() => {
+		if (detailLoadingTimerRef.current != null) {
+			window.clearTimeout(detailLoadingTimerRef.current);
+			detailLoadingTimerRef.current = null;
+		}
+		setExpandedLoading(false);
+	}, []);
+
+	const startDeferredExpandedLoading = useCallback(() => {
+		stopDeferredExpandedLoading();
+		detailLoadingTimerRef.current = window.setTimeout(() => {
+			detailLoadingTimerRef.current = null;
+			setExpandedLoading(true);
+		}, 180);
+	}, [stopDeferredExpandedLoading]);
+
+	const loadExpandedLog = useCallback(
+		async (logId: string, fallback?: LogEntry) => {
+			const detailSeq = detailSeqRef.current + 1;
+			detailSeqRef.current = detailSeq;
+			setExpandedId(logId);
+			setExpanded(fallback ?? null);
+			startDeferredExpandedLoading();
+			try {
+				const detail = await getLog(logId);
+				if (detailSeq !== detailSeqRef.current) return;
+				const nextLog = detail.log ?? fallback ?? null;
+				setExpanded(nextLog);
+			} catch (err) {
+				if (detailSeq !== detailSeqRef.current) return;
+				setError(err instanceof Error ? err.message : 'Failed to load log detail');
+			} finally {
+				if (detailSeq === detailSeqRef.current) stopDeferredExpandedLoading();
+			}
+		},
+		[startDeferredExpandedLoading, stopDeferredExpandedLoading]
+	);
+
 	useEffect(() => {
 		if (!linkedLogId) {
 			setExpandedId(null);
@@ -259,26 +292,7 @@ export function LogsPage() {
 		if (linkedLogId === expandedId) return;
 		const fallback = response.logs.find(entry => entry.id === linkedLogId);
 		void loadExpandedLog(linkedLogId, fallback);
-	}, [linkedLogId]);
-
-	async function loadExpandedLog(logId: string, fallback?: LogEntry) {
-		const detailSeq = detailSeqRef.current + 1;
-		detailSeqRef.current = detailSeq;
-		setExpandedId(logId);
-		setExpanded(fallback ?? null);
-		startDeferredExpandedLoading();
-		try {
-			const detail = await getLog(logId);
-			if (detailSeq !== detailSeqRef.current) return;
-			const nextLog = detail.log ?? fallback ?? null;
-			setExpanded(nextLog);
-		} catch (err) {
-			if (detailSeq !== detailSeqRef.current) return;
-			setError(err instanceof Error ? err.message : 'Failed to load log detail');
-		} finally {
-			if (detailSeq === detailSeqRef.current) stopDeferredExpandedLoading();
-		}
-	}
+	}, [linkedLogId, expandedId, response.logs, loadExpandedLog, stopDeferredExpandedLoading]);
 
 	async function expand(entry: LogEntry) {
 		if (expandedId === entry.id) {
@@ -290,22 +304,6 @@ export function LogsPage() {
 		}
 		setLinkedLogQuery(entry.id);
 		await loadExpandedLog(entry.id, entry);
-	}
-
-	function startDeferredExpandedLoading() {
-		stopDeferredExpandedLoading();
-		detailLoadingTimerRef.current = window.setTimeout(() => {
-			detailLoadingTimerRef.current = null;
-			setExpandedLoading(true);
-		}, 180);
-	}
-
-	function stopDeferredExpandedLoading() {
-		if (detailLoadingTimerRef.current != null) {
-			window.clearTimeout(detailLoadingTimerRef.current);
-			detailLoadingTimerRef.current = null;
-		}
-		setExpandedLoading(false);
 	}
 
 	return (
@@ -359,11 +357,9 @@ export function LogsPage() {
 								values={logFilters[dimension]}
 								placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 								allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+								searchLabel={`Search ${meta.label.toLowerCase()}`}
 								onChange={values =>
-									setLogFilters(current => ({
-										...current,
-										[dimension]: values
-									}))
+									setLogFilters(current => withAnalyticsFilter(current, dimension, values))
 								}
 							/>
 						);
@@ -392,14 +388,15 @@ export function LogsPage() {
 							onChange={event => setStream(event.target.checked)}
 						/>
 						Stream
-						{stream ? <span className="stream-live-dot" /> : null}
 					</label>
 					{hasAnalyticsFilters(logFilters) || status ? (
 						<button
 							className="button"
 							type="button"
 							onClick={() => {
-								setLogFilters(emptyAnalyticsFilterOptions());
+								setLogFilters(current =>
+									hasAnalyticsFilters(current) ? emptyAnalyticsFilterOptions() : current
+								);
 								setStatus('');
 							}}
 						>
@@ -604,6 +601,15 @@ function LogsSettingsDrawer(props: {
 	);
 }
 
+function withAnalyticsFilter(
+	filters: Record<AnalyticsDimension, string[]>,
+	dimension: AnalyticsDimension,
+	values: string[]
+) {
+	const next = { ...filters, [dimension]: values };
+	return analyticsFiltersKey(next) === analyticsFiltersKey(filters) ? filters : next;
+}
+
 function hasAnalyticsFilters(filters: Record<AnalyticsDimension, string[]>) {
 	return ANALYTICS_DIMENSIONS.some(item => filters[item.value].length > 0);
 }
@@ -727,8 +733,11 @@ export function AnalyticsPage() {
 	const loadSeqRef = useRef(0);
 	const selectedGroupBy: AnalyticsDimension[] = groupBy;
 	const groupByKey = selectedGroupBy.join(',');
-	const filtersKey = analyticsFiltersKey(filters);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
+	const [optionScope, setOptionScope] = useState({ timeRange, groupByKey });
+	if (optionScope.timeRange !== timeRange || optionScope.groupByKey !== groupByKey) {
+		setOptionScope({ timeRange, groupByKey });
+		setFilterOptionMap(emptyAnalyticsFilterOptions());
+	}
 	const analyticsState = useMemo(
 		() => ({
 			timeRange,
@@ -736,7 +745,7 @@ export function AnalyticsPage() {
 			filters,
 			metric
 		}),
-		[timeRange, groupByKey, filtersKey, metric]
+		[timeRange, selectedGroupBy, filters, metric]
 	);
 
 	useEffect(() => {
@@ -755,7 +764,7 @@ export function AnalyticsPage() {
 		return () => window.removeEventListener('popstate', onPopState);
 	}, []);
 
-	async function load() {
+	const load = useCallback(async () => {
 		const loadSeq = loadSeqRef.current + 1;
 		loadSeqRef.current = loadSeq;
 		setError(null);
@@ -787,32 +796,25 @@ export function AnalyticsPage() {
 		} finally {
 			if (loadSeq === loadSeqRef.current) setLoading(false);
 		}
-	}
+	}, [timeRange, selectedGroupBy, filters]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		void load();
-	}, [timeRange, groupByKey, filtersKey]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		setFilterOptionMap(emptyAnalyticsFilterOptions());
-	}, [timeRange, groupByKey]);
+	}, [load]);
 
 	function updateGroupBy(next: string[]) {
 		const normalized = next.filter((value): value is AnalyticsDimension =>
 			isAnalyticsDimension(value)
 		);
-		setGroupBy(normalized);
+		setGroupBy(current => (current.join(',') === normalized.join(',') ? current : normalized));
 	}
 
 	function updateFilter(dimension: AnalyticsDimension, values: string[]) {
-		setFilters(current => ({ ...current, [dimension]: values }));
+		setFilters(current => withAnalyticsFilter(current, dimension, values));
 	}
 
 	const requestedRange = useMemo(() => logTimeRangeToApi(timeRange), [timeRange]);
 	const effectiveBucketSeconds = bucketSeconds ?? bucketSecondsForRange(timeRange);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	const timeline = useMemo(
 		() =>
 			analyticsTimelineData(
@@ -822,16 +824,7 @@ export function AnalyticsPage() {
 				selectedGroupBy,
 				metric
 			),
-		[
-			buckets,
-			summaryRange?.from,
-			summaryRange?.to,
-			requestedRange.from,
-			requestedRange.to,
-			effectiveBucketSeconds,
-			selectedGroupBy,
-			metric
-		]
+		[buckets, summaryRange, requestedRange, effectiveBucketSeconds, selectedGroupBy, metric]
 	);
 	const chartData = useMemo(
 		() => analyticsBreakdownData(usage, selectedGroupBy, metric),
@@ -891,6 +884,7 @@ export function AnalyticsPage() {
 									values={filters[dimension]}
 									placeholder={`All ${meta.filterLabel.toLowerCase()}`}
 									allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+									searchLabel={`Search ${meta.label.toLowerCase()}`}
 									onChange={values => updateFilter(dimension, values)}
 								/>
 							);
@@ -1148,12 +1142,10 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 		(output === 'assistant' || output === 'toolCall');
 	return (
 		<Tooltip content={label}>
-			<span
+			<button
+				type="button"
 				className={`log-turn-badge ${common ? variant : 'other'}`}
-				role="img"
 				aria-label={label}
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: Existing lint violation; remove this suppression when the underlying issue is fixed.
-				tabIndex={0}
 			>
 				{common ? (
 					<>
@@ -1164,7 +1156,7 @@ function LogTurnBadge(props: { entry: LogEntry }) {
 				) : (
 					<Ellipsis size={15} />
 				)}
-			</span>
+			</button>
 		</Tooltip>
 	);
 }
@@ -1196,35 +1188,17 @@ function formatCompactNumber(value: number | null | undefined) {
 	return typeof value === 'number' ? compactNumberFormat.format(value) : '—';
 }
 
-const PROVIDER_ICON_KEYS = [
-	'openai',
-	'anthropic',
-	'gemini',
-	'vertex',
-	'bedrock',
-	'azure',
-	'copilot',
-	'cohere',
-	'ollama',
-	'baseten',
-	'cerebras',
-	'deepinfra',
-	'deepseek',
-	'groq',
-	'huggingface',
-	'mistral',
-	'openrouter',
-	'togetherai',
-	'xai',
-	'fireworks'
-];
+// Telemetry reports some providers by their qualified gen_ai.provider.name.
+const PROVIDER_ICON_ALIASES: Record<string, string> = {
+	'gcp.gemini': 'gemini',
+	'gcp.vertex_ai': 'vertex',
+	'aws.bedrock': 'bedrock'
+};
 
 function providerIconName(name: string | null | undefined) {
 	if (!name) return 'custom';
 	const normalized = name.trim().toLowerCase();
-	const match = PROVIDER_ICON_KEYS.find(key => normalized === key || normalized.includes(key));
-	if (!match) return name;
-	return match === 'xai' ? 'xAI' : match;
+	return PROVIDER_ICON_ALIASES[normalized] ?? normalized;
 }
 
 function logGuardrails(entry: LogEntry): Record<string, unknown>[] {
@@ -1358,6 +1332,8 @@ function LogCallRow(props: {
 	const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
 	const operation = props.entry.genAi.operationName ?? 'chat';
 	const provider = props.entry.genAi.providerName ?? null;
+	const summaryId = useId();
+	const toggleRef = useRef<HTMLButtonElement>(null);
 	return (
 		<tbody
 			className={
@@ -1366,25 +1342,49 @@ function LogCallRow(props: {
 					: `log-row ${statusBad ? 'bad' : 'ok'}`
 			}
 		>
-			{/** biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
 			<tr
+				id={summaryId}
 				className="log-row-summary"
-				tabIndex={0}
-				role="button"
-				aria-expanded={props.expanded}
-				onClick={props.onToggle}
-				onKeyDown={event => {
-					if (event.key === 'Enter' || event.key === ' ') {
-						event.preventDefault();
-						props.onToggle();
+				onClick={event => {
+					const toggle = toggleRef.current;
+					// Another button in the row, like the turn badge, keeps focus.
+					const button = (event.target as Element).closest('button');
+					if (toggle && (!button || button === toggle)) {
+						// Pointer clicks leave keyboard mode, like the old focusable row.
+						if (event.detail > 0) delete toggle.dataset.keyboard;
+						if (document.activeElement !== toggle) {
+							toggle.focus({ focusVisible: false, preventScroll: true });
+						}
 					}
+					props.onToggle();
 				}}
 			>
 				<td className="log-td-time">
-					<span className="log-cell-lines">
-						<span className="log-cell-primary">{formatRelativeTime(props.entry.completedAt)}</span>
-						<span className="log-cell-secondary">{formatDate(props.entry.completedAt)}</span>
-					</span>
+					<button
+						aria-expanded={props.expanded}
+						aria-labelledby={summaryId}
+						className="log-row-toggle"
+						ref={toggleRef}
+						type="button"
+						onBlur={event => {
+							delete event.currentTarget.dataset.keyboard;
+						}}
+						onKeyDown={event => {
+							// Show the row ring after a key press, as the focused row did before.
+							event.currentTarget.dataset.keyboard = '';
+							if (event.key === ' ') {
+								event.preventDefault();
+								props.onToggle();
+							}
+						}}
+					>
+						<span className="log-cell-lines">
+							<span className="log-cell-primary">
+								{formatRelativeTime(props.entry.completedAt)}
+							</span>
+							<span className="log-cell-secondary">{formatDate(props.entry.completedAt)}</span>
+						</span>
+					</button>
 				</td>
 				<td className="log-td-status">
 					<span className="log-status-indicators">
@@ -1547,16 +1547,15 @@ function LogDetailView(props: {
 		});
 	}
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
 	useEffect(() => {
 		const anchorId = decodeURIComponent(window.location.hash.slice(1));
-		if (!trajectory.some(event => event.anchorId === anchorId)) return;
+		if (!anchorId || !trajectoryAnchors.split('|').includes(anchorId)) return;
 		if (conversationRef.current) conversationRef.current.open = true;
 		const frame = window.requestAnimationFrame(() => {
 			document.getElementById(anchorId)?.scrollIntoView({ block: 'center' });
 		});
 		return () => window.cancelAnimationFrame(frame);
-	}, [props.entry.id, trajectoryAnchors]);
+	}, [trajectoryAnchors]);
 
 	return (
 		<div className="log-detail-view">
@@ -2394,8 +2393,10 @@ function escapeLogMarkdownHtml(value: string) {
 }
 
 function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: string }) {
-	const html = useMemo(
-		() =>
+	const ref = useRef<HTMLDivElement>(null);
+	// Keep this div empty in JSX so React leaves the sanitized content alone.
+	useLayoutEffect(() => {
+		ref.current?.replaceChildren(
 			DOMPurify.sanitize(
 				marked.parse(props.content, {
 					async: false,
@@ -2405,17 +2406,17 @@ function LogMarkdown(props: { content: string; collapsed: boolean; anchorId?: st
 				}) as string,
 				{
 					ALLOWED_ATTR: [],
-					ALLOWED_TAGS: LOG_MARKDOWN_TAGS
+					ALLOWED_TAGS: LOG_MARKDOWN_TAGS,
+					RETURN_DOM_FRAGMENT: true
 				}
-			),
-		[props.content]
-	);
+			)
+		);
+	}, [props.content]);
 	return (
 		<div
 			className={`log-msg-content log-markdown${props.collapsed ? ' collapsed' : ''}`}
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			dangerouslySetInnerHTML={{ __html: html }}
 			id={props.anchorId}
+			ref={ref}
 		/>
 	);
 }

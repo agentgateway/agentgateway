@@ -1,0 +1,265 @@
+---
+source: crates/llm/src/golden_tests.rs
+---
+{
+  "scanned": [
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "answer"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "plaintext reasoning detail"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "plaintext summary"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "refusal"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "transcript"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "unsigned reasoning"
+    },
+    {
+      "scope": "messages",
+      "signed": true,
+      "text": "signed reasoning detail"
+    },
+    {
+      "scope": "messages",
+      "signed": true,
+      "text": "signed reasoning"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "arguments"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "input"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "legacy input"
+    }
+  ],
+  "masked": {
+    "messages": {
+      "model": "model",
+      "usage": null,
+      "choices": [
+        {
+          "message": {
+            "content": "<masked>",
+            "role": "assistant",
+            "refusal": "<masked>",
+            "reasoning_content": "<masked>",
+            "audio": {
+              "id": "audio",
+              "data": "opaque",
+              "transcript": "<masked>"
+            },
+            "function_call": {
+              "name": "legacy",
+              "arguments": "legacy input"
+            },
+            "tool_calls": [
+              {
+                "id": "call",
+                "type": "function",
+                "function": {
+                  "name": "function",
+                  "arguments": "arguments"
+                }
+              },
+              {
+                "id": "custom",
+                "type": "custom",
+                "custom": {
+                  "name": "custom",
+                  "input": "input"
+                }
+              }
+            ],
+            "reasoning_details": [
+              {
+                "type": "reasoning.text",
+                "text": "<masked>"
+              },
+              {
+                "type": "reasoning.summary",
+                "summary": "<masked>"
+              },
+              {
+                "type": "reasoning.text",
+                "text": "signed reasoning detail",
+                "signature": "signature"
+              },
+              {
+                "type": "reasoning.encrypted",
+                "data": "opaque"
+              }
+            ]
+          }
+        },
+        {
+          "message": {
+            "role": "assistant",
+            "reasoning_content": "signed reasoning",
+            "reasoning_signature": "signature"
+          }
+        }
+      ]
+    },
+    "toolInput": {
+      "model": "model",
+      "usage": null,
+      "choices": [
+        {
+          "message": {
+            "content": "answer",
+            "role": "assistant",
+            "refusal": "refusal",
+            "reasoning_content": "unsigned reasoning",
+            "audio": {
+              "id": "audio",
+              "data": "opaque",
+              "transcript": "transcript"
+            },
+            "function_call": {
+              "name": "legacy",
+              "arguments": "<masked>"
+            },
+            "tool_calls": [
+              {
+                "id": "call",
+                "type": "function",
+                "function": {
+                  "name": "function",
+                  "arguments": "<masked>"
+                }
+              },
+              {
+                "id": "custom",
+                "type": "custom",
+                "custom": {
+                  "name": "custom",
+                  "input": "<masked>"
+                }
+              }
+            ],
+            "reasoning_details": [
+              {
+                "type": "reasoning.text",
+                "text": "plaintext reasoning detail"
+              },
+              {
+                "type": "reasoning.summary",
+                "summary": "plaintext summary"
+              },
+              {
+                "type": "reasoning.text",
+                "text": "signed reasoning detail",
+                "signature": "signature"
+              },
+              {
+                "type": "reasoning.encrypted",
+                "data": "opaque"
+              }
+            ]
+          }
+        },
+        {
+          "message": {
+            "role": "assistant",
+            "reasoning_content": "signed reasoning",
+            "reasoning_signature": "signature"
+          }
+        }
+      ]
+    },
+    "toolOutput": {
+      "model": "model",
+      "usage": null,
+      "choices": [
+        {
+          "message": {
+            "content": "answer",
+            "role": "assistant",
+            "refusal": "refusal",
+            "reasoning_content": "unsigned reasoning",
+            "audio": {
+              "id": "audio",
+              "data": "opaque",
+              "transcript": "transcript"
+            },
+            "function_call": {
+              "name": "legacy",
+              "arguments": "legacy input"
+            },
+            "tool_calls": [
+              {
+                "id": "call",
+                "type": "function",
+                "function": {
+                  "name": "function",
+                  "arguments": "arguments"
+                }
+              },
+              {
+                "id": "custom",
+                "type": "custom",
+                "custom": {
+                  "name": "custom",
+                  "input": "input"
+                }
+              }
+            ],
+            "reasoning_details": [
+              {
+                "type": "reasoning.text",
+                "text": "plaintext reasoning detail"
+              },
+              {
+                "type": "reasoning.summary",
+                "summary": "plaintext summary"
+              },
+              {
+                "type": "reasoning.text",
+                "text": "signed reasoning detail",
+                "signature": "signature"
+              },
+              {
+                "type": "reasoning.encrypted",
+                "data": "opaque"
+              }
+            ]
+          }
+        },
+        {
+          "message": {
+            "role": "assistant",
+            "reasoning_content": "signed reasoning",
+            "reasoning_signature": "signature"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,28 @@ export function currentOrigin() {
 	return window.location.origin;
 }
 
+export async function waitForLlmCors(baseUrl: string) {
+	const signal = AbortSignal.timeout(10_000);
+	while (!signal.aborted) {
+		try {
+			// An empty model request checks POST CORS without invoking a provider.
+			const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/models`, {
+				method: 'POST',
+				credentials: 'omit',
+				headers: { 'Content-Type': 'application/json', Authorization: 'Bearer cors-probe' },
+				body: '{}',
+				cache: 'no-store',
+				signal
+			});
+			await response.body?.cancel();
+			return;
+		} catch {
+			if (!signal.aborted) await new Promise(resolve => setTimeout(resolve, 250));
+		}
+	}
+	throw new Error('The CORS policy was saved, but the LLM listener is not reachable. Try again.');
+}
+
 export function corsNeedsUpdate(
 	cors: CorsPolicy | null | undefined,
 	target: CorsTarget,

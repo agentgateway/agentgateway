@@ -260,6 +260,7 @@ type ModelProvider string
 
 const (
 	ModelProviderOpenAI      ModelProvider = "OpenAI"
+	ModelProviderCopilot     ModelProvider = "Copilot"
 	ModelProviderAzure       ModelProvider = "Azure"
 	ModelProviderAnthropic   ModelProvider = "Anthropic"
 	ModelProviderGemini      ModelProvider = "Gemini"
@@ -278,6 +279,9 @@ const (
 	ModelProviderTogetherAI  ModelProvider = "TogetherAI"
 	ModelProviderXAI         ModelProvider = "XAI"
 	ModelProviderFireworks   ModelProvider = "Fireworks"
+	ModelProviderMeta        ModelProvider = "Meta"
+	ModelProviderPerplexity  ModelProvider = "Perplexity"
+	ModelProviderTypesafe    ModelProvider = "Typesafe"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 
@@ -294,7 +298,7 @@ const (
 	ModelVisibilityInternal ModelVisibility = "Internal"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=weighted;failover;conditional
+// +kubebuilder:validation:ExactlyOneOf=weighted;failover;conditional;callout
 type VirtualModel struct {
 	// Weight-based model selection.
 	// +optional
@@ -307,6 +311,10 @@ type VirtualModel struct {
 	// Ordered condition-based model selection.
 	// +optional
 	Conditional *ConditionalModelRouting `json:"conditional,omitempty"`
+
+	// Model selection by calling an external HTTP service.
+	// +optional
+	Callout *CalloutModelRouting `json:"callout,omitempty"`
 }
 
 type WeightedModelRouting struct {
@@ -366,6 +374,72 @@ type ConditionalModelTarget struct {
 	// Omit only on the final fallback target.
 	// +optional
 	When *CELExpression `json:"when,omitempty"`
+}
+
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+type CalloutModelRouting struct {
+	// Service that selects the model. Supported types: `Service` and `Backend`.
+	// A `url` may include the request path, such as `https://router.example.com/v1/route`.
+	// The callout request is sent with the `POST` method.
+	PolicyBackendEndpoint `json:",inline"`
+
+	// Headers to set on the callout request, computed from CEL expressions.
+	// Keys may be header names or the `:path`, `:method`, and `:authority`
+	// pseudo-headers.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Headers map[string]CELExpression `json:"headers,omitempty"`
+
+	// CEL expression that computes the callout request body. Strings and bytes
+	// are used directly; other values are JSON-encoded. If unset, the original
+	// request body is forwarded.
+	// +optional
+	Body *CELExpression `json:"body,omitempty"`
+
+	// CEL expressions that compute request payload fields from the callout
+	// response, overriding existing values. `callout.headers` holds the response
+	// headers and `callout.body` the decoded JSON response body. `model` is
+	// required and selects the concrete model name, which is matched against the
+	// effective match.model of models attached to the same listener.
+	// +kubebuilder:validation:MinProperties=1
+	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="has(self.model)",message="transformation must set model"
+	// +required
+	Transformation map[string]CELExpression `json:"transformation"`
+
+	// Model used when the callout fails, returns a non-2xx or non-JSON
+	// response, or selects an unknown model. `transformation` is not applied to
+	// the fallback. If unset, the request is rejected.
+	// +optional
+	Fallback *ModelTargetReference `json:"fallback,omitempty"`
+
+	// Reuse callout responses using CEL expressions as the cache key. On a cache
+	// hit, `transformation` is evaluated against the cached response. Keying on
+	// a session identifier makes routing sticky for that session.
+	// +optional
+	Cache *CalloutCache `json:"cache,omitempty"`
+}
+
+type CalloutCache struct {
+	// Ordered list of CEL expressions evaluated against the request to
+	// construct the cache key.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +required
+	Key []CELExpression `json:"key"`
+
+	// Duration string, such as `5m`, or a CEL expression that returns the
+	// duration that a cached callout response may be reused, or a timestamp
+	// when it expires. The expression is evaluated with `callout` available,
+	// before `transformation` is applied.
+	// +required
+	TTL CELExpression `json:"ttl"`
+
+	// Maximum number of callout responses to keep in the cache. If unset, this
+	// defaults to 10000.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 }
 
 type ModelTargetReference struct {

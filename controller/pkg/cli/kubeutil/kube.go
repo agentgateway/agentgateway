@@ -208,12 +208,12 @@ func inferNamespace(name, namespace string) (string, string) {
 
 		return name[0 : idx+separator], name[idx+separator+1:]
 	}
-	separator := strings.LastIndex(name, ".")
-	if separator < 0 {
+	before, after, ok := strings.CutLast(name, ".")
+	if !ok {
 		return name, namespace
 	}
 
-	return name[0:separator], name[separator+1:]
+	return before, after
 }
 
 func selectorForResource(ctx context.Context, kubeClient CLIClient, resourceType, name, namespace string) (string, string, error) {

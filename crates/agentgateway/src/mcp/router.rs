@@ -12,8 +12,8 @@ use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
 use crate::mcp::{FailureMode, MCPInfo, McpAuthorizationSet, auth};
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
+use crate::proxy::{ProxyError, ProxyResponse};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
@@ -75,7 +75,7 @@ impl App {
 		backend_policies: BackendPolicies,
 		mut req: MustSnapshot<'_>,
 		mut log: &mut RequestLog,
-	) -> Result<Response, ProxyError> {
+	) -> Result<Response, ProxyResponse> {
 		let backends = {
 			let binds = self.state.read_binds();
 			let nt = backend
@@ -92,6 +92,7 @@ impl App {
 						name: backend_group_name.name.as_ref(),
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
+						kind: backend_group_name.kind.as_deref(),
 					};
 					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
 					let backend_policies = backend_policies.clone().merge(target_policies);
@@ -135,11 +136,12 @@ impl App {
 		let logy = log.mcp_status.clone();
 		logy.store(Some(MCPInfo::default()));
 		req.extensions_mut().insert(logy);
+		req.extensions_mut().insert(log.mcp_guardrails.clone());
 
 		if backend.dns_rebinding_protection
 			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
 		{
-			return Ok(resp);
+			return Err(ProxyResponse::DirectResponse(Box::new(resp)));
 		}
 
 		authorization_policies.register(log.cel.ctx());
@@ -150,17 +152,20 @@ impl App {
 		// authentication so it can include verified claims
 
 		// Take a request snapshot before authentication can mutate or partially consume the
-		// request. If authentication lets the request continue, the normal snapshot below
+		// request. If authentication lets the request continue, the snapshot below
 		// replaces this with the post-authentication request state.
-		Self::snapshot_request_without_clearing_extensions(&mut req, log);
+		// MCP requires CEL execution after the snapshot so we do not clear extensions
+		let mut req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
 		if let Some(auth) = authn.as_ref()
 			&& let Some(resp) = auth::enforce_authentication(&mut req, auth, &request_client).await?
 		{
 			return Ok(resp);
 		}
-
-		// MCP requires CEL execution after the snapshot so we do not clear extensions
-		let req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
+		log.request_snapshot = log
+			.cel
+			.cel_context
+			.maybe_snapshot_request(&mut req, false)
+			.map(Arc::new);
 		if log.request_processing_duration.is_none() {
 			// This is a bit inaccurate but the best we can do for the MCP path without very invasive changes.
 			log.request_processing_duration = Some(log.request_processing_start.elapsed());
@@ -223,18 +228,7 @@ impl App {
 					log.response_processing_duration,
 				));
 		}
-		response
-	}
-
-	fn snapshot_request_without_clearing_extensions(
-		req: &mut MustSnapshot<'_>,
-		log: &mut RequestLog,
-	) {
-		log.request_snapshot = log
-			.cel
-			.cel_context
-			.maybe_snapshot_request(req, false)
-			.map(Arc::new);
+		response.map_err(ProxyResponse::from)
 	}
 }
 

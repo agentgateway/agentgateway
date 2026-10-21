@@ -15,6 +15,7 @@ export async function sendChatCompletion(args: {
 	if (args.apiKey) headers.Authorization = `Bearer ${args.apiKey}`;
 	const response = await fetch(url, {
 		method: 'POST',
+		credentials: 'omit',
 		headers,
 		body: JSON.stringify({
 			model: args.model,
@@ -46,6 +47,7 @@ export async function sendMcpJsonRpc(args: {
 	try {
 		response = await fetch(args.baseUrl, {
 			method: 'POST',
+			credentials: 'omit',
 			headers,
 			body: JSON.stringify(args.body)
 		});

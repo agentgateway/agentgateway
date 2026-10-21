@@ -19,11 +19,13 @@ use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test,
+	setup_proxy_test_with_config, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{
-	BackendTrafficPolicy, FrontendPolicy, McpServerOverrides, PolicyTarget, TargetedPolicy,
+	BackendTrafficPolicy, FrontendPolicy, McpAuthenticationMode, McpServerOverrides, PolicyTarget,
+	TargetedPolicy,
 };
 use crate::*;
 
@@ -837,7 +839,7 @@ async fn stateless_multiplex_never_prefix_tool_call_resolves_target() {
 }
 
 #[tokio::test]
-async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
+async fn multiplex_advertises_upstream_change_capabilities() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
 	let t = setup_proxy_test("{}")
@@ -852,14 +854,15 @@ async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
-	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
-	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, Some(true));
-	assert_eq!(caps.resources.as_ref().unwrap().list_changed, Some(true));
+	// The mock upstreams offer resource subscribe but no list_changed notifications.
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, None);
 	assert_eq!(caps.resources.as_ref().unwrap().subscribe, Some(true));
 }
 
 #[tokio::test]
-async fn stateless_multiplex_does_not_advertise_resource_subscribe() {
+async fn stateless_multiplex_does_not_advertise_change_notifications() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
 	let t = setup_proxy_test("{}")
@@ -874,7 +877,10 @@ async fn stateless_multiplex_does_not_advertise_resource_subscribe() {
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
-	assert_ne!(caps.resources.as_ref().unwrap().subscribe, Some(true));
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().subscribe, None);
 }
 
 #[tokio::test]
@@ -1073,6 +1079,148 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 			"rejected no-session message must not create a session"
 		);
 	}
+}
+
+// MCP requires clients to start a new session after a 404
+// https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management
+#[tokio::test]
+async fn stale_session_key_returns_not_found() {
+	const OLD_KEY: &str = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+	const CURRENT_KEY: &str = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
+
+	let mock = mock_streamable_http_server(true).await;
+	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	config.session_encoder = http::sessionpersistence::Encoder::aes(CURRENT_KEY).unwrap();
+	let bind = setup_proxy_test_with_config(config)
+		.with_mcp_backend_policies(mock.addr, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = bind.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let old_encoder = http::sessionpersistence::Encoder::aes(OLD_KEY).unwrap();
+	let session_id = http::sessionpersistence::SessionState::MCP(
+		http::sessionpersistence::MCPSessionState::new(vec![], None),
+	)
+	.encode(&old_encoder)
+	.unwrap();
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", session_id)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn delete_reports_success_when_upstream_delete_fails() {
+	let unreachable = {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		listener.local_addr().unwrap()
+	};
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(unreachable, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(unreachable));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let session_id =
+		http::sessionpersistence::SessionState::MCP(http::sessionpersistence::MCPSessionState::new(
+			vec![http::sessionpersistence::MCPSession {
+				target_name: Some("mcp".to_string()),
+				session: Some("upstream-session".to_string()),
+				backend: None,
+			}],
+			None,
+		))
+		.encode(&http::sessionpersistence::Encoder::base64())
+		.unwrap();
+
+	let delete = reqwest::Client::new()
+		.delete(format!("http://{io}/mcp"))
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(delete.status(), reqwest::StatusCode::ACCEPTED);
+}
+
+#[tokio::test]
+async fn delete_on_replica_without_session_closes_upstream_session() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind_a, io_a) = setup_proxy(&mock, true, false).await;
+	let (_bind_b, io_b) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+	let init = mcp_json_post(&client, &format!("http://{io_a}/mcp"), &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize response should include a session id")
+		.to_str()
+		.unwrap()
+		.to_string();
+	let http::sessionpersistence::SessionState::MCP(state) =
+		http::sessionpersistence::SessionState::decode(
+			&session_id,
+			&http::sessionpersistence::Encoder::base64(),
+		)
+		.unwrap()
+	else {
+		panic!("expected MCP session state");
+	};
+	let upstream_session_id = state.sessions[0]
+		.session
+		.clone()
+		.expect("stateful upstream should assign a session id");
+
+	let delete = client
+		.delete(format!("http://{io_b}/mcp"))
+		.header("mcp-session-id", &session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(delete.status(), reqwest::StatusCode::ACCEPTED);
+
+	let list_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {}
+	});
+	let upstream_list = mcp_json_post(&client, &format!("http://{}/mcp", mock.addr), &list_body)
+		.header("mcp-session-id", upstream_session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(upstream_list.status(), reqwest::StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]
@@ -1675,7 +1823,7 @@ async fn task_methods_respect_mcp_authorization_deny_policy() {
 	)
 	.await;
 	assert_eq!(get["error"]["code"], -32602);
-	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
+	assert_eq!(get["error"]["message"], "unknown resource");
 }
 
 /// Test that a policy keyed on mcp.methodName sees the right method for each
@@ -1934,6 +2082,41 @@ fn mcp_initialize_body() -> serde_json::Value {
 			"clientInfo": {"name": "test-client", "version": "0.0.1"}
 		}
 	})
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_comma_separated_accept_header() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let response = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn streamable_http_post_accepts_separate_accept_header_lines() {
+	use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let body = mcp_initialize_body().to_string();
+	let request = format!(
+		"POST /mcp HTTP/1.1\r\nHost: {io}\r\nContent-Type: application/json\r\nAccept: application/json\r\nAccept: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	stream.write_all(request.as_bytes()).await.unwrap();
+	let mut reader = tokio::io::BufReader::new(stream);
+	let mut status_line = String::new();
+	reader.read_line(&mut status_line).await.unwrap();
+	assert!(
+		status_line.starts_with("HTTP/1.1 200"),
+		"unexpected response: {status_line}"
+	);
 }
 
 #[tokio::test]
@@ -2565,11 +2748,7 @@ async fn streamable_http_oversized_body_returns_413_with_configured_limit() {
 	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
 
 	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
-	let text = resp.text().await.unwrap();
-	assert!(
-		text.contains(&limit.to_string()),
-		"expected configured limit {limit} in body: {text}"
-	);
+	assert_eq!(resp.text().await.unwrap(), "request body too large");
 }
 
 #[tokio::test]
@@ -2621,11 +2800,7 @@ async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
 	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
 
 	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
-	let text = resp.text().await.unwrap();
-	assert!(
-		text.contains(&limit.to_string()),
-		"expected configured limit {limit} in body: {text}"
-	);
+	assert_eq!(resp.text().await.unwrap(), "request body too large");
 }
 
 #[tokio::test]
@@ -2938,7 +3113,7 @@ async fn stream_to_stream_single_tls() {
 		true,
 		false,
 		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
-			value: SecretString::new("my-key".into()),
+			value: SecretString::new("my-key".into()).into(),
 			location: None,
 		})],
 	)
@@ -2959,7 +3134,7 @@ async fn stream_to_stream_single_tls() {
 }
 
 /// Test that calling a tool denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown tool: {tool_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_tool_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -2982,7 +3157,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	let client = mcp_streamable_client(io).await;
 
-	// Attempt to call a tool - should fail with "Unknown tool" error
+	// Attempt to call a tool - should fail with "unknown resource" error
 	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
@@ -3016,9 +3191,47 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 	assert_eq!(
 		mcp_error.message.as_ref(),
-		"Unknown tool: echo",
-		"Expected error message 'Unknown tool: echo', got: {}",
+		"unknown resource",
+		"Expected error message 'unknown resource', got: {}",
 		mcp_error.message
+	);
+}
+
+/// An upstream JSON-RPC error response must keep its own code, message, and
+/// data instead of being flattened into a generic internal error. The
+/// hand-written mock answers `tools/call` (its catch-all branch) with
+/// `-32601`, which the gateway must propagate verbatim (#3748).
+#[tokio::test]
+async fn upstream_jsonrpc_error_code_is_propagated() {
+	let mock = mock_streamable_http_server_without_discover().await;
+	let (_bind, io) = setup_proxy_policies(&mock, true, false, vec![]).await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	let mcp_error = match result.expect_err("tool call should fail") {
+		rmcp::ServiceError::McpError(mcp_error) => mcp_error,
+		other => panic!("Expected ServiceError::McpError, got: {:?}", other),
+	};
+
+	assert_eq!(
+		mcp_error.code.0, -32601,
+		"the upstream METHOD_NOT_FOUND code must be propagated, got: {} ({})",
+		mcp_error.code.0, mcp_error.message
+	);
+	assert_eq!(
+		mcp_error.message.as_ref(),
+		"tools/call",
+		"the upstream error message must be propagated"
 	);
 }
 
@@ -3155,8 +3368,154 @@ async fn stateful_session_cannot_cross_mcp_backends() {
 	assert_eq!(public.init_count().await, 0);
 }
 
+#[tokio::test]
+async fn stateful_session_reuse_applies_route_guardrails() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
+
+	// A session opened on an unguarded route must not skip the guardrails of
+	// another route to the same MCP backend.
+	let extmcp_mock = closure_mock(
+		|_| reject_request(Code::PermissionDenied, "denied by route b"),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+	let mock = mock_streamable_http_server(true).await;
+	let backend = strng::format!("/{}", mock.addr);
+
+	let mut route_a = basic_named_route(backend.clone());
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(backend);
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+	route_b.backends[0].inline_policies = vec![guardrails_test_support::policy(extmcp_mock.address)];
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "echo", "arguments": {"hi": "world"}}
+	});
+	let reused = mcp_json_post(&client, &format!("http://{io}/b"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	let msg = read_response_message(reused).await;
+	assert_eq!(msg["result"]["isError"], true, "{msg}");
+	assert_eq!(msg["result"]["content"][0]["text"], "denied by route b");
+}
+
+#[tokio::test]
+async fn persisted_stateful_session_cannot_cross_mcp_backends() {
+	let a = mock_streamable_http_server(true).await;
+	let (b, b_requests) = mock_streamable_http_server_with_capture(true).await;
+	let make_gateway = || {
+		let mut route_a = basic_named_route(strng::format!("/{}", a.addr));
+		route_a.key = "route-a".into();
+		route_a.name.name = "route-a".into();
+		route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+		let mut route_b = basic_named_route(strng::format!("/{}", b.addr));
+		route_b.key = "route-b".into();
+		route_b.name.name = "route-b".into();
+		route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+		let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+		config.session_encoder = http::sessionpersistence::Encoder::aes(
+			"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+		)
+		.unwrap();
+		setup_proxy_test_with_config(config)
+			.with_mcp_backend(a.addr, true, false)
+			.with_mcp_backend(b.addr, true, false)
+			.with_bind(simple_bind())
+			.with_route(route_a)
+			.with_route(route_b)
+	};
+	let client = reqwest::Client::new();
+
+	let first = make_gateway();
+	let first_io = first.serve_real_listener(BIND_KEY).await;
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{first_io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	// A fresh gateway has no in-memory session, so it resumes from the token.
+	let restarted = make_gateway();
+	let restarted_io = restarted.serve_real_listener(BIND_KEY).await;
+	let list = serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}});
+	let crossed = mcp_json_post(&client, &format!("http://{restarted_io}/b"), &list)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid.clone())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(crossed.status(), reqwest::StatusCode::NOT_FOUND);
+	assert!(b_requests.lock().unwrap().is_empty());
+
+	let own = mcp_json_post(&client, &format!("http://{restarted_io}/a"), &list)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(own.status(), reqwest::StatusCode::OK);
+}
+
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_prompt_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3201,8 +3560,8 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown prompt: example_prompt",
-				"Expected error message 'Unknown prompt: example_prompt', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -3254,7 +3613,7 @@ async fn authorization_by_method_name_allows_prompts_list_denies_prompts_get() {
 }
 
 /// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_resource_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3301,8 +3660,8 @@ async fn authorization_denied_returns_unknown_resource_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown resource: memo://insights",
-				"Expected error message 'Unknown resource: memo://insights', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -3736,7 +4095,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 
 	use ::http::{HeaderName, HeaderValue};
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 
@@ -3775,7 +4134,8 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let client_info = ClientConfig::new(
 			ClientCapabilities::default(),
 			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
-		);
+		)
+		.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 		client_info
 			.serve(transport)
 			.await
@@ -3898,6 +4258,107 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 			.and_then(|v| v.to_str().ok()),
 		Some("/.well-known/oauth-protected-resource/mcp")
 	);
+}
+
+#[rstest::rstest]
+#[case::preserved(McpAuthenticationMode::Strict, true, &["gateway", "mcp"], reqwest::StatusCode::OK)]
+#[case::wrong_audience(McpAuthenticationMode::Strict, true, &["gateway"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::stripped(McpAuthenticationMode::Strict, false, &["gateway", "mcp"], reqwest::StatusCode::UNAUTHORIZED)]
+#[case::permissive_stripped(McpAuthenticationMode::Permissive, false, &["gateway", "mcp"], reqwest::StatusCode::OK)]
+#[tokio::test]
+async fn mcp_authentication_after_route_jwt(
+	#[case] mode: McpAuthenticationMode,
+	#[case] preserve_token: bool,
+	#[case] audiences: &[&str],
+	#[case] expected_status: reqwest::StatusCode,
+) {
+	use crate::http::jwt::tests::build_signed_token_with_payload;
+
+	const KID: &str = "XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI";
+	const ISSUER: &str = "https://issuer.example.com";
+	let jwks = serde_json::json!({
+		"keys": [{
+			"use": "sig",
+			"kty": "EC",
+			"kid": KID,
+			"crv": "P-256",
+			"alg": "ES256",
+			"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+			"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+		}]
+	});
+	let exp = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+	let token = build_signed_token_with_payload(
+		KID,
+		serde_json::json!({ "iss": ISSUER, "aud": audiences, "exp": exp }),
+	);
+	let mock = mock_streamable_http_server(true).await;
+	let provider = crate::http::jwt::Provider::from_jwks(
+		serde_json::from_value(jwks.clone()).unwrap(),
+		ISSUER.to_string(),
+		Some(vec!["mcp".to_string()]),
+		Default::default(),
+	)
+	.unwrap();
+	let authn = crate::types::agent::McpAuthentication {
+		issuer: ISSUER.to_string(),
+		audiences: vec!["mcp".to_string()],
+		provider: None,
+		resource_metadata: crate::types::agent::ResourceMetadata {
+			extra: Default::default(),
+		},
+		jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+			vec![provider],
+			mode.into(),
+			crate::http::auth::AuthorizationLocation::bearer_header(),
+			false,
+		)),
+		mode,
+		client_id: None,
+		client_secret: None,
+	};
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthentication(authn)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	t.attach_route_policy(serde_json::json!({
+		"jwtAuth": {
+			"issuer": ISSUER,
+			"audiences": ["gateway"],
+			"jwks": jwks.to_string(),
+			"preserveToken": preserve_token,
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let response = reqwest::Client::new()
+		.post(format!("http://{io}/mcp"))
+		.bearer_auth(token)
+		.header("accept", "application/json, text/event-stream")
+		.json(&serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "initialize",
+			"params": {
+				"protocolVersion": "2025-03-26",
+				"capabilities": {},
+				"clientInfo": {"name": "t", "version": "1"}
+			}
+		}))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), expected_status);
 }
 
 async fn standard_assertions(client: RunningService<RoleClient, InitializeRequestParams>) {
@@ -4350,14 +4811,15 @@ pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport))
 		.await
@@ -4374,6 +4836,16 @@ struct ResourceUpdateClient {
 }
 
 impl rmcp::ClientHandler for ResourceUpdateClient {
+	fn get_info(&self) -> rmcp::model::ClientConfig {
+		use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
+
+		ClientConfig::new(
+			ClientCapabilities::default(),
+			Implementation::new("test client".to_string(), "0.0.1".to_string()),
+		)
+		.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE)
+	}
+
 	async fn on_resource_updated(
 		&self,
 		params: rmcp::model::ResourceUpdatedNotificationParam,
@@ -4993,7 +5465,9 @@ pub async fn mcp_streamable_client_with_ui(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation};
+	use rmcp::model::{
+		ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation, ProtocolVersion,
+	};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
@@ -5010,7 +5484,8 @@ pub async fn mcp_streamable_client_with_ui(
 			.enable_extensions_with(extensions)
 			.build(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport))
 		.await
@@ -5954,6 +6429,7 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 				"/unused-{name}"
 			)),
 			schema: Arc::new(schema),
+			prefix: String::new(),
 		}),
 		backend_policies: Default::default(),
 		backend: Some(crate::types::agent::SimpleBackend::Opaque(
@@ -6957,11 +7433,23 @@ async fn mcp_local_ratelimit() {
 }
 
 #[tokio::test]
-async fn mcp_cached_request_reparsed_after_body_transformation() {
+async fn mcp_context_refreshed_after_body_transformation() {
 	let mock = mock_streamable_http_server(true).await;
+	let deny_increment = crate::types::agent::Authorization(Arc::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "increment""#).unwrap(),
+		)],
+		vec![],
+	))));
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
-		.with_mcp_backend(mock.addr, true, false)
+		.with_mcp_backend_policies(
+			mock.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::Authorization(deny_increment)],
+		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));
 
@@ -6975,8 +7463,8 @@ async fn mcp_cached_request_reparsed_after_body_transformation() {
 						"id": json(request.body).id,
 						"method": "tools/call",
 						"params": {
-							"name": mcp.tool.name,
-							"arguments": {"after": true}
+							"name": "increment",
+							"arguments": {}
 						}
 					}"#
 				}
@@ -6987,21 +7475,27 @@ async fn mcp_cached_request_reparsed_after_body_transformation() {
 
 	let io = t.serve_real_listener(BIND_KEY).await;
 	let client = mcp_streamable_client(io).await;
-	let result = client
-		.call_tool(
-			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-				serde_json::json!({"before": true})
-					.as_object()
-					.cloned()
-					.unwrap(),
-			),
-		)
-		.await
-		.expect("transformed tool call should succeed");
 
-	assert_eq!(
-		&result.content[0].as_text().unwrap().text,
-		r#"{"after":true}"#
+	assert!(
+		client
+			.call_tool(rmcp::model::CallToolRequestParams::new("increment"))
+			.await
+			.is_err(),
+		"direct increment should be denied"
+	);
+	assert!(
+		client
+			.call_tool(
+				rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+					serde_json::json!({"before": true})
+						.as_object()
+						.cloned()
+						.unwrap(),
+				),
+			)
+			.await
+			.is_err(),
+		"echo transformed into increment should also be denied"
 	);
 }
 
@@ -7060,14 +7554,15 @@ async fn try_mcp_streamable_client(
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
 {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport)).await
 }
@@ -7980,7 +8475,86 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
-	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+	assert_eq!(e.message.as_ref(), "unknown resource");
+}
+
+// mcpGuardrails request-result metadata should be visible to access-log CEL
+// (`frontendPolicies.accessLog.add`), mirroring the backend filters (authz,
+// transformation) that run after the hook and can already read it.
+#[tokio::test]
+async fn mcp_guardrails_metadata_visible_to_access_log_cel() {
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	let trace_id = format!("mcp-guardrails-access-log-{}", uuid::Uuid::new_v4());
+	let extmcp_mock = closure_mock(
+		|_| {
+			pass_request_with(
+				Vec::<(String, String)>::new(),
+				Vec::<String>::new(),
+				Some(serde_json::from_value(serde_json::json!({"decision": "allow"})).unwrap()),
+			)
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let mock = mock_streamable_http_server(true).await;
+	let (mut t, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy(extmcp_mock.address)],
+	)
+	.await;
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {
+				"mcp_trace": "mcp.tool.arguments.traceId",
+				"mcp_guardrail_decision": "mcpGuardrails != null ? string(mcpGuardrails.decision) : \"\""
+			}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/accessLog".into(),
+		name: None,
+		target: PolicyTarget::Gateway(crate::types::agent::ListenerTarget {
+			gateway_name: t.pi.cfg.xds.gateway.clone(),
+			gateway_namespace: t.pi.cfg.xds.namespace.clone(),
+			listener_name: None,
+			port: None,
+		}),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+
+	let client = mcp_streamable_client(io).await;
+	let _ = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"traceId": trace_id, "hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp_trace", &trace_id),
+	])
+	.await
+	.unwrap();
+
+	assert_eq!(
+		log.get("mcp_guardrail_decision"),
+		Some(&serde_json::json!("allow")),
+		"mcpGuardrails request-result metadata should be readable from access-log CEL"
+	);
 }
 
 // Simiilar to mcp_guardrails_metadata_consumed_by_authz but for the fanout path.
@@ -8310,7 +8884,7 @@ async fn mcp_guardrails_fail_closed_on_grpc_error() {
 		"gRPC failure should map to internal error"
 	);
 	assert!(
-		e.message.contains("mcpGuardrails checkRequest failed"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -8416,7 +8990,7 @@ async fn mcp_guardrails_protocol_violation_fails_closed() {
 		"protocol violation should map to internal error"
 	);
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -8461,7 +9035,7 @@ async fn mcp_guardrails_non_object_mutation_is_protocol_violation() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);

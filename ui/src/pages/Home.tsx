@@ -77,10 +77,16 @@ export function HomePage() {
 	const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
 	const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 	const showStartup = Boolean(config.data && startupFlow);
-	const selectedSurfaces =
-		Number(hasLlm || locallyEnabled.has('llm')) +
-		Number(hasMcp || locallyEnabled.has('mcp')) +
-		Number(hasTraffic || locallyEnabled.has('apis'));
+	const anySurfaceEnabled = hasLlm || hasMcp || hasTraffic || locallyEnabled.size > 0;
+
+	useEffect(() => {
+		if (!showStartup) return;
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key === 'Escape') setStartupFlow(false);
+		}
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [showStartup]);
 
 	useEffect(() => {
 		if (!config.data || pageDataLoading || pageDataError || startupEvaluated) return;
@@ -119,23 +125,22 @@ export function HomePage() {
 
 	if (showStartup) {
 		return (
-			// biome-ignore lint/a11y/noStaticElementInteractions: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			// biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed.
-			<div className="startup-shell" onClick={() => setStartupFlow(false)}>
-				{/** biome-ignore lint/a11y/useKeyWithClickEvents: Existing lint violation; remove this suppression when the underlying issue is fixed. */}
-				<section
-					className="startup-panel"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="startup-title"
-					onClick={event => event.stopPropagation()}
-				>
+			<div
+				className="startup-shell"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="startup-title"
+				onClick={event => {
+					if (event.target === event.currentTarget) setStartupFlow(false);
+				}}
+				onKeyDown={event => {
+					if (event.key === 'Escape') setStartupFlow(false);
+				}}
+			>
+				<section className="startup-panel">
 					<div className="startup-copy">
 						<h2 id="startup-title">Welcome to Agentgateway</h2>
-						<p>
-							Agentgateway is a gateway that can route, secure, and observe LLM, MCP, and
-							traditional API traffic. Select one or more capabilities to enable, then continue.
-						</p>
+						<p>Choose what this gateway will serve. Anything skipped can be enabled later.</p>
 					</div>
 
 					{pageDataError ? (
@@ -152,7 +157,7 @@ export function HomePage() {
 					<div className="startup-chip-grid">
 						<StartupChip
 							label="LLM"
-							description="Models, keys, policies, and chat testing."
+							description="Models, providers, and API keys."
 							enabled={hasLlm || locallyEnabled.has('llm')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Bot size={24} />}
@@ -160,15 +165,15 @@ export function HomePage() {
 						/>
 						<StartupChip
 							label="MCP"
-							description="Servers, tools, and MCP playground flows."
+							description="MCP servers and tools."
 							enabled={hasMcp || locallyEnabled.has('mcp')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Server size={24} />}
 							onClick={() => void enableSurface('mcp')}
 						/>
 						<StartupChip
-							label="APIs"
-							description="HTTP and TCP listeners, routes, and policy controls."
+							label="Traffic"
+							description="HTTP and TCP routes and backends."
 							enabled={hasTraffic || locallyEnabled.has('apis')}
 							disabled={enable.isPending || update.isPending}
 							icon={<Network size={24} />}
@@ -176,9 +181,8 @@ export function HomePage() {
 						/>
 					</div>
 
-					{selectedSurfaces > 0 ? (
+					{anySurfaceEnabled ? (
 						<div className="startup-actions">
-							<span>{selectedSurfaces} of 3 enabled</span>
 							<button
 								className="button primary"
 								type="button"
@@ -215,10 +219,6 @@ export function HomePage() {
 				<StatusBanner state="bad" title="Configuration API unavailable">
 					{pageDataError.message}
 				</StatusBanner>
-			) : !hasLlm && !hasMcp && !hasTraffic ? (
-				<StatusBanner state="warn" title="No gateway surfaces enabled yet">
-					Enable the capabilities you want to operate from the setup path.
-				</StatusBanner>
 			) : warnings.length ? (
 				<StatusBanner
 					state="warn"
@@ -236,7 +236,7 @@ export function HomePage() {
 					state="warn"
 					title="UI is exposed without authentication"
 					action={
-						<Link className="button" to="/settings">
+						<Link className="button" to="/settings/ui">
 							Configure UI policies
 						</Link>
 					}
@@ -447,7 +447,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>Not enabled</span>
 				</div>
 				<button className="button" type="button" disabled={props.disabled} onClick={props.onEnable}>
 					Enable {props.title}
@@ -462,7 +461,6 @@ function SurfaceRow(props: {
 				<div className="surface-row-title">
 					{props.icon}
 					<strong>{props.title}</strong>
-					<span>Enabled</span>
 				</div>
 				{props.setupNeeded ? (
 					<p>{props.setupText}</p>

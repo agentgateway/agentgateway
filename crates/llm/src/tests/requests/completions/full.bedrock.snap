@@ -3,6 +3,7 @@ source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/completions/full.json
 info:
   model: gpt-4-turbo-preview
+  service_tier: priority
   messages:
     - role: system
       content: You are a helpful assistant that specializes in technical documentation and code analysis.
@@ -163,11 +164,14 @@ info:
           }
         }
       ],
-      "tool_choice": {
+      "toolChoice": {
         "tool": {
           "name": "my_function"
         }
       }
+    },
+    "serviceTier": {
+      "type": "priority"
     }
   },
   "parsed": {

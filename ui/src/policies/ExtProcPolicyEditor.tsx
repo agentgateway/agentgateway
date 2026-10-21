@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
-import { UnsupportedYamlFallback } from '@/components/EditorContracts';
+import { LostFieldsWarning, UnsupportedInForm, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
 import { FieldGroup } from '@/components/Primitives';
@@ -10,52 +10,26 @@ import {
 	hasUnsupportedTarget,
 	KeyValueEditor,
 	TargetEditor,
-	targetFrom,
-	unsupportedTargetLabel
+	targetFrom
 } from '@/policies/PolicyFormControls';
 import { PolicySection } from '@/policies/PolicyLayout';
 import { cleanEmpty, parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { ExtProcDraft } from '@/policies/types';
-import type { SchemaHelp } from '@/schemaHelp';
+import type { DeepPath, SchemaHelp } from '@/schemaHelp';
 
 type BodyMode = 'none' | 'buffered' | 'bufferedPartial' | 'fullDuplexStreamed';
 type SendMode = 'send' | 'skip';
 
 const bodyModes: Array<EnumSelectorOption<BodyMode>> = [
-	{
-		value: 'fullDuplexStreamed',
-		label: 'Full duplex streamed',
-		description: 'Stream the full body through the external processor.'
-	},
-	{
-		value: 'buffered',
-		label: 'Buffered',
-		description: 'Buffer the full body before sending it to the processor.'
-	},
-	{
-		value: 'bufferedPartial',
-		label: 'Buffered partial',
-		description: 'Send a bounded body buffer and allow truncation.'
-	},
-	{
-		value: 'none',
-		label: 'None',
-		description: 'Do not send the body to the processor.'
-	}
+	{ value: 'fullDuplexStreamed', label: 'Full duplex streamed' },
+	{ value: 'buffered', label: 'Buffered' },
+	{ value: 'bufferedPartial', label: 'Buffered partial' },
+	{ value: 'none', label: 'None' }
 ];
 
 const sendModes: Array<EnumSelectorOption<SendMode>> = [
-	{
-		value: 'send',
-		label: 'Send',
-		description: 'Send this phase to the external processor.'
-	},
-	{
-		value: 'skip',
-		label: 'Skip',
-		description: 'Do not send this phase to the external processor.'
-	}
+	{ value: 'send', label: 'Send' },
+	{ value: 'skip', label: 'Skip' }
 ];
 
 export function ExtProcPolicyEditor(props: {
@@ -101,19 +75,10 @@ export function ExtProcPolicyEditor(props: {
 	);
 	const [metadataError, setMetadataError] = useState<string | null>(null);
 	const preview = buildExtProc();
+	const merged = useMergedEdits(props.extProc, preview);
 
 	if (unsupportedTarget) {
-		return (
-			<UnsupportedYamlFallback
-				title="Unsupported target type"
-				value={props.extProc ?? {}}
-				schema={props.help.node(['$defs', 'ExtProc'])}
-				help={props.help}
-			>
-				This policy uses a {unsupportedTargetLabel(props.extProc)} target. The visual editor
-				currently supports host targets only.
-			</UnsupportedYamlFallback>
-		);
+		return <UnsupportedInForm supports="host targets" />;
 	}
 
 	function buildExtProc() {
@@ -135,8 +100,8 @@ export function ExtProcPolicyEditor(props: {
 				responseTrailerMode,
 				allowModeOverride: allowModeOverride ? true : undefined
 			},
-			requestAttributes,
-			responseAttributes,
+			requestAttributes: Object.keys(requestAttributes).length ? requestAttributes : undefined,
+			responseAttributes: Object.keys(responseAttributes).length ? responseAttributes : undefined,
 			metadataContext
 		}) as ExtProcDraft;
 	}
@@ -145,7 +110,7 @@ export function ExtProcPolicyEditor(props: {
 		try {
 			if (metadataText.trim()) parseYamlText(metadataText);
 			setMetadataError(null);
-			props.onSave(buildExtProc());
+			props.onSave(merged.value);
 		} catch (err) {
 			setMetadataError(err instanceof Error ? err.message : 'Invalid metadata YAML');
 		}
@@ -160,8 +125,10 @@ export function ExtProcPolicyEditor(props: {
 				save();
 			}}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<TargetEditor
 				value={target}
+				help={props.help}
 				tooltip={props.help.field<ExtProc>('ExtProc', 'host')}
 				onChange={setTarget}
 			/>
@@ -181,52 +148,55 @@ export function ExtProcPolicyEditor(props: {
 							{ value: 'failClosed', label: 'Fail closed' },
 							{ value: 'failOpen', label: 'Fail open' }
 						]}
-						schema={props.help.node(['$defs', 'FailureMode5'])}
+						schema={props.help.fieldNode<ExtProc>('ExtProc', 'failureMode')}
 						onChange={setFailureMode}
 					/>
 				</FieldGroup>
 				<div className="form-grid">
 					<ModeSelect
 						label="Request body"
-						tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', 'requestBodyMode')}
+						help={props.help}
+						field="requestBodyMode"
 						value={requestBodyMode}
 						options={bodyModes}
 						onChange={setRequestBodyMode}
 					/>
 					<ModeSelect
 						label="Response body"
-						tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', 'responseBodyMode')}
+						help={props.help}
+						field="responseBodyMode"
 						value={responseBodyMode}
 						options={bodyModes}
 						onChange={setResponseBodyMode}
 					/>
 					<ModeSelect
 						label="Request headers"
-						tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', 'requestHeaderMode')}
+						help={props.help}
+						field="requestHeaderMode"
 						value={requestHeaderMode}
 						options={sendModes}
 						onChange={setRequestHeaderMode}
 					/>
 					<ModeSelect
 						label="Response headers"
-						tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', 'responseHeaderMode')}
+						help={props.help}
+						field="responseHeaderMode"
 						value={responseHeaderMode}
 						options={sendModes}
 						onChange={setResponseHeaderMode}
 					/>
 					<ModeSelect
 						label="Request trailers"
-						tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', 'requestTrailerMode')}
+						help={props.help}
+						field="requestTrailerMode"
 						value={requestTrailerMode}
 						options={sendModes}
 						onChange={setRequestTrailerMode}
 					/>
 					<ModeSelect
 						label="Response trailers"
-						tooltip={props.help.field<ProcessingOptions>(
-							'ProcessingOptions',
-							'responseTrailerMode'
-						)}
+						help={props.help}
+						field="responseTrailerMode"
 						value={responseTrailerMode}
 						options={sendModes}
 						onChange={setResponseTrailerMode}
@@ -283,24 +253,28 @@ export function ExtProcPolicyEditor(props: {
 					/>
 				</FieldGroup>
 			</PolicySection>
-			<ResultingYaml value={preview} />
 		</form>
 	);
 }
 
 function ModeSelect<T extends string>(props: {
 	label: string;
-	tooltip?: string;
+	help: SchemaHelp;
+	field: DeepPath<ProcessingOptions>;
 	value: T;
 	options: Array<EnumSelectorOption<T>>;
 	onChange: (value: T) => void;
 }) {
 	return (
-		<FieldGroup label={props.label} tooltip={props.tooltip}>
+		<FieldGroup
+			label={props.label}
+			tooltip={props.help.field<ProcessingOptions>('ProcessingOptions', props.field)}
+		>
 			<EnumSelector
 				ariaLabel={props.label}
 				value={props.value}
 				options={props.options}
+				schema={props.help.fieldNode<ProcessingOptions>('ProcessingOptions', props.field)}
 				onChange={props.onChange}
 			/>
 		</FieldGroup>

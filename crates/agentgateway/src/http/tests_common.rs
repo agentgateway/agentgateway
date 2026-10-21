@@ -2,7 +2,6 @@ use bytes::Bytes;
 use http::{HeaderName, HeaderValue, Uri};
 
 use crate::http::{Body, Request, Response};
-use crate::test_helpers::proxymock::read_body_raw;
 
 pub fn request_for_uri(uri: &str) -> Request {
 	request(uri, http::Method::GET, &[])
@@ -38,20 +37,11 @@ impl ResponseExt for Response {
 	}
 }
 
-pub fn assert_status(res: &Response, want: u16) {
-	assert_eq!(res.status().as_u16(), want);
-}
-
 pub fn assert_header(res: &Response, h: impl TryInto<HeaderName>, want: &str) {
 	let Ok(h) = h.try_into() else {
 		panic!("invalid header key")
 	};
 	assert_eq!(res.hdr(h), want);
-}
-
-pub async fn assert_body(res: Response, want: impl AsRef<[u8]>) {
-	let body = read_body_raw(res.into_body()).await;
-	assert_eq!(body.as_ref(), want.as_ref());
 }
 
 pub trait IntoTestBody {

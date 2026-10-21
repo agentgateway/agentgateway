@@ -6,6 +6,29 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
+  name: copilot-default
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Copilot
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: copilot-endpoint
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Copilot
+  match:
+    model: gpt-test
+  baseURL: https://api.githubcopilot.com
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
   name: bedrock
 spec:
   parentRefs:

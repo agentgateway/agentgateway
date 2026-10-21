@@ -73,14 +73,13 @@ export function McpPlaygroundPage() {
 		localStorage.removeItem('mcpPlaygroundArgs');
 	}, []);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Existing lint violation; remove this suppression when the underlying issue is fixed.
-	useEffect(() => {
-		if (selectedTool?.inputSchema) {
-			setArgumentValues(defaultArgumentsFromSchema(selectedTool.inputSchema));
-		} else {
-			setArgumentValues({});
-		}
-	}, [selectedTool?.name, selectedTool?.inputSchema]);
+	const [argumentTool, setArgumentTool] = useState(selectedTool);
+	if (argumentTool !== selectedTool) {
+		setArgumentTool(selectedTool);
+		setArgumentValues(
+			selectedTool?.inputSchema ? defaultArgumentsFromSchema(selectedTool.inputSchema) : {}
+		);
+	}
 
 	async function initialize() {
 		setLoading('initialize');
@@ -168,7 +167,7 @@ export function McpPlaygroundPage() {
 		<div className="page-stack">
 			<PageHeader
 				title="MCP Playground"
-				description="Initialize a gateway MCP session, list tools, and call a tool through the MCP listener."
+				description="List and call tools through the MCP gateway."
 			/>
 			{needsCors ? (
 				<StatusBanner

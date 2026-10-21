@@ -305,6 +305,17 @@ fn invalid_request_error(bytes: &[u8]) -> Result<bytes::Bytes, AIError> {
 	))
 }
 
+impl From<&bedrock::TokenUsage> for super::ProviderUsage {
+	fn from(u: &bedrock::TokenUsage) -> Self {
+		Self {
+			input_tokens: u.input_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			cache_creation_1h_input_tokens: u.cache_write_input_tokens_for("1h").map(|i| i as u64),
+			..Default::default()
+		}
+	}
+}
+
 pub mod from_rerank {
 	use crate::bedrock::Provider;
 	use crate::types::ResponseType;
@@ -405,7 +416,7 @@ pub mod from_embeddings {
 
 	pub fn translate(req: &types::embeddings::Request) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
-			.map_err(AIError::RequestMarshal)?;
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Embeddings, err))?;
 
 		let model = typed.model.as_str();
 
@@ -416,9 +427,10 @@ pub mod from_embeddings {
 			let input = match &typed.input {
 				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
 				types::embeddings::typed::EmbeddingInput::Array(_) => {
-					return Err(AIError::RequestParsing(serde::de::Error::custom(
-						"Nova requires a single string input",
-					)));
+					return Err(AIError::RequestParsing(
+						crate::InputFormat::Embeddings,
+						serde::de::Error::custom("Nova requires a single string input"),
+					));
 				},
 			};
 			let bedrock_req = types::bedrock::NovaEmbeddingRequest {
@@ -475,9 +487,10 @@ pub mod from_embeddings {
 			let input = match &typed.input {
 				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
 				types::embeddings::typed::EmbeddingInput::Array(_) => {
-					return Err(AIError::RequestParsing(serde::de::Error::custom(
-						"Titan requires a single string input",
-					)));
+					return Err(AIError::RequestParsing(
+						crate::InputFormat::Embeddings,
+						serde::de::Error::custom("Titan requires a single string input"),
+					));
 				},
 			};
 			let bedrock_req = types::bedrock::AmazonTitanV2EmbeddingRequest {
@@ -644,6 +657,21 @@ pub mod from_completions {
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
+	fn push_text_content(
+		out: &mut Vec<bedrock::ContentBlock>,
+		text: &completions::RequestMessageContentPartText,
+		cache_points_used: &mut usize,
+	) {
+		if !text.text.trim().is_empty() {
+			out.push(bedrock::ContentBlock::Text(text.text.clone()));
+		}
+		helpers::insert_cache_point_on_prefix(
+			out,
+			text.prompt_cache_breakpoint.as_ref(),
+			cache_points_used,
+		);
+	}
+
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
 		cache_points_used: &mut usize,
@@ -659,14 +687,7 @@ pub mod from_completions {
 				for part in parts {
 					match part {
 						completions::RequestUserMessageContentPart::Text(text) => {
-							if !text.text.trim().is_empty() {
-								out.push(bedrock::ContentBlock::Text(text.text.clone()));
-								helpers::maybe_insert_cache_point(
-									&mut out,
-									text.prompt_cache_breakpoint.is_some(),
-									cache_points_used,
-								);
-							}
+							push_text_content(&mut out, text, cache_points_used);
 						},
 						completions::RequestUserMessageContentPart::ImageUrl(image) => {
 							out.push(
@@ -675,7 +696,7 @@ pub mod from_completions {
 							);
 							helpers::maybe_insert_cache_point(
 								&mut out,
-								image.prompt_cache_breakpoint.is_some(),
+								image.prompt_cache_breakpoint.as_ref(),
 								cache_points_used,
 							);
 						},
@@ -718,14 +739,7 @@ pub mod from_completions {
 					for part in parts {
 						match part {
 							completions::RequestAssistantMessageContentPart::Text(text) => {
-								if !text.text.trim().is_empty() {
-									content.push(bedrock::ContentBlock::Text(text.text.clone()));
-									helpers::maybe_insert_cache_point(
-										&mut content,
-										text.prompt_cache_breakpoint.is_some(),
-										cache_points_used,
-									);
-								}
+								push_text_content(&mut content, text, cache_points_used);
 							},
 							completions::RequestAssistantMessageContentPart::Refusal(refusal) => {
 								if !refusal.refusal.trim().is_empty() {
@@ -779,7 +793,7 @@ pub mod from_completions {
 		msg: &completions::RequestToolMessage,
 		cache_points_used: &mut usize,
 	) -> Vec<bedrock::ContentBlock> {
-		let mut marked = false;
+		let mut marked = None;
 		let content = match &msg.content {
 			completions::RequestToolMessageContent::Text(text) => {
 				vec![bedrock::ToolResultContentBlock::Text(text.to_string())]
@@ -788,7 +802,7 @@ pub mod from_completions {
 				.iter()
 				.map(|part| match part {
 					completions::RequestToolMessageContentPart::Text(text) => {
-						marked |= text.prompt_cache_breakpoint.is_some();
+						marked = marked.or(text.prompt_cache_breakpoint.as_ref());
 						bedrock::ToolResultContentBlock::Text(text.text.clone())
 					},
 				})
@@ -818,7 +832,8 @@ pub mod from_completions {
 		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
+		let typed = json::convert::<_, completions::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) =
 			translate_internal(typed, model_id, provider, headers, prompt_caching, catalog)?;
@@ -875,14 +890,16 @@ pub mod from_completions {
 				completions::RequestMessage::System(message) => match &message.content {
 					completions::RequestSystemMessageContent::Text(text) => {
 						if !text.trim().is_empty() {
-							system_parts.push((text.clone(), false));
+							system_parts.push((text.clone(), None));
 						}
 					},
 					completions::RequestSystemMessageContent::Array(parts) => {
 						for part in parts {
 							let completions::RequestSystemMessageContentPart::Text(text) = part;
 							if !text.text.trim().is_empty() {
-								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.is_some()));
+								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.as_ref()));
+							} else if let Some((_, marked)) = system_parts.last_mut() {
+								*marked = marked.or(text.prompt_cache_breakpoint.as_ref());
 							}
 						}
 					},
@@ -890,14 +907,16 @@ pub mod from_completions {
 				completions::RequestMessage::Developer(message) => match &message.content {
 					completions::RequestDeveloperMessageContent::Text(text) => {
 						if !text.trim().is_empty() {
-							system_parts.push((text.clone(), false));
+							system_parts.push((text.clone(), None));
 						}
 					},
 					completions::RequestDeveloperMessageContent::Array(parts) => {
 						for part in parts {
 							let completions::RequestDeveloperMessageContentPart::Text(text) = part;
 							if !text.text.trim().is_empty() {
-								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.is_some()));
+								system_parts.push((text.text.clone(), text.prompt_cache_breakpoint.as_ref()));
+							} else if let Some((_, marked)) = system_parts.last_mut() {
+								*marked = marked.or(text.prompt_cache_breakpoint.as_ref());
 							}
 						}
 					},
@@ -906,7 +925,7 @@ pub mod from_completions {
 			}
 		}
 		let mut cache_points_used = 0;
-		let has_explicit_system_cache = system_parts.iter().any(|(_, marked)| *marked);
+		let has_explicit_system_cache = system_parts.iter().any(|(_, marked)| marked.is_some());
 		let mut system_content = if system_parts.is_empty() {
 			None
 		} else if has_explicit_system_cache {
@@ -941,10 +960,10 @@ pub mod from_completions {
 				})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
-				Some(bedrock::ToolChoice::Auto)
+				Some(bedrock::ToolChoice::Auto {})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)) => {
-				Some(bedrock::ToolChoice::Any)
+				Some(bedrock::ToolChoice::Any {})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)) => None,
 			_ => None,
@@ -1104,6 +1123,10 @@ pub mod from_completions {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req
+				.service_tier
+				.as_deref()
+				.and_then(helpers::service_tier_from_openai),
 		};
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages
@@ -1178,10 +1201,14 @@ pub mod from_completions {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
 		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: passthrough,
+			provider_usage,
+		}))
 	}
 
 	fn translate_response_internal(
@@ -1265,8 +1292,8 @@ pub mod from_completions {
 							&serde_json::Value::Null,
 						);
 						// Emit the start of a tool call
-						let d = completions::StreamResponseDelta {
-							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+						let d = completions::StreamResponseDelta::with_tool_calls(vec![
+							completions::ChatCompletionMessageToolCallChunk {
 								index: tool_index,
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
@@ -1274,16 +1301,9 @@ pub mod from_completions {
 									name: Some(name),
 									arguments: None,
 								}),
-							}]),
-							..Default::default()
-						};
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: d,
-							finish_reason: None,
-						};
+							},
+						]);
+						let choice = completions::ChatChoiceStream::with_delta(d);
 						mk(vec![choice], None)
 					} else {
 						// Text/reasoning starts don't need events in Universal format
@@ -1360,13 +1380,7 @@ pub mod from_completions {
 					});
 
 					if let Some(delta) = delta {
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta,
-							finish_reason: None,
-						};
+						let choice = completions::ChatChoiceStream::with_delta(delta);
 						mk(vec![choice], None)
 					} else {
 						None
@@ -1380,19 +1394,14 @@ pub mod from_completions {
 				},
 				bedrock::ConverseStreamOutput::MessageStart(start) => {
 					// Just send a blob with the role
-					let choice = completions::ChatChoiceStream {
-						rest: Default::default(),
-						index: 0,
-						logprobs: None,
-						delta: completions::StreamResponseDelta {
+					let choice =
+						completions::ChatChoiceStream::with_delta(completions::StreamResponseDelta {
 							role: Some(match start.role {
 								bedrock::Role::Assistant => completions::Role::Assistant,
 								bedrock::Role::User => completions::Role::User,
 							}),
 							..Default::default()
-						},
-						finish_reason: None,
-					};
+						});
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
@@ -1400,13 +1409,7 @@ pub mod from_completions {
 					finish_reason = crate::types::serialize_str(&translated_finish_reason);
 
 					// Just send a blob with the finish reason
-					let choice = completions::ChatChoiceStream {
-						rest: Default::default(),
-						index: 0,
-						logprobs: None,
-						delta: completions::StreamResponseDelta::default(),
-						finish_reason: Some(translated_finish_reason),
-					};
+					let choice = completions::ChatChoiceStream::with_finish_reason(translated_finish_reason);
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::Metadata(metadata) => {
@@ -1418,6 +1421,8 @@ pub mod from_completions {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_1h_input_tokens =
+								usage.cache_write_input_tokens_for("1h").map(|i| i as u64);
 							if let Some(completion) = completion.take() {
 								r.response.completion = Some(vec![completion]);
 							}
@@ -1425,28 +1430,23 @@ pub mod from_completions {
 								logged_tool_calls.take_output_messages(finish_reason.take());
 						});
 
+						let input_tokens = usage.input_tokens
+							+ usage.cache_read_input_tokens.unwrap_or_default()
+							+ usage.cache_write_input_tokens.unwrap_or_default();
 						mk(
 							vec![],
 							Some(completions::Usage {
-								prompt_tokens: usage.input_tokens as u32,
+								prompt_tokens: input_tokens as u32,
 								completion_tokens: usage.output_tokens as u32,
 								total_tokens: usage.total_tokens as u32,
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
-								prompt_tokens_details: match (
-									usage.cache_read_input_tokens,
-									usage.cache_write_input_tokens,
-								) {
-									(None, None) => None,
-									(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-										cached_tokens: cached_tokens.map(|i| i as u64),
-										audio_tokens: None,
-										cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-										rest: Default::default(),
-									}),
-								},
+								prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+									usage.cache_read_input_tokens.map(|i| i as u64),
+									usage.cache_write_input_tokens.map(|i| i as u64),
+								),
 								// TODO: can we get reasoning tokens?
-								completion_tokens_details: None,
+								..Default::default()
 							}),
 						)
 					} else {
@@ -1481,11 +1481,12 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
-	use std::collections::HashSet;
+	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
 	use agent_core::strng;
 	use agent_http::Body;
+	use base64::Engine;
 	use bytes::Bytes;
 	use types::bedrock;
 	use types::messages::typed as messages;
@@ -1502,7 +1503,8 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		let (xlated, tool_name_map) = translate_internal(typed, provider, headers, catalog)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
@@ -1575,16 +1577,22 @@ pub mod from_messages {
 			}
 		});
 
-		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
+		// Bedrock applies strict inference constraints only to explicit extended thinking.
 		let thinking_enabled = requested_thinking
 			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
 
 		// Prepare typed tools before messages so definitions keep priority if a previous tool-use
 		// name would otherwise collide. Cache points are inserted later in their original order.
 		let pending_tool_config = if let Some(tools) = req.tools {
-			let mut bedrock_tools = Vec::with_capacity(tools.len());
+			let mut bedrock_tools: Vec<(bedrock::Tool, Option<messages::CacheControlEphemeral>)> =
+				Vec::with_capacity(tools.len());
 			for tool in tools {
 				let messages::Tool::Custom(tool) = tool else {
+					if let Some((_, marked)) = bedrock_tools.last_mut()
+						&& marked.is_none()
+					{
+						*marked = tool.cache_control().cloned();
+					}
 					// Bedrock's Converse API has no native equivalent of an Anthropic server tool
 					// (e.g. web_search_20250305) executing upstream of the model. Drop it rather
 					// than fail the whole request; the model just won't see this tool offered.
@@ -1597,38 +1605,22 @@ pub mod from_messages {
 						description: tool.description,
 						input_schema: Some(bedrock::ToolInputSchema::Json(tool.input_schema)),
 					}),
-					tool.cache_control.is_some(),
+					tool.cache_control,
 				));
 			}
 
 			if bedrock_tools.is_empty() {
 				None
 			} else {
+				// Forward tool_choice as-is. Extended thinking only allows `auto`/`none`, so forced
+				// tool use is left for Bedrock to reject, as the Anthropic API does.
 				let tool_choice = match req.tool_choice {
-					Some(messages::ToolChoice::Auto { .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Auto)
-						}
-					},
-					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any),
-					Some(messages::ToolChoice::Tool { name, .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Tool {
-								name: tool_name_map.register(&name),
-							})
-						}
-					},
-					Some(messages::ToolChoice::None {}) | None => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							None
-						}
-					},
+					Some(messages::ToolChoice::Auto { .. }) => Some(bedrock::ToolChoice::Auto {}),
+					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any {}),
+					Some(messages::ToolChoice::Tool { name, .. }) => Some(bedrock::ToolChoice::Tool {
+						name: tool_name_map.register(&name),
+					}),
+					Some(messages::ToolChoice::None {}) | None => None,
 				};
 
 				Some((bedrock_tools, tool_choice))
@@ -1657,7 +1649,7 @@ pub mod from_messages {
 								// Insert cache point if this block has cache_control
 								helpers::maybe_insert_cache_point(
 									&mut result,
-									cache_control.is_some(),
+									cache_control.as_ref(),
 									&mut cache_points_used,
 								);
 							},
@@ -1669,11 +1661,55 @@ pub mod from_messages {
 		});
 
 		// Convert typed Anthropic messages to Bedrock messages
-		let mut messages = Vec::new();
+		let mut messages: Vec<bedrock::Message> = Vec::new();
+		// Mid-conversation system messages waiting to be placed after the next tool results.
+		let mut pending_reminders = Vec::new();
 		for msg in req.messages {
 			let role = match msg.role {
 				messages::Role::Assistant => bedrock::Role::Assistant,
 				messages::Role::User => bedrock::Role::User,
+				// Converse has no mid-conversation system role. Hoisting these into `system` would change the
+				// cached prefix ahead of every message, so render them in place as user reminders instead.
+				messages::Role::System if !messages.is_empty() => {
+					let mut reminder = Vec::new();
+					for block in msg.content {
+						if let messages::ContentBlock::Text(messages::ContentTextBlock {
+							text,
+							cache_control,
+							..
+						}) = block
+						{
+							reminder.push(bedrock::ContentBlock::Text(format!(
+								"<system-reminder>\n{text}\n</system-reminder>"
+							)));
+							helpers::maybe_insert_cache_point(
+								&mut reminder,
+								cache_control.as_ref(),
+								&mut cache_points_used,
+							);
+						}
+					}
+					// Tool results must directly follow their tool use, so defer the reminder until after them.
+					let awaiting_tool_results = messages.last().is_some_and(|m| {
+						m.role == bedrock::Role::Assistant
+							&& m
+								.content
+								.iter()
+								.any(|b| matches!(b, bedrock::ContentBlock::ToolUse(_)))
+					});
+					if awaiting_tool_results {
+						pending_reminders.extend(reminder);
+					} else if !reminder.is_empty() {
+						helpers::push_or_merge_message(
+							&mut messages,
+							bedrock::Message {
+								role: bedrock::Role::User,
+								content: reminder,
+							},
+						);
+					}
+					continue;
+				},
 				messages::Role::System => {
 					for block in msg.content {
 						if let messages::ContentBlock::Text(messages::ContentTextBlock {
@@ -1686,7 +1722,7 @@ pub mod from_messages {
 							system_content.push(bedrock::SystemContentBlock::Text { text });
 							helpers::maybe_insert_cache_point(
 								system_content,
-								cache_control.is_some(),
+								cache_control.as_ref(),
 								&mut cache_points_used,
 							);
 						}
@@ -1698,12 +1734,12 @@ pub mod from_messages {
 			// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
 			let mut content = Vec::with_capacity(msg.content.len() * 2);
 			for block in msg.content {
-				let (bedrock_block, has_cache_control) = match block {
+				let (bedrock_block, cache_control) = match block {
 					messages::ContentBlock::Text(messages::ContentTextBlock {
 						text,
 						cache_control,
 						..
-					}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
+					}) => (bedrock::ContentBlock::Text(text), cache_control),
 					messages::ContentBlock::Image(messages::ContentImageBlock {
 						source,
 						cache_control,
@@ -1714,7 +1750,7 @@ pub mod from_messages {
 							(
 								super::CanonicalImage::from_media_type_and_base64(media_type, data)?
 									.into_bedrock_content_block(),
-								cache_control.is_some(),
+								cache_control,
 							)
 						} else {
 							return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -1733,7 +1769,7 @@ pub mod from_messages {
 							name: tool_name_map.register(&name),
 							input,
 						}),
-						cache_control.is_some(),
+						cache_control,
 					),
 					messages::ContentBlock::ToolResult {
 						tool_use_id,
@@ -1741,7 +1777,9 @@ pub mod from_messages {
 						is_error,
 						cache_control,
 					} => {
-						let mut has_cache_control = cache_control.is_some();
+						// Bedrock only supports top-level checkpoints. Use the last supported nested
+						// marker after the whole result unless the result has its own marker.
+						let mut nested_cache_control = None;
 						let bedrock_content = match tool_content {
 							messages::ToolResultContent::Text(text) => {
 								vec![bedrock::ToolResultContentBlock::Text(text)]
@@ -1754,19 +1792,19 @@ pub mod from_messages {
 										cache_control,
 										..
 									} => {
-										has_cache_control |= cache_control.is_some();
+										nested_cache_control = cache_control.or(nested_cache_control.take());
 										Some(bedrock::ToolResultContentBlock::Text(text))
 									},
 									messages::ToolResultContentPart::Image {
 										source,
 										cache_control,
 									} => {
+										nested_cache_control = cache_control.or(nested_cache_control.take());
 										if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
 											&& let Some(data) = source.get("data").and_then(|v| v.as_str())
 											&& let Ok(image) =
 												super::CanonicalImage::from_media_type_and_base64(media_type, data)
 										{
-											has_cache_control |= cache_control.is_some();
 											Some(bedrock::ToolResultContentBlock::Image(
 												image.into_bedrock_image_block(),
 											))
@@ -1778,12 +1816,15 @@ pub mod from_messages {
 										tool_name,
 										cache_control,
 									} => {
-										has_cache_control |= cache_control.is_some();
+										nested_cache_control = cache_control.or(nested_cache_control.take());
 										Some(bedrock::ToolResultContentBlock::Text(tool_name))
 									},
-									messages::ToolResultContentPart::Document { .. }
-									| messages::ToolResultContentPart::SearchResult { .. }
-									| messages::ToolResultContentPart::Unknown => None,
+									messages::ToolResultContentPart::Document { cache_control, .. }
+									| messages::ToolResultContentPart::SearchResult { cache_control, .. } => {
+										nested_cache_control = cache_control.or(nested_cache_control.take());
+										None
+									},
+									messages::ToolResultContentPart::Unknown => None,
 								})
 								.collect(),
 						};
@@ -1799,7 +1840,7 @@ pub mod from_messages {
 								content: bedrock_content,
 								status,
 							}),
-							has_cache_control,
+							cache_control.or(nested_cache_control),
 						)
 					},
 					messages::ContentBlock::Thinking {
@@ -1812,27 +1853,71 @@ pub mod from_messages {
 								signature: Some(signature).filter(|s| !s.is_empty()),
 							},
 						}),
-						false,
+						None,
 					),
-					messages::ContentBlock::WebSearchToolResult { .. } => continue,
 					messages::ContentBlock::RedactedThinking { data } => (
 						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Redacted {
 							redacted_content: data,
 						}),
-						false,
+						None,
 					),
-					messages::ContentBlock::Document(_) => continue,
-					messages::ContentBlock::SearchResult(_) => continue,
-					messages::ContentBlock::ServerToolUse { .. } => continue,
+					messages::ContentBlock::Document(messages::ContentDocumentBlock {
+						cache_control,
+						..
+					})
+					| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+						cache_control,
+						..
+					})
+					| messages::ContentBlock::WebSearchToolResult { cache_control, .. }
+					| messages::ContentBlock::ServerToolUse { cache_control, .. } => {
+						// Keep the breakpoint on the retained prefix when dropping unsupported content.
+						helpers::insert_cache_point_on_retained_prefix(
+							&mut content,
+							&mut messages,
+							system_content.as_mut(),
+							cache_control.as_ref(),
+							&mut cache_points_used,
+						);
+						continue;
+					},
 					messages::ContentBlock::Unknown => continue,
 				};
 
 				content.push(bedrock_block);
 
-				helpers::maybe_insert_cache_point(&mut content, has_cache_control, &mut cache_points_used);
+				helpers::maybe_insert_cache_point(
+					&mut content,
+					cache_control.as_ref(),
+					&mut cache_points_used,
+				);
 			}
 
-			messages.push(bedrock::Message { role, content });
+			if !pending_reminders.is_empty() {
+				if role == bedrock::Role::User {
+					content.append(&mut pending_reminders);
+				} else {
+					helpers::push_or_merge_message(
+						&mut messages,
+						bedrock::Message {
+							role: bedrock::Role::User,
+							content: std::mem::take(&mut pending_reminders),
+						},
+					);
+				}
+			}
+			if !content.is_empty() {
+				helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
+			}
+		}
+		if !pending_reminders.is_empty() {
+			helpers::push_or_merge_message(
+				&mut messages,
+				bedrock::Message {
+					role: bedrock::Role::User,
+					content: pending_reminders,
+				},
+			);
 		}
 
 		// Build inference config from typed fields
@@ -1851,11 +1936,11 @@ pub mod from_messages {
 
 		let tool_config = pending_tool_config.map(|(tools, tool_choice)| {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
-			for (tool, has_cache_control) in tools {
+			for (tool, cache_control) in tools {
 				bedrock_tools.push(tool);
 				helpers::maybe_insert_cache_point(
 					&mut bedrock_tools,
-					has_cache_control,
+					cache_control.as_ref(),
 					&mut cache_points_used,
 				);
 			}
@@ -1950,6 +2035,7 @@ pub mod from_messages {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: None,
 		};
 		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		Ok((bedrock_request, tool_name_map))
@@ -1989,10 +2075,14 @@ pub mod from_messages {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
 		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough =
 			json::convert::<_, types::messages::Response>(&openai).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: passthrough,
+			provider_usage,
+		}))
 	}
 
 	fn translate_response_internal(
@@ -2030,13 +2120,20 @@ pub mod from_messages {
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
+		let mut redacted_blocks: HashMap<i32, Vec<u8>> = HashMap::new();
+		let mut redacted_bytes = 0usize;
+		let mut pending_reasoning_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls =
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let model = model.to_string();
+		let mut failed = false;
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
+			if failed {
+				return vec![];
+			}
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
 				Err(e) => {
@@ -2057,29 +2154,22 @@ pub mod from_messages {
 			match event {
 				bedrock::ConverseStreamOutput::MessageStart(_start) => {
 					let event = messages::MessagesStreamEvent::MessageStart {
-						message: messages::MessagesResponse {
-							id: helpers::generate_anthropic_message_id(),
-							r#type: "message".to_string(),
-							role: messages::Role::Assistant,
-							content: vec![],
-							model: model.to_string(),
-							stop_reason: None,
-							stop_sequence: None,
-							usage: messages::Usage {
-								input_tokens: 0,
-								output_tokens: 0,
-								cache_creation_input_tokens: None,
-								cache_read_input_tokens: None,
-								service_tier: None,
-							},
-							input_audio_tokens: None,
-							output_audio_tokens: None,
-						},
+						message: messages::MessagesResponse::start(
+							helpers::generate_anthropic_message_id(),
+							model.to_string(),
+						),
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
 					vec![(event_name, serde_json::to_value(event_data).unwrap())]
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStart(start) => {
+					if matches!(
+						start.start,
+						Some(bedrock::ContentBlockStart::ReasoningContent)
+					) {
+						pending_reasoning_blocks.insert(start.content_block_index);
+						return vec![];
+					}
 					seen_blocks.insert(start.content_block_index);
 					let content_block = match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(s)) => {
@@ -2098,17 +2188,7 @@ pub mod from_messages {
 								cache_control: None,
 							}
 						},
-						Some(bedrock::ContentBlockStart::ReasoningContent) => {
-							messages::ContentBlock::Thinking {
-								thinking: String::new(),
-								signature: String::new(),
-							}
-						},
-						_ => messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: String::new(),
-							citations: None,
-							cache_control: None,
-						}),
+						_ => messages::ContentBlock::text(String::new()),
 					};
 
 					let event = messages::MessagesStreamEvent::ContentBlockStart {
@@ -2129,12 +2209,11 @@ pub mod from_messages {
 						if let Some(ref d) = delta.delta {
 							let content_block = match d {
 								bedrock::ContentBlockDelta::Text(_) => {
-									Some(messages::ContentBlock::Text(messages::ContentTextBlock {
-										text: String::new(),
-										citations: None,
-										cache_control: None,
-									}))
+									Some(messages::ContentBlock::text(String::new()))
 								},
+								bedrock::ContentBlockDelta::ReasoningContent(
+									bedrock::ReasoningContentBlockDelta::RedactedContent(_),
+								) => None,
 								bedrock::ContentBlockDelta::ReasoningContent(_) => {
 									Some(messages::ContentBlock::Thinking {
 										thinking: String::new(),
@@ -2182,10 +2261,30 @@ pub mod from_messages {
 								bedrock::ReasoningContentBlockDelta::Signature(sig) => {
 									messages::ContentBlockDelta::SignatureDelta { signature: sig }
 								},
-								bedrock::ReasoningContentBlockDelta::RedactedContent(_) => {
-									messages::ContentBlockDelta::ThinkingDelta {
-										thinking: "[REDACTED]".to_string(),
+								// Redacted content is emitted as a single block once it is complete.
+								bedrock::ReasoningContentBlockDelta::RedactedContent(data) => {
+									// Fragments produce no output until the block stops, so bound what is held.
+									redacted_bytes += data.len();
+									if redacted_bytes > buffer_limit {
+										tracing::error!("bedrock redacted reasoning exceeded buffer limit");
+										failed = true;
+										redacted_blocks.clear();
+										return vec![(
+											"error",
+											serde_json::json!({
+												"type": "error",
+												"error": {
+													"type": "api_error",
+													"message": "Stream processing error"
+												}
+											}),
+										)];
 									}
+									redacted_blocks
+										.entry(delta.content_block_index)
+										.or_default()
+										.extend(data);
+									return out;
 								},
 								bedrock::ReasoningContentBlockDelta::Unknown => {
 									messages::ContentBlockDelta::ThinkingDelta {
@@ -2212,12 +2311,38 @@ pub mod from_messages {
 					out
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
-					seen_blocks.remove(&stop.content_block_index);
+					let saw_delta = seen_blocks.remove(&stop.content_block_index);
+					let pending_reasoning = pending_reasoning_blocks.remove(&stop.content_block_index);
+					// Emit the deferred start for redacted or empty reasoning blocks.
+					let content_block = if let Some(data) = redacted_blocks.remove(&stop.content_block_index)
+					{
+						redacted_bytes -= data.len();
+						Some(messages::ContentBlock::RedactedThinking {
+							data: base64::prelude::BASE64_STANDARD.encode(data),
+						})
+					} else if pending_reasoning && !saw_delta {
+						Some(messages::ContentBlock::Thinking {
+							thinking: String::new(),
+							signature: String::new(),
+						})
+					} else {
+						None
+					};
+					let mut out = Vec::new();
+					if let Some(content_block) = content_block {
+						let event = messages::MessagesStreamEvent::ContentBlockStart {
+							index: stop.content_block_index as usize,
+							content_block,
+						};
+						let (event_name, event_data) = event.into_sse_tuple();
+						out.push((event_name, serde_json::to_value(event_data).unwrap()));
+					}
 					let event = messages::MessagesStreamEvent::ContentBlockStop {
 						index: stop.content_block_index as usize,
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
-					vec![(event_name, serde_json::to_value(event_data).unwrap())]
+					out.push((event_name, serde_json::to_value(event_data).unwrap()));
+					out
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
 					pending_stop_reason = Some(stop.stop_reason);
@@ -2225,7 +2350,6 @@ pub mod from_messages {
 				},
 				bedrock::ConverseStreamOutput::Metadata(meta) => {
 					if let Some(usage) = meta.usage {
-						pending_usage = Some(usage);
 						log.update(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
@@ -2233,10 +2357,13 @@ pub mod from_messages {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_1h_input_tokens =
+								usage.cache_write_input_tokens_for("1h").map(|i| i as u64);
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}
 						});
+						pending_usage = Some(usage);
 					}
 
 					let mut out = Vec::new();
@@ -2295,10 +2422,12 @@ pub mod from_messages {
 
 	fn to_anthropic_message_delta_usage(usage: bedrock::TokenUsage) -> messages::MessageDeltaUsage {
 		messages::MessageDeltaUsage {
+			cache_creation: helpers::cache_creation(&usage),
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			..Default::default()
 		}
 	}
 }
@@ -2309,16 +2438,18 @@ pub mod from_responses {
 
 	use agent_core::strng;
 	use agent_http::Body;
+	use base64::Engine;
 	use bytes::Bytes;
 	use helpers::*;
 	use rand::RngExt;
 	use responses::{
-		AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
-		OutputContent, OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails,
-		ResponseContentPartAddedEvent, ResponseContentPartDoneEvent, ResponseErrorEvent,
+		AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
+		OutputItem, OutputMessage, OutputStatus, OutputTextContent, OutputTokenDetails, ReasoningItem,
+		ReasoningItemContent, ReasoningTextContent, ResponseContentPartAddedEvent,
+		ResponseContentPartDoneEvent, ResponseError, ResponseErrorCode, ResponseErrorEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
-		ResponseTextDeltaEvent, ResponseUsage,
+		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent,
+		ResponseReasoningTextDoneEvent, ResponseStreamEvent, ResponseTextDeltaEvent, ResponseUsage,
 	};
 	use types::bedrock;
 	use types::responses::typed as responses;
@@ -2414,8 +2545,8 @@ pub mod from_responses {
 		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let mut typed =
-			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
+		let mut typed = json::convert::<_, responses::CreateResponse>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Responses, err))?;
 		let namespaces =
 			crate::conversion::namespace_tools::NamespaceToolMap::rewrite_request(&mut typed)?;
 		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
@@ -2503,22 +2634,22 @@ pub mod from_responses {
 			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
 				use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
 				match tc {
-					ToolChoiceParam::Mode(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
-					ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
-					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
+					ToolChoiceParam::Option(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto {}),
+					ToolChoiceParam::Option(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any {}),
+					ToolChoiceParam::Option(ToolChoiceOptions::None) => None,
 					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
 						Some(bedrock::ToolChoice::Tool {
 							name: tool_name_map.register(name),
 						})
 					},
-					ToolChoiceParam::Hosted(_) => {
+					ToolChoiceParam::BuiltIn(_) => {
 						tracing::warn!("Hosted tool choice not supported for Bedrock");
 						None
 					},
 					ToolChoiceParam::AllowedTools(_)
 					| ToolChoiceParam::Mcp(_)
 					| ToolChoiceParam::Custom(_)
-					| ToolChoiceParam::ProgrammaticToolCalling(_)
+					| ToolChoiceParam::ProgrammaticToolCalling
 					| ToolChoiceParam::ApplyPatch
 					| ToolChoiceParam::Shell => {
 						tracing::warn!("Unsupported tool choice for Bedrock: {:?}", tc);
@@ -2572,7 +2703,7 @@ pub mod from_responses {
 						blocks.push(bedrock::ContentBlock::Text(input_text.text.clone()));
 						maybe_insert_cache_point(
 							&mut blocks,
-							input_text.prompt_cache_breakpoint.is_some(),
+							input_text.prompt_cache_breakpoint.as_ref(),
 							cache_points_used,
 						);
 					},
@@ -2597,7 +2728,7 @@ pub mod from_responses {
 							.push(super::CanonicalImage::from_data_url(image_url)?.into_bedrock_content_block());
 						maybe_insert_cache_point(
 							&mut blocks,
-							input_image.prompt_cache_breakpoint.is_some(),
+							input_image.prompt_cache_breakpoint.as_ref(),
 							cache_points_used,
 						);
 					},
@@ -2657,7 +2788,7 @@ pub mod from_responses {
 						}));
 						maybe_insert_cache_point(
 							&mut blocks,
-							input_file.prompt_cache_breakpoint.is_some(),
+							input_file.prompt_cache_breakpoint.as_ref(),
 							cache_points_used,
 						);
 					},
@@ -2678,7 +2809,7 @@ pub mod from_responses {
 						});
 						maybe_insert_cache_point(
 							&mut blocks,
-							input_text.prompt_cache_breakpoint.is_some(),
+							input_text.prompt_cache_breakpoint.as_ref(),
 							cache_points_used,
 						);
 					},
@@ -2745,6 +2876,8 @@ pub mod from_responses {
 					helpers::push_or_merge_message(&mut messages, bedrock::Message { role, content });
 				},
 				InputItem::Item(Item::Message(MessageItem::Output(msg))) => {
+					// TODO: Insert cache points once the SDK's OutputTextContent
+					// supports prompt_cache_breakpoint.
 					let content = msg
 						.content
 						.iter()
@@ -2766,27 +2899,44 @@ pub mod from_responses {
 					}
 				},
 				InputItem::Item(Item::Reasoning(reasoning)) => {
-					let content = if let Some(redacted_content) = reasoning.encrypted_content {
-						vec![bedrock::ContentBlock::ReasoningContent(
-							bedrock::ReasoningContentBlock::Redacted { redacted_content },
-						)]
-					} else {
-						reasoning
-							.content
-							.unwrap_or_default()
+					// encrypted_content holds the signature for visible reasoning, or the redacted
+					// content when there is no visible text.
+					let texts = reasoning
+						.content
+						.unwrap_or_default()
+						.into_iter()
+						.map(|part| {
+							let responses::ReasoningItemContent::ReasoningText(text) = part;
+							text.text
+						})
+						.collect::<Vec<_>>();
+					let content = match reasoning.encrypted_content {
+						Some(redacted_content) if texts.is_empty() => {
+							vec![bedrock::ContentBlock::ReasoningContent(
+								bedrock::ReasoningContentBlock::Redacted { redacted_content },
+							)]
+						},
+						Some(signature) => vec![bedrock::ContentBlock::ReasoningContent(
+							bedrock::ReasoningContentBlock::Structured {
+								reasoning_text: bedrock::ReasoningText {
+									text: texts.concat(),
+									signature: Some(signature),
+								},
+							},
+						)],
+						None => texts
 							.into_iter()
-							.map(|part| {
-								let responses::ReasoningItemContent::ReasoningText(text) = part;
+							.map(|text| {
 								bedrock::ContentBlock::ReasoningContent(
 									bedrock::ReasoningContentBlock::Structured {
 										reasoning_text: bedrock::ReasoningText {
-											text: text.text,
+											text,
 											signature: None,
 										},
 									},
 								)
 							})
-							.collect()
+							.collect(),
 					};
 					if !content.is_empty() {
 						helpers::push_or_merge_message(
@@ -2799,13 +2949,11 @@ pub mod from_responses {
 					}
 				},
 				InputItem::Item(Item::FunctionCall(call)) => {
-					let Ok(input) = serde_json::from_str::<serde_json::Value>(&call.arguments) else {
-						tracing::warn!(
-							"Skipping function_call with invalid JSON arguments for tool '{}': {}",
-							call.name,
-							call.arguments
-						);
-						continue;
+					// Converse rejects non-object toolUse.input values, despite input being a document.
+					// Keep the call (rather than dropping it) so its function_call_output still pairs.
+					let input = match serde_json::from_str::<serde_json::Value>(&call.arguments) {
+						Ok(serde_json::Value::Object(input)) => serde_json::Value::Object(input),
+						_ => serde_json::json!({}),
 					};
 
 					helpers::push_or_merge_message(
@@ -3019,6 +3167,16 @@ pub mod from_responses {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req.service_tier.as_ref().and_then(|tier| {
+				use responses::ServiceTierResponses as Tier;
+				let tier_type = match tier {
+					Tier::Priority => bedrock::ServiceTierType::Priority,
+					Tier::Default => bedrock::ServiceTierType::Default,
+					Tier::Flex => bedrock::ServiceTierType::Flex,
+					Tier::Auto | Tier::Scale | Tier::Fast | Tier::Ultrafast => return None,
+				};
+				Some(bedrock::ServiceTier { tier_type })
+			}),
 		};
 
 		// Apply user message and tool caching
@@ -3118,6 +3276,7 @@ pub mod from_responses {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(super::super::ProviderUsage::from);
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let mut typed = adapter.to_responses_typed(tool_name_map);
 		if let Some(namespaces) = namespaces {
@@ -3125,7 +3284,10 @@ pub mod from_responses {
 		}
 		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: passthrough,
+			provider_usage,
+		}))
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
@@ -3160,10 +3322,9 @@ pub mod from_responses {
 		let mut last_token_at: Option<Instant> = None;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
-		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		// Terminal events must carry the full output even when content logging is disabled.
 		let mut text = String::new();
-		let mut completed_tools: Vec<(u32, OutputItem)> = Vec::new();
+		let mut completed_items: Vec<(u32, OutputItem)> = Vec::new();
 		let mut logged_tool_calls =
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 
@@ -3171,8 +3332,12 @@ pub mod from_responses {
 		// output_index is the stable position of this tool call in the response output array.
 		let mut tool_calls: HashMap<i32, (String, String, String, u32)> = HashMap::new();
 
-		// Message item is always output_index 0; tool call items get sequential indices from 1.
-		let mut next_output_index: u32 = 1;
+		// Track reasoning blocks: (content_block_index -> (item_id, output_index, text, signature, redacted_content))
+		let mut reasoning_blocks: HashMap<i32, (String, u32, String, String, Vec<u8>)> = HashMap::new();
+
+		// Output indices are assigned in stream order, so reasoning precedes the message it led to.
+		let mut next_output_index: u32 = 0;
+		let mut message_output_index: Option<u32> = None;
 
 		// Track sequence numbers and item IDs
 		let mut sequence_number: u64 = 0;
@@ -3223,26 +3388,9 @@ pub mod from_responses {
 					let created_event = response_builder.created_event(sequence_number);
 					events.push(("event", created_event));
 
-					sequence_number += 1;
-					let item_added_event =
-						ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
-							sequence_number,
-							output_index: 0,
-							item: OutputItem::Message(OutputMessage {
-								content: Vec::new(),
-								id: message_item_id.clone(),
-								role: AssistantRole::Assistant,
-								phase: None,
-								status: OutputStatus::InProgress,
-							}),
-						});
-					events.push(("event", item_added_event));
-
 					events
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStart(start) => {
-					seen_blocks.insert(start.content_block_index);
-
 					match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(tu)) => {
 							let tool_call_item_id = format!("call_{:016x}", rand::rng().random::<u64>());
@@ -3284,19 +3432,8 @@ pub mod from_responses {
 
 							vec![("event", item_added_event)]
 						},
-						_ => {
-							sequence_number += 1;
-							let part_added_event =
-								ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
-									sequence_number,
-									item_id: message_item_id.clone(),
-									output_index: 0,
-									content_index: 0,
-									part: make_output_part(String::new()),
-								});
-
-							vec![("event", part_added_event)]
-						},
+						// Text and reasoning items are opened by their first delta.
+						_ => vec![],
 					}
 				},
 				bedrock::ConverseStreamOutput::ContentBlockDelta(delta) => {
@@ -3318,46 +3455,104 @@ pub mod from_responses {
 						match d {
 							bedrock::ContentBlockDelta::Text(delta) => {
 								text.push_str(&delta);
+								let output_index = *message_output_index.get_or_insert_with(|| {
+									let output_index = next_output_index;
+									next_output_index += 1;
+									sequence_number += 1;
+									out.push((
+										"event",
+										ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
+											sequence_number,
+											output_index,
+											item: OutputItem::Message(OutputMessage {
+												content: Vec::new(),
+												id: message_item_id.clone(),
+												role: AssistantRole::Assistant,
+												phase: None,
+												status: OutputStatus::InProgress,
+											}),
+										}),
+									));
+									sequence_number += 1;
+									out.push((
+										"event",
+										ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
+											sequence_number,
+											item_id: message_item_id.clone(),
+											output_index,
+											content_index: 0,
+											part: make_output_part(String::new()),
+										}),
+									));
+									output_index
+								});
 								sequence_number += 1;
 								let delta_event =
 									ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 										sequence_number,
 										item_id: message_item_id.clone(),
-										output_index: 0,
+										output_index,
 										content_index: 0,
 										delta,
 										logprobs: None,
 									});
 								out.push(("event", delta_event));
 							},
-							bedrock::ContentBlockDelta::ReasoningContent(rc) => match rc {
-								bedrock::ReasoningContentBlockDelta::Text(t) => {
-									sequence_number += 1;
-									let delta_event =
-										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
-											sequence_number,
-											item_id: message_item_id.clone(),
-											output_index: 0,
-											content_index: 0,
-											delta: t,
-											logprobs: None,
+							bedrock::ContentBlockDelta::ReasoningContent(rc) => {
+								let (item_id, output_index, reasoning_text, signature, redacted_content) =
+									reasoning_blocks
+										.entry(delta.content_block_index)
+										.or_insert_with(|| {
+											let item_id = format!("rs_{:016x}", rand::rng().random::<u64>());
+											let output_index = next_output_index;
+											next_output_index += 1;
+											sequence_number += 1;
+											out.push((
+												"event",
+												ResponseStreamEvent::ResponseOutputItemAdded(
+													ResponseOutputItemAddedEvent {
+														sequence_number,
+														output_index,
+														item: OutputItem::Reasoning(ReasoningItem {
+															id: Some(item_id.clone()),
+															summary: vec![],
+															content: None,
+															encrypted_content: None,
+															status: Some(OutputStatus::InProgress),
+														}),
+													},
+												),
+											));
+											(
+												item_id,
+												output_index,
+												String::new(),
+												String::new(),
+												Vec::new(),
+											)
 										});
-									out.push(("event", delta_event));
-								},
-								bedrock::ReasoningContentBlockDelta::RedactedContent(_) => {
-									sequence_number += 1;
-									let delta_event =
-										ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
-											sequence_number,
-											item_id: message_item_id.clone(),
-											output_index: 0,
-											content_index: 0,
-											delta: "[REDACTED]".to_string(),
-											logprobs: None,
-										});
-									out.push(("event", delta_event));
-								},
-								_ => {},
+								match rc {
+									bedrock::ReasoningContentBlockDelta::Text(t) => {
+										reasoning_text.push_str(&t);
+										sequence_number += 1;
+										let delta_event = ResponseStreamEvent::ResponseReasoningTextDelta(
+											ResponseReasoningTextDeltaEvent {
+												sequence_number,
+												item_id: item_id.clone(),
+												output_index: *output_index,
+												content_index: 0,
+												delta: t,
+											},
+										);
+										out.push(("event", delta_event));
+									},
+									// Signatures and redacted content are only exposed once complete, on the item done event.
+									bedrock::ReasoningContentBlockDelta::Signature(sig) => signature.push_str(&sig),
+									bedrock::ReasoningContentBlockDelta::RedactedContent(data) => {
+										redacted_content.extend(data);
+									},
+									bedrock::ReasoningContentBlockDelta::Unknown => {},
+								}
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
 								logged_tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
@@ -3385,7 +3580,6 @@ pub mod from_responses {
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
-					let was_tracked = seen_blocks.remove(&stop.content_block_index);
 
 					if let Some((item_id, name, buffer, output_index)) =
 						tool_calls.remove(&stop.content_block_index)
@@ -3412,7 +3606,7 @@ pub mod from_responses {
 							status: Some(OutputStatus::Completed),
 							r#async: None,
 						});
-						completed_tools.push((output_index, item.clone()));
+						completed_items.push((output_index, item.clone()));
 						sequence_number += 1;
 						let item_done_event =
 							ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
@@ -3421,17 +3615,53 @@ pub mod from_responses {
 								item,
 							});
 						events.push(("event", item_done_event));
-					} else if was_tracked {
+					} else if let Some((item_id, output_index, reasoning_text, signature, redacted_content)) =
+						reasoning_blocks.remove(&stop.content_block_index)
+					{
+						if !reasoning_text.is_empty() {
+							sequence_number += 1;
+							let text_done_event =
+								ResponseStreamEvent::ResponseReasoningTextDone(ResponseReasoningTextDoneEvent {
+									sequence_number,
+									item_id: item_id.clone(),
+									output_index,
+									content_index: 0,
+									text: reasoning_text.clone(),
+								});
+							events.push(("event", text_done_event));
+						}
+						// encrypted_content carries the redacted content, or the signature alongside visible text.
+						let (content, encrypted_content) = if redacted_content.is_empty() {
+							(
+								Some(vec![ReasoningItemContent::ReasoningText(
+									ReasoningTextContent {
+										text: reasoning_text,
+									},
+								)]),
+								(!signature.is_empty()).then_some(signature),
+							)
+						} else {
+							(
+								None,
+								Some(base64::prelude::BASE64_STANDARD.encode(redacted_content)),
+							)
+						};
+						let item = OutputItem::Reasoning(ReasoningItem {
+							id: Some(item_id),
+							summary: vec![],
+							content,
+							encrypted_content,
+							status: Some(OutputStatus::Completed),
+						});
+						completed_items.push((output_index, item.clone()));
 						sequence_number += 1;
-						let part_done_event =
-							ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
+						let item_done_event =
+							ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 								sequence_number,
-								item_id: message_item_id.clone(),
-								output_index: 0,
-								content_index: 0,
-								part: make_output_part(text.clone()),
+								output_index,
+								item,
 							});
-						events.push(("event", part_done_event));
+						events.push(("event", item_done_event));
 					}
 
 					events
@@ -3442,7 +3672,6 @@ pub mod from_responses {
 				},
 				bedrock::ConverseStreamOutput::Metadata(meta) => {
 					if let Some(usage) = meta.usage {
-						pending_usage = Some(usage);
 						log.update(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
@@ -3450,7 +3679,10 @@ pub mod from_responses {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							r.response.cache_creation_1h_input_tokens =
+								usage.cache_write_input_tokens_for("1h").map(|i| i as u64);
 						});
+						pending_usage = Some(usage);
 					}
 
 					let mut out: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
@@ -3461,39 +3693,43 @@ pub mod from_responses {
 						.map(responses_output_status)
 						.unwrap_or(OutputStatus::Completed);
 
-					let content = if text.is_empty() {
-						vec![]
-					} else {
-						vec![responses::OutputMessageContent::OutputText(
-							OutputTextContent {
-								annotations: vec![],
-								logprobs: None,
-								text: text.clone(),
-							},
-						)]
-					};
+					if let Some(output_index) = message_output_index {
+						sequence_number += 1;
+						let part_done_event =
+							ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
+								sequence_number,
+								item_id: message_item_id.clone(),
+								output_index,
+								content_index: 0,
+								part: make_output_part(text.clone()),
+							});
+						out.push(("event", part_done_event));
 
-					let item = OutputItem::Message(OutputMessage {
-						content,
-						id: message_item_id.clone(),
-						role: AssistantRole::Assistant,
-						phase: None,
-						status: output_status,
-					});
-					let mut output = Vec::new();
-					if !text.is_empty() {
-						output.push(item.clone());
-					}
-					sequence_number += 1;
-					let message_done_event =
-						ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
-							sequence_number,
-							output_index: 0,
-							item,
+						let item = OutputItem::Message(OutputMessage {
+							content: vec![responses::OutputMessageContent::OutputText(
+								OutputTextContent {
+									annotations: vec![],
+									logprobs: None,
+									text: text.clone(),
+								},
+							)],
+							id: message_item_id.clone(),
+							role: AssistantRole::Assistant,
+							phase: None,
+							status: output_status,
 						});
-					completed_tools.sort_by_key(|(index, _)| *index);
-					output.extend(completed_tools.drain(..).map(|(_, item)| item));
-					out.push(("event", message_done_event));
+						completed_items.push((output_index, item.clone()));
+						sequence_number += 1;
+						let message_done_event =
+							ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
+								sequence_number,
+								output_index,
+								item,
+							});
+						out.push(("event", message_done_event));
+					}
+					completed_items.sort_by_key(|(index, _)| *index);
+					let output: Vec<_> = completed_items.drain(..).map(|(_, item)| item).collect();
 
 					let response_status = match stop.as_ref() {
 						Some(bedrock::StopReason::EndTurn)
@@ -3512,17 +3748,22 @@ pub mod from_responses {
 							logged_tool_calls.take_output_messages(finish_reason.clone());
 					});
 
-					let usage_obj = usage_data.map(|u| ResponseUsage {
-						input_tokens: u.input_tokens as u32,
-						output_tokens: u.output_tokens as u32,
-						total_tokens: u.total_tokens as u32,
-						input_tokens_details: InputTokenDetails {
-							cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
-							cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
-						},
-						output_tokens_details: OutputTokenDetails {
-							reasoning_tokens: 0,
-						},
+					let usage_obj = usage_data.map(|u| {
+						let input_tokens = u.input_tokens
+							+ u.cache_read_input_tokens.unwrap_or_default()
+							+ u.cache_write_input_tokens.unwrap_or_default();
+						ResponseUsage {
+							input_tokens: input_tokens as u32,
+							output_tokens: u.output_tokens as u32,
+							total_tokens: u.total_tokens as u32,
+							input_tokens_details: InputTokenDetails {
+								cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
+								cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as i64),
+							},
+							output_tokens_details: OutputTokenDetails {
+								reasoning_tokens: 0,
+							},
+						}
 					});
 
 					sequence_number += 1;
@@ -3542,8 +3783,8 @@ pub mod from_responses {
 						| Some(bedrock::StopReason::GuardrailIntervened) => response_builder.failed_event(
 							sequence_number,
 							usage_obj,
-							ErrorObject {
-								code: "content_filter".to_string(),
+							ResponseError {
+								code: ResponseErrorCode::Other("content_filter".to_string()),
 								message: "Content filtered by guardrails".to_string(),
 								misalignment: None,
 							},
@@ -3585,7 +3826,7 @@ pub mod from_anthropic_token_count {
 		let anthropic_version = headers
 			.get("anthropic-version")
 			.and_then(|v| v.to_str().ok())
-			.unwrap_or("2023-06-01");
+			.unwrap_or(crate::anthropic::ANTHROPIC_VERSION);
 
 		let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
 		let mut body: serde_json::Map<String, serde_json::Value> =
@@ -3621,6 +3862,9 @@ mod helpers {
 	use std::sync::LazyLock;
 
 	use crate::AIError;
+	use crate::types::completions::typed::PromptCacheBreakpointParam;
+	use crate::types::messages::typed::{CacheControlEphemeral, CacheCreation};
+	use crate::types::responses::typed::PromptCacheBreakpointConfig;
 
 	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
 	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
@@ -3692,8 +3936,16 @@ mod helpers {
 		}
 	}
 
+	pub fn cache_creation(usage: &bedrock::TokenUsage) -> Option<CacheCreation> {
+		(!usage.cache_details.is_empty()).then(|| CacheCreation {
+			ephemeral_5m_input_tokens: usage.cache_write_input_tokens_for("5m"),
+			ephemeral_1h_input_tokens: usage.cache_write_input_tokens_for("1h"),
+		})
+	}
+
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
+			ttl: None,
 			r#type: bedrock::CachePointType::Default,
 		}
 	}
@@ -3720,16 +3972,97 @@ mod helpers {
 		}
 	}
 
-	pub fn maybe_insert_cache_point(
-		target: &mut impl CachePointTarget,
-		marked: bool,
+	pub trait CachePoint {
+		fn cache_point(self) -> Option<bedrock::CachePointBlock>;
+	}
+
+	impl CachePoint for Option<&PromptCacheBreakpointParam> {
+		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
+			self.map(|_| create_cache_point())
+		}
+	}
+
+	impl CachePoint for Option<&PromptCacheBreakpointConfig> {
+		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
+			self.map(|_| create_cache_point())
+		}
+	}
+
+	impl CachePoint for Option<&CacheControlEphemeral> {
+		fn cache_point(self) -> Option<bedrock::CachePointBlock> {
+			let CacheControlEphemeral::Ephemeral { ttl } = self?;
+			Some(bedrock::CachePointBlock {
+				ttl: ttl.clone(),
+				..create_cache_point()
+			})
+		}
+	}
+
+	pub fn insert_cache_point_on_retained_prefix(
+		content: &mut Vec<bedrock::ContentBlock>,
+		messages: &mut [bedrock::Message],
+		system: Option<&mut Vec<bedrock::SystemContentBlock>>,
+		breakpoint: impl CachePoint,
 		cache_points_used: &mut usize,
 	) {
-		if !marked || *cache_points_used >= 4 {
+		let prefix = std::iter::once(content)
+			.chain(
+				messages
+					.iter_mut()
+					.rev()
+					.map(|message| &mut message.content),
+			)
+			.find(|blocks| {
+				blocks
+					.iter()
+					.any(|block| !matches!(block, bedrock::ContentBlock::ReasoningContent(_)))
+			});
+		if let Some(prefix) = prefix {
+			insert_cache_point_on_prefix(prefix, breakpoint, cache_points_used);
+		} else if let Some(system) = system
+			&& matches!(
+				system.last(),
+				Some(bedrock::SystemContentBlock::Text { .. })
+			) {
+			maybe_insert_cache_point(system, breakpoint, cache_points_used);
+		}
+	}
+
+	pub fn insert_cache_point_on_prefix(
+		content: &mut Vec<bedrock::ContentBlock>,
+		breakpoint: impl CachePoint,
+		cache_points_used: &mut usize,
+	) {
+		if *cache_points_used >= 4 {
 			return;
 		}
-		target.push_cache_point(create_cache_point());
-		*cache_points_used += 1;
+		let Some(point) = breakpoint.cache_point() else {
+			return;
+		};
+		let Some(index) = content
+			.iter()
+			.rposition(|block| !matches!(block, bedrock::ContentBlock::ReasoningContent(_)))
+		else {
+			return;
+		};
+		if !matches!(content[index], bedrock::ContentBlock::CachePoint(_)) {
+			content.insert(index + 1, bedrock::ContentBlock::CachePoint(point));
+			*cache_points_used += 1;
+		}
+	}
+
+	pub fn maybe_insert_cache_point(
+		target: &mut impl CachePointTarget,
+		breakpoint: impl CachePoint,
+		cache_points_used: &mut usize,
+	) {
+		if *cache_points_used >= 4 {
+			return;
+		}
+		if let Some(point) = breakpoint.cache_point() {
+			target.push_cache_point(point);
+			*cache_points_used += 1;
+		}
 	}
 
 	pub fn supports_prompt_caching(model_id: &str) -> bool {
@@ -3843,6 +4176,23 @@ mod helpers {
 		}
 
 		metadata
+	}
+
+	pub fn service_tier_from_openai(tier: &str) -> Option<bedrock::ServiceTier> {
+		let tier_type = match tier {
+			"priority" => bedrock::ServiceTierType::Priority,
+			"default" => bedrock::ServiceTierType::Default,
+			"flex" => bedrock::ServiceTierType::Flex,
+			"auto" => return None,
+			unsupported => {
+				tracing::warn!(
+					service_tier = unsupported,
+					"service tier is not supported by Bedrock; request is served at the default tier"
+				);
+				return None;
+			},
+		};
+		Some(bedrock::ServiceTier { tier_type })
 	}
 
 	pub fn extract_beta_headers(
@@ -4011,21 +4361,13 @@ impl ConverseResponseAdapter {
 			reasoning_signature = None;
 		}
 
+		let tool_calls = (!tool_calls.is_empty()).then_some(tool_calls);
 		let message = completions::ResponseMessage {
-			role: completions::Role::Assistant,
 			content,
-			tool_calls: if tool_calls.is_empty() {
-				None
-			} else {
-				Some(tool_calls)
-			},
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
-			extra: None,
+			tool_calls,
 			reasoning_content,
 			reasoning_signature,
+			..completions::ResponseMessage::assistant()
 		};
 
 		let choice = completions::ChatChoice {
@@ -4038,26 +4380,23 @@ impl ConverseResponseAdapter {
 
 		let usage = self
 			.usage
-			.map(|token_usage| completions::Usage {
-				prompt_tokens: token_usage.input_tokens as u32,
-				completion_tokens: token_usage.output_tokens as u32,
-				total_tokens: token_usage.total_tokens as u32,
-				completion_tokens_details: None,
-
-				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
-				prompt_tokens_details: match (
-					token_usage.cache_read_input_tokens,
-					token_usage.cache_write_input_tokens,
-				) {
-					(None, None) => None,
-					(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-						cached_tokens: cached_tokens.map(|i| i as u64),
-						audio_tokens: None,
-						cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-						rest: Default::default(),
-					}),
-				},
-				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
+			.as_ref()
+			.map(|token_usage| {
+				let input_tokens = token_usage.input_tokens
+					+ token_usage.cache_read_input_tokens.unwrap_or_default()
+					+ token_usage.cache_write_input_tokens.unwrap_or_default();
+				completions::Usage {
+					prompt_tokens: input_tokens as u32,
+					completion_tokens: token_usage.output_tokens as u32,
+					total_tokens: token_usage.total_tokens as u32,
+					cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
+					prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+						token_usage.cache_read_input_tokens.map(|i| i as u64),
+						token_usage.cache_write_input_tokens.map(|i| i as u64),
+					),
+					cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
+					..Default::default()
+				}
 			})
 			.unwrap_or_default();
 
@@ -4103,9 +4442,11 @@ impl ConverseResponseAdapter {
 				},
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
 					let (text, encrypted_content) = match reasoning {
-						bedrock::ReasoningContentBlock::Structured { reasoning_text } => {
-							(Some(reasoning_text.text.clone()), None)
-						},
+						// The signature rides in encrypted_content so it can be replayed on the next turn.
+						bedrock::ReasoningContentBlock::Structured { reasoning_text } => (
+							Some(reasoning_text.text.clone()),
+							reasoning_text.signature.clone(),
+						),
 						bedrock::ReasoningContentBlock::Redacted { redacted_content } => {
 							(None, Some(redacted_content.clone()))
 						},
@@ -4188,8 +4529,8 @@ impl ConverseResponseAdapter {
 
 		let error = match self.stop_reason {
 			bedrock::StopReason::ContentFiltered | bedrock::StopReason::GuardrailIntervened => {
-				Some(responsest::ErrorObject {
-					code: "content_filter".to_string(),
+				Some(responsest::ResponseError {
+					code: responsest::ResponseErrorCode::Other("content_filter".to_string()),
 					message: "Content filtered by guardrails".to_string(),
 					misalignment: None,
 				})
@@ -4198,17 +4539,22 @@ impl ConverseResponseAdapter {
 		};
 
 		// Build usage
-		let usage = self.usage.map(|u| responsest::ResponseUsage {
-			input_tokens: u.input_tokens as u32,
-			output_tokens: u.output_tokens as u32,
-			total_tokens: u.total_tokens as u32,
-			input_tokens_details: responsest::InputTokenDetails {
-				cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
-				cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
-			},
-			output_tokens_details: responsest::OutputTokenDetails {
-				reasoning_tokens: 0,
-			},
+		let usage = self.usage.as_ref().map(|u| {
+			let input_tokens = u.input_tokens
+				+ u.cache_read_input_tokens.unwrap_or_default()
+				+ u.cache_write_input_tokens.unwrap_or_default();
+			responsest::ResponseUsage {
+				input_tokens: input_tokens as u32,
+				output_tokens: u.output_tokens as u32,
+				total_tokens: u.total_tokens as u32,
+				input_tokens_details: responsest::InputTokenDetails {
+					cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
+					cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as i64),
+				},
+				output_tokens_details: responsest::OutputTokenDetails {
+					reasoning_tokens: 0,
+				},
+			}
 		});
 
 		let mut response = response_builder.response(status, usage, error, incomplete_details);
@@ -4226,13 +4572,7 @@ impl ConverseResponseAdapter {
 			tool_name_map: Option<&BedrockToolNameMap>,
 		) -> Option<messagest::ContentBlock> {
 			match block {
-				bedrock::ContentBlock::Text(text) => {
-					Some(messagest::ContentBlock::Text(messagest::ContentTextBlock {
-						text: text.clone(),
-						citations: None,
-						cache_control: None,
-					}))
-				},
+				bedrock::ContentBlock::Text(text) => Some(messagest::ContentBlock::text(text.clone())),
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
 					// Extract text and signature from either format
 					let (thinking_text, signature) = match reasoning {
@@ -4284,32 +4624,25 @@ impl ConverseResponseAdapter {
 
 		let usage = self
 			.usage
+			.as_ref()
 			.map(|u| messagest::Usage {
+				cache_creation: helpers::cache_creation(u),
 				input_tokens: u.input_tokens,
 				output_tokens: u.output_tokens,
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
-				service_tier: None,
+				..Default::default()
 			})
-			.unwrap_or(messagest::Usage {
-				input_tokens: 0,
-				output_tokens: 0,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
-			});
+			.unwrap_or_default();
 
 		Ok(messagest::MessagesResponse {
-			id: helpers::generate_anthropic_message_id(),
-			r#type: "message".to_string(),
-			role: messagest::Role::Assistant,
 			content,
-			model: self.model.clone(),
 			stop_reason: Some(from_messages::translate_stop_reason(self.stop_reason)),
-			stop_sequence: None,
 			usage,
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..messagest::MessagesResponse::start(
+				helpers::generate_anthropic_message_id(),
+				self.model.clone(),
+			)
 		})
 	}
 }

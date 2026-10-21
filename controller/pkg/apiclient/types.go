@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"context"
+	"sync"
 
 	"istio.io/istio/pkg/config/schema/kubeclient"
 	"istio.io/istio/pkg/kube/kubetypes"
@@ -14,8 +15,9 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
-// RegisterTypes registers all the types used by our API Client
-func RegisterTypes() {
+// RegisterTypes registers all the types used by our API Client.
+// The registry is an unsynchronized global map, so this only runs once.
+var RegisterTypes = sync.OnceFunc(func() {
 	kubeclient.Register(
 		wellknown.AgentgatewayModelGVR,
 		wellknown.AgentgatewayModelGVK,
@@ -81,4 +83,4 @@ func RegisterTypes() {
 			return c.(Client).GatewayAPI().GatewayV1().TCPRoutes(namespace)
 		},
 	)
-}
+})

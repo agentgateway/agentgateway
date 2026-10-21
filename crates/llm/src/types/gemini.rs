@@ -117,7 +117,7 @@ impl<'de> Deserialize<'de> for Request {
 	}
 }
 
-/// Applies `f` to the text of every visible (non-thought) `Text` part in `content`, scanning
+/// Applies `f` to unsigned visible text parts in `content`, scanning
 /// consecutive text parts as one run so guard patterns can span parts — matching how the other
 /// request/response types expose text to prompt guard.
 fn visit_content_text(content: &mut vg::Content, f: &mut dyn FnMut(&mut String)) {
@@ -125,7 +125,13 @@ fn visit_content_text(content: &mut vg::Content, f: &mut dyn FnMut(&mut String))
 		&mut content.parts,
 		"\n",
 		|p| match p {
-			vg::Part::Text(tp) if tp.thought != Some(true) => Some(&mut tp.text),
+			vg::Part::Text(tp)
+				if tp.thought != Some(true)
+					&& tp.thought_signature.as_ref().is_none_or(String::is_empty)
+					&& !crate::types::has_signature(&tp.rest) =>
+			{
+				Some(&mut tp.text)
+			},
 			_ => None,
 		},
 		|_| None,
@@ -134,12 +140,35 @@ fn visit_content_text(content: &mut vg::Content, f: &mut dyn FnMut(&mut String))
 	);
 }
 
+fn visit_audio_transcription(
+	rest: &mut serde_json::Value,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	for field in ["audioTranscription", "audio_transcription"] {
+		if let Some(transcript) = rest.get_mut(field) {
+			crate::types::visit_json_at(transcript, &["text"], ContentScope::Messages, f);
+			if let Some(serde_json::Value::Array(words)) = transcript.get_mut("words") {
+				for word in words {
+					crate::types::visit_json_at(word, &["word"], ContentScope::Messages, f);
+				}
+			}
+		}
+	}
+}
+
 // visit every part (that is represented in the typed SDK)
 // unknown items should be logged for future review
 // https://ai.google.dev/api/generate-content#Part
 fn visit_tool_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	if !part.has_signature() {
+		visit_part_text(part, f);
+	}
+}
+
+fn visit_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mut String)) {
 	match part {
-		// not a tool, visit_content_text covers Text
+		vg::Part::Text(p) if p.thought == Some(true) => f(ContentScope::Messages, &mut p.text),
+		// Visible text is scanned in runs by visit_content_text.
 		vg::Part::Text(_) => {},
 		vg::Part::FunctionCall(p) => {
 			crate::types::visit_json_strings(&mut p.function_call.args, &mut |text| {
@@ -173,8 +202,19 @@ fn visit_tool_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mu
 				f,
 			);
 		},
-		// No readable text: base64 payloads and file references.
-		vg::Part::InlineData(_) | vg::Part::FileData(_) => {},
+		vg::Part::ToolCall(p) => {
+			crate::types::visit_json_at(&mut p.tool_call, &["args"], ContentScope::ToolInput, f);
+		},
+		vg::Part::ToolResponse(p) => {
+			crate::types::visit_json_at(
+				&mut p.tool_response,
+				&["response"],
+				ContentScope::ToolOutput,
+				f,
+			);
+		},
+		vg::Part::InlineData(p) => visit_audio_transcription(&mut p.rest, f),
+		vg::Part::FileData(p) => visit_audio_transcription(&mut p.rest, f),
 		vg::Part::Unknown(value) => {
 			tracing::debug!(
 				keys = value
@@ -188,6 +228,9 @@ fn visit_tool_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mu
 }
 
 impl RequestType for Request {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::Gemini
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -215,10 +258,17 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			Some(crate::tokenizer::num_tokens_from_messages(
-				&model, &messages,
-			)?)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self
+					.inner
+					.rest
+					.get("tools")
+					.and_then(serde_json::Value::as_array)
+					.into_iter()
+					.flatten(),
+			))
 		} else {
 			None
 		};
@@ -337,7 +387,11 @@ fn normalized_gemini_message(content: &vg::Content, role: Option<Strng>) -> Norm
 				part.code_execution_result.clone(),
 				None,
 			)),
-			vg::Part::InlineData(_) | vg::Part::FileData(_) | vg::Part::Unknown(_) => None,
+			vg::Part::InlineData(_)
+			| vg::Part::FileData(_)
+			| vg::Part::ToolCall(_)
+			| vg::Part::ToolResponse(_)
+			| vg::Part::Unknown(_) => None,
 		})
 		.collect();
 	NormalizedMessage { role, parts }
@@ -367,6 +421,9 @@ pub struct CountTokensRequest {
 }
 
 impl RequestType for CountTokensRequest {
+	fn input_format() -> crate::InputFormat {
+		crate::InputFormat::GeminiCountTokens
+	}
 	fn body_is_json(&self) -> bool {
 		true
 	}
@@ -543,6 +600,9 @@ impl ResponseType for Response {
 			total_tokens: counts.map(|c| c.2),
 			reasoning_tokens: um.and_then(|u| u.thoughts_token_count),
 			cached_input_tokens: um.and_then(|u| u.cached_content_token_count),
+			service_tier: um
+				.and_then(|u| u.service_tier.as_deref().or(u.traffic_type.as_deref()))
+				.map(strng::new),
 			provider_model: self.0.model_version.as_deref().map(strng::new),
 			completion: log_content.completion.then(|| {
 				self
@@ -591,10 +651,20 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self.0)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for candidate in &mut self.0.candidates {
 			if let Some(content) = &mut candidate.content {
-				visit_content_text(content, f);
+				for part in &mut content.parts {
+					let signed = part.has_signature();
+					let mut visit =
+						|scope, text: &mut String| f(crate::types::ResponseText { scope, signed }, text);
+					if signed && let vg::Part::Text(p) = part {
+						visit(ContentScope::Messages, &mut p.text);
+					} else {
+						visit_part_text(part, &mut visit);
+					}
+				}
+				visit_content_text(content, &mut |text| f(ContentScope::Messages.into(), text));
 			}
 		}
 	}
@@ -1110,7 +1180,8 @@ mod tests {
 				"candidatesTokenCount": 5,
 				"totalTokenCount": 17,
 				"thoughtsTokenCount": 2,
-				"cachedContentTokenCount": 3
+				"cachedContentTokenCount": 3,
+				"serviceTier": "flex"
 			},
 			"modelVersion": "gemini-2.5-flash"
 		}));
@@ -1124,6 +1195,7 @@ mod tests {
 		assert_eq!(llm.total_tokens, Some(17));
 		assert_eq!(llm.reasoning_tokens, Some(2));
 		assert_eq!(llm.cached_input_tokens, Some(3));
+		assert_eq!(llm.service_tier.as_deref(), Some("flex"));
 		assert_eq!(llm.provider_model.as_deref(), Some("gemini-2.5-flash"));
 		assert_eq!(llm.completion, Some(vec!["hello".to_string()]));
 		assert!(llm.output_messages.is_none());

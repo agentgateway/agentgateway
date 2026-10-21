@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::http;
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 
@@ -17,7 +16,7 @@ pub struct GrpcReferenceChannel {
 
 impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel {
 	type Response = http::Response;
-	type Error = ProxyError;
+	type Error = tonic::Status;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
 	fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -33,6 +32,7 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 			client
 				.call_reference_with_policies_untraced(req, &target, policies.as_slice())
 				.await
+				.map_err(tonic::Status::from)
 		})
 	}
 }

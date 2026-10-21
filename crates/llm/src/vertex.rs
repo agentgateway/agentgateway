@@ -37,7 +37,13 @@ pub fn prepare_anthropic_message_body(body: Vec<u8>) -> Result<Vec<u8>, AIError>
 
 impl Provider {
 	pub fn is_anthropic_model(&self, request_model: &str) -> bool {
-		self.anthropic_model(request_model).is_some()
+		Self::anthropic_model(request_model).is_some()
+	}
+
+	/// Canonical id for any model alias accepted by Vertex routing, as keyed in the model catalog.
+	pub fn canonical_model(request_model: &str) -> Strng {
+		Self::anthropic_model(request_model)
+			.unwrap_or_else(|| strng::new(strip_google_model_prefix(request_model)))
 	}
 
 	pub fn is_gemini_model(&self, request_model: &str) -> bool {
@@ -60,7 +66,7 @@ fn prepare_anthropic_body(
 	apply: impl FnOnce(&mut Map<String, Value>),
 ) -> Result<Vec<u8>, AIError> {
 	let mut body: Map<String, Value> =
-		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+		serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
 	body.insert(
 		"anthropic_version".to_string(),
 		Value::String(ANTHROPIC_VERSION.to_string()),
@@ -85,7 +91,7 @@ impl Provider {
 
 		match (
 			route,
-			self.anthropic_model(request_model),
+			Self::anthropic_model(request_model),
 			self.gemini_model(request_model),
 		) {
 			(RouteType::AnthropicTokenCount, _, _) => {
@@ -224,7 +230,7 @@ impl Provider {
 		}
 	}
 
-	fn anthropic_model(&self, request_model: &str) -> Option<Strng> {
+	fn anthropic_model(request_model: &str) -> Option<Strng> {
 		let model = request_model;
 
 		let model: &str = model
@@ -324,16 +330,11 @@ mod tests {
 		Some("claude-sonnet-4-5@20251001")
 	)]
 	fn test_anthropic_model_normalization(
-		#[case] provider: Option<&str>,
+		#[case] _provider: Option<&str>,
 		#[case] req: &str,
 		#[case] expected: Option<&str>,
 	) {
-		let p = Provider {
-			project_id: strng::new("test-project"),
-			model_override: provider.map(strng::new),
-			region: None,
-		};
-		let actual = p.anthropic_model(req).map(|m| m.to_string());
+		let actual = Provider::anthropic_model(req).map(|m| m.to_string());
 		assert_eq!(actual.as_deref(), expected);
 	}
 

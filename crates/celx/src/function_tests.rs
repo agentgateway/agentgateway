@@ -433,6 +433,25 @@ fn regex_replace() {
 }
 
 #[test]
+fn regex_replace_all() {
+	assert(
+		json!("[EMAIL], [EMAIL]"),
+		r#""alice@example.com, bob@example.org".regexReplaceAll("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}", "[EMAIL]")"#,
+	);
+	assert(
+		json!("[123] [456]"),
+		r#""id=123 id=456".regexReplaceAll("id=([0-9]+)", "[$1]")"#,
+	);
+	assert(
+		json!("unchanged"),
+		r#""unchanged".regexReplaceAll("[0-9]+", "x")"#,
+	);
+	assert!(eval(r#""text".regexReplaceAll("[", "x")"#).is_err());
+	// The existing function continues to replace only the first match.
+	assert(json!("x 456"), r#""123 456".regexReplace("[0-9]+", "x")"#);
+}
+
+#[test]
 fn merge_maps() {
 	let expr = r#"{"a":2}.merge({"b":3})"#;
 	assert(json!({"a":2, "b":3}), expr);

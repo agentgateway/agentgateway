@@ -1,0 +1,721 @@
+---
+source: crates/llm/src/golden_tests.rs
+---
+{
+  "scanned": [
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "plaintext summary"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "refusal"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "unsigned reasoning"
+    },
+    {
+      "scope": "messages",
+      "signed": false,
+      "text": "unsigned summary"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "arguments"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "check"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "diff"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "file"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "print(1)"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "query"
+    },
+    {
+      "scope": "toolInput",
+      "signed": false,
+      "text": "text"
+    },
+    {
+      "scope": "toolInput",
+      "signed": true,
+      "text": "signed code"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "description"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "description"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "error"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "https://example.com"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "logs"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "result"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "result"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "schema"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "schema"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "stderr"
+    },
+    {
+      "scope": "toolOutput",
+      "signed": false,
+      "text": "stdout"
+    }
+  ],
+  "masked": {
+    "messages": {
+      "id": "response",
+      "status": "completed",
+      "output": [
+        {
+          "type": "web_search_call",
+          "action": {
+            "type": "search",
+            "query": "query",
+            "queries": null,
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://example.com"
+              }
+            ]
+          },
+          "id": "search",
+          "status": "completed"
+        },
+        {
+          "type": "code_interpreter_call",
+          "code": "print(1)",
+          "container_id": "container",
+          "id": "code",
+          "outputs": [
+            {
+              "type": "logs",
+              "logs": "logs"
+            },
+            {
+              "type": "image",
+              "url": "data:image/png;base64,opaque"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "mcp_call",
+          "arguments": "arguments",
+          "id": "mcp",
+          "name": "tool",
+          "server_label": "server",
+          "approval_request_id": null,
+          "error": {
+            "type": "http_error",
+            "code": 500,
+            "message": "error"
+          },
+          "output": "result",
+          "status": null
+        },
+        {
+          "type": "shell_call_output",
+          "id": "shell",
+          "call_id": "call",
+          "status": "completed",
+          "output": [
+            {
+              "stdout": "stdout",
+              "stderr": "stderr",
+              "type": "exit",
+              "exit_code": 0
+            }
+          ],
+          "max_output_length": null
+        },
+        {
+          "type": "apply_patch_call",
+          "id": "patch",
+          "call_id": "call",
+          "status": "completed",
+          "operation": {
+            "type": "update_file",
+            "path": "file",
+            "diff": "diff"
+          }
+        },
+        {
+          "type": "computer_call",
+          "action": {
+            "type": "type",
+            "text": "text"
+          },
+          "call_id": "call",
+          "id": "computer",
+          "pending_safety_checks": [
+            {
+              "id": "check",
+              "code": "code",
+              "message": "check"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "result"
+            },
+            {
+              "type": "input_image",
+              "detail": "auto",
+              "image_url": "data:image/png;base64,opaque"
+            }
+          ],
+          "id": "result",
+          "status": "completed"
+        },
+        {
+          "type": "mcp_list_tools",
+          "id": "list",
+          "server_label": "server",
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object",
+                "description": "schema",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "name": "tool",
+              "description": "description"
+            }
+          ]
+        },
+        {
+          "type": "tool_search_output",
+          "id": "search_output",
+          "call_id": "call",
+          "execution": "server",
+          "tools": [
+            {
+              "type": "function",
+              "name": "tool",
+              "parameters": {
+                "type": "object",
+                "description": "schema"
+              },
+              "description": "description"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "reasoning",
+          "id": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "<masked>"
+            }
+          ],
+          "content": [
+            {
+              "type": "reasoning_text",
+              "text": "<masked>"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "id": "signed",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "<masked>"
+            }
+          ],
+          "encrypted_content": "encrypted"
+        },
+        {
+          "type": "program",
+          "id": "program",
+          "call_id": "call",
+          "code": "signed code",
+          "fingerprint": "fingerprint"
+        },
+        {
+          "type": "message",
+          "content": [
+            {
+              "type": "refusal",
+              "refusal": "<masked>"
+            }
+          ],
+          "id": "message",
+          "role": "assistant",
+          "status": "completed"
+        }
+      ],
+      "model": "model"
+    },
+    "toolInput": {
+      "id": "response",
+      "status": "completed",
+      "output": [
+        {
+          "type": "web_search_call",
+          "action": {
+            "type": "search",
+            "query": "<masked>",
+            "queries": null,
+            "sources": [
+              {
+                "type": "url",
+                "url": "https://example.com"
+              }
+            ]
+          },
+          "id": "search",
+          "status": "completed"
+        },
+        {
+          "type": "code_interpreter_call",
+          "code": "<masked>",
+          "container_id": "container",
+          "id": "code",
+          "outputs": [
+            {
+              "type": "logs",
+              "logs": "logs"
+            },
+            {
+              "type": "image",
+              "url": "data:image/png;base64,opaque"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "mcp_call",
+          "arguments": "<masked>",
+          "id": "mcp",
+          "name": "tool",
+          "server_label": "server",
+          "approval_request_id": null,
+          "error": {
+            "type": "http_error",
+            "code": 500,
+            "message": "error"
+          },
+          "output": "result",
+          "status": null
+        },
+        {
+          "type": "shell_call_output",
+          "id": "shell",
+          "call_id": "call",
+          "status": "completed",
+          "output": [
+            {
+              "stdout": "stdout",
+              "stderr": "stderr",
+              "type": "exit",
+              "exit_code": 0
+            }
+          ],
+          "max_output_length": null
+        },
+        {
+          "type": "apply_patch_call",
+          "id": "patch",
+          "call_id": "call",
+          "status": "completed",
+          "operation": {
+            "type": "update_file",
+            "path": "<masked>",
+            "diff": "<masked>"
+          }
+        },
+        {
+          "type": "computer_call",
+          "action": {
+            "type": "type",
+            "text": "<masked>"
+          },
+          "call_id": "call",
+          "id": "computer",
+          "pending_safety_checks": [
+            {
+              "id": "check",
+              "code": "code",
+              "message": "<masked>"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "result"
+            },
+            {
+              "type": "input_image",
+              "detail": "auto",
+              "image_url": "data:image/png;base64,opaque"
+            }
+          ],
+          "id": "result",
+          "status": "completed"
+        },
+        {
+          "type": "mcp_list_tools",
+          "id": "list",
+          "server_label": "server",
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object",
+                "description": "schema",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "name": "tool",
+              "description": "description"
+            }
+          ]
+        },
+        {
+          "type": "tool_search_output",
+          "id": "search_output",
+          "call_id": "call",
+          "execution": "server",
+          "tools": [
+            {
+              "type": "function",
+              "name": "tool",
+              "parameters": {
+                "type": "object",
+                "description": "schema"
+              },
+              "description": "description"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "reasoning",
+          "id": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "unsigned summary"
+            }
+          ],
+          "content": [
+            {
+              "type": "reasoning_text",
+              "text": "unsigned reasoning"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "id": "signed",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "plaintext summary"
+            }
+          ],
+          "encrypted_content": "encrypted"
+        },
+        {
+          "type": "program",
+          "id": "program",
+          "call_id": "call",
+          "code": "signed code",
+          "fingerprint": "fingerprint"
+        },
+        {
+          "type": "message",
+          "content": [
+            {
+              "type": "refusal",
+              "refusal": "refusal"
+            }
+          ],
+          "id": "message",
+          "role": "assistant",
+          "status": "completed"
+        }
+      ],
+      "model": "model"
+    },
+    "toolOutput": {
+      "id": "response",
+      "status": "completed",
+      "output": [
+        {
+          "type": "web_search_call",
+          "action": {
+            "type": "search",
+            "query": "query",
+            "queries": null,
+            "sources": [
+              {
+                "type": "url",
+                "url": "<masked>"
+              }
+            ]
+          },
+          "id": "search",
+          "status": "completed"
+        },
+        {
+          "type": "code_interpreter_call",
+          "code": "print(1)",
+          "container_id": "container",
+          "id": "code",
+          "outputs": [
+            {
+              "type": "logs",
+              "logs": "<masked>"
+            },
+            {
+              "type": "image",
+              "url": "data:image/png;base64,opaque"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "mcp_call",
+          "arguments": "arguments",
+          "id": "mcp",
+          "name": "tool",
+          "server_label": "server",
+          "approval_request_id": null,
+          "error": {
+            "type": "http_error",
+            "code": 500,
+            "message": "<masked>"
+          },
+          "output": "<masked>",
+          "status": null
+        },
+        {
+          "type": "shell_call_output",
+          "id": "shell",
+          "call_id": "call",
+          "status": "completed",
+          "output": [
+            {
+              "stdout": "<masked>",
+              "stderr": "<masked>",
+              "type": "exit",
+              "exit_code": 0
+            }
+          ],
+          "max_output_length": null
+        },
+        {
+          "type": "apply_patch_call",
+          "id": "patch",
+          "call_id": "call",
+          "status": "completed",
+          "operation": {
+            "type": "update_file",
+            "path": "file",
+            "diff": "diff"
+          }
+        },
+        {
+          "type": "computer_call",
+          "action": {
+            "type": "type",
+            "text": "text"
+          },
+          "call_id": "call",
+          "id": "computer",
+          "pending_safety_checks": [
+            {
+              "id": "check",
+              "code": "code",
+              "message": "check"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call",
+          "output": [
+            {
+              "type": "input_text",
+              "text": "<masked>"
+            },
+            {
+              "type": "input_image",
+              "detail": "auto",
+              "image_url": "data:image/png;base64,opaque"
+            }
+          ],
+          "id": "result",
+          "status": "completed"
+        },
+        {
+          "type": "mcp_list_tools",
+          "id": "list",
+          "server_label": "server",
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object",
+                "description": "<masked>",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "name": "tool",
+              "description": "<masked>"
+            }
+          ]
+        },
+        {
+          "type": "tool_search_output",
+          "id": "search_output",
+          "call_id": "call",
+          "execution": "server",
+          "tools": [
+            {
+              "type": "function",
+              "name": "tool",
+              "parameters": {
+                "type": "object",
+                "description": "<masked>"
+              },
+              "description": "<masked>"
+            }
+          ],
+          "status": "completed"
+        },
+        {
+          "type": "reasoning",
+          "id": "reasoning",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "unsigned summary"
+            }
+          ],
+          "content": [
+            {
+              "type": "reasoning_text",
+              "text": "unsigned reasoning"
+            }
+          ]
+        },
+        {
+          "type": "reasoning",
+          "id": "signed",
+          "summary": [
+            {
+              "type": "summary_text",
+              "text": "plaintext summary"
+            }
+          ],
+          "encrypted_content": "encrypted"
+        },
+        {
+          "type": "program",
+          "id": "program",
+          "call_id": "call",
+          "code": "signed code",
+          "fingerprint": "fingerprint"
+        },
+        {
+          "type": "message",
+          "content": [
+            {
+              "type": "refusal",
+              "refusal": "refusal"
+            }
+          ],
+          "id": "message",
+          "role": "assistant",
+          "status": "completed"
+        }
+      ],
+      "model": "model"
+    }
+  }
+}

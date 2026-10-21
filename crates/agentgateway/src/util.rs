@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::io::{Error, ErrorKind};
+use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf, absolute};
 use std::time::Duration;
 
@@ -22,15 +22,6 @@ impl<T> ErrorContext<T> for Option<T> {
 	fn ctx(self, msg: impl Display) -> anyhow::Result<T> {
 		self.ok_or_else(|| anyhow!("{msg}"))
 	}
-}
-
-pub fn is_runtime_shutdown(e: &Error) -> bool {
-	if e.kind() == ErrorKind::Other
-		&& e.to_string() == "A Tokio 1.x context was found, but it is being shutdown."
-	{
-		return true;
-	}
-	false
 }
 
 pub struct WatchedFiles {

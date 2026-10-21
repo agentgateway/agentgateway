@@ -55,7 +55,7 @@ async fn response_policy_short_circuit() {
 	// Each type of response modifier should NOT run since the ext_authz short-circuits the req
 	assert_eq!(res.hdr("x-filter"), "");
 	assert_eq!(res.hdr("x-xfm"), "");
-	assert_eq!(read_body!(res).as_ref(), b"external authorization failed");
+	assert_eq!(read_body!(res).as_ref(), b"authorization failed");
 }
 
 #[tokio::test]
@@ -527,6 +527,8 @@ async fn response_transformation_can_read_gateway_error() {
 			.hdr("x-error-message")
 			.starts_with("upstream call failed:")
 	);
+	// Operators can explicitly expose diagnostics through CEL, but the default body stays safe.
+	assert_eq!(read_body!(res).as_ref(), b"connection refused");
 }
 
 #[tokio::test]

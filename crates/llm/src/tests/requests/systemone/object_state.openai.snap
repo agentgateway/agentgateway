@@ -1,0 +1,34 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/systemone/object_state.json
+info:
+  model: jev-1.13.0
+  state:
+    order_id: 123
+    status: damaged
+  questions:
+    damaged:
+      type: noul
+      instructions: Did the item arrive damaged?
+---
+{
+  "request": {
+    "model": "jev-1.13.0",
+    "input": "{\"order_id\":123,\"status\":\"damaged\"}",
+    "questions": [
+      {
+        "type": "predicate",
+        "name": "damaged",
+        "instructions": "Did the item arrive damaged?"
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "SystemOne",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "jev-1.13.0",
+    "provider": "openai",
+    "streaming": false,
+    "params": {}
+  }
+}

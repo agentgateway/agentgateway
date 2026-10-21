@@ -15,7 +15,7 @@ pub const RESERVED_COOKIE_PREFIX: &str = "agw_oidc_";
 // Use a conservative budget below the common ~4 KiB browser per-cookie limit so
 // attributes and user-agent differences do not turn borderline values into
 // silently dropped session cookies.
-const MAX_BROWSER_COOKIE_VALUE_SIZE: usize = 3800;
+const MAX_COOKIE_VALUE_SIZE: usize = 3800;
 const ORIGINAL_URI_LIMIT: usize = 2048;
 /// Marks a compressed payload. Sessions written before compression are bare JSON, which never
 /// starts with this byte, so untagged payloads still decode.
@@ -24,7 +24,7 @@ const COMPRESSION_LEVEL: i32 = 9;
 const MAX_DECOMPRESSED_PAYLOAD_SIZE: usize = 64 * 1024;
 
 pub(super) fn default_session_ttl() -> Duration {
-	Duration::from_secs(60 * 60)
+	Duration::from_secs(7 * 24 * 60 * 60)
 }
 
 pub(super) fn default_transaction_ttl() -> Duration {
@@ -80,6 +80,8 @@ impl Serialize for TransactionState {
 #[serde(rename_all = "camelCase")]
 pub struct BrowserSession {
 	pub policy_id: PolicyId,
+	#[serde(default)]
+	pub subject: Option<String>,
 	#[serde(serialize_with = "crate::serdes::ser_redact")]
 	pub raw_id_token: SecretString,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,13 +99,50 @@ impl Serialize for BrowserSession {
 		#[serde(rename_all = "camelCase")]
 		struct SerializableBrowserSession<'a> {
 			policy_id: &'a PolicyId,
+			subject: Option<&'a str>,
 			raw_id_token: &'a str,
 			expires_at_unix: Option<u64>,
 		}
 
 		SerializableBrowserSession {
 			policy_id: &self.policy_id,
+			subject: self.subject.as_deref(),
 			raw_id_token: self.raw_id_token.expose_secret(),
+			expires_at_unix: self.expires_at_unix,
+		}
+		.serialize(serializer)
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshSession {
+	pub policy_id: PolicyId,
+	#[serde(default)]
+	pub subject: Option<String>,
+	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	pub refresh_token: SecretString,
+	pub expires_at_unix: u64,
+}
+
+impl Serialize for RefreshSession {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		#[derive(Serialize)]
+		#[serde(rename_all = "camelCase")]
+		struct SerializableRefreshSession<'a> {
+			policy_id: &'a PolicyId,
+			subject: Option<&'a str>,
+			refresh_token: &'a str,
+			expires_at_unix: u64,
+		}
+
+		SerializableRefreshSession {
+			policy_id: &self.policy_id,
+			subject: self.subject.as_deref(),
+			refresh_token: self.refresh_token.expose_secret(),
 			expires_at_unix: self.expires_at_unix,
 		}
 		.serialize(serializer)
@@ -122,6 +161,7 @@ impl BrowserSession {
 #[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
 	pub cookie_name: String,
+	pub refresh_cookie_name: String,
 	pub transaction_cookie_prefix: String,
 	pub same_site: SameSiteMode,
 	pub secure: CookieSecureMode,
@@ -155,6 +195,17 @@ impl SessionConfig {
 	}
 
 	pub fn decode_browser_session(&self, cookie: &str) -> Result<BrowserSession, Error> {
+		let session = self.decode_browser_session_for_refresh(cookie)?;
+		if session.is_expired() {
+			return Err(Error::InvalidSession);
+		}
+		Ok(session)
+	}
+
+	pub(super) fn decode_browser_session_for_refresh(
+		&self,
+		cookie: &str,
+	) -> Result<BrowserSession, Error> {
 		let decoded = self
 			.encoder
 			.decrypt(cookie)
@@ -162,9 +213,6 @@ impl SessionConfig {
 		let decoded = decode_session_payload(decoded)?;
 		let session: BrowserSession =
 			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
-		if session.is_expired() {
-			return Err(Error::InvalidSession);
-		}
 		Ok(session)
 	}
 
@@ -174,7 +222,32 @@ impl SessionConfig {
 			.encoder
 			.encrypt_bytes(&encode_session_payload(&json))
 			.map_err(|_| Error::InvalidSession)?;
-		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
+		if encoded.len() > MAX_COOKIE_VALUE_SIZE {
+			return Err(Error::SessionCookieTooLarge);
+		}
+		Ok(encoded)
+	}
+
+	pub fn decode_refresh_session(&self, cookie: &str) -> Result<RefreshSession, Error> {
+		let decoded = self
+			.encoder
+			.decrypt(cookie)
+			.map_err(|_| Error::InvalidSession)?;
+		let session: RefreshSession =
+			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
+		if session.expires_at_unix <= now_unix() {
+			return Err(Error::InvalidSession);
+		}
+		Ok(session)
+	}
+
+	pub fn encode_refresh_session(&self, session: &RefreshSession) -> Result<String, Error> {
+		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
+		let encoded = self
+			.encoder
+			.encrypt(&json)
+			.map_err(|_| Error::InvalidSession)?;
+		if encoded.len() > MAX_COOKIE_VALUE_SIZE {
 			return Err(Error::SessionCookieTooLarge);
 		}
 		Ok(encoded)
@@ -249,7 +322,7 @@ pub enum CookieSecureMode {
 	Never,
 }
 
-pub(super) fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
+pub(super) fn derive_cookie_names(policy_id: &PolicyId) -> (String, String, String) {
 	let digest = crate::crypto::digest::sha256(policy_id.as_str().as_bytes());
 	let mut hex = String::with_capacity(32);
 	for byte in digest.iter().take(8) {
@@ -257,6 +330,7 @@ pub(super) fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
 	}
 	(
 		format!("{RESERVED_COOKIE_PREFIX}s_{hex}"),
+		format!("{RESERVED_COOKIE_PREFIX}r_{hex}"),
 		format!("{RESERVED_COOKIE_PREFIX}t_{hex}"),
 	)
 }

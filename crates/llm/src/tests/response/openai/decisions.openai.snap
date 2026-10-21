@@ -1,0 +1,52 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/openai/decisions.json
+info:
+  model: gpt-6-luna
+  answers:
+    - type: predicate
+      name: visible_damage
+      probability: 0.64
+  usage:
+    input_tokens: 156
+    input_tokens_details:
+      cached_tokens: 0
+      cache_write_tokens: 0
+    output_tokens: 0
+    output_tokens_details:
+      reasoning_tokens: 0
+    total_tokens: 156
+---
+{
+  "response": {
+    "model": "gpt-6-luna",
+    "usage": {
+      "input_tokens": 156,
+      "output_tokens": 0,
+      "input_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 156
+    },
+    "answers": [
+      {
+        "type": "predicate",
+        "name": "visible_damage",
+        "probability": 0.64
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 156,
+    "output_tokens": 0,
+    "total_tokens": 156,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "gpt-6-luna"
+  }
+}

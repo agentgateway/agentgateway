@@ -1,6 +1,7 @@
 import { FileCode2, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 
+import { useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector, type EnumSelectorOption } from '@/components/EnumSelector';
 import { FieldGroup, StatusBanner } from '@/components/Primitives';
 import { parseSchemaYamlEditorValue, SchemaYamlEditor } from '@/components/SchemaYamlEditor';
@@ -13,7 +14,6 @@ import {
 	passthroughDraftToValue
 } from '@/policies/backendAuth/passthrough';
 import { toYamlText } from '@/policies/policyUtils';
-import { ResultingYaml } from '@/policies/ResultingYaml';
 import type { SchemaHelp } from '@/schemaHelp';
 
 type AuthKind = 'passthrough' | 'raw';
@@ -60,10 +60,14 @@ export function BackendAuthPolicyEditor(props: {
 	const passthroughPreview = {
 		passthrough: passthroughDraftToValue(passthrough)
 	} as BackendAuth;
+	const merged = useMergedEdits(
+		props.backendAuth,
+		kind === 'passthrough' ? passthroughPreview : parseOrUndefined(yamlText)
+	);
 
 	function save() {
 		if (kind === 'passthrough') {
-			props.onSave(passthroughPreview);
+			props.onSave(merged.value as BackendAuth);
 			return;
 		}
 		try {
@@ -109,7 +113,6 @@ export function BackendAuthPolicyEditor(props: {
 			{kind === 'passthrough' ? (
 				<>
 					<PassthroughFields value={passthrough} help={props.help} onChange={setPassthrough} />
-					<ResultingYaml value={passthroughPreview} />
 				</>
 			) : (
 				<>
@@ -128,6 +131,9 @@ export function BackendAuthPolicyEditor(props: {
 							onChange={value => {
 								setYamlText(value);
 								if (error) setError(null);
+								// The YAML is the whole value, so it replaces the original.
+								const parsed = parseOrUndefined(value);
+								if (parsed !== undefined) merged.reset(parsed);
 							}}
 							onSave={save}
 						/>
@@ -171,4 +177,12 @@ function draftFromBackendAuth(value: BackendAuth | null | undefined): Draft {
 		kind: value === null || value === undefined ? 'passthrough' : 'raw',
 		passthrough: emptyPassthroughDraft()
 	};
+}
+
+function parseOrUndefined(text: string) {
+	try {
+		return parseSchemaYamlEditorValue(text);
+	} catch {
+		return undefined;
+	}
 }

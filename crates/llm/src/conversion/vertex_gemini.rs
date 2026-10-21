@@ -68,6 +68,11 @@ pub fn passthrough_stream(
 				r.response.total_tokens = Some(total);
 				r.response.cached_input_tokens = um.cached_content_token_count;
 				r.response.reasoning_tokens = um.thoughts_token_count;
+				r.response.service_tier = um
+					.service_tier
+					.as_deref()
+					.or(um.traffic_type.as_deref())
+					.map(strng::new);
 			});
 		}
 		if log_content.completion {
@@ -454,9 +459,8 @@ pub mod from_completions {
 
 	/// Convert an OpenAI `file` content part into a Gemini part.
 	///
-	/// Mirrors [`image_part`]: inline `data:` payloads become `inlineData`, `gs://`
-	/// objects become `fileData`, and anything Vertex cannot fetch is rejected rather
-	/// than dropped.
+	/// Inline `data:` payloads and raw base64 become `inlineData`; `gs://` and http(s) URIs in
+	/// `file_data` or `file_id` become `fileData`, which Vertex fetches itself.
 	fn file_part(file: Option<&Value>) -> Result<vg::Part, AIError> {
 		let field = |k: &str| {
 			file
@@ -466,15 +470,17 @@ pub mod from_completions {
 		};
 		let file_data = field("file_data");
 		let file_id = field("file_id");
+		let hinted_mime = || {
+			explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+		};
 
 		if let Some((mime, data)) = parse_data_url(file_data) {
 			if !mime.is_empty() {
 				return Ok(inline_data_part(mime, data));
 			}
 			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
-			else {
+			let Some(mime) = hinted_mime() else {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
 				)));
@@ -482,17 +488,22 @@ pub mod from_completions {
 			return Ok(inline_data_part(&mime, data));
 		}
 
-		// Clients carry a gs:// object in either field; Vertex fetches those directly.
 		if let Some(uri) = [file_data, file_id]
 			.into_iter()
-			.find(|u| u.starts_with("gs://"))
+			.find(|u| u.starts_with("gs://") || u.starts_with("https://") || u.starts_with("http://"))
 		{
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
-				.or_else(|| mime_from_extension(uri).map(str::to_string))
+			// Drop the query and fragment from http(s) URIs: signed URLs put the extension before
+			// the query, and the query holds the signature, which must not appear in errors.
+			// gs:// object names may contain '?' and '#' literally.
+			let path = if uri.starts_with("gs://") {
+				uri
+			} else {
+				uri.split(['?', '#']).next().unwrap_or(uri)
+			};
+			let Some(mime) = hinted_mime().or_else(|| mime_from_extension(path).map(str::to_string))
 			else {
 				return Err(AIError::UnsupportedConversion(strng::new(format!(
-					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
+					"file ({path}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use a URI with a known extension"
 				))));
 			};
 			return Ok(file_data_part(&mime, uri));
@@ -501,9 +512,7 @@ pub mod from_completions {
 		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
 		// A malformed `data:` value must not reach here, or its header becomes payload.
 		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
-			let Some(mime) = explicit_mime_hint(file)
-				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
-			else {
+			let Some(mime) = hinted_mime() else {
 				return Err(AIError::UnsupportedConversion(strng::literal!(
 					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
 				)));
@@ -513,12 +522,12 @@ pub mod from_completions {
 
 		if !file_id.is_empty() {
 			return Err(AIError::UnsupportedConversion(strng::new(format!(
-				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
+				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or put a gs:// or http(s) URI in file.file_data or file.file_id"
 			))));
 		}
 
 		Err(AIError::UnsupportedConversion(strng::new(
-			"file content part has neither an inline data: file_data nor a gs:// reference",
+			"file content part carries no payload; send inline bytes in file.file_data, or a gs:// or http(s) URI in file.file_data or file.file_id",
 		)))
 	}
 
@@ -820,7 +829,7 @@ pub mod from_completions {
 				f(v);
 			}
 		}
-		for key in ["anyOf", "allOf"] {
+		for key in ["anyOf", "oneOf", "allOf"] {
 			if let Some(Value::Array(arr)) = map.get_mut(key) {
 				for v in arr.iter_mut() {
 					f(v);
@@ -933,6 +942,20 @@ pub mod from_completions {
 			let ty = const_value_type(&c);
 			map.insert("enum".to_string(), Value::Array(vec![c]));
 			map.entry("type".to_string()).or_insert_with(|| ty.into());
+		}
+
+		// oneOf -> anyOf. Gemini's Schema proto has any_of only and Vertex silently ignores oneOf, which
+		// leaves the node typeless and defaults it to an empty object. "Exactly one" and "at least one"
+		// only differ for overlapping members, and anyOf is the closest Gemini can express. A node that
+		// already carries an anyOf gets the members appended (best-effort, as with allOf).
+		if let Some(Value::Array(members)) = map.remove("oneOf") {
+			changed = true;
+			match map.get_mut("anyOf") {
+				Some(Value::Array(existing)) => existing.extend(members),
+				_ => {
+					map.insert("anyOf".to_string(), Value::Array(members));
+				},
+			}
 		}
 
 		if let Some(Value::Array(types)) = map.get("type").cloned() {
@@ -1192,28 +1215,6 @@ pub mod to_completions {
 			.unwrap_or_else(|| format!("call_{seed}_{index}"))
 	}
 
-	fn assistant_message(
-		content: Option<String>,
-		reasoning_content: Option<String>,
-		tool_calls: Option<Vec<completions::MessageToolCalls>>,
-	) -> completions::ResponseMessage {
-		completions::ResponseMessage {
-			role: completions::Role::Assistant,
-			content,
-			reasoning_content,
-			// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
-			// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
-			// Tool-call signatures still round-trip via the tool_call id.
-			reasoning_signature: None,
-			tool_calls,
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
-			extra: None,
-		}
-	}
-
 	fn build_response(resp: &vg::GenerateContentResponse) -> completions::Response {
 		let model = resp.model_version.clone().unwrap_or_default();
 		let id = resp
@@ -1236,7 +1237,10 @@ pub mod to_completions {
 			vec![completions::ChatChoice {
 				rest: Default::default(),
 				index: 0,
-				message: assistant_message(Some(String::new()), None, None),
+				message: completions::ResponseMessage {
+					content: Some(String::new()),
+					..completions::ResponseMessage::assistant()
+				},
 				finish_reason: Some(finish),
 				logprobs: None,
 			}]
@@ -1256,7 +1260,7 @@ pub mod to_completions {
 			model,
 			choices,
 			usage: resp.usage_metadata.as_ref().map(build_usage),
-			service_tier: None,
+			service_tier: resp.usage_metadata.as_ref().and_then(openai_service_tier),
 			system_fingerprint: None,
 		}
 	}
@@ -1304,7 +1308,16 @@ pub mod to_completions {
 		completions::ChatChoice {
 			rest: Default::default(),
 			index,
-			message: assistant_message(content, reasoning, tool_calls),
+			message: completions::ResponseMessage {
+				content,
+				tool_calls,
+				reasoning_content: reasoning,
+				// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
+				// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
+				// Tool-call signatures still round-trip via the tool_call id.
+				reasoning_signature: None,
+				..completions::ResponseMessage::assistant()
+			},
 			finish_reason: Some(finish),
 			logprobs: None,
 		}
@@ -1464,11 +1477,9 @@ pub mod to_completions {
 				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
-					rest: Default::default(),
-					index: 0,
 					delta,
 					finish_reason: finish,
-					logprobs: None,
+					..Default::default()
 				}]
 			} else {
 				vec![]
@@ -1482,7 +1493,7 @@ pub mod to_completions {
 				choices,
 				created: self.created,
 				model: self.model_version.clone(),
-				service_tier: None,
+				service_tier: chunk.usage_metadata.as_ref().and_then(openai_service_tier),
 				system_fingerprint: None,
 				object: "chat.completion.chunk".to_string(),
 				usage,
@@ -1545,6 +1556,11 @@ pub mod to_completions {
 					r.response.total_tokens = Some(total);
 					r.response.cached_input_tokens = um.cached_content_token_count;
 					r.response.reasoning_tokens = um.thoughts_token_count;
+					r.response.service_tier = um
+						.service_tier
+						.as_deref()
+						.or(um.traffic_type.as_deref())
+						.map(strng::new);
 				});
 			}
 
@@ -1612,6 +1628,18 @@ pub mod to_completions {
 		parse::sse::append_done_on_success(body)
 	}
 
+	/// Maps Gemini service tiers and Vertex traffic types to OpenAI service tiers.
+	fn openai_service_tier(um: &vg::UsageMetadata) -> Option<String> {
+		let tier = match um.service_tier.as_deref().or(um.traffic_type.as_deref())? {
+			"standard" | "ON_DEMAND" => "default",
+			"flex" | "ON_DEMAND_FLEX" => "flex",
+			"priority" | "ON_DEMAND_PRIORITY" => "priority",
+			"PROVISIONED_THROUGHPUT" => "scale",
+			_ => return None,
+		};
+		Some(tier.to_string())
+	}
+
 	fn build_usage(um: &vg::UsageMetadata) -> completions::Usage {
 		let (prompt, completion, total) = um.counts();
 		completions::Usage {
@@ -1621,20 +1649,16 @@ pub mod to_completions {
 			prompt_tokens_details: um.cached_content_token_count.map(|c| {
 				completions::UsagePromptDetails {
 					cached_tokens: Some(c),
-					audio_tokens: None,
-					cache_write_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
 			completion_tokens_details: um.thoughts_token_count.map(|t| {
 				completions::UsageCompletionDetails {
 					reasoning_tokens: Some(t),
-					audio_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
-			cache_read_input_tokens: None,
-			cache_creation_input_tokens: None,
+			..Default::default()
 		}
 	}
 }

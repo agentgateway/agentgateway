@@ -374,12 +374,21 @@ pub fn parse_config(
 		ThreadingMode::default()
 	};
 
-	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
-		crate::http::sessionpersistence::Encoder::aes(key.trim())
-			.ctx("invalid session persistence key SESSION_KEY")?
+	let session_key_env = parse::<String>("SESSION_KEY")?;
+	let session_key_unset = session_key_env.is_none() && raw.session.is_none();
+	let session_encoder = if let Some(key) = session_key_env {
+		if key.trim() == "disabled" {
+			crate::http::sessionpersistence::Encoder::base64()
+		} else {
+			crate::http::sessionpersistence::Encoder::aes(key.trim())
+				.ctx("invalid session persistence key SESSION_KEY")?
+		}
 	} else {
 		match raw.session.as_ref() {
 			None => crate::http::sessionpersistence::Encoder::base64(),
+			Some(session) if session.key.expose_secret() == "disabled" => {
+				crate::http::sessionpersistence::Encoder::base64()
+			},
 			Some(session) => {
 				let key = session.key.expose_secret();
 				crate::http::sessionpersistence::Encoder::aes(key)
@@ -449,8 +458,10 @@ pub fn parse_config(
 		termination_min_deadline,
 		threading_mode,
 		backend: raw.backend,
+		callouts: raw.callouts,
 		admin_runtime_handle: None,
 		budget_policy: Arc::new(crate::http::budget::BudgetPolicy::default()),
+		config_reload_status: Arc::new(crate::ConfigReloadStatus::default()),
 		termination_max_deadline,
 		tracing: raw
 			.tracing
@@ -576,6 +587,10 @@ pub fn parse_config(
 					standard_attributes(raw.standard_attributes.as_ref())
 						.ctx("invalid config.standardAttributes")?,
 				)),
+				session: Arc::new(arc_swap::ArcSwapOption::new(
+					session_attribute(raw.standard_attributes.as_ref())
+						.ctx("invalid config.standardAttributes.session")?,
+				)),
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -604,6 +619,7 @@ pub fn parse_config(
 		storage,
 		sensitive_headers,
 		session_encoder,
+		session_key_unset,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
 				h2: agent_hbone::H2Config {
@@ -676,6 +692,10 @@ pub(crate) fn standard_attributes(
 				.and_then(|attributes| attributes.group.clone())
 				.unwrap_or_else(|| DEFAULT_UI_GROUP_ATTRIBUTE.to_string()),
 		),
+		(
+			"agentgateway.session".to_string(),
+			"request.agent.session".to_string(),
+		),
 	];
 
 	Ok(LoggingFields {
@@ -692,6 +712,15 @@ pub(crate) fn standard_attributes(
 		),
 	})
 }
+pub(crate) fn session_attribute(
+	standard_attributes: Option<&crate::RawStandardAttributes>,
+) -> anyhow::Result<Option<Arc<cel::Expression>>> {
+	let Some(session) = standard_attributes.and_then(|attributes| attributes.session.as_ref()) else {
+		return Ok(None);
+	};
+	Ok(Some(Arc::new(cel::Expression::new_strict(session)?)))
+}
+
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,
@@ -1063,6 +1092,85 @@ mod parse_headers_tests {
 
 		assert!(err.to_string().contains("invalid header value: bad\nvalue"));
 	}
+}
+
+/// Generates and persists a session key when none is configured, so MCP sessions are encrypted
+/// by default. In hybrid mode the key is shared through the database; in file mode it is written
+/// back to `config.session.key` in the config file.
+pub async fn ensure_session_key(
+	config: &mut Config,
+	config_source: Option<&ConfigSource>,
+	store: Option<&crate::config_store::ConfigResourceStore>,
+) -> anyhow::Result<()> {
+	if !config.session_key_unset {
+		return Ok(());
+	}
+	let key = match (store, config_source) {
+		(Some(store), _) => Some(store.session_key().await?),
+		(None, Some(ConfigSource::File(path))) if config.storage.mode == ConfigStoreMode::File => {
+			match persist_session_key(path).await {
+				Ok(key) => Some(key),
+				Err(err) => {
+					warn!(?err, path = %path.display(), "failed to write generated session key");
+					None
+				},
+			}
+		},
+		_ => None,
+	};
+	match key {
+		Some(key) => {
+			config.session_encoder =
+				crate::http::sessionpersistence::Encoder::aes(&key).ctx("invalid generated session key")?;
+		},
+		None => warn!(
+			"no session key configured; MCP session IDs are not encrypted. Set SESSION_KEY or config.session.key"
+		),
+	}
+	Ok(())
+}
+
+async fn persist_session_key(path: &Path) -> anyhow::Result<String> {
+	let key = crate::config_store::generate_session_key()?;
+	let current = fs_err::tokio::read_to_string(path).await?;
+	let mut document = yaml_serde_edit::YamlObject::<serde_json::Value>::parse(&current)?;
+	let mut cfg = document.get().clone();
+	let section = cfg
+		.as_object_mut()
+		.context("config file must be an object")?
+		.entry("config")
+		.or_insert(serde_json::Value::Null);
+	if section.is_null() {
+		*section = serde_json::json!({});
+	}
+	section
+		.as_object_mut()
+		.context("config.config must be an object")?
+		.insert("session".to_string(), serde_json::json!({ "key": key }));
+	let content = match document.set(cfg.clone()) {
+		Ok(()) => document.get_string().to_owned(),
+		Err(yaml_serde_edit::Error::RoundTrip) => crate::yaml::to_string(&cfg)?,
+		Err(e) => return Err(e.into()),
+	};
+	let content = content
+		.lines()
+		.map(|line| {
+			if line.contains(&key) {
+				let indent = &line[..line.len() - line.trim_start().len()];
+				format!(
+					"{indent}# Auto-generated by agentgateway to encode session IDs. Changing it invalidates existing sessions.\n{line}\n"
+				)
+			} else {
+				format!("{line}\n")
+			}
+		})
+		.collect::<String>();
+	fs_err::tokio::write(path, content).await?;
+	info!(
+		path = %path.display(),
+		"generated a session key and wrote it to config.session.key; we recommend setting SESSION_KEY instead"
+	);
+	Ok(key)
 }
 
 #[cfg(test)]

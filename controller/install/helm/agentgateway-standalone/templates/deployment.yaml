@@ -41,6 +41,10 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.extraInitContainers }}
+      initContainers:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
       containers:
       - name: agentgateway
         image: {{ include "agentgateway-standalone.mainImage" . | quote }}
@@ -74,6 +78,13 @@ spec:
         env:
         - name: RUST_BACKTRACE
           value: "1"
+        {{- with .Values.session.secretName }}
+        - name: SESSION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ . }}
+              key: key
+        {{- end }}
         {{- if .Values.oidc.enabled }}
         - name: OIDC_COOKIE_SECRET
           valueFrom:

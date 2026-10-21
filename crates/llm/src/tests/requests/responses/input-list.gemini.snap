@@ -22,6 +22,15 @@ info:
     - role: user
       content: Continue.
     - type: reasoning
+      id: rs_signed
+      summary: []
+      content:
+        - type: reasoning_text
+          text: Let me check the signature.
+      encrypted_content: SIG-xyz==
+    - role: user
+      content: Keep going.
+    - type: reasoning
       id: rs_empty
       summary: []
     - role: user
@@ -47,6 +56,10 @@ info:
       {
         "role": "user",
         "content": "Continue."
+      },
+      {
+        "role": "user",
+        "content": "Keep going."
       },
       {
         "role": "user",
@@ -82,6 +95,10 @@ info:
       {
         "role": "user",
         "content": "Continue."
+      },
+      {
+        "role": "user",
+        "content": "Keep going."
       },
       {
         "role": "user",

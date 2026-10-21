@@ -107,15 +107,28 @@ pub mod from_messages {
 	pub fn translate_request(
 		req: &types::messages::Request,
 	) -> Result<types::completions::typed::Request, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req)
+			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Messages, err))?;
 		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
+			input_tokens: u.prompt_tokens as u64,
+			total_tokens: u.total_tokens as u64,
+			reasoning_tokens: u
+				.completion_tokens_details
+				.as_ref()
+				.and_then(|d| d.reasoning_tokens),
+			..Default::default()
+		});
 		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		Ok(Box::new(super::super::ResponseWithProviderUsage {
+			response: anthropic,
+			provider_usage,
+		}))
 	}
 
 	/// First string among the candidate extension values, in precedence order.
@@ -158,7 +171,7 @@ pub mod from_messages {
 		// Engines report reasoning beside the text; the Messages contract puts it first. A turn whose
 		// reasoning text is withheld carries the signature alone, so the signature is enough to send
 		// the block: it is what the next turn has to replay.
-		let thinking = choice.message.reasoning_content.unwrap_or_default();
+		let thinking = choice.message.reasoning().unwrap_or_default().to_string();
 		let signature = choice.message.reasoning_signature.unwrap_or_default();
 		if !thinking.is_empty() || !signature.is_empty() {
 			content.push(messages::ContentBlock::Thinking {
@@ -167,11 +180,7 @@ pub mod from_messages {
 			});
 		}
 		if let Some(text) = choice.message.content {
-			content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-				text,
-				citations: None,
-				cache_control: None,
-			}));
+			content.push(messages::ContentBlock::text(text));
 		}
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
@@ -221,10 +230,7 @@ pub mod from_messages {
 				.map(|tokens| tokens as usize)
 		});
 		Ok(messages::MessagesResponse {
-			id,
-			r#type: "message".to_string(),
-			role: messages::Role::Assistant,
-			model,
+			content,
 			stop_reason: Some(stop_reason),
 			stop_sequence,
 			usage: messages::Usage {
@@ -236,11 +242,12 @@ pub mod from_messages {
 					.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
 				output_tokens: usage
 					.as_ref()
-					.map(|u| u.completion_tokens as usize)
+					.map(|u| u.output_tokens() as usize)
 					.unwrap_or(0),
 				cache_creation_input_tokens,
 				cache_read_input_tokens,
 				service_tier,
+				..Default::default()
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
 				u.prompt_tokens_details
@@ -254,7 +261,7 @@ pub mod from_messages {
 					.and_then(|d| d.audio_tokens)
 					.map(|t| t as usize)
 			}),
-			content,
+			..messages::MessagesResponse::start(id, model)
 		})
 	}
 
@@ -396,11 +403,7 @@ pub mod from_messages {
 				events,
 				messages::MessagesStreamEvent::ContentBlockStart {
 					index,
-					content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-						text: "".to_string(),
-						citations: None,
-						cache_control: None,
-					}),
+					content_block: messages::ContentBlock::text("".to_string()),
 				},
 			);
 			index
@@ -509,7 +512,7 @@ pub mod from_messages {
 						(u.prompt_tokens as usize)
 							.saturating_sub(cache_creation_input_tokens.unwrap_or(0))
 							.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
-						u.completion_tokens as usize,
+						u.output_tokens() as usize,
 					)
 				})
 				.unwrap_or((0, 0));
@@ -526,6 +529,7 @@ pub mod from_messages {
 						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens,
 						cache_read_input_tokens,
+						..Default::default()
 					},
 				},
 			);
@@ -535,8 +539,12 @@ pub mod from_messages {
 			if let Some(usage) = usage {
 				log.update(|r| {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
-					r.response.output_tokens = Some(usage.completion_tokens as u64);
+					r.response.output_tokens = Some(usage.output_tokens() as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.reasoning_tokens = usage
+						.completion_tokens_details
+						.as_ref()
+						.and_then(|d| d.reasoning_tokens);
 					r.response.cache_creation_input_tokens =
 						cache_creation_input_tokens.map(|tokens| tokens as u64);
 					r.response.cached_input_tokens = cache_read_input_tokens.map(|tokens| tokens as u64);
@@ -585,24 +593,7 @@ pub mod from_messages {
 						push_event(
 							&mut events,
 							messages::MessagesStreamEvent::MessageStart {
-								message: messages::MessagesResponse {
-									id: f.id.clone(),
-									r#type: "message".to_string(),
-									role: messages::Role::Assistant,
-									content: vec![],
-									model: f.model.clone(),
-									stop_reason: None,
-									stop_sequence: None,
-									usage: messages::Usage {
-										input_tokens: 0,
-										output_tokens: 0,
-										cache_creation_input_tokens: None,
-										cache_read_input_tokens: None,
-										service_tier: None,
-									},
-									input_audio_tokens: None,
-									output_audio_tokens: None,
-								},
+								message: messages::MessagesResponse::start(f.id.clone(), f.model.clone()),
 							},
 						);
 
@@ -614,12 +605,7 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(thinking) = choice
-							.delta
-							.reasoning_content
-							.as_deref()
-							.filter(|s| !s.is_empty())
-						{
+						if let Some(thinking) = choice.delta.reasoning() {
 							let index = open_thinking_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
@@ -682,7 +668,9 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
-											entry.arguments.push_str(args);
+											if log_content.tool_calls {
+												entry.arguments.push_str(args);
+											}
 										}
 									}
 
@@ -861,19 +849,20 @@ pub mod from_messages {
 			Some(messages::ThinkingInput::Adaptive {}) => true,
 			_ => output_effort.is_some(),
 		};
-		let reasoning_effort = if reasoning_requested {
-			Some(match output_effort {
-				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
-				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
-				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
-				// Anthropic adaptive thinking defaults to high effort when omitted.
-				None => completions::ReasoningEffort::High,
-			})
-		} else {
-			None
-		};
+		let reasoning_effort =
+			if reasoning_requested && crate::conversion::supports_reasoning_effort(&model) {
+				Some(match output_effort {
+					Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
+					Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
+					Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
+					Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
+					Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
+					// Anthropic adaptive thinking defaults to high effort when omitted.
+					None => completions::ReasoningEffort::High,
+				})
+			} else {
+				None
+			};
 		let response_format = output_config
 			.as_ref()
 			.and_then(|cfg| cfg.format.as_ref())
@@ -1413,7 +1402,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.audio_tokens);
-								r.response.output_tokens = Some(u.completion_tokens as u64);
+								r.response.output_tokens = Some(u.output_tokens() as u64);
 								r.response.output_audio_tokens = u
 									.completion_tokens_details
 									.as_ref()

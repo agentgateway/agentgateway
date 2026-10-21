@@ -1,0 +1,57 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/stream-vllm_reasoning.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"Qwen/Qwen3-8B","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"","model":"Qwen/Qwen3-8B","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.reasoning_text.delta","sequence_number":4,"item_id":"rs_xxx","output_index":0,"content_index":0,"delta":"The user wants"}
+
+event: event
+data: {"type":"response.reasoning_text.delta","sequence_number":5,"item_id":"rs_xxx","output_index":0,"content_index":0,"delta":" a sum."}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":7,"item_id":"","output_index":1,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":8,"item_id":"","output_index":1,"content_index":0,"delta":"2 + 2 = 4."}
+
+event: event
+data: {"type":"response.reasoning_text.done","sequence_number":9,"item_id":"rs_xxx","output_index":0,"content_index":0,"text":"The user wants a sum."}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"The user wants a sum."}],"status":"completed"}}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":11,"item_id":"","output_index":1,"content_index":0,"text":"2 + 2 = 4.","logprobs":null}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":12,"item_id":"","output_index":1,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"2 + 2 = 4."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":1,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"2 + 2 = 4."}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":14,"response":{"created_at":123,"id":"","model":"Qwen/Qwen3-8B","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"The user wants a sum."}],"status":"completed"},{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"2 + 2 = 4."}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":17,"input_tokens_details":{"cached_tokens":0},"output_tokens":23,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":40}}}
+
+
+
+{
+  "input_tokens": 17,
+  "output_tokens": 23,
+  "total_tokens": 40,
+  "provider_model": "Qwen/Qwen3-8B",
+  "completion": [
+    "2 + 2 = 4."
+  ]
+}

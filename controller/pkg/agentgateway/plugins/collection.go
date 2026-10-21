@@ -215,12 +215,12 @@ func NewAgwCollections(
 		// BackendTrafficPolicy?
 
 		// inference extensions need to be enabled so control plane has permissions to watch resource. Disable by default
-		InferencePools: krt.NewStaticCollection[*inf.InferencePool](nil, nil, krtOptions.ToOptions("disable/inferencepools")...),
+		InferencePools: krt.NewDisabledCollection[*inf.InferencePool](krtOptions.ToOptions("disable/inferencepools")...),
 
 		// agentgateway-specific CRDs
 		AgentgatewayPolicies: krt.NewFilteredInformer[*agentgateway.AgentgatewayPolicy](client, filter, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
 		Backends:             krt.NewFilteredInformer[*agentgateway.AgentgatewayBackend](client, filter, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
-		Models:               krt.NewStaticCollection[*agentgateway.AgentgatewayModel](nil, nil, krtOptions.ToOptions("disable/AgentgatewayModels")...),
+		Models:               krt.NewDisabledCollection[*agentgateway.AgentgatewayModel](krtOptions.ToOptions("disable/AgentgatewayModels")...),
 	}
 
 	if settings.EnableInferExt {

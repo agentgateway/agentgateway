@@ -132,6 +132,7 @@ output:
       concreteModel:
         backend:
           backend: default/gpt-5-mini/backend.llm
+        discoveryProvider: openai
       created: "1704164645"
       key: default/gpt-5-mini.llm
       listenerKey: default/llm-only.llm

@@ -147,13 +147,13 @@ type testOutput[Status any, Output any] struct {
 	Output []Output `json:"output"`
 }
 
-func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
+func Syncer(t testing.TB, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
 	return SyncerWithOptions(t, ctx, includeStatusKinds)
 }
 
 // SyncerWithOptions is Syncer, with syncer options applied.
 func SyncerWithOptions(
-	t *testing.T,
+	t testing.TB,
 	ctx plugins.PolicyCtx,
 	includeStatusKinds []string,
 	opts ...syncer.AgentgatewaySyncerOption,

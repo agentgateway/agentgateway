@@ -102,6 +102,7 @@ output:
       concreteModel:
         backend:
           backend: default/direct-model/backend.http
+        discoveryProvider: openai
       key: default/direct-model.http
       listenerKey: default/model-gateway.http
       match:

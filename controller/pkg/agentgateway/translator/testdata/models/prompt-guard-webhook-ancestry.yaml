@@ -195,6 +195,7 @@ output:
       concreteModel:
         backend:
           backend: default/guarded-model/backend.llm
+        discoveryProvider: openai
       key: default/guarded-model.llm
       listenerKey: default/llm-gateway.llm
       match:

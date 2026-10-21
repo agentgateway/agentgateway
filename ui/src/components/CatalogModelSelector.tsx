@@ -5,7 +5,9 @@ import { listCostModels } from '@/api/costsApi';
 import { FreeformCombobox } from '@/components/FreeformCombobox';
 
 export function CatalogModelSelector(props: {
+	id?: string;
 	ariaLabel: string;
+	'aria-describedby'?: string;
 	value: string;
 	onChange: (value: string) => void;
 	provider?: string | null;
@@ -31,7 +33,9 @@ export function CatalogModelSelector(props: {
 
 	return (
 		<FreeformCombobox
+			id={props.id}
 			ariaLabel={props.ariaLabel}
+			aria-describedby={props['aria-describedby']}
 			value={props.value}
 			options={options}
 			onChange={props.onChange}
@@ -58,7 +62,8 @@ function catalogProviderKeys(provider: string | null | undefined) {
 		openai_legacy: ['openai'],
 		anthropic: ['anthropic'],
 		azure: ['azure'],
-		copilot: ['copilot']
+		copilot: ['copilot'],
+		typesafe: ['typesafe']
 	};
 	return [normalized, ...(aliases[normalized] ?? [])]
 		.filter(Boolean)

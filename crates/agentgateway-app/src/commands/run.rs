@@ -38,7 +38,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			if validate_only {
 				return validate(contents, local_config_source).await;
 			}
-			let mut config = agentgateway::config::parse_config(contents, local_config_source)?;
+			let mut config = agentgateway::config::parse_config(contents, local_config_source.clone())?;
 			// Capture the admin/runtime handle to ensure some background tasks (e.g., OTLP exporters created from dataplane
 			// policy initialization) run on the admin runtime rather than the dataplane runtime.
 			config.admin_runtime_handle = Some(tokio::runtime::Handle::current());
@@ -79,6 +79,12 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			} else {
 				None
 			};
+			agentgateway::config::ensure_session_key(
+				&mut config,
+				local_config_source.as_ref(),
+				config_resource_store.as_ref(),
+			)
+			.await?;
 			let request_log_store = match config.logging.database.as_ref() {
 				Some(cfg) => {
 					let pool = config
@@ -199,11 +205,8 @@ async fn proxy(
 	cfg: Arc<Config>,
 	config_resource_store: Option<agentgateway::config_store::ConfigResourceStore>,
 ) -> anyhow::Result<()> {
-	#[cfg(feature = "ui")]
 	let bound =
 		agentgateway::app::run_with_ui_assets(cfg, config_resource_store, &crate::UI_ASSETS).await?;
-	#[cfg(not(feature = "ui"))]
-	let bound = agentgateway::app::run(cfg, config_resource_store).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await
 }

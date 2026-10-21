@@ -64,16 +64,6 @@ impl RedirectUri {
 			origin: url.origin().ascii_serialization(),
 		})
 	}
-
-	pub fn canonical_uri(&self) -> String {
-		let scheme = if self.https { "https" } else { "http" };
-		let host = if self.host.contains(':') {
-			format!("[{}]", self.host)
-		} else {
-			self.host.clone()
-		};
-		format!("{scheme}://{host}:{}{}", self.port, self.callback_path)
-	}
 }
 
 impl Serialize for RedirectUri {

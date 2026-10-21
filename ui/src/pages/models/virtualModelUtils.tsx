@@ -44,7 +44,8 @@ export function failoverTargetGroups(
 export function virtualModelStrategy(model: LlmVirtualModel) {
 	if (model.routing.conditional) return 'conditional';
 	if (model.routing.failover) return 'failover';
-	return 'weighted';
+	if (model.routing.weighted) return 'weighted';
+	return Object.keys(model.routing)[0] ?? 'none';
 }
 
 export function virtualModelSummary(model: LlmVirtualModel) {
@@ -59,6 +60,9 @@ export function virtualModelSummary(model: LlmVirtualModel) {
 		const priorities = new Set(targets.map(target => target.priority)).size;
 		return `${priorities} ${priorities === 1 ? 'priority' : 'priorities'}, ${targets.length} ${targets.length === 1 ? 'target' : 'targets'}`;
 	}
-	const targets = model.routing.weighted?.targets ?? [];
-	return `${targets.length} weighted ${targets.length === 1 ? 'target' : 'targets'}`;
+	if (model.routing.weighted) {
+		const targets = model.routing.weighted.targets ?? [];
+		return `${targets.length} weighted ${targets.length === 1 ? 'target' : 'targets'}`;
+	}
+	return '';
 }

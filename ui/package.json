@@ -3,6 +3,9 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#*": "./src/*"
+	},
 	"scripts": {
 		"build": "node scripts/generate-schema.mjs && tsc -b && vite build",
 		"check": "biome check .",
@@ -11,9 +14,10 @@
 		"format": "biome format --write .",
 		"format:check": "biome format .",
 		"generate-schema": "node scripts/generate-schema.mjs",
-		"lint": "pnpm typecheck && pnpm check",
+		"lint": "pnpm typecheck && pnpm check && pnpm test",
 		"preview": "pnpm build && vite preview",
 		"preview:e2e": "pnpm build --mode e2e && vite preview --mode e2e",
+		"test": "node --test 'src/**/*.test.ts'",
 		"test:e2e": "playwright test",
 		"typecheck": "pnpm generate-schema && tsc -b"
 	},
@@ -22,7 +26,7 @@
 		"@monaco-editor/react": "=4.7.0",
 		"@tanstack/react-query": "=5.101.4",
 		"@tanstack/react-router": "=1.170.18",
-		"dompurify": "=3.4.13",
+		"dompurify": "=3.4.16",
 		"js-yaml": "=5.4.2",
 		"lucide-react": "=1.28.0",
 		"marked": "=14.0.0",

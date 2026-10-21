@@ -3,6 +3,7 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/kelseyhightower/envconfig"
@@ -151,6 +152,10 @@ const (
 )
 
 type Settings struct {
+	// UnsafeAdminBindAddress is an IP address or the literal localhost, without a port (always 9095).
+	// Defaults to localhost. A non-loopback address unsafely makes the admin server network-accessible.
+	UnsafeAdminBindAddress string `split_words:"true" default:"localhost"`
+
 	// Controls the DnsLookupFamily for all static clusters created via Backend resources.
 	// If not set, agentgateway will default to "V4_PREFERRED". Note that this is different
 	// from the Envoy default of "AUTO", which is effectively "V6_PREFERRED".
@@ -281,6 +286,9 @@ func BuildSettings() (*Settings, error) {
 	settings := &Settings{}
 	if err := envconfig.Process("AGW", settings); err != nil {
 		return settings, err
+	}
+	if settings.UnsafeAdminBindAddress != "localhost" && net.ParseIP(settings.UnsafeAdminBindAddress) == nil {
+		return settings, fmt.Errorf("invalid AGW_UNSAFE_ADMIN_BIND_ADDRESS %q: expected an IP address or the literal localhost without a port", settings.UnsafeAdminBindAddress)
 	}
 	return settings, nil
 }

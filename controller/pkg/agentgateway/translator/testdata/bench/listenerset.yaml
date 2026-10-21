@@ -1,0 +1,27 @@
+#refresh=false
+# One ListenerSet per gateway, adding an HTTPS listener for the app.
+{{ range $gw := .gateways }}
+{{ $spl := split "/" $gw }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: {{$.Name}}-{{$spl._1}}
+spec:
+  parentRef:
+    name: {{$spl._1}}
+    namespace: {{$spl._0}}
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  listeners:
+    - name: {{$.Name}}
+      hostname: {{$.Name}}.example.com
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            group: ""
+            name: ns-cert
+---
+{{ end }}

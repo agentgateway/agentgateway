@@ -42,7 +42,7 @@ impl Limiter {
 		let limit = limit.get() as usize;
 		self
 			.active
-			.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |active| {
+			.try_update(Ordering::Relaxed, Ordering::Relaxed, |active| {
 				(active < limit).then_some(active + 1)
 			})
 			.ok()?;

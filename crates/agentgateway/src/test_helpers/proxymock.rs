@@ -1110,6 +1110,7 @@ impl TestBind {
 					name: addr.to_string().into(),
 					namespace: Default::default(),
 					section: None,
+					kind: None,
 				}),
 				inheritance: Default::default(),
 				policy: v.into(),
@@ -1484,15 +1485,17 @@ pub fn setup_proxy_test_with_spiffe(
 }
 
 pub fn setup_proxy_test_with_config_and_spiffe(
-	config: crate::Config,
+	mut config: crate::Config,
 	spiffe: Option<Arc<crate::control::spiffe::SpiffeClient>>,
 ) -> TestBind {
+	// Mock backends listen on loopback.
+	config.backend.allow_dynamic_loopback = true;
 	agent_core::telemetry::testing::setup_test_logging();
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let histogram_mode = config.histograms;
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
-	let client = client::Client::new(&config.dns, None, Default::default(), None);
+	let client = client::Client::new(&config.dns, None, config.backend.clone(), None);
 	let (drain_tx, drain_rx) = drain::new();
 	let pi = Arc::new(ProxyInputs {
 		cfg: Arc::new(config),

@@ -2,9 +2,6 @@ datadog:
   apiKeyExistingSecret: datadog-api-key
   site: us3.datadoghq.com
   clusterName: agentgateway-datadog
-  # Kind uses a kubelet certificate that the Agent cannot validate.
-  kubelet:
-    tlsVerify: false
   logs:
     enabled: false
   apm:

@@ -118,12 +118,6 @@ fn get_origin_header(req: &Request) -> Result<Option<String>, filters::Error> {
 		let origin_str = origin_value.to_str().map_err(|_| {
 			filters::Error::InvalidFilterConfiguration("malformed origin header".to_string())
 		})?;
-
-		// Handle "null" origin as no origin
-		if origin_str == "null" {
-			return Ok(None);
-		}
-
 		return Ok(Some(origin_str.to_string()));
 	}
 	Ok(None)

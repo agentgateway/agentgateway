@@ -1,7 +1,5 @@
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::{mpsc, oneshot};
 
-pub type AckSender<T> = Sender<T, ()>;
 #[derive(Debug)]
 pub struct Sender<T, R> {
 	tx: mpsc::Sender<(T, oneshot::Sender<R>)>,
@@ -38,13 +36,8 @@ where
 			.await
 			.map_err(|_| anyhow::anyhow!("rx channel closed"))
 	}
-	pub async fn send_ignore(&self, request: T) -> Result<(), SendError<(T, oneshot::Sender<R>)>> {
-		let (response_tx, _) = oneshot::channel();
-		self.tx.send((request, response_tx)).await
-	}
 }
 
-pub type AckReceiver<T> = Receiver<T, ()>;
 pub struct Receiver<T, R> {
 	rx: mpsc::Receiver<(T, oneshot::Sender<R>)>,
 }
