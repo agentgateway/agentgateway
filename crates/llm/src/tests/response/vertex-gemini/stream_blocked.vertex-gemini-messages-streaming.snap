@@ -1,0 +1,33 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_blocked.json
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"blocked-stream-1","type":"message","role":"assistant","content":[],"model":"gemini-3.8-flash","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Here is how"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null,"stop_details":{"type":"refusal","category":null,"explanation":"The response was blocked for dangerous content."}},"usage":{"input_tokens":14,"output_tokens":3}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 14,
+  "output_tokens": 3,
+  "total_tokens": 17,
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    "Here is how"
+  ]
+}

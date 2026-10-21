@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"live-ok "}]}}],"modelVersion":"gemini-3.8-flash","responseId":"text-signature"}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"second-ok"}]}}],"modelVersion":"gemini-3.8-flash","responseId":"text-signature"}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"","thoughtSignature":"sig-text"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":2,"totalTokenCount":7,"trafficType":"ON_DEMAND"},"modelVersion":"gemini-3.8-flash","responseId":"text-signature"}
+

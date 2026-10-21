@@ -1,0 +1,23 @@
+{
+  "candidates": [
+    {
+      "finishReason": "MALFORMED_FUNCTION_CALL",
+      "finishMessage": "Malformed function call: call:get_weather{location:Columbus"
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 39,
+    "totalTokenCount": 120,
+    "trafficType": "ON_DEMAND",
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 39
+      }
+    ],
+    "thoughtsTokenCount": 81
+  },
+  "modelVersion": "gemini-3.8-flash",
+  "createTime": "2026-10-17T05:20:00.000000Z",
+  "responseId": "malformed-function-call"
+}

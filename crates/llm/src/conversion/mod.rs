@@ -16,6 +16,8 @@ struct ProviderUsage {
 	reasoning_tokens: Option<u64>,
 	cache_creation_1h_input_tokens: Option<u64>,
 	usage_lines: Vec<crate::UsageLine>,
+	cached_input_tokens: Option<u64>,
+	service_tier: Option<agent_core::prelude::Strng>,
 }
 
 /// Keep provider token counts for accounting when translating client usage conventions.
@@ -35,6 +37,8 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 				.cache_creation_1h_input_tokens
 				.or(response.cache_creation_1h_input_tokens);
 			response.usage_lines.clone_from(&usage.usage_lines);
+			response.cached_input_tokens = usage.cached_input_tokens.or(response.cached_input_tokens);
+			response.service_tier = usage.service_tier.clone().or(response.service_tier);
 		}
 		response
 	}
@@ -93,6 +97,9 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 
 #[cfg(test)]
 mod rerank_tests;
+
+#[cfg(test)]
+mod stream_tests;
 
 #[cfg(test)]
 mod tests {

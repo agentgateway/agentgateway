@@ -22,7 +22,7 @@ pub enum RequestInput {
 
 #[derive(Debug, Deserialize, Clone, Serialize, PartialEq)]
 #[serde(transparent)]
-pub struct RawInputItem(Value);
+pub struct RawInputItem(pub Value);
 
 impl RawInputItem {
 	fn from_typed(item: InputItem) -> Self {
@@ -1372,15 +1372,15 @@ pub mod typed {
 		InputTokenDetails, Item, MessageItem, OutputContent, OutputItem, OutputMessage,
 		OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
 		PromptCacheBreakpointConfig, Reasoning, ReasoningEffort, ReasoningItem, ReasoningItemContent,
-		ReasoningTextContent, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
-		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseError, ResponseErrorCode,
-		ResponseErrorEvent, ResponseFailedEvent, ResponseFunctionCallArgumentsDeltaEvent,
-		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
-		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent,
-		ResponseReasoningTextDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role,
-		ServiceTierResponses, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
-		ToolChoiceOptions, ToolChoiceParam,
+		ReasoningTextContent, RefusalContent, Response, ResponseCompletedEvent,
+		ResponseContentPartAddedEvent, ResponseContentPartDoneEvent, ResponseCreatedEvent,
+		ResponseError, ResponseErrorCode, ResponseErrorEvent, ResponseFailedEvent,
+		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
+		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent, ResponseReasoningTextDoneEvent,
+		ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent, ResponseTextDeltaEvent,
+		ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, ServiceTierResponses, Status,
+		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

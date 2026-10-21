@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl_filter_explained",
+  "object": "chat.completion",
+  "created": 123,
+  "model": "gemini-3.8-flash",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "content_filter",
+      "message": { "role": "assistant", "content": "", "refusal": "The response was blocked for dangerous content." }
+    }
+  ],
+  "usage": { "prompt_tokens": 14, "completion_tokens": 3, "total_tokens": 17 }
+}

@@ -79,7 +79,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
-fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+fn vertex_gemini_uses_native_conversion_for_chat_clients() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
 		model_override: None,
@@ -87,20 +87,17 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 	});
 	let model = "google/gemini-2.5-flash-lite";
 
-	assert_eq!(
-		provider
-			.chat_translation(InputFormat::Completions, model, None)
-			.unwrap()
-			.output,
-		ChatFormat::VertexGemini
-	);
-	for input in [InputFormat::Messages, InputFormat::Responses] {
+	for input in [
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses,
+	] {
 		assert_eq!(
 			provider
-				.chat_translation(input, model, None)
+				.chat_translation(&CHAT_TRANSLATIONS, input, model, None)
 				.unwrap()
 				.output,
-			ChatFormat::OpenAICompletions
+			ChatFormat::VertexGemini
 		);
 	}
 }
@@ -125,7 +122,12 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	] {
 		assert_eq!(
 			runtime
-				.chat_translation(input, "anthropic.claude-3-5-sonnet-20241022-v2:0", None)
+				.chat_translation(
+					&CHAT_TRANSLATIONS,
+					input,
+					"anthropic.claude-3-5-sonnet-20241022-v2:0",
+					None
+				)
 				.unwrap()
 				.output,
 			ChatFormat::BedrockConverse,
@@ -148,7 +150,7 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	] {
 		assert_eq!(
 			mantle
-				.chat_translation(input, "openai.gpt-oss-120b", catalog)
+				.chat_translation(&CHAT_TRANSLATIONS, input, "openai.gpt-oss-120b", catalog)
 				.unwrap()
 				.output,
 			expected,
@@ -158,7 +160,12 @@ fn bedrock_chat_translation_follows_endpoint_selection() {
 	// Claude serves the native Messages API on Mantle.
 	assert_eq!(
 		mantle
-			.chat_translation(InputFormat::Messages, "anthropic.claude-sonnet-5", catalog)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Messages,
+				"anthropic.claude-sonnet-5",
+				catalog
+			)
 			.unwrap()
 			.output,
 		ChatFormat::AnthropicMessages,
@@ -258,6 +265,7 @@ fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
 	assert_eq!(
 		mantle
 			.chat_translation(
+				&CHAT_TRANSLATIONS,
 				InputFormat::Completions,
 				"anthropic.claude-sonnet-5",
 				Some(catalog.as_handle()),
@@ -271,7 +279,12 @@ fn bedrock_mantle_never_sends_completions_to_a_claude_model() {
 	// Untagged fallback: the is_anthropic_model heuristic must also keep Completions off completions.
 	assert_eq!(
 		mantle
-			.chat_translation(InputFormat::Completions, "anthropic.claude-opus-4-8", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Completions,
+				"anthropic.claude-opus-4-8",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::AnthropicMessages,
@@ -288,7 +301,12 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	});
 	assert_eq!(
 		vertex
-			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Gemini,
+				"gemini-2.5-flash",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -296,7 +314,12 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// Vertex with a non-Gemini model has no Gemini-input translation.
 	assert!(
 		vertex
-			.chat_translation(InputFormat::Gemini, "claude-sonnet-4-5", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Gemini,
+				"claude-sonnet-4-5",
+				None
+			)
 			.is_err()
 	);
 
@@ -305,7 +328,12 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	});
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Gemini,
+				"gemini-2.5-flash",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -314,20 +342,23 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// OpenAI-compat shim, matching Vertex with a Gemini model.
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Completions,
+				"gemini-2.5-flash",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
 	);
-	// Messages and Responses clients still ride the compat shim: there is no conversion from
-	// those formats to native Gemini.
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
 			gemini
-				.chat_translation(input, "gemini-2.5-flash", None)
+				.chat_translation(&CHAT_TRANSLATIONS, input, "gemini-2.5-flash", None)
 				.unwrap()
 				.output,
-			ChatFormat::OpenAICompletions
+			ChatFormat::VertexGemini
 		);
 	}
 }
@@ -337,7 +368,12 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 	let anthropic = AIProvider::Anthropic(anthropic::Provider {
 		model_override: None,
 	});
-	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, "claude-opus-4", None) else {
+	let Err(err) = anthropic.chat_translation(
+		&CHAT_TRANSLATIONS,
+		InputFormat::Gemini,
+		"claude-opus-4",
+		None,
+	) else {
 		panic!("expected unsupported conversion");
 	};
 	assert!(matches!(err, AIError::UnsupportedConversion(_)));
@@ -349,7 +385,12 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 		model_override: None,
 		region: None,
 	});
-	let Err(err) = vertex.chat_translation(InputFormat::Gemini, "claude-sonnet-4-5", None) else {
+	let Err(err) = vertex.chat_translation(
+		&CHAT_TRANSLATIONS,
+		InputFormat::Gemini,
+		"claude-sonnet-4-5",
+		None,
+	) else {
 		panic!("expected unsupported conversion");
 	};
 	let msg = err.to_string();
@@ -363,7 +404,12 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Native Gemini input takes the direct passthrough.
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Gemini,
+				"gemini-2.5-flash",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -372,7 +418,12 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Vertex with a Gemini model (the CHAT_TRANSLATIONS quirk).
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Completions,
+				"gemini-2.5-flash",
+				None
+			)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -382,7 +433,12 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	let undeclared = custom_provider(custom::ProviderFormat::Completions);
 	assert!(
 		undeclared
-			.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+			.chat_translation(
+				&CHAT_TRANSLATIONS,
+				InputFormat::Gemini,
+				"gemini-2.5-flash",
+				None
+			)
 			.is_err()
 	);
 }
@@ -424,7 +480,7 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 	assert_eq!(upstream_route_type, RouteType::GenerateContent);
 	assert!(matches!(
 		llm_request.provider_state,
-		Some(ProviderState::VertexGemini)
+		Some(ProviderState::VertexGemini { .. })
 	));
 
 	provider
@@ -481,7 +537,12 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+		.chat_translation(
+			&CHAT_TRANSLATIONS,
+			InputFormat::Gemini,
+			"gemini-2.5-flash",
+			None,
+		)
 		.unwrap();
 
 	let raw = json!({
@@ -530,7 +591,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		.expect("render");
 	assert!(matches!(
 		rendered.provider_state,
-		Some(ProviderState::VertexGemini)
+		Some(ProviderState::VertexGemini { .. })
 	));
 	let out: Value = serde_json::from_slice(&rendered.body).expect("valid body");
 	assert_eq!(
@@ -547,7 +608,12 @@ fn gemini_error_passes_google_shape_through() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, "gemini-2.5-flash", None)
+		.chat_translation(
+			&CHAT_TRANSLATIONS,
+			InputFormat::Gemini,
+			"gemini-2.5-flash",
+			None,
+		)
 		.unwrap();
 	assert!(matches!(
 		provider.chat_error_format(translation, "gemini-2.5-flash"),
@@ -565,6 +631,36 @@ fn gemini_error_passes_google_shape_through() {
 		)
 		.expect("error translation");
 	assert_eq!(out, body);
+}
+
+#[rstest::rstest]
+#[case::messages(
+	InputFormat::Messages,
+	json!({ "type": "error", "error": { "type": "invalid_request_error", "message": "bad request" } })
+)]
+#[case::responses(
+	InputFormat::Responses,
+	json!({ "event_id": null, "error": { "type": "invalid_request_error", "message": "bad request", "code": "INVALID_ARGUMENT" } })
+)]
+fn native_gemini_errors_reach_clients_in_their_format(
+	#[case] input: InputFormat,
+	#[case] expected: Value,
+) {
+	let translation = ChatTranslation {
+		input,
+		output: ChatFormat::VertexGemini,
+	};
+	let body = bytes::Bytes::from_static(
+		br#"{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}"#,
+	);
+	let out = translation
+		.error(
+			&body,
+			::http::StatusCode::BAD_REQUEST,
+			ChatErrorFormat::Google,
+		)
+		.expect("error translation");
+	assert_eq!(serde_json::from_slice::<Value>(&out).unwrap(), expected);
 }
 
 #[test]
@@ -2666,6 +2762,89 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+const FAILED_GEMINI_REPLY: &str = r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"x"}]},"finishReason":"MALFORMED_FUNCTION_CALL","finishMessage":"Bad call"}],"usageMetadata":{"promptTokenCount":7,"candidatesTokenCount":2,"totalTokenCount":9}}"#;
+
+#[rstest::rstest]
+#[tokio::test]
+async fn a_failed_native_gemini_reply_is_an_error(
+	#[values(
+		InputFormat::Completions,
+		InputFormat::Messages,
+		InputFormat::Responses
+	)]
+	input_format: InputFormat,
+) {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = input_format;
+	req.request_model = "gemini-3.8-flash".into();
+	req.streaming = false;
+	let upstream = ::http::Response::new(Body::from(FAILED_GEMINI_REPLY));
+
+	let response = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			upstream,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), ::http::StatusCode::BAD_GATEWAY);
+	let llm = response
+		.extensions()
+		.get::<crate::cel::LLMContext>()
+		.unwrap();
+	assert_eq!(llm.total_tokens, Some(9));
+	let body: Value =
+		serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(
+		body["error"]["message"],
+		"Gemini stopped with MALFORMED_FUNCTION_CALL: Bad call"
+	);
+}
+
+#[tokio::test]
+async fn a_failed_reply_passes_through_to_native_gemini_clients() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Gemini(gemini::Provider {
+		model_override: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Gemini;
+	req.request_model = "gemini-3.8-flash".into();
+	req.streaming = false;
+	let upstream = ::http::Response::new(Body::from(FAILED_GEMINI_REPLY));
+
+	let response = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			Default::default(),
+			None,
+			upstream,
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), ::http::StatusCode::OK);
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(body, FAILED_GEMINI_REPLY.as_bytes());
+}
+
 #[tokio::test]
 async fn upstream_encoding_is_applied_after_messages_response_translation() {
 	use crate::proxy::httpproxy::PolicyClient;
@@ -2784,7 +2963,7 @@ async fn context_overflow_reaches_messages_client_with_status_and_request_id() {
 	] {
 		assert_eq!(
 			provider
-				.chat_translation(InputFormat::Messages, model, None)
+				.chat_translation(&CHAT_TRANSLATIONS, InputFormat::Messages, model, None)
 				.unwrap()
 				.output,
 			format,
@@ -3165,7 +3344,7 @@ fn setup_request_custom_generate_content_defaults_to_the_native_path() {
 			streaming,
 			params: Default::default(),
 			prompt: None,
-			provider_state: Some(ProviderState::VertexGemini),
+			provider_state: Some(ProviderState::VertexGemini { namespaces: None }),
 		};
 		let mut req = crate::http::tests_common::request(
 			"https://gemini.example.com/v1beta/models/gemini-2.5-flash:generateContent",
@@ -3287,7 +3466,7 @@ fn native_gemini_llm_request(request_model: &str, streaming: bool) -> LLMRequest
 		streaming,
 		params: Default::default(),
 		prompt: None,
-		provider_state: Some(ProviderState::VertexGemini),
+		provider_state: Some(ProviderState::VertexGemini { namespaces: None }),
 	}
 }
 

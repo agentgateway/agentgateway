@@ -1,0 +1,71 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/content_filter_explained.json
+info:
+  id: chatcmpl_filter_explained
+  object: chat.completion
+  created: 123
+  model: gemini-3.8-flash
+  choices:
+    - index: 0
+      finish_reason: content_filter
+      message:
+        role: assistant
+        content: ""
+        refusal: The response was blocked for dangerous content.
+  usage:
+    prompt_tokens: 14
+    completion_tokens: 3
+    total_tokens: 17
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": ""
+          },
+          {
+            "type": "refusal",
+            "refusal": "The response was blocked for dangerous content."
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "incomplete"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 14,
+      "output_tokens": 3,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 17
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "content_filter"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 14,
+    "output_tokens": 3,
+    "total_tokens": 17,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}

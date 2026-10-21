@@ -1,0 +1,8 @@
+data: {"id":"chatcmpl_filter_explained","object":"chat.completion.chunk","created":123,"model":"gemini-3.8-flash","choices":[{"index":0,"delta":{"role":"assistant","refusal":"The response was blocked "}}]}
+
+data: {"id":"chatcmpl_filter_explained","object":"chat.completion.chunk","created":123,"model":"gemini-3.8-flash","choices":[{"index":0,"delta":{"refusal":"for dangerous content."}}]}
+
+data: {"id":"chatcmpl_filter_explained","object":"chat.completion.chunk","created":123,"model":"gemini-3.8-flash","choices":[{"index":0,"delta":{},"finish_reason":"content_filter"}],"usage":{"prompt_tokens":14,"completion_tokens":3,"total_tokens":17}}
+
+data: [DONE]
+

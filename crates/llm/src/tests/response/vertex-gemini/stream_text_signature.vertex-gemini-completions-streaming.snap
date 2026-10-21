@@ -1,0 +1,24 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_text_signature.json
+---
+data: {"id":"text-signature","choices":[{"index":0,"delta":{"content":"live-ok ","role":"assistant"}}],"created":123,"model":"gemini-3.8-flash","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"text-signature","choices":[{"index":0,"delta":{"content":"second-ok"}}],"created":123,"model":"gemini-3.8-flash","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"text-signature","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"gemini-3.8-flash","service_tier":"default","system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 5,
+  "output_tokens": 2,
+  "total_tokens": 7,
+  "service_tier": "ON_DEMAND",
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    "live-ok second-ok"
+  ]
+}

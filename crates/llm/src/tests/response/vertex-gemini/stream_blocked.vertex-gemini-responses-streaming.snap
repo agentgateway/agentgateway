@@ -1,0 +1,54 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_blocked.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":4,"item_id":"msg_xxx","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"msg_xxx","output_index":0,"content_index":0,"delta":"Here is how"}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":6,"item_id":"msg_xxx","output_index":0,"content_index":1,"part":{"type":"refusal","refusal":""}}
+
+event: event
+data: {"type":"response.refusal.delta","sequence_number":7,"item_id":"msg_xxx","output_index":0,"content_index":1,"delta":"The response was blocked for dangerous content."}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":8,"item_id":"msg_xxx","output_index":0,"content_index":0,"text":"Here is how","logprobs":null}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":9,"item_id":"msg_xxx","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is how"}}
+
+event: event
+data: {"type":"response.refusal.done","sequence_number":10,"item_id":"msg_xxx","output_index":0,"content_index":1,"refusal":"The response was blocked for dangerous content."}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":11,"item_id":"msg_xxx","output_index":0,"content_index":1,"part":{"type":"refusal","refusal":"The response was blocked for dangerous content."}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":12,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is how"},{"type":"refusal","refusal":"The response was blocked for dangerous content."}],"id":"msg_xxx","role":"assistant","status":"incomplete"}}
+
+event: event
+data: {"type":"response.incomplete","sequence_number":13,"response":{"created_at":123,"id":"resp_xxx","incomplete_details":{"reason":"content_filter"},"model":"gemini-3.8-flash","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"Here is how"},{"type":"refusal","refusal":"The response was blocked for dangerous content."}],"id":"msg_xxx","role":"assistant","status":"incomplete"}],"status":"incomplete","usage":{"input_tokens":14,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":17}}}
+
+
+
+{
+  "input_tokens": 14,
+  "output_tokens": 3,
+  "total_tokens": 17,
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    "Here is how"
+  ]
+}

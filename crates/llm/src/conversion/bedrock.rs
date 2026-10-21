@@ -2386,6 +2386,7 @@ pub mod from_messages {
 							delta: messages::MessageDelta {
 								stop_reason: Some(translate_stop_reason(stop_reason)),
 								stop_sequence: None,
+								stop_details: None,
 							},
 							usage: to_anthropic_message_delta_usage(usage_data),
 						};

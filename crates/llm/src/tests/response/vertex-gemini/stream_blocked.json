@@ -1,0 +1,4 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Here is how"}]}}],"usageMetadata":{"promptTokenCount":14,"candidatesTokenCount":3,"totalTokenCount":17},"modelVersion":"gemini-3.8-flash","responseId":"blocked-stream-1"}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":""}]},"finishReason":"SAFETY","finishMessage":"The response was blocked for dangerous content.","safetyRatings":[{"category":"HARM_CATEGORY_DANGEROUS_CONTENT","probability":"HIGH","blocked":true}]}],"usageMetadata":{"promptTokenCount":14,"candidatesTokenCount":3,"totalTokenCount":17},"modelVersion":"gemini-3.8-flash","responseId":"blocked-stream-1"}
+

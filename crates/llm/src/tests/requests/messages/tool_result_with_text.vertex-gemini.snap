@@ -1,0 +1,154 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/tool_result_with_text.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 1024
+  tools:
+    - name: get_weather
+      description: Get the current weather in a given location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  messages:
+    - role: user
+      content: What is the weather in Berlin and Paris?
+    - role: assistant
+      content:
+        - type: tool_use
+          id: toolu_01
+          name: get_weather
+          input:
+            location: Berlin
+        - type: tool_use
+          id: toolu_02
+          name: get_weather
+          input:
+            location: Paris
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: toolu_01
+          content: "{\"temp\":9}"
+        - type: tool_result
+          tool_use_id: toolu_02
+          content: "{\"temp\":12}"
+        - type: text
+          text: "<system-reminder>\nKeep the answer short.\n</system-reminder>"
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the weather in Berlin and Paris?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Berlin"
+              }
+            }
+          },
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Paris"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{\"temp\":9}"
+              }
+            }
+          },
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{\"temp\":12}"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "<system-reminder>\nKeep the answer short.\n</system-reminder>"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-3.8-flash",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather in Berlin and Paris?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": "<system-reminder>\nKeep the answer short.\n</system-reminder>"
+      }
+    ]
+  }
+}

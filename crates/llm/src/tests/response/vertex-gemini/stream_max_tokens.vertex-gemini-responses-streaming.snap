@@ -1,0 +1,38 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_max_tokens.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":4,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"agentgateway.gemini.text-signatures.v1:{\"parts\":[{\"type\":\"text\",\"part\":{\"text\":\"\",\"thoughtSignature\":\"AY89a1/R6X3uXMmfRZuRjU2HSLegjI+U3dYIzzdzkkLUBajaZwnZ5tM3XZwT9BJEpbh9mwF3aEA1YbfW3duscUME2sRgViR6VPhFG6z7HnwqE5Ef/VT2MbuVcvjKcjGOVrl5jwOkloMMsAsHUI2fnX2RMwWms+o8Pw==\"}}]}","status":"incomplete"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":5,"output_index":1,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":1,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}}
+
+event: event
+data: {"type":"response.incomplete","sequence_number":7,"response":{"created_at":123,"id":"resp_xxx","incomplete_details":{"reason":"max_output_tokens"},"model":"gemini-3.8-flash","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"agentgateway.gemini.text-signatures.v1:{\"parts\":[{\"type\":\"text\",\"part\":{\"text\":\"\",\"thoughtSignature\":\"AY89a1/R6X3uXMmfRZuRjU2HSLegjI+U3dYIzzdzkkLUBajaZwnZ5tM3XZwT9BJEpbh9mwF3aEA1YbfW3duscUME2sRgViR6VPhFG6z7HnwqE5Ef/VT2MbuVcvjKcjGOVrl5jwOkloMMsAsHUI2fnX2RMwWms+o8Pw==\"}}]}","status":"incomplete"},{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"incomplete"}],"status":"incomplete","usage":{"input_tokens":23,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":5},"total_tokens":28}}}
+
+
+
+{
+  "input_tokens": 23,
+  "output_tokens": 5,
+  "total_tokens": 28,
+  "reasoning_tokens": 5,
+  "service_tier": "ON_DEMAND",
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ]
+}

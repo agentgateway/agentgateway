@@ -1,0 +1,115 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/reasoning_replay.json
+info:
+  model: "claude-3-7-sonnet-20250219-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: What is 2+2?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Two plus two.
+          signature: SIG-replay==
+        - type: redacted_thinking
+          data: cnNuX2pRenlYWklGSkxscEt5ZmxZa0NmdndJRmVMVjVaYkRXWDRo
+        - type: text
+          text: "4"
+    - role: user
+      content:
+        - type: text
+          text: And 3+3?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Three plus three is six.
+          signature: ""
+        - type: text
+          text: "6"
+    - role: user
+      content: Continue.
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is 2+2?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "4"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "And 3+3?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "6"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Continue."
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "maxOutputTokens": 1024
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-3.8-flash",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is 2+2?"
+      },
+      {
+        "role": "assistant",
+        "content": "4"
+      },
+      {
+        "role": "user",
+        "content": "And 3+3?"
+      },
+      {
+        "role": "assistant",
+        "content": "6"
+      },
+      {
+        "role": "user",
+        "content": "Continue."
+      }
+    ]
+  }
+}

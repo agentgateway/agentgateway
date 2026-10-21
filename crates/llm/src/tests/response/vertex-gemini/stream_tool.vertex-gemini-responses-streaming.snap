@@ -1,0 +1,98 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_tool.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.in_progress","sequence_number":2,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.reasoning_text.delta","sequence_number":4,"item_id":"rs_xxx","output_index":0,"content_index":0,"delta":"**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":5,"output_index":1,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":2,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"agentgateway.gemini.thought-signature.v1:{\"call_id\":\"call_668209\",\"signature\":\"AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=\"}","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":2,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"agentgateway.gemini.thought-signature.v1:{\"call_id\":\"call_668209\",\"signature\":\"AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=\"}","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":8,"output_index":3,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":9,"item_id":"call_xxx","output_index":3,"delta":"{\"location\":\"Columbus\"}"}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":10,"output_index":4,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":11,"item_id":"call_xxx","output_index":4,"delta":"{\"location\":\"Tokyo\"}"}
+
+event: event
+data: {"type":"response.reasoning_text.done","sequence_number":12,"item_id":"rs_xxx","output_index":0,"content_index":0,"text":"**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":13,"output_index":0,"item":{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"}],"status":"completed"}}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":14,"item_id":"call_xxx","output_index":3,"arguments":"{\"location\":\"Columbus\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":15,"output_index":3,"item":{"type":"function_call","arguments":"{\"location\":\"Columbus\"}","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"completed"}}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":16,"item_id":"call_xxx","output_index":4,"arguments":"{\"location\":\"Tokyo\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":17,"output_index":4,"item":{"type":"function_call","arguments":"{\"location\":\"Tokyo\"}","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":18,"output_index":1,"item":{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":19,"response":{"created_at":123,"id":"resp_xxx","model":"gemini-3.8-flash","object":"response","output":[{"type":"reasoning","id":"rs_xxx","summary":[],"content":[{"type":"reasoning_text","text":"**Gathering Weather Data**\n\nI'm calling `get_weather` for Columbus and Tokyo at the same time, as asked.\n\n"}],"status":"completed"},{"type":"message","content":[],"id":"msg_xxx","role":"assistant","status":"completed"},{"type":"reasoning","id":"rs_xxx","summary":[],"encrypted_content":"agentgateway.gemini.thought-signature.v1:{\"call_id\":\"call_668209\",\"signature\":\"AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=\"}","status":"completed"},{"type":"function_call","arguments":"{\"location\":\"Columbus\"}","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"completed"},{"type":"function_call","arguments":"{\"location\":\"Tokyo\"}","call_id":"call_xxx","name":"get_weather","id":"call_xxx","status":"completed"}],"status":"completed","usage":{"input_tokens":39,"input_tokens_details":{"cached_tokens":0},"output_tokens":132,"output_tokens_details":{"reasoning_tokens":100},"total_tokens":171}}}
+
+
+
+{
+  "input_tokens": 39,
+  "output_tokens": 132,
+  "total_tokens": 171,
+  "reasoning_tokens": 100,
+  "service_tier": "ON_DEMAND",
+  "provider_model": "gemini-3.8-flash",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_668209__thought__AY89a1/XLPk+CZLcvbdZZ7TrghCVxk1JrTGbYnDA2GW/rhaVTpyJZMPyTrIWSoM/58DPzw/PfFfMMSVihiMbesUl5WooeMqBlQy9L4AB8EgHDkHxhemVnJ3MD8Plwc2jucp2laHT8gsSUJcwnAIkAxh2Y0qPI85ouWjCDbcVcZa0gdu/IHySoK+zZGPFQKAYqSJudZNi4Bnl+Z1eLyDrNTMEkUrM75vcDgkoJRa15EbYetl1V5awHYDotZeHvgOVnmE0azd3PfiYnxjDHwP54l/geQb96v+/jOCrVj/vBpvmW+0+Guz++WgFULnCMP+UYWuZjjEDQqKhwg6BHARUpfgkGhDYCBovmqFLccmUrbX+wVSAtoK9jRKoHP/PMJIB+0nYeVZUaVsE+BR1kTglzL3Vexjwp6M8lpqW0my1/LqqYpz1C74GZ7/44xghlu+Lf707She7XXOatpwj4Ad9vJy3fELHvf46hHzviiQhG6vN9mvOJ55vrLX+sktiUo2XoeaYH0w+n4AAKB4/OWLlNOHEg748/dsBKfTm0pnHmKpkV9CjAiEnLmRchpCt+7tYpjHTqi8uiAZ8yLNUlMcvC2lEB6p+av9wMfSA54CQYX+acW6i5a8TL9Sbenr8/vjBJlycHex6lViQkQSnfRwfjjXvTa3v0SBdzmU3zJGjc7LBSJqJc+G9asoy8avHS8Og1T64DZtW4+Tl6bYudIpYWhZ7gFbuOeWGy9/H6X5Kzzt3j4F1fa6ttuvTY/HnxDZ3MjN4/T77ZHKIiFH9MXzpvgk1uBH3/KxSWOIPS/lCKzVvf20=",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Columbus"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "call_668212",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Tokyo"
+          }
+        }
+      ],
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

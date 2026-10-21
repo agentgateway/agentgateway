@@ -1,9 +1,15 @@
+use std::pin::pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use agent_http::{Body, RawBody};
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
+use futures_util::future::{self, Either};
 use futures_util::stream::{self, BoxStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use tokio::sync::Notify;
 use tokio_sse_codec::{Event, Frame, SseDecodeError, SseDecoder};
 use tokio_util::codec::{BytesCodec, Decoder};
 
@@ -26,6 +32,69 @@ pub fn append_done_on_success(body: Body) -> Body {
 					Some(Err(err)) => Some((Err(err), (None, None))),
 					None => done.map(|done| (Ok(done), (None, None))),
 				}
+			},
+		)
+		.fuse();
+		RawBody::from_stream(stream)
+	})
+}
+
+#[derive(Default)]
+pub struct StreamEnd {
+	finished: AtomicBool,
+	failed: AtomicBool,
+	failure: Notify,
+}
+
+impl StreamEnd {
+	pub fn finish(&self) {
+		self.finished.store(true, Ordering::Relaxed);
+	}
+
+	/// The upstream reported an error. The body ends without waiting for upstream to close, even
+	/// when the client already had the final event and so gets no error event
+	pub fn fail(&self) {
+		self.failed.store(true, Ordering::Relaxed);
+		self.failure.notify_one();
+	}
+}
+
+/// Append `[DONE]` only after a terminal reply; an early EOF ends with a body error
+/// A failed stream ends after its error event
+pub fn append_done_if_finished(body: Body, end: Arc<StreamEnd>) -> Body {
+	end_stream(body, end, true)
+}
+
+/// Ends a translated stream once its upstream fails, however upstream goes on
+pub fn end_after_error(body: Body, end: Arc<StreamEnd>) -> Body {
+	end_stream(body, end, false)
+}
+
+fn end_stream(body: Body, end: Arc<StreamEnd>, needs_finish: bool) -> Body {
+	body.transform_stream(|body| {
+		let stream = stream::unfold(
+			Some((body.into_data_stream().boxed(), end)),
+			move |state| async move {
+				let (mut stream, end) = state?;
+				let next = match future::select(stream.next(), pin!(end.failure.notified())).await {
+					Either::Left((next, _)) => next,
+					Either::Right(_) => None,
+				};
+				let error = match next {
+					Some(Ok(chunk)) => return Some((Ok(chunk), Some((stream, end)))),
+					_ if end.failed.load(Ordering::Relaxed) => return None,
+					None if !needs_finish => return None,
+					None if end.finished.load(Ordering::Relaxed) => {
+						let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+						return Some((Ok(done), None));
+					},
+					Some(Err(err)) => err,
+					None => axum_core::Error::new("upstream stream ended before its last reply"),
+				};
+				// hyper's HTTP/1 writer drops body data it has buffered but not yet flushed when the
+				// next poll fails, so yield once to let it send the events before this error
+				tokio::task::yield_now().await;
+				Some((Err(error), None))
 			},
 		)
 		.fuse();

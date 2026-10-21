@@ -1,0 +1,66 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/content_filter.json
+info:
+  id: chatcmpl_filtered
+  object: chat.completion
+  created: 123
+  model: gpt-5.6-luna
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: ""
+      finish_reason: content_filter
+  usage:
+    prompt_tokens: 10
+    completion_tokens: 0
+    total_tokens: 10
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": ""
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "incomplete"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 0,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 10
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "content_filter"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 10,
+    "output_tokens": 0,
+    "total_tokens": 10,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}
