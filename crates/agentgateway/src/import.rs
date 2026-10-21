@@ -614,6 +614,16 @@ fn apply_litellm_health(router_settings: &Map<String, Value>, plan: &mut ImportP
 		}
 	}
 
+	if router_settings.contains_key("allowed_fails_policy") {
+		report_unmapped_litellm_health(
+			router_settings,
+			ImportStatus::Manual,
+			"allowed_fails_policy requires manual migration",
+			&mut plan.findings,
+		);
+		return;
+	}
+
 	let allowed_fails = router_settings.get("allowed_fails");
 	let cooldown_time = router_settings.get("cooldown_time");
 	let (Some(allowed_fails), Some(cooldown_time)) = (allowed_fails, cooldown_time) else {
@@ -1159,8 +1169,9 @@ fn import_litellm_model(
 		findings,
 	);
 
-	let cooldown_override = params.remove("cooldown_time").is_some();
-	if cooldown_override {
+	let params_cooldown_override = params.remove("cooldown_time").is_some();
+	let cooldown_override = params_cooldown_override || model_info.contains_key("cooldown_time");
+	if params_cooldown_override {
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.cooldown_time"),
 			status: ImportStatus::Manual,
@@ -2020,8 +2031,6 @@ model_list:
 router_settings:
   allowed_fails: 3
   cooldown_time: 60
-  allowed_fails_policy:
-    RateLimitErrorAllowedFails: 10
 "#,
 		)
 		.expect("import litellm config");
@@ -2050,12 +2059,86 @@ router_settings:
 			ImportStatus::Manual
 		);
 		assert_eq!(
-			find_status(&result, "router_settings.allowed_fails_policy"),
-			ImportStatus::Manual
-		);
-		assert_eq!(
 			find_status(&result, "router_settings.allowed_fails"),
 			ImportStatus::Approximate
+		);
+	}
+
+	#[test]
+	fn exception_specific_thresholds_suppress_generic_litellm_health() {
+		let result = import_config(
+			"litellm",
+			r#"
+model_list:
+- model_name: primary
+  litellm_params:
+    model: openai/gpt-4o
+router_settings:
+  allowed_fails: 3
+  cooldown_time: 60
+  allowed_fails_policy:
+    RateLimitErrorAllowedFails: 10
+"#,
+		)
+		.expect("import litellm config");
+
+		assert!(
+			imported_models(&result)
+				.iter()
+				.all(|model| model.get("health").is_none())
+		);
+		for source_path in [
+			"router_settings.allowed_fails_policy",
+			"router_settings.allowed_fails",
+			"router_settings.cooldown_time",
+		] {
+			assert_eq!(find_status(&result, source_path), ImportStatus::Manual);
+		}
+	}
+
+	#[test]
+	fn model_info_cooldown_override_suppresses_health_only_for_that_deployment() {
+		let result = import_config(
+			"litellm",
+			r#"
+model_list:
+- model_name: primary
+  litellm_params:
+    model: openai/gpt-4o
+  model_info:
+    cooldown_time: 5
+- model_name: backup
+  litellm_params:
+    model: openai/gpt-4o-mini
+router_settings:
+  allowed_fails: 3
+  cooldown_time: 60
+"#,
+		)
+		.expect("import litellm config");
+
+		let health_by_model = imported_models(&result)
+			.iter()
+			.map(|model| {
+				(
+					model["params"]["model"].as_str().expect("upstream model"),
+					model.get("health").cloned(),
+				)
+			})
+			.collect::<HashMap<_, _>>();
+		assert_eq!(health_by_model["gpt-4o"], None);
+		assert_eq!(
+			health_by_model["gpt-4o-mini"],
+			Some(json!({
+				"eviction": {
+					"consecutiveFailures": 4,
+					"duration": "60s",
+				}
+			}))
+		);
+		assert_eq!(
+			find_status(&result, "model_list[0].model_info.cooldown_time"),
+			ImportStatus::Manual
 		);
 	}
 
