@@ -2703,11 +2703,33 @@ impl AIProvider {
 			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(
+			let mut resp = match self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
-			)?;
+			) {
+				Ok(resp) => resp,
+				Err(err) => {
+					// Empty replies may still report usage. Preserve it before returning the
+					// translation error, just as the streaming path does.
+					if matches!(err, AIError::IncompleteResponse)
+						&& self
+							.chat_translation(
+								req.input_format,
+								&req.request_model,
+								model_catalog.map(|c| c.as_handle()),
+							)
+							.is_ok_and(|t| t.output == ChatFormat::OpenAICompletions)
+						&& let Ok(upstream) = serde_json::from_slice::<types::completions::Response>(&bytes)
+					{
+						log.store(Some(LLMInfo::new(
+							req,
+							upstream.to_llm_response(log_content),
+						)));
+					}
+					return Err(err);
+				},
+			};
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 

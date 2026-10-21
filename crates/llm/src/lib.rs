@@ -424,6 +424,10 @@ pub struct LLMResponse {
 	/// `usage.iterations`). When set, cost is priced per line instead of from the totals above.
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub usage_lines: Vec<UsageLine>,
+	/// Stream conversion can fail after HTTP 200 is sent.
+	/// Keep the error for request logging and metrics.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub stream_error: Option<Strng>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
 	/// Timestamp of the most recently observed output token, used to compute

@@ -1,5 +1,48 @@
 use super::parse_data_url;
 
+#[test]
+fn empty_responses_without_finish_reason_fail() {
+	use bytes::Bytes;
+	use serde_json::{Value, json};
+
+	use crate::AIError;
+
+	let response: Value =
+		serde_json::from_slice(include_bytes!("../tests/response/completions/basic.json")).unwrap();
+	for translate in [super::from_messages::translate_response, |bytes: &Bytes| {
+		crate::conversion::openai_compat::to_responses::translate_response(bytes, "m", None)
+	}] {
+		let mut input = response.clone();
+		input["choices"][0]["finish_reason"] = Value::Null;
+		for message in [
+			json!({"role": "assistant"}),
+			json!({"content": null, "role": "assistant"}),
+			json!({"content": "", "role": "assistant"}),
+			json!({"content": null, "role": "assistant", "tool_calls": []}),
+			json!({"content": "", "role": "assistant", "tool_calls": []}),
+			json!({"content": null, "role": "assistant", "tool_calls": [{"custom_tool": {"input": "input", "name": "custom"}, "id": "custom", "type": "custom"}]}),
+		] {
+			input["choices"][0]["message"] = message;
+			let err = translate(&Bytes::from(serde_json::to_vec(&input).unwrap()))
+				.err()
+				.expect("no output or finish reason must fail");
+			assert!(matches!(err, AIError::IncompleteResponse), "{err}");
+		}
+		for (content, finish) in [
+			(Value::Null, json!("stop")),
+			(json!(""), json!("stop")),
+			(json!("Hi"), Value::Null),
+			(json!(" "), Value::Null),
+		] {
+			input["choices"][0]["message"] = json!({"content": content, "role": "assistant"});
+			input["choices"][0]["finish_reason"] = finish;
+			assert!(translate(&Bytes::from(serde_json::to_vec(&input).unwrap())).is_ok());
+		}
+		input["choices"] = json!([]);
+		assert!(translate(&Bytes::from(serde_json::to_vec(&input).unwrap())).is_err());
+	}
+}
+
 mod context_overflow {
 	use bytes::Bytes;
 	use http::StatusCode;

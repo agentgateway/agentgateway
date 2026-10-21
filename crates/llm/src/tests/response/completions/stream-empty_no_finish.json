@@ -1,0 +1,4 @@
+data: {"id":"chunk-empty","object":"chat.completion.chunk","created":1,"model":"gemini-4-argon","choices":[{"index":0,"delta":{"content":null,"role":"assistant"}}],"usage":{"prompt_tokens":283710,"completion_tokens":8,"total_tokens":285133,"prompt_tokens_details":{"cached_tokens":281661},"completion_tokens_details":{"reasoning_tokens":1415}}}
+
+data: [DONE]
+

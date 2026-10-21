@@ -1395,8 +1395,23 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 	}
 }
 
+/// Include failures found after HTTP 200 in the final logs and metrics.
+/// Keep any request error already recorded.
+fn record_stream_error(log: &mut RequestLog) {
+	if log.error.is_some() {
+		return;
+	}
+	let error = &mut log.error;
+	log.llm_response.non_atomic_mutate(|info| {
+		*error = info.response.stream_error.as_ref().map(|e| e.to_string());
+	});
+}
+
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
+		if let Some(log) = self.log.as_mut() {
+			record_stream_error(log);
+		}
 		let status = self
 			.log
 			.as_ref()
@@ -3359,6 +3374,72 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	fn llm_info_with_stream_error(error: Option<&str>) -> llm::LLMInfo {
+		llm::LLMInfo::new(
+			metric_test_llm_request(),
+			llm::LLMResponse {
+				input_tokens: Some(10),
+				output_tokens: Some(5),
+				cached_input_tokens: Some(8),
+				stream_error: error.map(strng::new),
+				..Default::default()
+			},
+		)
+	}
+
+	#[test]
+	fn stream_error_becomes_the_request_error() {
+		let mut log = test_request_log();
+		log
+			.llm_response
+			.store(Some(llm_info_with_stream_error(Some("stream ended early"))));
+		record_stream_error(&mut log);
+		assert_eq!(log.error.as_deref(), Some("stream ended early"));
+		// Leave token counts available for final logging.
+		let info = log.llm_response.take().unwrap();
+		assert_eq!(info.response.cached_input_tokens, Some(8));
+	}
+
+	#[test]
+	fn stream_error_keeps_an_existing_request_error() {
+		let mut log = test_request_log();
+		log.error = Some("connection failed".to_string());
+		log
+			.llm_response
+			.store(Some(llm_info_with_stream_error(Some("stream ended early"))));
+		record_stream_error(&mut log);
+		assert_eq!(log.error.as_deref(), Some("connection failed"));
+	}
+
+	#[test]
+	fn no_stream_error_leaves_a_successful_request_alone() {
+		let mut log = test_request_log();
+		log
+			.llm_response
+			.store(Some(llm_info_with_stream_error(None)));
+		record_stream_error(&mut log);
+		assert_eq!(log.error, None);
+	}
+
+	#[test]
+	fn stream_error_classifies_a_streamed_200_as_failed() {
+		let (mut log, registry) = test_request_log_with_registry();
+		log.status = Some(http::StatusCode::OK);
+		log.llm_request = Some(metric_test_llm_request());
+		log
+			.llm_response
+			.store(Some(llm_info_with_stream_error(Some("stream ended early"))));
+
+		drop(DropOnLog::from(log));
+
+		let encoded = encoded_metrics(&registry);
+		let count = encoded
+			.lines()
+			.find(|line| line.starts_with("gen_ai_server_request_duration_count"))
+			.unwrap_or_else(|| panic!("no GenAI request duration count in:\n{encoded}"));
+		assert!(count.contains("error_type=\"_OTHER\""), "{count}");
 	}
 
 	#[test]

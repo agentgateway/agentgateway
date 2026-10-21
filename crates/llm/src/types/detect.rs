@@ -692,6 +692,7 @@ impl ResponseType for Response {
 			completion: None,
 			output_messages: None,
 			usage_lines: Vec::new(),
+			stream_error: None,
 			// TODO: we could probably derive this
 			first_token: None,
 			last_token_at: None,

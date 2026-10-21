@@ -182,6 +182,7 @@ impl ResponseType for Response {
 			cache_creation_1h_input_tokens: None,
 			cache_creation_12h_input_tokens: None,
 			usage_lines: Vec::new(),
+			stream_error: None,
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
