@@ -2617,43 +2617,6 @@ pub mod from_responses {
 		})
 	}
 
-	fn flush_invalid_function_outputs(
-		messages: &mut Vec<bedrock::Message>,
-		diagnostics: &mut Vec<bedrock::ContentBlock>,
-	) {
-		if diagnostics.is_empty() {
-			return;
-		}
-
-		// Parallel tool results must stay together immediately after their tool-use turn.
-		// Converse rejects text mixed with tool results, so replay recovery diagnostics
-		// in a separate exchange once the entire output group has been converted.
-		if messages.last().is_some_and(|message| {
-			message.role == bedrock::Role::User
-				&& message
-					.content
-					.iter()
-					.any(|block| matches!(block, bedrock::ContentBlock::ToolResult(_)))
-		}) {
-			helpers::push_or_merge_message(
-				messages,
-				bedrock::Message {
-					role: bedrock::Role::Assistant,
-					content: vec![bedrock::ContentBlock::Text(
-						"A function call had invalid JSON arguments and was not executed.".to_string(),
-					)],
-				},
-			);
-		}
-		helpers::push_or_merge_message(
-			messages,
-			bedrock::Message {
-				role: bedrock::Role::User,
-				content: std::mem::take(diagnostics),
-			},
-		);
-	}
-
 	pub(super) fn translate_internal(
 		req: responses::CreateResponse,
 		explicit_thinking_budget: Option<u64>,
@@ -2914,17 +2877,8 @@ pub mod from_responses {
 			Ok(blocks)
 		};
 
-		let mut invalid_function_calls = std::collections::HashSet::new();
-		let mut invalid_function_outputs = Vec::new();
-
 		// Process each input item
 		for item in items {
-			if !matches!(
-				&item,
-				InputItem::Item(Item::FunctionCallOutput(_) | Item::CustomToolCallOutput(_))
-			) {
-				flush_invalid_function_outputs(&mut messages, &mut invalid_function_outputs);
-			}
 			match item {
 				InputItem::EasyMessage(msg) => {
 					let role = match msg.role {
@@ -3044,19 +2998,11 @@ pub mod from_responses {
 					}
 				},
 				InputItem::Item(Item::FunctionCall(call)) => {
-					let Ok(input) = serde_json::from_str::<serde_json::Value>(&call.arguments) else {
-						tracing::warn!("Replaying an invalid function call as non-executable text");
-						invalid_function_calls.insert(call.call_id);
-						helpers::push_or_merge_message(
-							&mut messages,
-							bedrock::Message {
-								role: bedrock::Role::Assistant,
-								content: vec![bedrock::ContentBlock::Text(
-									"A function call had invalid JSON arguments and was not executed.".to_string(),
-								)],
-							},
-						);
-						continue;
+					// Converse rejects non-object toolUse.input values, despite input being a document.
+					// Keep the call (rather than dropping it) so its function_call_output still pairs.
+					let input = match serde_json::from_str::<serde_json::Value>(&call.arguments) {
+						Ok(serde_json::Value::Object(input)) => serde_json::Value::Object(input),
+						_ => serde_json::json!({}),
 					};
 
 					helpers::push_or_merge_message(
@@ -3086,13 +3032,6 @@ pub mod from_responses {
 							.collect::<Vec<_>>()
 							.join("\n"),
 					};
-
-					if invalid_function_calls.contains(&call_id) {
-						invalid_function_outputs.push(bedrock::ContentBlock::Text(format!(
-							"The unexecuted function call returned this error: {output_text}"
-						)));
-						continue;
-					}
 
 					helpers::push_or_merge_message(
 						&mut messages,
@@ -3161,8 +3100,6 @@ pub mod from_responses {
 				},
 			}
 		}
-
-		flush_invalid_function_outputs(&mut messages, &mut invalid_function_outputs);
 
 		let mut system_content = if system_blocks.is_empty() {
 			None
