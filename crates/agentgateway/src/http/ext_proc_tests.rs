@@ -2432,14 +2432,15 @@ const STANDALONE_SERVICE_PORT: u16 = 8000;
 
 #[derive(Clone)]
 struct StandaloneInferenceRouter {
-	target: Option<SocketAddr>,
+	/// Raw value the mock EPP returns in the x-gateway-destination-endpoint header.
+	target: Option<String>,
 	request_headers_seen: Arc<AtomicUsize>,
 	request_path_seen: Option<Arc<Mutex<Option<String>>>>,
 	request_body_seen: Option<Arc<Mutex<Vec<u8>>>>,
 }
 
 impl StandaloneInferenceRouter {
-	fn new(target: Option<SocketAddr>, request_headers_seen: Arc<AtomicUsize>) -> Self {
+	fn new(target: Option<String>, request_headers_seen: Arc<AtomicUsize>) -> Self {
 		Self {
 			target,
 			request_headers_seen,
@@ -2449,7 +2450,7 @@ impl StandaloneInferenceRouter {
 	}
 
 	fn recording(
-		target: Option<SocketAddr>,
+		target: Option<String>,
 		request_headers_seen: Arc<AtomicUsize>,
 		request_path_seen: Arc<Mutex<Option<String>>>,
 		request_body_seen: Arc<Mutex<Vec<u8>>>,
@@ -2489,7 +2490,7 @@ impl Handler for StandaloneInferenceRouter {
 			*request_path_seen.lock().unwrap() = Some(path);
 		}
 		let _ = sender
-			.send(request_header_response(self.target.map(|target| {
+			.send(request_header_response(self.target.clone().map(|target| {
 				CommonResponse {
 					header_mutation: Some(HeaderMutation {
 						set_headers: vec![HeaderValueOption {
@@ -2658,14 +2659,15 @@ fn configure_standalone_service_with_app_protocol(t: &TestBind, app_protocol: Op
 }
 
 async fn setup_inference_routing_mock(
-	target: Option<SocketAddr>,
+	target: Option<String>,
 	request_headers_seen: Arc<AtomicUsize>,
 	destination_mode: Option<&'static str>,
 ) -> (MockInstance, TestBind, Client<MemoryConnector, Body>) {
-	let ext_proc =
-		ExtProcMock::new(move || StandaloneInferenceRouter::new(target, request_headers_seen.clone()))
-			.spawn()
-			.await;
+	let ext_proc = ExtProcMock::new(move || {
+		StandaloneInferenceRouter::new(target.clone(), request_headers_seen.clone())
+	})
+	.spawn()
+	.await;
 
 	let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
 	configure_standalone_service(&t);
@@ -2744,7 +2746,7 @@ mod standalone_inference_routing {
 		let backend_b = named_backend("backend-b").await;
 		let request_headers_seen = Arc::new(AtomicUsize::new(0));
 		let (_ext_proc, _bind, io) = setup_inference_routing_mock(
-			Some(*backend_b.address()),
+			Some(backend_b.address().to_string()),
 			request_headers_seen.clone(),
 			Some("passthrough"),
 		)
@@ -2780,13 +2782,77 @@ mod standalone_inference_routing {
 	}
 
 	#[tokio::test]
+	async fn standalone_inference_routing_accepts_hostname_destination_in_passthrough() {
+		let backend_a = named_backend("backend-a").await;
+		let backend_b = named_backend("backend-b").await;
+		let request_headers_seen = Arc::new(AtomicUsize::new(0));
+		let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+			Some(format!("localhost:{}", backend_b.address().port())),
+			request_headers_seen.clone(),
+			Some("passthrough"),
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo").await;
+		assert_eq!(res.status(), 200);
+		let body = read_body_raw(res.into_body()).await;
+		assert_eq!(body.as_ref(), b"backend-b");
+		assert_eq!(
+			backend_a
+				.received_requests()
+				.await
+				.expect("backend-a recording should be enabled")
+				.len(),
+			0,
+			"non-selected service endpoints should not receive traffic",
+		);
+		assert_eq!(
+			backend_b
+				.received_requests()
+				.await
+				.expect("backend-b recording should be enabled")
+				.len(),
+			1,
+			"EPP-selected hostname endpoint should receive traffic",
+		);
+	}
+
+	#[tokio::test]
+	async fn standalone_inference_routing_rejects_hostname_destination_in_validated_mode() {
+		let backend = named_backend("backend").await;
+		let request_headers_seen = Arc::new(AtomicUsize::new(0));
+		// Validated mode (the default) matches destinations against local service
+		// endpoints; a hostname can never match, so it must be rejected.
+		let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+			Some(format!("localhost:{}", backend.address().port())),
+			request_headers_seen.clone(),
+			None,
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo").await;
+		assert_eq!(res.status(), 503);
+		assert_eq!(
+			backend
+				.received_requests()
+				.await
+				.expect("backend recording should be enabled")
+				.len(),
+			0,
+			"validated mode should reject hostname destinations",
+		);
+	}
+
+	#[tokio::test]
 	async fn standalone_inference_routing_h2c_service_uses_http2_upstream_for_grpc() {
 		let backend = simple_mock().await;
 		let backend_addr = *backend.address();
 		let request_headers_seen = Arc::new(AtomicUsize::new(0));
 		let ext_proc = ExtProcMock::new({
 			let request_headers_seen = request_headers_seen.clone();
-			move || StandaloneInferenceRouter::new(Some(backend_addr), request_headers_seen.clone())
+			move || {
+				StandaloneInferenceRouter::new(Some(backend_addr.to_string()), request_headers_seen.clone())
+			}
 		})
 		.spawn()
 		.await;
@@ -2865,9 +2931,12 @@ mod standalone_inference_routing {
 	async fn standalone_inference_routing_validates_selected_destination_by_default() {
 		let backend = named_backend("backend").await;
 		let request_headers_seen = Arc::new(AtomicUsize::new(0));
-		let (_ext_proc, _bind, io) =
-			setup_inference_routing_mock(Some(*backend.address()), request_headers_seen.clone(), None)
-				.await;
+		let (_ext_proc, _bind, io) = setup_inference_routing_mock(
+			Some(backend.address().to_string()),
+			request_headers_seen.clone(),
+			None,
+		)
+		.await;
 
 		let res = send_request(io, Method::GET, "http://lo").await;
 		assert_eq!(res.status(), 503);
@@ -2932,7 +3001,9 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
 	let ext_proc = ExtProcMock::new({
 		let request_headers_seen = request_headers_seen.clone();
-		move || StandaloneInferenceRouter::new(Some(backend_addr), request_headers_seen.clone())
+		move || {
+			StandaloneInferenceRouter::new(Some(backend_addr.to_string()), request_headers_seen.clone())
+		}
 	})
 	.spawn()
 	.await;
@@ -3017,7 +3088,7 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 		let request_body_seen = request_body_seen.clone();
 		move || {
 			StandaloneInferenceRouter::recording(
-				Some(backend_addr),
+				Some(backend_addr.to_string()),
 				request_headers_seen.clone(),
 				request_path_seen.clone(),
 				request_body_seen.clone(),
@@ -4215,20 +4286,6 @@ mod connect_authority_mutation {
 		}
 	}
 
-	/// Design question from the substrate atenet-router bug report: switching
-	/// `frontendPolicies.connect.mode` from `route` to `tunnel` would run
-	/// ext_proc on every request inside the tunnel (not just the CONNECT),
-	/// which would fix the target-port propagation gap Route mode has. But it
-	/// needs the *original* CONNECT authority (which carries both the actor
-	/// identity and the target port) available to ext_proc for each re-entered
-	/// request -- the re-entered request's own Host header is whatever the
-	/// client happens to send inside the tunnel, unrelated to the actor.
-	///
-	/// This reproduces the full topology: an outer bind terminates the CONNECT
-	/// tunnel and re-enters an inner wildcard bind, whose route's ext_proc
-	/// resolves `source.connectHeaders["host"]` (the original CONNECT
-	/// authority) instead of `request.host`, then rewrites `:authority` to the
-	/// worker exactly like the existing (working) Route-mode mutation does.
 	#[tokio::test]
 	async fn tunnel_mode_reentry_carries_connect_authority_to_ext_proc() {
 		use crate::types::agent::{BindMode, TunnelProtocol};

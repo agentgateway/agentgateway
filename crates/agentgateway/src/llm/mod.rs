@@ -51,6 +51,7 @@ use crate::proxy::dtrace;
 use crate::store;
 
 pub const LOCAL_LISTENER_NAME: &str = "llm";
+pub const LOCAL_ROUTE_NAME: &str = "llm:request";
 
 fn set_default_anthropic_version(headers: &mut HeaderMap) {
 	headers
@@ -374,13 +375,6 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 	const fn chat(input: InputFormat, output: ChatFormat) -> ChatTranslation {
 		ChatTranslation { input, output }
 	}
-	// AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS will be removed in v1.7.
-	let [messages_primary, messages_fallback] =
-		if std::env::var("AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS").is_ok_and(|v| v == "true") {
-			[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-		} else {
-			[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
-		};
 	vec![
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
@@ -398,8 +392,8 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
 		// Messages
-		chat(InputFormat::Messages, messages_primary),
-		chat(InputFormat::Messages, messages_fallback),
+		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
+		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),

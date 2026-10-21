@@ -126,7 +126,15 @@ impl Session {
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
-							http::sessionpersistence::MCPSessionState::new(sessions),
+							http::sessionpersistence::MCPSessionState::new(
+								sessions,
+								self
+									.relay
+									.backend_id
+									.as_ref()
+									.filter(|_| matches!(self.encoder, http::sessionpersistence::Encoder::Aes(_)))
+									.map(ToString::to_string),
+							),
 						);
 						if let Ok(id) = s.encode(&self.encoder) {
 							self.id = id.into();
@@ -181,7 +189,7 @@ impl Session {
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
-		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
+		self.relay = Arc::new(self.relay.with_inputs(inputs));
 		self
 	}
 
@@ -519,7 +527,15 @@ impl Session {
 						.await;
 						if let Some(sessions) = self.relay.get_sessions() {
 							let s = http::sessionpersistence::SessionState::MCP(
-								http::sessionpersistence::MCPSessionState::new(sessions),
+								http::sessionpersistence::MCPSessionState::new(
+									sessions,
+									self
+										.relay
+										.backend_id
+										.as_ref()
+										.filter(|_| matches!(self.encoder, http::sessionpersistence::Encoder::Aes(_)))
+										.map(ToString::to_string),
+								),
 							);
 							if let Ok(id) = s.encode(&self.encoder) {
 								self.id = id.into();
@@ -886,10 +902,21 @@ impl SessionManager {
 			.get_or_init(|| tokio::spawn(run_idle_reaper(self.sessions.clone())).abort_handle());
 	}
 
-	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
+	pub fn get_session(
+		&self,
+		id: &str,
+		builder: RelayInputs,
+		ctx: &IncomingRequestContext,
+	) -> Option<Session> {
 		let mut sessions = self.sessions.write().ok()?;
 		let entry = sessions.get_mut(id)?;
-		if entry.backend_id != builder.backend_id {
+		if entry.backend_id != builder.backend_id
+			|| !entry
+				.session
+				.relay
+				.upstreams
+				.conditions_match(&builder.backend, ctx)
+		{
 			return None;
 		}
 		entry.last_access = Instant::now();
@@ -903,7 +930,13 @@ impl SessionManager {
 		ctx: &IncomingRequestContext,
 	) -> Result<Option<Session>, mcp::Error> {
 		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
-			if s.backend_id != builder.backend_id {
+			if s.backend_id != builder.backend_id
+				|| !s
+					.session
+					.relay
+					.upstreams
+					.conditions_match(&builder.backend, ctx)
+			{
 				return Ok(None);
 			}
 			s.last_access = Instant::now();
@@ -916,6 +949,13 @@ impl SessionManager {
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
 			return Ok(None);
 		};
+		if state
+			.backend
+			.as_ref()
+			.is_some_and(|b| *b != backend_id.to_string())
+		{
+			return Ok(None);
+		}
 		let relay = builder.build_new_connections(ctx)?;
 		if let Err(err) = relay.set_sessions(state.sessions) {
 			warn!("failed to resume session: {err}");

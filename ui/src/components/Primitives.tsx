@@ -489,18 +489,15 @@ export function SegmentedControl<T extends string>(props: {
 	className?: string;
 }) {
 	return (
-		<div
+		<fieldset
 			className={['segmented-control', props.className].filter(Boolean).join(' ')}
-			role="radiogroup"
 			aria-label={props.ariaLabel}
 		>
 			{props.options.map(option => (
-				// biome-ignore lint/a11y/useSemanticElements: Existing lint violation; remove this suppression when the underlying issue is fixed.
 				<button
 					className={option.value === props.value ? 'active' : ''}
 					type="button"
-					role="radio"
-					aria-checked={option.value === props.value}
+					aria-pressed={option.value === props.value}
 					key={option.value}
 					onClick={() => props.onChange(option.value)}
 				>
@@ -508,7 +505,7 @@ export function SegmentedControl<T extends string>(props: {
 					{option.description ? <small>{option.description}</small> : null}
 				</button>
 			))}
-		</div>
+		</fieldset>
 	);
 }
 
@@ -700,7 +697,7 @@ export function Drawer(props: {
 	const missingFields = useRef(new Set<symbol>());
 	const lastErrors = useRef<{ value: unknown; errors: ConfigValueError[] } | null>(null);
 	const [checked, setChecked] = useState(false);
-	function formErrors() {
+	const formErrors = useCallback(() => {
 		const raw = rawRef.current;
 		if (!raw) return [];
 		const value = raw.value();
@@ -715,14 +712,13 @@ export function Drawer(props: {
 			};
 		}
 		return lastErrors.current.errors;
-	}
+	}, []);
 	const schemaPathKey = props.raw?.schemaPath.join('/');
-	// biome-ignore lint/correctness/useExhaustiveDependencies: formErrors reads refs; this changes with what it reports.
 	const fieldErrors = useMemo(
 		() =>
-			props.raw
+			schemaPathKey !== undefined && rawRef.current
 				? {
-						schemaPath: props.raw.schemaPath,
+						schemaPath: rawRef.current.schemaPath,
 						errors: () => (checked ? formErrors() : null),
 						register(path: string) {
 							fieldPaths.current.set(path, (fieldPaths.current.get(path) ?? 0) + 1);
@@ -735,7 +731,7 @@ export function Drawer(props: {
 						missing: missingFields.current
 					}
 				: null,
-		[checked, schemaPathKey]
+		[checked, formErrors, schemaPathKey]
 	);
 	function check() {
 		// Raw text is validated as it is edited.
@@ -819,7 +815,7 @@ export function Drawer(props: {
 
 	function trackButtonChange(event: ReactMouseEvent<HTMLElement>) {
 		const target = event.target as HTMLElement;
-		if (target.closest('[role="option"], [role="radio"], .segmented-control button, .choice-pill'))
+		if (target.closest('[role="option"], .segmented-control button, .choice-pill'))
 			setFormChanged(true);
 	}
 

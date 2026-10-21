@@ -35,6 +35,11 @@ info:
     "role": "assistant",
     "content": [
       {
+        "type": "thinking",
+        "thinking": "Okay, the user wants me to write a story",
+        "signature": ""
+      },
+      {
         "type": "text",
         "text": "hello world!"
       }

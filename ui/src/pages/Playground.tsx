@@ -1,3 +1,4 @@
+import { useMutation } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
 	Bot,
@@ -28,7 +29,7 @@ import {
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { providerLabel } from '@/config';
-import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from '@/cors';
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
 import {
@@ -207,15 +208,27 @@ export function PlaygroundPage() {
 		'';
 	const selectedKeyValue = apiKeyMode === 'saved' && rawVirtualKeys.length > 0 ? savedKey : apiKey;
 	const llmCors = policies.cors as CorsPolicy | null | undefined;
+	const applyCors = useMutation({
+		mutationFn: async () => {
+			await upsertPolicy.mutateAsync({
+				kind: 'llm.policy',
+				id: 'cors',
+				value: playgroundCorsPolicy(llmCors, 'llm')
+			});
+			await waitForLlmCors(llmBaseUrl);
+		}
+	});
 	const fileCorsOwned = Object.hasOwn(filePolicies, 'cors');
 	const fileMcpCorsOwned = Boolean(
 		mcpData.rawConfig.data?.mcp?.policies &&
 			Object.hasOwn(mcpData.rawConfig.data.mcp.policies, 'cors')
 	);
 	const needsCors =
-		!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
+		applyCors.isPending ||
+		applyCors.isError ||
+		(!configDataLoading && !configDataError && config.data && !llmEndpoint.sameOrigin
 			? corsNeedsUpdate(llmCors, 'llm')
-			: false;
+			: false);
 	const needsMcpCors =
 		mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
 			? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, 'mcp')
@@ -229,15 +242,13 @@ export function PlaygroundPage() {
 		apiKeyMode,
 		virtualKeysCount: rawVirtualKeys.length
 	});
-	const corsSaving = upsertPolicy.isPending;
-	const corsSaveError = upsertPolicy.error?.message ?? null;
+	if (applyCors.isPending || applyCors.isError)
+		sendBlockers.push('Waiting for the LLM CORS policy.');
+	const corsSaving = upsertPolicy.isPending || applyCors.isPending;
+	const corsSaveError = applyCors.error?.message ?? upsertPolicy.error?.message ?? null;
 
 	function applyLlmCors() {
-		upsertPolicy.mutate({
-			kind: 'llm.policy',
-			id: 'cors',
-			value: playgroundCorsPolicy(llmCors, 'llm')
-		});
+		applyCors.mutate();
 	}
 
 	function applyMcpCors() {

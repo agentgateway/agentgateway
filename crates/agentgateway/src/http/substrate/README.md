@@ -34,6 +34,25 @@ winning rule's effects. For HTTPS, the ClientHello SNI selects the certificate;
 the request authority is authorized independently. Upgrades in Substrate are
 denied (including CONNECT).
 
+WebSocket upgrades return HTTP 403 with the exact body
+`WebSocket egress is not supported` (no trailing newline), for both HTTP and
+intercepted HTTPS. This denial runs even on a rejection route without a
+`substrateEgress` policy, before credential effects or upstream dialing.
+Actor-originated CONNECT requests inside that tunnel likewise return HTTP 403
+with the exact body `CONNECT egress is not supported`, before request policy
+evaluation, regardless of the listener's CONNECT mode. The authenticated outer
+CONNECT remains supported.
+
+Configure an access-log field
+`substrate.connect.authority: 'destination.address + ":" + string(destination.port)'` to record the
+original CONNECT destination alongside `ate.actor.name`, `ate.atespace`, and
+`http.status`. For Substrate's numeric CONNECT targets, these destination fields
+come from the outer CONNECT URI and survive tunnel re-entry and TLS interception.
+Do not read the target from `source.connectHeaders`: HTTP/2 carries it in
+`:authority`, not a Host header.
+A successful outer CONNECT is not evidence of an inner HTTP
+request's success; intercepted HTTPS must emit its own HTTP access record.
+
 Both HTTP and TLS passthrough routes require dynamic backends. The gateway
 resolves the authorized HTTP authority or TLS SNI through DNS and uses the
 original CONNECT destination port. The CONNECT IP, an authority port, and a
@@ -42,6 +61,9 @@ Intercepted HTTPS defaults to TLS on dynamic upstream connections; `backendTLS`
 can configure private roots or client certificates. Passthrough TCP routes use
 the SNI and original destination port, with no backend TLS termination or
 credential effects. Their policy decision lasts for the connection.
+New connections use the current policy. When testing revocation of passthrough,
+keep the hostname in an HTTP rule so Substrate's DNS relay still resolves it;
+otherwise DNS can refuse the lookup before the gateway sees a connection.
 
 Exact names rank ahead of single-label wildcards, then `*`; explicit ports rank
 ahead of all ports. Omitted HTTP/HTTPS ports default to 80/443. Passthrough requires

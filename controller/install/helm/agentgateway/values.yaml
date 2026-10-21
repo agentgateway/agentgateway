@@ -146,6 +146,8 @@ controller:
   extraEnv: {}
   # -- Add extra sidecar containers to the controller pod.
   extraContainers: []
+  # -- Add extra init containers to the controller pod.
+  extraInitContainers: []
   # -- Add extra volume mounts to the controller container.
   extraVolumeMounts: []
   # -- Add extra volumes to the controller pod.

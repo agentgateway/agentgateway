@@ -279,13 +279,17 @@ func TranslateAgwBackend(
 	}, results
 }
 
-func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) {
+func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) error {
 	if condition == nil {
-		return
+		return nil
 	}
 	for _, t := range targets {
 		t.Condition = new(string(*condition))
 	}
+	if !plugins.IsValidCELExpression(*condition) {
+		return fmt.Errorf("MCP target condition is not a valid CEL expression: %s", *condition)
+	}
+	return nil
 }
 
 func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
@@ -323,7 +327,9 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				}
 
 				mcpTargets = append(mcpTargets, mcpTarget)
-				applyMCPTargetCondition(mcpTargets[start:], target.Condition)
+				if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+					errs = append(errs, err)
+				}
 				continue
 			}
 
@@ -377,7 +383,9 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 			}
 			mcpTargets = append(mcpTargets, targets...)
 		}
-		applyMCPTargetCondition(mcpTargets[start:], target.Condition)
+		if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	// defaults to stateful session routing
 	sessionRouting := api.MCPBackend_STATEFUL

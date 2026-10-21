@@ -839,7 +839,7 @@ async fn stateless_multiplex_never_prefix_tool_call_resolves_target() {
 }
 
 #[tokio::test]
-async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
+async fn multiplex_advertises_upstream_change_capabilities() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
 	let t = setup_proxy_test("{}")
@@ -854,14 +854,15 @@ async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
-	assert_eq!(caps.tools.as_ref().unwrap().list_changed, Some(true));
-	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, Some(true));
-	assert_eq!(caps.resources.as_ref().unwrap().list_changed, Some(true));
+	// The mock upstreams offer resource subscribe but no list_changed notifications.
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, None);
 	assert_eq!(caps.resources.as_ref().unwrap().subscribe, Some(true));
 }
 
 #[tokio::test]
-async fn stateless_multiplex_does_not_advertise_resource_subscribe() {
+async fn stateless_multiplex_does_not_advertise_change_notifications() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
 	let t = setup_proxy_test("{}")
@@ -876,7 +877,10 @@ async fn stateless_multiplex_does_not_advertise_resource_subscribe() {
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client(io).await;
 	let caps = &client.peer_info().unwrap().capabilities;
-	assert_ne!(caps.resources.as_ref().unwrap().subscribe, Some(true));
+	assert_eq!(caps.tools.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.prompts.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().list_changed, None);
+	assert_eq!(caps.resources.as_ref().unwrap().subscribe, None);
 }
 
 #[tokio::test]
@@ -1095,7 +1099,7 @@ async fn stale_session_key_returns_not_found() {
 	let client = reqwest::Client::new();
 	let old_encoder = http::sessionpersistence::Encoder::aes(OLD_KEY).unwrap();
 	let session_id = http::sessionpersistence::SessionState::MCP(
-		http::sessionpersistence::MCPSessionState::new(vec![]),
+		http::sessionpersistence::MCPSessionState::new(vec![], None),
 	)
 	.encode(&old_encoder)
 	.unwrap();
@@ -1127,15 +1131,17 @@ async fn delete_reports_success_when_upstream_delete_fails() {
 		.with_bind(simple_bind())
 		.with_route(basic_route(unreachable));
 	let io = t.serve_real_listener(BIND_KEY).await;
-	let session_id = http::sessionpersistence::SessionState::MCP(
-		http::sessionpersistence::MCPSessionState::new(vec![http::sessionpersistence::MCPSession {
-			target_name: Some("mcp".to_string()),
-			session: Some("upstream-session".to_string()),
-			backend: None,
-		}]),
-	)
-	.encode(&http::sessionpersistence::Encoder::base64())
-	.unwrap();
+	let session_id =
+		http::sessionpersistence::SessionState::MCP(http::sessionpersistence::MCPSessionState::new(
+			vec![http::sessionpersistence::MCPSession {
+				target_name: Some("mcp".to_string()),
+				session: Some("upstream-session".to_string()),
+				backend: None,
+			}],
+			None,
+		))
+		.encode(&http::sessionpersistence::Encoder::base64())
+		.unwrap();
 
 	let delete = reqwest::Client::new()
 		.delete(format!("http://{io}/mcp"))
@@ -3368,6 +3374,152 @@ async fn stateful_session_cannot_cross_mcp_backends() {
 	assert_eq!(cross_backend.status(), reqwest::StatusCode::NOT_FOUND);
 	assert_eq!(sensitive.init_count().await, 1);
 	assert_eq!(public.init_count().await, 0);
+}
+
+#[tokio::test]
+async fn stateful_session_reuse_applies_route_guardrails() {
+	use protos::ext_mcp::authorization_error::Code;
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_response, reject_request};
+
+	// A session opened on an unguarded route must not skip the guardrails of
+	// another route to the same MCP backend.
+	let extmcp_mock = closure_mock(
+		|_| reject_request(Code::PermissionDenied, "denied by route b"),
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+	let mock = mock_streamable_http_server(true).await;
+	let backend = strng::format!("/{}", mock.addr);
+
+	let mut route_a = basic_named_route(backend.clone());
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(backend);
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+	route_b.backends[0].inline_policies = vec![guardrails_test_support::policy(extmcp_mock.address)];
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "echo", "arguments": {"hi": "world"}}
+	});
+	let reused = mcp_json_post(&client, &format!("http://{io}/b"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	let msg = read_response_message(reused).await;
+	assert_eq!(msg["result"]["isError"], true, "{msg}");
+	assert_eq!(msg["result"]["content"][0]["text"], "denied by route b");
+}
+
+#[tokio::test]
+async fn persisted_stateful_session_cannot_cross_mcp_backends() {
+	let a = mock_streamable_http_server(true).await;
+	let (b, b_requests) = mock_streamable_http_server_with_capture(true).await;
+	let make_gateway = || {
+		let mut route_a = basic_named_route(strng::format!("/{}", a.addr));
+		route_a.key = "route-a".into();
+		route_a.name.name = "route-a".into();
+		route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+		let mut route_b = basic_named_route(strng::format!("/{}", b.addr));
+		route_b.key = "route-b".into();
+		route_b.name.name = "route-b".into();
+		route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+		let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+		config.session_encoder = http::sessionpersistence::Encoder::aes(
+			"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+		)
+		.unwrap();
+		setup_proxy_test_with_config(config)
+			.with_mcp_backend(a.addr, true, false)
+			.with_mcp_backend(b.addr, true, false)
+			.with_bind(simple_bind())
+			.with_route(route_a)
+			.with_route(route_b)
+	};
+	let client = reqwest::Client::new();
+
+	let first = make_gateway();
+	let first_io = first.serve_real_listener(BIND_KEY).await;
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{first_io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	// A fresh gateway has no in-memory session, so it resumes from the token.
+	let restarted = make_gateway();
+	let restarted_io = restarted.serve_real_listener(BIND_KEY).await;
+	let list = serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}});
+	let crossed = mcp_json_post(&client, &format!("http://{restarted_io}/b"), &list)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid.clone())
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(crossed.status(), reqwest::StatusCode::NOT_FOUND);
+	assert!(b_requests.lock().unwrap().is_empty());
+
+	let own = mcp_json_post(&client, &format!("http://{restarted_io}/a"), &list)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(own.status(), reqwest::StatusCode::OK);
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error

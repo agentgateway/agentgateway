@@ -1495,7 +1495,8 @@ message BackendPolicySpec {
         AzureContentSafety azure_content_safety = 7;
       }
       // Which parts of the request this guard inspects. When empty, defaults to the
-      // system prompt and regular message text; tool inputs/outputs are opt-in.
+      // system prompt, regular message text, and tool outputs; tool inputs are opt-in.
+      // Webhook guards always inspect the system prompt and regular message text.
       repeated ContentScope scope = 8;
     }
 

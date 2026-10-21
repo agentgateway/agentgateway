@@ -66,6 +66,17 @@ test('log detail renders the normalized conversation', async ({ page }) => {
 	await expect(page.locator('.log-markdown strong')).toHaveText('pong');
 	await expect(page.locator('.log-markdown a, .log-markdown img')).toHaveCount(0);
 	await expect(page.locator('.log-msg.system .log-markdown')).toContainText('docs [image: probe]');
+	const systemMarkdown = page.locator('.log-msg.system .log-markdown');
+	await expect(systemMarkdown).toContainText('<img src="x" onerror=');
+	await expect(systemMarkdown).toContainText('raw-html-probe<script>');
+	await expect(systemMarkdown.locator('img, script, [onerror], [src]')).toHaveCount(0);
+	expect(await page.evaluate(() => '__logMarkdownProbe' in window)).toBe(false);
+	await expect(systemMarkdown).toHaveClass(/collapsed/);
+	const systemHeading = await systemMarkdown.locator('h1').elementHandle();
+	await page.locator('.log-msg.system .log-msg-toggle').click();
+	await expect(systemMarkdown).not.toHaveClass(/collapsed/);
+	await expect(systemMarkdown.locator('h1')).toHaveCount(1);
+	expect(await systemHeading?.evaluate(node => node.isConnected)).toBe(true);
 	await expect(page.locator('.log-tool-block.call')).toHaveCount(1);
 	await expect(page.locator('.log-tool-block.result')).toHaveCount(1);
 	await expect(page.locator('.log-tool-block.reasoning')).toHaveCount(2);
@@ -954,7 +965,7 @@ test('creates an OpenAPI MCP target', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Add server' }).first().click();
 	await page.getByLabel('Server name').fill('weather');
-	await page.getByRole('radio', { name: 'OpenAPI' }).click();
+	await page.getByRole('button', { name: 'OpenAPI' }).click();
 	for (const name of ['URL', 'Schema']) {
 		const formControls = await page.evaluate(text => {
 			const span = [...document.querySelectorAll('.field-label')].find(
@@ -1379,6 +1390,64 @@ test('shows a banner when the last configuration reload failed', async ({ page }
 		.filter({ hasText: 'Configuration reload failed' });
 	await expect(banner).toBeVisible();
 	await expect(banner).toContainText('still running the previous configuration');
+});
+
+test('LLM playground waits for the listener after applying CORS', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { policies: { cors?: unknown } }).policies.cors = {
+		allowOrigins: ['http://127.0.0.1:19100'],
+		allowHeaders: ['Content-Type'],
+		allowMethods: ['GET', 'POST']
+	};
+	const gateway = await mockGateway(page, config);
+	let listenerReady = false;
+	let probes = 0;
+	await page.route('**/v1/models', async route => {
+		probes++;
+		expect(route.request().method()).toBe('POST');
+		expect(route.request().headers().authorization).toBe('Bearer cors-probe');
+		if (!listenerReady) return route.abort('failed');
+		await route.fulfill({ status: 401, body: 'API key required' });
+	});
+	await page.goto('/llm/playground');
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: /resilient/ }).click();
+	await page.getByLabel('User message').fill('ping');
+	await page.getByRole('button', { name: 'Apply CORS', exact: true }).click();
+	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Apply CORS', exact: true })).toBeVisible();
+	await expect.poll(() => probes).toBeGreaterThan(1);
+	expect(gateway.chatRequests).toHaveLength(0);
+	listenerReady = true;
+	await expect(page.getByRole('button', { name: 'Apply CORS', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect.poll(() => gateway.chatRequests.length).toBe(1);
+});
+
+test('LLM playground can retry when the CORS listener stays unavailable', async ({ page }) => {
+	const config = populatedConfig();
+	(config.llm as { policies: { cors?: unknown } }).policies.cors = undefined;
+	await mockGateway(page, config);
+	let listenerReady = false;
+	await page.route('**/v1/models', async route => {
+		if (!listenerReady) return route.abort('failed');
+		await route.fulfill({ status: 200, body: '{}' });
+	});
+	await page.goto('/llm/playground');
+	await page.getByRole('combobox', { name: 'Model' }).click();
+	await page.getByRole('option', { name: /resilient/ }).click();
+	await page.getByLabel('User message').fill('ping');
+	const apply = page.getByRole('button', { name: 'Apply CORS', exact: true });
+	await apply.click();
+	await expect(
+		page.getByText('The CORS policy was saved, but the LLM listener is not reachable. Try again.')
+	).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+	listenerReady = true;
+	await apply.click();
+	await expect(apply).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
 
 test('LLM playground sends selected virtual model name', async ({ page }) => {

@@ -2,6 +2,8 @@ module github.com/agentgateway/agentgateway/tools
 
 go 1.27.0
 
+toolchain go1.27.3
+
 tool (
 	github.com/agentgateway/agentgateway/tools/cmd/oss_compliance
 	github.com/bufbuild/buf/cmd/buf

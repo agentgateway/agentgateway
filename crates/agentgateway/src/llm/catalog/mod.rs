@@ -221,26 +221,66 @@ impl ModelCatalog {
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
+		let convention = info.request.cache_convention;
 		let state = self.state.load();
 		let snapshot = &state.snapshot;
-		if let Some(provider_model) = &info.response.provider_model {
-			let projection = snapshot.project_with_missing_trace(
+		let primary = |resp: &LLMResponse| {
+			if let Some(provider_model) = &info.response.provider_model {
+				let projection = snapshot.project_with_missing_trace(
+					provider,
+					provider_model.as_str(),
+					resp,
+					convention,
+					false,
+				);
+				if projection.status != CostLookupStatus::Missing {
+					return projection;
+				}
+			}
+			snapshot.project(
 				provider,
-				provider_model.as_str(),
-				&info.response,
-				info.request.cache_convention,
-				false,
-			);
-			if projection.status != CostLookupStatus::Missing {
-				return projection;
+				info.request.request_model.as_str(),
+				resp,
+				convention,
+			)
+		};
+		if info.response.usage_lines.is_empty() {
+			return primary(&info.response);
+		}
+		// Price each pass at the model that ran it, falling back to the primary model when that
+		// model is unpriced. Rates and model info are reported from the first pass, which is
+		// always the primary model's.
+		let mut total: Option<CostProjection> = None;
+		for line in &info.response.usage_lines {
+			let resp = LLMResponse {
+				input_tokens: Some(line.input_tokens),
+				output_tokens: Some(line.output_tokens),
+				cached_input_tokens: line.cached_input_tokens,
+				cache_creation_input_tokens: line.cache_creation_input_tokens,
+				cache_creation_1h_input_tokens: line.cache_creation_1h_input_tokens,
+				service_tier: info.response.service_tier.clone(),
+				..Default::default()
+			};
+			let projection = line
+				.model
+				.as_deref()
+				.map(|model| snapshot.project_with_missing_trace(provider, model, &resp, convention, false))
+				.filter(|p| p.status == CostLookupStatus::Exact)
+				.unwrap_or_else(|| primary(&resp));
+			let Some(total) = total.as_mut() else {
+				total = Some(projection);
+				continue;
+			};
+			if total.status == CostLookupStatus::Exact {
+				total.status = projection.status;
+			}
+			match (&mut total.cost, projection.cost) {
+				(Some(cost), Some(line_cost)) => *cost += line_cost,
+				(cost @ None, line_cost) => *cost = line_cost,
+				(Some(_), None) => {},
 			}
 		}
-		snapshot.project(
-			provider,
-			info.request.request_model.as_str(),
-			&info.response,
-			info.request.cache_convention,
-		)
+		total.expect("usage_lines is non-empty")
 	}
 }
 
@@ -1212,19 +1252,21 @@ mod tests {
 
 	#[test]
 	fn anthropic_prices_1h_cache_writes_at_1h_rate() {
+		use agent_llm::conversion::{bedrock as br, messages};
 		use agent_llm::types::ResponseType;
+		use agent_llm::types::messages::Response;
+		use agent_llm::types::messages::typed::MessagesResponse;
+
 		let snap = CatalogSnapshot::parse(
 			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWrite1h":"10"}}}}}}"#,
 		)
 		.unwrap();
 		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
 		let bedrock = br#"{"output":{"message":{"role":"assistant","content":[{"text":"hi"}]}},"stopReason":"end_turn","metrics":{"latencyMs":1},"usage":{"inputTokens":100,"outputTokens":0,"totalTokens":1000100,"cacheReadInputTokens":0,"cacheWriteInputTokens":1000000,"cacheDetails":[{"inputTokens":400000,"ttl":"5m"},{"inputTokens":600000,"ttl":"1h"}]}}"#;
-		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
-		let typed: agent_llm::types::messages::typed::MessagesResponse =
-			serde_json::from_str(body).unwrap();
+		let passthrough: Response = serde_json::from_str(body).unwrap();
+		let typed: MessagesResponse = serde_json::from_str(body).unwrap();
 		let body = bytes::Bytes::from_static(body.as_bytes());
 		let bedrock = bytes::Bytes::from_static(bedrock);
-		use agent_llm::conversion::{bedrock as br, messages};
 		for resp in [
 			Box::new(passthrough) as Box<dyn ResponseType>,
 			Box::new(typed),
@@ -1452,6 +1494,29 @@ mod tests {
 			Some(2.0),
 			"request model should price when provider model is absent from catalog"
 		);
+	}
+
+	#[test]
+	fn project_prices_usage_lines_at_their_own_model() {
+		let catalog = model_catalog(
+			r#"{"providers":{"openai":{"models":{
+				"executor":{"rates":{"input":"1","output":"2"}},
+				"advisor":{"rates":{"input":"10","output":"20"}}
+			}}}}"#,
+		);
+		let line = |model: Option<&str>| agent_llm::UsageLine {
+			model: model.map(Into::into),
+			input_tokens: 1_000_000,
+			output_tokens: 1_000_000,
+			..Default::default()
+		};
+		let mut info = test_llm_info("executor", Some("executor"));
+		info.response.usage_lines = vec![line(None), line(Some("advisor")), line(Some("unknown"))];
+		let projection = catalog.project(&info);
+
+		assert_eq!(projection.status, CostLookupStatus::Exact);
+		// executor 3 + advisor 30 + unknown falls back to executor 3
+		assert_eq!(projection.cost.and_then(|c| c.total().to_f64()), Some(36.0));
 	}
 
 	#[test]

@@ -2673,8 +2673,10 @@ where
 #[serde(rename_all = "lowercase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub enum TracingProtocol {
+	/// Export over OTLP/gRPC.
 	#[default]
 	Grpc,
+	/// Export over OTLP/HTTP.
 	Http,
 }
 
@@ -3321,6 +3323,10 @@ impl TryFrom<&str> for Target {
 		if let Some(path) = hostport.strip_prefix("unix:") {
 			return Ok(Target::UnixSocket(PathBuf::from(path)));
 		}
+		// Handles bracketed IPv6 (e.g. [::1]:80), which a plain split on ':' cannot.
+		if let Ok(addr) = hostport.parse::<SocketAddr>() {
+			return Ok(Target::Address(addr));
+		}
 		let Some((host, port)) = hostport.split_once(":") else {
 			anyhow::bail!("invalid host:port: {hostport}");
 		};
@@ -3730,6 +3736,15 @@ InvalidKeyData
 		// Ensure hostname:port still works
 		let target = Target::try_from("example.com:443").unwrap();
 		assert!(matches!(target, Target::Hostname(h, 443) if h.as_str() == "example.com"));
+	}
+
+	#[test]
+	fn test_target_ipv6_roundtrip() {
+		let target = Target::try_from("[::1]:8080").unwrap();
+		assert!(matches!(target, Target::Address(addr) if addr.to_string() == "[::1]:8080"));
+		let json = serde_json::to_value(&target).unwrap();
+		let target: Target = serde_json::from_value(json).unwrap();
+		assert_eq!(target.to_string(), "[::1]:8080");
 	}
 
 	#[test]

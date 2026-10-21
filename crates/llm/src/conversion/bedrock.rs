@@ -1123,6 +1123,10 @@ pub mod from_completions {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req
+				.service_tier
+				.as_deref()
+				.and_then(helpers::service_tier_from_openai),
 		};
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages
@@ -1288,8 +1292,8 @@ pub mod from_completions {
 							&serde_json::Value::Null,
 						);
 						// Emit the start of a tool call
-						let d = completions::StreamResponseDelta {
-							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+						let d = completions::StreamResponseDelta::with_tool_calls(vec![
+							completions::ChatCompletionMessageToolCallChunk {
 								index: tool_index,
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
@@ -1297,16 +1301,9 @@ pub mod from_completions {
 									name: Some(name),
 									arguments: None,
 								}),
-							}]),
-							..Default::default()
-						};
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: d,
-							finish_reason: None,
-						};
+							},
+						]);
+						let choice = completions::ChatChoiceStream::with_delta(d);
 						mk(vec![choice], None)
 					} else {
 						// Text/reasoning starts don't need events in Universal format
@@ -1383,13 +1380,7 @@ pub mod from_completions {
 					});
 
 					if let Some(delta) = delta {
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta,
-							finish_reason: None,
-						};
+						let choice = completions::ChatChoiceStream::with_delta(delta);
 						mk(vec![choice], None)
 					} else {
 						None
@@ -1403,19 +1394,14 @@ pub mod from_completions {
 				},
 				bedrock::ConverseStreamOutput::MessageStart(start) => {
 					// Just send a blob with the role
-					let choice = completions::ChatChoiceStream {
-						rest: Default::default(),
-						index: 0,
-						logprobs: None,
-						delta: completions::StreamResponseDelta {
+					let choice =
+						completions::ChatChoiceStream::with_delta(completions::StreamResponseDelta {
 							role: Some(match start.role {
 								bedrock::Role::Assistant => completions::Role::Assistant,
 								bedrock::Role::User => completions::Role::User,
 							}),
 							..Default::default()
-						},
-						finish_reason: None,
-					};
+						});
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
@@ -1423,13 +1409,7 @@ pub mod from_completions {
 					finish_reason = crate::types::serialize_str(&translated_finish_reason);
 
 					// Just send a blob with the finish reason
-					let choice = completions::ChatChoiceStream {
-						rest: Default::default(),
-						index: 0,
-						logprobs: None,
-						delta: completions::StreamResponseDelta::default(),
-						finish_reason: Some(translated_finish_reason),
-					};
+					let choice = completions::ChatChoiceStream::with_finish_reason(translated_finish_reason);
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::Metadata(metadata) => {
@@ -1461,20 +1441,12 @@ pub mod from_completions {
 								total_tokens: usage.total_tokens as u32,
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
-								prompt_tokens_details: match (
-									usage.cache_read_input_tokens,
-									usage.cache_write_input_tokens,
-								) {
-									(None, None) => None,
-									(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-										cached_tokens: cached_tokens.map(|i| i as u64),
-										audio_tokens: None,
-										cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-										rest: Default::default(),
-									}),
-								},
+								prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+									usage.cache_read_input_tokens.map(|i| i as u64),
+									usage.cache_write_input_tokens.map(|i| i as u64),
+								),
 								// TODO: can we get reasoning tokens?
-								completion_tokens_details: None,
+								..Default::default()
 							}),
 						)
 					} else {
@@ -2063,6 +2035,7 @@ pub mod from_messages {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: None,
 		};
 		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		Ok((bedrock_request, tool_name_map))
@@ -2181,25 +2154,10 @@ pub mod from_messages {
 			match event {
 				bedrock::ConverseStreamOutput::MessageStart(_start) => {
 					let event = messages::MessagesStreamEvent::MessageStart {
-						message: messages::MessagesResponse {
-							id: helpers::generate_anthropic_message_id(),
-							r#type: "message".to_string(),
-							role: messages::Role::Assistant,
-							content: vec![],
-							model: model.to_string(),
-							stop_reason: None,
-							stop_sequence: None,
-							usage: messages::Usage {
-								cache_creation: None,
-								input_tokens: 0,
-								output_tokens: 0,
-								cache_creation_input_tokens: None,
-								cache_read_input_tokens: None,
-								service_tier: None,
-							},
-							input_audio_tokens: None,
-							output_audio_tokens: None,
-						},
+						message: messages::MessagesResponse::start(
+							helpers::generate_anthropic_message_id(),
+							model.to_string(),
+						),
 					};
 					let (event_name, event_data) = event.into_sse_tuple();
 					vec![(event_name, serde_json::to_value(event_data).unwrap())]
@@ -2230,11 +2188,7 @@ pub mod from_messages {
 								cache_control: None,
 							}
 						},
-						_ => messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: String::new(),
-							citations: None,
-							cache_control: None,
-						}),
+						_ => messages::ContentBlock::text(String::new()),
 					};
 
 					let event = messages::MessagesStreamEvent::ContentBlockStart {
@@ -2255,11 +2209,7 @@ pub mod from_messages {
 						if let Some(ref d) = delta.delta {
 							let content_block = match d {
 								bedrock::ContentBlockDelta::Text(_) => {
-									Some(messages::ContentBlock::Text(messages::ContentTextBlock {
-										text: String::new(),
-										citations: None,
-										cache_control: None,
-									}))
+									Some(messages::ContentBlock::text(String::new()))
 								},
 								bedrock::ContentBlockDelta::ReasoningContent(
 									bedrock::ReasoningContentBlockDelta::RedactedContent(_),
@@ -2477,6 +2427,7 @@ pub mod from_messages {
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_write_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
+			..Default::default()
 		}
 	}
 }
@@ -3218,6 +3169,16 @@ pub mod from_responses {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
+			service_tier: req.service_tier.as_ref().and_then(|tier| {
+				use responses::ServiceTierResponses as Tier;
+				let tier_type = match tier {
+					Tier::Priority => bedrock::ServiceTierType::Priority,
+					Tier::Default => bedrock::ServiceTierType::Default,
+					Tier::Flex => bedrock::ServiceTierType::Flex,
+					Tier::Auto | Tier::Scale | Tier::Fast | Tier::Ultrafast => return None,
+				};
+				Some(bedrock::ServiceTier { tier_type })
+			}),
 		};
 
 		// Apply user message and tool caching
@@ -4219,6 +4180,23 @@ mod helpers {
 		metadata
 	}
 
+	pub fn service_tier_from_openai(tier: &str) -> Option<bedrock::ServiceTier> {
+		let tier_type = match tier {
+			"priority" => bedrock::ServiceTierType::Priority,
+			"default" => bedrock::ServiceTierType::Default,
+			"flex" => bedrock::ServiceTierType::Flex,
+			"auto" => return None,
+			unsupported => {
+				tracing::warn!(
+					service_tier = unsupported,
+					"service tier is not supported by Bedrock; request is served at the default tier"
+				);
+				return None;
+			},
+		};
+		Some(bedrock::ServiceTier { tier_type })
+	}
+
 	pub fn extract_beta_headers(
 		headers: &http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
@@ -4385,21 +4363,13 @@ impl ConverseResponseAdapter {
 			reasoning_signature = None;
 		}
 
+		let tool_calls = (!tool_calls.is_empty()).then_some(tool_calls);
 		let message = completions::ResponseMessage {
-			role: completions::Role::Assistant,
 			content,
-			tool_calls: if tool_calls.is_empty() {
-				None
-			} else {
-				Some(tool_calls)
-			},
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
-			extra: None,
+			tool_calls,
 			reasoning_content,
 			reasoning_signature,
+			..completions::ResponseMessage::assistant()
 		};
 
 		let choice = completions::ChatChoice {
@@ -4421,22 +4391,13 @@ impl ConverseResponseAdapter {
 					prompt_tokens: input_tokens as u32,
 					completion_tokens: token_usage.output_tokens as u32,
 					total_tokens: token_usage.total_tokens as u32,
-					completion_tokens_details: None,
-
 					cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
-					prompt_tokens_details: match (
-						token_usage.cache_read_input_tokens,
-						token_usage.cache_write_input_tokens,
-					) {
-						(None, None) => None,
-						(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-							cached_tokens: cached_tokens.map(|i| i as u64),
-							audio_tokens: None,
-							cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-							rest: Default::default(),
-						}),
-					},
+					prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+						token_usage.cache_read_input_tokens.map(|i| i as u64),
+						token_usage.cache_write_input_tokens.map(|i| i as u64),
+					),
 					cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
+					..Default::default()
 				}
 			})
 			.unwrap_or_default();
@@ -4613,13 +4574,7 @@ impl ConverseResponseAdapter {
 			tool_name_map: Option<&BedrockToolNameMap>,
 		) -> Option<messagest::ContentBlock> {
 			match block {
-				bedrock::ContentBlock::Text(text) => {
-					Some(messagest::ContentBlock::Text(messagest::ContentTextBlock {
-						text: text.clone(),
-						citations: None,
-						cache_control: None,
-					}))
-				},
+				bedrock::ContentBlock::Text(text) => Some(messagest::ContentBlock::text(text.clone())),
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
 					// Extract text and signature from either format
 					let (thinking_text, signature) = match reasoning {
@@ -4678,28 +4633,18 @@ impl ConverseResponseAdapter {
 				output_tokens: u.output_tokens,
 				cache_creation_input_tokens: u.cache_write_input_tokens,
 				cache_read_input_tokens: u.cache_read_input_tokens,
-				service_tier: None,
+				..Default::default()
 			})
-			.unwrap_or(messagest::Usage {
-				cache_creation: None,
-				input_tokens: 0,
-				output_tokens: 0,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
-			});
+			.unwrap_or_default();
 
 		Ok(messagest::MessagesResponse {
-			id: helpers::generate_anthropic_message_id(),
-			r#type: "message".to_string(),
-			role: messagest::Role::Assistant,
 			content,
-			model: self.model.clone(),
 			stop_reason: Some(from_messages::translate_stop_reason(self.stop_reason)),
-			stop_sequence: None,
 			usage,
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..messagest::MessagesResponse::start(
+				helpers::generate_anthropic_message_id(),
+				self.model.clone(),
+			)
 		})
 	}
 }

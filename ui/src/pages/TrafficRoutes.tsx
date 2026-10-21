@@ -1423,6 +1423,10 @@ function RouteBackendRow(props: {
 							ariaLabel="Backend target type"
 							value={type}
 							options={backendKindOptions(props.kind)}
+							schema={props.help.node([
+								'$defs',
+								props.kind === 'http' ? 'LocalRouteBackend' : 'LocalTCPRouteBackend'
+							])}
 							onChange={value => props.onChange(makeBackend(props.kind, value, backend))}
 						/>
 					</FieldGroup>

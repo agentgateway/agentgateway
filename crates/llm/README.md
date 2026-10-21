@@ -1,6 +1,6 @@
 # LLM API Extensions
 
-Request fields and values agentgateway accepts beyond the official API specs, and what they do.
+Request and response fields and values agentgateway accepts beyond the official API specs, and what they do.
 
 ## OpenAI Chat Completions
 
@@ -57,6 +57,17 @@ assistant message to preserve thinking across turns. Ignored without a signature
 
 ```json
 {"role": "assistant", "content": "4", "reasoning_content": "2+2...", "reasoning_signature": "EqQB..."}
+```
+
+### Upstream reasoning responses
+
+When a Chat Completions response is converted to another format, reasoning becomes a `thinking` block (Anthropic
+Messages) or a `reasoning` item (OpenAI Responses). It is read from `reasoning_content` (llama.cpp, DeepSeek, LiteLLM)
+or `reasoning` (vLLM, OpenRouter), on both `message` and streaming `delta`. `reasoning_content` wins when both are
+present.
+
+```json
+{"role": "assistant", "content": "4", "reasoning": "2+2..."}
 ```
 
 ## OpenAI Responses

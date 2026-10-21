@@ -255,6 +255,8 @@ struct UiConfigResource {
 	created_at: Option<chrono::DateTime<Utc>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	updated_at: Option<chrono::DateTime<Utc>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	result: Option<crate::config_store::WriteResult>,
 }
 
 #[derive(Serialize)]
@@ -272,6 +274,7 @@ impl From<ConfigResource> for UiConfigResource {
 			revision: Some(resource.revision),
 			created_at: Some(resource.created_at),
 			updated_at: Some(resource.updated_at),
+			result: resource.result,
 		}
 	}
 }
@@ -285,6 +288,7 @@ impl From<PreparedResource> for UiConfigResource {
 			revision: None,
 			created_at: None,
 			updated_at: None,
+			result: None,
 		}
 	}
 }
@@ -442,6 +446,16 @@ impl IntoResponse for ErrorResponse {
 	}
 }
 
+/// Parses a resource kind from an API path. `session.key` is internal and never exposed.
+fn parse_api_kind(kind: &str) -> Result<ConfigResourceKind, ErrorResponse> {
+	match kind.parse::<ConfigResourceKind>() {
+		Ok(ConfigResourceKind::SessionKey) => Err(resource_api_error(
+			ConfigResourceError::InvalidRequest(format!("unsupported config resource kind: {kind}")),
+		)),
+		res => res.map_err(resource_api_error),
+	}
+}
+
 async fn get_config(State(app): State<App>) -> Result<Json<Value>, ErrorResponse> {
 	Ok(Json(read_file_config(&app).await?))
 }
@@ -527,9 +541,7 @@ async fn list_config_resources_by_kind(
 	State(app): State<App>,
 	Path(kind): Path<String>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	list_stored_config_resources(&app, Some(kind))
 		.await
 		.map(Json)
@@ -540,8 +552,14 @@ async fn list_stored_config_resources(
 	kind: Option<ConfigResourceKind>,
 ) -> Result<UiConfigResourcesResponse, ErrorResponse> {
 	if app.state.storage.mode != ConfigStoreMode::Hybrid {
+		let resources = if app.state.xds.local_config.is_some() {
+			let config = read_file_config(app).await?;
+			crate::config_store::file_config_resources(&config, kind)
+		} else {
+			Vec::new()
+		};
 		return Ok(UiConfigResourcesResponse {
-			resources: Vec::new(),
+			resources: resources.into_iter().map(UiConfigResource::from).collect(),
 		});
 	}
 	let resources = app
@@ -566,9 +584,7 @@ async fn upsert_config_resources_by_kind(
 	Json(request): Json<ConfigResourceUpsertRequest>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	upsert_config_resources(&app, &auth, kind, request, None)
 		.await
 		.map(Json)
@@ -647,9 +663,7 @@ async fn update_config_resource(
 	Json(mut resource): Json<crate::config_store::ConfigResourceUpsert>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	if app.state.storage.mode == ConfigStoreMode::Hybrid && kind.settings_fields().is_some() {
 		remove_file_owned_settings(kind, &read_file_config(&app).await?, &mut resource.value)?;
 	}
@@ -721,6 +735,7 @@ async fn update_file_config_resource(
 			id.to_string(),
 			value,
 			crate::config_store::file_api_key_created_at(&config, id),
+			crate::config_store::file_config_resource(&config, kind, id),
 		)
 		.map_err(resource_api_error)?,
 		ConfigResourceKind::LlmPolicy
@@ -760,8 +775,13 @@ fn prepare_stored_update(
 			})?;
 			let created_at = crate::config_store::api_key_created_at(&existing.value)
 				.or_else(|| Some(existing.created_at.timestamp()));
-			crate::config_store::prepare_api_key_update(id.to_string(), value, created_at)
-				.map_err(resource_api_error)
+			crate::config_store::prepare_api_key_update(
+				id.to_string(),
+				value,
+				created_at,
+				Some(&existing.value),
+			)
+			.map_err(resource_api_error)
 		},
 		ConfigResourceKind::LlmPolicy
 		| ConfigResourceKind::McpPolicy
@@ -805,9 +825,7 @@ async fn delete_config_resource(
 	Path((kind, id)): Path<(String, String)>,
 ) -> Result<Json<Value>, ErrorResponse> {
 	app.ensure_writable()?;
-	let kind = kind
-		.parse::<ConfigResourceKind>()
-		.map_err(resource_api_error)?;
+	let kind = parse_api_kind(&kind)?;
 	if app.state.storage.mode == ConfigStoreMode::File {
 		let mut config = read_file_config(&app).await?;
 		if !crate::config_store::delete_file_config_resource(&mut config, kind, &id)
@@ -1366,6 +1384,82 @@ mod tests {
 		assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
 		let body: Value = serde_json::from_slice(&body).unwrap();
 		assert_eq!(body, serde_json::json!({"result": 3, "error": null}));
+	}
+
+	#[tokio::test]
+	async fn session_keys_are_never_exposed() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::write(&path, "{}").unwrap();
+		let mut app = test_app(false);
+		let state = Arc::get_mut(&mut app.state).unwrap();
+		state.storage.mode = ConfigStoreMode::Hybrid;
+		state.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let store = crate::config_store::setup(&crate::telemetry::log_store::Config {
+			url: format!("sqlite://{}", dir.path().join("config.db").display()),
+			max_connections: None,
+		})
+		.await
+		.unwrap();
+		let db_key = store.session_key().await.unwrap();
+		app.config_resource_store = Some(store);
+		let router = router(
+			app.state.clone(),
+			app.model_catalog.clone(),
+			app.config_resource_store.clone(),
+			app.resource_manager.clone(),
+			&EMPTY_ASSETS_DIR,
+		);
+		for (method, uri, body, want) in [
+			("GET", "/api/config/resources", "", StatusCode::OK),
+			(
+				"GET",
+				"/api/config/resources/session.key",
+				"",
+				StatusCode::BAD_REQUEST,
+			),
+			(
+				"PUT",
+				"/api/config/resources/session.key/default",
+				r#"{"value":{"key":"x"}}"#,
+				StatusCode::BAD_REQUEST,
+			),
+			(
+				"DELETE",
+				"/api/config/resources/session.key/default",
+				"",
+				StatusCode::BAD_REQUEST,
+			),
+		] {
+			let response = router
+				.clone()
+				.oneshot(
+					axum::extract::Request::builder()
+						.method(method)
+						.uri(uri)
+						.header("content-type", "application/json")
+						.body(axum::body::Body::from(body))
+						.unwrap(),
+				)
+				.await
+				.unwrap();
+			let status = response.status();
+			let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+				.await
+				.unwrap();
+			let body = String::from_utf8_lossy(&body);
+			assert_eq!(status, want, "{method} {uri}: {body}");
+			assert!(!body.contains(&db_key), "{method} {uri}: {body}");
+		}
+		assert_eq!(
+			app
+				.config_resource_store
+				.unwrap()
+				.session_key()
+				.await
+				.unwrap(),
+			db_key
+		);
 	}
 
 	#[tokio::test]

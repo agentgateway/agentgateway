@@ -607,8 +607,7 @@ async fn apply_llm_request_policies(
 	llm_req: &LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
-	// Token limits are settled here, where the parsed request gives the token count and, for a
-	// keyed rule, the `llm` context its key may read.
+	// Token limits are settled here, where the parsed request gives the token count.
 	let mut local_rate_limit = Vec::new();
 	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
 	let limits = policies
@@ -617,24 +616,7 @@ async fn apply_llm_request_policies(
 		.map(|limits| limits.as_slice())
 		.unwrap_or_default();
 	if !limits.is_empty() {
-		// The context costs a clone of the request, so it is only built for a key that reads it.
-		let reads_llm = |lrl: &http::localratelimit::RateLimit| {
-			lrl.spec.limit_type == http::localratelimit::RateLimitType::Tokens
-				&& lrl.spec.key.as_ref().is_some_and(|key| key.needs_llm())
-		};
-		let llm_ctx = limits.iter().any(reads_llm).then(|| {
-			cel::LLMContext::from_llm_info(
-				llm::LLMInfo {
-					request: llm_req.clone(),
-					response: Default::default(),
-				},
-				None,
-			)
-		});
-		let mut exec = cel::Executor::new_request(req);
-		if let Some(llm_ctx) = llm_ctx.as_ref() {
-			exec.llm = cel::LLMView::Context(llm_ctx);
-		}
+		let exec = cel::Executor::new_request(req);
 		let admitted = limits.iter().try_for_each(|lrl| {
 			if let Some((status, charged)) = lrl.charge_tokens(llm_req.input_tokens, &exec)? {
 				local_status =
@@ -842,20 +824,34 @@ impl HTTPProxy {
 	) -> Result<Response, SnapshottedProxyResponse> {
 		log.tls_info = req.extensions().get::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::http);
+		if let Some(actor) = req.extensions().get::<ActorIdentity>() {
+			log.ate_actor_name = Some(actor.actor_name.clone());
+			log.ate_actor_uid = actor.actor_uid.clone();
+			log.ate_atespace = Some(actor.atespace.clone());
+		}
 		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
-			if let Some(actor) = req.extensions().get::<ActorIdentity>() {
-				log.ate_actor_name = Some(actor.actor_name.clone());
-				log.ate_actor_uid = actor.actor_uid.clone();
-				log.ate_atespace = Some(actor.atespace.clone());
-			}
+			normalize_uri(log.tls_info.as_ref(), &mut req)
+				.map_err(ProxyError::Processing)
+				.snapshot_on_err(log, &mut req)?;
 			log.bind_name = Some(self.bind_name.clone());
 			log.listener_name = self.selected_listener.as_ref().map(|l| l.name.clone());
 			log.host = http::get_host(&req).ok().map(str::to_owned);
 			log.scheme = Some(Scheme::HTTPS);
 			log.server_port = req.uri().port_u16();
 			log.method = Some(req.method().clone());
-			log.path = req.uri().path_and_query().map(ToString::to_string);
+			log.path = Some(
+				if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
+					"/".to_string()
+				} else {
+					req
+						.uri()
+						.path_and_query()
+						.map(ToString::to_string)
+						.unwrap_or_else(|| req.uri().path().to_string())
+				},
+			);
 			log.version = Some(req.version());
+			crate::http::substrate::reject_upgrade(&req).snapshot_on_err(log, &mut req)?;
 			return Err(ProxyError::SubstrateEgressDenied(
 				"actor egress policy denied TLS destination".to_owned(),
 			))
@@ -885,6 +881,10 @@ impl HTTPProxy {
 		} else {
 			None
 		};
+		let substrate_upgrade = req
+			.extensions()
+			.get::<ActorIdentity>()
+			.map(|_| crate::http::substrate::reject_upgrade(&req));
 		let mut req_upgrade = hop_by_hop_headers(&mut req);
 
 		let host = http::get_host(&req)
@@ -938,6 +938,9 @@ impl HTTPProxy {
 				self
 					.handle_frontend_policies(&frontend_policies, log, &mut req)
 					.await;
+				if let Some(result) = substrate_upgrade {
+					result.snapshot_on_err(log, &mut req)?;
+				}
 				if req.method() == ::http::Method::CONNECT {
 					let mode = frontend_policies
 						.connect
@@ -2216,7 +2219,12 @@ fn evaluate_dynamic_backend_target(
 	};
 	let target = Target::try_from(s.as_str())
 		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target {s:?}: {e}")))?;
-	Ok(target)
+	match target {
+		Target::Address(_) | Target::Hostname(_, _) => Ok(target),
+		Target::UnixSocket(_) => Err(ProxyError::ProcessingString(format!(
+			"dynamic backend target {s:?} must be a host:port"
+		))),
+	}
 }
 
 fn resolve_tunnel_backend_call(
@@ -2294,11 +2302,18 @@ async fn apply_inference_routing(
 	inference_result
 		.policy_response
 		.apply(response_policies.headers())?;
-	log.add(|l| l.inference_pool = inference_result.destination);
+	log.add(|l| l.inference_pool = inference_result.destination.clone());
 
+	let destination_passthrough = inference_result.destination.is_some()
+		&& matches!(
+			inference_result.destination_mode,
+			InferenceRoutingDestinationMode::Passthrough
+		);
 	// Explicit inference and stateful MCP destinations take precedence over stateless affinity.
 	// In practice inference and MCP pinning do not conflict because they target different backends.
-	let destination = inference_result.destination.or(policies.override_dest);
+	let destination = inference_result
+		.destination
+		.or(policies.override_dest.map(Target::Address));
 	let affinity_key = if destination.is_none() {
 		policies
 			.session_affinity
@@ -2309,11 +2324,7 @@ async fn apply_inference_routing(
 	};
 	let service_override = ServiceCallOverride {
 		destination,
-		destination_passthrough: inference_result.destination.is_some()
-			&& matches!(
-				inference_result.destination_mode,
-				InferenceRoutingDestinationMode::Passthrough
-			),
+		destination_passthrough,
 		inference_failed_open: inference_result.failed_open,
 		affinity_key,
 	};
@@ -3192,6 +3203,7 @@ async fn make_backend_call(
 				.as_ref()
 				.and_then(|h| h.max_connection_duration),
 		},
+		dynamic_backend: matches!(backend, Backend::Dynamic(_, _)),
 	};
 	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
@@ -3474,12 +3486,12 @@ pub fn build_service_call(
 	} else {
 		None
 	};
-	if let Some(destination) = service_override.destination
+	if let Some(destination) = &service_override.destination
 		&& service_override.destination_passthrough
 	{
 		return Ok(BackendCall {
 			static_target: false,
-			target: Target::Address(destination),
+			target: destination.clone(),
 			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
 			transport_override: None,
@@ -3491,6 +3503,17 @@ pub fn build_service_call(
 		});
 	}
 
+	// Validated mode matches against local service endpoints, which only IP destinations can satisfy.
+	let validated_dest = match &service_override.destination {
+		None => None,
+		Some(Target::Address(addr)) => Some(*addr),
+		Some(dest) => {
+			return Err(ProxyError::Processing(anyhow!(
+				"destination {dest} requires destinationMode 'passthrough'"
+			)));
+		},
+	};
+
 	let discovery = inputs.stores.read_discovery();
 	let workloads = &discovery.workloads;
 	let (ep, handle, wl) = svc
@@ -3499,7 +3522,7 @@ pub fn build_service_call(
 			workloads,
 			svc.as_ref(),
 			port,
-			service_override.destination,
+			validated_dest,
 			service_override.affinity_key,
 		)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -3508,7 +3531,7 @@ pub fn build_service_call(
 		ep.as_ref(),
 		svc.as_ref(),
 		port,
-		service_override.destination,
+		validated_dest,
 		service_override.inference_failed_open,
 	)
 	.ok_or(ProxyError::NoHealthyEndpoints)?;
@@ -3944,9 +3967,27 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
-		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
+		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies,
+		evaluate_dynamic_backend_target, hop_by_hop_headers, resolved_workload_target_hostname,
+		select_service_target_port, spiffe_backend_alpns,
 	};
+
+	#[test]
+	fn dynamic_backend_target_expression_rejects_unix_socket() {
+		let request = ::http::Request::builder()
+			.uri("http://example.com")
+			.body(http::Body::empty())
+			.unwrap();
+		let executor = crate::cel::Executor::new_request(&request);
+		let expression = crate::cel::Expression::new_strict("'unix:/run/admin.sock'").unwrap();
+
+		let error = evaluate_dynamic_backend_target(&executor, &expression).unwrap_err();
+
+		assert_eq!(
+			error.to_string(),
+			"processing failed: dynamic backend target \"unix:/run/admin.sock\" must be a host:port"
+		);
+	}
 
 	#[test]
 	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
@@ -4951,9 +4992,9 @@ pub struct WaypointTarget {
 	pub identities: Vec<Identity>,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ServiceCallOverride {
-	pub destination: Option<SocketAddr>,
+	pub destination: Option<Target>,
 	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
 	pub affinity_key: Option<u64>,

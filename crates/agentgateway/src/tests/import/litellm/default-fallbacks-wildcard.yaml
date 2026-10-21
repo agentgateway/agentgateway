@@ -1,0 +1,9 @@
+model_list:
+- model_name: "*"
+  litellm_params:
+    model: "openai/*"
+- model_name: fast
+  litellm_params:
+    model: openai/gpt-4o-mini
+router_settings:
+  default_fallbacks: [fast]

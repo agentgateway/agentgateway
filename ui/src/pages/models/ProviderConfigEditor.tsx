@@ -223,6 +223,10 @@ export function ProviderConfigEditor(props: {
 									{ value: 'mantleOnly', label: 'Mantle only (advanced)' },
 									{ value: 'runtimeOnly', label: 'Runtime only (advanced)' }
 								]}
+								schema={props.help.fieldNode<LlmParams>(
+									'LocalLLMParams',
+									'bedrockEndpointPreference'
+								)}
 							/>
 						</FieldGroup>
 					) : null}

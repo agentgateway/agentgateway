@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// biome-ignore lint/style/noRestrictedImports: node --test cannot resolve the @/ alias.
-import { mergeEdits } from './mergeEdits.ts';
+import { mergeEdits } from '#mergeEdits.ts';
 
 test('keeps fields the editor does not model', () => {
 	const original = { host: 'a', cache: { ttl: '10s' }, policies: { backendTLS: {} } };

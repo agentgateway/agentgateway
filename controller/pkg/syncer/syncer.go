@@ -607,7 +607,7 @@ func (s *Syncer) buildAgwResources(
 	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
-	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways, krtopts)
 
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
@@ -636,6 +636,15 @@ func (s *Syncer) buildAgwResources(
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
+	routeInputs.ParentRefs = translator.RouteParentRefsCollection(
+		routeInputs,
+		s.agwCollections.HTTPRoutes,
+		s.agwCollections.GRPCRoutes,
+		s.agwCollections.TCPRoutes,
+		s.agwCollections.TLSRoutes,
+		s.agwCollections.Models,
+		krtopts,
+	)
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
 	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}

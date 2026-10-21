@@ -3419,7 +3419,7 @@ fn external_auth_from_proto(
 		};
 	let cache_store = cache
 		.as_ref()
-		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
+		.map(|cache| crate::http::expiring_cache::ExpiringCache::new(cache.max_entries))
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	let policies = backend_policies_from_proto(&ea.inline_policies, diagnostics)?;
 	Ok(http::ext_authz::ExtAuthz {
@@ -4543,12 +4543,11 @@ mod tests {
 		.unwrap_err();
 		convert_content_scopes(&[42], llm::policy::default_content_scope).unwrap_err();
 
-		// TODO respect scopes in all guard types
 		let ai = Ai {
 			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
 				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
 					rejection: None,
-					kind: Some(Kind::OpenaiModeration(Default::default())),
+					kind: Some(Kind::Webhook(Default::default())),
 					scope: vec![ProtoScope::ToolInput as i32],
 				}],
 				..Default::default()
@@ -4556,7 +4555,7 @@ mod tests {
 			..Default::default()
 		};
 		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
-		assert!(err.to_string().contains("non-default scope"), "{err}");
+		assert!(err.to_string().contains("do not support scope"), "{err}");
 
 		// response guards: regex can opt in to tool calls, webhook cannot
 		let convert_response_guard = |kind, scope| {

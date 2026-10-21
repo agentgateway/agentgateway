@@ -411,6 +411,11 @@ pub struct StoredRequestLog {
 	pub input_tokens: Option<i64>,
 	pub output_tokens: Option<i64>,
 	pub total_tokens: Option<i64>,
+	pub cache_read_input_tokens: Option<i64>,
+	pub cache_creation_input_tokens: Option<i64>,
+	pub reasoning_tokens: Option<i64>,
+	pub time_to_first_token_ms: Option<f64>,
+	pub time_per_output_token_ms: Option<f64>,
 	pub cost: Option<f64>,
 	pub agentgateway_user: Option<String>,
 	pub agentgateway_group: Option<String>,
@@ -519,7 +524,52 @@ pub enum GroupByField {
 	ResponseModel,
 	HttpStatus,
 	Attributes,
+	/// Time to first token histogram; the group value is the bucket's lower bound in milliseconds.
+	/// Requests without a first token (non-streaming) group under null.
+	Ttft,
+	/// Output tokens per second histogram; the group value is the bucket's lower bound.
+	OutputTokensPerSecond,
 }
+
+pub(crate) const MIGRATIONS_TABLE: &str = "_agentgateway_request_log_migrations";
+
+pub(crate) const TTFT_BOUNDS_MS: &[i64] = &[
+	0, 100, 250, 500, 1000, 2000, 5000, 10_000, 30_000, 60_000, 120_000, 300_000,
+];
+pub(crate) const OUTPUT_TOKENS_PER_SECOND_BOUNDS: &[i64] = &[
+	0, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000, 25_000,
+];
+
+/// A `CASE` labelling each row with the lower bound of the bucket `value` falls in, or NULL when
+/// `value` is NULL.
+pub(crate) fn histogram_bucket_sql(value: &str, bounds: &[i64]) -> String {
+	let mut sql = format!("CASE WHEN {value} IS NULL THEN NULL");
+	for pair in bounds.windows(2) {
+		sql.push_str(&format!(" WHEN {value} < {} THEN '{}'", pair[1], pair[0]));
+	}
+	let last = bounds.last().copied().unwrap_or_default();
+	sql.push_str(&format!(" ELSE '{last}' END"));
+	sql
+}
+
+/// The `AnalyticsTotals` select list, valid in both SQLite and Postgres. Aliases must match the
+/// struct's field names.
+pub(crate) const ANALYTICS_TOTALS_SELECT: &str = "\
+	COUNT(*) AS requests, \
+	CAST(COALESCE(SUM(total_tokens), 0) AS BIGINT) AS total_tokens, \
+	CAST(COALESCE(SUM(cost), 0) AS DOUBLE PRECISION) AS cost, \
+	CAST(COALESCE(SUM(input_tokens), 0) AS BIGINT) AS input_tokens, \
+	CAST(COALESCE(SUM(output_tokens), 0) AS BIGINT) AS output_tokens, \
+	CAST(COALESCE(SUM(CASE WHEN http_status >= 400 OR error IS NOT NULL THEN 1 ELSE 0 END), 0) AS BIGINT) AS errors, \
+	CAST(COALESCE(SUM(duration_ms), 0) AS BIGINT) AS duration_ms, \
+	COUNT(time_to_first_token_ms) AS ttft_requests, \
+	CAST(COALESCE(SUM(time_to_first_token_ms), 0) AS DOUBLE PRECISION) AS ttft_ms, \
+	CAST(COALESCE(MAX(time_to_first_token_ms), 0) AS DOUBLE PRECISION) AS max_ttft_ms, \
+	CAST(COALESCE(SUM(CASE WHEN time_per_output_token_ms > 0 THEN output_tokens END), 0) AS BIGINT) AS generation_tokens, \
+	CAST(COALESCE(SUM(CASE WHEN time_per_output_token_ms > 0 THEN time_per_output_token_ms * output_tokens END), 0) AS DOUBLE PRECISION) AS generation_ms, \
+	CAST(COALESCE(SUM(cache_read_input_tokens), 0) AS BIGINT) AS cache_read_tokens, \
+	CAST(COALESCE(SUM(cache_creation_input_tokens), 0) AS BIGINT) AS cache_write_tokens, \
+	CAST(COALESCE(SUM(reasoning_tokens), 0) AS BIGINT) AS reasoning_tokens";
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -558,13 +608,79 @@ pub struct TailEvent {
 	pub cursor: String,
 }
 
+#[derive(Clone, Debug, Default, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct AnalyticsTotals {
+	pub requests: i64,
+	pub total_tokens: i64,
+	pub cost: f64,
+	pub input_tokens: i64,
+	pub output_tokens: i64,
+	/// Requests with an HTTP status >= 400 or a recorded error.
+	pub errors: i64,
+	/// Sum of request durations; divide by `requests` for the mean.
+	pub duration_ms: i64,
+	/// Requests with a recorded time to first token (streaming responses).
+	pub ttft_requests: i64,
+	/// Sum of time to first token; divide by `ttft_requests` for the mean.
+	pub ttft_ms: f64,
+	pub max_ttft_ms: f64,
+	/// Output tokens of requests with a recorded per-token time.
+	pub generation_tokens: i64,
+	/// Time spent generating those tokens; `generation_tokens` over this is the decode rate.
+	pub generation_ms: f64,
+	/// Input tokens served from the provider's prompt cache (included in `input_tokens`).
+	pub cache_read_tokens: i64,
+	/// Input tokens written to the provider's prompt cache (included in `input_tokens`).
+	pub cache_write_tokens: i64,
+	/// Reasoning tokens (included in `output_tokens`).
+	pub reasoning_tokens: i64,
+}
+
+impl AnalyticsTotals {
+	fn add(&mut self, other: &AnalyticsTotals) {
+		// Destructure so a new field fails to compile until it is merged here.
+		let AnalyticsTotals {
+			requests,
+			total_tokens,
+			cost,
+			input_tokens,
+			output_tokens,
+			errors,
+			duration_ms,
+			ttft_requests,
+			ttft_ms,
+			max_ttft_ms,
+			generation_tokens,
+			generation_ms,
+			cache_read_tokens,
+			cache_write_tokens,
+			reasoning_tokens,
+		} = other;
+		self.requests += requests;
+		self.total_tokens += total_tokens;
+		self.cost += cost;
+		self.input_tokens += input_tokens;
+		self.output_tokens += output_tokens;
+		self.errors += errors;
+		self.duration_ms += duration_ms;
+		self.ttft_requests += ttft_requests;
+		self.ttft_ms += ttft_ms;
+		self.max_ttft_ms = self.max_ttft_ms.max(*max_ttft_ms);
+		self.generation_tokens += generation_tokens;
+		self.generation_ms += generation_ms;
+		self.cache_read_tokens += cache_read_tokens;
+		self.cache_write_tokens += cache_write_tokens;
+		self.reasoning_tokens += reasoning_tokens;
+	}
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyticsGroup {
 	pub group: BTreeMap<String, Value>,
-	pub requests: i64,
-	pub total_tokens: i64,
-	pub cost: f64,
+	#[serde(flatten)]
+	pub totals: AnalyticsTotals,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -572,9 +688,24 @@ pub struct AnalyticsGroup {
 pub struct AnalyticsTimeBucket {
 	pub start: DateTime<Utc>,
 	pub group: BTreeMap<String, Value>,
-	pub requests: i64,
-	pub total_tokens: i64,
-	pub cost: f64,
+	#[serde(flatten)]
+	pub totals: AnalyticsTotals,
+}
+
+pub(crate) fn groups_from_buckets(buckets: &[AnalyticsTimeBucket]) -> Vec<AnalyticsGroup> {
+	let mut groups = BTreeMap::<String, AnalyticsGroup>::new();
+	for bucket in buckets {
+		let key = serde_json::to_string(&bucket.group).unwrap_or_default();
+		groups
+			.entry(key)
+			.or_insert_with(|| AnalyticsGroup {
+				group: bucket.group.clone(),
+				totals: AnalyticsTotals::default(),
+			})
+			.totals
+			.add(&bucket.totals);
+	}
+	groups.into_values().collect()
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -585,6 +585,55 @@ llm:
 }
 
 #[tokio::test]
+async fn llm_attached_rejection_is_stored_in_log_database() {
+	let _guard =
+		agentgateway::telemetry::log_store::setup(&agentgateway::telemetry::log_store::Config {
+			url: "sqlite::memory:".to_string(),
+			max_connections: Some(1),
+		})
+		.await
+		.unwrap();
+	let t = setup_local_llm_config(
+		r#"
+gateways:
+  default:
+    port: 0
+llm:
+  gateways: default
+  policies:
+    apiKey:
+      keys:
+      - key: sk-test
+      mode: strict
+  models:
+  - name: gpt-4o
+    provider: openAI
+"#,
+	)
+	.await;
+	// No API key: rejected before the LLM handler runs, on a listener not named "llm".
+	let response =
+		send_completions_with_model(t.serve_http(strng::literal!("bind/0")), "gpt-4o", &[]).await;
+	assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+	let _ = read_body_raw(response.into_body()).await;
+
+	let request: agentgateway::telemetry::log_store::SearchRequest =
+		serde_json::from_value(json!({"filters": {"httpStatus": [401]}})).unwrap();
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while agentgateway::telemetry::log_store::search(request.clone())
+			.await
+			.unwrap()
+			.logs
+			.is_empty()
+		{
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	})
+	.await
+	.expect("rejected request stored in log database");
+}
+
+#[tokio::test]
 async fn llm_catalog_discovery() {
 	let mut results = serde_json::Map::new();
 	for (name, setting) in [

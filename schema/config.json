@@ -423,7 +423,8 @@
             "poolIdleTimeout": "1m30s",
             "poolMaxSize": null,
             "h2KeepaliveInterval": "0s",
-            "h2KeepaliveTimeout": "5s"
+            "h2KeepaliveTimeout": "5s",
+            "allowDynamicLoopback": false
           }
         },
         "callouts": {
@@ -1067,7 +1068,7 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, sessions will not be encrypted.\nFor example, generated via `openssl rand -hex 32`.",
+          "description": "The AES-256-GCM session protection key to be used for session tokens.\nIf not set, a key is generated when the config file or database is writable.\nSet to `disabled` to leave sessions unencrypted.\nFor example, generated via `openssl rand -hex 32`.",
           "type": "string"
         }
       },
@@ -1356,6 +1357,11 @@
           "description": "Timeout waiting for a PING ACK before considering the connection dead and closing it.\nOnly applies when h2_keepalive_interval is set. Defaults to 5s.",
           "type": "string",
           "default": "5s"
+        },
+        "allowDynamicLoopback": {
+          "description": "Allow dynamic backends to connect to loopback and link-local addresses (such as cloud\nmetadata servers). Disabled by default, as this lets requests reach services local to the\ngateway.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false
@@ -3093,12 +3099,27 @@
       "unevaluatedProperties": false
     },
     "Phase": {
-      "type": "string",
-      "enum": [
-        "off",
-        "request",
-        "response",
-        "full"
+      "oneOf": [
+        {
+          "description": "Do not run this processor for matching methods.",
+          "type": "string",
+          "const": "off"
+        },
+        {
+          "description": "Run before forwarding the MCP request.",
+          "type": "string",
+          "const": "request"
+        },
+        {
+          "description": "Run after the MCP response is available.",
+          "type": "string",
+          "const": "response"
+        },
+        {
+          "description": "Run with request and response context.",
+          "type": "string",
+          "const": "full"
+        }
       ]
     },
     "SimpleLocalBackendPolicies": {
@@ -5024,10 +5045,17 @@
       ]
     },
     "FailureMode": {
-      "type": "string",
-      "enum": [
-        "failClosed",
-        "failOpen"
+      "oneOf": [
+        {
+          "description": "Reject the request when the processor is unavailable.",
+          "type": "string",
+          "const": "failClosed"
+        },
+        {
+          "description": "Allow the request when the processor is unavailable.",
+          "type": "string",
+          "const": "failOpen"
+        }
       ]
     },
     "HeaderFilter": {
@@ -5444,7 +5472,8 @@
           "minItems": 1,
           "default": [
             "systemPrompt",
-            "messages"
+            "messages",
+            "toolOutput"
           ]
         }
       },
@@ -6353,7 +6382,7 @@
           "default": "requests"
         },
         "key": {
-          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. The key\nis evaluated where the rule is checked, so a token limit can also read the parsed LLM\nrequest. Buckets are local to one proxy instance, which keeps a bounded number of them per\nrule and drops the least used ones.",
+          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets\nare local to one proxy instance, which keeps a bounded number of them per rule and drops the\nleast used ones.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -6409,7 +6438,7 @@
           "default": "requests"
         },
         "key": {
-          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. The key\nis evaluated where the rule is checked, so a token limit can also read the parsed LLM\nrequest. Buckets are local to one proxy instance, which keeps a bounded number of them per\nrule and drops the least used ones.",
+          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets\nare local to one proxy instance, which keeps a bounded number of them per rule and drops the\nleast used ones.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -6958,6 +6987,14 @@
           },
           "default": []
         },
+        "sessionTtl": {
+          "description": "Lifetime of the browser session cookie. Defaults to 7 days.\nThe effective expiry is capped at the ID token's `exp`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "login": {
           "description": "Optional explicit login endpoint and pre-login redirect. Omit for automatic OAuth login.",
           "anyOf": [
@@ -7004,10 +7041,17 @@
       ]
     },
     "TokenEndpointAuth": {
-      "type": "string",
-      "enum": [
-        "clientSecretBasic",
-        "clientSecretPost"
+      "oneOf": [
+        {
+          "description": "Send client credentials using HTTP Basic authentication.",
+          "type": "string",
+          "const": "clientSecretBasic"
+        },
+        {
+          "description": "Send client credentials in the token request body.",
+          "type": "string",
+          "const": "clientSecretPost"
+        }
       ]
     },
     "OidcLogin": {
@@ -8585,7 +8629,7 @@
       "type": "object",
       "properties": {
         "attempts": {
-          "description": "Total number of attempts, including the original request.",
+          "description": "Maximum number of retries after the original request.",
           "type": "integer",
           "format": "uint8",
           "minimum": 1,
@@ -9620,12 +9664,27 @@
       ]
     },
     "BedrockEndpointPreference": {
-      "type": "string",
-      "enum": [
-        "runtimePreferred",
-        "mantlePreferred",
-        "mantleOnly",
-        "runtimeOnly"
+      "oneOf": [
+        {
+          "description": "Use Runtime, except for models the catalog lists as available only on Mantle.",
+          "type": "string",
+          "const": "runtimePreferred"
+        },
+        {
+          "description": "Use Mantle, except for models the catalog lists as available only on Runtime.",
+          "type": "string",
+          "const": "mantlePreferred"
+        },
+        {
+          "description": "Always use Mantle for chat; unsupported models fail.",
+          "type": "string",
+          "const": "mantleOnly"
+        },
+        {
+          "description": "Always use Runtime for chat; unsupported models fail.",
+          "type": "string",
+          "const": "runtimeOnly"
+        }
       ]
     },
     "AzureProvider": {
@@ -10067,12 +10126,12 @@
       "description": "Controls how an endpoint-picker-selected destination is used.",
       "oneOf": [
         {
-          "description": "Require the selected destination to match agentgateway's local service endpoints.",
+          "description": "Require the selected destination to match agentgateway's local service endpoints.\nOnly IP destinations can be validated; a hostname destination is rejected.",
           "type": "string",
           "const": "validated"
         },
         {
-          "description": "Trust the selected destination directly without local endpoint validation.",
+          "description": "Trust the selected destination directly without local endpoint validation.\nThe destination may be an IP address or a DNS hostname.",
           "type": "string",
           "const": "passthrough"
         }
@@ -11231,10 +11290,17 @@
       "additionalProperties": false
     },
     "TracingProtocol": {
-      "type": "string",
-      "enum": [
-        "grpc",
-        "http"
+      "oneOf": [
+        {
+          "description": "Export over OTLP/gRPC.",
+          "type": "string",
+          "const": "grpc"
+        },
+        {
+          "description": "Export over OTLP/HTTP.",
+          "type": "string",
+          "const": "http"
+        }
       ]
     },
     "DatabaseLoggingConfig": {

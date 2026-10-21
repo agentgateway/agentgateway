@@ -525,6 +525,20 @@ pub struct Breakdown {
 	pub pages: Decimal,
 }
 
+impl std::ops::AddAssign for Breakdown {
+	fn add_assign(&mut self, other: Self) {
+		self.input += other.input;
+		self.cache_read += other.cache_read;
+		self.cache_write += other.cache_write;
+		self.cache_write_1h += other.cache_write_1h;
+		self.output += other.output;
+		self.reasoning += other.reasoning;
+		self.input_audio += other.input_audio;
+		self.output_audio += other.output_audio;
+		self.pages += other.pages;
+	}
+}
+
 impl Breakdown {
 	pub fn total(&self) -> Decimal {
 		self.input

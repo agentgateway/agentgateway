@@ -64,7 +64,31 @@
 	},
 	"overrides": [
 		{
-			"includes": ["src/**/*.{ts,tsx}"],
+			"includes": ["src/**/*.{ts,tsx}", "!src/**/*.test.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["./**", "../**"],
+										"message": "Use the configured @/ alias instead of relative imports."
+									},
+									{
+										"group": ["#*", "#*/**"],
+										"message": "Use the configured @/ alias. # imports are only for node --test files."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/**/*.test.ts"],
 			"linter": {
 				"rules": {
 					"style": {

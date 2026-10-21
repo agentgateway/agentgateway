@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, HeaderValue, Method};
 use anyhow::{Context, bail};
 use bytes::Bytes;
 use itertools::Itertools;
-use quick_cache::sync::Cache;
 use serde_json::Value as JsonValue;
 
 use crate::cel::{Expression, Value};
+use crate::http::expiring_cache::{ExpiringCache, Lookup};
 use crate::http::ext_authz::{CacheConfig, CacheKey, effective_cache_entries};
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::{HeaderOrPseudo, HeaderOrPseudoValue, Request, RequestOrResponse};
@@ -54,7 +54,7 @@ pub struct VirtualModelCallout {
 	pub cache: Option<CacheConfig>,
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub(crate) cache_store: Option<Arc<Cache<CacheKey, CachedCallout>>>,
+	pub(crate) cache_store: Option<ExpiringCache<CacheKey, Arc<JsonValue>>>,
 }
 
 #[apply(schema!)]
@@ -65,12 +65,6 @@ pub enum VirtualModelCalloutFailureMode {
 	FailClosed,
 	/// Route to this model, which is resolved against llm.models, without applying `transformation`.
 	Fallback(String),
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct CachedCallout {
-	expires_at: Instant,
-	response: Arc<JsonValue>,
 }
 
 #[derive(Debug)]
@@ -85,7 +79,7 @@ impl VirtualModelCallout {
 		self.cache_store = self
 			.cache
 			.as_ref()
-			.map(|cache| Arc::new(Cache::new(effective_cache_entries(cache.max_entries))));
+			.map(|cache| ExpiringCache::new(effective_cache_entries(cache.max_entries)));
 		self
 	}
 
@@ -129,14 +123,10 @@ impl VirtualModelCallout {
 	}
 
 	fn cached(&self, key: &CacheKey) -> Option<Arc<JsonValue>> {
-		let store = self.cache_store.as_ref()?;
-		let cached = store.get(key)?;
-		let now = Instant::now();
-		if cached.expires_at <= now {
-			store.remove_if(key, |cached| cached.expires_at <= now);
-			return None;
+		match self.cache_store.as_ref()?.lookup(key) {
+			Lookup::Hit(response) => Some(response),
+			Lookup::Refresh | Lookup::Expired | Lookup::Vacant => None,
 		}
-		Some(cached.response)
 	}
 
 	fn insert_cache(&self, key: CacheKey, req: &Request, response: &Arc<JsonValue>) {
@@ -145,20 +135,11 @@ impl VirtualModelCallout {
 		};
 		let mut exec = cel::Executor::new_request(req);
 		exec.callout = Some(response);
-		let Some(expires_at) = cache
-			.evaluate_ttl(&exec)
-			.and_then(|ttl| Instant::now().checked_add(ttl))
-		else {
+		let Some(ttl) = cache.evaluate_ttl(&exec) else {
 			tracing::debug!("skip caching callout response; invalid TTL");
 			return;
 		};
-		store.insert(
-			key,
-			CachedCallout {
-				expires_at,
-				response: response.clone(),
-			},
-		);
+		store.insert(key, response.clone(), ttl);
 	}
 
 	async fn call(&self, client: &PolicyClient, callout_req: Request) -> anyhow::Result<JsonValue> {

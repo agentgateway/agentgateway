@@ -279,6 +279,7 @@ mod tests {
 					},
 				)
 				.into(),
+				dynamic_backend: false,
 			})
 			.await
 			.unwrap();

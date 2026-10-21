@@ -19,6 +19,7 @@ pub mod basicauth;
 pub mod compression;
 pub mod csrf;
 pub mod envoy_proto_common;
+pub mod expiring_cache;
 pub mod ext_authz;
 pub mod ext_proc;
 pub(crate) mod oauth;

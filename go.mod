@@ -2,10 +2,13 @@ module github.com/agentgateway/agentgateway
 
 go 1.27.0
 
+toolchain go1.27.3
+
 replace github.com/agentgateway/agentgateway/api => ./api
 
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
+	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/agentgateway/agentgateway/api v0.0.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/cespare/xxhash/v2 v2.3.0
@@ -74,7 +77,6 @@ require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect

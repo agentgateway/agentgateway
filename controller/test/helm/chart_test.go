@@ -122,6 +122,41 @@ func TestImageTagVPrefix(t *testing.T) {
 	}
 }
 
+func TestUnsafeAdminBindAddress(t *testing.T) {
+	t.Parallel()
+	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name    string
+		setArgs []string
+		address string
+	}{
+		{name: "default"},
+		{
+			name:    "IPv4 wildcard",
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=0.0.0.0"},
+			address: "0.0.0.0",
+		},
+		{
+			name:    "IPv6 wildcard",
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=::"},
+			address: "::",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args := append([]string{"template", "test-release", chartPath}, tc.setArgs...)
+			output, err := helmCommand(t, args...).CombinedOutput()
+			require.NoError(t, err, "%s", output)
+			if tc.address == "" {
+				require.NotContains(t, string(output), "AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+			} else {
+				require.Contains(t, string(output), "- name: AGW_UNSAFE_ADMIN_BIND_ADDRESS\n              value: \""+tc.address+"\"")
+			}
+		})
+	}
+}
+
 // extractImageLines extracts lines containing "image:" from the output for debugging
 func extractImageLines(output string) string {
 	var lines []string
@@ -349,6 +384,22 @@ func TestHelmChartTemplate(t *testing.T) {
       ports:
         - containerPort: 80
           name: httpbin
+`,
+		},
+		{
+			name: "extra-init-containers",
+			filterKinds: []string{
+				"Deployment",
+			},
+			valuesYAML: `controller:
+  extraInitContainers:
+    - name: sleep
+      image: docker.io/curlimages/curl
+      command:
+        - /bin/sleep
+        - infinity
+      imagePullPolicy: IfNotPresent
+      restartPolicy: Always
 `,
 		},
 		{

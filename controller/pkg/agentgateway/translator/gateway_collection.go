@@ -402,10 +402,21 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 	}
 }
 
+// portProtocol is the state accumulated for one port from the listeners accepted on it so far.
 type portProtocol struct {
+	// hostnames are the keys already claimed on this port; a later listener claiming any of
+	// them conflicts. The key format depends on how the dataplane selects a listener:
+	//   - SNI ports (HTTPS/TLS): the bare listener hostname, e.g. "foo.example.com" or "*".
+	//     The listener is chosen from the TLS ClientHello, which carries no namespace, so two
+	//     listeners with the same hostname are indistinguishable regardless of allowedRoutes.
+	//   - Other ports: "<allowed route namespace>/<hostname>" entries from buildHostnameMatch,
+	//     e.g. "default/foo.example.com". The same hostname may be reused by listeners that
+	//     admit routes from different namespaces.
 	hostnames sets.String
-	protocol  gwv1.ProtocolType
-	internal  bool
+	// protocol is the protocol of the first listener accepted on this port.
+	protocol gwv1.ProtocolType
+	// internal is the bind mode of the first listener accepted on this port.
+	internal bool
 }
 
 type ListenerConflict string
@@ -416,36 +427,80 @@ const (
 	ListenerConflictBindMode = "bind-mode"
 )
 
+// usesSNI reports whether listeners of this protocol are selected by SNI. HTTPS and TLS
+// listeners both produce a TLS bind, where the dataplane picks the listener from the SNI and
+// then serves it as HTTP (HTTPS) or TCP (TLS), so the two may share a port.
+func usesSNI(p gwv1.ProtocolType) bool {
+	return p == gwv1.HTTPSProtocolType || p == gwv1.TLSProtocolType
+}
+
+// validateListenerConflicts marks each listener that cannot share its port with the listeners
+// before it. listeners must be sorted by Gateway API precedence: the first listener on a port
+// fixes the port's bind mode and protocol, and earlier listeners win hostname conflicts.
+// A conflicted listener claims nothing, so it never causes later listeners to conflict.
+//
+// For a listener on a port that already has accepted listeners, checks run in order:
+//  1. Bind mode differs (internal vs standard)             -> ListenerConflictBindMode
+//  2. Protocol differs, unless both are HTTPS/TLS           -> ListenerConflictProtocol
+//  3. Hostname already claimed (see portProtocol.hostnames) -> ListenerConflictHostname
 func validateListenerConflicts(listeners []*GatewayListener) {
-	// Precompute the final size to avoid incremental sizing
+	// Count how many hostname keys each port will hold so each set is allocated once at its
+	// final size: one bare hostname per SNI listener, one entry per allowed namespace otherwise.
+	// Ports mixing SNI and non-SNI listeners overestimate slightly, which is harmless.
 	hostnameCounts := make(map[gwv1.PortNumber]int)
 	for _, listener := range listeners {
-		hostnameCounts[listener.ParentInfo.Port] += len(listener.ParentInfo.Hostnames)
+		if usesSNI(listener.ParentInfo.Protocol) {
+			hostnameCounts[listener.ParentInfo.Port]++
+		} else {
+			hostnameCounts[listener.ParentInfo.Port] += len(listener.ParentInfo.Hostnames)
+		}
 	}
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for i, listener := range listeners {
+		pi := &listener.ParentInfo
+		sni := usesSNI(pi.Protocol)
+		// The hostname key used on SNI ports. A listener without a hostname matches any SNI,
+		// so it claims "*".
+		sniHostname := pi.OriginalHostname
+		if sniHostname == "" {
+			sniHostname = "*"
+		}
 		var conflict ListenerConflict
-		if p, ok := portMap[listener.ParentInfo.Port]; ok {
-			if p.internal != listener.ParentInfo.Internal {
+		if p, ok := portMap[pi.Port]; ok {
+			// The port already has an accepted listener; check this one against it.
+			if p.internal != pi.Internal {
 				// Listeners are ordered by Gateway API precedence before validation.
 				// Preserve the winning bind mode and reject only the later listener.
 				conflict = ListenerConflictBindMode
-			} else if p.protocol == listener.ParentInfo.Protocol {
-				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
+			} else if p.protocol != pi.Protocol && !(sni && usesSNI(p.protocol)) {
+				// Different protocols cannot share a bind, except HTTPS with TLS.
+				conflict = ListenerConflictProtocol
+			} else if sni {
+				// HTTPS/TLS: hostnames must be unique across the port, regardless of namespace.
+				if p.hostnames.Contains(sniHostname) {
 					conflict = ListenerConflictHostname
 				} else {
-					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
+					p.hostnames.Insert(sniHostname)
 				}
+			} else if slices.ContainsFunc(pi.Hostnames, p.hostnames.Contains) {
+				// Other protocols: conflict only if a namespace/hostname pair is already claimed.
+				conflict = ListenerConflictHostname
 			} else {
-				conflict = ListenerConflictProtocol
+				p.hostnames.InsertAll(pi.Hostnames...)
 			}
 		} else {
-			hostnames := sets.NewWithLength[string](hostnameCounts[listener.ParentInfo.Port])
-			hostnames.InsertAll(listener.ParentInfo.Hostnames...)
-			portMap[listener.ParentInfo.Port] = &portProtocol{
+			// The first listener on a port is always accepted and fixes the port's protocol
+			// and bind mode for every later listener.
+			hostnames := sets.NewWithLength[string](hostnameCounts[pi.Port])
+			if sni {
+				hostnames.Insert(sniHostname)
+			} else {
+				hostnames.InsertAll(pi.Hostnames...)
+			}
+			portMap[pi.Port] = &portProtocol{
 				hostnames: hostnames,
-				protocol:  listener.ParentInfo.Protocol,
-				internal:  listener.ParentInfo.Internal,
+				protocol:  pi.Protocol,
+				internal:  pi.Internal,
 			}
 		}
 		if conflict != listener.Conflict {
@@ -614,14 +669,31 @@ type ParentResolver = plugins.ParentResolver
 
 // RouteParents holds information about things Routes can reference as parents.
 type RouteParents struct {
-	Gateways     krt.Collection[*GatewayListener]
-	GatewayIndex krt.Index[utils.TypedNamespacedName, *GatewayListener]
+	Parents     krt.Collection[*RouteParent]
+	ParentIndex krt.Index[utils.TypedNamespacedName, *RouteParent]
+}
+
+// RouteParent is the subset of a GatewayListener that routes depend on. Routes fetch this rather
+// than the GatewayListener, so listener changes routes do not read (such as TLS certificates) do
+// not recompute every attached route.
+type RouteParent struct {
+	Name         string
+	ParentObject utils.TypedNamespacedName
+	ParentInfo
+}
+
+func (p *RouteParent) ResourceName() string {
+	return p.Name
+}
+
+func (p *RouteParent) Equals(other *RouteParent) bool {
+	return p.Name == other.Name && p.ParentObject == other.ParentObject && p.ParentInfo.Equals(other.ParentInfo)
 }
 
 // Fetch returns the parents for a given parent key.
 func (p RouteParents) ParentsFor(ctx krt.HandlerContext, pk utils.TypedNamespacedName) []*ParentInfo {
-	return slices.Map(krt.Fetch(ctx, p.Gateways, krt.FilterIndex(p.GatewayIndex, pk)), func(gw *GatewayListener) *ParentInfo {
-		return &gw.ParentInfo
+	return slices.Map(krt.Fetch(ctx, p.Parents, krt.FilterIndex(p.ParentIndex, pk)), func(rp *RouteParent) *ParentInfo {
+		return &rp.ParentInfo
 	})
 }
 
@@ -643,13 +715,17 @@ func (c *CompositeParentResolver) ParentsFor(ctx krt.HandlerContext, pk utils.Ty
 // BuildRouteParents builds a RouteParents from a collection of gateways.
 func BuildRouteParents(
 	gateways krt.Collection[*GatewayListener],
+	krtopts krtutil.KrtOptions,
 ) RouteParents {
-	idx := krt.NewIndex(gateways, "Parent", func(o *GatewayListener) []utils.TypedNamespacedName {
+	parents := krt.MapCollection(gateways, func(gw *GatewayListener) *RouteParent {
+		return &RouteParent{Name: gw.Name, ParentObject: gw.ParentObject, ParentInfo: gw.ParentInfo}
+	}, append(krtopts.ToOptions("translator/RouteParents"), krt.WithMapDiscardEqual())...)
+	idx := krt.NewIndex(parents, "Parent", func(o *RouteParent) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.ParentObject}
 	})
 	return RouteParents{
-		Gateways:     gateways,
-		GatewayIndex: idx,
+		Parents:     parents,
+		ParentIndex: idx,
 	}
 }
 

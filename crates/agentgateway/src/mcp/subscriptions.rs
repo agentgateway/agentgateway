@@ -3,7 +3,7 @@ use agent_core::strng::Strng;
 use futures_util::StreamExt;
 use futures_util::stream::FuturesUnordered;
 use rmcp::model::{
-	GetMeta, RequestId, ServerJsonRpcMessage, ServerNotification, SubscriptionFilter,
+	ErrorCode, GetMeta, RequestId, ServerJsonRpcMessage, ServerNotification, SubscriptionFilter,
 	SubscriptionsAcknowledgedNotification, SubscriptionsAcknowledgedNotificationParams,
 };
 use tracing::warn;
@@ -123,16 +123,22 @@ pub(super) async fn prepare_listen_streams(
 				Some(Ok(ServerJsonRpcMessage::Notification(notification))) => {
 					match notification.notification {
 						ServerNotification::SubscriptionsAcknowledgedNotification(ack) => {
-							Ok(PreparedListenStream {
+							Ok(Some(PreparedListenStream {
 								target,
 								stream,
 								accepted_filter: intersect_filters(&sent_filter, &ack.params.notifications),
-							})
+							}))
 						},
 						_ => Err(ListenSetupFailure::Client(ClientError::new(
 							anyhow::anyhow!("upstream {target} sent a non-ack first listen frame"),
 						))),
 					}
+				},
+				// An upstream without listen support grants nothing; drop it rather than fail the listen.
+				Some(Ok(ServerJsonRpcMessage::Error(error)))
+					if error.error.code == ErrorCode::METHOD_NOT_FOUND =>
+				{
+					Ok(None)
 				},
 				Some(Ok(ServerJsonRpcMessage::Error(error))) => Err(ListenSetupFailure::Upstream(
 					Box::new(ServerJsonRpcMessage::Error(error)),
@@ -153,7 +159,8 @@ pub(super) async fn prepare_listen_streams(
 	let mut failures = Vec::new();
 	while let Some((index, target, result)) = pending.next().await {
 		match result {
-			Ok(stream) => prepared.push(stream),
+			Ok(Some(stream)) => prepared.push(stream),
+			Ok(None) => {},
 			Err(error) if failure_mode == FailureMode::FailClosed => return Err(error),
 			Err(error) => {
 				warn!(target = %target, ?error, "upstream failed during listen setup, skipping");
@@ -161,13 +168,13 @@ pub(super) async fn prepare_listen_streams(
 			},
 		}
 	}
-	if prepared.is_empty() {
+	if prepared.is_empty() && !failures.is_empty() {
 		failures.sort_by_key(|(index, _)| *index);
 		return Err(
 			failures
 				.into_iter()
 				.next()
-				.expect("at least one selected upstream must complete")
+				.expect("failures is non-empty")
 				.1,
 		);
 	}
@@ -590,6 +597,36 @@ mod tests {
 		.await
 		.unwrap();
 		assert_eq!(prepared.len(), 1);
+		assert_eq!(accepted, tools_filter());
+	}
+
+	#[tokio::test]
+	async fn prepare_listen_streams_skips_upstream_without_listen() {
+		let method_not_found: ServerJsonRpcMessage = serde_json::from_value(serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"error": {"code": -32601, "message": "Method not found", "data": "subscriptions/listen"}
+		}))
+		.unwrap();
+		let (prepared, accepted) = prepare_listen_streams(
+			vec![
+				(
+					"unsupported".into(),
+					Messages::from_results(vec![Ok(method_not_found)]),
+					tools_filter(),
+				),
+				(
+					"accepted".into(),
+					Messages::from_results(vec![Ok(listen_ack(tools_filter()))]),
+					tools_filter(),
+				),
+			],
+			FailureMode::FailClosed,
+		)
+		.await
+		.unwrap();
+		assert_eq!(prepared.len(), 1);
+		assert_eq!(prepared[0].target, "accepted");
 		assert_eq!(accepted, tools_filter());
 	}
 

@@ -89,12 +89,9 @@ export function AccessLogPolicyEditor(props: {
 						value={preset}
 						options={[
 							{ value: 'default', label: 'Default', description: 'Human-oriented fields.' },
-							{
-								value: 'otel',
-								label: 'OpenTelemetry',
-								description: 'OTel-aligned HTTP field names.'
-							}
+							{ value: 'otel', label: 'OpenTelemetry' }
 						]}
+						schema={props.help.fieldNode<LoggingPolicy>('LoggingPolicy', 'preset')}
 						onChange={setPreset}
 					/>
 				</FieldGroup>
@@ -160,6 +157,7 @@ export function AccessLogPolicyEditor(props: {
 									ariaLabel="OTLP protocol"
 									value={otlpProtocol}
 									options={otlpProtocolOptions}
+									schema={props.help.fieldNode<OtlpLoggingConfig>('OtlpLoggingConfig', 'protocol')}
 									onChange={setOtlpProtocol}
 								/>
 							</FieldGroup>
@@ -205,17 +203,10 @@ export function AccessLogPolicyEditor(props: {
 						value={llmMode}
 						options={[
 							{ value: 'default', label: 'Default' },
-							{
-								value: 'metadata',
-								label: 'Metadata',
-								description: 'Usage, timing, and cost without prompts or completions.'
-							},
-							{
-								value: 'full',
-								label: 'Full',
-								description: 'Also store prompt and completion content.'
-							}
+							{ value: 'metadata', label: 'Metadata' },
+							{ value: 'full', label: 'Full' }
 						]}
+						schema={props.help.fieldNode<LoggingPolicy>('LoggingPolicy', 'database.llm')}
 						onChange={setLlmMode}
 					/>
 				</FieldGroup>

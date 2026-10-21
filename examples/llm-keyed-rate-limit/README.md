@@ -31,10 +31,8 @@ localRateLimit:
   key: jwt.sub + "/" + llm.requestModel
 ```
 
-A `requests` rule is checked before the request body is read, so its key sees the request alone.
-A `tokens` rule is charged once the LLM request has been parsed, so its key can also read the
-requested model, and the bucket is settled with the real input and output token counts once the
-response is known.
+Keys of both `requests` and `tokens` rules can read the requested model. A `tokens` rule's bucket
+is settled with the real input and output token counts once the response is known.
 
 ### Running the example
 

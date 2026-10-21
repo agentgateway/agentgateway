@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Dropdown } from '@/components/Primitives';
 import { enumOptionDetails } from '@/policies/policyUtils';
 import type { SchemaNode } from '@/policies/types';
+import { resolveEnumSchema } from '@/schemaHelp';
 
 export type EnumSelectorOption<T extends string = string> = {
 	value: T;
@@ -57,7 +58,7 @@ function enumOptions<T extends string>(props: {
 	descriptions?: Partial<Record<T, ReactNode>>;
 	icons?: Partial<Record<T, ReactNode>>;
 }) {
-	const schema = props.schema as SchemaNode | undefined;
+	const schema = resolveEnumSchema(props.schema) as SchemaNode | undefined;
 	const schemaDetails = new Map(enumOptionDetails(schema).map(option => [option.value, option]));
 	const raw: Array<EnumSelectorOption<T>> =
 		props.options ??

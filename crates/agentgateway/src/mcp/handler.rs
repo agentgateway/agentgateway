@@ -331,6 +331,7 @@ pub struct Relay {
 	pub policies: McpAuthorizationSet,
 	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub(crate) policy_client: PolicyClient,
+	pub(crate) backend_id: Option<ResourceName>,
 }
 
 pub struct RelayInputs {
@@ -349,6 +350,7 @@ impl RelayInputs {
 		let r = Relay::new_for_request(self.backend, self.policies, self.client, ctx)?;
 		Ok(Relay {
 			mcp_guardrails: self.mcp_guardrails,
+			backend_id: Some(self.backend_id),
 			..r
 		})
 	}
@@ -371,14 +373,18 @@ impl Relay {
 			policies,
 			mcp_guardrails: None,
 			policy_client: client,
+			backend_id: None,
 		})
 	}
-	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
+	/// Rebind a reused session to the current route's policies; the session may have been
+	/// created on a different route to the same backend group.
+	pub fn with_inputs(&self, inputs: RelayInputs) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
-			policies,
-			mcp_guardrails: self.mcp_guardrails.clone(),
-			policy_client: self.policy_client.clone(),
+			policies: inputs.policies,
+			mcp_guardrails: inputs.mcp_guardrails,
+			policy_client: PolicyClient::new(inputs.client.inputs.clone()),
+			backend_id: Some(inputs.backend_id),
 		}
 	}
 
@@ -844,7 +850,10 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
-		let resource_subscribe = self.upstreams.stateful();
+		// Only pre-2026-07-28 clients send `initialize`. They receive change notifications
+		// (list_changed, resources/updated) on the session's GET stream, which only exists when the
+		// backend is stateful. Compare `merge_discover`, where `stateful` does not apply.
+		let stateful = self.upstreams.stateful();
 		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
@@ -852,10 +861,23 @@ impl Relay {
 				let Some((name, result)) = s.into_iter().next() else {
 					return Err(incompatible_upstream_result("initialize"));
 				};
-				let ServerResult::InitializeResult(ir) = result else {
+				let ServerResult::InitializeResult(mut ir) = result else {
 					return Err(incompatible_upstream_result("initialize"));
 				};
 				upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
+				if !stateful {
+					let caps = &mut ir.capabilities;
+					if let Some(c) = caps.tools.as_mut() {
+						c.list_changed = None;
+					}
+					if let Some(c) = caps.prompts.as_mut() {
+						c.list_changed = None;
+					}
+					if let Some(c) = caps.resources.as_mut() {
+						c.list_changed = None;
+						c.subscribe = None;
+					}
+				}
 				return Ok(ir.into());
 			}
 
@@ -863,12 +885,17 @@ impl Relay {
 			// that all servers support and merge instructions from all upstreams.
 			let mut lowest_version = pv;
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
+			let mut notifications = UpstreamNotifications::default();
 
 			for (server_name, v) in s {
 				let ServerResult::InitializeResult(r) = v else {
 					return Err(incompatible_upstream_result("initialize"));
 				};
 				upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
+				// Stateless: no GET stream to deliver notifications on, so advertise none.
+				if stateful {
+					notifications.add(&r.capabilities);
+				}
 				if r.protocol_version.to_string() < lowest_version.to_string() {
 					lowest_version = r.protocol_version;
 				}
@@ -882,7 +909,7 @@ impl Relay {
 			Ok(
 				Self::get_info(
 					lowest_version,
-					resource_subscribe,
+					notifications,
 					upstream_instructions,
 					upstreams.merged_extensions(&HashMap::new()),
 					upstreams.server_overrides(),
@@ -893,7 +920,6 @@ impl Relay {
 	}
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
-		let resource_subscribe = self.upstreams.stateful();
 		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			// Single server: forward the upstream's advertised versions untouched. The gateway
@@ -918,10 +944,15 @@ impl Relay {
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
 			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
+			let mut notifications = UpstreamNotifications::default();
 			for (server_name, v) in s {
 				let ServerResult::DiscoverResult(mut r) = v else {
 					return Err(incompatible_upstream_result("server/discover"));
 				};
+				// Only 2026-07-28+ clients send `server/discover`. They receive change notifications on
+				// a `subscriptions/listen` stream, which needs no session, so unlike `merge_initialize`
+				// this ignores the backend's `stateful` setting.
+				notifications.add(&r.capabilities);
 				if let Some(ext) = r.capabilities.extensions.take()
 					&& !ext.is_empty()
 				{
@@ -936,7 +967,7 @@ impl Relay {
 			}
 
 			let mut discover = Self::get_discovery(
-				resource_subscribe,
+				notifications,
 				upstream_instructions,
 				upstreams.merged_extensions(&upstream_extensions),
 				upstreams.server_overrides(),
@@ -1115,7 +1146,11 @@ impl Relay {
 	) -> Result<(Vec<(Strng, Messages)>, Option<Vec<String>>), UpstreamError> {
 		// A discovery rejection means "legacy protocol", not "upstream unavailable".
 		// Surface it even in FailOpen so probe clients can fall back to initialize.
-		let fail_on_discovery_rejection = matches!(&r.request, ClientRequest::DiscoverRequest(_));
+		// A listen rejection means the upstream offers no notifications; listen setup skips it.
+		let fail_on_method_rejection = matches!(
+			&r.request,
+			ClientRequest::DiscoverRequest(_) | ClientRequest::SubscriptionsListenRequest(_)
+		);
 		let selected_upstreams = self
 			.upstreams
 			.iter_named()
@@ -1183,7 +1218,7 @@ impl Relay {
 			match result {
 				Ok(s) => streams.push((name, s)),
 				Err(e) => {
-					let discovery_rejection = fail_on_discovery_rejection
+					let method_rejection = fail_on_method_rejection
 						&& match &e {
 							UpstreamError::InvalidMethod(_) => true,
 							UpstreamError::Http(ClientError::Status(response)) => matches!(
@@ -1192,7 +1227,7 @@ impl Relay {
 							),
 							_ => false,
 						};
-					if discovery_rejection {
+					if method_rejection {
 						streams.push((
 							name,
 							Messages::from(ServerJsonRpcMessage::error(
@@ -1727,7 +1762,7 @@ impl Relay {
 
 	fn get_info(
 		pv: ProtocolVersion,
-		resource_subscribe: bool,
+		notifications: UpstreamNotifications,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
 		server_overrides: Option<McpServerOverrides>,
@@ -1735,14 +1770,21 @@ impl Relay {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
 			// Resources are supported with multiplexing using service+<uri> prefixing.
+			// Change notifications come only from upstreams, so advertise those at least one offers.
 			let mut builder = ServerCapabilities::builder()
 				.enable_tools()
-				.enable_tool_list_changed()
 				.enable_prompts()
-				.enable_prompts_list_changed()
-				.enable_resources()
-				.enable_resources_list_changed();
-			if resource_subscribe {
+				.enable_resources();
+			if notifications.tools_list_changed {
+				builder = builder.enable_tool_list_changed();
+			}
+			if notifications.prompts_list_changed {
+				builder = builder.enable_prompts_list_changed();
+			}
+			if notifications.resources_list_changed {
+				builder = builder.enable_resources_list_changed();
+			}
+			if notifications.resources_subscribe {
 				builder = builder.enable_resources_subscribe();
 			}
 			let mut capabilities = builder.build();
@@ -1784,14 +1826,14 @@ impl Relay {
 	}
 
 	fn get_discovery(
-		resource_subscribe: bool,
+		notifications: UpstreamNotifications,
 		upstream_instructions: Vec<(String, String)>,
 		extensions: Option<ExtensionCapabilities>,
 		server_overrides: Option<McpServerOverrides>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
-			resource_subscribe,
+			notifications,
 			upstream_instructions,
 			extensions,
 			server_overrides,
@@ -1865,6 +1907,27 @@ pub(crate) fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
 		.extensions()
 		.get::<RequestProtocol>()
 		.is_some_and(RequestProtocol::is_modern)
+}
+
+/// Change notifications offered by at least one upstream.
+#[derive(Default)]
+struct UpstreamNotifications {
+	tools_list_changed: bool,
+	prompts_list_changed: bool,
+	resources_list_changed: bool,
+	resources_subscribe: bool,
+}
+
+impl UpstreamNotifications {
+	fn add(&mut self, caps: &ServerCapabilities) {
+		let tools = caps.tools.as_ref();
+		let prompts = caps.prompts.as_ref();
+		let resources = caps.resources.as_ref();
+		self.tools_list_changed |= tools.and_then(|c| c.list_changed) == Some(true);
+		self.prompts_list_changed |= prompts.and_then(|c| c.list_changed) == Some(true);
+		self.resources_list_changed |= resources.and_then(|c| c.list_changed) == Some(true);
+		self.resources_subscribe |= resources.and_then(|c| c.subscribe) == Some(true);
+	}
 }
 
 fn listen_filter_for_target(

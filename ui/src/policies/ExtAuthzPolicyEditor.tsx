@@ -141,18 +141,8 @@ export function ExtAuthzPolicyEditor(props: {
 						<EnumSelector
 							ariaLabel="Protocol"
 							value={protocolMode}
-							options={[
-								{
-									value: 'grpc',
-									label: 'gRPC',
-									description: 'Use Envoy external authorization over gRPC.'
-								},
-								{
-									value: 'http',
-									label: 'HTTP',
-									description: 'Call an HTTP authorization service.'
-								}
-							]}
+							schema={props.help.fieldNode<ExtAuthz>('ExtAuthz', 'protocol')}
+							labels={{ grpc: 'gRPC', http: 'HTTP' }}
 							onChange={setProtocolMode}
 						/>
 					</FieldGroup>
@@ -168,7 +158,7 @@ export function ExtAuthzPolicyEditor(props: {
 								{ value: 'allow', label: 'Allow' },
 								{ value: 'denyWithStatus', label: 'Deny with status' }
 							]}
-							schema={props.help.node(['$defs', 'FailureMode4'])}
+							schema={props.help.fieldNode<ExtAuthz>('ExtAuthz', 'failureMode')}
 							onChange={setFailureMode}
 						/>
 					</FieldGroup>

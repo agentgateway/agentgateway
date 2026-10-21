@@ -21,39 +21,15 @@ type ProcessorDraft = {
 };
 
 const phaseOptions = [
-	{
-		value: 'off',
-		label: 'Off',
-		description: 'Do not run this processor for matching methods.'
-	},
-	{
-		value: 'request',
-		label: 'Request',
-		description: 'Run before forwarding the MCP request.'
-	},
-	{
-		value: 'response',
-		label: 'Response',
-		description: 'Run after the MCP response is available.'
-	},
-	{
-		value: 'full',
-		label: 'Full',
-		description: 'Run with request and response context.'
-	}
+	{ value: 'off', label: 'Off' },
+	{ value: 'request', label: 'Request' },
+	{ value: 'response', label: 'Response' },
+	{ value: 'full', label: 'Full' }
 ];
 
 const failureOptions = [
-	{
-		value: 'failClosed',
-		label: 'Fail closed',
-		description: 'Reject when the processor is unavailable.'
-	},
-	{
-		value: 'failOpen',
-		label: 'Fail open',
-		description: 'Allow traffic when the processor is unavailable.'
-	}
+	{ value: 'failClosed', label: 'Fail closed' },
+	{ value: 'failOpen', label: 'Fail open' }
 ];
 
 export function McpGuardrailsPolicyEditor(props: {
@@ -196,6 +172,7 @@ export function McpGuardrailsPolicyEditor(props: {
 										ariaLabel={`Processor ${index + 1} failure mode`}
 										value={processor.failureMode}
 										options={failureOptions}
+										schema={props.help.fieldNode<Processor>('Processor', 'failureMode')}
 										onChange={value =>
 											updateProcessor(index, {
 												failureMode: value as FailureMode
@@ -288,6 +265,7 @@ function MethodPhaseEditor(props: {
 						ariaLabel="Phase"
 						value={phase}
 						options={phaseOptions}
+						schema={props.help.node(['$defs', 'Phase'])}
 						onChange={value => setPhase(value as Phase)}
 					/>
 					<button className="button" type="button" onClick={add}>

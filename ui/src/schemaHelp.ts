@@ -171,6 +171,15 @@ function findPropertyNode(
 	return undefined;
 }
 
+// Resolves $refs and unwraps Option<T> (anyOf [T, null]) so enum variants are directly readable.
+export function resolveEnumSchema(node: unknown): unknown {
+	const resolved = resolveSchemaNode(schema, node);
+	const variants = (resolved as { anyOf?: unknown } | undefined)?.anyOf;
+	if (!Array.isArray(variants)) return resolved;
+	const nonNull = variants.filter(variant => (variant as { type?: unknown })?.type !== 'null');
+	return nonNull.length === 1 ? resolveEnumSchema(nonNull[0]) : resolved;
+}
+
 function readPath(value: unknown, path: Array<string | number>) {
 	let current = value;
 	for (const segment of path) {

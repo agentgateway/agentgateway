@@ -49,10 +49,9 @@ pub struct RateLimitSpec {
 	pub limit_type: RateLimitType,
 	/// CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or
 	/// `jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits
-	/// above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key
-	/// is evaluated where the rule is checked, so a token limit can also read the parsed LLM
-	/// request. Buckets are local to one proxy instance, which keeps a bounded number of them per
-	/// rule and drops the least used ones.
+	/// above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets
+	/// are local to one proxy instance, which keeps a bounded number of them per rule and drops the
+	/// least used ones.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub key: Option<Arc<Expression>>,
 }
@@ -421,14 +420,32 @@ mod policy_tests {
 
 	#[test]
 	fn a_key_without_its_context_uses_the_shared_bucket() {
-		// A request limit is checked before the LLM request is parsed, so a key that reads it
-		// cannot be evaluated and the rule holds every request to one bucket.
+		// Without the requested model on the request, the key cannot be evaluated and the rule
+		// holds every request to one bucket.
 		let rl = keyed_requests_limit(1, "llm.requestModel");
 		let req = request("alice");
 		let exec = Executor::new_request(&req);
 		assert!(rl.check_request(&exec).unwrap().is_some());
 		assert!(rl.check_request(&exec).is_err());
 		assert_eq!(rl.keyed.len(), 0);
+	}
+
+	#[test]
+	fn request_limits_can_key_on_the_requested_model() {
+		let rl = keyed_requests_limit(1, "llm.requestModel");
+		let with_model = |model: &str| {
+			let mut req = request("alice");
+			req.extensions_mut().insert(crate::cel::RequestModel {
+				request_model: model.into(),
+			});
+			req
+		};
+		let qwen = with_model("qwen3");
+		assert!(rl.check_request(&Executor::new_request(&qwen)).is_ok());
+		assert!(rl.check_request(&Executor::new_request(&qwen)).is_err());
+		let llama = with_model("llama");
+		assert!(rl.check_request(&Executor::new_request(&llama)).is_ok());
+		assert_eq!(rl.keyed.len(), 2);
 	}
 
 	#[test]

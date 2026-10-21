@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-16T15:54:44Z"
+    "generatedAt": "2026-10-19T08:42:56Z"
   },
   "providers": {
     "anthropic": {
@@ -11969,6 +11969,74 @@
             ]
           }
         },
+        "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "0.3",
+            "output": "1.2"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "deepseek-ai/DeepSeek-V4.1-Flash-1017-Fast": {
+          "name": "DeepSeek V4.1 Flash 1017 Fast",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "0.6",
+            "output": "2.4"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "high",
+              "max"
+            ]
+          }
+        },
         "deepseek-ai/DeepSeek-V4.1-Flash-Fast": {
           "name": "DeepSeek V4.1 Flash Fast",
           "released": "2026-09-10",
@@ -15586,6 +15654,42 @@
             ]
           }
         },
+        "deepseek-ai/DeepSeek-V4.1-Flash-1017": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "released": "2026-10-17",
+          "rates": {
+            "input": "0.2",
+            "output": "0.6",
+            "cacheRead": "0.006"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 384000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
         "google/gemma-3-12b-it": {
           "name": "Gemma 3 12B IT",
           "released": "2025-03-12",
@@ -15944,7 +16048,7 @@
           "rates": {
             "input": "1",
             "output": "2.7",
-            "cacheRead": "0.05"
+            "cacheRead": "0.1"
           },
           "limits": {
             "context": 1048576,
@@ -16236,8 +16340,8 @@
     "deepseek": {
       "models": {
         "deepseek-flash": {
-          "name": "DeepSeek V4.1 Flash",
-          "released": "2026-09-10",
+          "name": "DeepSeek V4.1 Flash 1017",
+          "released": "2026-10-17",
           "rates": {
             "input": "0.15",
             "output": "0.6",
@@ -16315,6 +16419,52 @@
         "accounts/fireworks/models/deepseek-v4p1-flash": {
           "name": "DeepSeek V4.1 Flash",
           "released": "2026-09-10",
+          "rates": {
+            "input": "0.3",
+            "output": "1.2",
+            "cacheRead": "0.006"
+          },
+          "tiers": [
+            {
+              "serviceTier": "priority",
+              "rates": {
+                "input": "0.375",
+                "output": "1.5",
+                "cacheRead": "0.0075"
+              }
+            }
+          ],
+          "limits": {
+            "context": 1000000,
+            "output": 384000
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true,
+            "effort": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        "accounts/fireworks/models/deepseek-v4p1-flash-1017": {
+          "name": "DeepSeek V4.1 Flash 1017",
+          "released": "2026-10-17",
           "rates": {
             "input": "0.3",
             "output": "1.2",
@@ -26602,6 +26752,43 @@
             "temperature": true
           }
         },
+        "meta-models/Muse-Spark-Open-816B-A42B": {
+          "name": "Muse Spark Open",
+          "released": "2026-10-15",
+          "rates": {
+            "input": "1.25",
+            "output": "4.25",
+            "cacheRead": "0.15"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
         "moonshotai/Kimi-K3": {
           "name": "Kimi K3",
           "released": "2026-07-16",
@@ -26636,6 +26823,38 @@
               "high",
               "max"
             ]
+          }
+        },
+        "nvidia/NVIDIA-Nemotron-3.5-Super-VL": {
+          "name": "Nemotron 3.5 Super VL 120B A12B",
+          "released": "2026-10-15",
+          "rates": {
+            "input": "0.15",
+            "output": "0.5",
+            "cacheRead": "0.02"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 262144
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image",
+              "video"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "toggle": true
           }
         },
         "nvidia/nemotron-3-ultra-550b-a55b": {
@@ -26697,6 +26916,42 @@
               "low",
               "medium",
               "high"
+            ]
+          }
+        },
+        "reflection/Beam-1.0-501B-A23B": {
+          "name": "Beam 1.0 501B A23B",
+          "released": "2026-10-05",
+          "rates": {
+            "input": "0.4",
+            "output": "1.2",
+            "cacheRead": "0.04"
+          },
+          "limits": {
+            "context": 1048576,
+            "output": 131072
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "structuredOutput": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         },

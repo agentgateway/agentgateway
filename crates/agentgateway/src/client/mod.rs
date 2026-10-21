@@ -29,6 +29,7 @@ pub struct Client {
 	client: agent_pool::Client<Connector, PoolKey>,
 	connector: Connector,
 	callout_proxy: Option<Arc<callout::Proxy>>,
+	allow_dynamic_loopback: bool,
 }
 
 impl Debug for Client {
@@ -45,12 +46,16 @@ pub struct Call {
 	pub req: http::Request,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	/// The target came from a dynamic backend, so loopback destinations are rejected unless allowed.
+	pub dynamic_backend: bool,
 }
 
 pub struct TCPCall {
 	pub source: Socket,
 	pub target: Target,
 	pub connection: ConnectionConfig,
+	/// The target came from a dynamic backend, so loopback destinations are rejected unless allowed.
+	pub dynamic_backend: bool,
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
@@ -541,6 +546,19 @@ pub struct Config {
 	pub resolver_opts: ResolverOpts,
 }
 
+/// Rejects loopback and link-local destinations, checked after DNS resolution.
+fn check_not_loopback(dest: SocketAddr) -> Result<(), ProxyError> {
+	let ip = dest.ip().to_canonical();
+	let link_local = match ip {
+		std::net::IpAddr::V4(ip) => ip.is_link_local(),
+		std::net::IpAddr::V6(ip) => ip.is_unicast_link_local(),
+	};
+	if ip.is_loopback() || link_local || (ip.is_unspecified() && dest.port() != 0) {
+		return Err(ProxyError::DynamicBackendLoopback);
+	}
+	Ok(())
+}
+
 impl Client {
 	pub fn new(
 		cfg: &Config,
@@ -578,6 +596,7 @@ impl Client {
 			b.http2_keep_alive_while_idle(true);
 		}
 
+		let allow_dynamic_loopback = backend_config.allow_dynamic_loopback;
 		let connector = Connector {
 			resolver: Arc::new(resolver),
 			hbone_pool,
@@ -590,6 +609,7 @@ impl Client {
 			client,
 			connector,
 			callout_proxy: None,
+			allow_dynamic_loopback,
 		}
 	}
 
@@ -630,6 +650,7 @@ impl Client {
 					tcp,
 					max_connection_duration: None,
 				},
+				dynamic_backend: false,
 			})
 			.await
 	}
@@ -640,12 +661,16 @@ impl Client {
 			source,
 			target,
 			connection,
+			dynamic_backend,
 		} = call;
 
 		let dest = self
 			.connector
 			.resolve_target(connection.transport.skip_dns_resolution(), &target)
 			.await?;
+		if dynamic_backend && !self.allow_dynamic_loopback {
+			check_not_loopback(dest)?;
+		}
 
 		let transport_name = connection.transport.name();
 		let target_name = target.to_string();
@@ -712,17 +737,25 @@ impl Client {
 	) -> impl std::future::Future<Output = Result<http::Response, ProxyError>> + '_ {
 		let client = &self.client;
 		let connector = &self.connector;
+		let deny_loopback = call.dynamic_backend && !self.allow_dynamic_loopback;
 		let start = std::time::Instant::now();
 		let Call {
 			mut req,
 			target,
 			connection,
+			..
 		} = call;
 		async move {
 			let mut upstream_call = crate::telemetry::upstream::PendingCall::from_request(&req, &target);
 			let dest = connector
 				.resolve_target(connection.transport.skip_dns_resolution(), &target)
 				.await
+				.and_then(|dest| {
+					if deny_loopback {
+						check_not_loopback(dest)?;
+					}
+					Ok(dest)
+				})
 				.inspect_err(|error| {
 					if let Some(call) = upstream_call.as_mut() {
 						call.set_error(error.to_string());
