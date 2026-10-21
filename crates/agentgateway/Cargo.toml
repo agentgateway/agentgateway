@@ -20,7 +20,7 @@ mimalloc = ["pprof-alloc/allocator-mimalloc"]
 # Note the linked module version is not necessarily CMVP-validated; check the
 # certificate for the exact AWS-LC-FIPS version before making a compliance claim.
 # `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls back to
-# aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
+# aws-lc-rs for JWT, certificate issuance, and SQLx (no SymCrypt hook there).
 crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
 fips = ["aws-lc-rs?/fips", "rustls/fips", "tokio-rustls/fips"]
 crypto-symcrypt = ["dep:symcrypt", "dep:rustls-symcrypt", "dep:aws-lc-rs", "jsonwebtoken/aws_lc_rs"]
@@ -150,6 +150,7 @@ spiffe.workspace = true
 sse-stream.workspace = true
 subtle.workspace = true
 sqlx.workspace = true
+sqlx-core.workspace = true
 thiserror.workspace = true
 tokio-rustls.workspace = true
 tokio-stream.workspace = true

@@ -221,9 +221,10 @@ sqlx = { version = "0.9", default-features = false, features = [
     "postgres",
     "runtime-tokio",
     "sqlite",
-    "tls-rustls",
+    "tls-rustls-aws-lc-rs",
     "uuid",
 ] }
+sqlx-core = { version = "0.9", default-features = false, features = ["rustls-native-certs"] }
 stacker = "0.1"
 subtle = "2"
 tempfile = "3.27"
