@@ -28,7 +28,7 @@ use tracing::{Instrument, debug, error, event, info, info_span, warn};
 use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
-use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
+use crate::telemetry::metrics::{AdmissionLabels, HbonePassthroughLabels, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
@@ -1680,6 +1680,9 @@ impl Gateway {
 		// HBONE re-entry bypasses the listening socket, so it must not expose binds
 		// scoped to a concrete address (for example, a loopback-only listener).
 		let Some(bind) = pi.stores.read_binds().find_bind_by_port(socket_addr.port()) else {
+			if pi.cfg.hbone_passthrough.allows(socket_addr) {
+				return Self::serve_passthrough(pi, req, socket_addr.port()).await;
+			}
 			warn!("no bind for {hbone_addr}");
 			let Ok(_) = req
 				.send_response(build_response(StatusCode::NOT_FOUND))
@@ -1708,6 +1711,46 @@ impl Gateway {
 			drain,
 		)
 		.await
+	}
+
+	/// Forwards a CONNECT for one of the proxy's own non-listener ports to localhost, as ztunnel
+	/// does for a captured pod. The bytes are opaque: no routes, policies or access logs apply.
+	async fn serve_passthrough(pi: Arc<ProxyInputs>, req: H2Request, port: u16) {
+		let mut local = match Self::connect_localhost(pi.cfg.ipv6_enabled, port).await {
+			Ok(stream) => stream,
+			Err(e) => {
+				warn!(port, "hbone passthrough connect failed: {e}");
+				let _ = req.send_error(build_response(StatusCode::SERVICE_UNAVAILABLE));
+				return;
+			},
+		};
+		let Ok(resp) = req.send_response(build_response(StatusCode::OK)).await else {
+			warn!("failed to send response");
+			return;
+		};
+		pi.metrics
+			.hbone_passthrough_connections
+			.get_or_create(&HbonePassthroughLabels { port })
+			.inc();
+		let mut con = agent_hbone::RWStream {
+			stream: resp,
+			buf: Bytes::new(),
+			drain_tx: None,
+		};
+		if let Err(e) = tokio::io::copy_bidirectional(&mut con, &mut local).await {
+			debug!(port, "hbone passthrough closed: {e}");
+		}
+	}
+
+	async fn connect_localhost(ipv6_enabled: bool, port: u16) -> std::io::Result<TcpStream> {
+		let mut last = std::io::Error::other("no localhost address");
+		for addr in crate::Address::Localhost(ipv6_enabled, port) {
+			match TcpStream::connect(addr).await {
+				Ok(stream) => return Ok(stream),
+				Err(e) => last = e,
+			}
+		}
+		Err(last)
 	}
 }
 
