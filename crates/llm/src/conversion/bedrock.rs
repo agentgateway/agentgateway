@@ -991,7 +991,9 @@ pub mod from_completions {
 				})
 				.collect_vec()
 		});
-		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
+		let tool_config = tools
+			.filter(|tools| !tools.is_empty())
+			.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
 		let mut messages = Vec::new();
 		for msg in &req.messages {

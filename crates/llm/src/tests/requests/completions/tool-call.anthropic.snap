@@ -3,6 +3,7 @@ source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/completions/tool-call.json
 info:
   model: gpt-3.5-turbo
+  tools: []
   messages:
     - role: user
       content: How is the current weather in Columbus?
@@ -82,7 +83,8 @@ info:
       }
     ],
     "model": "gpt-3.5-turbo",
-    "max_tokens": 4096
+    "max_tokens": 4096,
+    "tools": []
   },
   "parsed": {
     "input_format": "Completions",
