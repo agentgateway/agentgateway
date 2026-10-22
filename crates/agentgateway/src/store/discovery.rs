@@ -632,11 +632,15 @@ impl StoreUpdater {
 	pub fn new(state: Arc<RwLock<Store>>) -> Self {
 		Self { state }
 	}
-	pub fn read(&self) -> std::sync::RwLockReadGuard<'_, Store> {
-		self.state.read().expect("mutex acquired")
+	#[track_caller]
+	pub fn read(&self) -> crate::store::ReadGuard<'_, Store> {
+		thread_local! {
+			static DISCOVERY_READ_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+		}
+		crate::store::ReadGuard::new(&self.state, &DISCOVERY_READ_DEPTH)
 	}
 	pub fn dump(&self) -> Dump {
-		let store = self.state.read().expect("mutex");
+		let store = self.read();
 		// Services all have hostname, so use that as the key
 		let services: Vec<_> = store
 			.services
@@ -759,10 +763,12 @@ pub struct PreviousState {
 	pub services: HashSet<NamespacedHostname>,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LocalWorkload {
 	#[serde(flatten)]
 	pub workload: Workload,
+	#[serde_as(as = "HashMap<_, HashMap<crate::types::discovery::PortKey, _>>")]
 	pub services: HashMap<String, HashMap<u16, u16>>,
 }

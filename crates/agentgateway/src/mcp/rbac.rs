@@ -58,7 +58,7 @@ impl McpAuthorizationSet {
 		let mut mcp = crate::mcp::MCPInfo::from(res);
 		mcp.method_name = Some(method_name.clone());
 		let mut exec = cel.0.executor();
-		exec.mcp = Some(&mcp);
+		exec.mcp = Some(crate::mcp::MCPView::new(&mcp));
 		self.0.validate(&exec)
 	}
 

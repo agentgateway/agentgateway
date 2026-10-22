@@ -28,7 +28,7 @@ pub(crate) mod client_auth;
 mod cross_app_access;
 mod transport;
 
-use cache::{InMemoryTokenCache, TokenCacheResult};
+use cache::InMemoryTokenCache;
 use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
@@ -867,25 +867,18 @@ async fn fetch_token(
 	auth: &OAuthTokenExchangeAuth,
 	req: ExchangeRequest,
 ) -> Result<SecretString, FetchError> {
-	let result = match auth.cache.as_ref() {
+	// TODO: export metrics
+	match auth.cache.as_ref() {
 		Some(cache) => {
 			cache
-				.get_or_insert_with(&req, || fetch_token_uncached(client, auth, &req))
-				.await?
+				.get_or_insert_with(&req, || {
+					trace!("token exchange cache miss");
+					fetch_token_uncached(client, auth, &req)
+				})
+				.await
 		},
-		None => {
-			let transport::TokenEndpointResponse { access_token, .. } =
-				fetch_token_uncached(client, auth, &req).await?;
-			TokenCacheResult::Miss(access_token)
-		},
-	};
-
-	// TODO: export metrics
-	match &result {
-		TokenCacheResult::Hit(_) => trace!("token exchange cache hit"),
-		TokenCacheResult::Miss(_) => trace!("token exchange succeeded"),
+		None => Ok(fetch_token_uncached(client, auth, &req).await?.access_token),
 	}
-	Ok(result.into_token())
 }
 
 async fn fetch_token_uncached(

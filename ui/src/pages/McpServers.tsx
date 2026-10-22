@@ -1,8 +1,9 @@
-import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Info, Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
+import { LostFieldsWarning, useMergedEdits } from '@/components/EditorContracts';
 import { EnumSelector } from '@/components/EnumSelector';
 import { GatewayBindingEditor, type GatewayBindingValue } from '@/components/GatewayBindingEditor';
 import { MiniMonacoEditor } from '@/components/MiniMonacoEditor';
@@ -27,7 +28,8 @@ import {
 } from '@/config';
 import { useStickyQueryParam } from '@/drawerRouteState';
 import { useDeleteConfigResource, useMcpConfigData, useUpsertConfigResource } from '@/hooks';
-import { PolicySection } from '@/policies/PolicyLayout';
+import { BackendPoliciesField } from '@/policies/PolicyFormControls';
+import { CollapsiblePolicySection, PolicySection } from '@/policies/PolicyLayout';
 import { parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type {
@@ -42,9 +44,10 @@ import type {
 
 const targetKinds: McpTargetKind[] = ['mcp', 'sse', 'stdio', 'openapi'];
 
-type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port'>> & {
+type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port' | 'dnsRebindingProtection'>> & {
 	gateways?: McpConfig['gateways'] | null;
 	port?: number | null;
+	dnsRebindingProtection?: boolean | null;
 };
 
 export function McpServersPage() {
@@ -345,12 +348,26 @@ function McpSettings(props: {
 	const [failureMode, setFailureMode] = useState<McpFailureMode>(
 		props.mcp?.failureMode ?? 'failClosed'
 	);
+	const [sseKeepAlive, setSseKeepAlive] = useState(props.mcp?.sseKeepAlive ?? '');
+	const [server, setServer] = useState({
+		name: props.mcp?.server?.name ?? '',
+		version: props.mcp?.server?.version ?? '',
+		title: props.mcp?.server?.title ?? '',
+		instructions: props.mcp?.server?.instructions ?? ''
+	});
+	const serverOverrides = Object.fromEntries(
+		Object.entries(server).filter(([, value]) => value.trim())
+	);
+	const serverReadOnly = props.readOnlyFields?.has('server');
 	const patch: McpSettingsPatch = {
 		gateways: binding.gateways ?? [],
 		port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port,
 		statefulMode,
 		prefixMode: prefixMode === 'none' ? null : prefixMode,
-		failureMode
+		failureMode,
+		sseKeepAlive: sseKeepAlive.trim() || null,
+		dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
+		server: Object.keys(serverOverrides).length > 0 ? serverOverrides : null
 	};
 	const originalResourceValue = Object.fromEntries(
 		Object.entries({
@@ -358,7 +375,10 @@ function McpSettings(props: {
 			port: props.mcp?.port,
 			statefulMode: props.mcp?.statefulMode,
 			prefixMode: props.mcp?.prefixMode,
-			failureMode: props.mcp?.failureMode
+			failureMode: props.mcp?.failureMode,
+			sseKeepAlive: props.mcp?.sseKeepAlive,
+			dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
+			server: props.mcp?.server
 		}).filter(([field, value]) => value != null && !props.readOnlyFields?.has(field))
 	);
 	const resourceValue = Object.fromEntries(
@@ -409,7 +429,7 @@ function McpSettings(props: {
 					/>
 				</div>
 			</PolicySection>
-			<PolicySection
+			<CollapsiblePolicySection
 				icon={<SlidersHorizontal size={17} />}
 				title="MCP behavior"
 				description="Choose session, tool-prefix, and failure behavior."
@@ -508,8 +528,80 @@ function McpSettings(props: {
 							onChange={setFailureMode}
 						/>
 					</FieldGroup>
+					<Field
+						label="SSE keep-alive"
+						tooltip={props.help.field<McpConfig>('LocalSimpleMcpConfig', 'sseKeepAlive')}
+					>
+						<input
+							value={sseKeepAlive}
+							disabled={props.readOnlyFields?.has('sseKeepAlive')}
+							onChange={event => setSseKeepAlive(event.target.value)}
+							placeholder="15s"
+						/>
+					</Field>
 				</div>
-			</PolicySection>
+			</CollapsiblePolicySection>
+			<CollapsiblePolicySection
+				icon={<Info size={17} />}
+				title="Server info"
+				description="Override the server info and instructions reported to clients when multiplexing targets."
+			>
+				<div className="form-grid">
+					<Field
+						label="Name"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'name'
+						)}
+					>
+						<input
+							value={server.name}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, name: event.target.value })}
+							placeholder="agentgateway"
+						/>
+					</Field>
+					<Field
+						label="Version"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'version'
+						)}
+					>
+						<input
+							value={server.version}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, version: event.target.value })}
+						/>
+					</Field>
+					<Field
+						label="Title"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'title'
+						)}
+					>
+						<input
+							value={server.title}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, title: event.target.value })}
+						/>
+					</Field>
+				</div>
+				<Field
+					label="Instructions"
+					tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+						'McpServerOverrides',
+						'instructions'
+					)}
+				>
+					<textarea
+						value={server.instructions}
+						disabled={serverReadOnly}
+						onChange={event => setServer({ ...server, instructions: event.target.value })}
+					/>
+				</Field>
+			</CollapsiblePolicySection>
 			<ConfigDiffSaveActions
 				config={props.config}
 				diffTitle="MCP settings config diff"
@@ -533,6 +625,30 @@ function McpSettings(props: {
 	);
 }
 
+type McpServerForm = ReturnType<typeof formFrom>;
+
+// The form state for a target: from the saved config, or from raw mode.
+function formFrom(target: McpTarget) {
+	const kind = targetKind(target);
+	const stdio = 'stdio' in target ? target.stdio : undefined;
+	const schema = 'openapi' in target ? target.openapi?.schema : undefined;
+	const schemaMode = schemaSourceMode(schema);
+	return {
+		// The target itself, for the fields the form does not edit.
+		source: target,
+		name: target.name ?? '',
+		kind,
+		url: networkUrl(networkTarget(target), kind),
+		cmd: stdio?.cmd ?? '',
+		args: (stdio?.args ?? []).join(' '),
+		envText: toYamlMappingText(stdio?.env),
+		clearEnv: Boolean(stdio?.clear_env),
+		schemaMode,
+		schemaValue: schemaSourceValue(schema, schemaMode),
+		policies: target.policies
+	};
+}
+
 function McpServerEditor(props: {
 	initial: McpTarget;
 	config?: GatewayConfig | null;
@@ -544,24 +660,10 @@ function McpServerEditor(props: {
 	onCancel: () => void;
 	onSave: (target: McpTarget, previousName?: string) => void;
 }) {
-	const [name, setName] = useState(props.initial.name);
-	const [kind, setKind] = useState<McpTargetKind>(() => targetKind(props.initial));
-	const network = networkTarget(props.initial);
-	const stdio = 'stdio' in props.initial ? props.initial.stdio : undefined;
-	const initialSchema = 'openapi' in props.initial ? props.initial.openapi.schema : undefined;
-	const [url, setUrl] = useState(() => networkUrl(network, kind));
-	const [cmd, setCmd] = useState(stdio?.cmd ?? '');
-	const [args, setArgs] = useState((stdio?.args ?? []).join(' '));
-	const [envText, setEnvText] = useState(toYamlMappingText(stdio?.env));
-	const [clearEnv, setClearEnv] = useState(Boolean(stdio?.clear_env));
-	const [schemaMode, setSchemaMode] = useState<SchemaSourceMode>(() =>
-		schemaSourceMode(initialSchema)
-	);
-	const [schemaValue, setSchemaValue] = useState(() =>
-		schemaSourceValue(initialSchema, schemaMode)
-	);
-	const [error, setError] = useState<string | null>(null);
-	const draft = JSON.stringify({
+	const [form, setForm] = useState(() => formFrom(props.initial));
+	const [initialForm] = useState(form);
+	const {
+		source,
 		name,
 		kind,
 		url,
@@ -570,15 +672,30 @@ function McpServerEditor(props: {
 		envText,
 		clearEnv,
 		schemaMode,
-		schemaValue
-	});
-	const [initialDraft] = useState(() => draft);
+		schemaValue,
+		policies
+	} = form;
+	const network = networkTarget(source);
+	const [error, setError] = useState<string | null>(null);
+	// A target naming a backend takes that backend's policies; editing the URL
+	// connects it directly instead.
+	const backendReference =
+		network && 'backend' in network && url.trim() === networkUrl(network, targetKind(source))
+			? String(network.backend)
+			: null;
+
+	const merged = useMergedEdits(
+		props.previousName ? props.initial : undefined,
+		safeTargetPreview(),
+		['$defs', 'LocalMcpTarget']
+	);
 
 	function targetPreview() {
 		const base = {
-			...props.initial,
+			...source,
 			name: name.trim(),
-			policies: props.initial.policies
+			// The gateway rejects target policies on stdio and backend references.
+			policies: kind === 'stdio' || backendReference ? undefined : policies
 		} as McpTarget;
 		delete (base as Record<string, unknown>).mcp;
 		delete (base as Record<string, unknown>).sse;
@@ -596,13 +713,28 @@ function McpServerEditor(props: {
 				}
 			};
 		}
-		const target = {
-			host: url.trim() || null
-		};
+		// The URL field folds host, port, and path into one value. Until it is
+		// edited, emit the original address so an edit replaces all of them.
+		const target =
+			network && url.trim() === networkUrl(network, targetKind(source))
+				? { ...network }
+				: { host: url.trim() || null };
 		if (kind === 'sse') return { ...base, sse: target };
 		if (kind === 'openapi')
 			return { ...base, openapi: { ...target, schema: schemaFromSource(schemaValue, schemaMode) } };
 		return { ...base, mcp: target };
+	}
+
+	function update(patch: Partial<McpServerForm>) {
+		setForm(current => ({ ...current, ...patch }));
+	}
+
+	function safeTargetPreview() {
+		try {
+			return targetPreview();
+		} catch {
+			return null;
+		}
 	}
 
 	function validTargetPreview() {
@@ -616,16 +748,25 @@ function McpServerEditor(props: {
 	}
 
 	function save() {
-		const target = validTargetPreview();
-		if (!target) return;
-		props.onSave(target, props.previousName);
+		if (!validTargetPreview()) return;
+		props.onSave(merged.value as McpTarget, props.previousName);
 	}
 
 	return (
 		<Drawer
 			title={props.previousName ? 'Edit MCP server' : 'Add MCP server'}
 			onClose={props.onCancel}
-			dirty={draft !== initialDraft}
+			error={props.saveError}
+			raw={{
+				schemaPath: ['$defs', 'LocalMcpTarget'],
+				value: () => merged.value ?? undefined,
+				onChange: value => {
+					setForm(formFrom(value as McpTarget));
+					merged.reset(value);
+				},
+				empty: makeEmptyMcpTarget()
+			}}
+			dirty={JSON.stringify(form) !== JSON.stringify(initialForm)}
 			saving={props.saving}
 			footer={requestClose => (
 				<ConfigDiffSaveActions
@@ -633,11 +774,6 @@ function McpServerEditor(props: {
 					diffTitle="MCP server config diff"
 					saveLabel="Save server"
 					saving={props.saving}
-					saveDisabled={
-						!name.trim() ||
-						(kind === 'stdio' && !cmd.trim()) ||
-						(kind === 'openapi' && !schemaValue.trim())
-					}
 					onCancel={requestClose}
 					onSave={save}
 					beforeDiff={() => Boolean(validTargetPreview())}
@@ -645,20 +781,19 @@ function McpServerEditor(props: {
 						props.databaseBacked
 							? () => ({
 									original: props.previousName ? props.initial : {},
-									modified: targetPreview()
+									modified: merged.value
 								})
 							: undefined
 					}
-					applyDiff={next => {
-						const target = targetPreview();
-						upsertMcpTarget(next, target, props.previousName);
-					}}
+					applyDiff={next => upsertMcpTarget(next, merged.value as McpTarget, props.previousName)}
 				/>
 			)}
 		>
+			<LostFieldsWarning lost={merged.lost} />
 			<div className="form-grid">
 				<Field
 					label="Server name"
+					path="name"
 					tooltip={props.help.field<McpTarget>(
 						'LocalMcpTarget',
 						'name',
@@ -667,7 +802,7 @@ function McpServerEditor(props: {
 				>
 					<input
 						value={name}
-						onChange={event => setName(event.target.value)}
+						onChange={event => update({ name: event.target.value })}
 						placeholder="weather"
 					/>
 				</Field>
@@ -681,11 +816,14 @@ function McpServerEditor(props: {
 						value,
 						label: transportLabel(value)
 					}))}
-					onChange={value => {
-						setKind(value);
-						if (!url.trim())
-							setUrl(value === 'sse' ? 'http://localhost:3001/sse' : 'http://localhost:3001/mcp');
-					}}
+					onChange={value =>
+						update({
+							kind: value,
+							url:
+								url.trim() ||
+								(value === 'sse' ? 'http://localhost:3001/sse' : 'http://localhost:3001/mcp')
+						})
+					}
 				/>
 			</FieldGroup>
 
@@ -693,13 +831,18 @@ function McpServerEditor(props: {
 				<>
 					<Field
 						label="Command"
+						path="stdio.cmd"
 						tooltip={props.help.field<McpTarget>(
 							'LocalMcpTarget1',
 							'stdio.cmd',
 							'Command to launch for command-line MCP servers.'
 						)}
 					>
-						<input value={cmd} onChange={event => setCmd(event.target.value)} placeholder="npx" />
+						<input
+							value={cmd}
+							onChange={event => update({ cmd: event.target.value })}
+							placeholder="npx"
+						/>
 					</Field>
 					<Field
 						label="Arguments"
@@ -711,7 +854,7 @@ function McpServerEditor(props: {
 					>
 						<input
 							value={args}
-							onChange={event => setArgs(event.target.value)}
+							onChange={event => update({ args: event.target.value })}
 							placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
 						/>
 					</Field>
@@ -723,13 +866,17 @@ function McpServerEditor(props: {
 							'Environment variables set for the MCP server process.'
 						)}
 					>
-						<MiniMonacoEditor language="yaml" value={envText} onChange={setEnvText} />
+						<MiniMonacoEditor
+							language="yaml"
+							value={envText}
+							onChange={value => update({ envText: value })}
+						/>
 					</FieldGroup>
 					<label className="toggle-row">
 						<input
 							type="checkbox"
 							checked={clearEnv}
-							onChange={event => setClearEnv(event.target.checked)}
+							onChange={event => update({ clearEnv: event.target.checked })}
 						/>
 						Clear environment
 					</label>
@@ -738,6 +885,7 @@ function McpServerEditor(props: {
 				<>
 					<Field
 						label="URL"
+						path={`${kind}.host`}
 						tooltip={
 							kind === 'sse'
 								? props.help.field<McpTarget>(
@@ -760,7 +908,7 @@ function McpServerEditor(props: {
 					>
 						<input
 							value={url}
-							onChange={event => setUrl(event.target.value)}
+							onChange={event => update({ url: event.target.value })}
 							placeholder={
 								kind === 'sse' ? 'http://localhost:3001/sse' : 'http://localhost:3001/mcp'
 							}
@@ -784,23 +932,29 @@ function McpServerEditor(props: {
 										{ value: 'file', label: 'File' },
 										{ value: 'inline', label: 'Inline' }
 									]}
-									onChange={setSchemaMode}
+									onChange={value => update({ schemaMode: value })}
 								/>
 							</FieldGroup>
 							{schemaMode === 'inline' ? (
 								<FieldGroup
 									label="Schema"
+									missing={!schemaValue.trim()}
 									tooltip={props.help.field<McpTarget>(
 										'LocalMcpTarget1',
 										'openapi.schema',
 										'Inline OpenAPI schema document.'
 									)}
 								>
-									<MiniMonacoEditor language="yaml" value={schemaValue} onChange={setSchemaValue} />
+									<MiniMonacoEditor
+										language="yaml"
+										value={schemaValue}
+										onChange={value => update({ schemaValue: value })}
+									/>
 								</FieldGroup>
 							) : (
 								<Field
 									label="Schema"
+									missing={!schemaValue.trim()}
 									tooltip={props.help.field<McpTarget>(
 										'LocalMcpTarget1',
 										'openapi.schema',
@@ -811,7 +965,7 @@ function McpServerEditor(props: {
 								>
 									<input
 										value={schemaValue}
-										onChange={event => setSchemaValue(event.target.value)}
+										onChange={event => update({ schemaValue: event.target.value })}
 										placeholder={
 											schemaMode === 'file'
 												? '/etc/agentgateway/openapi.yaml'
@@ -822,16 +976,18 @@ function McpServerEditor(props: {
 							)}
 						</>
 					) : null}
+					{backendReference ? null : (
+						<BackendPoliciesField
+							help={props.help}
+							value={policies}
+							onChange={value => update({ policies: value as McpTarget['policies'] })}
+						/>
+					)}
 				</>
 			)}
 			{error ? (
 				<StatusBanner state="bad" title="Invalid server">
 					{error}
-				</StatusBanner>
-			) : null}
-			{props.saveError ? (
-				<StatusBanner state="bad" title="Save failed">
-					{props.saveError}
 				</StatusBanner>
 			) : null}
 		</Drawer>

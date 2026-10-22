@@ -14,6 +14,7 @@ import (
 // TestImageTagVPrefix verifies that image tags always have a 'v' prefix,
 // regardless of whether AppVersion or explicit image.tag values include one.
 func TestImageTagVPrefix(t *testing.T) {
+	t.Parallel()
 	charts := []struct {
 		name             string
 		path             string
@@ -77,6 +78,7 @@ func TestImageTagVPrefix(t *testing.T) {
 		for _, tc := range testCases {
 			testName := chart.name + "/" + tc.name
 			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
 				absHelmChartPath, err := filepath.Abs(chart.path)
 				require.NoError(t, err, "failed to get absolute path for helm chart")
 
@@ -120,6 +122,41 @@ func TestImageTagVPrefix(t *testing.T) {
 	}
 }
 
+func TestUnsafeAdminBindAddress(t *testing.T) {
+	t.Parallel()
+	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name    string
+		setArgs []string
+		address string
+	}{
+		{name: "default"},
+		{
+			name:    "IPv4 wildcard",
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=0.0.0.0"},
+			address: "0.0.0.0",
+		},
+		{
+			name:    "IPv6 wildcard",
+			setArgs: []string{"--set-string", "controller.extraEnv.AGW_UNSAFE_ADMIN_BIND_ADDRESS=::"},
+			address: "::",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args := append([]string{"template", "test-release", chartPath}, tc.setArgs...)
+			output, err := helmCommand(t, args...).CombinedOutput()
+			require.NoError(t, err, "%s", output)
+			if tc.address == "" {
+				require.NotContains(t, string(output), "AGW_UNSAFE_ADMIN_BIND_ADDRESS")
+			} else {
+				require.Contains(t, string(output), "- name: AGW_UNSAFE_ADMIN_BIND_ADDRESS\n              value: \""+tc.address+"\"")
+			}
+		})
+	}
+}
+
 // extractImageLines extracts lines containing "image:" from the output for debugging
 func extractImageLines(output string) string {
 	var lines []string
@@ -131,10 +168,79 @@ func extractImageLines(output string) string {
 	return strings.Join(lines, "\n")
 }
 
+func TestRBACCreate(t *testing.T) {
+	t.Parallel()
+	chartPath, err := filepath.Abs(filepath.Join("..", "..", "install", "helm", "agentgateway"))
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name                string
+		setArgs             []string
+		serviceAccounts     int
+		clusterRoles        int
+		roles               int
+		clusterRoleBindings int
+		roleBindings        int
+	}{
+		{
+			name:                "default",
+			serviceAccounts:     1,
+			clusterRoles:        2,
+			roles:               1,
+			clusterRoleBindings: 2,
+			roleBindings:        1,
+		},
+		{
+			name:            "rbac disabled",
+			setArgs:         []string{"--set", "rbac.create=false"},
+			serviceAccounts: 1,
+		},
+		{
+			name:         "existing service account",
+			setArgs:      []string{"--set", "serviceAccount.create=false", "--set", "serviceAccount.name=external"},
+			clusterRoles: 2,
+			roles:        1,
+		},
+		{
+			name:    "service account and rbac disabled",
+			setArgs: []string{"--set", "serviceAccount.create=false", "--set", "rbac.create=false"},
+		},
+		{
+			name:            "namespaced rbac disabled",
+			setArgs:         []string{"--set", "rbac.create=false", "--set", "rbac.gatewayNamespaces[0]=team-a", "--set", "rbac.gatewayNamespaces[1]=team-b"},
+			serviceAccounts: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			args := append([]string{"template", "test-release", chartPath, "--namespace", "default"}, tc.setArgs...)
+			cmd := helmCommand(t, args...)
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "helm template failed: %s", output)
+
+			kindCounts := make(map[string]int)
+			for line := range strings.SplitSeq(string(output), "\n") {
+				if kind, found := strings.CutPrefix(line, "kind: "); found {
+					kindCounts[strings.TrimSpace(kind)]++
+				}
+			}
+
+			require.Equal(t, tc.serviceAccounts, kindCounts["ServiceAccount"])
+			require.Equal(t, tc.clusterRoles, kindCounts["ClusterRole"])
+			require.Equal(t, tc.roles, kindCounts["Role"])
+			require.Equal(t, tc.clusterRoleBindings, kindCounts["ClusterRoleBinding"])
+			require.Equal(t, tc.roleBindings, kindCounts["RoleBinding"])
+		})
+	}
+}
+
 // TestHelmChartTemplate tests helm template output for agentgateway charts
 // with different values configurations.
 // NOTE: The test cases contain YAML blocks that are indented with 2 spaces, do not use tabs.
 func TestHelmChartTemplate(t *testing.T) {
+	t.Parallel()
 	charts := []string{"agentgateway"}
 
 	valuesCases := []struct {
@@ -278,6 +384,22 @@ func TestHelmChartTemplate(t *testing.T) {
       ports:
         - containerPort: 80
           name: httpbin
+`,
+		},
+		{
+			name: "extra-init-containers",
+			filterKinds: []string{
+				"Deployment",
+			},
+			valuesYAML: `controller:
+  extraInitContainers:
+    - name: sleep
+      image: docker.io/curlimages/curl
+      command:
+        - /bin/sleep
+        - infinity
+      imagePullPolicy: IfNotPresent
+      restartPolicy: Always
 `,
 		},
 		{
@@ -510,6 +632,7 @@ controllerName: example.com/custom-agentgateway
 		for _, vc := range valuesCases {
 			testName := chart + "/" + vc.name
 			t.Run(testName, func(t *testing.T) {
+				t.Parallel()
 				helmChartPath := filepath.Join("..", "..", "install", "helm", chart)
 				absHelmChartPath, err := filepath.Abs(helmChartPath)
 				require.NoError(t, err, "failed to get absolute path for helm chart")
@@ -573,6 +696,7 @@ controllerName: example.com/custom-agentgateway
 				want, err := os.ReadFile(absGoldenFile)
 				require.NoError(t, err, "failed to read golden file %s; run with REFRESH_GOLDEN=true to generate", absGoldenFile)
 
+				want = bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
 				diff := cmp.Diff(string(want), string(got))
 				if diff != "" {
 					t.Errorf("helm template output differs from golden file (-want +got):\n%s\n\nTo refresh: REFRESH_GOLDEN=true go test ./test/helm", diff)
@@ -583,6 +707,7 @@ controllerName: example.com/custom-agentgateway
 }
 
 func filterHelmObjects(output []byte, kinds []string) []byte {
+	output = bytes.ReplaceAll(output, []byte("\r\n"), []byte("\n"))
 	if len(kinds) == 0 {
 		return output
 	}

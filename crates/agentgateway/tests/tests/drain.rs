@@ -155,7 +155,8 @@ async fn drain_serves_new_connections_during_minimum() {
 	let drained = tokio::spawn(test.start_drain());
 	tokio::time::sleep(Duration::from_millis(200)).await;
 
-	assert_full_response(get(http1_client(), addr).await.unwrap()).await;
+	let headers = assert_full_response(get(http1_client(), addr).await.unwrap()).await;
+	assert_eq!(headers[header::CONNECTION], "close");
 	tokio::time::timeout(Duration::from_secs(2), drained)
 		.await
 		.expect("drain must finish once the minimum passes")

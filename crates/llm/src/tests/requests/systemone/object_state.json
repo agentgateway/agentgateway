@@ -1,0 +1,7 @@
+{
+  "model": "jev-1.13.0",
+  "state": {"order_id": 123, "status": "damaged"},
+  "questions": {
+    "damaged": {"type": "noul", "instructions": "Did the item arrive damaged?"}
+  }
+}

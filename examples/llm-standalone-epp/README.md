@@ -13,7 +13,7 @@ services:
   hostname: my-model
   vips: []
   ports:
-    8000: 8000
+    "8000": 8000
 
 binds:
 - port: 8081

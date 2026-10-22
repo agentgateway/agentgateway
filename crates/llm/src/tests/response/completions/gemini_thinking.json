@@ -1,0 +1,26 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Neptune was found by mathematics.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1775595257,
+  "id": "9W7VaabzK7KPjMcPnYGiuAU",
+  "model": "google/gemini-3.8-flash",
+  "object": "chat.completion",
+  "system_fingerprint": "",
+  "usage": {
+    "completion_tokens": 30,
+    "completion_tokens_details": {
+      "reasoning_tokens": 20
+    },
+    "prompt_tokens": 19,
+    "total_tokens": 69
+  }
+}

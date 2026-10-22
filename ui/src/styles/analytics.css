@@ -93,6 +93,25 @@
 	padding: 8px;
 }
 
+.multi-check-search {
+	position: sticky;
+	top: -8px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: -8px -8px 0;
+	background: var(--surface);
+	color: var(--muted);
+	padding: 8px 8px 4px 18px;
+}
+
+.multi-check-search input {
+	min-height: 32px;
+	font-size: 13px;
+	padding: 6px 8px;
+}
+
 .multi-check-option {
 	display: grid;
 	grid-template-columns: 18px minmax(0, 1fr);

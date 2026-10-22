@@ -1,13 +1,16 @@
+use anyhow::Context;
 use serde_json::Value;
 use sqlx::types::Json;
-use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, query_builder};
+use sqlx::{FromRow, QueryBuilder, Row, Sqlite, SqlitePool, query_builder};
 
 use super::{
-	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
-	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
-	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
+	ANALYTICS_TOTALS_SELECT, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
+	AnalyticsTotals, GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry,
+	LogFilters, MIGRATIONS_TABLE, OUTPUT_TOKENS_PER_SECOND_BOUNDS, PayloadEntry, SearchRequest,
+	SearchResponse, StoredRequestLog, StoredRequestLogPayload, TTFT_BOUNDS_MS, TailRequest,
 	TailResponse, TimeRange, TurnEntry, UsageEntry, analytics_window, attr_filter_values,
-	decode_cursor, encode_cursor, limit, promoted_attribute_column, prompt_preview, turn_kind,
+	decode_cursor, encode_cursor, groups_from_buckets, histogram_bucket_sql, limit,
+	promoted_attribute_column, prompt_preview, turn_kind,
 };
 
 pub struct SqliteLogStore {
@@ -16,14 +19,15 @@ pub struct SqliteLogStore {
 
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
 // Leave room below SQLite's 32,766-parameter limit for two more log fields or one payload field.
-const LOG_INSERT_CHUNK_SIZE: usize = 1_400;
+const LOG_INSERT_CHUNK_SIZE: usize = 1_150;
 const PAYLOAD_INSERT_CHUNK_SIZE: usize = 8_000;
 const INSERT_LOG_PREFIX: &str = r#"
 INSERT INTO request_logs (
 	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
 	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
-	input_tokens, output_tokens, total_tokens, cost, agentgateway_user, agentgateway_group,
-	user_agent_name, has_payload, attributes_json
+	input_tokens, output_tokens, total_tokens, cache_read_input_tokens, cache_creation_input_tokens,
+	reasoning_tokens, time_to_first_token_ms, time_per_output_token_ms, cost, agentgateway_user,
+	agentgateway_group, user_agent_name, has_payload, attributes_json
 ) 
 "#;
 
@@ -51,6 +55,11 @@ fn push_request_log_row(
 		.push_bind(record.input_tokens)
 		.push_bind(record.output_tokens)
 		.push_bind(record.total_tokens)
+		.push_bind(record.cache_read_input_tokens)
+		.push_bind(record.cache_creation_input_tokens)
+		.push_bind(record.reasoning_tokens)
+		.push_bind(record.time_to_first_token_ms)
+		.push_bind(record.time_per_output_token_ms)
 		.push_bind(record.cost)
 		.push_bind(&record.agentgateway_user)
 		.push_bind(&record.agentgateway_group)
@@ -72,7 +81,15 @@ fn push_request_log_payload_row(
 
 impl SqliteLogStore {
 	pub async fn from_pool(pool: SqlitePool) -> anyhow::Result<Self> {
-		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
+		let started = std::time::Instant::now();
+		tracing::info!("initializing request log database schema");
+		let mut migrator = sqlx::migrate!("./src/telemetry/log_store/sqlite_migrations");
+		migrator.dangerous_set_table_name(MIGRATIONS_TABLE);
+		migrator
+			.run(&pool)
+			.await
+			.context("failed to migrate request log database schema")?;
+		tracing::info!(elapsed = ?started.elapsed(), "request log database schema is ready");
 		Ok(Self { pool })
 	}
 
@@ -163,7 +180,9 @@ impl SqliteLogStore {
 			qb.push(", ");
 			push_group_select(&mut qb, &request.group_by);
 		}
-		qb.push(", COUNT(*) AS requests, COALESCE(SUM(total_tokens), 0) AS total_tokens, COALESCE(SUM(cost), 0.0) AS cost FROM request_logs WHERE 1=1");
+		qb.push(", ");
+		qb.push(ANALYTICS_TOTALS_SELECT);
+		qb.push(" FROM request_logs WHERE 1=1");
 		push_filters(&mut qb, Some(&time_range), &request.filters);
 		qb.push(" GROUP BY bucket_index");
 		if !request.group_by.is_empty() {
@@ -298,23 +317,6 @@ impl SqliteLogStore {
 	}
 }
 
-fn groups_from_buckets(buckets: &[AnalyticsTimeBucket]) -> Vec<AnalyticsGroup> {
-	let mut groups = std::collections::BTreeMap::<String, AnalyticsGroup>::new();
-	for bucket in buckets {
-		let key = serde_json::to_string(&bucket.group).unwrap_or_default();
-		let group = groups.entry(key).or_insert_with(|| AnalyticsGroup {
-			group: bucket.group.clone(),
-			requests: 0,
-			total_tokens: 0,
-			cost: 0.0,
-		});
-		group.requests += bucket.requests;
-		group.total_tokens += bucket.total_tokens;
-		group.cost += bucket.cost;
-	}
-	groups.into_values().collect()
-}
-
 fn analytics_filter_option_map() -> std::collections::BTreeMap<String, Vec<String>> {
 	[
 		("requestModel".to_string(), Vec::new()),
@@ -337,6 +339,8 @@ fn distinct_option_index(column: &str) -> Option<&'static str> {
 	}
 }
 
+/// Databases created before the analytics columns existed get them added and backfilled from
+/// `attributes_json`.
 fn push_filter_option(
 	options: &mut std::collections::BTreeMap<String, Vec<String>>,
 	key: &str,
@@ -438,6 +442,17 @@ fn push_group_select(qb: &mut QueryBuilder<Sqlite>, group_by: &[GroupBy]) {
 			GroupByField::HttpStatus => {
 				qb.push(format!("CAST(http_status AS TEXT) AS g{idx}"));
 			},
+			GroupByField::Ttft => {
+				let bucket = histogram_bucket_sql("time_to_first_token_ms", TTFT_BOUNDS_MS);
+				qb.push(format!("{bucket} AS g{idx}"));
+			},
+			GroupByField::OutputTokensPerSecond => {
+				let bucket = histogram_bucket_sql(
+					"1000.0 / NULLIF(time_per_output_token_ms, 0)",
+					OUTPUT_TOKENS_PER_SECOND_BOUNDS,
+				);
+				qb.push(format!("{bucket} AS g{idx}"));
+			},
 			GroupByField::Attributes => {
 				if let Some(column) = group.key.as_deref().and_then(promoted_attribute_column) {
 					qb.push(format!("{column} AS g{idx}"));
@@ -469,9 +484,7 @@ fn row_to_analytics_bucket(
 	Ok(AnalyticsTimeBucket {
 		start: from + chrono::Duration::seconds(bucket_index * bucket_seconds),
 		group,
-		requests: row.try_get("requests")?,
-		total_tokens: row.try_get("total_tokens")?,
-		cost: row.try_get("cost")?,
+		totals: AnalyticsTotals::from_row(&row)?,
 	})
 }
 
@@ -535,6 +548,8 @@ fn group_key(group: &GroupBy) -> String {
 			.key
 			.clone()
 			.unwrap_or_else(|| "attributes".to_string()),
+		GroupByField::Ttft => "ttft".to_string(),
+		GroupByField::OutputTokensPerSecond => "outputTokensPerSecond".to_string(),
 	}
 }
 
@@ -569,47 +584,6 @@ fn sqlite_attr_value(value: String) -> String {
 	}
 }
 
-const SCHEMA: &str = r#"
-CREATE TABLE IF NOT EXISTS request_logs (
-	id TEXT PRIMARY KEY,
-	started_at TEXT NOT NULL,
-	completed_at TEXT NOT NULL,
-	duration_ms INTEGER NOT NULL,
-	trace_id TEXT,
-	span_id TEXT,
-	http_status INTEGER,
-	error TEXT,
-	gen_ai_operation_name TEXT,
-	gen_ai_provider_name TEXT,
-	gen_ai_request_model TEXT,
-	gen_ai_response_model TEXT,
-	input_tokens INTEGER,
-	output_tokens INTEGER,
-	total_tokens INTEGER,
-	cost REAL,
-	agentgateway_user TEXT,
-	agentgateway_group TEXT,
-	user_agent_name TEXT,
-	has_payload INTEGER NOT NULL,
-	attributes_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS request_log_payloads (
-	log_id TEXT PRIMARY KEY REFERENCES request_logs(id) ON DELETE CASCADE,
-	request_prompt_json TEXT,
-	response_completion_json TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_request_logs_completed_at ON request_logs(completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_usage_completed_at ON request_logs(completed_at DESC, total_tokens, cost);
-CREATE INDEX IF NOT EXISTS idx_request_logs_http_status_completed_at ON request_logs(http_status, completed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_gen_ai_completed_at ON request_logs(gen_ai_provider_name, gen_ai_request_model, completed_at DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_request_model_completed_at ON request_logs(gen_ai_request_model, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_user_completed_at ON request_logs(agentgateway_user, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_group_completed_at ON request_logs(agentgateway_group, completed_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS idx_request_logs_user_agent_completed_at ON request_logs(user_agent_name, completed_at DESC, id DESC);
-"#;
-
 const SELECT_LOGS: &str = r#"
 SELECT id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
 	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
@@ -628,3 +602,97 @@ FROM request_logs
 LEFT JOIN request_log_payloads ON request_logs.id = request_log_payloads.log_id
 WHERE request_logs.id = ?
 "#;
+
+#[cfg(test)]
+mod tests {
+	use chrono::{TimeZone, Utc};
+	use serde_json::json;
+	use sqlx::sqlite::SqlitePoolOptions;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn analytics_totals_from_migrated_and_new_rows() -> anyhow::Result<()> {
+		let pool = SqlitePoolOptions::new()
+			.max_connections(1)
+			.connect("sqlite::memory:")
+			.await?;
+		// A row written before the analytics columns existed; only attributes_json has the values.
+		sqlx::raw_sql(include_str!(
+			"sqlite_migrations/0001_create_request_log_schema.sql"
+		))
+		.execute(&pool)
+		.await?;
+		sqlx::raw_sql(
+			r#"
+INSERT INTO request_logs VALUES (
+	'old', '2026-10-01T00:00:00+00:00', '2026-10-01T00:00:01+00:00', 1000, NULL, NULL, 200, NULL,
+	'chat', 'openai', 'gpt', 'gpt', 1000, 10, 1010, 0.5, NULL, NULL, NULL, 0,
+	'{"gen_ai.usage.cache_read.input_tokens":800,"agw.ai.time_to_first_token":0.3,"agw.ai.time_per_output_token":0.01}'
+);
+"#,
+		)
+		.execute(&pool)
+		.await?;
+		let store = SqliteLogStore::from_pool(pool).await?;
+		let at = Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 2).unwrap();
+		store
+			.insert_batch(&[StoredRequestLog {
+				id: "new".into(),
+				started_at: at,
+				completed_at: at,
+				duration_ms: 2000,
+				trace_id: None,
+				span_id: None,
+				http_status: Some(500),
+				error: None,
+				gen_ai_operation_name: Some("chat".into()),
+				gen_ai_provider_name: Some("openai".into()),
+				gen_ai_request_model: Some("gpt".into()),
+				gen_ai_response_model: Some("gpt".into()),
+				input_tokens: Some(100),
+				output_tokens: Some(50),
+				total_tokens: Some(150),
+				cache_read_input_tokens: None,
+				cache_creation_input_tokens: Some(40),
+				reasoning_tokens: Some(20),
+				time_to_first_token_ms: Some(1500.0),
+				time_per_output_token_ms: Some(20.0),
+				cost: Some(0.25),
+				agentgateway_user: None,
+				agentgateway_group: None,
+				user_agent_name: None,
+				has_payload: false,
+				attributes_json: "{}".into(),
+				payload: None,
+			}])
+			.await?;
+
+		let request = serde_json::from_value(json!({
+			"timeRange": { "from": "2026-10-01T00:00:00Z", "to": "2026-10-02T00:00:00Z" },
+			"groupBy": [{ "field": "ttft" }, { "field": "outputTokensPerSecond" }],
+			"bucketCount": 1,
+		}))?;
+		let groups = serde_json::to_value(store.analytics_summary(request).await?.groups)?;
+		assert_eq!(
+			groups,
+			json!([
+				{
+					"group": { "ttft": "250", "outputTokensPerSecond": "100" },
+					"requests": 1, "totalTokens": 1010, "cost": 0.5, "inputTokens": 1000,
+					"outputTokens": 10, "errors": 0, "durationMs": 1000, "ttftRequests": 1,
+					"ttftMs": 300.0, "maxTtftMs": 300.0, "generationTokens": 10, "generationMs": 100.0,
+					"cacheReadTokens": 800, "cacheWriteTokens": 0, "reasoningTokens": 0,
+				},
+				{
+					"group": { "ttft": "1000", "outputTokensPerSecond": "50" },
+					"requests": 1, "totalTokens": 150, "cost": 0.25, "inputTokens": 100,
+					"outputTokens": 50, "errors": 1, "durationMs": 2000, "ttftRequests": 1,
+					"ttftMs": 1500.0, "maxTtftMs": 1500.0, "generationTokens": 50, "generationMs": 1000.0,
+					"cacheReadTokens": 0, "cacheWriteTokens": 40, "reasoningTokens": 20,
+				},
+			])
+		);
+		Ok(())
+	}
+}

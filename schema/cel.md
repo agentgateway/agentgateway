@@ -15,6 +15,8 @@
 |`request.bodyPrefix`|string|The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
+|`request.agent`|object|The agent harness that sent the request.|
+|`request.agent.session`|string|The agent session the request belongs to, from `standardAttributes.session` or detected from<br>well-known agent headers such as `x-claude-code-session-id`.|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
@@ -53,7 +55,7 @@
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
 |`llm.streaming`|boolean|Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.|
-|`llm.requestModel`|string|The model requested for the LLM request. This may differ from the actual model used.|
+|`llm.requestModel`|string|The model requested for the LLM request. Before LLM processing, this is extracted from<br>the incoming URL or body, before provider overrides. This may differ from the actual model used.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
 |`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
@@ -70,7 +72,7 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
 |`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
-|`llm.serviceTier`|string|The service tier the provider served the request under.|
+|`llm.serviceTier`|enum|The service tier the provider served the request under.<br>Possible values: `standard`, `flex`, `priority`, `reserved`, `null`.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
@@ -97,6 +99,9 @@
 |`llm.cost.output`|number||
 |`llm.cost.cacheRead`|number||
 |`llm.cost.cacheWrite`|number||
+|`llm.cost.cacheWriteDetails`|object||
+|`llm.cost.cacheWriteDetails.1h`|number||
+|`llm.cost.cacheWriteDetails.12h`|number||
 |`llm.cost.reasoning`|number||
 |`llm.cost.inputAudio`|number||
 |`llm.cost.outputAudio`|number||
@@ -106,11 +111,38 @@
 |`llm.costRates.output`|number||
 |`llm.costRates.cacheRead`|number||
 |`llm.costRates.cacheWrite`|number||
+|`llm.costRates.cacheWriteDetails`|object||
+|`llm.costRates.cacheWriteDetails.1h`|number||
+|`llm.costRates.cacheWriteDetails.12h`|number||
 |`llm.costRates.reasoning`|number||
 |`llm.costRates.inputAudio`|number||
 |`llm.costRates.outputAudio`|number||
 |`llm.costRates.perPage`|number||
-|`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
+|`llm.model`|object|Model catalog metadata for the model that served the request.<br>Unset when the model is not in the catalog.|
+|`llm.model.id`|string|The catalog model ID the request resolved to.|
+|`llm.model.name`|string|Human-readable display name.|
+|`llm.model.status`|string|Lifecycle stage (alpha, beta, deprecated); absent means generally available.|
+|`llm.model.released`|string|Release date, as YYYY-MM-DD or YYYY-MM.|
+|`llm.model.tags`|[]string|Freeform capability/routing tags for this model.|
+|`llm.model.limits`|object|Token limits.|
+|`llm.model.limits.context`|integer|Total context window, shared by input and output.|
+|`llm.model.limits.input`|integer|Maximum input tokens, when tighter than the context window allows.|
+|`llm.model.limits.output`|integer|Maximum output tokens.|
+|`llm.model.modalities`|object|Supported input and output modalities.|
+|`llm.model.modalities.input`|[]string|Input modalities, such as text, image, pdf, audio, or video.|
+|`llm.model.modalities.output`|[]string|Output modalities, such as text, image, audio, or video.|
+|`llm.model.capabilities`|object|Supported features. Absent fields are unknown.|
+|`llm.model.capabilities.reasoning`|boolean|Whether the model supports reasoning.|
+|`llm.model.capabilities.structuredOutput`|boolean|Whether the model supports JSON Schema structured outputs.|
+|`llm.model.capabilities.toolCall`|boolean|Whether the model supports tool calling.|
+|`llm.model.capabilities.temperature`|boolean|Whether the model accepts the temperature parameter.|
+|`llm.model.reasoning`|object|How reasoning can be controlled.|
+|`llm.model.reasoning.toggle`|boolean|Whether reasoning can be turned on and off.|
+|`llm.model.reasoning.effort`|[]string|Accepted effort levels.|
+|`llm.model.reasoning.budgetTokens`|object|Accepted reasoning token budget range.|
+|`llm.model.reasoning.budgetTokens.min`|integer|Minimum reasoning token budget.|
+|`llm.model.reasoning.budgetTokens.max`|integer|Maximum reasoning token budget.|
+|`llmRequest`|any|`llmRequest` contains the raw JSON LLM request during route and LLM policies.<br>Policies occurring after LLM processing, such as logs, will not have this field present.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
 |`source.port`|integer|The port of the downstream connection.|
@@ -160,6 +192,8 @@
 |`mcp.promptsList`|any|The terminal prompts/list result returned to the client, if available.|
 |`mcp.resourcesList`|any|The terminal resources/list result returned to the client, if available.|
 |`mcp.resourceTemplatesList`|any|The terminal resources/templates/list result returned to the client, if available.|
+|`mcp.params`|any|Current request parameters, with the same structure as the `params` object in an MCP request.<br>Available only during request-phase CEL guardrails.|
+|`mcp.result`|any|Current response result, with the same structure as the `result` object in an MCP response.<br>Available only during response-phase CEL guardrails.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.endpoint`|string|The resolved target for directly addressed backends, including the port for network endpoints.<br>Absent for Service backends, whose workload endpoints are selected separately.|
@@ -174,7 +208,7 @@
 |`guardrails`|[]object|`guardrails` contains entries for prompt-guard guardrail evaluations, in either the<br>request or response phase. Only present in CEL that runs after the request completes,<br>such as log and metric fields.|
 |`guardrails[].phase`|string|The phase the guardrail was evaluated in: `request` or `response`.|
 |`guardrails[].guard`|string|The guard kind that was evaluated, such as `bedrockGuardrails`.|
-|`guardrails[].action`|string|The action the guardrail took (allow/mask/reject/audit/failOpen).|
+|`guardrails[].action`|enum|The action the guardrail took.<br>Possible values: `allow`, `failOpen`, `audit`, `mask`, `reject`.|
 |`guardrails[].guardrailId`|string|The configured guardrail identifier.|
 |`guardrails[].guardrailVersion`|string|The configured guardrail version.|
 |`guardrails[].actionReason`|string|The reason the guardrail reported for its action.|

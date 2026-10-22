@@ -34,6 +34,18 @@ info:
     "status": "completed",
     "output": [
       {
+        "type": "reasoning",
+        "id": "[id]",
+        "summary": [],
+        "content": [
+          {
+            "type": "reasoning_text",
+            "text": "Okay, the user wants me to write a story"
+          }
+        ],
+        "status": "completed"
+      },
+      {
         "type": "message",
         "content": [
           {

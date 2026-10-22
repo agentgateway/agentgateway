@@ -306,19 +306,6 @@ impl RequestBuilder {
 		self
 	}
 
-	// This was a shell only meant to help with rendered documentation.
-	// However, docs.rs can now show the docs for the wasm platforms, so this
-	// is no longer needed.
-	//
-	// You should not otherwise depend on this function. It's deprecation
-	// is just to nudge people to reduce breakage. It may be removed in a
-	// future patch version.
-	#[doc(hidden)]
-	#[cfg_attr(target_arch = "wasm32", deprecated)]
-	pub fn fetch_mode_no_cors(self) -> RequestBuilder {
-		self
-	}
-
 	pub fn path_match(mut self, path_match: String) -> Self {
 		if let Ok(ref mut req) = self.request {
 			req.path_match = Some(path_match);

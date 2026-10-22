@@ -7,7 +7,7 @@ use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
-use crate::{AIError, StreamingUsageGuard, parse};
+use crate::{AIError, StreamingUsageGuard, parse, types};
 
 const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
 
@@ -21,6 +21,120 @@ fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> O
 	Some(budget_tokens.min(max_tokens - 1))
 }
 
+/// Client cache marks take precedence: when the request already has any, the policy adds none, so
+/// it can never place a default TTL mark ahead of a longer client TTL.
+pub fn apply_prompt_caching(
+	req: &mut types::messages::Request,
+	caching: &crate::PromptCachingConfig,
+) {
+	if has_cache_control(req) {
+		return;
+	}
+	let mark = |block: Option<&mut serde_json::Value>| {
+		if let Some(block) = block.and_then(serde_json::Value::as_object_mut) {
+			block.insert(
+				"cache_control".into(),
+				serde_json::json!({"type": "ephemeral"}),
+			);
+		}
+	};
+	if caching.cache_system
+		&& let Some(system) = &mut req.system
+		&& caching
+			.min_tokens
+			.is_none_or(|min| system_tokens(system) >= min)
+	{
+		mark(
+			system
+				.parts_mut()
+				.and_then(|parts| parts.last_mut())
+				.map(types::messages::TextPart::fields_mut),
+		);
+	}
+	if caching.cache_messages && req.messages.len() >= 2 {
+		let idx = (req.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+		// Thinking blocks cannot carry cache_control.
+		let last_cacheable = req.messages[idx]
+			.content
+			.as_mut()
+			.and_then(types::messages::ContentBlock::parts_mut)
+			.and_then(|parts| {
+				parts
+					.iter_mut()
+					.rev()
+					.map(types::messages::ContentPart::fields_mut)
+					.find(|block| {
+						!matches!(
+							block["type"].as_str(),
+							Some("thinking" | "redacted_thinking")
+						)
+					})
+			});
+		mark(last_cacheable);
+	}
+	// Deferred tools cannot carry cache_control, so mark the last tool that is loaded up front.
+	// https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool#prompt-caching
+	if caching.cache_tools
+		&& let Some(tool) = req
+			.tools
+			.iter_mut()
+			.flatten()
+			.rev()
+			.find(|tool| tool.rest["defer_loading"] != true)
+	{
+		tool.cache_control = Some(serde_json::json!({"type": "ephemeral"}));
+	}
+}
+
+/// Looks for cache_control only where the API accepts it, so a key with the same name inside tool
+/// inputs or schemas is not mistaken for a mark.
+fn has_cache_control(req: &types::messages::Request) -> bool {
+	let system = match &req.system {
+		Some(types::messages::TextBlock::Array(parts)) => parts
+			.iter()
+			.any(|part| has_nested_cache_control(part.fields())),
+		_ => false,
+	};
+	let content = req
+		.messages
+		.iter()
+		.filter_map(|message| match &message.content {
+			Some(types::messages::ContentBlock::Array(parts)) => Some(parts),
+			_ => None,
+		})
+		.flatten()
+		.any(|part| has_nested_cache_control(part.fields()));
+	let tools = req
+		.tools
+		.iter()
+		.flatten()
+		.any(|tool| tool.cache_control.is_some());
+	req.cache_control.is_some() || system || content || tools
+}
+
+fn has_nested_cache_control(value: &serde_json::Value) -> bool {
+	match value {
+		serde_json::Value::Array(blocks) => blocks.iter().any(has_nested_cache_control),
+		serde_json::Value::Object(block) => {
+			block.get("cache_control").is_some_and(|c| !c.is_null())
+				|| types::messages::cache_control_children(block)
+					.iter()
+					.filter_map(|field| block.get(*field))
+					.any(has_nested_cache_control)
+		},
+		_ => false,
+	}
+}
+
+fn system_tokens(system: &types::messages::TextBlock) -> usize {
+	match system {
+		types::messages::TextBlock::Text(text) => super::estimate_tokens([text.as_str()]),
+		types::messages::TextBlock::Array(parts) => {
+			super::estimate_tokens(parts.iter().filter_map(types::messages::TextPart::text))
+		},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -31,6 +145,146 @@ mod tests {
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
 		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
 		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
+	}
+
+	fn apply(req: serde_json::Value, caching: &crate::PromptCachingConfig) -> serde_json::Value {
+		let mut req: types::messages::Request = serde_json::from_value(req).unwrap();
+		apply_prompt_caching(&mut req, caching);
+		serde_json::to_value(&req).unwrap()
+	}
+
+	#[test]
+	fn apply_prompt_caching_marks_system_history_and_tools() {
+		let caching = crate::PromptCachingConfig {
+			cache_tools: true,
+			min_tokens: None,
+			..Default::default()
+		};
+		let messages = apply(
+			serde_json::json!({
+				"model": "claude-sonnet-4",
+				"system": "You are helpful.",
+				"messages": [
+					{"role": "user", "content": "Hello"},
+					{"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},
+					{"role": "user", "content": "How are you?"}
+				],
+				"tools": [
+					{"name": "get_weather", "input_schema": {"type": "object"}},
+					// Deferred tools cannot carry cache_control.
+					{"name": "get_time", "input_schema": {"type": "object"}, "defer_loading": true}
+				]
+			}),
+			&caching,
+		);
+		let completions: types::completions::Request = serde_json::from_value(serde_json::json!({
+			"model": "claude-sonnet-4",
+			"messages": [
+				{"role": "system", "content": "You are helpful."},
+				{"role": "user", "content": "Hello"},
+				{"role": "assistant", "content": "Hi"},
+				{"role": "user", "content": "How are you?"}
+			],
+			"tools": [{"type": "function", "function": {"name": "get_weather", "parameters": {"type": "object"}}}]
+		}))
+		.unwrap();
+		let completions: serde_json::Value = serde_json::from_slice(
+			&from_completions::translate(&completions, Some(&caching), None).unwrap(),
+		)
+		.unwrap();
+		let mark = serde_json::json!({"type": "ephemeral"});
+		for out in [messages, completions] {
+			assert_eq!(out["system"][0]["cache_control"], mark);
+			assert_eq!(out["messages"][1]["content"][0]["cache_control"], mark);
+			assert!(
+				out["messages"][2]["content"][0]
+					.get("cache_control")
+					.is_none()
+			);
+			assert_eq!(out["tools"][0]["cache_control"], mark);
+			assert!(out["tools"][1].get("cache_control").is_none());
+		}
+	}
+
+	#[test]
+	fn apply_prompt_caching_skips_short_system_prompt() {
+		let out = apply(
+			serde_json::json!({
+				"system": "You are helpful.",
+				"messages": [{"role": "user", "content": "Hello"}]
+			}),
+			&crate::PromptCachingConfig::default(),
+		);
+		assert_eq!(out["system"], "You are helpful.");
+	}
+
+	#[test]
+	fn apply_prompt_caching_defers_to_client_marks() {
+		let request = |system_mark: serde_json::Value| {
+			serde_json::json!({
+				"system": [{"type": "text", "text": "a", "cache_control": system_mark}],
+				"messages": [
+					{"role": "assistant", "content": [
+						{"type": "tool_use", "id": "t1", "name": "set", "input": {"cache_control": "on"}}
+					]},
+					{"role": "user", "content": "How are you?"}
+				]
+			})
+		};
+		let caching = crate::PromptCachingConfig {
+			min_tokens: None,
+			..Default::default()
+		};
+		let out = apply(
+			request(serde_json::json!({"type": "ephemeral", "ttl": "1h"})),
+			&caching,
+		);
+		assert_eq!(out["system"][0]["cache_control"]["ttl"], "1h");
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
+		// The cache_control key in the tool input is tool data, not a client mark.
+		let out = apply(request(serde_json::Value::Null), &caching);
+		assert_eq!(
+			out["messages"][0]["content"][0]["cache_control"],
+			serde_json::json!({"type": "ephemeral"})
+		);
+		// Marks nested inside other blocks count as client marks too.
+		let mut nested = request(serde_json::Value::Null);
+		nested["messages"][1]["content"] = serde_json::json!([{
+			"type": "search_result",
+			"source": "https://example.com",
+			"title": "Example",
+			"content": [{"type": "text", "text": "result", "cache_control": {"type": "ephemeral", "ttl": "1h"}}]
+		}]);
+		let out = apply(nested, &caching);
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
+		let mut web_fetch = request(serde_json::Value::Null);
+		web_fetch["messages"][1]["content"] = serde_json::json!([{
+			"type": "web_fetch_tool_result",
+			"tool_use_id": "t2",
+			"content": {
+				"type": "web_fetch_result",
+				"url": "https://example.com",
+				"content": {
+					"type": "document",
+					"source": {"type": "text", "media_type": "text/plain", "data": "page"},
+					"cache_control": {"type": "ephemeral", "ttl": "1h"}
+				}
+			}
+		}]);
+		let out = apply(web_fetch, &caching);
+		assert!(
+			out["messages"][0]["content"][0]
+				.get("cache_control")
+				.is_none()
+		);
 	}
 }
 
@@ -103,16 +357,12 @@ pub mod from_completions {
 
 	fn user_content_to_messages(
 		content: &completions::RequestUserMessageContent,
-	) -> Vec<messages::ContentBlock> {
+	) -> Result<Vec<messages::ContentBlock>, AIError> {
 		let mut out = Vec::new();
 		match content {
 			completions::RequestUserMessageContent::Text(text) => {
 				if !text.trim().is_empty() {
-					out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-						text: text.clone(),
-						citations: None,
-						cache_control: None,
-					}));
+					out.push(messages::ContentBlock::text(text.clone()));
 				}
 			},
 			completions::RequestUserMessageContent::Array(parts) => {
@@ -145,13 +395,38 @@ pub mod from_completions {
 								cache_control: cache_control(&image.prompt_cache_breakpoint),
 							}));
 						},
-						completions::RequestUserMessageContentPart::InputAudio(_)
-						| completions::RequestUserMessageContentPart::File(_) => {},
+						completions::RequestUserMessageContentPart::File(file) => {
+							let file_data = file.file.file_data.as_deref().unwrap_or_default();
+							let Some((media_type, data)) = parse_data_url(file_data) else {
+								if let Some(file_id) = file.file.file_id.as_deref() {
+									return Err(AIError::UnsupportedConversion(strng::new(format!(
+										"anthropic path cannot resolve OpenAI file_id ({file_id}); send file.file_data as an inline data: URI"
+									))));
+								}
+								return Err(AIError::UnsupportedConversion(strng::literal!(
+									"file content part requires file.file_data as an inline base64 data: URI"
+								)));
+							};
+							out.push(messages::ContentBlock::Document(
+								messages::ContentDocumentBlock {
+									source: serde_json::json!({
+										"type": "base64",
+										"media_type": media_type,
+										"data": data
+									}),
+									cache_control: cache_control(&file.prompt_cache_breakpoint),
+									citations: None,
+									context: None,
+									title: file.file.filename.clone(),
+								},
+							));
+						},
+						completions::RequestUserMessageContentPart::InputAudio(_) => {},
 					}
 				}
 			},
 		}
-		out
+		Ok(out)
 	}
 
 	fn assistant_content_to_messages(
@@ -171,11 +446,7 @@ pub mod from_completions {
 			match content {
 				completions::RequestAssistantMessageContent::Text(text) => {
 					if !text.trim().is_empty() {
-						out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: text.clone(),
-							citations: None,
-							cache_control: None,
-						}));
+						out.push(messages::ContentBlock::text(text.clone()));
 					}
 				},
 				completions::RequestAssistantMessageContent::Array(parts) => {
@@ -192,11 +463,7 @@ pub mod from_completions {
 							},
 							completions::RequestAssistantMessageContentPart::Refusal(refusal) => {
 								if !refusal.refusal.trim().is_empty() {
-									out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-										text: refusal.refusal.clone(),
-										citations: None,
-										cache_control: None,
-									}));
+									out.push(messages::ContentBlock::text(refusal.refusal.clone()));
 								}
 							},
 						}
@@ -207,11 +474,7 @@ pub mod from_completions {
 		if let Some(refusal) = &msg.refusal
 			&& !refusal.trim().is_empty()
 		{
-			out.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-				text: refusal.clone(),
-				citations: None,
-				cache_control: None,
-			}));
+			out.push(messages::ContentBlock::text(refusal.clone()));
 		}
 		if let Some(tool_calls) = &msg.tool_calls {
 			for tool_call in tool_calls {
@@ -268,20 +531,113 @@ pub mod from_completions {
 	/// translate an OpenAI completions request to an anthropic messages request
 	pub fn translate(
 		req: &types::completions::Request,
+		prompt_caching: Option<&crate::PromptCachingConfig>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<Vec<u8>, AIError> {
 		let typed = json::convert::<_, completions::Request>(req)
 			.map_err(|err| AIError::RequestParsing(crate::InputFormat::Completions, err))?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, catalog);
+		let mut xlated = translate_internal(typed, model_id, catalog)?;
+		if let Some(caching) = prompt_caching {
+			apply_prompt_caching(&mut xlated, caching);
+		}
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	fn apply_prompt_caching(req: &mut messages::Request, caching: &crate::PromptCachingConfig) {
+		if has_cache_control(req) {
+			return;
+		}
+		let mark = || Some(messages::CacheControlEphemeral::Ephemeral { ttl: None });
+		if caching.cache_system
+			&& let Some(messages::SystemPrompt::Text(text)) = &mut req.system
+			&& caching
+				.min_tokens
+				.is_none_or(|min| crate::conversion::estimate_tokens([text.as_str()]) >= min)
+		{
+			let text = std::mem::take(text);
+			req.system = Some(messages::SystemPrompt::Blocks(vec![
+				messages::SystemContentBlock::Text {
+					text,
+					cache_control: mark(),
+				},
+			]));
+		}
+		if caching.cache_messages && req.messages.len() >= 2 {
+			let idx = (req.messages.len() - 2).saturating_sub(caching.cache_message_offset);
+			if let Some(cache_control) = req.messages[idx]
+				.content
+				.iter_mut()
+				.rev()
+				.find_map(content_cache_control)
+			{
+				*cache_control = mark();
+			}
+		}
+		if caching.cache_tools
+			&& let Some(tool) = req.tools.as_mut().and_then(|tools| tools.last_mut())
+		{
+			match tool {
+				messages::Tool::Custom(tool) => tool.cache_control = mark(),
+				messages::Tool::Server(tool) => tool.cache_control = mark(),
+			}
+		}
+	}
+
+	fn has_cache_control(req: &mut messages::Request) -> bool {
+		let system = matches!(&req.system, Some(messages::SystemPrompt::Blocks(blocks))
+			if blocks.iter().any(|messages::SystemContentBlock::Text { cache_control, .. }| cache_control.is_some()));
+		let content = req
+			.messages
+			.iter_mut()
+			.flat_map(|message| &mut message.content)
+			.any(|block| {
+				// Tool results translated from Completions only hold text parts.
+				let nested = matches!(block, messages::ContentBlock::ToolResult {
+					content: messages::ToolResultContent::Array(parts),
+					..
+				} if parts.iter().any(|part| matches!(part, messages::ToolResultContentPart::Text {
+					cache_control: Some(_),
+					..
+				})));
+				nested || content_cache_control(block).is_some_and(|c| c.is_some())
+			});
+		let tools = req
+			.tools
+			.iter()
+			.flatten()
+			.any(|tool| tool.cache_control().is_some());
+		system || content || tools
+	}
+
+	fn content_cache_control(
+		block: &mut messages::ContentBlock,
+	) -> Option<&mut Option<messages::CacheControlEphemeral>> {
+		match block {
+			messages::ContentBlock::Text(messages::ContentTextBlock { cache_control, .. })
+			| messages::ContentBlock::Image(messages::ContentImageBlock { cache_control, .. })
+			| messages::ContentBlock::Document(messages::ContentDocumentBlock {
+				cache_control, ..
+			})
+			| messages::ContentBlock::SearchResult(messages::ContentSearchResultBlock {
+				cache_control,
+				..
+			})
+			| messages::ContentBlock::ToolUse { cache_control, .. }
+			| messages::ContentBlock::ToolResult { cache_control, .. }
+			| messages::ContentBlock::ServerToolUse { cache_control, .. }
+			| messages::ContentBlock::WebSearchToolResult { cache_control, .. } => Some(cache_control),
+			messages::ContentBlock::Thinking { .. }
+			| messages::ContentBlock::RedactedThinking { .. }
+			| messages::ContentBlock::Unknown => None,
+		}
 	}
 
 	fn translate_internal(
 		req: completions::Request,
 		model_id: String,
 		catalog: crate::model_catalog::Catalog<'_>,
-	) -> messages::Request {
+	) -> Result<messages::Request, AIError> {
 		let max_tokens = req.max_tokens();
 		let stop_sequences = req.stop_sequence();
 		let mut system_blocks = Vec::new();
@@ -359,10 +715,12 @@ pub mod from_completions {
 					completions::RequestMessage::System(_) | completions::RequestMessage::Developer(_) => {
 						return None;
 					},
-					completions::RequestMessage::User(user) => (
-						messages::Role::User,
-						user_content_to_messages(&user.content),
-					),
+					completions::RequestMessage::User(user) => {
+						match user_content_to_messages(&user.content) {
+							Ok(content) => (messages::Role::User, content),
+							Err(err) => return Some(Err(err)),
+						}
+					},
 					completions::RequestMessage::Assistant(assistant) => (
 						messages::Role::Assistant,
 						assistant_content_to_messages(assistant),
@@ -381,11 +739,7 @@ pub mod from_completions {
 						if let Some(text) = &function.content
 							&& !text.trim().is_empty()
 						{
-							blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-								text: text.clone(),
-								citations: None,
-								cache_control: None,
-							}));
+							blocks.push(messages::ContentBlock::text(text.clone()));
 						}
 						(messages::Role::User, blocks)
 					},
@@ -393,10 +747,10 @@ pub mod from_completions {
 				if content.is_empty() {
 					None
 				} else {
-					Some(messages::Message { role, content })
+					Some(Ok(messages::Message { role, content }))
 				}
 			})
-			.collect();
+			.collect::<Result<Vec<_>, _>>()?;
 
 		let tools = if let Some(tools) = req.tools {
 			let mapped_tools: Vec<_> = tools
@@ -509,7 +863,7 @@ pub mod from_completions {
 		} else {
 			None
 		};
-		messages::Request {
+		Ok(messages::Request {
 			messages,
 			system,
 			model: model_id,
@@ -524,15 +878,19 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
-		}
+			cache_control: None,
+		})
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<messages::MessagesResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		let usage = resp.usage.accounting();
 		let provider_usage = Some(super::super::ProviderUsage {
-			input_tokens: resp.usage.input_tokens as u64,
-			total_tokens: (resp.usage.input_tokens + resp.usage.output_tokens) as u64,
+			input_tokens: usage.input_tokens,
+			total_tokens: usage.input_tokens.saturating_add(usage.output_tokens),
+			cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+			usage_lines: crate::types::messages::usage_lines(&resp.usage.iterations),
 			..Default::default()
 		});
 		let openai = translate_response_internal(resp);
@@ -545,6 +903,7 @@ pub mod from_completions {
 	}
 
 	fn translate_response_internal(resp: messages::MessagesResponse) -> completions::Response {
+		let accounting = resp.usage.accounting();
 		// Convert Anthropic content blocks to OpenAI message content
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
@@ -605,24 +964,16 @@ pub mod from_completions {
 				messages::ContentBlock::Unknown => continue,
 			}
 		}
+		let tool_calls = (!tool_calls.is_empty()).then_some(tool_calls);
 		let message = completions::ResponseMessage {
-			role: completions::Role::Assistant,
 			content,
-			tool_calls: if tool_calls.is_empty() {
-				None
-			} else {
-				Some(tool_calls)
-			},
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
+			tool_calls,
 			reasoning_content,
 			reasoning_signature: match reasoning_signatures.as_slice() {
 				[signature] if !signature.is_empty() => Some(signature.clone()),
 				_ => None,
 			},
-			extra: None,
+			..completions::ResponseMessage::assistant()
 		};
 		let finish_reason = resp.stop_reason.as_ref().map(super::translate_stop_reason);
 		// Only one choice for anthropic
@@ -636,29 +987,21 @@ pub mod from_completions {
 
 		let choices = vec![choice];
 		// Convert usage from Anthropic format to OpenAI format
-		let input_tokens = resp.usage.input_tokens
-			+ resp.usage.cache_read_input_tokens.unwrap_or_default()
-			+ resp.usage.cache_creation_input_tokens.unwrap_or_default();
+		let input_tokens = accounting
+			.input_tokens
+			.saturating_add(accounting.cache_read_input_tokens.unwrap_or_default())
+			.saturating_add(accounting.cache_creation_input_tokens.unwrap_or_default());
 		let usage = completions::Usage {
 			prompt_tokens: input_tokens as u32,
-			completion_tokens: resp.usage.output_tokens as u32,
-			total_tokens: (input_tokens + resp.usage.output_tokens) as u32,
-			cache_read_input_tokens: resp.usage.cache_read_input_tokens.map(|i| i as u64),
-			prompt_tokens_details: match (
-				resp.usage.cache_read_input_tokens,
-				resp.usage.cache_creation_input_tokens,
-			) {
-				(None, None) => None,
-				(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-					cached_tokens: cached_tokens.map(|i| i as u64),
-					audio_tokens: None,
-					cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-					rest: Default::default(),
-				}),
-			},
-			cache_creation_input_tokens: resp.usage.cache_creation_input_tokens.map(|i| i as u64),
-
-			completion_tokens_details: None,
+			completion_tokens: accounting.output_tokens as u32,
+			total_tokens: input_tokens.saturating_add(accounting.output_tokens) as u32,
+			cache_read_input_tokens: accounting.cache_read_input_tokens,
+			prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+				accounting.cache_read_input_tokens,
+				accounting.cache_creation_input_tokens,
+			),
+			cache_creation_input_tokens: accounting.cache_creation_input_tokens,
+			..Default::default()
 		};
 
 		completions::Response {
@@ -713,10 +1056,7 @@ pub mod from_completions {
 		// role field — it belongs on `choices[].delta`, so hold it until there is a chunk for it.
 		let mut pending_role = None;
 		let mut service_tier = None;
-		let mut input_tokens = 0;
-		let mut output_tokens = 0;
-		let mut cache_read_input_tokens = None;
-		let mut cache_creation_input_tokens = None;
+		let mut usage_acc = crate::types::messages::AccountingUsage::default();
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
@@ -753,6 +1093,7 @@ pub mod from_completions {
 			// Extract info we need
 			match f {
 				messages::MessagesStreamEvent::MessageStart { message } => {
+					usage_acc = message.usage.accounting();
 					message_id = Some(message.id);
 					pending_role = Some(match message.role {
 						messages::Role::Assistant => completions::Role::Assistant,
@@ -761,17 +1102,8 @@ pub mod from_completions {
 					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
-					input_tokens = message.usage.input_tokens;
-					output_tokens = message.usage.output_tokens;
-					cache_read_input_tokens = message.usage.cache_read_input_tokens;
-					cache_creation_input_tokens = message.usage.cache_creation_input_tokens;
 					log.update(|r| {
-						r.response.output_tokens = Some(message.usage.output_tokens as u64);
-						r.response.input_tokens = Some(message.usage.input_tokens as u64);
-						r.response.cached_input_tokens =
-							message.usage.cache_read_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_input_tokens =
-							message.usage.cache_creation_input_tokens.map(|i| i as u64);
+						usage_acc.apply(&mut r.response);
 						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 						r.response.provider_model = Some(strng::new(&message.model))
 					});
@@ -801,12 +1133,9 @@ pub mod from_completions {
 							},
 						);
 
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: completions::StreamResponseDelta {
-								tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+						let choice = completions::ChatChoiceStream::with_delta(
+							completions::StreamResponseDelta::with_tool_calls(vec![
+								completions::ChatCompletionMessageToolCallChunk {
 									index: tool_index,
 									id: Some(id),
 									r#type: Some(completions::FunctionType::Function),
@@ -814,11 +1143,9 @@ pub mod from_completions {
 										name: Some(name),
 										arguments: None,
 									}),
-								}]),
-								..Default::default()
-							},
-							finish_reason: None,
-						};
+								},
+							]),
+						);
 						mk(vec![choice], None)
 					},
 					_ => None,
@@ -874,41 +1201,23 @@ pub mod from_completions {
 						},
 					};
 					if emit_chunk {
-						let choice = completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: dr,
-							finish_reason: None,
-						};
+						let choice = completions::ChatChoiceStream::with_delta(dr);
 						mk(vec![choice], None)
 					} else {
 						None
 					}
 				},
 				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+					usage_acc = usage.accumulate(usage_acc);
 					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
 					let log_finish_reason = delta
 						.stop_reason
 						.as_ref()
 						.and_then(crate::types::serialize_str);
 					log.update(|r| {
-						if let Some(inp) = usage.input_tokens {
-							r.response.input_tokens = Some(inp as u64);
-						}
-						if let Some(crt) = usage.cache_read_input_tokens {
-							r.response.cached_input_tokens = Some(crt as u64);
-						}
-						if let Some(cwt) = usage.cache_creation_input_tokens {
-							r.response.cache_creation_input_tokens = Some(cwt as u64);
-						}
-						if let Some(o) = usage.output_tokens {
-							r.response.output_tokens = Some(o as u64);
-						}
-						if let Some(inp) = r.response.input_tokens
-							&& let Some(o) = r.response.output_tokens
-						{
-							r.response.total_tokens = Some(inp + o)
+						usage_acc.apply(&mut r.response);
+						if !usage.iterations.is_empty() {
+							r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
 						}
 						if let Some(completion) = completion.take() {
 							r.response.completion = Some(vec![completion]);
@@ -916,44 +1225,30 @@ pub mod from_completions {
 						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
 					});
 					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
-						vec![completions::ChatChoiceStream {
-							rest: Default::default(),
-							index: 0,
-							logprobs: None,
-							delta: completions::StreamResponseDelta::default(),
-							finish_reason: Some(finish_reason),
-						}]
+						vec![completions::ChatChoiceStream::with_finish_reason(
+							finish_reason,
+						)]
 					});
-					input_tokens = usage.input_tokens.unwrap_or(input_tokens);
-					output_tokens = usage.output_tokens.unwrap_or(output_tokens);
-					cache_read_input_tokens = usage.cache_read_input_tokens.or(cache_read_input_tokens);
-					cache_creation_input_tokens = usage
-						.cache_creation_input_tokens
-						.or(cache_creation_input_tokens);
-					let prompt_tokens = input_tokens
-						+ cache_read_input_tokens.unwrap_or_default()
-						+ cache_creation_input_tokens.unwrap_or_default();
+					let cache_read_input_tokens = usage_acc.cache_read_input_tokens;
+					let cache_creation_input_tokens = usage_acc.cache_creation_input_tokens;
+					let prompt_tokens = usage_acc
+						.input_tokens
+						.saturating_add(cache_read_input_tokens.unwrap_or_default())
+						.saturating_add(cache_creation_input_tokens.unwrap_or_default());
+					let output_tokens = usage_acc.output_tokens;
 					mk(
 						choices,
 						Some(completions::Usage {
 							prompt_tokens: prompt_tokens as u32,
 							completion_tokens: output_tokens as u32,
-
-							total_tokens: (prompt_tokens + output_tokens) as u32,
-
-							cache_read_input_tokens: cache_read_input_tokens.map(|i| i as u64),
-							prompt_tokens_details: match (cache_read_input_tokens, cache_creation_input_tokens) {
-								(None, None) => None,
-								(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-									cached_tokens: cached_tokens.map(|i| i as u64),
-									audio_tokens: None,
-									cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-									rest: Default::default(),
-								}),
-							},
-							cache_creation_input_tokens: cache_creation_input_tokens.map(|i| i as u64),
-
-							completion_tokens_details: None,
+							total_tokens: prompt_tokens.saturating_add(output_tokens) as u32,
+							cache_read_input_tokens,
+							prompt_tokens_details: UsagePromptDetails::from_cache_tokens(
+								cache_read_input_tokens,
+								cache_creation_input_tokens,
+							),
+							cache_creation_input_tokens,
+							..Default::default()
 						}),
 					)
 				},
@@ -962,12 +1257,9 @@ pub mod from_completions {
 						Some(ongoing) if !ongoing.emitted_arguments => {
 							// If no arguments were emitted for a tool call, send a synthetic `{}`
 							// for compatibility.
-							let choice = completions::ChatChoiceStream {
-								rest: Default::default(),
-								index: 0,
-								logprobs: None,
-								delta: completions::StreamResponseDelta {
-									tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+							let choice = completions::ChatChoiceStream::with_delta(
+								completions::StreamResponseDelta::with_tool_calls(vec![
+									completions::ChatCompletionMessageToolCallChunk {
 										index: ongoing.tool_index,
 										id: None,
 										r#type: None,
@@ -975,11 +1267,9 @@ pub mod from_completions {
 											name: None,
 											arguments: Some("{}".to_string()),
 										}),
-									}]),
-									..Default::default()
-								},
-								finish_reason: None,
-							};
+									},
+								]),
+							);
 							mk(vec![choice], None)
 						},
 						_ => None,
@@ -1112,6 +1402,7 @@ pub fn passthrough_stream(
 	let mut last_token_at: Option<Instant> = None;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
+	let mut usage_acc = crate::types::messages::AccountingUsage::default();
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
@@ -1133,12 +1424,9 @@ pub fn passthrough_stream(
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
+				usage_acc = message.usage.accounting();
 				log.update(|r| {
-					r.response.output_tokens = Some(message.usage.output_tokens as u64);
-					r.response.input_tokens = Some(message.usage.input_tokens as u64);
-					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
-					r.response.cache_creation_input_tokens =
-						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					usage_acc.apply(&mut r.response);
 					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
@@ -1177,27 +1465,15 @@ pub fn passthrough_stream(
 				}
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+				usage_acc = usage.accumulate(usage_acc);
 				let finish_reason = delta
 					.stop_reason
 					.as_ref()
 					.and_then(crate::types::serialize_str);
 				log.update(|r| {
-					if let Some(inp) = usage.input_tokens {
-						r.response.input_tokens = Some(inp as u64);
-					}
-					if let Some(o) = usage.output_tokens {
-						r.response.output_tokens = Some(o as u64);
-					}
-					if let Some(crt) = usage.cache_read_input_tokens {
-						r.response.cached_input_tokens = Some(crt as u64);
-					}
-					if let Some(cwt) = usage.cache_creation_input_tokens {
-						r.response.cache_creation_input_tokens = Some(cwt as u64);
-					}
-					if let Some(inp) = r.response.input_tokens
-						&& let Some(o) = r.response.output_tokens
-					{
-						r.response.total_tokens = Some(inp + o)
+					usage_acc.apply(&mut r.response);
+					if !usage.iterations.is_empty() {
+						r.response.usage_lines = crate::types::messages::usage_lines(&usage.iterations);
 					}
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);

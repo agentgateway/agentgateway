@@ -16,11 +16,11 @@ info:
   stop_sequence: ~
   usage:
     input_tokens: 47
-    cache_creation_input_tokens: 1
+    cache_creation_input_tokens: 150
     cache_read_input_tokens: 2
     cache_creation:
-      ephemeral_5m_input_tokens: 0
-      ephemeral_1h_input_tokens: 0
+      ephemeral_5m_input_tokens: 100
+      ephemeral_1h_input_tokens: 50
     output_tokens: 251
     service_tier: standard
 ---
@@ -45,11 +45,11 @@ info:
     "stop_sequence": null,
     "usage": {
       "input_tokens": 47,
-      "cache_creation_input_tokens": 1,
+      "cache_creation_input_tokens": 150,
       "cache_read_input_tokens": 2,
       "cache_creation": {
-        "ephemeral_5m_input_tokens": 0,
-        "ephemeral_1h_input_tokens": 0
+        "ephemeral_5m_input_tokens": 100,
+        "ephemeral_1h_input_tokens": 50
       },
       "output_tokens": 251,
       "service_tier": "standard"
@@ -59,7 +59,7 @@ info:
     "input_tokens": 47,
     "output_tokens": 251,
     "total_tokens": 298,
-    "cache_creation_input_tokens": 1,
+    "cache_creation_input_tokens": 150,
     "cached_input_tokens": 2,
     "service_tier": "standard",
     "provider_model": "claude-opus-4-6"

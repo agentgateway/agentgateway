@@ -33,6 +33,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
@@ -147,15 +148,26 @@ type testOutput[Status any, Output any] struct {
 	Output []Output `json:"output"`
 }
 
-func Syncer(t *testing.T, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
+func Syncer(t testing.TB, ctx plugins.PolicyCtx, includeStatusKinds ...string) (*TestStatusQueue, *syncer.Syncer) {
 	return SyncerWithOptions(t, ctx, includeStatusKinds)
 }
 
 // SyncerWithOptions is Syncer, with syncer options applied.
 func SyncerWithOptions(
-	t *testing.T,
+	t testing.TB,
 	ctx plugins.PolicyCtx,
 	includeStatusKinds []string,
+	opts ...syncer.AgentgatewaySyncerOption,
+) (*TestStatusQueue, *syncer.Syncer) {
+	return SyncerWithExtensions(t, ctx, includeStatusKinds, plugins.AgwPlugin{}, nil, opts...)
+}
+
+func SyncerWithExtensions(
+	t testing.TB,
+	ctx plugins.PolicyCtx,
+	includeStatusKinds []string,
+	extensions plugins.AgwPlugin,
+	additionalGatewayClasses map[string]*deployer.GatewayClassInfo,
 	opts ...syncer.AgentgatewaySyncerOption,
 ) (*TestStatusQueue, *syncer.Syncer) {
 	fc := fake.NewClient(t)
@@ -175,8 +187,8 @@ func SyncerWithOptions(
 		// Only used for NACK, so no need to do anything special here.
 		fc,
 		ctx.Collections,
-		agwPluginFactory(ctx.Collections, resolver, jwksLookup),
-		nil,
+		plugins.MergePlugins(agwPluginFactory(ctx.Collections, resolver, jwksLookup), extensions),
+		additionalGatewayClasses,
 		krtOpts,
 		nil,
 		opts...,

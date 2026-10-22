@@ -21,6 +21,7 @@ serviceAccount:
 
 # -- Configure the RBAC permissions created for the controller.
 rbac:
+  create: true
   # -- Restrict namespaced write permissions to these namespaces. The namespaces must already exist. An empty list preserves the default cluster-wide write access. Cluster-wide read permissions and writes to cluster-scoped resources are unaffected.
   # Restricting this list means only Gateways in these namespaces can be used.
   gatewayNamespaces: []
@@ -145,6 +146,8 @@ controller:
   extraEnv: {}
   # -- Add extra sidecar containers to the controller pod.
   extraContainers: []
+  # -- Add extra init containers to the controller pod.
+  extraInitContainers: []
   # -- Add extra volume mounts to the controller container.
   extraVolumeMounts: []
   # -- Add extra volumes to the controller pod.
@@ -298,6 +301,16 @@ monitoring:
     interval: 15s
     # -- Additional labels to add to the controller ServiceMonitor and the proxy PodMonitor (e.g. release: prometheus).
     extraLabels: {}
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+    scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+    scrapeClassicHistograms: true
+    # -- Relabeling rules applied to the scrape target before metrics are ingested.
+    #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+    relabelings: []
+    # -- Relabeling rules applied to scraped metrics before ingestion.
+    #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
+    metricRelabelings: []
 
   proxy:
     podMonitor:
@@ -309,6 +322,16 @@ monitoring:
       #    by the bundled Grafana dashboard for gateway discovery and filtering.
       podTargetLabels:
         - gateway.networking.k8s.io/gateway-name
+      # -- Scrape native (exponential, high-resolution) histograms. Requires Prometheus >= v3.8.0.
+      scrapeNativeHistograms: false
+      # -- Scrape classic (legacy bucket) histograms.
+      scrapeClassicHistograms: true
+      # -- Relabeling rules applied to the scrape target before metrics are ingested.
+      #    See the [Prometheus relabel_config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config).
+      relabelings: []
+      # -- Relabeling rules applied to scraped metrics before ingestion.
+      #    See the [Prometheus metric_relabel_configs docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs).
+      metricRelabelings: []
     # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
     gatewayClassNames:
       - agentgateway

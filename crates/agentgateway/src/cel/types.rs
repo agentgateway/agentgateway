@@ -30,9 +30,10 @@ use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{Body, BodyInspection, RecordedBodyHandle, apikey, basicauth, jwt};
 use crate::llm::{LLMInfo, LLMRequest};
 use crate::mcp::guardrails::McpGuardrailsDynamicMetadata;
-use crate::mcp::{MCPInfo, MCPTool};
+use crate::mcp::{MCPInfo, MCPTool, MCPView};
 use crate::proxy::dtrace;
 use crate::serdes::schema;
+use crate::telemetry::metrics::GuardrailAction;
 use crate::transport::tls::TlsInfo;
 use crate::{apply, llm};
 
@@ -59,12 +60,15 @@ pub struct Executor<'a> {
 	#[dynamic(rename = "basicAuth")]
 	pub basic_auth: ExtensionOrDirect<'a, basicauth::Claims>,
 
-	pub llm: ExtensionOrDirect<'a, LLMContext>,
+	pub llm: LLMView<'a>,
 
 	#[dynamic(rename = "llmRequest")]
 	pub llm_request: Option<&'a serde_json::Value>,
 
-	pub mcp: Option<&'a MCPInfo>,
+	/// Response from a virtual model callout, with `headers` and the decoded JSON `body`.
+	pub callout: Option<&'a serde_json::Value>,
+
+	pub mcp: Option<MCPView<'a>>,
 
 	pub backend: ExtensionOrDirect<'a, BackendContext>,
 
@@ -504,8 +508,7 @@ static DUMP: Lazy<Expression> =
 impl ExecutorResolver<'_> {
 	pub fn slow_debug(&self) -> serde_json::Value {
 		let expr = &DUMP;
-		let cel_value =
-			Value::resolve(expr.expression.expression(), context(), self).unwrap_or(Value::Null);
+		let cel_value = Value::resolve(expr.ast(), context(), self).unwrap_or(Value::Null);
 		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
 		// Filter nulls which are just noisy
 		if let serde_json::Value::Object(obj) = &mut v {
@@ -547,24 +550,22 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve_direct(&self, field: &OptimizedExpr) -> Option<Option<Value<'a>>> {
 		match field {
 			// To avoid a conversion from a string key into a HeaderName, we have a hot path
-			OptimizedExpr::HeaderLookup { request, header } if *request => Some(
-				self
-					.executor
-					.request
-					.as_ref()
-					.and_then(|r| r.headers.get(header))
-					.and_then(|h| h.to_str().ok())
-					.map(|s| Value::String(s.into())),
-			),
-			// OptimizedExpr::HeaderLookup { request, header } if !*request => Some(
-			// 	self
-			// 		.executor
-			// 		.response
-			// 		.as_ref()
-			// 		.and_then(|r| r.headers.get(header))
-			// 		.and_then(|h| h.to_str().ok())
-			// 		.map(|s| Value::String(s.into())),
-			// ),
+			OptimizedExpr::HeaderLookup { request, header } if *request => {
+				let Some(r) = self.executor.request.as_ref() else {
+					return Some(None);
+				};
+				let mut values = r.headers.as_ref().get_all(header).iter();
+				let first = values.next();
+				// Repeated headers are returned as a list; defer to the generic path for those.
+				if values.next().is_some() {
+					return None;
+				}
+				Some(
+					first
+						.and_then(|h| std::str::from_utf8(h.as_bytes()).ok())
+						.map(Value::from),
+				)
+			},
 			_ => None,
 		}
 	}
@@ -573,13 +574,22 @@ impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 impl<'a> Executor<'a> {
 	fn set_request(&mut self, req: &'a crate::http::Request) {
 		self.request = Some(req.into());
+		self.llm_request = req
+			.body()
+			.extension::<crate::json::ParsedJson>()
+			.map(|body| &body.0);
 		self.set_request_extensions(req.extensions());
 	}
 	fn set_request_extensions(&mut self, ext: &'a Extensions) {
 		self.api_key = ExtensionOrDirect::Extension(ext);
 		self.jwt = ExtensionOrDirect::Extension(ext);
-		self.llm = ExtensionOrDirect::Extension(ext);
-		self.mcp = ext.get::<MCPInfo>();
+		self.llm = match ext.get::<LLMContext>() {
+			Some(llm) => LLMView::Context(llm),
+			None => ext
+				.get::<RequestModel>()
+				.map_or(LLMView::None, LLMView::RequestModel),
+		};
+		self.mcp = ext.get::<MCPInfo>().map(MCPView::new);
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
 		self.extproc = ExtensionOrDirect::Extension(ext);
@@ -594,7 +604,7 @@ impl<'a> Executor<'a> {
 		self.request = Some(req.into());
 		self.api_key = ExtensionOrDirect::Direct(req.api_key.as_ref());
 		self.jwt = ExtensionOrDirect::Direct(req.jwt.as_ref());
-		self.llm = ExtensionOrDirect::Direct(req.llm.as_ref());
+		self.llm = req.llm.as_ref().into();
 		self.basic_auth = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
 		self.extauthz = ExtensionOrDirect::Direct(req.extauthz.as_ref());
 		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
@@ -609,7 +619,7 @@ impl<'a> Executor<'a> {
 		self.response = Some(resp.into());
 		self.proxy = ExtensionOrDirect::Extension(resp.extensions());
 		if let Some(llm) = resp.extensions().get::<LLMContext>() {
-			self.llm = ExtensionOrDirect::Direct(Some(llm));
+			self.llm = LLMView::Context(llm);
 		}
 		if let Some(extproc) = resp.extensions().get::<ExtProcDynamicMetadata>() {
 			self.extproc = ExtensionOrDirect::Direct(Some(extproc));
@@ -633,7 +643,7 @@ impl<'a> Executor<'a> {
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
 		}
-		this.mcp = Some(mcp);
+		this.mcp = Some(MCPView::new(mcp));
 		this
 	}
 	pub fn new_buffered_request(req: &'a ::http::Request<Option<Bytes>>) -> Self {
@@ -647,12 +657,6 @@ impl<'a> Executor<'a> {
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
 		}
-		this.llm_request = Some(llm_body);
-		this
-	}
-	pub fn new_llm_request(req: &'a crate::http::Request, llm_body: &'a serde_json::Value) -> Self {
-		let mut this = Self::new_empty();
-		this.set_request(req);
 		this.llm_request = Some(llm_body);
 		this
 	}
@@ -678,8 +682,8 @@ impl<'a> Executor<'a> {
 			response.body.recorded = resp.recorded_body.as_ref();
 			response.body_prefix = BodyPrefix(response.body.clone());
 		}
-		this.llm = ExtensionOrDirect::Direct(llm);
-		this.mcp = mcp;
+		this.llm = llm.into();
+		this.mcp = mcp.map(MCPView::new);
 		this.guardrails = guardrails;
 		if let Some(proxy) = proxy {
 			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
@@ -697,7 +701,7 @@ impl<'a> Executor<'a> {
 		if let Some(req) = req {
 			this.set_request_snapshot(req);
 		}
-		this.llm = ExtensionOrDirect::Direct(Some(llm));
+		this.llm = LLMView::Context(llm);
 		this
 	}
 	pub fn new_tcp_logger(
@@ -763,10 +767,24 @@ impl<'a> Executor<'a> {
 		resolver.slow_debug()
 	}
 
+	pub fn with_mcp_params(mut self, params: Option<&'a dyn DynamicType>) -> Self {
+		if let Some(mcp) = self.mcp.as_mut() {
+			mcp.params = params;
+		}
+		self
+	}
+
+	pub fn with_mcp_result(mut self, result: Option<&'a dyn DynamicType>) -> Self {
+		if let Some(mcp) = self.mcp.as_mut() {
+			mcp.result = result;
+		}
+		self
+	}
+
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
 		let start = dtrace::timed_start();
-		let res = Value::resolve(expr.expression.expression(), context(), &resolver);
+		let res = Value::resolve(expr.ast(), context(), &resolver);
 		dtrace::trace(|t| {
 			t.cel_eval(
 				start,
@@ -863,6 +881,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		mcp_guardrails: ext::<McpGuardrailsDynamicMetadata>(req, clear),
 		metadata: ext::<TransformationMetadata>(req, clear),
 		llm: ext::<LLMContext>(req, clear),
+		agent: ext::<AgentContext>(req, clear),
 		start_time: ext::<RequestTime>(req, clear),
 	}
 }
@@ -920,6 +939,8 @@ pub struct RequestSnapshot {
 	pub metadata: Option<TransformationMetadata>,
 
 	pub llm: Option<LLMContext>,
+
+	pub agent: Option<AgentContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -968,6 +989,19 @@ pub struct RequestRef<'a> {
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub end_time: Option<&'a RequestTime>,
+
+	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
+	pub agent: ExtensionOrDirect<'a, AgentContext>,
+}
+
+/// The agent harness that sent the request, such as Claude Code or Codex.
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+pub struct AgentContext {
+	/// The agent session the request belongs to, from `standardAttributes.session` or detected from
+	/// well-known agent headers such as `x-claude-code-session-id`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub session: Option<Strng>,
 }
 
 #[derive(Debug, Clone)]
@@ -1084,6 +1118,9 @@ pub struct RequestRefSerde {
 	/// The time the request completed
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub end_time: Option<RequestTime>,
+	/// The agent harness that sent the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub agent: Option<AgentContext>,
 }
 
 #[apply(schema!)]
@@ -1145,6 +1182,7 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			}),
 			start_time: value.start_time.as_ref().into(),
 			end_time: None,
+			agent: value.agent.as_ref().into(),
 		}
 	}
 }
@@ -1165,6 +1203,7 @@ impl<'a> RequestRef<'a> {
 			start_time: req.extensions().into(),
 			// Only known in snapshot phase...
 			end_time: None,
+			agent: req.extensions().into(),
 		}
 	}
 }
@@ -1430,8 +1469,8 @@ pub struct GuardrailInfo {
 	pub phase: Strng,
 	/// The guard kind that was evaluated, such as `bedrockGuardrails`.
 	pub guard: Strng,
-	/// The action the guardrail took (allow/mask/reject/audit/failOpen).
-	pub action: Strng,
+	/// The action the guardrail took.
+	pub action: GuardrailAction,
 	#[serde(flatten, default)]
 	#[dynamic(flatten)]
 	pub detail: GuardDetail,
@@ -1456,6 +1495,25 @@ pub struct GuardDetail {
 	pub assessments: Vec<serde_json::Value>,
 }
 
+impl DynamicType for GuardrailAction {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::String(
+			match self {
+				GuardrailAction::Allow => "allow",
+				GuardrailAction::FailOpen => "failOpen",
+				GuardrailAction::Audit => "audit",
+				GuardrailAction::Mask => "mask",
+				GuardrailAction::Reject => "reject",
+			}
+			.into(),
+		)
+	}
+}
+
 impl GuardrailInfo {
 	/// Minimal details about which guardrail was evaluated, its phase and its action.
 	/// Does not include detailed reasons or assessments.
@@ -1472,12 +1530,60 @@ impl GuardrailInfo {
 	}
 }
 
+/// The incoming request model, exposed as `llm.requestModel` before LLM processing.
+#[derive(Clone, Debug, cel::DynamicType)]
+pub struct RequestModel {
+	#[dynamic(rename = "requestModel")]
+	pub request_model: Strng,
+}
+
+#[derive(Debug, Default)]
+pub enum LLMView<'a> {
+	#[default]
+	None,
+	Context(&'a LLMContext),
+	RequestModel(&'a RequestModel),
+}
+
+impl<'a> From<Option<&'a LLMContext>> for LLMView<'a> {
+	fn from(value: Option<&'a LLMContext>) -> Self {
+		value.map_or(Self::None, Self::Context)
+	}
+}
+
+impl DynamicType for LLMView<'_> {
+	fn auto_materialize(&self) -> bool {
+		match self {
+			Self::None => true,
+			Self::Context(llm) => llm.auto_materialize(),
+			Self::RequestModel(model) => model.auto_materialize(),
+		}
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		match self {
+			Self::None => Value::Null,
+			Self::Context(llm) => llm.materialize(),
+			Self::RequestModel(model) => model.materialize(),
+		}
+	}
+
+	fn field(&self, field: &str) -> Option<Value<'_>> {
+		match self {
+			Self::None => None,
+			Self::Context(llm) => llm.field(field),
+			Self::RequestModel(model) => model.field(field),
+		}
+	}
+}
+
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
 pub struct LLMContext {
 	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
-	/// The model requested for the LLM request. This may differ from the actual model used.
+	/// The model requested for the LLM request. Before LLM processing, this is extracted from
+	/// the incoming URL or body, before provider overrides. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]
 	pub request_model: Strng,
 	/// The model that actually served the LLM response.
@@ -1551,9 +1657,9 @@ pub struct LLMContext {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub provider_total_tokens: Option<u64>,
 	/// The service tier the provider served the request under.
-	#[dynamic(rename = "serviceTier")]
+	#[dynamic(rename = "serviceTier", with_value = "service_tier_to_value")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub service_tier: Option<Strng>,
+	pub service_tier: Option<llm::catalog::PricingTier>,
 	// For now, not exposed to CEL; only used to piggy-back this field for metrics.
 	#[serde(skip)]
 	#[dynamic(skip)]
@@ -1598,6 +1704,10 @@ pub struct LLMContext {
 	#[dynamic(rename = "costRates")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cost_rates: Option<llm::catalog::CostRates>,
+	/// Model catalog metadata for the model that served the request.
+	/// Unset when the model is not in the catalog.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<Arc<llm::catalog::ModelInfo>>,
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub cost_status: Option<llm::catalog::CostLookupStatus>,
@@ -1629,7 +1739,10 @@ impl LLMContext {
 			input_audio_tokens: resp.input_audio_tokens,
 			cached_input_tokens: resp.cached_input_tokens,
 			cache_creation_input_tokens: resp.cache_creation_input_tokens,
-			service_tier: resp.service_tier,
+			service_tier: resp
+				.service_tier
+				.as_deref()
+				.and_then(|tier| llm::catalog::PricingTier::detect(&value.request.provider, tier)),
 			response_model: resp.provider_model,
 			// Not always set
 			completion: resp.completion,
@@ -1668,6 +1781,7 @@ impl LLMContext {
 		if let Some(projection) = projection {
 			base.cost = projection.cost;
 			base.cost_rates = projection.cost_rates;
+			base.model = projection.model;
 			base.cost_status = Some(projection.status);
 		}
 
@@ -1742,6 +1856,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			cost: None,
 			cost_rates: None,
 			cost_status: None,
+			model: None,
 		}
 	}
 }
@@ -1789,6 +1904,16 @@ impl DynamicType for SecretStringValue<'_> {
 pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
 	Value::Dynamic(DynamicValue::new_owned(SecretStringValue(secret)))
 }
+fn service_tier_to_value(c: &Option<llm::catalog::PricingTier>) -> Value<'_> {
+	match c {
+		None => Value::Null,
+		Some(llm::catalog::PricingTier::Standard) => Value::String("standard".into()),
+		Some(llm::catalog::PricingTier::Flex) => Value::String("flex".into()),
+		Some(llm::catalog::PricingTier::Priority) => Value::String("priority".into()),
+		Some(llm::catalog::PricingTier::Reserved) => Value::String("reserved".into()),
+	}
+}
+
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
 }
@@ -1827,13 +1952,6 @@ impl<'a> Headers<'a> {
 
 	fn as_ref(&self) -> &http::HeaderMap {
 		self.headers
-	}
-
-	fn get<K>(&self, name: K) -> Option<&http::HeaderValue>
-	where
-		K: http::header::AsHeaderName,
-	{
-		self.as_ref().get(name)
 	}
 
 	fn redacted(mut self) -> Self {
@@ -2167,8 +2285,8 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub llm: Option<LLMContext>,
 
-	/// `llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;
-	/// policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.
+	/// `llmRequest` contains the raw JSON LLM request during route and LLM policies.
+	/// Policies occurring after LLM processing, such as logs, will not have this field present.
 	#[serde(rename = "llmRequest", skip_serializing_if = "Option::is_none")]
 	pub llm_request: Option<serde_json::Value>,
 
@@ -2185,6 +2303,7 @@ pub struct ExecutorSerde {
 	/// `task`) plus `methodName`. Post-request CEL may also include fields like
 	/// `sessionId`, tool payloads, and list results.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<MCPView<'static>>"))]
 	pub mcp: Option<MCPInfo>,
 
 	/// `backend` contains information about the backend being used.
@@ -2279,6 +2398,7 @@ impl ExecutorSerde {
 				}),
 				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
 				end_time: req.end_time.as_ref(),
+				agent: ExtensionOrDirect::Direct(req.agent.as_ref()),
 			});
 		}
 
@@ -2311,14 +2431,14 @@ impl ExecutorSerde {
 		exec.jwt = ExtensionOrDirect::Direct(self.jwt.as_ref());
 		exec.api_key = ExtensionOrDirect::Direct(self.api_key.as_ref());
 		exec.basic_auth = ExtensionOrDirect::Direct(self.basic_auth.as_ref());
-		exec.llm = ExtensionOrDirect::Direct(self.llm.as_ref());
+		exec.llm = self.llm.as_ref().into();
 		exec.backend = ExtensionOrDirect::Direct(self.backend.as_ref());
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
 		exec.guardrails = self.guardrails.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
-		exec.mcp = self.mcp.as_ref();
+		exec.mcp = self.mcp.as_ref().map(MCPView::new);
 
 		exec
 	}
@@ -2350,6 +2470,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 			end_time: Some(RequestTime(
 				chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:01.12345678Z").unwrap(),
 			)),
+			agent: Some(AgentContext {
+				session: Some("e96634a3-fa28-4083-b354-55542e2dca01".into()),
+			}),
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
@@ -2452,7 +2575,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
 			provider_total_tokens: Some(150),
-			service_tier: Some("default".into()),
+			service_tier: Some(llm::catalog::PricingTier::Standard),
 			first_token: None,
 			inter_chunk_latencies: llm::TokenGapSummary::default(),
 			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
@@ -2475,6 +2598,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			cost: None,
 			cost_rates: None,
 			cost_status: None,
+			model: None,
 		}),
 		mcp: Some(MCPInfo {
 			method_name: Some("tools/call".into()),
@@ -2518,7 +2642,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		guardrails: Some(vec![GuardrailInfo {
 			phase: "request".into(),
 			guard: "bedrockGuardrails".into(),
-			action: "reject".into(),
+			action: GuardrailAction::Reject,
 			detail: GuardDetail {
 				guardrail_id: Some("gr-abc123".into()),
 				guardrail_version: Some("1".into()),

@@ -26,61 +26,77 @@ const URL_REWRITE_TRACE_KIND: &str = "url_rewrite";
 const DIRECT_RESPONSE_TRACE_KIND: &str = "direct_response";
 
 #[apply(schema!)]
+#[derive(Default)]
 pub struct HeaderModifier {
 	/// Headers to append without replacing existing values.
 	#[serde(default, skip_serializing_if = "is_default")]
-	#[serde_as(as = "serde_with::Map<_, _>")]
-	pub add: Vec<(Strng, Strng)>,
+	#[serde_as(as = "serde_with::Map<crate::serdes::SerAsStr, crate::serdes::SerAsHeaderValue>")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::BTreeMap<String, String>")
+	)]
+	pub add: Vec<(HeaderName, HeaderValue)>,
 	/// Headers to set, replacing any existing values.
 	#[serde(default, skip_serializing_if = "is_default")]
-	#[serde_as(as = "serde_with::Map<_, _>")]
-	pub set: Vec<(Strng, Strng)>,
+	#[serde_as(as = "serde_with::Map<crate::serdes::SerAsStr, crate::serdes::SerAsHeaderValue>")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::BTreeMap<String, String>")
+	)]
+	pub set: Vec<(HeaderName, HeaderValue)>,
 	/// Header names to remove.
 	#[serde(default, skip_serializing_if = "is_default")]
-	pub remove: Vec<Strng>,
+	#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+	pub remove: Vec<HeaderName>,
+	/// Set when an xDS header failed to parse. The entries before it are kept, and applying the
+	/// modifier fails after them.
+	#[serde(skip)]
+	pub invalid: Option<Strng>,
 }
 
 impl HeaderModifier {
+	fn check_invalid(&self) -> Result<(), Error> {
+		match &self.invalid {
+			Some(e) => Err(Error::InvalidFilterConfiguration(e.to_string())),
+			None => Ok(()),
+		}
+	}
+
 	pub fn apply(&self, headers: &mut HeaderMap<HeaderValue>) -> Result<(), Error> {
 		for (k, v) in &self.add {
-			headers.append(HeaderName::from_bytes(k.as_bytes())?, v.parse()?);
+			headers.append(k, v.clone());
 		}
 		for (k, v) in &self.set {
-			headers.insert(HeaderName::from_bytes(k.as_bytes())?, v.parse()?);
+			headers.insert(k, v.clone());
 		}
 		for k in &self.remove {
-			headers.remove(HeaderName::from_bytes(k.as_bytes())?);
+			headers.remove(k);
 		}
-		Ok(())
+		self.check_invalid()
 	}
 
 	pub fn apply_request(&self, req: &mut Request) -> Result<(), Error> {
 		for (k, v) in &self.add {
-			let name = HeaderName::from_bytes(k.as_bytes())?;
-			let value = HeaderValue::from_str(v)?;
 			let mut rr = crate::http::RequestOrResponse::Request(req);
 			rr.apply_header(
-				&crate::http::HeaderOrPseudo::Header(name),
-				Some(crate::http::HeaderOrPseudoValue::Header(value)),
+				&crate::http::HeaderOrPseudo::Header(k.clone()),
+				Some(crate::http::HeaderOrPseudoValue::Header(v.clone())),
 				crate::http::HeaderMutationAction::AppendIfExistsOrAdd,
 			);
 		}
 		for (k, v) in &self.set {
-			let name = HeaderName::from_bytes(k.as_bytes())?;
-			let value = HeaderValue::from_str(v)?;
 			let mut rr = crate::http::RequestOrResponse::Request(req);
 			rr.apply_header(
-				&crate::http::HeaderOrPseudo::Header(name),
-				Some(crate::http::HeaderOrPseudoValue::Header(value)),
+				&crate::http::HeaderOrPseudo::Header(k.clone()),
+				Some(crate::http::HeaderOrPseudoValue::Header(v.clone())),
 				crate::http::HeaderMutationAction::OverwriteIfExistsOrAdd,
 			);
 		}
 		for k in &self.remove {
-			req
-				.headers_mut()
-				.remove(HeaderName::from_bytes(k.as_bytes())?);
+			req.headers_mut().remove(k);
 		}
-		Ok(())
+		self.check_invalid()
 	}
 }
 
@@ -163,7 +179,15 @@ impl RequestRedirect {
 			.or_else(|| req.uri().scheme())
 			.cloned()
 			.unwrap_or(Scheme::HTTP);
-		let authority = rewrite_host(authority, req.uri(), scheme.as_ref(), &new_scheme)?;
+		let authority = match authority {
+			// An explicit scheme without a port uses the scheme's well-known port.
+			None | Some(HostRedirect::None)
+				if scheme == &Some(Scheme::HTTP) || scheme == &Some(Scheme::HTTPS) =>
+			{
+				req.uri().host().ok_or(Error::InvalidURI)?.parse()?
+			},
+			_ => rewrite_host(authority, req.uri(), scheme.as_ref(), &new_scheme)?,
+		};
 		let path_and_query = rewrite_path(path, path_match, req.uri())?;
 		let new = Uri::builder()
 			.scheme(new_scheme)
@@ -310,6 +334,13 @@ pub struct DirectResponse {
 }
 
 impl DirectResponse {
+	pub fn validate(&self) -> anyhow::Result<()> {
+		if self.body_expression.is_some() && !self.body.is_empty() {
+			anyhow::bail!("directResponse body and bodyExpression may not both be set");
+		}
+		Ok(())
+	}
+
 	pub fn apply(&self, req: &Request) -> Result<Response, Error> {
 		pol_result!(
 			DIRECT_RESPONSE_TRACE_KIND,
@@ -318,11 +349,6 @@ impl DirectResponse {
 			"applied direct response"
 		);
 		let body = if let Some(expr) = &self.body_expression {
-			if !self.body.is_empty() {
-				return Err(Error::InvalidFilterConfiguration(
-					"body and bodyExpression may not both be set".to_string(),
-				));
-			}
 			let exec = crate::cel::Executor::new_request(req);
 			let value = exec
 				.eval(expr.as_ref())
@@ -383,7 +409,18 @@ pub struct RequestMirror {
 	/// Backend that receives mirrored request copies.
 	pub backend: SimpleBackendReference,
 	/// Fraction of matching requests to mirror, from 0.0 to 1.0.
+	#[serde(deserialize_with = "de_mirror_percentage")]
 	pub percentage: f64,
+}
+
+fn de_mirror_percentage<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+	let percentage = <f64 as serde::Deserialize>::deserialize(d)?;
+	if !(0.0..=1.0).contains(&percentage) {
+		return Err(serde::de::Error::custom(format!(
+			"requestMirror percentage must be between 0.0 and 1.0, got {percentage}"
+		)));
+	}
+	Ok(percentage)
 }
 
 fn rewrite_host(
@@ -397,17 +434,17 @@ fn rewrite_host(
 		None | Some(HostRedirect::None) | Some(HostRedirect::Auto) => {
 			orig.authority().cloned().ok_or(Error::InvalidURI)
 		},
-		Some(HostRedirect::Full(hp)) => Ok(hp.as_str().try_into()?),
+		Some(HostRedirect::Full(hp)) => Ok(hp.clone()),
 		Some(HostRedirect::Host(h)) => {
 			if original_scheme == Some(&Scheme::HTTP) || original_scheme == Some(&Scheme::HTTPS) {
-				Ok(h.as_str().try_into()?)
+				Ok(h.clone())
 			} else {
 				let new_port = orig
 					.port_u16()
 					.and_then(|p| port_respecting_default(new_scheme, p));
 				match new_port {
 					Some(p) => Ok(format!("{h}:{p}").try_into()?),
-					None => Ok(h.as_str().try_into()?),
+					None => Ok(h.clone()),
 				}
 			}
 		},
@@ -460,11 +497,11 @@ fn rewrite_path(
 		Some(PathRedirect::Prefix(r)) => {
 			let PathMatch::PathPrefix(match_pfx) = path_match else {
 				return Err(Error::InvalidFilterConfiguration(
-					"prefix redirect requires prefix match".to_string(),
+					"path prefix rewrite requires a PathPrefix route match".to_string(),
 				));
 			};
-			let match_pfx = match_pfx.trim_end_matches('/');
-			let Some(rest) = strip_segment_prefix(orig.path(), match_pfx) else {
+			let Some(rest) = crate::http::route::strip_path_prefix(orig.path(), match_pfx.as_str())
+			else {
 				return Err(Error::InvalidURI);
 			};
 			let mut new_path = r.to_string();
@@ -484,15 +521,6 @@ fn rewrite_path(
 			}
 			Ok(new_path.try_into()?)
 		},
-	}
-}
-
-fn strip_segment_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
-	let rest = path.strip_prefix(prefix)?;
-	if prefix.is_empty() || rest.is_empty() || rest.starts_with('/') {
-		Some(rest)
-	} else {
-		None
 	}
 }
 

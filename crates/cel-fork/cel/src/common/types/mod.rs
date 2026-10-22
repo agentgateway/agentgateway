@@ -213,10 +213,6 @@ impl<'a> Type<'a> {
 	pub fn name(&self) -> &'a str {
 		self.runtime_type_name
 	}
-
-	pub fn has_trait(&self, t: u16) -> bool {
-		self.trait_mask & t == t
-	}
 }
 
 #[cfg(test)]

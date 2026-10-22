@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
-	istiolog "istio.io/istio/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -101,14 +100,6 @@ type ControllerBuilder struct {
 }
 
 func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuilder, error) {
-	loggingOptions := istiolog.DefaultOptions()
-	loggingOptions.JSONEncoding = true
-	if cfg.Dev {
-		setupLog.Info("starting log in dev mode")
-		loggingOptions.SetDefaultOutputLevel(istiolog.OverrideScopeName, istiolog.DebugLevel)
-	}
-	istiolog.Configure(loggingOptions)
-
 	setupLog.Info("initializing agentgateway extensions")
 
 	if cfg.JWKSLookup == nil {

@@ -214,6 +214,7 @@ output:
       concreteModel:
         backend:
           backend: default/local-llama/backend.llm
+        discoveryProvider: team-a
       key: default/local-llama.llm
       listenerKey: default/internal-gateway.llm
       match:

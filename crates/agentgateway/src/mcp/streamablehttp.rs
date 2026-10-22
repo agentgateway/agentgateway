@@ -95,7 +95,7 @@ impl StreamableHttpService {
 			},
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request, inputs).await,
-			(http::Method::DELETE, true) => self.handle_delete(request, inputs).await,
+			(http::Method::DELETE, true) => Box::pin(self.handle_delete(request, inputs)).await,
 			_ => Err(ProxyError::MCP(mcp::Error::MethodNotAllowed)),
 		}
 	}
@@ -106,13 +106,16 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		// check accept header
-		if !request
-			.headers()
-			.get(http::header::ACCEPT)
-			.and_then(|header| header.to_str().ok())
-			.is_some_and(|header| {
-				header.contains(JSON_MIME_TYPE) && header.contains(EVENT_STREAM_MIME_TYPE)
-			}) {
+		let mut accepts_json = false;
+		let mut accepts_event_stream = false;
+		for header in request.headers().get_all(http::header::ACCEPT).iter() {
+			let Ok(header) = header.to_str() else {
+				return mcp::Error::InvalidAccept.into();
+			};
+			accepts_json |= header.contains(JSON_MIME_TYPE);
+			accepts_event_stream |= header.contains(EVENT_STREAM_MIME_TYPE);
+		}
+		if !accepts_json || !accepts_event_stream {
 			return mcp::Error::InvalidAccept.into();
 		}
 
@@ -262,19 +265,20 @@ impl StreamableHttpService {
 			return mcp::Error::InvalidAcceptGet.into();
 		}
 
-		let Some(session_id) = request
-			.headers()
+		let (parts, _) = request.into_parts();
+		let Some(session_id) = parts
+			.headers
 			.get(HEADER_SESSION_ID)
 			.and_then(|v| v.to_str().ok())
 		else {
 			return mcp::Error::SessionIdRequired.into();
 		};
 
-		let Some(session) = self.session_manager.get_session(session_id, inputs) else {
+		let ctx = crate::mcp::upstream::IncomingRequestContext::new(&parts);
+		let Some(session) = self.session_manager.get_session(session_id, inputs, &ctx) else {
 			return mcp::Error::UnknownSession.into();
 		};
 
-		let (parts, _) = request.into_parts();
 		session.get_stream(parts).await
 	}
 
@@ -298,8 +302,8 @@ impl StreamableHttpService {
 		Ok(
 			self
 				.session_manager
-				.delete_session(&inputs.backend_id, &session_id, parts)
-				.await
+				.delete_session(&session_id, inputs, parts)
+				.await?
 				.unwrap_or_else(accepted_response),
 		)
 	}

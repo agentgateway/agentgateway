@@ -1,0 +1,195 @@
+{
+  "id": "response",
+  "status": "completed",
+  "model": "model",
+  "output": [
+    {
+      "type": "web_search_call",
+      "id": "search",
+      "status": "completed",
+      "action": {
+        "type": "search",
+        "query": "query",
+        "sources": [
+          {
+            "type": "url",
+            "url": "https://example.com"
+          }
+        ]
+      }
+    },
+    {
+      "type": "code_interpreter_call",
+      "id": "code",
+      "container_id": "container",
+      "status": "completed",
+      "code": "print(1)",
+      "outputs": [
+        {
+          "type": "logs",
+          "logs": "logs"
+        },
+        {
+          "type": "image",
+          "url": "data:image/png;base64,opaque"
+        }
+      ]
+    },
+    {
+      "type": "mcp_call",
+      "id": "mcp",
+      "server_label": "server",
+      "name": "tool",
+      "arguments": "arguments",
+      "output": "result",
+      "error": {
+        "type": "http_error",
+        "code": 500,
+        "message": "error"
+      }
+    },
+    {
+      "type": "shell_call_output",
+      "id": "shell",
+      "call_id": "call",
+      "status": "completed",
+      "output": [
+        {
+          "stdout": "stdout",
+          "stderr": "stderr",
+          "type": "exit",
+          "exit_code": 0
+        }
+      ]
+    },
+    {
+      "type": "apply_patch_call",
+      "id": "patch",
+      "call_id": "call",
+      "status": "completed",
+      "operation": {
+        "type": "update_file",
+        "path": "file",
+        "diff": "diff"
+      }
+    },
+    {
+      "type": "computer_call",
+      "id": "computer",
+      "call_id": "call",
+      "status": "completed",
+      "action": {
+        "type": "type",
+        "text": "text"
+      },
+      "pending_safety_checks": [
+        {
+          "id": "check",
+          "code": "code",
+          "message": "check"
+        }
+      ]
+    },
+    {
+      "type": "function_call_output",
+      "id": "result",
+      "call_id": "call",
+      "status": "completed",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "result"
+        },
+        {
+          "type": "input_image",
+          "detail": "auto",
+          "image_url": "data:image/png;base64,opaque"
+        }
+      ]
+    },
+    {
+      "type": "mcp_list_tools",
+      "id": "list",
+      "server_label": "server",
+      "tools": [
+        {
+          "name": "tool",
+          "description": "description",
+          "input_schema": {
+            "type": "object",
+            "description": "schema",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "tool_search_output",
+      "id": "search_output",
+      "call_id": "call",
+      "execution": "server",
+      "status": "completed",
+      "tools": [
+        {
+          "type": "function",
+          "name": "tool",
+          "description": "description",
+          "parameters": {
+            "type": "object",
+            "description": "schema"
+          }
+        }
+      ]
+    },
+    {
+      "type": "reasoning",
+      "id": "reasoning",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "unsigned summary"
+        }
+      ],
+      "content": [
+        {
+          "type": "reasoning_text",
+          "text": "unsigned reasoning"
+        }
+      ]
+    },
+    {
+      "type": "reasoning",
+      "id": "signed",
+      "summary": [
+        {
+          "type": "summary_text",
+          "text": "plaintext summary"
+        }
+      ],
+      "encrypted_content": "encrypted"
+    },
+    {
+      "type": "program",
+      "id": "program",
+      "call_id": "call",
+      "code": "signed code",
+      "fingerprint": "fingerprint"
+    },
+    {
+      "type": "message",
+      "id": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "refusal",
+          "refusal": "refusal"
+        }
+      ]
+    }
+  ]
+}

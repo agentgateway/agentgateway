@@ -145,8 +145,8 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 			final = krt.NewCollection(initial, func(kctx krt.HandlerContext, i krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus]) *krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus] {
 				desired := i.Status
 				desired.AttachedRoutes = len(krt.Fetch(kctx, cfg.RouteAttachments, krt.FilterIndex(attachmentIndex, plugins.RouteAttachmentParent{
-					GroupKind:      i.Obj.GroupVersionKind().GroupKind(),
-					NamespacedName: types.NamespacedName{Namespace: i.Obj.GetNamespace(), Name: i.Obj.GetName()},
+					GroupKind: i.Obj.GroupVersionKind().GroupKind(),
+					Namespace: i.Obj.GetNamespace(), Name: i.Obj.GetName(),
 				})))
 				for _, listener := range krt.Fetch(kctx, cfg.GatewayListeners) {
 					if listener.ParentObject.Name == i.Obj.GetName() && listener.Conflict != "" {
@@ -200,7 +200,7 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	candidates.Reset([]*translator.ListenerSet{free})
 	check(finalizationTestStatus{AttachedRoutes: 1})
 	serviceBacked := *free
-	serviceBacked.ParentInfo.ServiceKey = ptr.Of(types.NamespacedName{Namespace: "default", Name: "service"})
+	serviceBacked.ParentInfo.ServiceKey = new(types.NamespacedName{Namespace: "default", Name: "service"})
 	candidates.Reset([]*translator.ListenerSet{&serviceBacked})
 	check(finalizationTestStatus{AttachedRoutes: 1})
 	candidates.Reset([]*translator.ListenerSet{free})

@@ -25,7 +25,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
+use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target};
 use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
@@ -128,9 +128,11 @@ pub use processing::{
 /// Controls how an endpoint-picker-selected destination is used.
 pub enum InferenceRoutingDestinationMode {
 	/// Require the selected destination to match agentgateway's local service endpoints.
+	/// Only IP destinations can be validated; a hostname destination is rejected.
 	#[default]
 	Validated,
 	/// Trust the selected destination directly without local endpoint validation.
+	/// The destination may be an IP address or a DNS hostname.
 	Passthrough,
 }
 
@@ -189,7 +191,7 @@ pub struct InferencePoolRouter {
 
 #[derive(Debug, Default)]
 pub struct InferenceRequestResult {
-	pub destination: Option<SocketAddr>,
+	pub destination: Option<Target>,
 	pub destination_mode: InferenceRoutingDestinationMode,
 	pub policy_response: PolicyResponse,
 	pub failed_open: bool,
@@ -221,6 +223,15 @@ impl InferenceRouting {
 	}
 }
 
+/// Parses the EPP destination header (host:port). unix: paths are rejected so an
+/// EPP cannot point the proxy at a local socket.
+fn parse_destination(v: &str) -> anyhow::Result<Target> {
+	match Target::try_from(v)? {
+		Target::UnixSocket(_) => anyhow::bail!("expected host:port"),
+		t => Ok(t),
+	}
+}
+
 impl InferencePoolRouter {
 	pub fn is_enabled(&self) -> bool {
 		self.ext_proc.is_some()
@@ -242,7 +253,7 @@ impl InferencePoolRouter {
 		let dest = req
 			.headers_mut()
 			.remove(&INFERENCE_DESTINATION_HEADER)
-			.and_then(|v| v.to_str().ok().map(|v| v.parse::<SocketAddr>()))
+			.and_then(|v| v.to_str().ok().map(parse_destination))
 			.transpose()
 			.map_err(|e| ProxyError::Processing(anyhow!("EPP returned invalid address: {e}")))?;
 		Ok(InferenceRequestResult {

@@ -415,10 +415,11 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 			.with_route(basic_route(*mock.address()))
 			.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
 		// Authorization on the re-entered request only allows when the custom header
-		// carried on the CONNECT request is present and matches.
+		// carried on the CONNECT request is present and matches. Preserve the
+		// supplied Host even when it differs from the CONNECT request target.
 		t.attach_route_policy(json!({
 			"authorization": {
-				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\""],
+				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\" && source.connectHeaders[\"host\"] == \"captured.example:18080\""],
 			},
 		}))
 		.await;
@@ -426,10 +427,10 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 		let mut io = t.serve_tunnel(strng::literal!("outer"));
 		let connect = match custom_header {
 			Some(v) => format!(
-				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\nx-custom-header: {v}\r\n\r\n"
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: captured.example:18080\r\nx-custom-header: {v}\r\n\r\n"
 			),
 			None => {
-				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\n\r\n".to_string()
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: captured.example:18080\r\n\r\n".to_string()
 			},
 		};
 		io.write_all(connect.as_bytes()).await.unwrap();
@@ -468,7 +469,7 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 		"expected inner request to be authorized, got: {allowed}",
 	);
 
-	// Header absent: `source.connectHeaders` is empty, the rule does not match,
+	// Custom header absent: the rule does not match,
 	// and the inner request is denied (403).
 	let denied = tunnel_inner_request(None).await;
 	assert!(
@@ -1351,6 +1352,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 			name: strng::literal!("dynamic"),
 			namespace: Default::default(),
 			section: None,
+			kind: None,
 		}),
 		policy: BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(

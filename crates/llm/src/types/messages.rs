@@ -25,8 +25,21 @@ pub struct Request {
 	pub stream: Option<bool>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tools: Option<Vec<Tool>>,
+	/// Kept as raw JSON so fields we do not model (such as scope) pass through unchanged.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct Tool {
+	#[serde(flatten)]
+	pub rest: serde_json::Value,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_control: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
@@ -76,8 +89,81 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+/// Fields of a request block that hold nested blocks which may carry cache_control. Walking only
+/// these keeps a key with the same name inside tool inputs or schemas from being treated as a mark.
+pub(crate) fn cache_control_children(
+	block: &serde_json::Map<String, serde_json::Value>,
+) -> &'static [&'static str] {
+	match block.get("type").and_then(serde_json::Value::as_str) {
+		None if block.contains_key("role") => &["content"],
+		Some(
+			"tool_result"
+			| "mcp_tool_result"
+			| "search_result"
+			| "web_fetch_tool_result"
+			| "web_fetch_result"
+			| "content",
+		) => &["content"],
+		Some("document") => &["source"],
+		_ => &[],
+	}
+}
+
+impl TextBlock {
+	/// The blocks of this prompt, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<TextPart>> {
+		if let TextBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = TextBlock::Array(vec![TextPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			TextBlock::Array(parts) => Some(parts),
+			TextBlock::Text(_) => None,
+		}
+	}
+}
+
+impl ContentBlock {
+	/// The blocks of this content, turning a non-empty string into a single text block.
+	pub(crate) fn parts_mut(&mut self) -> Option<&mut Vec<ContentPart>> {
+		if let ContentBlock::Text(text) = self
+			&& !text.is_empty()
+		{
+			*self = ContentBlock::Array(vec![ContentPart::Text {
+				r#type: "text".to_string(),
+				text: std::mem::take(text),
+				rest: serde_json::Value::Object(Default::default()),
+			}]);
+		}
+		match self {
+			ContentBlock::Array(parts) => Some(parts),
+			ContentBlock::Text(_) => None,
+		}
+	}
+}
+
 impl TextPart {
-	fn text(&self) -> Option<&str> {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			TextPart::Text { rest, .. } => rest,
+			TextPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn text(&self) -> Option<&str> {
 		match self {
 			TextPart::Text { text, .. } => Some(text),
 			TextPart::Unknown(_) => None,
@@ -86,8 +172,8 @@ impl TextPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			TextPart::Text { text, .. } => Some(text),
-			TextPart::Unknown(_) => None,
+			TextPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
 		}
 	}
 
@@ -100,6 +186,21 @@ impl TextPart {
 }
 
 impl ContentPart {
+	/// The JSON object holding this block's own fields, such as cache_control.
+	pub(crate) fn fields(&self) -> &serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
+	pub(crate) fn fields_mut(&mut self) -> &mut serde_json::Value {
+		match self {
+			ContentPart::Text { rest, .. } => rest,
+			ContentPart::Unknown(block) => block,
+		}
+	}
+
 	fn text(&self) -> Option<&str> {
 		match self {
 			ContentPart::Text { text, .. } => Some(text),
@@ -109,8 +210,8 @@ impl ContentPart {
 
 	fn text_mut(&mut self) -> Option<&mut String> {
 		match self {
-			ContentPart::Text { text, .. } => Some(text),
-			ContentPart::Unknown(_) => None,
+			ContentPart::Text { text, rest, .. } if !crate::types::has_signature(rest) => Some(text),
+			_ => None,
 		}
 	}
 
@@ -158,8 +259,130 @@ pub struct Usage {
 	pub cache_read_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub iterations: Vec<UsageIteration>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq, Eq)]
+pub struct UsageIteration {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<String>,
+	#[serde(default)]
+	pub input_tokens: u64,
+	#[serde(default)]
+	pub output_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_read_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation: Option<UsageIterationCacheCreation>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize, PartialEq, Eq)]
+pub struct UsageIterationCacheCreation {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub ephemeral_1h_input_tokens: Option<u64>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct AccountingUsage {
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	pub cache_creation_input_tokens: Option<u64>,
+	pub cache_read_input_tokens: Option<u64>,
+	pub cache_creation_1h_input_tokens: Option<u64>,
+}
+
+impl AccountingUsage {
+	pub(crate) fn apply(&self, response: &mut crate::LLMResponse) {
+		response.input_tokens = Some(self.input_tokens);
+		response.output_tokens = Some(self.output_tokens);
+		response.total_tokens = Some(self.input_tokens.saturating_add(self.output_tokens));
+		response.cached_input_tokens = self.cache_read_input_tokens;
+		response.cache_creation_input_tokens = self.cache_creation_input_tokens;
+		response.cache_creation_1h_input_tokens = self.cache_creation_1h_input_tokens;
+	}
+
+	fn with_iterations(mut self, iterations: &[UsageIteration]) -> Self {
+		if iterations.is_empty() {
+			return self;
+		}
+
+		self.input_tokens = iterations
+			.iter()
+			.map(|usage| usage.input_tokens)
+			.fold(0, u64::saturating_add);
+		self.output_tokens = iterations
+			.iter()
+			.map(|usage| usage.output_tokens)
+			.fold(0, u64::saturating_add);
+		self.cache_creation_input_tokens = sum_optional(
+			iterations
+				.iter()
+				.map(|usage| usage.cache_creation_input_tokens),
+		)
+		.or(self.cache_creation_input_tokens);
+		self.cache_read_input_tokens =
+			sum_optional(iterations.iter().map(|usage| usage.cache_read_input_tokens))
+				.or(self.cache_read_input_tokens);
+		self.cache_creation_1h_input_tokens = sum_optional(iterations.iter().map(|usage| {
+			usage
+				.cache_creation
+				.as_ref()
+				.and_then(|cache| cache.ephemeral_1h_input_tokens)
+		}))
+		.or(self.cache_creation_1h_input_tokens);
+		self
+	}
+}
+
+pub(crate) fn usage_lines(iterations: &[UsageIteration]) -> Vec<crate::UsageLine> {
+	iterations
+		.iter()
+		.map(|i| crate::UsageLine {
+			model: i.model.as_deref().map(strng::new),
+			input_tokens: i.input_tokens,
+			output_tokens: i.output_tokens,
+			cache_creation_input_tokens: i.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: i
+				.cache_creation
+				.as_ref()
+				.and_then(|c| c.ephemeral_1h_input_tokens),
+			cached_input_tokens: i.cache_read_input_tokens,
+		})
+		.collect()
+}
+
+fn sum_optional(values: impl Iterator<Item = Option<u64>>) -> Option<u64> {
+	values.flatten().reduce(u64::saturating_add)
+}
+
+impl Usage {
+	pub fn cache_creation_1h_input_tokens(&self) -> Option<u64> {
+		self
+			.rest
+			.get("cache_creation")?
+			.get("ephemeral_1h_input_tokens")?
+			.as_u64()
+	}
+
+	pub(crate) fn accounting(&self) -> AccountingUsage {
+		AccountingUsage {
+			input_tokens: self.input_tokens,
+			output_tokens: self.output_tokens,
+			cache_creation_input_tokens: self.cache_creation_input_tokens,
+			cache_read_input_tokens: self.cache_read_input_tokens,
+			cache_creation_1h_input_tokens: self.cache_creation_1h_input_tokens(),
+		}
+		.with_iterations(&self.iterations)
+	}
 }
 
 pub fn get_messages_helper(
@@ -201,6 +424,43 @@ pub fn get_messages_helper(
 	out
 }
 
+pub fn get_messages_v2_helper(
+	messages: &[RequestMessage],
+	system: &Option<TextBlock>,
+) -> Vec<NormalizedMessage> {
+	let mut out = system
+		.as_ref()
+		.map(|system| NormalizedMessage {
+			role: strng::literal!("system"),
+			parts: match system {
+				TextBlock::Text(text) => {
+					vec![NormalizedMessagePart::text(strng::new(text))]
+				},
+				TextBlock::Array(parts) => parts
+					.iter()
+					.filter_map(TextPart::text)
+					.map(|text| NormalizedMessagePart::text(strng::new(text)))
+					.collect(),
+			},
+		})
+		.into_iter()
+		.collect::<Vec<_>>();
+	out.extend(messages.iter().map(|message| NormalizedMessage {
+		role: strng::new(&message.role),
+		parts: match &message.content {
+			Some(ContentBlock::Text(text)) => {
+				vec![NormalizedMessagePart::text(strng::new(text))]
+			},
+			Some(ContentBlock::Array(parts)) => {
+				parts.iter().filter_map(normalized_anthropic_part).collect()
+			},
+			None => Vec::new(),
+		},
+	}));
+	crate::types::attach_tool_result_names(&mut out);
+	out
+}
+
 /// `rest` keys preserved when a masked text run collapses; see `scan_text_runs`.
 const PRESERVED_REST_KEYS: &[&str] = &[
 	// Anthropic prompt-cache breakpoint
@@ -233,9 +493,16 @@ impl RequestType for Request {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
-			let messages = self.get_messages();
-			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
-			Some(tokens)
+			Some(crate::tokenizer::num_tokens(
+				&model,
+				&self.get_messages_v2(),
+				self
+					.rest
+					.get("tools")
+					.and_then(serde_json::Value::as_array)
+					.into_iter()
+					.flatten(),
+			))
 		} else {
 			None
 		};
@@ -268,38 +535,7 @@ impl RequestType for Request {
 	}
 
 	fn get_messages_v2(&self) -> Vec<NormalizedMessage> {
-		let mut messages = self
-			.system
-			.as_ref()
-			.map(|system| NormalizedMessage {
-				role: strng::literal!("system"),
-				parts: match system {
-					TextBlock::Text(text) => {
-						vec![NormalizedMessagePart::text(strng::new(text))]
-					},
-					TextBlock::Array(parts) => parts
-						.iter()
-						.filter_map(TextPart::text)
-						.map(|text| NormalizedMessagePart::text(strng::new(text)))
-						.collect(),
-				},
-			})
-			.into_iter()
-			.collect::<Vec<_>>();
-		messages.extend(self.messages.iter().map(|message| NormalizedMessage {
-			role: strng::new(&message.role),
-			parts: match &message.content {
-				Some(ContentBlock::Text(text)) => {
-					vec![NormalizedMessagePart::text(strng::new(text))]
-				},
-				Some(ContentBlock::Array(parts)) => {
-					parts.iter().filter_map(normalized_anthropic_part).collect()
-				},
-				None => Vec::new(),
-			},
-		}));
-		crate::types::attach_tool_result_names(&mut messages);
-		messages
+		get_messages_v2_helper(&self.messages, &self.system)
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
@@ -405,6 +641,12 @@ fn visit_tool_part_text(
 	value: &mut serde_json::Value,
 	f: &mut dyn FnMut(ContentScope, &mut String),
 ) {
+	if !crate::types::has_signature(value) {
+		visit_part_text(value, f);
+	}
+}
+
+fn visit_part_text(value: &mut serde_json::Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
 	match value.get("type").and_then(|t| t.as_str()) {
 		Some(
 			"tool_result"
@@ -414,41 +656,133 @@ fn visit_tool_part_text(
 			| "text_editor_code_execution_tool_result"
 			| "tool_search_tool_result"
 			| "web_fetch_tool_result"
-			| "advisor_tool_result",
+			| "advisor_tool_result"
+			| "web_search_tool_result",
 		) => {
-			visit_json_at(value, &["content"], ContentScope::ToolOutput, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::ToolOutput, f);
+			}
+		},
+		Some("mcp_tool_listing") => {
+			if let Some(serde_json::Value::Array(tools)) = value.get_mut("tools") {
+				for tool in tools {
+					visit_json_at(tool, &["description"], ContentScope::ToolOutput, f);
+					if let Some(schema) = tool.get_mut("input_schema") {
+						crate::types::visit_json_schema_text(schema, &mut |text| {
+							f(ContentScope::ToolOutput, text)
+						});
+					}
+				}
+			}
 		},
 		Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
 			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
 		},
 		// User-provided context blocks: message content, not tool traffic.
-		Some("document") => {
-			visit_json_at(value, &["source"], ContentScope::Messages, f);
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["context"], ContentScope::Messages, f);
-		},
-		Some("search_result") => {
-			visit_json_at(value, &["title"], ContentScope::Messages, f);
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
-		},
+		Some("document" | "search_result") => visit_content_text(value, ContentScope::Messages, f),
 		// Replayed conversation summary.
 		Some("compaction") => {
-			visit_json_at(value, &["content"], ContentScope::Messages, f);
+			if value
+				.get("encrypted_content")
+				.is_none_or(serde_json::Value::is_null)
+			{
+				visit_json_at(value, &["content"], ContentScope::Messages, f);
+			}
 		},
+		Some("thinking") => visit_json_at(value, &["thinking"], ContentScope::Messages, f),
 		// Mid-conversation system instructions: text blocks under `content`.
 		Some("mid_conv_system") => {
-			visit_json_at(value, &["content"], ContentScope::SystemPrompt, f);
+			if let Some(content) = value.get_mut("content") {
+				visit_content_text(content, ContentScope::SystemPrompt, f);
+			}
 		},
 		// No readable text: base64 payloads and file/tool references.
 		Some("image" | "container_upload" | "tool_addition" | "tool_removal" | "fallback") => {},
 		// Signature/encrypted content the API integrity-checks on replay; a mask would 400.
-		Some("thinking" | "redacted_thinking" | "web_search_tool_result") => {},
+		Some("redacted_thinking") => {},
 		other => {
 			tracing::debug!(
 				block_type = other.unwrap_or("<none>"),
 				"unrecognized content block; not scanned by prompt guards"
 			);
 		},
+	}
+}
+
+fn visit_content_text(
+	value: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	use serde_json::Value;
+	if crate::types::has_signature(value) {
+		return;
+	}
+	match value {
+		Value::String(text) => f(scope, text),
+		Value::Array(parts) => {
+			for part in parts {
+				visit_content_text(part, scope, f);
+			}
+		},
+		Value::Object(_) => match value.get("type").and_then(Value::as_str) {
+			Some("text" | "advisor_result") => visit_json_at(value, &["text"], scope, f),
+			Some("document") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["context"], scope, f);
+				if let Some(source) = value.get_mut("source") {
+					visit_document_source(source, scope, f);
+				}
+			},
+			Some("search_result" | "web_fetch_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["source"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+				if let Some(content) = value.get_mut("content") {
+					visit_content_text(content, scope, f);
+				}
+			},
+			Some("web_search_result") => {
+				visit_json_at(value, &["title"], scope, f);
+				visit_json_at(value, &["url"], scope, f);
+			},
+			Some(
+				"code_execution_result" | "bash_code_execution_result" | "encrypted_code_execution_result",
+			) => {
+				visit_json_at(value, &["stdout"], scope, f);
+				visit_json_at(value, &["stderr"], scope, f);
+			},
+			Some("text_editor_code_execution_view_result") => {
+				if value.get("file_type").and_then(Value::as_str) == Some("text") {
+					visit_json_at(value, &["content"], scope, f);
+				}
+			},
+			Some("text_editor_code_execution_str_replace_result") => {
+				visit_json_at(value, &["lines"], scope, f)
+			},
+			Some("text_editor_code_execution_tool_result_error" | "tool_search_tool_result_error") => {
+				visit_json_at(value, &["error_message"], scope, f);
+			},
+			// Other result variants carry IDs, status codes, media, or encrypted data.
+			_ => {},
+		},
+		_ => {},
+	}
+}
+
+fn visit_document_source(
+	source: &mut serde_json::Value,
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	match source.get("type").and_then(serde_json::Value::as_str) {
+		Some("text") => visit_json_at(source, &["data"], scope, f),
+		Some("content") => {
+			if let Some(content) = source.get_mut("content") {
+				visit_content_text(content, scope, f);
+			}
+		},
+		_ => {},
 	}
 }
 
@@ -567,6 +901,7 @@ fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let usage = self.usage.accounting();
 		let output_messages = if log_content.tool_calls {
 			extract_output_message(self)
 		} else {
@@ -574,22 +909,25 @@ impl ResponseType for Response {
 		};
 
 		LLMResponse {
-			input_tokens: Some(self.usage.input_tokens),
+			input_tokens: Some(usage.input_tokens),
 			input_image_tokens: None,
 			input_text_tokens: None,
 			input_audio_tokens: self.input_audio_tokens,
-			output_tokens: Some(self.usage.output_tokens),
+			output_tokens: Some(usage.output_tokens),
 			output_image_tokens: None,
 			output_text_tokens: None,
 			output_audio_tokens: self.output_audio_tokens,
-			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
+			total_tokens: Some(usage.output_tokens.saturating_add(usage.input_tokens)),
 			pages: None,
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
 			reasoning_tokens: None,
-			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
-			cached_input_tokens: self.usage.cache_read_input_tokens,
+			cache_creation_input_tokens: usage.cache_creation_input_tokens,
+			cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+			cache_creation_12h_input_tokens: None,
+			cached_input_tokens: usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
+			usage_lines: usage_lines(&self.usage.iterations),
 			completion: if log_content.completion {
 				Some(
 					self
@@ -638,10 +976,14 @@ impl ResponseType for Response {
 		serde_json::to_vec(&self)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		for c in &mut self.content {
-			if let Some(text) = &mut c.text {
-				f(text);
+			let signed = crate::types::has_signature(&c.rest);
+			let mut visit =
+				|scope, text: &mut String| f(crate::types::ResponseText { scope, signed }, text);
+			match &mut c.text {
+				Some(text) => visit(ContentScope::Messages, text),
+				None => visit_part_text(&mut c.rest, &mut visit),
 			}
 		}
 	}
@@ -757,6 +1099,16 @@ pub mod typed {
 		// There are LOTs of possible values; since we don't support them all, just allow them without failing
 		#[serde(other)]
 		Unknown,
+	}
+
+	impl ContentBlock {
+		pub fn text(text: String) -> Self {
+			Self::Text(ContentTextBlock {
+				text,
+				citations: None,
+				cache_control: None,
+			})
+		}
 	}
 
 	#[derive(Debug, Serialize, Deserialize, Clone)]
@@ -934,6 +1286,10 @@ pub mod typed {
 
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub output_config: Option<OutputConfig>,
+
+		/// Automatic caching: marks the last cacheable block of the request.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
@@ -1034,6 +1390,24 @@ pub mod typed {
 		pub output_audio_tokens: Option<usize>,
 	}
 
+	impl MessagesResponse {
+		/// The empty assistant message carried by a stream's `message_start` event.
+		pub fn start(id: String, model: String) -> Self {
+			Self {
+				id,
+				model,
+				r#type: "message".to_string(),
+				role: Role::Assistant,
+				content: Vec::new(),
+				stop_reason: None,
+				stop_sequence: None,
+				usage: Usage::default(),
+				input_audio_tokens: None,
+				output_audio_tokens: None,
+			}
+		}
+	}
+
 	#[derive(Clone, Serialize, Deserialize, Debug)]
 	#[serde(rename_all = "snake_case", tag = "type")]
 	pub enum MessagesStreamEvent {
@@ -1110,7 +1484,7 @@ pub mod typed {
 		},
 	}
 
-	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	#[derive(Clone, Serialize, Deserialize, Debug, Default, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
 		/// Cumulative input tokens
 		pub input_tokens: Option<usize>,
@@ -1122,6 +1496,47 @@ pub mod typed {
 		/// Cumulative cache read tokens
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+		/// Cache creation tokens split by TTL
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		pub iterations: Vec<super::UsageIteration>,
+	}
+
+	impl MessageDeltaUsage {
+		/// Merges this delta onto the usage accumulated so far; fields absent from the delta are kept.
+		pub(crate) fn accumulate(&self, prev: super::AccountingUsage) -> super::AccountingUsage {
+			super::AccountingUsage {
+				input_tokens: self.input_tokens.map_or(prev.input_tokens, |t| t as u64),
+				output_tokens: self.output_tokens.map_or(prev.output_tokens, |t| t as u64),
+				cache_creation_input_tokens: self
+					.cache_creation_input_tokens
+					.map(|t| t as u64)
+					.or(prev.cache_creation_input_tokens),
+				cache_read_input_tokens: self
+					.cache_read_input_tokens
+					.map(|t| t as u64)
+					.or(prev.cache_read_input_tokens),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.cache_creation)
+					.or(prev.cache_creation_1h_input_tokens),
+			}
+			.with_iterations(&self.iterations)
+		}
+	}
+
+	/// Cache creation tokens split by TTL.
+	#[derive(Clone, Serialize, Deserialize, Debug, Default, Eq, PartialEq)]
+	pub struct CacheCreation {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_5m_input_tokens: Option<usize>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub ephemeral_1h_input_tokens: Option<usize>,
+	}
+
+	impl CacheCreation {
+		pub fn ephemeral_1h(c: &Option<CacheCreation>) -> Option<u64> {
+			c.as_ref()?.ephemeral_1h_input_tokens.map(|i| i as u64)
+		}
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -1177,7 +1592,7 @@ pub mod typed {
 	}
 
 	/// Billing and rate-limit usage.
-	#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+	#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 	pub struct Usage {
 		/// The number of input tokens which were used.
 		pub input_tokens: usize,
@@ -1193,9 +1608,29 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
 
+		/// Cache creation tokens split by TTL.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub cache_creation: Option<CacheCreation>,
+
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub service_tier: Option<String>,
+
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		pub iterations: Vec<super::UsageIteration>,
+	}
+
+	impl Usage {
+		pub(crate) fn accounting(&self) -> super::AccountingUsage {
+			super::AccountingUsage {
+				input_tokens: self.input_tokens as u64,
+				output_tokens: self.output_tokens as u64,
+				cache_creation_input_tokens: self.cache_creation_input_tokens.map(|tokens| tokens as u64),
+				cache_read_input_tokens: self.cache_read_input_tokens.map(|tokens| tokens as u64),
+				cache_creation_1h_input_tokens: CacheCreation::ephemeral_1h(&self.cache_creation),
+			}
+			.with_iterations(&self.iterations)
+		}
 	}
 
 	/// Tool definition. A client-defined custom tool always carries `input_schema` and no `type`
@@ -1344,6 +1779,7 @@ pub mod typed {
 
 	impl super::ResponseType for MessagesResponse {
 		fn to_llm_response(&self, log_content: crate::LogContentFields) -> crate::LLMResponse {
+			let usage = self.usage.accounting();
 			let output_messages = if log_content.tool_calls {
 				extract_output_message_from_typed(self)
 			} else {
@@ -1351,20 +1787,23 @@ pub mod typed {
 			};
 
 			crate::LLMResponse {
-				input_tokens: Some(self.usage.input_tokens as u64),
+				input_tokens: Some(usage.input_tokens),
 				input_image_tokens: None,
 				input_text_tokens: None,
 				input_audio_tokens: self.input_audio_tokens.map(|i| i as u64),
-				output_tokens: Some(self.usage.output_tokens as u64),
+				output_tokens: Some(usage.output_tokens),
 				output_image_tokens: None,
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
-				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
+				total_tokens: Some(usage.input_tokens.saturating_add(usage.output_tokens)),
 				pages: None,
 				reasoning_tokens: None,
-				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
-				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
+				cache_creation_input_tokens: usage.cache_creation_input_tokens,
+				cache_creation_1h_input_tokens: usage.cache_creation_1h_input_tokens,
+				cache_creation_12h_input_tokens: None,
+				cached_input_tokens: usage.cache_read_input_tokens,
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
+				usage_lines: super::usage_lines(&self.usage.iterations),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if log_content.completion {
@@ -1426,10 +1865,76 @@ pub mod typed {
 			serde_json::to_vec(&self)
 		}
 
-		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 			for block in &mut self.content {
-				if let ContentBlock::Text(t) = block {
-					f(&mut t.text);
+				if let ContentBlock::Thinking {
+					thinking,
+					signature,
+				} = block
+				{
+					f(
+						crate::types::ResponseText {
+							scope: crate::types::ContentScope::Messages,
+							signed: !signature.is_empty(),
+						},
+						thinking,
+					);
+					continue;
+				}
+				let mut plain =
+					|scope: crate::types::ContentScope, text: &mut String| f(scope.into(), text);
+				let f = &mut plain;
+				match block {
+					ContentBlock::Text(t) => f(crate::types::ContentScope::Messages, &mut t.text),
+					ContentBlock::ToolUse { input, .. } | ContentBlock::ServerToolUse { input, .. } => {
+						crate::types::visit_json_strings(input, &mut |text| {
+							f(crate::types::ContentScope::ToolInput, text)
+						});
+					},
+					ContentBlock::ToolResult { content, .. } => {
+						let scope = crate::types::ContentScope::ToolOutput;
+						match content {
+							ToolResultContent::Text(text) => f(scope, text),
+							ToolResultContent::Array(parts) => {
+								for part in parts {
+									match part {
+										ToolResultContentPart::Text { text, .. } => f(scope, text),
+										ToolResultContentPart::Document {
+											source,
+											title,
+											context,
+											..
+										} => {
+											super::visit_document_source(source, scope, f);
+											for text in title.iter_mut().chain(context.iter_mut()) {
+												f(scope, text);
+											}
+										},
+										ToolResultContentPart::SearchResult {
+											content,
+											source,
+											title,
+											..
+										} => {
+											f(scope, source);
+											f(scope, title);
+											for part in content {
+												super::visit_content_text(part, scope, f);
+											}
+										},
+										_ => {},
+									}
+								}
+							},
+						}
+					},
+					ContentBlock::WebSearchToolResult {
+						content: Some(content),
+						..
+					} => {
+						super::visit_content_text(content, crate::types::ContentScope::ToolOutput, f);
+					},
+					_ => {},
 				}
 			}
 		}
@@ -1460,9 +1965,6 @@ mod tests {
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {
-			id: "msg_test".to_string(),
-			r#type: "message".to_string(),
-			role: typed::Role::Assistant,
 			content: vec![
 				typed::ContentBlock::Text(typed::ContentTextBlock {
 					text: "I'll call the tool.".to_string(),
@@ -1482,18 +1984,16 @@ mod tests {
 					cache_control: None,
 				},
 			],
-			model: "claude-sonnet-4-20250514".to_string(),
 			stop_reason: Some(typed::StopReason::ToolUse),
-			stop_sequence: None,
 			usage: typed::Usage {
 				input_tokens: 100,
 				output_tokens: 50,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
+				..Default::default()
 			},
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..typed::MessagesResponse::start(
+				"msg_test".to_string(),
+				"claude-sonnet-4-20250514".to_string(),
+			)
 		}
 	}
 
@@ -1533,26 +2033,21 @@ mod tests {
 	#[test]
 	fn test_typed_response_text_only_omits_output_messages() {
 		let response = typed::MessagesResponse {
-			id: "msg_test2".to_string(),
-			r#type: "message".to_string(),
-			role: typed::Role::Assistant,
 			content: vec![typed::ContentBlock::Text(typed::ContentTextBlock {
 				text: "Hello!".to_string(),
 				citations: None,
 				cache_control: None,
 			})],
-			model: "claude-sonnet-4-20250514".to_string(),
 			stop_reason: Some(typed::StopReason::EndTurn),
-			stop_sequence: None,
 			usage: typed::Usage {
 				input_tokens: 50,
 				output_tokens: 20,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
-				service_tier: None,
+				..Default::default()
 			},
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..typed::MessagesResponse::start(
+				"msg_test2".to_string(),
+				"claude-sonnet-4-20250514".to_string(),
+			)
 		};
 
 		let llm_response = response.to_llm_response(crate::LogContentFields {
@@ -1577,6 +2072,7 @@ mod tests {
 				cache_creation_input_tokens: None,
 				cache_read_input_tokens: None,
 				service_tier: None,
+				iterations: vec![],
 				rest: Default::default(),
 			},
 			content: vec![

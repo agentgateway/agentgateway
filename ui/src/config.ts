@@ -41,7 +41,10 @@ export const mcpSettingsFields = [
 	'port',
 	'statefulMode',
 	'prefixMode',
-	'failureMode'
+	'failureMode',
+	'sseKeepAlive',
+	'dnsRebindingProtection',
+	'server'
 ] as const;
 
 export const providerNames: ProviderName[] = [
@@ -52,6 +55,7 @@ export const providerNames: ProviderName[] = [
 	'bedrock',
 	'azure',
 	'copilot',
+	'typesafe',
 	'cohere',
 	'ollama',
 	'baseten',
@@ -66,6 +70,7 @@ export const providerNames: ProviderName[] = [
 	'xai',
 	'fireworks',
 	'meta',
+	'perplexity',
 	'custom'
 ];
 
@@ -77,6 +82,7 @@ export const coreProviderNames = new Set<ProviderName>([
 	'bedrock',
 	'azure',
 	'copilot',
+	'typesafe',
 	'custom'
 ]);
 
@@ -103,6 +109,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		bedrock: 'Amazon Bedrock',
 		azure: 'Azure',
 		copilot: 'GitHub Copilot',
+		typesafe: 'TypeSafe',
 		cohere: 'Cohere',
 		ollama: 'Ollama',
 		baseten: 'Baseten',
@@ -117,6 +124,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
 		xai: 'xAI (Grok)',
 		fireworks: 'Fireworks AI',
 		meta: 'Meta',
+		perplexity: 'Perplexity',
 		custom: 'Custom'
 	};
 	return names[provider] ?? provider;
@@ -442,12 +450,12 @@ export function makeEmptyModel(): LlmModel {
 	} as unknown as LlmModel;
 }
 
-export function makeEmptyVirtualModel(): LlmVirtualModel {
+export function makeEmptyVirtualModel(model = ''): LlmVirtualModel {
 	return {
 		name: '',
 		routing: {
 			weighted: {
-				targets: [{ model: '', weight: 1 }]
+				targets: [{ model, weight: 1 }]
 			}
 		}
 	};

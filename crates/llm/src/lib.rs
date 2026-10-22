@@ -175,6 +175,10 @@ pub enum RouteType {
 	GeminiCountTokens,
 	/// Cohere /v2/rerank (document reranking)
 	Rerank,
+	/// OpenAI /v1/decisions
+	Decisions,
+	/// TypeSafe /v1/systemone
+	SystemOne,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
@@ -188,6 +192,8 @@ pub enum InputFormat {
 	CountTokens,
 	Detect,
 	Rerank,
+	Decisions,
+	SystemOne,
 	/// Native Gemini generateContent body
 	Gemini,
 	/// Native Gemini countTokens body
@@ -210,6 +216,8 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Decisions => false,
+			InputFormat::SystemOne => false,
 			InputFormat::Gemini => true,
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
@@ -269,6 +277,8 @@ pub enum ProviderState {
 		namespaces: Arc<conversion::namespace_tools::NamespaceToolMap>,
 	},
 	VertexGemini,
+	SystemOneDecisions(Arc<conversion::systemone::from_decisions::State>),
+	DecisionsSystemOne(Arc<conversion::systemone::from_systemone::State>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
@@ -394,6 +404,12 @@ pub struct LLMResponse {
 	pub reasoning_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
+	/// Subset of cache_creation_input_tokens written with a 1h TTL (Anthropic `cache_creation.ephemeral_1h_input_tokens`).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_1h_input_tokens: Option<u64>,
+	/// Subset of cache_creation_input_tokens written with a 12h TTL (OpenAI `cache_write_tokens_details.ttl_12h_tokens`).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_12h_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -404,6 +420,10 @@ pub struct LLMResponse {
 	pub completion: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_messages: Option<Vec<types::OutputMessage>>,
+	/// Per-pass usage when the provider ran several inference passes for one request (Anthropic
+	/// `usage.iterations`). When set, cost is priced per line instead of from the totals above.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub usage_lines: Vec<UsageLine>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
 	/// Timestamp of the most recently observed output token, used to compute
@@ -414,6 +434,21 @@ pub struct LLMResponse {
 	/// the inter-chunk-latency histogram at request completion.
 	#[serde(skip)]
 	pub inter_chunk_latencies: TokenGapSummary,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct UsageLine {
+	/// Provider model that ran this pass; `None` means the response's model.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model: Option<Strng>,
+	pub input_tokens: u64,
+	pub output_tokens: u64,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_1h_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cached_input_tokens: Option<u64>,
 }
 
 /// Upper bounds for bucketing inter-chunk gaps before they're replayed into the
@@ -516,7 +551,7 @@ impl Default for StreamingUsageGuard {
 }
 
 pub use types::{
-	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
+	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseText, ResponseType,
 	SimpleChatCompletionMessage, ToolCall,
 };
 
@@ -543,7 +578,7 @@ pub enum AIError {
 	MessageNotFound,
 	#[error("response was missing fields")]
 	IncompleteResponse,
-	#[error("todo: streaming is not currently supported for this provider")]
+	#[error("streaming is not currently supported for this provider")]
 	StreamingUnsupported,
 	#[error("unsupported model")]
 	UnsupportedModel,

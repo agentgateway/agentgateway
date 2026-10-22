@@ -279,12 +279,26 @@ func TranslateAgwBackend(
 	}, results
 }
 
+func applyMCPTargetCondition(targets []*api.MCPTarget, condition *agentgateway.CELExpression) error {
+	if condition == nil {
+		return nil
+	}
+	for _, t := range targets {
+		t.Condition = new(string(*condition))
+	}
+	if !plugins.IsValidCELExpression(*condition) {
+		return fmt.Errorf("MCP target condition is not a valid CEL expression: %s", *condition)
+	}
+	return nil
+}
+
 func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBackend, inlinePolicies []*api.BackendPolicySpec) ([]*api.Backend, error) {
 	mcp := be.Spec.MCP
 	var mcpTargets []*api.MCPTarget
 	var backends []*api.Backend
 	var errs []error
 	for _, target := range mcp.Targets {
+		start := len(mcpTargets)
 		if s := target.Static; s != nil {
 			if s.BackendRef != nil {
 				serviceHostname, err := ResolveMCPBackendRefHost(ctx, be.Namespace, s.BackendRef)
@@ -313,6 +327,9 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				}
 
 				mcpTargets = append(mcpTargets, mcpTarget)
+				if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+					errs = append(errs, err)
+				}
 				continue
 			}
 
@@ -365,6 +382,9 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				return nil, err
 			}
 			mcpTargets = append(mcpTargets, targets...)
+		}
+		if err := applyMCPTargetCondition(mcpTargets[start:], target.Condition); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	// defaults to stateful session routing
@@ -509,6 +529,10 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				Model:      llm.OpenAI.Model,
 				Moderation: moderation,
 			},
+		}
+	} else if llm.Copilot != nil {
+		provider.Provider = &api.AIBackend_Provider_Copilot{
+			Copilot: &api.AIBackend_Copilot{Model: llm.Copilot.Model},
 		}
 	} else if llm.AzureOpenAI != nil {
 		resourceName, resourceType := parseAzureEndpoint(llm.AzureOpenAI.Endpoint)

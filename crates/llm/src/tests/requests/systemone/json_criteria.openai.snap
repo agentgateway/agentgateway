@@ -1,0 +1,70 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/systemone/json_criteria.json
+info:
+  model: jev-1.13.0
+  state: My order arrived with a cracked screen.
+  questions:
+    refund:
+      type: noul
+      instructions: Is the customer asking for a refund?
+      criteria:
+        "true":
+          signal: asks for money back
+        "false": Anything else
+    category:
+      type: choice
+      instructions: What is the ticket about?
+      criteria:
+        damage:
+          examples:
+            - cracked
+            - dented
+        shipping: Late or lost
+    policy:
+      type: noul
+      instructions: Is this eligible for a refund?
+      criteria:
+        "true": Within 30 days
+---
+{
+  "request": {
+    "model": "jev-1.13.0",
+    "input": "My order arrived with a cracked screen.",
+    "questions": [
+      {
+        "type": "predicate",
+        "name": "refund",
+        "instructions": "Is the customer asking for a refund?\n\ntrue: {\"signal\":\"asks for money back\"}\nfalse: Anything else"
+      },
+      {
+        "type": "choice",
+        "name": "category",
+        "instructions": "What is the ticket about?",
+        "choices": [
+          {
+            "value": "damage",
+            "description": "{\"examples\":[\"cracked\",\"dented\"]}"
+          },
+          {
+            "value": "shipping",
+            "description": "Late or lost"
+          }
+        ]
+      },
+      {
+        "type": "predicate",
+        "name": "policy",
+        "instructions": "Is this eligible for a refund?\n\ntrue: Within 30 days"
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "SystemOne",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "jev-1.13.0",
+    "provider": "openai",
+    "streaming": false,
+    "params": {}
+  }
+}

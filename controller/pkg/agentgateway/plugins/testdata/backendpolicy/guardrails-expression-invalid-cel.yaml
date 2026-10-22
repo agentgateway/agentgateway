@@ -1,0 +1,68 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: guardrails-expression-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - expression:
+            condition: 'foolen_{{mcp.params.name}}'
+            transform: 'mcp.params.merge({{'
+          methods:
+            tools/call: Request
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        mcpGuardrails:
+          processors:
+          - expression:
+              condition: foolen_{{mcp.params.name}}
+              transform: mcp.params.merge({{
+            methods:
+              tools/call: REQUEST
+      key: backend/default/guardrails-expression-invalid-cel:mcp-guardrails:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: guardrails-expression-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: guardrails-expression-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: |-
+          mcpGuardrails condition is not a valid CEL expression: foolen_{{mcp.params.name}}
+          mcpGuardrails transform is not a valid CEL expression: mcp.params.merge({{
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

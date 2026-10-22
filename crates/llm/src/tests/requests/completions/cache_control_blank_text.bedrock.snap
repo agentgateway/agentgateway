@@ -1,0 +1,135 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/cache_control_blank_text.json
+info:
+  model: anthropic.claude-sonnet-4-5
+  messages:
+    - role: system
+      content:
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: text
+          text: system
+    - role: developer
+      content:
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: user
+      content:
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: text
+          text: retained
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: text
+          text: suffix
+    - role: assistant
+      reasoning_content: reasoning
+      reasoning_signature: signature
+      content:
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+        - type: text
+          text: retained
+        - type: text
+          text: " \n"
+          prompt_cache_breakpoint:
+            mode: explicit
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "retained"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          },
+          {
+            "text": "suffix"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "reasoning",
+                "signature": "signature"
+              }
+            }
+          },
+          {
+            "text": "retained"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      }
+    ],
+    "system": [
+      {
+        "text": "system"
+      },
+      {
+        "cachePoint": {
+          "type": "default"
+        }
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-sonnet-4-5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": " \n system"
+      },
+      {
+        "role": "developer",
+        "content": " \n"
+      },
+      {
+        "role": "user",
+        "content": " \n retained  \n  \n suffix"
+      },
+      {
+        "role": "assistant",
+        "content": " \n retained  \n"
+      }
+    ]
+  }
+}

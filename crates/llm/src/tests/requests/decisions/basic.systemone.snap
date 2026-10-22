@@ -1,0 +1,40 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/decisions/basic.json
+info:
+  model: gpt-6-luna
+  input:
+    - role: user
+      content:
+        - type: input_text
+          text: The package was left in the rain and the box is soaked through.
+  questions:
+    - type: predicate
+      name: visible_damage
+      instructions: Does the customer report visible damage to the package?
+---
+{
+  "request": {
+    "model": "gpt-6-luna",
+    "state": [
+      {
+        "role": "user",
+        "content": "The package was left in the rain and the box is soaked through."
+      }
+    ],
+    "questions": {
+      "visible_damage": {
+        "type": "noul",
+        "instructions": "Does the customer report visible damage to the package?"
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Decisions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-6-luna",
+    "provider": "systemone",
+    "streaming": false,
+    "params": {}
+  }
+}

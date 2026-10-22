@@ -70,7 +70,7 @@ impl LegacySSEService {
 		let mut ctx = crate::mcp::upstream::IncomingRequestContext::new(&part);
 		*ctx.request.body_mut() = Some(bytes);
 
-		let Some(mut session) = self.session_manager.get_session(&session_id, inputs) else {
+		let Some(mut session) = self.session_manager.get_session(&session_id, inputs, &ctx) else {
 			return mcp::Error::UnknownSession.into();
 		};
 

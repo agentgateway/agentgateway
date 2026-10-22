@@ -461,6 +461,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
@@ -476,6 +477,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
@@ -519,15 +521,17 @@ impl LocalAPIKey {
 				budget.name,
 				api_key.as_deref().unwrap_or_default(),
 			);
-			let window_ms = budget.window.rolling.as_millis();
-			anyhow::ensure!(
-				window_ms > 0,
-				"budget rolling windows must be greater than zero"
-			);
-			anyhow::ensure!(
-				window_ms <= i64::MAX as u128,
-				"budget rolling window is too large"
-			);
+			if let Some(window) = &budget.window {
+				let window_ms = window.rolling.as_millis();
+				anyhow::ensure!(
+					window_ms > 0,
+					"budget rolling windows must be greater than zero"
+				);
+				anyhow::ensure!(
+					window_ms <= i64::MAX as u128,
+					"budget rolling window is too large"
+				);
+			}
 			let amount = budget.limit.amount.decimal().normalize();
 			let multiplier = match budget.limit.unit {
 				BudgetLimitUnit::Usd => {

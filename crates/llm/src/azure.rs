@@ -8,8 +8,9 @@ use crate::{RouteType, apply};
 pub enum AzureResourceType {
 	/// Azure OpenAI Service endpoint: `{resourceName}.openai.azure.com`
 	OpenAI,
-	/// Azure AI Foundry (project) endpoint: `{resourceName}.services.ai.azure.com`
-	/// Requires `project_name` to construct paths like `/api/projects/{project}/openai/v1/...`
+	/// Azure AI Foundry: project endpoints at `{resourceName}.services.ai.azure.com`,
+	/// or resource-level SystemOne at `{resourceName}.cognitiveservices.azure.com`.
+	/// Uses `project_name` for paths like `/api/projects/{project}/openai/v1/...`.
 	#[serde(alias = "aiServices")]
 	Foundry,
 }
@@ -27,7 +28,7 @@ pub struct Provider {
 	/// Azure API version query parameter for the endpoint.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_version: Option<Strng>,
-	/// The Foundry project name, required when `resourceType` is `foundry`.
+	/// The Foundry project name for project-scoped OpenAI-compatible APIs.
 	/// Used to construct paths: `/api/projects/{projectName}/openai/v1/...`.
 	/// This is distinct from `resourceName` which is used for the host.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -53,6 +54,9 @@ impl Provider {
 	}
 
 	fn foundry_path(&self, route: RouteType, model: &str) -> Strng {
+		if route == RouteType::SystemOne {
+			return strng::literal!("/providers/microsoft/v1/systemone");
+		}
 		if self.is_anthropic_model(model) {
 			match route {
 				RouteType::Messages => return strng::literal!("/anthropic/v1/messages"),
@@ -92,10 +96,15 @@ impl Provider {
 		}
 	}
 
-	pub fn get_host(&self) -> Strng {
+	pub fn get_host(&self, route: RouteType) -> Strng {
 		match &self.resource_type {
 			AzureResourceType::OpenAI => {
 				strng::format!("{}.openai.azure.com", self.resource_name)
+			},
+			AzureResourceType::Foundry
+				if matches!(route, RouteType::Decisions | RouteType::SystemOne) =>
+			{
+				strng::format!("{}.cognitiveservices.azure.com", self.resource_name)
 			},
 			AzureResourceType::Foundry => {
 				strng::format!("{}.services.ai.azure.com", self.resource_name)
@@ -127,7 +136,7 @@ mod tests {
 	#[case::foundry(AzureResourceType::Foundry, "my-resource.services.ai.azure.com")]
 	fn test_get_host(#[case] resource_type: AzureResourceType, #[case] expected: &str) {
 		let p = make_provider("my-resource", resource_type);
-		assert_eq!(p.get_host().as_str(), expected);
+		assert_eq!(p.get_host(RouteType::Completions).as_str(), expected);
 	}
 
 	#[rstest::rstest]
@@ -191,6 +200,21 @@ mod tests {
 		None,
 		"text-embedding-3-small",
 		"/api/projects/my-resource/openai/v1/embeddings"
+	)]
+	// Foundry + SystemOne: use the resource-level path with or without a project name.
+	#[case::foundry_systemone_alias(
+		AzureResourceType::Foundry,
+		RouteType::SystemOne,
+		Some("my-project"),
+		"deployment-alias",
+		"/providers/microsoft/v1/systemone"
+	)]
+	#[case::foundry_systemone_without_project(
+		AzureResourceType::Foundry,
+		RouteType::SystemOne,
+		None,
+		"deployment-alias",
+		"/providers/microsoft/v1/systemone"
 	)]
 	// OpenAI resource: standard v1 paths (model irrelevant)
 	#[case::openai_completions(

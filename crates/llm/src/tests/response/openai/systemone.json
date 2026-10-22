@@ -1,0 +1,25 @@
+{
+  "model": "gpt-6-luna",
+  "answers": [
+    {"type": "predicate", "name": "refund", "probability": 0.93},
+    {
+      "type": "choice",
+      "name": "category",
+      "choice": "damage",
+      "probabilities": [{"value": "damage", "probability": 0.88}, {"value": "shipping", "probability": 0.12}],
+      "confidence": 0.88
+    },
+    {
+      "type": "score",
+      "name": "urgency",
+      "score": 2,
+      "probabilities": [
+        {"value": 0, "label": "Low", "probability": 0.05},
+        {"value": 1, "label": "Medium", "probability": 0.25},
+        {"value": 2, "label": "High", "probability": 0.7}
+      ],
+      "confidence": 0.7
+    }
+  ],
+  "usage": {"input_tokens": 212, "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0}, "output_tokens": 0, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 212}
+}

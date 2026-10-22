@@ -1,0 +1,495 @@
+# Current-state recovery: the duplicate and incompatible listeners moved
+# ports. Previously conflicted statuses must not survive.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example
+  namespace: default
+  generation: 2
+spec:
+  gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: All
+  listeners:
+  - name: http
+    port: 8080
+    protocol: HTTP
+    hostname: owner.example.com
+  - name: duplicate
+    port: 8081
+    protocol: HTTP
+  - name: incompatible
+    port: 8083
+    protocol: TCP
+status:
+  listeners:
+  - name: http
+    attachedRoutes: 0
+    supportedKinds:
+    - kind: HTTPRoute
+    conditions:
+    - type: Conflicted
+      status: "False"
+      reason: NoConflicts
+      message: No errors found
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Accepted
+      status: "True"
+      reason: Accepted
+      message: No errors found
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Programmed
+      status: "True"
+      reason: Programmed
+      message: No errors found
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+  - name: duplicate
+    attachedRoutes: 0
+    supportedKinds:
+    - kind: HTTPRoute
+    conditions:
+    - type: Conflicted
+      status: "True"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Accepted
+      status: "False"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Programmed
+      status: "False"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+  - name: incompatible
+    attachedRoutes: 0
+    supportedKinds:
+    - kind: TCPRoute
+    conditions:
+    - type: Conflicted
+      status: "True"
+      reason: ProtocolConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Accepted
+      status: "False"
+      reason: ProtocolConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Programmed
+      status: "False"
+      reason: ProtocolConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+---
+# The higher-precedence ListenerSet is absent; this remaining candidate now
+# wins, even though its stored status still describes the old conflict.
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: remaining
+  namespace: default
+  generation: 2
+spec:
+  parentRef:
+    name: example
+  listeners:
+  - name: http
+    port: 8080
+    protocol: HTTP
+    hostname: shared.example.com
+  - name: wildcard
+    port: 8080
+    protocol: HTTP
+    hostname: "*.example.com"
+  - name: catch-all
+    port: 8080
+    protocol: HTTP
+status:
+  conditions:
+  - type: Accepted
+    status: "False"
+    reason: ListenersNotValid
+    message: previous conflict
+    observedGeneration: 1
+    lastTransitionTime: "2026-01-01T00:00:00Z"
+  listeners:
+  - name: http
+    attachedRoutes: 0
+    supportedKinds:
+    - kind: HTTPRoute
+    conditions:
+    - type: Conflicted
+      status: "True"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Accepted
+      status: "False"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+    - type: Programmed
+      status: "False"
+      reason: HostnameConflict
+      message: previous conflict
+      observedGeneration: 1
+      lastTransitionTime: "2026-01-01T00:00:00Z"
+
+---
+# Output
+output:
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/example
+      port: 8080
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8081/default/example
+      port: 8081
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8083/default/example
+      port: 8083
+      protocol: TCP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8081/default/example
+      key: default/example.duplicate
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: duplicate
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: owner.example.com
+      key: default/example.http
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8083/default/example
+      key: default/example.incompatible
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: incompatible
+      protocol: TCP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      key: default/remaining.catch-all
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: catch-all
+        listenerSet:
+          name: remaining
+          namespace: default
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: shared.example.com
+      key: default/remaining.http
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: http
+        listenerSet:
+          name: remaining
+          namespace: default
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: '*.example.com'
+      key: default/remaining.wildcard
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: wildcard
+        listenerSet:
+          name: remaining
+          namespace: default
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: remaining
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Resource accepted
+      observedGeneration: 2
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Resource programmed
+      observedGeneration: 2
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: wildcard
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: catch-all
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: example
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 1
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      observedGeneration: 2
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      observedGeneration: 2
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: duplicate
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        observedGeneration: 2
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: incompatible
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TCPRoute

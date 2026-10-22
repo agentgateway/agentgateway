@@ -1,0 +1,102 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: example-policy
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    timeouts:
+      request: 5s
+status:
+  ancestors:
+    # Our entry comes first and is refreshed in place.
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: stale
+          reason: Valid
+          status: "True"
+          type: Accepted
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: stale
+          reason: Pending
+          status: "False"
+          type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    # Another controller's entry that sorts before ours; it must keep its position.
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: a-other-gw
+      conditions:
+        - lastTransitionTime: "2026-04-22T17:57:23Z"
+          message: Accepted by fake controller
+          reason: Valid
+          status: "True"
+          type: Accepted
+      controllerName: other-controller.example.com/controller
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/example-policy:timeout:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: example-policy
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        timeout:
+          request: 5s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: example-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: a-other-gw
+      conditions:
+      - lastTransitionTime: fake
+        message: Accepted by fake controller
+        reason: Valid
+        status: "True"
+        type: Accepted
+      controllerName: other-controller.example.com/controller

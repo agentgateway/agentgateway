@@ -46,6 +46,8 @@ type InMemoryGatewayParametersConfig struct {
 var (
 	// ErrNoValidPorts is returned when no valid ports are found for the Gateway
 	ErrNoValidPorts = errors.New("no valid ports")
+	// ErrSessionKey is returned when the Gateway's managed session key Secret cannot be read or created
+	ErrSessionKey = errors.New("session key unavailable")
 )
 
 const sessionKeyChecksumAnnotation = "checksum/session-key"
@@ -72,7 +74,7 @@ func (gp *GatewayParameters) WithHelmValuesGeneratorOverride(generator HelmValue
 
 func (gp *GatewayParameters) WithSessionKeyGenerator(generator func() (string, error)) *GatewayParameters {
 	if gp.agwHelmValuesGenerator != nil && generator != nil {
-		gp.agwHelmValuesGenerator.sessionKeyGen = generator
+		gp.agwHelmValuesGenerator.sessionKeys.SetGenerator(generator)
 	}
 	return gp
 }
@@ -163,33 +165,33 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 		if err != nil {
 			return nil, err
 		}
-		if usesManagedSessionKeyResolvedParameters(resolved) {
-			sessionKeySecret, err := gp.agwHelmValuesGenerator.buildSessionKeySecret(
-				ctx,
-				gw,
-				gatewaySessionKeySecretName(gw.Name),
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to build session key secret for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
-			}
-			if err := addSessionKeyChecksumAnnotation(rendered, sessionKeySecret); err != nil {
-				return nil, fmt.Errorf("failed to annotate session key checksum for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
-			}
-			rendered = append(rendered, sessionKeySecret)
+		if err := gp.agwHelmValuesGenerator.sessionKeys.Apply(ctx, gw, rendered); err != nil {
+			return nil, err
 		}
 	}
 
 	return rendered, nil
 }
 
-func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Secret) error {
-	key, found := secret.Data["key"]
-	if !found || len(key) == 0 {
-		return fmt.Errorf("session key secret %s/%s missing key entry", secret.Namespace, secret.Name)
+// Apply creates the managed session key when the rendered workload references it
+// and adds its checksum to the workload pod template.
+func (s *SessionKeys) Apply(ctx context.Context, gw *gwv1.Gateway, rendered []client.Object) error {
+	if !referencesManagedSessionKey(rendered, SessionKeySecretName(gw.Name)) {
+		return nil
 	}
 
-	checksum := sha256.Sum256(key)
-	checksumHex := hex.EncodeToString(checksum[:])
+	key, err := s.Get(ctx, gw)
+	if err != nil {
+		return fmt.Errorf("%w for Gateway %s/%s: %w", ErrSessionKey, gw.Namespace, gw.Name, err)
+	}
+	AddSessionKeyChecksum(rendered, key)
+	return nil
+}
+
+// AddSessionKeyChecksum annotates workload pod templates so proxies restart when the key changes.
+func AddSessionKeyChecksum(rendered []client.Object, key string) {
+	sum := sha256.Sum256([]byte(key))
+	checksum := hex.EncodeToString(sum[:])
 
 	for _, obj := range rendered {
 		var template *corev1.PodTemplateSpec
@@ -201,14 +203,34 @@ func addSessionKeyChecksumAnnotation(rendered []client.Object, secret *corev1.Se
 		default:
 			continue
 		}
-
 		if template.Annotations == nil {
 			template.Annotations = map[string]string{}
 		}
-		template.Annotations[sessionKeyChecksumAnnotation] = checksumHex
+		template.Annotations[sessionKeyChecksumAnnotation] = checksum
 	}
+}
 
-	return nil
+func referencesManagedSessionKey(rendered []client.Object, secretName string) bool {
+	for _, obj := range rendered {
+		var template *corev1.PodTemplateSpec
+		switch workload := obj.(type) {
+		case *appsv1.Deployment:
+			template = &workload.Spec.Template
+		case *appsv1.DaemonSet:
+			template = &workload.Spec.Template
+		default:
+			continue
+		}
+		for _, container := range template.Spec.Containers {
+			for _, env := range container.Env {
+				if env.Name == sessionKeyEnvVar && env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil &&
+					env.ValueFrom.SecretKeyRef.Name == secretName && env.ValueFrom.SecretKeyRef.Key == "key" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func GatewayReleaseNameAndNamespace(obj client.Object) (string, string) {

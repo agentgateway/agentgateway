@@ -1,7 +1,7 @@
 init_config: {}
 instances:
 - use_latest_spec: true
-  openmetrics_endpoint: http://gateway:15020/metrics
+  openmetrics_endpoint: http://host.docker.internal:15020/metrics
   namespace: agentgateway
   raw_metric_prefix: agentgateway_
   metrics:

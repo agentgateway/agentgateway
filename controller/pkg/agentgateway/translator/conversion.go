@@ -420,7 +420,7 @@ func BuildAgwTrafficPolicyFilters(
 			if h == nil {
 				continue
 			}
-			policies = append(policies, h)
+			policies = append(policies, &api.TrafficPolicySpec{Kind: &api.TrafficPolicySpec_UrlRewrite{UrlRewrite: h}})
 		case gwv1.HTTPRouteFilterCORS:
 			h := createAgwCorsFilter(filter.CORS)
 			if h == nil {
@@ -520,6 +520,12 @@ func BuildAgwBackendPolicyFilters(
 			} else {
 				mergedMirror = append(mergedMirror, h)
 			}
+		case gwv1.HTTPRouteFilterURLRewrite:
+			h := CreateAgwRewriteFilter(filter.URLRewrite)
+			if h == nil {
+				continue
+			}
+			policies = append(policies, &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_UrlRewrite{UrlRewrite: h}})
 		default:
 			return nil, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionAccepted,
@@ -873,7 +879,17 @@ func ReferenceAllowed(
 	return nil
 }
 
-func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
+func extractParentReferenceInfo(ctx RouteContext, obj controllers.Object) []RouteParentReference {
+	// Several collections resolve the parents of the same route, so use the precomputed ones.
+	_, _, kind := GetCommonRouteInfo(obj)
+	key := utils.TypedNamespacedName{Kind: kind.Kind, Namespace: obj.GetNamespace(), Name: obj.GetName()}
+	if refs := krt.FetchOne(ctx.Krt, ctx.ParentRefs, krt.FilterKey(key.String())); refs != nil {
+		return refs.Refs
+	}
+	return nil
+}
+
+func resolveParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
 	allowed := ctx.References.AllowedParentReferences
@@ -927,8 +943,13 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 		}
 	}
 	// Ensure stable order
-	slices.SortBy(parentRefs, func(a RouteParentReference) string {
-		return ParentRefString(a.OriginalReference)
+	slices.SortFunc(parentRefs, func(a, b RouteParentReference) int {
+		return cmp.Or(
+			strings.Compare(ParentRefString(a.OriginalReference), ParentRefString(b.OriginalReference)),
+			strings.Compare(a.ListenerKey, b.ListenerKey),
+			strings.Compare(ptr.OrEmpty(a.ServiceKey).String(), ptr.OrEmpty(b.ServiceKey).String()),
+			strings.Compare(a.Hostname, b.Hostname),
+		)
 	})
 	return parentRefs
 }

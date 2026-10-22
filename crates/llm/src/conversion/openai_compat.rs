@@ -531,6 +531,19 @@ pub mod to_responses {
 		let mut tool_calls: Vec<responses::OutputItem> = Vec::new();
 
 		if let Some(choice) = &choice {
+			if let Some(text) = choice.message.reasoning() {
+				outputs.push(responses::OutputItem::Reasoning(responses::ReasoningItem {
+					id: Some(format!("rs_{:016x}", rand::rng().random::<u64>())),
+					summary: vec![],
+					content: Some(vec![responses::ReasoningItemContent::ReasoningText(
+						responses::ReasoningTextContent {
+							text: text.to_string(),
+						},
+					)]),
+					encrypted_content: None,
+					status: Some(responses::OutputStatus::Completed),
+				}));
+			}
 			if let Some(content) = &choice.message.content {
 				text_parts.push(responses::OutputMessageContent::OutputText(
 					responses::OutputTextContent {
@@ -603,7 +616,7 @@ pub mod to_responses {
 
 		let usage = resp.usage.map(|u| responses::ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: responses::InputTokenDetails {
 				cached_tokens: u
@@ -617,6 +630,7 @@ pub mod to_responses {
 					.and_then(|d| d.cache_write_tokens)
 					.or(u.cache_creation_input_tokens)
 					.map(|tokens| tokens as i64),
+				cache_write_tokens_details: None,
 			},
 			output_tokens_details: responses::OutputTokenDetails {
 				reasoning_tokens: u
@@ -640,12 +654,12 @@ pub mod to_responses {
 		namespaces: Option<std::sync::Arc<crate::conversion::namespace_tools::NamespaceToolMap>>,
 	) -> Body {
 		use responses::{
-			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
-			OutputTextContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
-			ResponseOutputItemAddedEvent, ResponseStreamEvent, ResponseTextDeltaEvent,
+			FunctionToolCall, OutputContent, OutputItem, OutputStatus, OutputTextContent, ReasoningItem,
+			ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
+			ResponseOutputItemAddedEvent, ResponseReasoningTextDeltaEvent, ResponseStreamEvent,
+			ResponseTextDeltaEvent,
 		};
 
-		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
 		let mut sent_created = false;
 		let mut sent_content_part = false;
@@ -656,7 +670,12 @@ pub mod to_responses {
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let mut response_builder: Option<types::responses::ResponseBuilder> = None;
 
-		let mut next_output_index: u32 = 1;
+		// Output indexes follow arrival order. The message opens lazily so reasoning, which streams
+		// first, takes index 0 as it does in the Responses API.
+		let mut next_output_index: u32 = 0;
+		let mut message_output_index: Option<u32> = None;
+		// (item_id, output_index, text)
+		let mut reasoning: Option<(String, u32, String)> = None;
 		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
 		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let mut completion = log_content.completion.then(String::new);
@@ -685,9 +704,12 @@ pub mod to_responses {
 								&mut events,
 								&mut sequence_number,
 								&mut tool_calls,
+								&mut reasoning,
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
+								&mut message_output_index,
+								&mut next_output_index,
 								&sent_content_part,
 								&text,
 								&log,
@@ -729,22 +751,6 @@ pub mod to_responses {
 								}),
 							));
 
-							sequence_number += 1;
-							events.push((
-								"event",
-								ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
-									sequence_number,
-									output_index: 0,
-									item: OutputItem::Message(OutputMessage {
-										content: Vec::new(),
-										id: message_item_id.clone(),
-										role: AssistantRole::Assistant,
-										phase: None,
-										status: OutputStatus::InProgress,
-									}),
-								}),
-							));
-
 							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&chunk.model));
 								if let Some(st) = &chunk.service_tier {
@@ -758,11 +764,59 @@ pub mod to_responses {
 						}
 
 						if let Some(choice) = chunk.choices.first() {
-							if let Some(content) = &choice.delta.content {
+							if let Some(delta) = choice.delta.reasoning() {
+								let (item_id, output_index, reasoning_text) = reasoning.get_or_insert_with(|| {
+									let item_id = format!("rs_{:016x}", rand::rng().random::<u64>());
+									let output_index = next_output_index;
+									next_output_index += 1;
+									sequence_number += 1;
+									events.push((
+										"event",
+										ResponseStreamEvent::ResponseOutputItemAdded(ResponseOutputItemAddedEvent {
+											sequence_number,
+											output_index,
+											item: OutputItem::Reasoning(ReasoningItem {
+												id: Some(item_id.clone()),
+												summary: vec![],
+												content: None,
+												encrypted_content: None,
+												status: Some(OutputStatus::InProgress),
+											}),
+										}),
+									));
+									(item_id, output_index, String::new())
+								});
+								reasoning_text.push_str(delta);
+
+								record_token(&mut last_token_at, &log);
+
+								sequence_number += 1;
+								events.push((
+									"event",
+									ResponseStreamEvent::ResponseReasoningTextDelta(
+										ResponseReasoningTextDeltaEvent {
+											sequence_number,
+											item_id: item_id.clone(),
+											output_index: *output_index,
+											content_index: 0,
+											delta: delta.to_string(),
+										},
+									),
+								));
+							}
+
+							if let Some(content) = choice.delta.content.as_ref().filter(|c| !c.is_empty()) {
 								if let Some(completion) = completion.as_mut() {
 									completion.push_str(content);
 								}
 								text.push_str(content);
+								let message_output_index = open_message(
+									&mut events,
+									&mut sequence_number,
+									&mut message_output_index,
+									&mut next_output_index,
+									&message_item_id,
+								);
 								if !sent_content_part {
 									sent_content_part = true;
 									sequence_number += 1;
@@ -771,7 +825,7 @@ pub mod to_responses {
 										ResponseStreamEvent::ResponseContentPartAdded(ResponseContentPartAddedEvent {
 											sequence_number,
 											item_id: message_item_id.clone(),
-											output_index: 0,
+											output_index: message_output_index,
 											content_index: 0,
 											part: OutputContent::OutputText(OutputTextContent {
 												text: String::new(),
@@ -782,19 +836,7 @@ pub mod to_responses {
 									));
 								}
 
-								{
-									let now = Instant::now();
-									if !saw_token {
-										saw_token = true;
-										last_token_at = Some(now);
-										log.update(|r| {
-											r.response.first_token = Some(now);
-										});
-									} else if let Some(prev) = last_token_at.replace(now) {
-										let gap = now.duration_since(prev);
-										log.update(|r| r.response.inter_chunk_latencies.record(gap));
-									}
-								}
+								record_token(&mut last_token_at, &log);
 
 								sequence_number += 1;
 								events.push((
@@ -802,7 +844,7 @@ pub mod to_responses {
 									ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
 										sequence_number,
 										item_id: message_item_id.clone(),
-										output_index: 0,
+										output_index: message_output_index,
 										content_index: 0,
 										delta: content.clone(),
 										logprobs: None,
@@ -811,6 +853,14 @@ pub mod to_responses {
 							}
 
 							if let Some(tcs) = &choice.delta.tool_calls {
+								// The message keeps its place ahead of the tool calls.
+								open_message(
+									&mut events,
+									&mut sequence_number,
+									&mut message_output_index,
+									&mut next_output_index,
+									&message_item_id,
+								);
 								for tc in tcs {
 									let tool_index = tc.index;
 									if let Some(logged_tool_calls) = logged_tool_calls.as_mut() {
@@ -847,17 +897,7 @@ pub mod to_responses {
 									}
 
 									if is_new {
-										let now = Instant::now();
-										if !saw_token {
-											saw_token = true;
-											last_token_at = Some(now);
-											log.update(|r| {
-												r.response.first_token = Some(now);
-											});
-										} else if let Some(prev) = last_token_at.replace(now) {
-											let gap = now.duration_since(prev);
-											log.update(|r| r.response.inter_chunk_latencies.record(gap));
-										}
+										record_token(&mut last_token_at, &log);
 
 										sequence_number += 1;
 										events.push((
@@ -913,9 +953,12 @@ pub mod to_responses {
 								&mut events,
 								&mut sequence_number,
 								&mut tool_calls,
+								&mut reasoning,
 								&mut pending_stop_reason,
 								&mut pending_usage,
 								&message_item_id,
+								&mut message_output_index,
+								&mut next_output_index,
 								&sent_content_part,
 								&text,
 								&log,
@@ -937,11 +980,48 @@ pub mod to_responses {
 		)
 	}
 
-	fn usage_output_tokens(usage: &completions::Usage) -> u32 {
-		if usage.completion_tokens == 0 && usage.total_tokens > 0 {
-			return usage.total_tokens.saturating_sub(usage.prompt_tokens);
+	/// Records the first token time, or the gap since the previous token.
+	fn record_token(last_token_at: &mut Option<Instant>, log: &StreamingUsageGuard) {
+		let now = Instant::now();
+		match last_token_at.replace(now) {
+			None => log.update(|r| r.response.first_token = Some(now)),
+			Some(prev) => {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
+			},
 		}
-		usage.completion_tokens
+	}
+
+	/// Emits the message's `output_item.added` the first time it is needed and returns its index.
+	fn open_message(
+		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
+		sequence_number: &mut u64,
+		message_output_index: &mut Option<u32>,
+		next_output_index: &mut u32,
+		message_item_id: &str,
+	) -> u32 {
+		*message_output_index.get_or_insert_with(|| {
+			let output_index = *next_output_index;
+			*next_output_index += 1;
+			*sequence_number += 1;
+			events.push((
+				"event",
+				responses::ResponseStreamEvent::ResponseOutputItemAdded(
+					responses::ResponseOutputItemAddedEvent {
+						sequence_number: *sequence_number,
+						output_index,
+						item: responses::OutputItem::Message(responses::OutputMessage {
+							content: Vec::new(),
+							id: message_item_id.to_string(),
+							role: responses::AssistantRole::Assistant,
+							phase: None,
+							status: responses::OutputStatus::InProgress,
+						}),
+					},
+				),
+			));
+			output_index
+		})
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -949,9 +1029,12 @@ pub mod to_responses {
 		events: &mut Vec<(&'static str, responses::ResponseStreamEvent)>,
 		sequence_number: &mut u64,
 		tool_calls: &mut HashMap<u32, (String, String, String, u32)>,
+		reasoning: &mut Option<(String, u32, String)>,
 		pending_stop_reason: &mut Option<completions::FinishReason>,
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
+		message_output_index: &mut Option<u32>,
+		next_output_index: &mut u32,
 		sent_content_part: &bool,
 		text: &str,
 		log: &StreamingUsageGuard,
@@ -962,8 +1045,9 @@ pub mod to_responses {
 		use responses::{
 			AssistantRole, FunctionToolCall, IncompleteDetails, InputTokenDetails, OutputContent,
 			OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ResponseContentPartDoneEvent, ResponseError,
-			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
+			OutputTokenDetails, ReasoningItem, ReasoningItemContent, ReasoningTextContent,
+			ResponseContentPartDoneEvent, ResponseError, ResponseFunctionCallArgumentsDoneEvent,
+			ResponseOutputItemDoneEvent, ResponseReasoningTextDoneEvent, ResponseStreamEvent,
 			ResponseTextDoneEvent, ResponseUsage,
 		};
 
@@ -998,8 +1082,49 @@ pub mod to_responses {
 			);
 		});
 
-		// Finished items, in output order — what `response.completed` carries.
-		let mut output: Vec<OutputItem> = Vec::new();
+		// Finished items, sorted into output order below — what `response.completed` carries.
+		let mut output: Vec<(u32, OutputItem)> = Vec::new();
+
+		if let Some((item_id, output_index, text)) = reasoning.take() {
+			*sequence_number += 1;
+			events.push((
+				"event",
+				ResponseStreamEvent::ResponseReasoningTextDone(ResponseReasoningTextDoneEvent {
+					sequence_number: *sequence_number,
+					item_id: item_id.clone(),
+					output_index,
+					content_index: 0,
+					text: text.clone(),
+				}),
+			));
+			let item = OutputItem::Reasoning(ReasoningItem {
+				id: Some(item_id),
+				summary: vec![],
+				content: Some(vec![ReasoningItemContent::ReasoningText(
+					ReasoningTextContent { text },
+				)]),
+				encrypted_content: None,
+				status: Some(OutputStatus::Completed),
+			});
+			*sequence_number += 1;
+			events.push((
+				"event",
+				ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
+					sequence_number: *sequence_number,
+					output_index,
+					item: item.clone(),
+				}),
+			));
+			output.push((output_index, item));
+		}
+
+		let message_output_index = open_message(
+			events,
+			sequence_number,
+			message_output_index,
+			next_output_index,
+			message_item_id,
+		);
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
 		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
@@ -1038,7 +1163,7 @@ pub mod to_responses {
 					item: item.clone(),
 				}),
 			));
-			output.push(item);
+			output.push((output_index, item));
 		}
 
 		let mut content = Vec::new();
@@ -1049,7 +1174,7 @@ pub mod to_responses {
 				ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
 					sequence_number: *sequence_number,
 					item_id: message_item_id.to_string(),
-					output_index: 0,
+					output_index: message_output_index,
 					content_index: 0,
 					text: text.to_string(),
 					logprobs: None,
@@ -1061,7 +1186,7 @@ pub mod to_responses {
 				ResponseStreamEvent::ResponseContentPartDone(ResponseContentPartDoneEvent {
 					sequence_number: *sequence_number,
 					item_id: message_item_id.to_string(),
-					output_index: 0,
+					output_index: message_output_index,
 					content_index: 0,
 					part: OutputContent::OutputText(OutputTextContent {
 						annotations: Vec::new(),
@@ -1089,16 +1214,18 @@ pub mod to_responses {
 			"event",
 			ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 				sequence_number: *sequence_number,
-				output_index: 0,
+				output_index: message_output_index,
 				item: message.clone(),
 			}),
 		));
-		output.insert(0, message);
+		output.push((message_output_index, message));
+		output.sort_by_key(|(output_index, _)| *output_index);
+		let output: Vec<OutputItem> = output.into_iter().map(|(_, item)| item).collect();
 
 		if let Some(ref u) = usage {
 			log.update(|r| {
 				r.response.input_tokens = Some(u.prompt_tokens as u64);
-				r.response.output_tokens = Some(usage_output_tokens(u) as u64);
+				r.response.output_tokens = Some(u.output_tokens() as u64);
 				r.response.total_tokens = Some(u.total_tokens as u64);
 				r.response.cached_input_tokens = u
 					.prompt_tokens_details
@@ -1118,7 +1245,7 @@ pub mod to_responses {
 
 		let usage_obj = usage.map(|u| ResponseUsage {
 			input_tokens: u.prompt_tokens,
-			output_tokens: usage_output_tokens(&u),
+			output_tokens: u.output_tokens(),
 			total_tokens: u.total_tokens,
 			input_tokens_details: InputTokenDetails {
 				cached_tokens: u
@@ -1132,6 +1259,7 @@ pub mod to_responses {
 					.and_then(|d| d.cache_write_tokens)
 					.or(u.cache_creation_input_tokens)
 					.map(|tokens| tokens as i64),
+				cache_write_tokens_details: None,
 			},
 			output_tokens_details: OutputTokenDetails {
 				reasoning_tokens: u

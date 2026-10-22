@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homehub-support
+  namespace: agentgateway-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homehub-support
+  template:
+    metadata:
+      labels:
+        app: homehub-support
+    spec:
+      containers:
+      - name: homehub
+        image: ghcr.io/solo-io/homehub-support-demo:sha-fd19c81
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: [ALL]
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homehub-support
+  namespace: agentgateway-system
+spec:
+  selector:
+    app: homehub-support
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http

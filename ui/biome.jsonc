@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -57,14 +57,38 @@
 		"rules": {
 			"preset": "recommended",
 			"style": {
-				"noDescendingSpecificity": "error",
+				"noDescendingSpecificity": "off",
 				"noNonNullAssertion": "error"
 			}
 		}
 	},
 	"overrides": [
 		{
-			"includes": ["src/**/*.{ts,tsx}"],
+			"includes": ["src/**/*.{ts,tsx}", "!src/**/*.test.ts"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["./**", "../**"],
+										"message": "Use the configured @/ alias instead of relative imports."
+									},
+									{
+										"group": ["#*", "#*/**"],
+										"message": "Use the configured @/ alias. # imports are only for node --test files."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"includes": ["src/**/*.test.ts"],
 			"linter": {
 				"rules": {
 					"style": {

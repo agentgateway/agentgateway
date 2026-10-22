@@ -13,7 +13,7 @@ use crate::*;
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "RetryPolicy"))]
 pub struct Policy {
-	/// Total number of attempts, including the original request.
+	/// Maximum number of retries after the original request.
 	#[serde(default = "default_attempts")]
 	pub attempts: NonZeroU8,
 	/// Delay between retry attempts.

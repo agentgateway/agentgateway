@@ -1,0 +1,11 @@
+server:
+  disableTls: true
+  auth:
+    allowUnauthenticatedUsers: true
+
+grpcRoute:
+  enabled: true
+  gateway:
+    create: true
+    className: agentgateway
+    name: openshell-ingress

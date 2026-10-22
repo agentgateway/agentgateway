@@ -41,11 +41,13 @@ const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_COHERE_V4: &str = "bedrock-cohere-v4";
 const BEDROCK_NOVA: &str = "bedrock-nova";
+const BEDROCK_PROMPT_CACHING: &str = "bedrock-prompt-caching";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
 const RESPONSES: &str = "responses";
 const VERTEX_EMBED_CONTENT: &str = "vertex-embed-content";
+const SYSTEMONE: &str = "systemone";
 
 mod requests {
 	use super::*;
@@ -66,9 +68,12 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA | BEDROCK_OPENAI | BEDROCK_OPENAI_GPT => {
-						BEDROCK
-					},
+					BEDROCK_TITAN
+					| BEDROCK_COHERE
+					| BEDROCK_NOVA
+					| BEDROCK_OPENAI
+					| BEDROCK_OPENAI_GPT
+					| BEDROCK_PROMPT_CACHING => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -144,6 +149,7 @@ mod requests {
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("prompt-cache-breakpoint", &[ANTHROPIC, BEDROCK]),
+		("cache_control_blank_text", &[BEDROCK]),
 		("full", &[ANTHROPIC, BEDROCK]),
 		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
 		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
@@ -155,7 +161,8 @@ mod requests {
 		("image-url", &[ANTHROPIC]),
 		("image-inline", &[VERTEX_GEMINI]),
 		("image-file", &[VERTEX_GEMINI]),
-		("file-inline", &[VERTEX_GEMINI]),
+		("file-inline", &[ANTHROPIC, VERTEX_GEMINI]),
+		("file-uri", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
@@ -194,9 +201,14 @@ mod requests {
 			"cache_control",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
 		),
+		("cache_control_dropped_blocks", &[BEDROCK]),
+		("cache_control_reasoning_prefix", &[BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),
 		("cache_control_unsupported", &[COMPLETIONS, RESPONSES]),
+		("cache_control_dropped_server_tools", &[BEDROCK]),
+		("system_message_mid_conversation", &[BEDROCK]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
+		("reasoning_unsupported_model", &[COMPLETIONS, RESPONSES]),
 		("reasoning_replay", &[BEDROCK, COMPLETIONS, RESPONSES]),
 		(
 			"tool_history_without_tools",
@@ -208,7 +220,10 @@ mod requests {
 			&[COMPLETIONS, BEDROCK, RESPONSES],
 		),
 		("responses_agent_subset", &[RESPONSES]),
-		("tool_result_error", &[COMPLETIONS, RESPONSES]),
+		(
+			"tool_result_error",
+			&[COMPLETIONS, RESPONSES, BEDROCK_PROMPT_CACHING],
+		),
 		("citations", &[COMPLETIONS, RESPONSES]),
 		("unknown_content", &[COMPLETIONS, RESPONSES]),
 		("reasoning_enabled", &[COMPLETIONS, RESPONSES]),
@@ -227,6 +242,7 @@ mod requests {
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
 		("cache_control", &[BEDROCK, GEMINI]),
+		("cache_control_tool_outputs", &[BEDROCK]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -285,7 +301,7 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(i, Some(&catalog))
+						conversion::messages::from_completions::translate(i, None, Some(&catalog))
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
 						conversion::bedrock::from_completions::translate(
@@ -367,8 +383,44 @@ mod requests {
 						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None, None, None)
+							.map(|r| r.body)
 					}),
+					BEDROCK_PROMPT_CACHING => test_request(
+						BEDROCK_PROMPT_CACHING,
+						&path,
+						|i: &mut types::messages::Request| {
+							let caching = crate::PromptCachingConfig {
+								cache_tools: true,
+								min_tokens: None,
+								..Default::default()
+							};
+							// Nova supports caching, but not on tool definitions.
+							i.model = Some("amazon.nova-pro-v1:0".to_string());
+							let nova: serde_json::Value = serde_json::from_slice(
+								&conversion::bedrock::from_messages::translate(
+									i,
+									&bedrock,
+									None,
+									Some(&caching),
+									None,
+								)?
+								.body,
+							)
+							.unwrap();
+							assert!(
+								nova["toolConfig"]["tools"]
+									.as_array()
+									.unwrap()
+									.iter()
+									.all(|tool| tool.get("cachePoint").is_none())
+							);
+							// The policy only marks models known to support caching.
+							i.model = Some("anthropic.claude-3-5-sonnet-20241022-v2:0".to_string());
+							conversion::bedrock::from_messages::translate(i, &bedrock, None, Some(&caching), None)
+								.map(|r| r.body)
+						},
+					),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
@@ -497,6 +549,32 @@ mod requests {
 					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
 				}
 			}
+		}
+	}
+
+	#[test]
+	fn decisions() {
+		for name in ["basic", "full"] {
+			let path = format!("requests/decisions/{name}.json");
+			test_request(OPENAI, &path, |i: &mut types::decisions::Request| {
+				serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+			});
+			test_request(SYSTEMONE, &path, |i: &mut types::decisions::Request| {
+				conversion::systemone::from_decisions::translate(i).map(|(body, _)| body)
+			});
+		}
+	}
+
+	#[test]
+	fn systemone() {
+		for name in ["basic", "full", "object_state", "json_criteria"] {
+			let path = format!("requests/systemone/{name}.json");
+			test_request(SYSTEMONE, &path, |i: &mut types::systemone::Request| {
+				serde_json::to_vec(i).map_err(AIError::RequestMarshal)
+			});
+			test_request(OPENAI, &path, |i: &mut types::systemone::Request| {
+				conversion::systemone::from_systemone::translate(i).map(|(body, _)| body)
+			});
 		}
 	}
 
@@ -839,7 +917,9 @@ mod responses {
 				(r#""created":[0-9]+"#, r#""created":123"#),
 				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
 				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
+				(r#""id":"rs_[0-9a-f]{16}""#, r#""id":"rs_xxx""#),
 				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
+				(r#""item_id":"rs_[0-9a-f]{16}""#, r#""item_id":"rs_xxx""#),
 				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
 			],
 		}, {
@@ -884,6 +964,10 @@ mod responses {
 	];
 	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_ANTHROPIC),
+		(
+			"iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("tool", ALL_ANTHROPIC),
 		("thinking", ALL_ANTHROPIC),
 		("multiple_text_blocks", ALL_ANTHROPIC),
@@ -911,6 +995,14 @@ mod responses {
 		("reasoning_omitted", &[COMPLETIONS_TO_MESSAGES]),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		(
+			"gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
@@ -930,7 +1022,14 @@ mod responses {
 				RESPONSES_TO_MESSAGES,
 			],
 		),
-		("tool", &[RESPONSES_TO_MESSAGES]),
+		(
+			"tool",
+			&[
+				RESPONSES_TO_MESSAGES,
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+			],
+		),
 		("reasoning", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
@@ -966,6 +1065,10 @@ mod responses {
 	const VERTEX_GEMINI_RESPONSES: &[&str] = &["basic", "tool", "reasoning", "blocked"];
 	const DETECT_RESPONSES: &[(&str, &str)] = &[
 		("response/detect/bedrock-invoke.bin", BEDROCK_TO_DETECT),
+		(
+			"response/detect/bedrock-invoke-anthropic.bin",
+			BEDROCK_TO_DETECT,
+		),
 		("response/detect/bedrock-basic.bin", BEDROCK_TO_DETECT),
 		("response/detect/bedrock-broken.bin", BEDROCK_TO_DETECT),
 		("response/detect/broken-sse", COMPLETIONS_TO_DETECT),
@@ -979,9 +1082,14 @@ mod responses {
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
+		("reasoning_redacted", ALL_BEDROCK),
 	];
 	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream_basic", ALL_ANTHROPIC),
+		(
+			"stream_iterations",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
 		("stream_thinking", ALL_ANTHROPIC),
 		(
 			"stream_message_delta_usage",
@@ -1001,6 +1109,18 @@ mod responses {
 		("stream", ALL_COMPLETIONS),
 		(
 			"stream_tool_empty_content",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
+		(
+			"stream-gemini_thinking",
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
+		),
+		(
+			"stream-vllm_reasoning",
 			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
 		),
 	];
@@ -1337,6 +1457,44 @@ mod responses {
 				}),
 				other => panic!("unsupported provider in RERANK_RESPONSES: {other}"),
 			}
+		}
+	}
+
+	#[test]
+	fn decisions() {
+		let parse = |bytes: &[u8]| {
+			serde_json::from_slice::<types::decisions::Response>(bytes)
+				.map(|r| Box::new(r) as Box<dyn ResponseType>)
+				.map_err(AIError::ResponseParsing)
+		};
+		test_response(OPENAI, "response/openai/decisions.json", |i| parse(&i));
+		let req: types::decisions::Request =
+			serde_json::from_slice(&fs::read(fixture_path("requests/decisions/full.json")).unwrap())
+				.unwrap();
+		let (_, state) = conversion::systemone::from_decisions::translate(&req).unwrap();
+		test_response(SYSTEMONE, "response/systemone/decisions.json", |i| {
+			parse(&conversion::systemone::from_decisions::translate_response(
+				&i, &state,
+			)?)
+		});
+	}
+
+	#[test]
+	fn systemone() {
+		let req: types::systemone::Request =
+			serde_json::from_slice(&fs::read(fixture_path("requests/systemone/full.json")).unwrap())
+				.unwrap();
+		let (_, state) = conversion::systemone::from_systemone::translate(&req).unwrap();
+		for path in [
+			"response/openai/systemone.json",
+			"response/openai/systemone_refusal.json",
+		] {
+			test_response(OPENAI, path, |i| {
+				let body = conversion::systemone::from_systemone::translate_response(&i, &state)?;
+				serde_json::from_slice::<types::systemone::Response>(&body)
+					.map(|r| Box::new(r) as Box<dyn ResponseType>)
+					.map_err(AIError::ResponseParsing)
+			});
 		}
 	}
 
@@ -1824,6 +1982,35 @@ fn messages_to_responses_rejects_malformed_image_source() {
 }
 
 #[test]
+fn completions_to_messages_rejects_non_inline_file() {
+	let error_files = [
+		// OpenAI Files API reference
+		json!({"file_id": "file-abc123"}),
+		// raw base64 without a data: URI
+		json!({"file_data": "JVBERi0xLjQK", "filename": "report.pdf"}),
+		// remote URL
+		json!({"file_data": "https://example.com/report.pdf"}),
+		// no content
+		json!({"filename": "report.pdf"}),
+	];
+	for (i, file) in error_files.iter().enumerate() {
+		let input: types::completions::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "file", "file": file}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::messages::from_completions::translate(&input, None, None).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error file #{i} ({file}), got {err:?}"
+		);
+	}
+}
+
+#[test]
 fn messages_to_responses_maps_anthropic_runtime_features() {
 	let input: types::messages::Request = serde_json::from_value(json!({
 		"model": "gpt-5.6-terra",
@@ -1865,4 +2052,56 @@ fn messages_to_responses_maps_anthropic_runtime_features() {
 		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
 		"explicit"
 	);
+}
+
+mod response_guardrails {
+	use super::*;
+
+	fn test_scopes<T: ResponseType + DeserializeOwned>(path: &str) {
+		let input = fs::read_to_string(fixture_path(path)).unwrap();
+		let mut response: T = serde_json::from_str(&input).unwrap();
+		let mut scanned = Vec::new();
+		response.visit_text_mut(&mut |content, text| {
+			scanned.push(json!({"scope": content.scope, "signed": content.signed, "text": text}));
+		});
+		scanned.sort_by_cached_key(Value::to_string);
+		let mut masked = serde_json::Map::new();
+		for scope in [
+			ContentScope::Messages,
+			ContentScope::ToolInput,
+			ContentScope::ToolOutput,
+		] {
+			let mut response: T = serde_json::from_str(&input).unwrap();
+			response.visit_text_mut(&mut |content, text| {
+				if content.scope == scope && !content.signed {
+					*text = "<masked>".into();
+				}
+			});
+			let name = serde_json::to_value(scope)
+				.unwrap()
+				.as_str()
+				.unwrap()
+				.to_owned();
+			masked.insert(
+				name,
+				serde_json::from_slice(&response.serialize().unwrap()).unwrap(),
+			);
+		}
+		let (snapshot_path, snapshot_name) = snapshot_path_and_name(path, "guardrails");
+		insta::with_settings!({
+			snapshot_path => snapshot_path,
+			prepend_module_to_snapshot => false,
+			omit_expression => true,
+		}, {
+			insta::assert_json_snapshot!(snapshot_name, json!({"scanned": scanned, "masked": masked}));
+		});
+	}
+
+	#[test]
+	fn response_scopes() {
+		test_scopes::<types::completions::Response>("response/completions/guardrails.json");
+		test_scopes::<types::messages::Response>("response/anthropic/guardrails.json");
+		test_scopes::<types::gemini::Response>("response/vertex-gemini/guardrails.json");
+		test_scopes::<types::responses::Response>("response/responses/guardrails.json");
+	}
 }

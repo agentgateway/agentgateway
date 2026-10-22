@@ -16,7 +16,7 @@ use crate::*;
 
 #[cfg(test)]
 #[path = "jwt_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 const TRACE_POLICY_KIND: &str = "jwt";
 
@@ -571,6 +571,10 @@ impl<'de> Deserialize<'de> for Claims {
 impl Jwt {
 	pub fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
 		self.location.expression().into_iter()
+	}
+
+	pub(crate) fn has_token(&self, req: &Request) -> bool {
+		self.location.extract(req).is_some()
 	}
 
 	pub async fn apply(

@@ -1,0 +1,66 @@
+{
+  "model": "model",
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "answer",
+        "refusal": "refusal",
+        "reasoning_content": "unsigned reasoning",
+        "audio": {
+          "id": "audio",
+          "data": "opaque",
+          "transcript": "transcript"
+        },
+        "function_call": {
+          "name": "legacy",
+          "arguments": "legacy input"
+        },
+        "tool_calls": [
+          {
+            "id": "call",
+            "type": "function",
+            "function": {
+              "name": "function",
+              "arguments": "arguments"
+            }
+          },
+          {
+            "id": "custom",
+            "type": "custom",
+            "custom": {
+              "name": "custom",
+              "input": "input"
+            }
+          }
+        ],
+        "reasoning_details": [
+          {
+            "type": "reasoning.text",
+            "text": "plaintext reasoning detail"
+          },
+          {
+            "type": "reasoning.summary",
+            "summary": "plaintext summary"
+          },
+          {
+            "type": "reasoning.text",
+            "text": "signed reasoning detail",
+            "signature": "signature"
+          },
+          {
+            "type": "reasoning.encrypted",
+            "data": "opaque"
+          }
+        ]
+      }
+    },
+    {
+      "message": {
+        "role": "assistant",
+        "reasoning_content": "signed reasoning",
+        "reasoning_signature": "signature"
+      }
+    }
+  ]
+}

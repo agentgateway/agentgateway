@@ -1,5 +1,6 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
+use http::{HeaderMap, HeaderValue, header};
 
 use crate::{ChatFormat, RouteType, apply};
 
@@ -18,6 +19,29 @@ impl super::Provider for Provider {
 impl Provider {
 	pub fn is_anthropic_model(request_model: &str) -> bool {
 		request_model.to_ascii_lowercase().starts_with("claude-")
+	}
+	pub fn set_required_headers(headers: &mut HeaderMap) {
+		headers.insert(
+			header::CONTENT_TYPE,
+			HeaderValue::from_static("application/json"),
+		);
+		headers.insert(
+			"editor-version",
+			HeaderValue::from_static(concat!("agentgateway/", env!("CARGO_PKG_VERSION"))),
+		);
+		headers.insert(
+			"openai-intent",
+			HeaderValue::from_static("conversation-agent"),
+		);
+		headers.insert(
+			"x-github-api-version",
+			HeaderValue::from_static("2025-10-01"),
+		);
+		headers.insert("x-initiator", HeaderValue::from_static("agent"));
+		headers.insert(
+			"x-interaction-type",
+			HeaderValue::from_static("conversation-agent"),
+		);
 	}
 	pub fn supported_formats_for_model(
 		request_model: &str,

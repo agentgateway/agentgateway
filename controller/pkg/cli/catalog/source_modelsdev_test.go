@@ -47,9 +47,21 @@ func sampleAPI() map[string]modelsDevProvider {
 				Status: "deprecated",
 				Cost:   &modelsDevCost{Input: "30", Output: "60"},
 			},
-			"gpt-4o-mini": {
-				Cost: &modelsDevCost{Input: "0.15", Output: "0.6", CacheRead: "0.075"},
-			},
+			"gpt-5.6": modelsDevSampleModel(`{"cost": {"input": 1, "output": 5, "cache_read": 0.1, "cache_write": 1.25, "tiers": [{"input": 2, "output": 10, "cache_write": 2.5, "tier": {"type": "context", "size": 200000}}]}, "experimental": {"modes": {"fast": {"cost": {"input": 2, "output": 10, "cache_write": 2.5}, "provider": {"body": {"service_tier": "priority"}}}}}}`),
+			"gpt-4o-mini": modelsDevSampleModel(`{
+				"name": "GPT-4o mini",
+				"release_date": "2024-07-18",
+				"cost": {"input": 0.15, "output": 0.6, "cache_read": 0.075, "cache_write": 0.1875},
+				"reasoning": false,
+				"tool_call": true,
+				"temperature": true,
+				"limit": {"context": 128000, "output": 16384},
+				"modalities": {"input": ["text", "image"], "output": ["text"]},
+				"experimental": {"modes": {
+					"fast": {"cost": {"input": 0.25, "output": 1}, "provider": {"body": {"service_tier": "priority"}}},
+					"ultrafast": {"cost": {"input": 1, "output": 4}, "provider": {"body": {"service_tier": "ultrafast"}}}
+				}}
+			}`),
 			"gpt-4o-mini-audio-preview": {
 				Cost: &modelsDevCost{Input: "0.15", Output: "0.6", InputAudio: "10", OutputAudio: "20"},
 			},
@@ -58,14 +70,15 @@ func sampleAPI() map[string]modelsDevProvider {
 			"claude-opus-4-7": {
 				Family:           "claude-opus",
 				Cost:             &modelsDevCost{Input: "5", Output: "25"},
-				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort"}},
+				ReasoningOptions: []modelsDevReasoningOption{{Type: "effort", Values: []*string{new("low"), new("high")}}},
 			},
 			"claude-opus-4-6": {
 				Family: "claude-opus",
 				Cost:   &modelsDevCost{Input: "5", Output: "25"},
 				ReasoningOptions: []modelsDevReasoningOption{
-					{Type: "effort"},
-					{Type: "budget_tokens"},
+					{Type: "toggle"},
+					{Type: "effort", Values: []*string{new("low"), new("high")}},
+					{Type: "budget_tokens", Min: new(int64(1024))},
 				},
 			},
 			"claude-sonnet-4-5": {
@@ -99,6 +112,14 @@ func sampleAPI() map[string]modelsDevProvider {
 			"identity": {},
 		}},
 	}
+}
+
+func modelsDevSampleModel(s string) modelsDevModel {
+	var m modelsDevModel
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		panic(err)
+	}
+	return m
 }
 
 func TestTransformIncludesLegacyModelsWhenRequested(t *testing.T) {

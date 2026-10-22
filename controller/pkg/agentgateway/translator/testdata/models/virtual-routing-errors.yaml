@@ -83,6 +83,24 @@ spec:
       - modelRef:
           name: wildcard-model
         model: gpt-working
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: callout-cross-namespace-without-grant
+  namespace: default
+spec:
+  parentRefs:
+  - name: virtual-model-errors
+    sectionName: llm
+  virtualModel:
+    callout:
+      backendRef:
+        name: router
+        namespace: other
+        port: 8080
+      transformation:
+        model: callout.body.model
 
 ---
 # Output
@@ -120,6 +138,19 @@ output:
         gatewayNamespace: default
         listenerName: llm
       protocol: HTTP
+- gateway:
+    Name: virtual-model-errors
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/callout-cross-namespace-without-grant.llm
+      listenerKey: default/virtual-model-errors.llm
+      match:
+        model: callout-cross-namespace-without-grant
+      virtualModel:
+        callout:
+          transformation:
+            model: callout.body.model
 - gateway:
     Name: virtual-model-errors
     Namespace: default
@@ -183,6 +214,33 @@ output:
       match:
         model: gpt-*
 status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: callout-cross-namespace-without-grant
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'failed to build callout: backendRef other/router not accessible
+          to an AgentgatewayModel in namespace "default" (missing a ReferenceGrant?)'
+        reason: Invalid
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-model-errors
+        namespace: default
+        sectionName: llm
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayModel
   metadata:
@@ -308,7 +366,7 @@ status:
       status: "True"
       type: Programmed
     listeners:
-    - attachedRoutes: 4
+    - attachedRoutes: 5
       conditions:
       - lastTransitionTime: fake
         message: No errors found

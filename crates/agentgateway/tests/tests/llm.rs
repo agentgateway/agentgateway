@@ -1,4 +1,4 @@
-use agentgateway::llm::{AIProvider, custom, gemini, openai};
+use agentgateway::llm::{AIProvider, copilot, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
 use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
@@ -34,6 +34,48 @@ async fn llm_openai() {
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert_llm(io, llm_body!("requests/completions/basic.json"), want).await;
+}
+
+#[rstest::rstest]
+#[case::configured_key("configured-token")]
+#[case::empty_key("")]
+#[tokio::test]
+async fn llm_copilot_explicit_auth(#[case] credential: &str) {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let mut provider = llm_named_provider(
+		&mock,
+		AIProvider::Copilot(copilot::Provider {
+			model_override: None,
+		}),
+		false,
+	);
+	provider.policies =
+		Some(serde_json::from_value(json!({"backendAuth": {"key": credential}})).unwrap());
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let response = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		llm_body!("requests/completions/basic.json"),
+	)
+	.await;
+	assert_eq!(response.status(), StatusCode::OK);
+	read_body_raw(response.into_body()).await;
+
+	let request = single_upstream_request(&mock).await;
+	assert_eq!(
+		request.headers[header::AUTHORIZATION].to_str().unwrap(),
+		format!("Bearer {credential}").trim_end()
+	);
+	assert_eq!(request.headers[header::CONTENT_TYPE], "application/json");
+	assert_eq!(
+		request.headers["editor-version"],
+		concat!("agentgateway/", env!("CARGO_PKG_VERSION"))
+	);
+	assert_eq!(request.headers["openai-intent"], "conversation-agent");
+	assert_eq!(request.headers["x-github-api-version"], "2025-10-01");
+	assert_eq!(request.headers["x-initiator"], "agent");
+	assert_eq!(request.headers["x-interaction-type"], "conversation-agent");
 }
 
 #[tokio::test]
@@ -225,7 +267,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -288,7 +330,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await
 	.unwrap();
 	let want = json!({
-		"gen_ai.operation.name": "chat",
+		"gen_ai.operation.name": "unknown",
 		"gen_ai.provider.name": "openai",
 		"gen_ai.request.model": "replaceme-overwrite",
 		"gen_ai.response.model": "gpt-3.5-turbo-0125",
@@ -323,173 +365,6 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 		)
 		.expect("sync local binds");
 	t
-}
-
-#[rstest::rstest]
-#[case::root_default("", "", false)]
-#[case::prefixed_default("/foo/", "", false)]
-#[case::prefixed_detect("/foo/", "passthrough: detect", false)]
-#[case::prefixed_opaque("/foo/", "passthrough: opaque", false)]
-#[case::httproute_root("", "", true)]
-#[case::httproute_prefix("/foo/", "", true)]
-#[tokio::test]
-async fn llm_model_router_endpoint_classification_and_trace_names(
-	#[case] prefix: &str,
-	#[case] passthrough: &str,
-	#[case] http_route: bool,
-) {
-	use agentgateway::test_helpers::oteltracemock;
-	struct TraceHandler(mpsc::UnboundedSender<String>);
-	#[async_trait::async_trait]
-	impl oteltracemock::Handler for TraceHandler {
-		async fn export(
-			&mut self,
-			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
-		) -> Result<
-			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
-			tonic::Status,
-		> {
-			for span in request
-				.resource_spans
-				.iter()
-				.flat_map(|r| &r.scope_spans)
-				.flat_map(|s| &s.spans)
-			{
-				if span.kind == opentelemetry_proto::tonic::trace::v1::span::SpanKind::Server as i32 {
-					let _ = self.0.send(span.name.clone());
-				}
-			}
-			oteltracemock::ok_response()
-		}
-	}
-	let (tx, mut rx) = mpsc::unbounded_channel();
-	let otel = oteltracemock::OtelTraceMock::new(move || TraceHandler(tx.clone()))
-		.spawn()
-		.await;
-	let mock = body_mock(llm_body!("response/responses/basic.json")).await;
-	let serving_prefix = if http_route { "" } else { prefix };
-	let config = format!(
-		r#"
-frontendPolicies:
-  tracing:
-    host: {}
-    randomSampling: true
-llm:
-  port: 0
-  pathPrefix: "{serving_prefix}"
-  models:
-  - name: real-model
-    provider: openAI
-    {passthrough}
-    params:
-      baseUrl: http://{}/v1
-"#,
-		otel.address,
-		mock.address()
-	);
-	let t = setup_local_llm_config(&config).await;
-	let prefix = prefix.trim_end_matches('/');
-	let t = if http_route {
-		// The controller emits this prefix match and rewrite for a model-serving HTTPRoute.
-		let mut route = basic_named_route(strng::literal!("/llm:router"));
-		route.key = strng::literal!("llm:request");
-		route.matches[0].path =
-			PathMatch::PathPrefix(strng::new(if prefix.is_empty() { "/" } else { prefix }));
-		route.inline_policies.push(TrafficPolicy::UrlRewrite(
-			agentgateway::store::RequestPolicy::single(agentgateway::http::filters::UrlRewrite {
-				authority: None,
-				path: Some(agentgateway::types::agent::PathRedirect::Prefix(
-					strng::EMPTY,
-				)),
-			}),
-		));
-		t.with_route_for_listener(strng::literal!("llm"), route)
-	} else {
-		t
-	};
-	let io = t.serve_http(strng::literal!("bind/0"));
-	let body =
-		br#"{"model":"real-model","max_tokens":32,"messages":[{"role":"user","content":"hello"}]}"#;
-	for path in ["/v1/messages", "/other/v1/messages", "/custom"] {
-		let response = send_request_body(
-			io.clone(),
-			Method::POST,
-			&format!("http://lo{prefix}{path}?trace=1"),
-			body,
-		)
-		.await;
-		assert_eq!(response.status(), StatusCode::OK, "{path}");
-		let _ = read_body_raw(response.into_body()).await;
-	}
-	let requests = mock.received_requests().await.unwrap();
-	assert_eq!(requests.len(), 3);
-	assert_eq!(
-		&requests[0].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/responses?trace=1"
-	);
-	assert_eq!(
-		&requests[1].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/other/v1/messages?trace=1"
-	);
-	assert_eq!(
-		&requests[2].url[Position::BeforePath..Position::AfterQuery],
-		"/v1/custom?trace=1"
-	);
-	for request in &requests[1..] {
-		assert_eq!(
-			serde_json::from_slice::<Value>(&request.body).unwrap(),
-			serde_json::from_slice::<Value>(body).unwrap()
-		);
-	}
-	for (method, path, status) in [
-		(Method::GET, "/v1/models", StatusCode::OK),
-		(Method::POST, "/v1/messages", StatusCode::BAD_REQUEST),
-		(
-			Method::POST,
-			"/v1beta/models/missing:generateContent",
-			StatusCode::NOT_FOUND,
-		),
-		(
-			Method::POST,
-			"/model/missing/converse",
-			StatusCode::NOT_FOUND,
-		),
-	] {
-		let response = send_request_body(
-			io.clone(),
-			method,
-			&format!("http://lo{prefix}{path}"),
-			b"{}",
-		)
-		.await;
-		assert_eq!(response.status(), status, "{path}");
-		let _ = read_body_raw(response.into_body()).await;
-	}
-	let mut names = tokio::time::timeout(Duration::from_secs(10), async {
-		let mut names = Vec::new();
-		for _ in 0..7 {
-			names.push(rx.recv().await.unwrap());
-		}
-		names
-	})
-	.await
-	.expect("request spans exported");
-	names.sort();
-	let mut expected = vec![
-		format!("GET {prefix}/v1/models"),
-		format!("POST {prefix}/v1/messages"),
-		format!("POST {prefix}/v1beta/models/{{model}}:generateContent"),
-		format!("POST {prefix}/model/{{model}}/converse"),
-		format!("POST {prefix}/v1/messages"),
-		format!("POST {prefix}/*"),
-		format!("POST {prefix}/*"),
-	];
-	expected.sort();
-	assert_eq!(names, expected);
-	if !prefix.is_empty() {
-		let response = send_request_body(io, Method::POST, "http://lo/v1/messages", body).await;
-		assert_eq!(response.status(), StatusCode::NOT_FOUND);
-	}
 }
 
 #[tokio::test]
@@ -540,6 +415,55 @@ llm:
 	let body: Value = serde_json::from_slice(&read_body_raw(response.into_body()).await).unwrap();
 	assert_eq!(body["error"]["code"], "model_not_allowed");
 	assert_eq!(mock.received_requests().await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn llm_attached_rejection_is_stored_in_log_database() {
+	let _guard =
+		agentgateway::telemetry::log_store::setup(&agentgateway::telemetry::log_store::Config {
+			url: "sqlite::memory:".to_string(),
+			max_connections: Some(1),
+		})
+		.await
+		.unwrap();
+	let t = setup_local_llm_config(
+		r#"
+gateways:
+  default:
+    port: 0
+llm:
+  gateways: default
+  policies:
+    apiKey:
+      keys:
+      - key: sk-test
+      mode: strict
+  models:
+  - name: gpt-4o
+    provider: openAI
+"#,
+	)
+	.await;
+	// No API key: rejected before the LLM handler runs, on a listener not named "llm".
+	let response =
+		send_completions_with_model(t.serve_http(strng::literal!("bind/0")), "gpt-4o", &[]).await;
+	assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+	let _ = read_body_raw(response.into_body()).await;
+
+	let request: agentgateway::telemetry::log_store::SearchRequest =
+		serde_json::from_value(json!({"filters": {"httpStatus": [401]}})).unwrap();
+	tokio::time::timeout(Duration::from_secs(10), async {
+		while agentgateway::telemetry::log_store::search(request.clone())
+			.await
+			.unwrap()
+			.logs
+			.is_empty()
+		{
+			tokio::time::sleep(Duration::from_millis(50)).await;
+		}
+	})
+	.await
+	.expect("rejected request stored in log database");
 }
 
 #[tokio::test]
@@ -617,6 +541,74 @@ llm:
 		}
 	}
 	insta::assert_json_snapshot!(results);
+}
+
+#[tokio::test]
+async fn llm_model_list_metadata() {
+	let config = r#"
+llm:
+  port: 0
+  models:
+  - name: gpt-5.5
+    provider: openAI
+  - name: fast
+    provider: openAI
+    params:
+      model: gpt-5-mini
+  - name: openai/*
+    provider: openAI
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
+  - name: local-model
+    provider: openAI
+  virtualModels:
+  - name: blend
+    routing:
+      weighted:
+        targets:
+        - model: gpt-5.5
+          weight: 1
+        - model: fast
+          weight: 1
+"#;
+	let mut t = setup_local_llm_config(config).await;
+	Arc::get_mut(&mut t.pi).unwrap().model_catalog = agentgateway::llm::catalog::ModelCatalog::new(vec![
+		agentgateway::ModelCatalogSource::Inline {
+			inline: r#"{"metadata":{"generatedAt":"2099-01-01T00:00:00Z"},"providers":{"openai":{"models":{
+				"gpt-5.5":{"name":"GPT-5.5","released":"2026-04-23","limits":{"context":1050000,"input":922000,"output":128000},"modalities":{"input":["text","image","pdf"],"output":["text"]},"capabilities":{"reasoning":true,"structuredOutput":true,"toolCall":true,"temperature":false},"reasoning":{"effort":["low","high"]}},
+				"gpt-5-mini":{"name":"GPT-5 mini","released":"2025-08","limits":{"context":400000,"output":64000},"modalities":{"input":["text","image"],"output":["text"]},"capabilities":{"reasoning":true,"toolCall":true,"temperature":true},"reasoning":{"effort":["low","medium"]}}
+			}}}}"#.to_string(),
+		},
+	]).await.unwrap();
+	let io = t.serve_http(strng::literal!("bind/0"));
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let mut models: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models?limit=1").await;
+	let limited: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(limited["data"].as_array().unwrap().len(), 1);
+
+	let res = send_request(
+		io.clone(),
+		Method::GET,
+		"http://lo/v1/models/openai/gpt-5.5",
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let model: Value = serde_json::from_slice(&read_body_raw(res.into_body()).await).unwrap();
+	assert_eq!(model["id"], "openai/gpt-5.5");
+	assert_eq!(model["max_tokens"], 128000);
+
+	let res = send_request(io, Method::GET, "http://lo/v1/models/missing").await;
+	assert_eq!(res.status(), StatusCode::NOT_FOUND);
+	// Entries without catalog metadata carry the config load time.
+	for model in models["data"].as_array_mut().unwrap() {
+		if model["id"] == "local-model" || model["id"] == "blend" {
+			model["created"] = json!(0);
+		}
+	}
+	insta::assert_json_snapshot!(models);
 }
 
 #[tokio::test]
@@ -770,6 +762,93 @@ llm:
 			3
 		);
 	}
+}
+
+#[tokio::test]
+async fn llm_policies_see_request_model() {
+	let mock = body_mock(llm_body!("response/completions/basic.json")).await;
+	let set = r#"
+            x-request-model: llm.requestModel
+            x-messages: string(llmRequest.messages.size())"#;
+	// The AI backend reads them from a route policy; the model router from a provider policy,
+	// which is only known once the model is resolved.
+	let config = format!(
+		r#"
+gateways:
+  default:
+    port: 0
+routes:
+- hostnames: [ai.example]
+  policies:
+    transformations:
+      request:
+        set:{set}
+  backends:
+  - ai:
+      name: ai
+      hostOverride: {addr}
+      provider:
+        openAI:
+          model: upstream-model
+llm:
+  models:
+  - name: router-model
+    provider: openAI
+    params:
+      model: upstream-model
+      baseUrl: http://{addr}/v1
+    requestTransformation:
+      set:{set}
+"#,
+		addr = mock.address(),
+	);
+	let t = setup_local_llm_config(&config).await;
+
+	for (host, model, encoding) in [
+		("ai.example", "ai-model", None),
+		("ai.example", "identity-model", Some("identity")),
+		("lo", "router-model", None),
+	] {
+		let mut req = RequestBuilder::new(Method::POST, &format!("http://{host}/v1/chat/completions"));
+		if let Some(encoding) = encoding {
+			req = req.header(header::CONTENT_ENCODING, encoding);
+		}
+		let res = req
+			.body(Body::from(completions_request_body_with_model(model)))
+			.send(t.serve_http(strng::literal!("bind/0")))
+			.await
+			.expect("completions request");
+		assert_eq!(res.status(), StatusCode::OK, "{model}");
+	}
+	let got: Vec<_> = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled")
+		.iter()
+		.map(|req| {
+			let body: Value = serde_json::from_slice(&req.body).unwrap();
+			(
+				req.headers["x-request-model"].to_str().unwrap().to_string(),
+				req.headers["x-messages"].to_str().unwrap().to_string(),
+				body["model"].as_str().unwrap().to_string(),
+			)
+		})
+		.collect();
+	let want = |model: &str| {
+		(
+			model.to_string(),
+			"2".to_string(),
+			"upstream-model".to_string(),
+		)
+	};
+	assert_eq!(
+		got,
+		vec![
+			want("ai-model"),
+			want("identity-model"),
+			want("router-model")
+		]
+	);
 }
 
 #[tokio::test]
@@ -1744,7 +1823,7 @@ async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 #[rstest::rstest]
 #[case::preserves_path(None, None, "/v1/messages?trace=repro")]
 #[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
-#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses?trace=repro")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/responses")]
 #[tokio::test]
 async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	#[case] path_override: Option<&str>,

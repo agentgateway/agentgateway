@@ -480,7 +480,7 @@ func (s *Syncer) joinExtraListenerSets(
 	krtopts krtutil.KrtOptions,
 ) (krt.Collection[*translator.ListenerSet], krt.Collection[RejectedListenerSet]) {
 	noRejections := func() krt.Collection[RejectedListenerSet] {
-		return krt.NewStaticCollection[RejectedListenerSet](nil, nil,
+		return krt.NewDisabledCollection[RejectedListenerSet](
 			krtopts.ToOptions("translator/RejectedExtraListenerSets")...)
 	}
 	if s.extraListenerSets == nil {
@@ -594,13 +594,16 @@ func (s *Syncer) buildAgwResources(
 ) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
-	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+	routeGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if _, isAdditionalClass := s.additionalGatewayClasses[gw.ParentInfo.ParentGatewayClassName]; isAdditionalClass {
 			return nil
 		}
-		if gw.Conflict == translator.ListenerConflictBindMode {
-			// Bind mode is selected by listener precedence. Keep the losing listener
-			// available to status reporting, but do not program it or attach routes.
+		return &gw
+	}, krtopts.ToOptions("translator/RouteGateways")...)
+
+	// Keep conflicted parents for attachment status, but do not program them.
+	filteredGateways := krt.NewCollection(routeGateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
+		if gw.Conflict != "" {
 			return nil
 		}
 		return &gw
@@ -631,7 +634,7 @@ func (s *Syncer) buildAgwResources(
 	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
-	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
+	var routeParents translator.ParentResolver = translator.BuildRouteParents(routeGateways, krtopts)
 
 	// Compose with plugin-provided parent resolvers.
 	if ext := s.agwPlugins.AddResourceExtension; ext != nil && len(ext.ParentResolvers) > 0 {
@@ -660,6 +663,15 @@ func (s *Syncer) buildAgwResources(
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
+	routeInputs.ParentRefs = translator.RouteParentRefsCollection(
+		routeInputs,
+		s.agwCollections.HTTPRoutes,
+		s.agwCollections.GRPCRoutes,
+		s.agwCollections.TCPRoutes,
+		s.agwCollections.TLSRoutes,
+		s.agwCollections.Models,
+		krtopts,
+	)
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
 	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}
@@ -886,12 +898,12 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		meshConfig,
 		// Authz/Authn are not use for agentgateway, ignore
 		krt.NewIndex(
-			krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil, krtopts.ToOptions("addresses/DisabledWorkloadAuthorization")...),
+			krt.NewDisabledCollection[model.WorkloadAuthorization](krtopts.ToOptions("addresses/DisabledWorkloadAuthorization")...),
 			"byNS",
 			func(model.WorkloadAuthorization) []string { return nil },
 		),
 		krt.NewNamespaceIndex(
-			krt.NewStaticCollection[*securityclient.PeerAuthentication](nil, nil, krtopts.ToOptions("addresses/DisabledPeerAuthentication")...),
+			krt.NewDisabledCollection[*securityclient.PeerAuthentication](krtopts.ToOptions("addresses/DisabledPeerAuthentication")...),
 		),
 		waypoints,
 		services,

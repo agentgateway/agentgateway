@@ -5,14 +5,27 @@ pub mod messages;
 pub mod namespace_tools;
 pub mod openai_compat;
 pub mod responses;
+pub mod systemone;
 pub mod vertex;
 pub mod vertex_gemini;
+
+/// Rough token estimate (words x 1.3) used for the promptCaching policy's minTokens.
+pub(crate) fn estimate_tokens<'a>(texts: impl IntoIterator<Item = &'a str>) -> usize {
+	let word_count: usize = texts
+		.into_iter()
+		.map(|t| t.split_whitespace().count())
+		.sum();
+	(word_count * 13) / 10
+}
 
 #[derive(Default)]
 struct ProviderUsage {
 	input_tokens: u64,
 	total_tokens: u64,
 	reasoning_tokens: Option<u64>,
+	cache_creation_1h_input_tokens: Option<u64>,
+	cache_creation_12h_input_tokens: Option<u64>,
+	usage_lines: Vec<crate::UsageLine>,
 }
 
 /// Keep provider token counts for accounting when translating client usage conventions.
@@ -28,6 +41,13 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 			response.input_tokens = Some(usage.input_tokens);
 			response.total_tokens = Some(usage.total_tokens);
 			response.reasoning_tokens = usage.reasoning_tokens.or(response.reasoning_tokens);
+			response.cache_creation_1h_input_tokens = usage
+				.cache_creation_1h_input_tokens
+				.or(response.cache_creation_1h_input_tokens);
+			response.cache_creation_12h_input_tokens = usage
+				.cache_creation_12h_input_tokens
+				.or(response.cache_creation_12h_input_tokens);
+			response.usage_lines.clone_from(&usage.usage_lines);
 		}
 		response
 	}
@@ -47,9 +67,16 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 		self.response.serialize()
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(crate::types::ResponseText, &mut String)) {
 		self.response.visit_text_mut(f)
 	}
+}
+
+/// Older OpenAI chat models have no reasoning support and reject any reasoning effort.
+pub(crate) fn supports_reasoning_effort(model: &str) -> bool {
+	!["gpt-3.5", "gpt-4", "chatgpt-4o"]
+		.iter()
+		.any(|prefix| model.starts_with(prefix))
 }
 
 pub(crate) fn supports_prompt_cache_breakpoint(model: &str) -> bool {

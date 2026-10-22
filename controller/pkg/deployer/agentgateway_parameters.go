@@ -12,9 +12,11 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/util/smallset"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -236,6 +238,11 @@ func usesManagedSessionKeyEnv(envs []corev1.EnvVar) bool {
 	return !hasEnvVar(envs, sessionKeyEnvVar)
 }
 
+// UsesManagedSessionKey reports whether the controller manages the session key.
+func UsesManagedSessionKey(envs []corev1.EnvVar) bool {
+	return usesManagedSessionKeyEnv(envs)
+}
+
 // ApplyOverlaysToObjects applies the strategic-merge-patch overlays to rendered k8s objects.
 // This is called after rendering the helm chart.
 // It returns the (potentially modified) slice of objects, as new objects may be added
@@ -253,20 +260,21 @@ type agentgatewayParametersHelmValuesGenerator struct {
 	gwClassClient  kclient.Client[*gwv1.GatewayClass]
 	secretClient   kclient.Client[*corev1.Secret]
 	inputs         *Inputs
-	sessionKeyGen  func() (string, error)
+	sessionKeys    *SessionKeys
 }
 
 func newAgentgatewayParametersHelmValuesGenerator(cli apiclient.Client, inputs *Inputs) *agentgatewayParametersHelmValuesGenerator {
 	filter := kclient.Filter{ObjectFilter: cli.ObjectFilter()}
+	secretClient := kclient.NewFiltered[*corev1.Secret](cli, kclient.Filter{
+		FieldSelector: apiclient.SecretsFieldSelector,
+		ObjectFilter:  cli.ObjectFilter(),
+	})
 	return &agentgatewayParametersHelmValuesGenerator{
 		agwParamClient: kclient.NewFilteredDelayed[*agentgateway.AgentgatewayParameters](cli, wellknown.AgentgatewayParametersGVR, filter),
 		gwClassClient:  kclient.NewFilteredDelayed[*gwv1.GatewayClass](cli, wellknown.GatewayClassGVR, filter),
-		secretClient: kclient.NewFiltered[*corev1.Secret](cli, kclient.Filter{
-			FieldSelector: apiclient.SecretsFieldSelector,
-			ObjectFilter:  cli.ObjectFilter(),
-		}),
-		inputs:        inputs,
-		sessionKeyGen: generateSessionKey,
+		secretClient:   secretClient,
+		inputs:         inputs,
+		sessionKeys:    NewSessionKeys(secretClient, cli.Kube()),
 	}
 }
 
@@ -478,21 +486,6 @@ func (g *agentgatewayParametersHelmValuesGenerator) resolveParameters(gw *gwv1.G
 	return result, nil
 }
 
-func usesManagedSessionKeyResolvedParameters(resolved *resolvedParameters) bool {
-	if resolved == nil {
-		return true
-	}
-
-	var envs []corev1.EnvVar
-	if resolved.gatewayClassAGWP != nil {
-		envs = mergeEnvVars(envs, resolved.gatewayClassAGWP.Spec.AgentgatewayParametersConfigs.Env)
-	}
-	if resolved.gatewayAGWP != nil {
-		envs = mergeEnvVars(envs, resolved.gatewayAGWP.Spec.AgentgatewayParametersConfigs.Env)
-	}
-	return usesManagedSessionKeyEnv(envs)
-}
-
 func applyManagedSessionKeyDefaults(gtw *AgentgatewayHelmGateway, gatewayName string) {
 	if gtw == nil {
 		return
@@ -502,7 +495,7 @@ func applyManagedSessionKeyDefaults(gtw *AgentgatewayHelmGateway, gatewayName st
 		return
 	}
 
-	sessionKeySecretName := gatewaySessionKeySecretName(gatewayName)
+	sessionKeySecretName := SessionKeySecretName(gatewayName)
 	gtw.SessionKeySecretName = &sessionKeySecretName
 }
 
@@ -585,7 +578,7 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 	return &HelmConfig{Agentgateway: gtw}, nil
 }
 
-func gatewaySessionKeySecretName(gatewayName string) string {
+func SessionKeySecretName(gatewayName string) string {
 	return safeLabelValue(fmt.Sprintf("%s-session-key", safeLabelValue(gatewayName)))
 }
 
@@ -619,58 +612,138 @@ func validateSessionKey(key string) error {
 	return nil
 }
 
-func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
-	ctx context.Context,
-	gw *gwv1.Gateway,
-	secretName string,
-) (*corev1.Secret, error) {
-	key, err := g.resolveSessionKey(ctx, gw.Namespace, secretName)
-	if err != nil {
-		return nil, err
+// SessionKeys manages the per-Gateway Secret holding the key the proxy uses to encrypt session IDs.
+type SessionKeys struct {
+	secrets  kclient.Client[*corev1.Secret]
+	kube     kubernetes.Interface
+	generate func() (string, error)
+}
+
+func NewSessionKeys(secrets kclient.Client[*corev1.Secret], kube kubernetes.Interface) *SessionKeys {
+	return &SessionKeys{
+		secrets:  secrets,
+		kube:     kube,
+		generate: generateSessionKey,
 	}
+}
+
+// SetGenerator replaces the random key generator.
+func (s *SessionKeys) SetGenerator(generate func() (string, error)) {
+	s.generate = generate
+}
+
+// Get returns the Gateway's session key, creating its Secret if needed.
+//
+// The Secret's key is created but never updated. The cache can miss a Secret created
+// by an earlier reconcile, so on a miss the API server decides which key wins rather
+// than this reconcile overwriting it.
+func (s *SessionKeys) Get(ctx context.Context, gw *gwv1.Gateway) (string, error) {
+	name := SessionKeySecretName(gw.Name)
+	if secret := s.secrets.Get(name, gw.Namespace); secret != nil {
+		return s.sessionKeyFromOwnedSecret(ctx, gw, secret)
+	}
+
+	key, err := s.generate()
+	if err != nil {
+		return "", err
+	}
+	if err := validateSessionKey(key); err != nil {
+		return "", fmt.Errorf("generated invalid session key for %s/%s: %w", gw.Namespace, name, err)
+	}
+
+	secrets := s.kube.CoreV1().Secrets(gw.Namespace)
+	created, err := secrets.Create(ctx, newSessionKeySecret(gw, name, key), metav1.CreateOptions{})
+	if err == nil {
+		return sessionKeyFromSecret(created)
+	}
+	if !apierrors.IsAlreadyExists(err) {
+		return "", fmt.Errorf("failed to create session key secret %s/%s: %w", gw.Namespace, name, err)
+	}
+	existing, err := secrets.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get session key secret %s/%s: %w", gw.Namespace, name, err)
+	}
+	return s.sessionKeyFromOwnedSecret(ctx, gw, existing)
+}
+
+func newSessionKeySecret(gw *gwv1.Gateway, name, key string) *corev1.Secret {
 	return &corev1.Secret{
 		APIVersion: corev1.SchemeGroupVersion.String(),
 		Kind:       "Secret",
-		Name:       secretName,
+		Name:       name,
 		Namespace:  gw.Namespace,
 		Labels: map[string]string{
 			wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
 			wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
 		},
-		Type: corev1.SecretTypeOpaque,
+		OwnerReferences: []metav1.OwnerReference{sessionKeyOwnerReference(gw)},
+		Type:            corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"key": []byte(key),
 		},
-	}, nil
+	}
 }
 
-func (g *agentgatewayParametersHelmValuesGenerator) resolveSessionKey(
+func (s *SessionKeys) sessionKeyFromOwnedSecret(
 	ctx context.Context,
-	namespace string,
-	secretName string,
+	gw *gwv1.Gateway,
+	secret *corev1.Secret,
 ) (string, error) {
-	_ = ctx
-
-	if secret := g.secretClient.Get(secretName, namespace); secret != nil {
-		key, found := secret.Data["key"]
-		if !found || len(key) == 0 {
-			return "", fmt.Errorf("session key secret %s/%s missing key entry", namespace, secretName)
-		}
-		resolvedKey := strings.TrimSpace(string(key))
-		if err := validateSessionKey(resolvedKey); err != nil {
-			return "", fmt.Errorf("session key secret %s/%s contains an invalid key: %w", namespace, secretName, err)
-		}
-		return resolvedKey, nil
-	}
-
-	key, err := g.sessionKeyGen()
+	key, err := sessionKeyFromSecret(secret)
 	if err != nil {
 		return "", err
 	}
-	if err := validateSessionKey(key); err != nil {
-		return "", fmt.Errorf("generated invalid session key for %s/%s: %w", namespace, secretName, err)
+
+	controller := metav1.GetControllerOf(secret)
+	if controller == nil {
+		return "", fmt.Errorf("session key secret %s/%s has no controller owner", secret.Namespace, secret.Name)
 	}
-	return key, nil
+	if controller.UID == gw.UID {
+		return key, nil
+	}
+
+	desired := sessionKeyOwnerReference(gw)
+	if controller.APIVersion != desired.APIVersion || controller.Kind != desired.Kind || controller.Name != desired.Name {
+		return "", fmt.Errorf(
+			"session key secret %s/%s is controlled by %s %s/%s",
+			secret.Namespace, secret.Name, controller.Kind, secret.Namespace, controller.Name,
+		)
+	}
+
+	updated := secret.DeepCopy()
+	for i := range updated.OwnerReferences {
+		if ref := &updated.OwnerReferences[i]; ref.Controller != nil && *ref.Controller {
+			*ref = desired
+			break
+		}
+	}
+	updated, err = s.kube.CoreV1().Secrets(secret.Namespace).Update(ctx, updated, metav1.UpdateOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to update session key secret %s/%s owner: %w", secret.Namespace, secret.Name, err)
+	}
+	return sessionKeyFromSecret(updated)
+}
+
+func sessionKeyOwnerReference(gw *gwv1.Gateway) metav1.OwnerReference {
+	return metav1.OwnerReference{
+		APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
+		Kind:       wellknown.GatewayGVK.Kind,
+		Name:       gw.Name,
+		UID:        gw.UID,
+		Controller: new(true),
+	}
+}
+
+func sessionKeyFromSecret(secret *corev1.Secret) (string, error) {
+	key, found := secret.Data["key"]
+	if !found || len(key) == 0 {
+		return "", fmt.Errorf("session key secret %s/%s missing key entry", secret.Namespace, secret.Name)
+	}
+	resolvedKey := strings.TrimSpace(string(key))
+	if err := validateSessionKey(resolvedKey); err != nil {
+		return "", fmt.Errorf("session key secret %s/%s contains an invalid key: %w", secret.Namespace, secret.Name, err)
+	}
+	return resolvedKey, nil
 }
 
 func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.GatewayForDeployer {

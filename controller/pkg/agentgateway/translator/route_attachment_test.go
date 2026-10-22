@@ -88,7 +88,9 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 				}},
 				References: plugins.ReferenceTypes{AllowedParentReferences: sets.New(NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()))},
 			}
-			attachments := gatewayRouteAttachmentCollection(inputs, krt.NewStaticCollection(nil, []*gwv1.HTTPRoute{route}), wellknown.HTTPRouteGVK, opts)
+			routes := krt.NewStaticCollection(nil, []*gwv1.HTTPRoute{route})
+			inputs.ParentRefs = routeParentRefsCollection(inputs, routes, wellknown.HTTPRouteGVK, opts)
+			attachments := gatewayRouteAttachmentCollection(inputs, routes, wellknown.HTTPRouteGVK, opts)
 			require.True(t, attachments.WaitUntilSynced(stop))
 			if tt.wantKind == "" {
 				require.Empty(t, attachments.List())
@@ -98,8 +100,8 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 			got := attachments.List()[0]
 			require.Equal(t, utils.TypedNamespacedName{Kind: tt.wantKind, Namespace: "default", Name: tt.wantName}, got.To)
 			require.Equal(t, plugins.RouteAttachmentParent{
-				GroupKind:      NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()),
-				NamespacedName: types.NamespacedName{Namespace: defaultString(tt.namespace, "default"), Name: "parent"},
+				GroupKind: NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()),
+				Namespace: defaultString(tt.namespace, "default"), Name: "parent",
 			}, got.ParentRef)
 			require.Equal(t, tt.gateway, got.Gateway)
 			require.Equal(t, "http", got.ListenerName)

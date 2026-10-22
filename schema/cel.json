@@ -87,6 +87,23 @@
             "string",
             "null"
           ]
+        },
+        "agent": {
+          "description": "The agent harness that sent the request.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "session": {
+              "description": "The agent session the request belongs to, from `standardAttributes.session` or detected from\nwell-known agent headers such as `x-claude-code-session-id`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -360,7 +377,7 @@
           "type": "boolean"
         },
         "requestModel": {
-          "description": "The model requested for the LLM request. This may differ from the actual model used.",
+          "description": "The model requested for the LLM request. Before LLM processing, this is extracted from\nthe incoming URL or body, before provider overrides. This may differ from the actual model used.",
           "type": "string"
         },
         "responseModel": {
@@ -505,6 +522,13 @@
           "type": [
             "string",
             "null"
+          ],
+          "enum": [
+            "standard",
+            "flex",
+            "priority",
+            "reserved",
+            null
           ]
         },
         "timeToFirstToken": {
@@ -682,6 +706,20 @@
               "type": "number",
               "format": "double"
             },
+            "cacheWriteDetails": {
+              "type": "object",
+              "properties": {
+                "1h": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "12h": {
+                  "type": "number",
+                  "format": "double"
+                }
+              },
+              "additionalProperties": false
+            },
             "reasoning": {
               "type": "number",
               "format": "double"
@@ -747,6 +785,26 @@
               ],
               "format": "double"
             },
+            "cacheWriteDetails": {
+              "type": "object",
+              "properties": {
+                "1h": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "12h": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                }
+              },
+              "additionalProperties": false
+            },
             "reasoning": {
               "type": [
                 "number",
@@ -777,6 +835,194 @@
             }
           },
           "additionalProperties": false
+        },
+        "model": {
+          "description": "Model catalog metadata for the model that served the request.\nUnset when the model is not in the catalog.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "id": {
+              "description": "The catalog model ID the request resolved to.",
+              "type": "string"
+            },
+            "name": {
+              "description": "Human-readable display name.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "description": "Lifecycle stage (alpha, beta, deprecated); absent means generally available.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "released": {
+              "description": "Release date, as YYYY-MM-DD or YYYY-MM.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tags": {
+              "description": "Freeform capability/routing tags for this model.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limits": {
+              "description": "Token limits.",
+              "type": "object",
+              "properties": {
+                "context": {
+                  "description": "Total context window, shared by input and output.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint64",
+                  "minimum": 0
+                },
+                "input": {
+                  "description": "Maximum input tokens, when tighter than the context window allows.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint64",
+                  "minimum": 0
+                },
+                "output": {
+                  "description": "Maximum output tokens.",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint64",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "modalities": {
+              "description": "Supported input and output modalities.",
+              "type": "object",
+              "properties": {
+                "input": {
+                  "description": "Input modalities, such as text, image, pdf, audio, or video.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "output": {
+                  "description": "Output modalities, such as text, image, audio, or video.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "capabilities": {
+              "description": "Supported features. Absent fields are unknown.",
+              "type": "object",
+              "properties": {
+                "reasoning": {
+                  "description": "Whether the model supports reasoning.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "structuredOutput": {
+                  "description": "Whether the model supports JSON Schema structured outputs.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "toolCall": {
+                  "description": "Whether the model supports tool calling.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "temperature": {
+                  "description": "Whether the model accepts the temperature parameter.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            },
+            "reasoning": {
+              "description": "How reasoning can be controlled.",
+              "type": "object",
+              "properties": {
+                "toggle": {
+                  "description": "Whether reasoning can be turned on and off.",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "effort": {
+                  "description": "Accepted effort levels.",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "budgetTokens": {
+                  "description": "Accepted reasoning token budget range.",
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "min": {
+                      "description": "Minimum reasoning token budget.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "format": "uint64",
+                      "minimum": 0
+                    },
+                    "max": {
+                      "description": "Maximum reasoning token budget.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "format": "uint64",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false,
+              "default": {}
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id"
+          ]
         }
       },
       "additionalProperties": false,
@@ -788,7 +1034,7 @@
       ]
     },
     "llmRequest": {
-      "description": "`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;\npolicies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests."
+      "description": "`llmRequest` contains the raw JSON LLM request during route and LLM policies.\nPolicies occurring after LLM processing, such as logs, will not have this field present."
     },
     "source": {
       "description": "`source` contains attributes about the source of the request.",
@@ -1101,6 +1347,12 @@
         },
         "resourceTemplatesList": {
           "description": "The terminal resources/templates/list result returned to the client, if available."
+        },
+        "params": {
+          "description": "Current request parameters, with the same structure as the `params` object in an MCP request.\nAvailable only during request-phase CEL guardrails."
+        },
+        "result": {
+          "description": "Current response result, with the same structure as the `result` object in an MCP response.\nAvailable only during response-phase CEL guardrails."
         }
       },
       "additionalProperties": false
@@ -1195,8 +1447,15 @@
             "type": "string"
           },
           "action": {
-            "description": "The action the guardrail took (allow/mask/reject/audit/failOpen).",
-            "type": "string"
+            "description": "The action the guardrail took.",
+            "type": "string",
+            "enum": [
+              "allow",
+              "failOpen",
+              "audit",
+              "mask",
+              "reject"
+            ]
           },
           "guardrailId": {
             "description": "The configured guardrail identifier.",

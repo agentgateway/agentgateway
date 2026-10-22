@@ -85,7 +85,12 @@
   "usage": {
     "input_tokens": 10,
     "input_tokens_details": {
-      "cached_tokens": 0
+      "cached_tokens": 0,
+      "cache_write_tokens": 6,
+      "cache_write_tokens_details": {
+        "ttl_30m_tokens": 4,
+        "ttl_12h_tokens": 2
+      }
     },
     "output_tokens": 10,
     "output_tokens_details": {

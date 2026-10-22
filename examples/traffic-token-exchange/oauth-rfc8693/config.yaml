@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-# Exercises the backendAuth.oauth token-exchange policy
+# Exercises the backendAuth.oauthTokenExchange policy
 # (as opposed to the extAuthz+CEL approach in ../extauthz).
 #
 # Uses docker-compose.yaml in this directory:
