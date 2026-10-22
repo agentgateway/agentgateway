@@ -822,6 +822,7 @@ pub mod from_messages {
 			thinking,
 			output_config,
 			cache_control: _,
+			speed,
 		} = req;
 
 		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
@@ -1264,7 +1265,7 @@ pub mod from_messages {
 			function_call: None,
 			#[allow(deprecated)]
 			functions: None,
-			service_tier: None,
+			service_tier: (speed.as_deref() == Some("fast")).then(|| "priority".to_string()),
 			parallel_tool_calls,
 			web_search_options: None,
 		}

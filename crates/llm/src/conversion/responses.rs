@@ -199,6 +199,7 @@ pub mod from_messages {
 			thinking,
 			output_config,
 			cache_control: _,
+			speed,
 		} = typed;
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are
@@ -230,6 +231,13 @@ pub mod from_messages {
 			rest.insert(
 				"metadata".to_string(),
 				serde_json::to_value(metadata_fields).map_err(AIError::RequestMarshal)?,
+			);
+		}
+		// Anthropic fast mode maps to the OpenAI priority processing tier.
+		if speed.as_deref() == Some("fast") {
+			rest.insert(
+				"service_tier".to_string(),
+				Value::String("priority".to_string()),
 			);
 		}
 

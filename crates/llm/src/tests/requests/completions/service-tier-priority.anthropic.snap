@@ -1,0 +1,42 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/service-tier-priority.json
+info:
+  model: replaceme
+  service_tier: priority
+  messages:
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What is the name of the LLM provider?"
+          }
+        ]
+      }
+    ],
+    "model": "replaceme",
+    "max_tokens": 4096,
+    "speed": "fast"
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "replaceme",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the name of the LLM provider?"
+      }
+    ]
+  }
+}
