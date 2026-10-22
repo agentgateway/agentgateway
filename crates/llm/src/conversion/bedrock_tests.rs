@@ -170,6 +170,7 @@ fn test_metadata_from_header() {
 		thinking: None,
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, _) =
@@ -223,6 +224,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 			format: None,
 		}),
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -278,6 +280,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 			format: None,
 		}),
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -337,6 +340,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 			format: None,
 		}),
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -406,6 +410,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, _) = super::from_messages::translate_internal(req, &provider, None, None).unwrap();
@@ -528,6 +533,7 @@ fn enabled_thinking_request_with_tool_choice(
 		}),
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	}
 }
 
@@ -568,6 +574,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		thinking: None,
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	};
 
 	let err = super::from_messages::translate_internal(req, &provider, None, None).unwrap_err();
@@ -1628,6 +1635,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		thinking: None,
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	};
 
 	let (out, tool_map) =
@@ -1688,6 +1696,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		thinking: None,
 		output_config: None,
 		cache_control: None,
+		speed: None,
 	};
 
 	let (bedrock_req, tool_map) =

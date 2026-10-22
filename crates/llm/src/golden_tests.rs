@@ -165,6 +165,7 @@ mod requests {
 		("file-uri", &[VERTEX_GEMINI]),
 		("structured-output", &[VERTEX_GEMINI]),
 		("multi-turn-tools", &[VERTEX_GEMINI]),
+		("service-tier-priority", &[ANTHROPIC, BEDROCK]),
 		// Stands in for `full`, whose remote HTTP image the Gemini path rejects.
 		("generation-config", &[VERTEX_GEMINI]),
 	];
@@ -201,6 +202,7 @@ mod requests {
 			"cache_control",
 			&[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES],
 		),
+		("speed-fast", &[ANTHROPIC, COMPLETIONS, BEDROCK, RESPONSES]),
 		("cache_control_dropped_blocks", &[BEDROCK]),
 		("cache_control_reasoning_prefix", &[BEDROCK]),
 		("cache_control_responses", &[RESPONSES]),

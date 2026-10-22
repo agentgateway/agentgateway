@@ -1,0 +1,47 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/speed-fast.json
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  speed: fast
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "additionalModelRequestFields": {
+      "speed": "fast"
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
+  }
+}

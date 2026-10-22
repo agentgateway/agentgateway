@@ -879,6 +879,7 @@ pub mod from_completions {
 			thinking,
 			output_config,
 			cache_control: None,
+			speed: (req.service_tier.as_deref() == Some("priority")).then(|| "fast".to_string()),
 		})
 	}
 
