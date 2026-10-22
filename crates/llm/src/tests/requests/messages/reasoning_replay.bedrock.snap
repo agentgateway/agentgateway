@@ -76,13 +76,6 @@ info:
         "role": "assistant",
         "content": [
           {
-            "reasoningContent": {
-              "reasoningText": {
-                "text": "Three plus three is six."
-              }
-            }
-          },
-          {
             "text": "6"
           }
         ]
