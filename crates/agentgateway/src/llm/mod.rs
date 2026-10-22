@@ -2195,29 +2195,60 @@ impl AIProvider {
 			.typed_get::<headers::ContentType>()
 			.map(|v| v == headers::ContentType::json())
 			.unwrap_or_default();
-		let (parts, mut managed_body) = hreq.into_parts();
-		let cached = managed_body.remove_extension::<json::ParsedJson>();
-		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
-			return Err(AIError::RequestTooLarge);
-		};
-
-		let req = if is_json {
-			if let Some(json::ParsedJson(value)) = cached {
-				match policies {
-					Some(p) => p.unmarshal_request_value(value, log),
-					None => Ok(types::detect::Request::Json(value)),
-				}
-			} else if let Some(p) = policies
-				&& p.has_request_body_mutations()
-			{
-				p.unmarshal_request(&bytes, log)
-			} else {
-				serde_json::from_slice(bytes.as_ref())
-					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
+		let native_bedrock = hreq.uri().path().starts_with("/model/")
+			&& types::detect::extract_model_from_path(hreq.uri().path()).is_some();
+		let (parts, managed_body, req) = if native_bedrock && is_json {
+			// Native Bedrock carries the model in the path. Resolve it before body policies, then
+			// put it back in the path without adding a model field to the upstream body.
+			let (mut parts, managed_body, req) = self
+				.read_body_resolving_model::<types::detect::Request>(policies, hreq, log, true)
+				.await?;
+			let types::detect::Request::Json(mut body) = req else {
+				unreachable!("the JSON reader returns a JSON detect request");
+			};
+			let model = body.as_object_mut().and_then(|body| body.remove("model"));
+			let model = model
+				.and_then(|model| model.as_str().map(ToString::to_string))
+				.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
+			let model = policies
+				.and_then(|p| p.resolve_model_alias(&model))
+				.map(|m| m.as_str())
+				.unwrap_or(&model);
+			if !agent_llm::model_path::is_safe_resource_name(model) {
+				return Err(AIError::UnsupportedModel);
 			}
-			.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
+			let path = model_router::rewrite_path_model(parts.uri.path(), model)
+				.expect("native Bedrock path has a model");
+			let mut uri = parts.uri.into_parts();
+			Self::set_path_and_query(&mut uri, &path).map_err(|_| AIError::UnsupportedModel)?;
+			parts.uri = ::http::Uri::from_parts(uri).map_err(|_| AIError::UnsupportedModel)?;
+			(parts, managed_body, types::detect::Request::Json(body))
 		} else {
-			types::detect::Request::new_raw(bytes)
+			let (parts, mut managed_body) = hreq.into_parts();
+			let cached = managed_body.remove_extension::<json::ParsedJson>();
+			let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
+				return Err(AIError::RequestTooLarge);
+			};
+
+			let req = if is_json {
+				if let Some(json::ParsedJson(value)) = cached {
+					match policies {
+						Some(p) => p.unmarshal_request_value(value, log),
+						None => Ok(types::detect::Request::Json(value)),
+					}
+				} else if let Some(p) = policies
+					&& p.has_request_body_mutations()
+				{
+					p.unmarshal_request(&bytes, log)
+				} else {
+					serde_json::from_slice(bytes.as_ref())
+						.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
+				}
+				.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
+			} else {
+				types::detect::Request::new_raw(bytes)
+			};
+			(parts, managed_body, req)
 		};
 
 		self

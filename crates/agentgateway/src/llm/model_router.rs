@@ -985,7 +985,7 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 	Ok(())
 }
 
-fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
+pub(crate) fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		return rewrite_publishers_path_model(path, target);
 	}
