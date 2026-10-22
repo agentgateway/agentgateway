@@ -37,12 +37,14 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 		name       string
 		group      *gwv1.Group
 		kind       string
+		namespace  *gwv1.Namespace
 		serviceKey *types.NamespacedName
 		gateway    types.NamespacedName
 		wantKind   string
 		wantName   string
 	}{
-		{name: "extension", group: extensionGroup, kind: "TestListenerResource", gateway: gateway, wantKind: "TestListenerResource", wantName: "parent"},
+		{name: "extension", group: extensionGroup, kind: "TestListenerResource", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "cross namespace extension", group: extensionGroup, kind: "TestListenerResource", namespace: new(gwv1.Namespace("other")), gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "listener set", group: gatewayGroup, kind: "ListenerSet", gateway: gateway, wantKind: "ListenerSet", wantName: "parent"},
 		{name: "gateway", group: gatewayGroup, kind: "Gateway", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "gateway default group", kind: "Gateway", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
@@ -51,15 +53,17 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 		{name: "service", group: serviceGroup, kind: "Service", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "service entry", group: serviceEntryGroup, kind: "ServiceEntry", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "service-backed extension", group: extensionGroup, kind: "TestServiceResource", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "service-backed listener extension", group: extensionGroup, kind: "TestListenerResource", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "mesh service", group: serviceGroup, kind: "Service", serviceKey: &service},
 		{name: "mesh extension", group: extensionGroup, kind: "TestListenerResource"},
 		{name: "service without service key", group: serviceGroup, kind: "Service", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "service entry without service key", group: serviceEntryGroup, kind: "ServiceEntry", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
-		{name: "extension Gateway", group: extensionGroup, kind: "Gateway", gateway: gateway, wantKind: "Gateway", wantName: "parent"},
-		{name: "extension Service", group: extensionGroup, kind: "Service", gateway: gateway, wantKind: "Service", wantName: "parent"},
-		{name: "extension ServiceEntry", group: extensionGroup, kind: "ServiceEntry", gateway: gateway, wantKind: "ServiceEntry", wantName: "parent"},
-		{name: "extension ListenerSet", group: extensionGroup, kind: "ListenerSet", gateway: gateway, wantKind: "ListenerSet", wantName: "parent"},
+		{name: "extension Gateway", group: extensionGroup, kind: "Gateway", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "extension Service", group: extensionGroup, kind: "Service", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "extension ServiceEntry", group: extensionGroup, kind: "ServiceEntry", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "extension ListenerSet", group: extensionGroup, kind: "ListenerSet", gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "service-backed extension Gateway", group: extensionGroup, kind: "Gateway", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
+		{name: "service-backed extension ListenerSet", group: extensionGroup, kind: "ListenerSet", serviceKey: &service, gateway: gateway, wantKind: "Gateway", wantName: "gateway"},
 		{name: "listener set without gateway", group: gatewayGroup, kind: "ListenerSet", wantKind: "ListenerSet", wantName: "parent"},
 		{name: "extension ListenerSet without gateway", group: extensionGroup, kind: "ListenerSet"},
 	} {
@@ -70,7 +74,7 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 			if tt.kind != "" {
 				kind = new(gwv1.Kind(tt.kind))
 			}
-			ref := gwv1.ParentReference{Group: tt.group, Kind: kind, Name: "parent"}
+			ref := gwv1.ParentReference{Group: tt.group, Kind: kind, Namespace: tt.namespace, Name: "parent"}
 			route := &gwv1.HTTPRoute{
 				Namespace: "default", Name: "route",
 				Spec: gwv1.HTTPRouteSpec{CommonRouteSpec: gwv1.CommonRouteSpec{ParentRefs: []gwv1.ParentReference{ref}}},
@@ -93,6 +97,10 @@ func TestRouteAttachmentParentIdentity(t *testing.T) {
 			require.Len(t, attachments.List(), 1)
 			got := attachments.List()[0]
 			require.Equal(t, utils.TypedNamespacedName{Kind: tt.wantKind, Namespace: "default", Name: tt.wantName}, got.To)
+			require.Equal(t, plugins.RouteAttachmentParent{
+				GroupKind:      NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()),
+				NamespacedName: types.NamespacedName{Namespace: defaultString(tt.namespace, "default"), Name: "parent"},
+			}, got.ParentRef)
 			require.Equal(t, tt.gateway, got.Gateway)
 			require.Equal(t, "http", got.ListenerName)
 		})

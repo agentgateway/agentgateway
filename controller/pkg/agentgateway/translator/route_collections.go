@@ -1091,18 +1091,16 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 				return nil
 			}
 			parent := utils.TypedNamespacedName{Kind: wellknown.GatewayGVK.Kind, NamespacedName: e.ParentGateway}
-			switch parentKind {
-			case wellknown.ListenerSetGVK.GroupKind():
+			if parentKind == wellknown.ListenerSetGVK.GroupKind() {
 				parent = e.ParentKey
-			case wellknown.GatewayGVK.GroupKind(), wellknown.ServiceGVK.GroupKind(), wellknown.ServiceEntryGVK.GroupKind():
-			default:
-				if e.ServiceKey == nil {
-					parent = e.ParentKey
-				}
 			}
 			return new(&plugins.RouteAttachment{
-				From:         from,
-				To:           parent,
+				From: from,
+				To:   parent,
+				ParentRef: plugins.RouteAttachmentParent{
+					GroupKind:      parentKind,
+					NamespacedName: e.ParentKey.NamespacedName,
+				},
 				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
 			})

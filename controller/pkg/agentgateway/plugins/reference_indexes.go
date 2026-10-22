@@ -397,12 +397,25 @@ func resolveXBackend(
 	return &api.BackendReference{Kind: &api.BackendReference_Backend{Backend: key}}, nil
 }
 
+// RouteAttachmentParent identifies the route's referenced parent, including its API group.
+type RouteAttachmentParent struct {
+	schema.GroupKind
+	types.NamespacedName
+}
+
+func (p RouteAttachmentParent) String() string {
+	return p.Group + "/" + p.Kind + "/" + p.NamespacedName.String()
+}
+
 type RouteAttachment struct {
 	// Route
 	From utils.TypedNamespacedName
-	// Immediate parent
+	// Attachment attribution (Gateway or ListenerSet).
 	To           utils.TypedNamespacedName
 	ListenerName string
+	// Normalized referenced parent for extension status; does not change attachment attribution.
+	// Unset for synthesized attachments without a parent reference.
+	ParentRef RouteAttachmentParent
 	// Eventual parent (always Gateway)
 	Gateway types.NamespacedName
 }
@@ -416,7 +429,7 @@ func (r RouteAttachment) ResourceName() string {
 }
 
 func (r *RouteAttachment) Equals(other *RouteAttachment) bool {
-	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName && r.Gateway == other.Gateway
+	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName && r.Gateway == other.Gateway && r.ParentRef == other.ParentRef
 }
 
 // BuildReferenceIndex builds a set of indexes that can lookup objects through various means.

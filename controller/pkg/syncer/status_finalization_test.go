@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/test"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -122,6 +123,7 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 		}),
 		syncer.WithBuildReferenceTypes(func(_ *plugins.AgwCollections, base plugins.ReferenceTypes) plugins.ReferenceTypes {
 			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "test.example", Kind: "TestListenerResource"})
+			base.AllowedParentReferences.Insert(schema.GroupKind{Group: "other.example", Kind: "TestListenerResource"})
 			return base
 		}),
 		syncer.WithCustomResourceCollections(func(cfg syncer.CustomResourceCollectionsConfig) {
@@ -137,10 +139,15 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 			inputs = cfg
 			require.NotNil(t, initial)
 			require.Equal(t, wellknown.DefaultAgwControllerName, cfg.ControllerName)
-			attachmentIndex := krt.NewIndex(cfg.RouteAttachments, "to", func(a *plugins.RouteAttachment) []utils.TypedNamespacedName { return []utils.TypedNamespacedName{a.To} })
+			attachmentIndex := krt.NewIndex(cfg.RouteAttachments, "parent-ref", func(a *plugins.RouteAttachment) []plugins.RouteAttachmentParent {
+				return []plugins.RouteAttachmentParent{a.ParentRef}
+			})
 			final = krt.NewCollection(initial, func(kctx krt.HandlerContext, i krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus]) *krt.ObjectWithStatus[*unstructured.Unstructured, finalizationTestStatus] {
 				desired := i.Status
-				desired.AttachedRoutes = len(krt.Fetch(kctx, cfg.RouteAttachments, krt.FilterIndex(attachmentIndex, utils.TypedNamespacedName{Kind: "TestListenerResource", Namespace: i.Obj.GetNamespace(), Name: i.Obj.GetName()})))
+				desired.AttachedRoutes = len(krt.Fetch(kctx, cfg.RouteAttachments, krt.FilterIndex(attachmentIndex, plugins.RouteAttachmentParent{
+					GroupKind:      i.Obj.GroupVersionKind().GroupKind(),
+					NamespacedName: types.NamespacedName{Namespace: i.Obj.GetNamespace(), Name: i.Obj.GetName()},
+				})))
 				for _, listener := range krt.Fetch(kctx, cfg.GatewayListeners) {
 					if listener.ParentObject.Name == i.Obj.GetName() && listener.Conflict != "" {
 						desired.Conflicts++
@@ -178,12 +185,24 @@ func TestFinalStatusCollectionsLifecycle(t *testing.T) {
 	gatewayKey := status.Resource{GroupVersionKind: wellknown.GatewayGVK, NamespacedName: exampleGateway}
 	gwWrites := queue.statuses(gatewayKey)
 	require.NotEmpty(t, gwWrites)
-	require.Equal(t, int32(1), gwWrites[len(gwWrites)-1].(*gwv1.GatewayStatus).Listeners[0].AttachedRoutes)
+	require.Equal(t, int32(2), gwWrites[len(gwWrites)-1].(*gwv1.GatewayStatus).Listeners[0].AttachedRoutes)
 
 	routes.Reset([]*gwv1.HTTPRoute{gatewayRoute})
 	check(finalizationTestStatus{Conflicts: 1, Rejected: 1})
 	routes.Reset([]*gwv1.HTTPRoute{extensionRoute, gatewayRoute})
 	check(finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1})
+	otherGroupRoute := extensionRoute.DeepCopy()
+	otherGroupRoute.Spec.ParentRefs[0].Group = ptr.Of(gwv1.Group("other.example"))
+	routes.Reset([]*gwv1.HTTPRoute{otherGroupRoute, gatewayRoute})
+	check(finalizationTestStatus{Conflicts: 1, Rejected: 1})
+	routes.Reset([]*gwv1.HTTPRoute{extensionRoute, gatewayRoute})
+	check(finalizationTestStatus{AttachedRoutes: 1, Conflicts: 1, Rejected: 1})
+	candidates.Reset([]*translator.ListenerSet{free})
+	check(finalizationTestStatus{AttachedRoutes: 1})
+	serviceBacked := *free
+	serviceBacked.ParentInfo.ServiceKey = ptr.Of(types.NamespacedName{Namespace: "default", Name: "service"})
+	candidates.Reset([]*translator.ListenerSet{&serviceBacked})
+	check(finalizationTestStatus{AttachedRoutes: 1})
 	candidates.Reset([]*translator.ListenerSet{free})
 	check(finalizationTestStatus{AttachedRoutes: 1})
 	candidates.Reset(nil)
