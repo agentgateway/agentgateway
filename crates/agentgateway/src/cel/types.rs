@@ -81,6 +81,8 @@ pub struct Executor<'a> {
 
 	pub guardrails: Option<&'a Vec<GuardrailInfo>>,
 
+	pub upstream_calls: Option<&'a Vec<crate::telemetry::upstream::UpstreamCall>>,
+
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
 }
 
@@ -2332,6 +2334,12 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub guardrails: Option<Vec<GuardrailInfo>>,
 
+	/// `upstreamCalls` lists the outbound calls made for this request, such as MCP target and policy calls.
+	/// It's only filled in for access log expressions that reference it.
+	/// Its request headers are the ones sent to the backend. `request.headers` still has the client's headers.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub upstream_calls: Option<Vec<crate::telemetry::upstream::UpstreamCall>>,
+
 	/// `metadata` contains values set by transformation metadata expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub metadata: Option<TransformationMetadata>,
@@ -2437,6 +2445,7 @@ impl ExecutorSerde {
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
 		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
 		exec.guardrails = self.guardrails.as_ref();
+		exec.upstream_calls = self.upstream_calls.as_ref();
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref().map(MCPView::new);
 
@@ -2638,6 +2647,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
+		upstream_calls: None,
 		mcp_guardrails: Some(McpGuardrailsDynamicMetadata::default()),
 		guardrails: Some(vec![GuardrailInfo {
 			phase: "request".into(),

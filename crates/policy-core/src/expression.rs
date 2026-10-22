@@ -101,6 +101,8 @@ flagset::flags! {
 
 		Guardrails,
 
+		UpstreamCalls,
+
 		Extauthz,
 		Extproc,
 		Metadata,
@@ -241,6 +243,9 @@ pub fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			},
 			["mcp", ..] => {
 				attributes |= Attributes::Mcp;
+			},
+			["upstreamCalls", ..] => {
+				attributes |= Attributes::UpstreamCalls;
 			},
 			["guardrails", ..] => {
 				attributes |= Attributes::Guardrails;

@@ -9391,3 +9391,169 @@ async fn modern_multi_target_resolve_propagates_meta() {
 		assert_eq!(&probe["params"]["_meta"][key], value, "{key}");
 	}
 }
+
+fn enable_upstream_call_logs(t: &mut TestBind) {
+	let listener = t
+		.pi
+		.stores
+		.read_binds()
+		.bind(&BIND_KEY)
+		.unwrap()
+		.listeners
+		.iter()
+		.next()
+		.unwrap()
+		.name
+		.clone();
+	let mut policy: crate::types::frontend::LoggingPolicy =
+		serde_json::from_value(serde_json::json!({
+			"add": {"upstream_test_id": "request.headers['x-upstream-test-id']",
+				"upstream_calls": "upstreamCalls", "inbound_auth": "request.headers.authorization"}
+		}))
+		.unwrap();
+	policy.init_access_log_policy();
+	t.with_policy(TargetedPolicy {
+		key: "frontend/upstreamCalls".into(),
+		name: None,
+		target: PolicyTarget::Gateway(listener.into()),
+		creation_timestamp: 0,
+		inheritance: Default::default(),
+		policy: FrontendPolicy::AccessLog(policy).into(),
+	});
+}
+
+async fn upstream_call_test_request(
+	io: SocketAddr,
+	method: &str,
+	params: serde_json::Value,
+) -> serde_json::Value {
+	let id = uuid::Uuid::new_v4().to_string();
+	let body = serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
+	let client = reqwest::Client::new();
+	let mut request = mcp_json_post(&client, &format!("http://{io}/mcp"), &body)
+		.bearer_auth("subject-token")
+		.header("x-upstream-test-id", &id)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", method);
+	if method == "tools/call" {
+		request = request.header("mcp-name", "echo");
+	}
+	let response = request.send().await.unwrap();
+	let _ = response.bytes().await.unwrap();
+	agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("upstream_test_id", &id),
+	])
+	.await
+	.unwrap()
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_token_exchange_and_cache() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, ResponseTemplate};
+	let token = wiremock::MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/token"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+			"access_token": "exchanged-token", "token_type": "Bearer",
+			"issued_token_type": "urn:ietf:params:oauth:token-type:access_token", "expires_in": 3600
+		})))
+		.expect(1)
+		.mount(&token)
+		.await;
+	let upstream = mock_streamable_http_server(true).await;
+	let auth = serde_json::from_value(
+		serde_json::json!({"host": token.address().to_string(), "path": "/token"}),
+	)
+	.unwrap();
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(
+			upstream.addr,
+			false,
+			false,
+			vec![],
+			vec![BackendTrafficPolicy::backend_auth(
+				BackendAuthKind::OAuthTokenExchange(Box::new(auth)),
+			)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_route(upstream.addr));
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	for cached in [false, true] {
+		let log = upstream_call_test_request(
+			io,
+			"tools/call",
+			serde_json::json!({"name": "echo", "arguments": {}, "_meta": task_meta()}),
+		)
+		.await;
+		assert_eq!(log["inbound_auth"], "Bearer subject-token");
+		let calls = log["upstream_calls"].as_array().unwrap();
+		let policy = calls.iter().filter(|c| c["kind"] == "Policy").collect_vec();
+		assert_eq!(policy.len(), if cached { 0 } else { 1 }, "{log}");
+		if !cached {
+			assert_eq!(policy[0]["target"], token.address().to_string());
+			assert_eq!(policy[0]["response"]["code"], 200);
+		}
+		let mcp = calls.iter().find(|c| c["subtype"] == "Mcp").unwrap();
+		assert_eq!(mcp["target"], "mcp");
+		assert_eq!(
+			mcp["request"]["headers"]["authorization"],
+			"Bearer exchanged-token"
+		);
+		assert_eq!(mcp["response"]["code"], 200);
+	}
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_failed_mcp_transport() {
+	let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+	let addr = listener.local_addr().unwrap();
+	drop(listener);
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_and_target_policies(addr, false, false, vec![], vec![], false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(addr));
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let log = upstream_call_test_request(
+		io,
+		"tools/call",
+		serde_json::json!({"name": "echo", "arguments": {}, "_meta": task_meta()}),
+	)
+	.await;
+	let calls = log["upstream_calls"].as_array().unwrap();
+	assert!(!calls.is_empty(), "{log}");
+	for call in calls {
+		assert_eq!(call["subtype"], "Mcp");
+		assert!(
+			call["error"].as_str().is_some_and(|s| !s.is_empty()),
+			"{call}"
+		);
+		assert!(call["response"]["code"].is_null(), "{call}");
+	}
+}
+
+#[tokio::test]
+async fn upstream_calls_proxy_fanout() {
+	let a = mock_streamable_http_server(true).await;
+	let b = mock_streamable_http_server(true).await;
+	let mut t = never_prefix_proxy(vec![("a", a.addr, false), ("b", b.addr, false)], false);
+	enable_upstream_call_logs(&mut t);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let log =
+		upstream_call_test_request(io, "tools/list", serde_json::json!({"_meta": task_meta()})).await;
+	let calls = log["upstream_calls"].as_array().unwrap();
+	for target in ["a", "b"] {
+		assert!(
+			calls
+				.iter()
+				.any(|c| c["target"] == target && c["subtype"] == "Mcp" && c["response"]["code"] == 200),
+			"{log}"
+		);
+	}
+}
