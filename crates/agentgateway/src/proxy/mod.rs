@@ -109,6 +109,8 @@ impl ProxyError {
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
 			ProxyError::RateLimitFailed
 			| ProxyError::RateLimitExceeded { .. }
+			| ProxyError::ConcurrencyLimitExceeded { .. }
+			| ProxyError::ConcurrencyLimitKeyFailed
 			| ProxyError::RemoteRateLimitExceeded { .. }
 			| ProxyError::BudgetExceeded(_) => ProxyResponseReason::RateLimit,
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
@@ -279,6 +281,10 @@ pub enum ProxyError {
 		remaining: u64,
 		reset_seconds: u64,
 	},
+	#[error("concurrency limit exceeded")]
+	ConcurrencyLimitExceeded { limit: u32, in_flight: u32 },
+	#[error("concurrency limit key could not be evaluated")]
+	ConcurrencyLimitKeyFailed,
 	// remote (RLS) denial; into_response_with_grpc builds the 429 body and headers
 	#[error("rate limit exceeded")]
 	RemoteRateLimitExceeded {
@@ -537,11 +543,15 @@ impl ProxyError {
 			ProxyError::RequestLimitExceeded => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::SubstrateIngressFailed(status, _, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
+			ProxyError::ConcurrencyLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RemoteRateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::BudgetExceeded(_) => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
+			// A request the rule cannot key is rejected by failureMode: failClosed, like a failed
+			// rate limit service.
+			ProxyError::ConcurrencyLimitKeyFailed => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::GuardrailRejected { ref response, .. } => response.0.status(),
 
 			// Shouldn't happen on this path
