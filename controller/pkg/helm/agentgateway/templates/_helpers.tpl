@@ -259,6 +259,10 @@ spec:
         - name: NETWORK
           value: {{ $gateway.istio.network | quote }}
         {{- end }}
+        {{- if and (not (hasKey $userEnvNames "HBONE_PASSTHROUGH_PORTS")) (hasKey $gateway "istio") $gateway.istio.passthroughPorts }}
+        - name: HBONE_PASSTHROUGH_PORTS
+          value: {{ $gateway.istio.passthroughPorts | join "," | quote }}
+        {{- end }}
       {{- /* User-specified env vars */}}
       {{- with $gateway.env }}
         {{- toYaml . | nindent 8 }}

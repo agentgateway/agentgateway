@@ -193,6 +193,8 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 					"CA_ADDRESS should fall back to the default")
 				assert.Contains(t, outputYaml, "cluster.local",
 					"trust domain should fall back to the istio default")
+				assert.Contains(t, outputYaml, "HBONE_PASSTHROUGH_PORTS",
+					"integration enabled should expose the metrics port over HBONE by default")
 			},
 		},
 		{
@@ -239,6 +241,26 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 					"deployment should set ADDITIONAL_TRUST_DOMAINS env var")
 				assert.Contains(t, outputYaml, "extra.domain.com,another.domain.com",
 					"deployment should set the correct value for ADDITIONAL_TRUST_DOMAINS")
+			},
+		},
+		{
+			Name:      "agentgateway with Istio passthrough ports",
+			InputFile: "agentgateway-istio-passthrough-ports",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "HBONE_PASSTHROUGH_PORTS",
+					"deployment should set HBONE_PASSTHROUGH_PORTS env var")
+				assert.Contains(t, outputYaml, "value: 15020,15021",
+					"deployment should set the configured passthrough ports")
+			},
+		},
+		{
+			Name:      "agentgateway with Istio passthrough ports disabled",
+			InputFile: "agentgateway-istio-passthrough-disabled",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.NotContains(t, outputYaml, "HBONE_PASSTHROUGH_PORTS",
+					"an empty passthroughPorts list must turn the default off")
 			},
 		},
 		{

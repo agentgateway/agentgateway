@@ -140,6 +140,8 @@ spec:
           value: https://my-custom-istiod.custom-namespace.svc:15012
         - name: TRUST_DOMAIN
           value: my-custom-trust-domain
+        - name: HBONE_PASSTHROUGH_PORTS
+          value: "15020"
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:
