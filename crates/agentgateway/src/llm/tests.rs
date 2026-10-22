@@ -2030,7 +2030,7 @@ async fn native_bedrock_resolves_model_before_forwarding() {
 						[(
 							"model".to_string(),
 							Arc::new(
-								crate::cel::Expression::new_strict(&format!(
+								crate::cel::Expression::new_strict(format!(
 									"llmRequest.model == 'internal-model' ? '{target}' : 'wrong-model'"
 								))
 								.unwrap(),
