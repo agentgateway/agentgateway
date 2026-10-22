@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.11
 ARG BUILDER=base
 
-FROM docker.io/library/node:24.17.0-bookworm AS node
+FROM docker.io/library/node:24.22.1-bookworm AS node
 
 WORKDIR /app
 

@@ -19,7 +19,7 @@ This page contains instructions on how to run everything locally.
 
 Requirements:
 - Rust 1.86+
-- Node 24.17.0 (see `ui/.nvmrc`)
+- Node 24.22.1 (see `ui/.nvmrc`)
 
 The UI is built with [pnpm](https://pnpm.io/). The version is pinned in
 `ui/package.json` under `packageManager`, and Corepack (bundled with Node)
