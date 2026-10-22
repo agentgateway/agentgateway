@@ -1204,7 +1204,7 @@ pub mod from_completions {
 		let created = chrono::Utc::now().timestamp() as u32;
 		let mut saw_token = false;
 		let mut last_token_at: Option<Instant> = None;
-		// Track tool call JSON buffers by content block index
+		// Track tool call arguments by content block index
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		// Bedrock indexes every content block, while OpenAI indexes only tool calls.
 		let mut next_tool_index = 0u32;
@@ -1313,11 +1313,11 @@ pub mod from_completions {
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
 								logged_tool_calls.append_arguments(d.content_block_index as usize, &tu.input);
 								// Accumulate tool call JSON and emit deltas
-								if let (Some(json_buffer), Some(&tool_index)) = (
+								if let (Some(arguments), Some(&tool_index)) = (
 									tool_calls.get_mut(&d.content_block_index),
 									tool_index_map.get(&d.content_block_index),
 								) {
-									json_buffer.push_str(&tu.input);
+									arguments.push_str(&tu.input);
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
 										index: tool_index,
 										id: None, // Only sent in the first chunk
@@ -1342,9 +1342,26 @@ pub mod from_completions {
 				},
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					// Clean up tool call tracking for this content block
-					tool_calls.remove(&stop.content_block_index);
-					tool_index_map.remove(&stop.content_block_index);
-					None
+					let arguments = tool_calls.remove(&stop.content_block_index);
+					let tool_index = tool_index_map.remove(&stop.content_block_index);
+					match (arguments, tool_index) {
+						// Bedrock streams an empty input for zero-argument tools; send `{}` so arguments are valid JSON.
+						(Some(arguments), Some(tool_index)) if arguments.is_empty() => {
+							let d = completions::StreamResponseDelta::with_tool_calls(vec![
+								completions::ChatCompletionMessageToolCallChunk {
+									index: tool_index,
+									id: None,
+									r#type: None,
+									function: Some(completions::FunctionCallStream {
+										name: None,
+										arguments: Some("{}".to_string()),
+									}),
+								},
+							]);
+							mk(vec![completions::ChatChoiceStream::with_delta(d)], None)
+						},
+						_ => None,
+					}
 				},
 				bedrock::ConverseStreamOutput::MessageStart(start) => {
 					// Just send a blob with the role
@@ -3268,7 +3285,7 @@ pub mod from_responses {
 		let mut logged_tool_calls =
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 
-		// Track tool calls for streaming: (content_block_index -> (item_id, name, json_buffer, output_index))
+		// Track tool calls for streaming: (content_block_index -> (item_id, name, arguments, output_index))
 		// output_index is the stable position of this tool call in the response output array.
 		let mut tool_calls: HashMap<i32, (String, String, String, u32)> = HashMap::new();
 
@@ -3496,10 +3513,10 @@ pub mod from_responses {
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
 								logged_tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
-								if let Some((item_id, _name, buffer, output_index)) =
+								if let Some((item_id, _name, arguments, output_index)) =
 									tool_calls.get_mut(&delta.content_block_index)
 								{
-									buffer.push_str(&tu.input);
+									arguments.push_str(&tu.input);
 
 									sequence_number += 1;
 									let delta_event = ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
@@ -3521,9 +3538,25 @@ pub mod from_responses {
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					let mut events: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
-					if let Some((item_id, name, buffer, output_index)) =
+					if let Some((item_id, name, mut arguments, output_index)) =
 						tool_calls.remove(&stop.content_block_index)
 					{
+						// Bedrock streams an empty input for zero-argument tools; send `{}` so arguments are valid JSON.
+						if arguments.is_empty() {
+							arguments.push_str("{}");
+							sequence_number += 1;
+							events.push((
+								"event",
+								ResponseStreamEvent::ResponseFunctionCallArgumentsDelta(
+									ResponseFunctionCallArgumentsDeltaEvent {
+										sequence_number,
+										item_id: item_id.clone(),
+										output_index,
+										delta: arguments.clone(),
+									},
+								),
+							));
+						}
 						sequence_number += 1;
 						let args_done_event = ResponseStreamEvent::ResponseFunctionCallArgumentsDone(
 							ResponseFunctionCallArgumentsDoneEvent {
@@ -3531,13 +3564,13 @@ pub mod from_responses {
 								sequence_number,
 								item_id: item_id.clone(),
 								output_index,
-								arguments: buffer.clone(),
+								arguments: arguments.clone(),
 							},
 						);
 						events.push(("event", args_done_event));
 
 						let item = OutputItem::FunctionCall(FunctionToolCall {
-							arguments: buffer,
+							arguments,
 							call_id: item_id.clone(),
 							namespace: None,
 							name,
