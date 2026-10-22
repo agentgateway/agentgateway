@@ -1258,7 +1258,10 @@ fn import_litellm_model(
 	);
 
 	let params_cooldown_override = params.remove("cooldown_time").is_some();
-	let cooldown_override = params_cooldown_override || model_info.contains_key("cooldown_time");
+	let health_override = params_cooldown_override
+		|| ["cooldown_time", "allowed_fails", "allowed_fails_policy"]
+			.iter()
+			.any(|key| model_info.contains_key(*key));
 	if params_cooldown_override {
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.cooldown_time"),
@@ -1354,7 +1357,7 @@ fn import_litellm_model(
 			request_headers,
 			request_headers_override_defaults: false,
 			weight,
-			inherits_model_health: !cooldown_override,
+			inherits_model_health: !health_override,
 		},
 		credential_name,
 		model_upstream_headers,
@@ -2405,49 +2408,57 @@ router_settings:
 	}
 
 	#[test]
-	fn model_info_cooldown_override_suppresses_health_only_for_that_deployment() {
-		let result = import_config(
-			"litellm",
-			r#"
+	fn model_info_health_overrides_suppress_health_only_for_that_deployment() {
+		for (key, value) in [
+			("cooldown_time", "5"),
+			("allowed_fails", "0"),
+			("allowed_fails_policy", "{ RateLimitErrorAllowedFails: 1 }"),
+		] {
+			let result = import_config(
+				"litellm",
+				&format!(
+					r#"
 model_list:
 - model_name: primary
   litellm_params:
     model: openai/gpt-4o
   model_info:
-    cooldown_time: 5
+    {key}: {value}
 - model_name: backup
   litellm_params:
     model: openai/gpt-4o-mini
 router_settings:
   allowed_fails: 3
   cooldown_time: 60
-"#,
-		)
-		.expect("import litellm config");
+"#
+				),
+			)
+			.expect("import litellm config");
 
-		let health_by_model = imported_models(&result)
-			.iter()
-			.map(|model| {
-				(
-					model["params"]["model"].as_str().expect("upstream model"),
-					model.get("health").cloned(),
-				)
-			})
-			.collect::<HashMap<_, _>>();
-		assert_eq!(health_by_model["gpt-4o"], None);
-		assert_eq!(
-			health_by_model["gpt-4o-mini"],
-			Some(json!({
-				"eviction": {
-					"consecutiveFailures": 4,
-					"duration": "60s",
-				}
-			}))
-		);
-		assert_eq!(
-			find_status(&result, "model_list[0].model_info.cooldown_time"),
-			ImportStatus::Manual
-		);
+			let health_by_model = imported_models(&result)
+				.iter()
+				.map(|model| {
+					(
+						model["params"]["model"].as_str().expect("upstream model"),
+						model.get("health").cloned(),
+					)
+				})
+				.collect::<HashMap<_, _>>();
+			assert_eq!(health_by_model["gpt-4o"], None);
+			assert_eq!(
+				health_by_model["gpt-4o-mini"],
+				Some(json!({
+					"eviction": {
+						"consecutiveFailures": 4,
+						"duration": "60s",
+					}
+				}))
+			);
+			assert_eq!(
+				find_status(&result, &format!("model_list[0].model_info.{key}")),
+				ImportStatus::Manual
+			);
+		}
 	}
 
 	#[test]
