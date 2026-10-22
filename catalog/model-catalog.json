@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-10-21T19:06:18Z"
+    "generatedAt": "2026-10-22T08:37:20Z"
   },
   "providers": {
     "anthropic": {
@@ -15797,7 +15797,8 @@
           "capabilities": {
             "reasoning": true,
             "structuredOutput": true,
-            "toolCall": true
+            "toolCall": true,
+            "temperature": false
           },
           "reasoning": {
             "effort": [
@@ -19549,7 +19550,7 @@
             ]
           },
           "capabilities": {
-            "reasoning": true,
+            "reasoning": false,
             "toolCall": false,
             "temperature": true
           }
