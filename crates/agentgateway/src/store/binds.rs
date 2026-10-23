@@ -2432,6 +2432,7 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use protos::agent::Gcp;
 	use tokio_stream::StreamExt;
 
 	use super::*;
@@ -2441,6 +2442,7 @@ mod tests {
 		ResourceName, Target, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
+	use crate::types::proto::agent::backend_auth_policy;
 
 	fn listener() -> ListenerName {
 		ListenerName {
@@ -2544,16 +2546,21 @@ mod tests {
 		assert!(!logs.contains(SENTINEL), "{logs}");
 	}
 
-	#[test]
-	fn xds_invalid_gcp_credential_warns_without_blocking_other_backends() {
+	#[rstest::rstest]
+	#[case::gcp(invalid_gcp_auth(), "PRIVATE_KEY")]
+	#[case::oauth_private_key_jwt(invalid_private_key_jwt_auth(), "KEY-MATERIAL-MARKER")]
+	fn xds_invalid_backend_credential_warns_without_blocking_other_backends(
+		#[case] auth: backend_auth_policy::Kind,
+		#[case] secret: &str,
+	) {
 		use agent_xds::{Handler, XdsResource};
 
 		use crate::types::proto::agent::{
-			BackendAuthPolicy, BackendPolicySpec, Gcp, ResourceName, StaticBackend, backend,
+			BackendAuthPolicy, BackendPolicySpec, ResourceName, StaticBackend, backend,
 			backend_auth_policy, backend_policy_spec,
 		};
 
-		fn backend(key: &str, credential: Option<&str>) -> XdsBackend {
+		fn backend(key: &str, auth: Option<backend_auth_policy::Kind>) -> XdsBackend {
 			XdsBackend {
 				key: key.to_string(),
 				name: Some(ResourceName {
@@ -2570,13 +2577,10 @@ mod tests {
 					port: 80,
 					unix_path: String::new(),
 				})),
-				inline_policies: credential
-					.map(|credential| BackendPolicySpec {
+				inline_policies: auth
+					.map(|auth| BackendPolicySpec {
 						kind: Some(backend_policy_spec::Kind::Auth(BackendAuthPolicy {
-							kind: Some(backend_auth_policy::Kind::Gcp(Gcp {
-								credential: Some(credential.to_string()),
-								token_type: None,
-							})),
+							kind: Some(auth),
 							credentials: vec![],
 						})),
 					})
@@ -2588,13 +2592,11 @@ mod tests {
 		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
 		let mut updates = vec![
 			XdsUpdate::Update(XdsResource {
-				name: strng::literal!("backend/default/bad-gcp"),
+				name: strng::literal!("backend/default/bad-credential"),
 				resource: ADPResource {
 					kind: Some(XdsKind::Backend(backend(
-						"default/bad-gcp",
-						Some(
-							r#"{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"PRIVATE_KEY"}"#,
-						),
+						"default/bad-credential",
+						Some(auth),
 					))),
 				},
 			}),
@@ -2609,15 +2611,56 @@ mod tests {
 
 		let rejects = updater
 			.handle(Box::new(&mut updates))
-			.expect_err("the invalid GCP credential should produce a warning");
+			.expect_err("the invalid credential should produce a warning");
 		let rejects = RejectedConfig::format_json(&rejects);
-		assert!(rejects.contains("\"warn\":"));
-		assert!(!rejects.contains("\"error\":"));
-		assert!(!rejects.contains("PRIVATE_KEY"));
+		assert!(
+			rejects.contains("\"key\":\"backend/default/bad-credential\""),
+			"{rejects}"
+		);
+		assert!(rejects.contains("\"warn\":"), "{rejects}");
+		assert!(!rejects.contains("\"error\":"), "{rejects}");
+		assert!(!rejects.contains(secret), "{rejects}");
 
 		let store = updater.read();
-		assert!(store.backend(&strng::literal!("default/bad-gcp")).is_some());
+		assert!(
+			store
+				.backend(&strng::literal!("default/bad-credential"))
+				.is_some()
+		);
 		assert!(store.backend(&strng::literal!("default/healthy")).is_some());
+	}
+
+	fn invalid_gcp_auth() -> backend_auth_policy::Kind {
+		backend_auth_policy::Kind::Gcp(Gcp {
+			credential: Some(
+				r#"{"type":"service_account","project_id":"project","private_key_id":"key-id","private_key":"PRIVATE_KEY"}"#
+					.to_string(),
+			),
+			token_type: None,
+		})
+	}
+
+	fn invalid_private_key_jwt_auth() -> backend_auth_policy::Kind {
+		use crate::types::proto::agent::{
+			JwtSigningAlg, OAuthClientAuth, OAuthTokenExchange, o_auth_client_auth,
+		};
+
+		backend_auth_policy::Kind::OauthTokenExchange(OAuthTokenExchange {
+			client_auth: Some(OAuthClientAuth {
+				client_id: "client".to_string(),
+				method: o_auth_client_auth::Method::PrivateKeyJwt as i32,
+				private_key_jwt: Some(o_auth_client_auth::PrivateKeyJwt {
+					signing_key:
+						"-----BEGIN PRIVATE KEY-----\nKEY-MATERIAL-MARKER\n-----END PRIVATE KEY-----"
+							.to_string(),
+					alg: JwtSigningAlg::Es256 as i32,
+					assertion_audience: "https://idp.example/token".to_string(),
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			..Default::default()
+		})
 	}
 
 	#[tokio::test]
