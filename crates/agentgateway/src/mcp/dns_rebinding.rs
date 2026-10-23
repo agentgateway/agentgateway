@@ -43,7 +43,7 @@ fn has_localhost_authority(req: &Request) -> bool {
 	// Inbound HTTP/1 Host is normalized into the URI authority before routing;
 	// HTTP/2 already carries it as :authority. Keep that normalized value as the
 	// sole source of truth.
-	req.uri().host().is_some_and(is_localhost_host)
+	req.uri().host().is_some_and(super::is_localhost_host)
 }
 
 fn is_localhost_origin(origin: &str) -> bool {
@@ -58,12 +58,7 @@ fn is_localhost_origin(origin: &str) -> bool {
 		&& origin.path() == "/"
 		&& origin.query().is_none()
 		&& origin.fragment().is_none()
-		&& origin.host_str().is_some_and(is_localhost_host)
-}
-
-fn is_localhost_host(host: &str) -> bool {
-	let host = host.trim_matches(['[', ']']);
-	host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+		&& origin.host_str().is_some_and(super::is_localhost_host)
 }
 
 #[cfg(test)]
