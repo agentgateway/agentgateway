@@ -265,7 +265,9 @@ fn rewrite_authorization_server_issuer(
 		// authorization server issuer.
 		return Ok(());
 	}
-	let Some(issuer) = issuer_from_authorization_server_metadata_request(req) else {
+	let Some(issuer) = configured_authorization_server(auth)
+		.or_else(|| issuer_from_authorization_server_metadata_request(req))
+	else {
 		return Ok(());
 	};
 	let Some(metadata) = metadata.as_object_mut() else {
@@ -356,11 +358,57 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+	rewrite_authorization_server_metadata(req, auth, &mut resp)?;
+
+	let response = ::http::Response::builder()
+		.status(StatusCode::OK)
+		.header("content-type", "application/json")
+		.header("access-control-allow-origin", "*")
+		.header("access-control-allow-methods", "GET, OPTIONS")
+		.header("access-control-allow-headers", "content-type")
+		.body(Body::from(Bytes::from(
+			serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
+		)))?;
+
+	Ok(response)
+}
+
+// The sole configured `authorizationServers` entry, which the protected resource metadata
+// advertises in place of the request URL.
+fn configured_authorization_server(auth: &McpAuthentication) -> Option<String> {
+	let metadata = auth
+		.resource_metadata
+		.to_rfc_json(String::new(), String::new());
+	let [issuer] = metadata
+		.get("authorization_servers")?
+		.as_array()?
+		.as_slice()
+	else {
+		return None;
+	};
+	issuer
+		.as_str()
+		.filter(|issuer| !issuer.is_empty())
+		.map(str::to_owned)
+}
+
+fn authorization_server_metadata_base_uri(req: &Request, auth: &McpAuthentication) -> String {
+	configured_authorization_server(auth)
+		.map(|issuer| authorization_server_metadata_url(issuer.trim_end_matches('/')))
+		.unwrap_or_else(|| request_uri_for_oauth_metadata(req).to_string())
+}
+
+fn rewrite_authorization_server_metadata(
+	req: &Request,
+	auth: &McpAuthentication,
+	resp: &mut serde_json::Value,
+) -> Result<(), ProxyError> {
+	let current_uri = authorization_server_metadata_base_uri(req, auth);
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp,&["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -374,7 +422,7 @@ pub(super) async fn authorization_server_metadata(
 		Some(McpIDP::Okta {}) => {
 			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp,&["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -385,9 +433,8 @@ pub(super) async fn authorization_server_metadata(
 			}
 
 			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
-			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp,&["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -396,9 +443,8 @@ pub(super) async fn authorization_server_metadata(
 			// Descope supports RFC 8707, so no audience workaround needed.
 			// Management DCR endpoint likely lacks CORS — proxy it.
 			// Note: DCR requires a management key; recommend using clientId short-circuit instead.
-			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp,&["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -412,10 +458,8 @@ pub(super) async fn authorization_server_metadata(
 			// Keycloak doesn't do CORS for client registrations
 			// https://github.com/keycloak/keycloak/issues/39629
 			// We can workaround this by proxying it
-
-			let current_uri = request_uri_for_oauth_metadata(req);
 			let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
+				json::traverse_mut(resp,&["registration_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"registration_endpoint missing".to_string(),
@@ -433,7 +477,6 @@ pub(super) async fn authorization_server_metadata(
 			// https://github.com/goauthentik/authentik/issues/8751
 			// Inject one pointing at the gateway so MCP clients can complete DCR against
 			// the pre-registered client configured via `clientId`.
-			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(obj) = resp.as_object_mut() {
 				obj.insert(
 					"registration_endpoint".to_string(),
@@ -442,19 +485,17 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		Some(McpIDP::Entra {}) => {
-			let current_uri = request_uri_for_oauth_metadata(req);
-
 			// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010). Advertise
 			// gateway-proxied authorization/token endpoints that strip it before forwarding.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+				json::traverse_mut(resp,&["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
 				));
 			};
 			*ae = format!("{current_uri}/authorize");
-			let Some(serde_json::Value::String(te)) = json::traverse_mut(&mut resp, &["token_endpoint"])
+			let Some(serde_json::Value::String(te)) = json::traverse_mut(resp,&["token_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"token_endpoint missing".to_string(),
@@ -480,19 +521,7 @@ pub(super) async fn authorization_server_metadata(
 		_ => {},
 	}
 
-	rewrite_authorization_server_issuer(req, auth, &mut resp)?;
-
-	let response = ::http::Response::builder()
-		.status(StatusCode::OK)
-		.header("content-type", "application/json")
-		.header("access-control-allow-origin", "*")
-		.header("access-control-allow-methods", "GET, OPTIONS")
-		.header("access-control-allow-headers", "content-type")
-		.body(Body::from(Bytes::from(
-			serde_json::to_string(&resp).map_err(|e| ProxyError::Body(crate::http::Error::new(e)))?,
-		)))?;
-
-	Ok(response)
+	rewrite_authorization_server_issuer(req, auth, resp)
 }
 
 pub(super) async fn client_registration(
@@ -913,6 +942,132 @@ mod tests {
 		let mut metadata = serde_json::json!([]);
 
 		assert!(rewrite_authorization_server_issuer(&req, &auth, &mut metadata).is_err());
+	}
+
+	// Endpoints each provider adapter points back at the gateway.
+	fn gateway_endpoints(provider: &McpIDP) -> &'static [&'static str] {
+		match provider {
+			McpIDP::Entra {} => &[
+				"authorization_endpoint",
+				"token_endpoint",
+				"registration_endpoint",
+			],
+			_ => &["registration_endpoint"],
+		}
+	}
+
+	fn upstream_authorization_server_metadata() -> serde_json::Value {
+		serde_json::json!({
+			"issuer": "https://idp.example.com",
+			"authorization_endpoint": "https://idp.example.com/authorize",
+			"token_endpoint": "https://idp.example.com/token",
+			"registration_endpoint": "https://idp.example.com/register",
+		})
+	}
+
+	fn internal_metadata_request() -> ::http::request::Builder {
+		::http::Request::builder()
+			.uri("http://internal.example.com/.well-known/oauth-authorization-server/mcp")
+			.header("host", "internal.example.com")
+			.header("x-forwarded-proto", "https")
+	}
+
+	#[rstest::rstest]
+	#[tokio::test]
+	async fn provider_metadata_uses_configured_authorization_server(
+		#[values(
+			McpIDP::Okta {},
+			McpIDP::Descope {},
+			McpIDP::Keycloak {},
+			McpIDP::Authentik {},
+			McpIDP::Entra {}
+		)]
+		provider: McpIDP,
+	) {
+		let mut auth = default_auth();
+		auth.provider = Some(provider.clone());
+		auth.resource_metadata.extra.insert(
+			"authorizationServers".to_string(),
+			serde_json::json!(["https://public.example.com/mcp"]),
+		);
+		let req = internal_metadata_request()
+			.header("x-forwarded-host", "forwarded.example.com")
+			.body(Body::empty())
+			.unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(metadata["issuer"], "https://public.example.com/mcp");
+		for endpoint in gateway_endpoints(&provider) {
+			let value = metadata[endpoint].as_str().unwrap();
+			assert!(
+				value.starts_with("https://public.example.com/.well-known/oauth-authorization-server/mcp/"),
+				"{endpoint} = {value}"
+			);
+		}
+
+		let mut resource_req = ::http::Request::builder()
+			.uri("http://internal.example.com/.well-known/oauth-protected-resource/mcp")
+			.body(Body::empty())
+			.unwrap();
+		let protected =
+			response_body_to_json(protected_resource_metadata(&mut resource_req, &auth).await).await;
+		assert_eq!(metadata["issuer"], protected["authorization_servers"][0]);
+	}
+
+	#[rstest::rstest]
+	fn provider_metadata_falls_back_to_request_url(
+		#[values(
+			McpIDP::Okta {},
+			McpIDP::Descope {},
+			McpIDP::Keycloak {},
+			McpIDP::Authentik {},
+			McpIDP::Entra {}
+		)]
+		provider: McpIDP,
+	) {
+		let mut auth = default_auth();
+		auth.provider = Some(provider.clone());
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(metadata["issuer"], "https://internal.example.com/mcp");
+		for endpoint in gateway_endpoints(&provider) {
+			let value = metadata[endpoint].as_str().unwrap();
+			assert!(
+				value.starts_with("https://internal.example.com/.well-known/oauth-authorization-server/mcp/"),
+				"{endpoint} = {value}"
+			);
+		}
+	}
+
+	#[rstest::rstest]
+	#[case::camel_case("authorizationServers", "https://public.example.com/mcp")]
+	#[case::snake_case("authorization_servers", "https://public.example.com/mcp")]
+	#[case::trailing_slash("authorizationServers", "https://public.example.com/mcp/")]
+	fn configured_authorization_server_key_and_trailing_slash(
+		#[case] key: &str,
+		#[case] issuer: &str,
+	) {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		auth
+			.resource_metadata
+			.extra
+			.insert(key.to_string(), serde_json::json!([issuer]));
+		let req = internal_metadata_request().body(Body::empty()).unwrap();
+		let mut metadata = upstream_authorization_server_metadata();
+
+		rewrite_authorization_server_metadata(&req, &auth, &mut metadata).unwrap();
+
+		assert_eq!(metadata["issuer"], issuer);
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://public.example.com/.well-known/oauth-authorization-server/mcp/client-registration"
+		);
 	}
 
 	#[test]
