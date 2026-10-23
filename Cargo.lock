@@ -300,6 +300,7 @@ dependencies = [
  "heck",
  "hex",
  "hickory-resolver",
+ "hmac 0.13.0",
  "htpasswd-verify-fork",
  "http",
  "http-body",
