@@ -478,6 +478,77 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 	);
 }
 
+#[tokio::test]
+async fn connect_tunnel_authorizes_outer_port_before_accepting() {
+	for token in [Some("allowed"), Some("denied"), None] {
+		let mock = simple_mock().await;
+		let mut outer = simple_bind();
+		outer.key = strng::literal!("outer");
+		outer.address = "127.0.0.1:15008".parse().unwrap();
+		let mut inner = simple_bind();
+		inner.address = "0.0.0.0:18080".parse().unwrap();
+		let mut t = setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(*mock.address())
+			.with_bind(outer)
+			.with_bind(inner)
+			.with_route(basic_route(*mock.address()))
+			.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
+		t.attach_frontend_policy_with_port(
+			json!({
+				"networkAuthorization": {
+					"rules": ["destination.port == 18080 && source.connectHeaders[\"x-token\"] == \"allowed\""]
+				}
+			}),
+			Some(15008),
+		)
+		.await;
+		let mut io = t.serve_tunnel(strng::literal!("outer"));
+		let header = token
+			.map(|v| format!("x-token: {v}\r\n"))
+			.unwrap_or_default();
+		io.write_all(
+			format!("CONNECT inner.local:18080 HTTP/1.1\r\nHost: inner.local:18080\r\n{header}\r\n")
+				.as_bytes(),
+		)
+		.await
+		.unwrap();
+		let mut response = Vec::new();
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				let mut chunk = [0; 1024];
+				let n = io.read(&mut chunk).await.unwrap();
+				assert!(n > 0, "CONNECT response unexpectedly closed");
+				response.extend_from_slice(&chunk[..n]);
+				if response.windows(4).any(|w| w == b"\r\n\r\n") {
+					break;
+				}
+			}
+		})
+		.await
+		.expect("CONNECT response timed out");
+		let response = String::from_utf8_lossy(&response);
+		if token != Some("allowed") {
+			assert!(
+				response.starts_with("HTTP/1.1 403 Forbidden\r\n"),
+				"{response}"
+			);
+			assert!(mock.received_requests().await.unwrap().is_empty());
+			continue;
+		}
+		assert!(response.starts_with("HTTP/1.1 200 OK\r\n"), "{response}");
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+			.await
+			.expect("tunneled response timed out")
+			.unwrap();
+		assert!(String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"));
+	}
+}
+
 /// A `tunnelProtocol: Connect` bind with an HTTPS listener terminates the OUTER
 /// TLS BEFORE serving CONNECT, so the CONNECT request and its headers are
 /// encrypted on the wire.
@@ -492,7 +563,7 @@ async fn connect_tunnel_terminates_outer_tls() {
 	// SNI must match the `*.example.com` static cert at examples/mcp-tls/certs.
 	const SNI: &str = "gw.example.com";
 
-	async fn tls_connect_inner(custom_header: Option<&str>) -> String {
+	async fn tls_connect_inner(custom_header: Option<&str>, network_allowed: bool) -> String {
 		let mock = simple_mock().await;
 
 		// OUTER bind: HTTPS Static cert + tunnelProtocol Connect. The fix terminates
@@ -523,6 +594,12 @@ async fn connect_tunnel_terminates_outer_tls() {
 			.with_bind(outer)
 			.with_bind(inner)
 			.with_route(basic_route(*mock.address()));
+		t.attach_frontend_policy(json!({
+			"networkAuthorization": { "rules": [if network_allowed {
+				"destination.port == 18083 && source.connectHeaders[\"host\"] == \"inner.local:18083\""
+			} else { "false" }] }
+		}))
+		.await;
 		// Authorize the inner request only when the custom header carried on the
 		// (TLS-encrypted) CONNECT survived termination + re-entry.
 		t.attach_route_policy(json!({
@@ -568,6 +645,15 @@ async fn connect_tunnel_terminates_outer_tls() {
 				break;
 			}
 		}
+		if !network_allowed {
+			assert!(
+				String::from_utf8_lossy(&response).starts_with("HTTP/1.1 403 Forbidden\r\n"),
+				"unexpected denied CONNECT response: {}",
+				String::from_utf8_lossy(&response),
+			);
+			assert!(mock.received_requests().await.unwrap().is_empty());
+			return String::new();
+		}
 		assert!(
 			String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
 			"unexpected CONNECT response: {}",
@@ -588,22 +674,23 @@ async fn connect_tunnel_terminates_outer_tls() {
 
 	// Header present + matching: authorized (200) — proves the outer TLS was
 	// terminated, the CONNECT was read inside it, and the header reached CEL.
-	let allowed = tls_connect_inner(Some("custom-value")).await;
+	let allowed = tls_connect_inner(Some("custom-value"), true).await;
 	assert!(
 		allowed.starts_with("HTTP/1.1 200 OK\r\n"),
 		"expected authorized inner request, got: {allowed}",
 	);
 	// Wrong / absent header: denied (403).
-	let wrong = tls_connect_inner(Some("other-value")).await;
+	let wrong = tls_connect_inner(Some("other-value"), true).await;
 	assert!(
 		wrong.starts_with("HTTP/1.1 403 Forbidden\r\n"),
 		"expected denied inner request for wrong header, got: {wrong}",
 	);
-	let absent = tls_connect_inner(None).await;
+	let absent = tls_connect_inner(None, true).await;
 	assert!(
 		absent.starts_with("HTTP/1.1 403 Forbidden\r\n"),
 		"expected denied inner request without the header, got: {absent}",
 	);
+	tls_connect_inner(Some("custom-value"), false).await;
 }
 
 /// End-to-end on-behalf-of (OBO) token exchange over a CONNECT tunnel.

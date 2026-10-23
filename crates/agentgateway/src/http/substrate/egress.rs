@@ -62,6 +62,7 @@ struct CredentialCache {
 #[derive(Clone, Hash, PartialEq, Eq)]
 struct CredentialCacheKey {
 	actor_identity: String,
+	actor_uid: Option<String>,
 	uri: String,
 }
 
@@ -228,6 +229,7 @@ impl SubstrateEgress {
 		audiences.sort_unstable();
 		let key = CredentialCacheKey {
 			actor_identity: actor_spiffe_uri(&identity.atespace, &identity.actor_name),
+			actor_uid: identity.actor_uid.clone(),
 			uri: format!("actor-jwt:{}:{audiences:?}", source.expiration_seconds),
 		};
 		let ttl = Duration::from_secs(
@@ -279,6 +281,7 @@ impl SubstrateEgress {
 		let actor_identity = actor_spiffe_uri(&identity.atespace, &identity.actor_name);
 		let key = CredentialCacheKey {
 			actor_identity: actor_identity.clone(),
+			actor_uid: identity.actor_uid.clone(),
 			uri: uri.to_owned(),
 		};
 		if let Some(secret) =
@@ -463,8 +466,6 @@ async fn fetch_policy(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EgressTlsMode {
 	Intercept,
-	// Complete TLS, then return 403 before routing or applying request policies.
-	InterceptDenied,
 	Passthrough,
 }
 
@@ -504,7 +505,9 @@ fn tls_mode(
 		));
 	}
 	let Some(rule) = matching_destination_rule(policy, &sni, port, MatchPhase::ClientHello) else {
-		return Ok(EgressTlsMode::InterceptDenied);
+		return Err(ProxyError::SubstrateEgressDenied(
+			"actor egress policy denied TLS destination".to_owned(),
+		));
 	};
 	Ok(if rule.https.is_some() {
 		EgressTlsMode::Intercept
@@ -932,7 +935,7 @@ mod tests {
 	}
 
 	#[test]
-	fn tls_rejects_invalid_sni_and_intercepts_unmatched_destinations_for_denial() {
+	fn tls_rejects_invalid_sni_and_unmatched_destinations() {
 		let policy = protos::ateapi::EgressPolicy {
 			rules: vec![passthrough(&["*"], ports(&[443]))],
 			..Default::default()
@@ -940,10 +943,10 @@ mod tests {
 		for sni in ["", "127.0.0.1", "bad..example", "example.com.."] {
 			assert!(tls_mode(&policy, sni, 443).is_err(), "{sni}");
 		}
-		assert_eq!(
-			tls_mode(&policy, "api.example.com", 8443).unwrap(),
-			EgressTlsMode::InterceptDenied
-		);
+		assert!(matches!(
+			tls_mode(&policy, "api.example.com", 8443),
+			Err(ProxyError::SubstrateEgressDenied(_))
+		));
 		for rules in [
 			vec![],
 			vec![passthrough(&["*"], None)],
@@ -953,10 +956,10 @@ mod tests {
 				rules,
 				..Default::default()
 			};
-			assert_eq!(
-				tls_mode(&policy, "api.example.com", 443).unwrap(),
-				EgressTlsMode::InterceptDenied
-			);
+			assert!(matches!(
+				tls_mode(&policy, "api.example.com", 443),
+				Err(ProxyError::SubstrateEgressDenied(_))
+			));
 		}
 	}
 
@@ -1052,6 +1055,7 @@ mod tests {
 		let cache = CredentialCache::new(16);
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/example".to_owned(),
+			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		let now = Instant::now();
@@ -1067,22 +1071,27 @@ mod tests {
 	}
 
 	#[test]
-	fn credential_cache_is_partitioned_by_actor_identity_and_uri() {
+	fn credential_cache_is_partitioned_by_actor_identity_uid_and_uri() {
 		let cache = CredentialCache::new(16);
 		let now = Instant::now();
 		let key = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/one".to_owned(),
+			actor_uid: Some("uid-1".to_owned()),
 			uri: "ate-secret://kubernetes.io/default/token".to_owned(),
 		};
 		cache.insert(key.clone(), b"one".to_vec(), now);
 
 		let another_actor = CredentialCacheKey {
 			actor_identity: "spiffe://substrate-actor.local/actor/default/two".to_owned(),
-			uri: key.uri.clone(),
+			..key.clone()
 		};
 		let another_uri = CredentialCacheKey {
-			actor_identity: key.actor_identity.clone(),
 			uri: "ate-secret://kubernetes.io/default/other".to_owned(),
+			..key.clone()
+		};
+		let another_uid = CredentialCacheKey {
+			actor_uid: Some("uid-2".to_owned()),
+			..key
 		};
 		assert_eq!(
 			cache.get(&another_actor, now, DEFAULT_CREDENTIAL_CACHE_TTL),
@@ -1090,6 +1099,10 @@ mod tests {
 		);
 		assert_eq!(
 			cache.get(&another_uri, now, DEFAULT_CREDENTIAL_CACHE_TTL),
+			None
+		);
+		assert_eq!(
+			cache.get(&another_uid, now, DEFAULT_CREDENTIAL_CACHE_TTL),
 			None
 		);
 	}

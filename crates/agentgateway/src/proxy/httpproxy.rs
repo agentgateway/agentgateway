@@ -28,7 +28,7 @@ use crate::http::backendtls::{
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
-use crate::http::substrate::{ActorIdentity, EgressRequestProtocol, EgressTlsMode};
+use crate::http::substrate::{ActorIdentity, EgressRequestProtocol};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
@@ -730,7 +730,6 @@ impl HTTPProxy {
 			.copy::<ActorIdentity>(req.extensions_mut())
 			.is_some()
 		{
-			connection.copy::<EgressTlsMode>(req.extensions_mut());
 			// Outer CONNECT TLS authenticates the actor but does not make inner HTTP HTTPS.
 			let protocol = if matches!(
 				self
@@ -829,35 +828,6 @@ impl HTTPProxy {
 			log.ate_actor_uid = actor.actor_uid.clone();
 			log.ate_atespace = Some(actor.atespace.clone());
 		}
-		if req.extensions().get::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied) {
-			normalize_uri(log.tls_info.as_ref(), &mut req)
-				.map_err(ProxyError::Processing)
-				.snapshot_on_err(log, &mut req)?;
-			log.bind_name = Some(self.bind_name.clone());
-			log.listener_name = self.selected_listener.as_ref().map(|l| l.name.clone());
-			log.host = http::get_host(&req).ok().map(str::to_owned);
-			log.scheme = Some(Scheme::HTTPS);
-			log.server_port = req.uri().port_u16();
-			log.method = Some(req.method().clone());
-			log.path = Some(
-				if req.method() == ::http::Method::CONNECT && req.uri().path().is_empty() {
-					"/".to_string()
-				} else {
-					req
-						.uri()
-						.path_and_query()
-						.map(ToString::to_string)
-						.unwrap_or_else(|| req.uri().path().to_string())
-				},
-			);
-			log.version = Some(req.version());
-			crate::http::substrate::reject_upgrade(&req).snapshot_on_err(log, &mut req)?;
-			return Err(ProxyError::SubstrateEgressDenied(
-				"actor egress policy denied TLS destination".to_owned(),
-			))
-			.snapshot_on_err(log, &mut req);
-		}
-
 		let selected_listener = self.selected_listener.clone();
 		let inputs = self.inputs.clone();
 		let bind_name = self.bind_name.clone();

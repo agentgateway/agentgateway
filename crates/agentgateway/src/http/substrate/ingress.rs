@@ -339,7 +339,6 @@ impl SubstrateIngress {
 					atespace: actor.atespace.clone(),
 					name: actor.name.clone(),
 				}),
-				boot: false,
 			};
 			let mut delay = self.request_parking.retry_interval();
 			let mut last_retry_status = None;

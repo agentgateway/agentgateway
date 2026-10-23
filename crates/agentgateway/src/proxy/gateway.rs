@@ -719,6 +719,7 @@ impl Gateway {
 			hyper::service::service_fn(move |req: ::http::Request<hyper::body::Incoming>| {
 				let inputs = inputs.clone();
 				let connection = connection.clone();
+				let policies = policies.clone();
 				let drain = drain.clone();
 				let substrate_egress_actor_resolution =
 					Self::frontend_policies_for_bind(&bind_name, &inputs).substrate_egress_actor_resolution;
@@ -783,6 +784,22 @@ impl Gateway {
 							(SocketAddr::new(target_ip, port), bind)
 						}
 					};
+					let mut tunnel_connection = Extension::wrap(connection.clone());
+					let tcp = connection
+						.get::<TCPConnectionInfo>()
+						.expect("tcp info must be set");
+					tunnel_connection.insert(TCPConnectionInfo {
+						local_addr: target_address,
+						..tcp.clone()
+					});
+					tunnel_connection.insert(ConnectHeaders(connect_headers.clone()));
+					if let Err(e) =
+						Self::authorize_network_connection(&inputs, &policies, &mut tunnel_connection).await
+					{
+						warn!("connect tunnel authorization error: {e}");
+						return Ok(ProxyError::AuthorizationFailed.into_response_with_grpc(false));
+					}
+					let connection = Arc::new(tunnel_connection);
 					let actor_identity = if let Some(policy) = substrate_egress_actor_resolution.as_ref() {
 						match policy
 							.authorize_connect(&inputs, connection.as_ref(), &mut req)
@@ -847,6 +864,49 @@ impl Gateway {
 		Ok(())
 	}
 
+	async fn authorize_network_connection(
+		inputs: &Arc<ProxyInputs>,
+		policies: &FrontendPolices,
+		connection: &mut Extension,
+	) -> anyhow::Result<()> {
+		let tcp = connection
+			.get::<TCPConnectionInfo>()
+			.expect("tcp info must be set");
+		let tls = connection.get::<TLSConnectionInfo>();
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let mut src = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			tls.and_then(|t| t.src_identity.clone()),
+			unverified_workload,
+		);
+		let dst = crate::cel::DestinationContext::from_tcp_connection(tcp);
+		if let Some(ch) = connection.remove::<ConnectHeaders>() {
+			src.connect_headers = ch.0;
+		}
+		if let Some(network_authorization) = policies.network_authorization.as_ref()
+			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
+		{
+			anyhow::bail!("network authorization denied: {e}");
+		}
+		if let Some(authz) = policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					super::httpproxy::PolicyClient::new(inputs.clone()),
+					src.clone(),
+					dst.clone(),
+				)
+				.await
+				.map_err(|e| anyhow::anyhow!("network external authorization denied: {e}"))?;
+		}
+		connection.insert(src);
+		connection.insert(dst);
+		Ok(())
+	}
+
 	async fn proxy(
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
@@ -860,9 +920,6 @@ impl Gateway {
 		let server = auto_server(policies.http.as_ref());
 
 		// Precompute transport labels and metrics before moving `selected_listener` and `inputs`
-		let tcp = stream
-			.ext::<TCPConnectionInfo>()
-			.expect("tcp info must be set");
 		let tls = stream.ext::<TLSConnectionInfo>();
 		let transport_protocol = if tls.is_some() {
 			TransportProtocol::https
@@ -889,44 +946,7 @@ impl Gateway {
 			.get_or_create(&transport_labels)
 			.inc();
 
-		let unverified_workload = crate::cel::WorkloadContext::from_stores(
-			&inputs.stores,
-			&inputs.cfg.network,
-			tcp.peer_addr.ip(),
-		);
-		let mut src = crate::cel::SourceContext::from_tcp_connection(
-			tcp,
-			tls.and_then(|t| t.src_identity.clone()),
-			unverified_workload,
-		);
-		let dst = crate::cel::DestinationContext::from_tcp_connection(tcp);
-		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
-		// the source context so request policies can reference `source.connectHeaders`.
-		// Move the map out of the stream extension (it has no other consumer) to avoid
-		// cloning the header map.
-		if let Some(ch) = stream.ext_mut().remove::<ConnectHeaders>() {
-			src.connect_headers = ch.0;
-		}
-		// A denied TLS destination only serves an HTTP denial; it must not call auth services.
-		let egress_denied = stream.ext::<EgressTlsMode>() == Some(&EgressTlsMode::InterceptDenied);
-		if !egress_denied
-			&& let Some(network_authorization) = policies.network_authorization.as_ref()
-			&& let Err(e) = network_authorization.apply(&crate::cel::Executor::new_tcp(Some(&src), &dst))
-		{
-			anyhow::bail!("network authorization denied: {e}");
-		}
-		if !egress_denied && let Some(authz) = policies.network_ext_authz.as_ref() {
-			authz
-				.check_network(
-					super::httpproxy::PolicyClient::new(inputs.clone()),
-					src.clone(),
-					dst.clone(),
-				)
-				.await
-				.map_err(|e| anyhow::anyhow!("network external authorization denied: {e}"))?;
-		}
-		stream.ext_mut().insert(src);
-		stream.ext_mut().insert(dst);
+		Self::authorize_network_connection(&inputs, &policies, stream.ext_mut()).await?;
 
 		let transport_metrics = inputs.metrics.clone();
 		let proxy = super::httpproxy::HTTPProxy {
@@ -1249,7 +1269,7 @@ impl Gateway {
 			.await?;
 			let best = listeners
 				.best_match_filtered(sni, |protocol| match egress_mode {
-					Some(EgressTlsMode::Intercept | EgressTlsMode::InterceptDenied) => {
+					Some(EgressTlsMode::Intercept) => {
 						matches!(protocol, ListenerProtocol::HTTPS(_))
 					},
 					Some(EgressTlsMode::Passthrough) => matches!(protocol, ListenerProtocol::TLS(None)),
