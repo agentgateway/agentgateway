@@ -1140,22 +1140,20 @@ func gatewayRouteAttachmentCollection[T controllers.Object](
 
 		parentRefs := extractParentReferenceInfo(ctx, obj)
 		return slices.MapFilter(FilteredReferences(parentRefs), func(e RouteParentReference) **plugins.RouteAttachment {
-			if e.ParentKey.Kind == wellknown.ListenerSetGVK.Kind {
-				return new(&plugins.RouteAttachment{
-					From:         from,
-					To:           e.ParentKey,
-					Gateway:      e.ParentGateway,
-					ListenerName: string(e.ParentSection),
-				})
-			}
-			if e.ParentGateway.Name == "" {
+			parentKind := NormalizeReference(e.OriginalReference.Group, e.OriginalReference.Kind, wellknown.GatewayGVK.GroupKind())
+			if e.ParentGateway.Name == "" && parentKind != wellknown.ListenerSetGVK.GroupKind() {
 				return nil
+			}
+			parent := utils.TypedNamespacedName{Kind: wellknown.GatewayGVK.Kind, NamespacedName: e.ParentGateway}
+			if parentKind == wellknown.ListenerSetGVK.GroupKind() {
+				parent = e.ParentKey
 			}
 			return new(&plugins.RouteAttachment{
 				From: from,
-				To: utils.TypedNamespacedName{
-					Kind:           wellknown.GatewayGVK.Kind,
-					NamespacedName: e.ParentGateway,
+				To:   parent,
+				ParentRef: plugins.RouteAttachmentParent{
+					GroupKind:      parentKind,
+					NamespacedName: e.ParentKey.NamespacedName,
 				},
 				Gateway:      e.ParentGateway,
 				ListenerName: string(e.ParentSection),
