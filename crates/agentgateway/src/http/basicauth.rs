@@ -85,7 +85,7 @@ fn default_realm() -> String {
 const TRACE_POLICY_KIND: &str = "basic_auth";
 
 impl BasicAuthentication {
-	/// Create a new BasicAuthentication from a file path
+	/// Create a new BasicAuthentication from htpasswd contents
 	pub fn new(
 		htpasswd: &str,
 		realm: Option<String>,
@@ -220,9 +220,12 @@ pub struct LocalBasicAuth {
 }
 
 impl LocalBasicAuth {
-	pub fn try_into(self) -> anyhow::Result<BasicAuthentication> {
+	pub async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BasicAuthentication> {
 		Ok(BasicAuthentication::new(
-			&self.htpasswd.load()?,
+			&crate::serdes::load_file_or_inline(&self.htpasswd, resources).await?,
 			self.realm,
 			self.mode,
 			self.authorization_location,
