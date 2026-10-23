@@ -65,11 +65,13 @@ func OwnersFromPolicy(policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner
 	}
 
 	if policy.Spec.Backend != nil && policy.Spec.Backend.MCP != nil && policy.Spec.Backend.MCP.Authentication != nil {
-		owners = append(owners, PolicyBackendMCPAuthenticationLookupOwner(
-			policy.Namespace,
-			policy.Name,
-			policy.Spec.Backend.MCP.Authentication.JWKS,
-		))
+		if jwks := policy.Spec.Backend.MCP.Authentication.JWKS; jwks != nil {
+			owners = append(owners, PolicyBackendMCPAuthenticationLookupOwner(
+				policy.Namespace,
+				policy.Name,
+				*jwks,
+			))
+		}
 	}
 
 	return owners
@@ -80,15 +82,19 @@ func OwnersFromBackend(backend *agentgateway.AgentgatewayBackend) []RemoteJwksOw
 		return nil
 	}
 
+	jwks := backend.Spec.Policies.MCP.Authentication.JWKS
+	if jwks == nil {
+		return nil
+	}
 	return []RemoteJwksOwner{backendMCPAuthenticationOwner(
 		backend.Namespace,
 		backend.Name,
-		backend.Spec.Policies.MCP.Authentication.JWKS,
+		*jwks,
 	)}
 }
 
 func PolicyJWTProviderLookupOwner(namespace, name string, providerIndex int, provider agentgateway.JWTProvider) (RemoteJwksOwner, bool) {
-	if provider.JWKS.Remote == nil {
+	if provider.JWKS == nil || provider.JWKS.Remote == nil {
 		return RemoteJwksOwner{}, false
 	}
 

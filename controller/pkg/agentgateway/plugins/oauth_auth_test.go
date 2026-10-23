@@ -169,9 +169,7 @@ func TestBuildCrossAppAccess(t *testing.T) {
 
 	crossAppAccess, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
 		IdentityProvider: agentgateway.CrossAppAccessEndpoint{
-			PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-				URL: ptr.Of(agentgateway.LongString("https://idp.example.com/idp/token")),
-			},
+			URL:        ptr.Of(agentgateway.LongString("https://idp.example.com/idp/token")),
 			ClientAuth: crossAppAccessEndpoint("idp").ClientAuth,
 		},
 		ResourceAuthorizationServer: agentgateway.CrossAppAccessEndpoint{
