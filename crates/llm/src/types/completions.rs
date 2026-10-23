@@ -107,11 +107,132 @@ pub struct Choice {
 #[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ResponseMessage {
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub content: Option<String>,
+	pub content: Option<ResponseContent>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub role: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+/// A response message's `content`: usually a string, but some OpenAI-compatible providers
+/// (Mistral reasoning models) send an array of typed parts such as `thinking` and `text`.
+/// The parts are kept as received so a passthrough response is forwarded unchanged.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ResponseContent {
+	Text(String),
+	Parts(Vec<serde_json::Value>),
+}
+
+impl From<String> for ResponseContent {
+	fn from(s: String) -> Self {
+		ResponseContent::Text(s)
+	}
+}
+
+impl ResponseContent {
+	/// The visible text: the string itself, or the `text` parts joined.
+	pub fn text(&self) -> String {
+		match self {
+			ResponseContent::Text(s) => s.clone(),
+			ResponseContent::Parts(parts) => parts
+				.iter()
+				.filter(|p| part_type(p) == Some("text"))
+				.filter_map(|p| p.get("text").and_then(serde_json::Value::as_str))
+				.collect(),
+		}
+	}
+
+	/// Replaces the visible text. For parts, the first `text` part carries it and the other
+	/// `text` parts are dropped; non-text parts such as `thinking` are left in place.
+	pub fn set_text(&mut self, text: &str) {
+		match self {
+			ResponseContent::Text(s) => *s = text.to_string(),
+			ResponseContent::Parts(parts) => {
+				let mut replaced = false;
+				parts.retain_mut(|p| {
+					if part_type(p) != Some("text") {
+						return true;
+					}
+					// Masking to "" drops the part instead of leaving `{"text":""}`.
+					let keep = !replaced && !text.is_empty();
+					replaced = true;
+					if keep {
+						p["text"] = serde_json::Value::String(text.to_string());
+					}
+					keep
+				});
+				if !replaced && !text.is_empty() {
+					parts.push(serde_json::json!({"type": "text", "text": text}));
+				}
+			},
+		}
+	}
+
+	/// Visits the answer text and the plaintext reasoning carried in `thinking` parts.
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+		let parts = match self {
+			ResponseContent::Text(s) => return f(ContentScope::Messages, s),
+			ResponseContent::Parts(parts) => parts,
+		};
+		for part in parts {
+			match part_type(part) {
+				Some("text") => super::visit_json_at(part, &["text"], ContentScope::Messages, f),
+				Some("thinking") => match part.get_mut("thinking") {
+					Some(serde_json::Value::String(s)) => f(ContentScope::Messages, s),
+					Some(serde_json::Value::Array(inner)) => {
+						for p in inner.iter_mut().filter(|p| part_type(p) == Some("text")) {
+							super::visit_json_at(p, &["text"], ContentScope::Messages, f);
+						}
+					},
+					_ => {},
+				},
+				_ => {},
+			}
+		}
+	}
+}
+
+fn part_type(part: &serde_json::Value) -> Option<&str> {
+	part.get("type").and_then(serde_json::Value::as_str)
+}
+
+/// Deserializes a response `content` that may be a string or an array of typed parts into its
+/// visible text. Used by the typed responses that feed format translations: only `text` parts
+/// are kept, since a translated `thinking` block would be replayed as `reasoning_content`,
+/// which providers sending parts (Mistral) reject on the next turn.
+pub(crate) fn deserialize_content_text<'de, D>(d: D) -> Result<Option<String>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	#[derive(Deserialize)]
+	#[serde(untagged)]
+	enum Content {
+		Text(String),
+		Parts(Vec<Part>),
+	}
+	#[derive(Deserialize)]
+	#[serde(tag = "type", rename_all = "lowercase")]
+	enum Part {
+		Text {
+			text: String,
+		},
+		#[serde(other)]
+		Other,
+	}
+	Ok(match Option::<Content>::deserialize(d)? {
+		None => None,
+		Some(Content::Text(s)) => Some(s),
+		Some(Content::Parts(parts)) => {
+			let mut text: Option<String> = None;
+			for part in parts {
+				if let Part::Text { text: t } = part {
+					text.get_or_insert_default().push_str(&t);
+				}
+			}
+			text
+		},
+	})
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -229,7 +350,7 @@ impl ResponseType for Response {
 					self
 						.choices
 						.iter()
-						.flat_map(|c| c.message.content.clone())
+						.flat_map(|c| c.message.content.as_ref().map(ResponseContent::text))
 						.collect_vec(),
 				)
 			} else {
@@ -247,7 +368,10 @@ impl ResponseType for Response {
 			anyhow::bail!("webhook response message count mismatch");
 		}
 		for (m, wh) in self.choices.iter_mut().zip(choices) {
-			m.message.content = Some(wh.message.content.to_string());
+			m.message
+				.content
+				.get_or_insert_with(|| ResponseContent::Text(String::new()))
+				.set_text(&wh.message.content);
 		}
 		Ok(())
 	}
@@ -258,7 +382,13 @@ impl ResponseType for Response {
 			.iter()
 			.map(|c| {
 				let role = c.message.role.clone().unwrap_or_default().into();
-				let content = c.message.content.clone().unwrap_or_default().into();
+				let content = c
+					.message
+					.content
+					.as_ref()
+					.map(ResponseContent::text)
+					.unwrap_or_default()
+					.into();
 				ResponseChoice {
 					message: Message { role, content },
 				}
@@ -275,8 +405,8 @@ impl ResponseType for Response {
 			visit_reasoning_text(&mut c.message.rest, f);
 			let mut plain = |scope: ContentScope, text: &mut String| f(scope.into(), text);
 			let f = &mut plain;
-			if let Some(text) = &mut c.message.content {
-				f(ContentScope::Messages, text);
+			if let Some(content) = &mut c.message.content {
+				content.visit_text_mut(f);
 			}
 			super::visit_json_at(&mut c.message.rest, &["refusal"], ContentScope::Messages, f);
 			super::visit_json_at(
@@ -974,6 +1104,7 @@ pub mod typed {
 	#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct StreamResponseDelta {
 		/// The contents of the chunk message.
+		#[serde(default, deserialize_with = "super::deserialize_content_text")]
 		pub content: Option<String>,
 		/// Deprecated and replaced by `tool_calls`. The name and arguments of a function that should be called, as generated by the model.
 		#[deprecated]
@@ -1034,7 +1165,11 @@ pub mod typed {
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ResponseMessage {
 		/// The contents of the message.
-		#[serde(skip_serializing_if = "Option::is_none")]
+		#[serde(
+			default,
+			deserialize_with = "super::deserialize_content_text",
+			skip_serializing_if = "Option::is_none"
+		)]
 		pub content: Option<String>,
 		/// The refusal message generated by the model.
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -1586,5 +1721,78 @@ mod tests {
 		});
 
 		assert!(llm_response.output_messages.is_none());
+	}
+
+	fn mistral_parts() -> serde_json::Value {
+		serde_json::json!([
+			{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}], "closed": true},
+			{"type": "text", "text": "Hello"},
+			{"type": "text", "text": " world"}
+		])
+	}
+
+	#[test]
+	fn response_content_parts_round_trip_unchanged() {
+		for content in [serde_json::json!("hello"), mistral_parts()] {
+			let body = serde_json::json!({"role": "assistant", "index": 0, "content": content});
+			let msg: ResponseMessage = serde_json::from_value(body.clone()).unwrap();
+			assert_eq!(serde_json::to_value(&msg).unwrap(), body);
+		}
+	}
+
+	#[test]
+	fn response_content_parts_text_and_masking() {
+		let mut content: ResponseContent = serde_json::from_value(mistral_parts()).unwrap();
+		assert_eq!(content.text(), "Hello world");
+
+		let mut seen = Vec::new();
+		content.visit_text_mut(&mut |_, t| seen.push(t.clone()));
+		assert_eq!(seen, ["plan", "Hello", " world"]);
+
+		content.set_text("MASKED");
+		assert_eq!(
+			serde_json::to_value(&content).unwrap(),
+			serde_json::json!([
+				{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}], "closed": true},
+				{"type": "text", "text": "MASKED"}
+			])
+		);
+		content.set_text("");
+		assert_eq!(content.text(), "");
+		assert_eq!(
+			serde_json::to_value(&content)
+				.unwrap()
+				.as_array()
+				.unwrap()
+				.len(),
+			1
+		);
+	}
+
+	#[test]
+	fn typed_responses_keep_only_text_parts() {
+		let cases = [
+			(serde_json::json!("hello"), Some("hello")),
+			(serde_json::Value::Null, None),
+			(mistral_parts(), Some("Hello world")),
+			(
+				serde_json::json!([{"type": "thinking", "thinking": [{"type": "text", "text": "plan"}]}]),
+				None,
+			),
+		];
+		for (content, text) in cases {
+			let msg: typed::ResponseMessage = serde_json::from_value(
+				serde_json::json!({"role": "assistant", "content": content.clone()}),
+			)
+			.unwrap();
+			assert_eq!(msg.content.as_deref(), text, "{content}");
+			assert_eq!(msg.reasoning_content, None, "{content}");
+
+			let delta: typed::StreamResponseDelta =
+				serde_json::from_value(serde_json::json!({"content": content.clone()})).unwrap();
+			assert_eq!(delta.content.as_deref(), text, "{content}");
+		}
+		let delta: typed::StreamResponseDelta = serde_json::from_value(serde_json::json!({})).unwrap();
+		assert_eq!(delta.content, None);
 	}
 }
