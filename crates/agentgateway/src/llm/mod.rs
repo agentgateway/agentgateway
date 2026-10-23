@@ -2197,23 +2197,65 @@ impl AIProvider {
 			.unwrap_or_default();
 		let native_bedrock = hreq.uri().path().starts_with("/model/")
 			&& types::detect::extract_model_from_path(hreq.uri().path()).is_some();
-		let (parts, managed_body, req) = if native_bedrock && is_json {
-			// Native Bedrock carries the model in the path. Resolve it before body policies, then
-			// put it back in the path without adding a model field to the upstream body.
-			let (mut parts, managed_body, req) = self
-				.read_body_resolving_model::<types::detect::Request>(policies, hreq, log, true)
-				.await?;
-			let types::detect::Request::Json(mut body) = req else {
-				unreachable!("the JSON reader returns a JSON detect request");
+		let (mut parts, mut managed_body) = hreq.into_parts();
+		let cached = managed_body.remove_extension::<json::ParsedJson>();
+		let ce = (native_bedrock && is_json)
+			.then(|| parts.headers.typed_get::<ContentEncoding>())
+			.flatten();
+		let (encoding, bytes) = match http::compression::to_bytes_with_decompression(
+			managed_body.take_content(),
+			ce.as_ref(),
+			buffer,
+		)
+		.await
+		{
+			Ok(v) => v,
+			Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
+			Err(e) if native_bedrock && is_json => {
+				return Err(map_request_compression_error(e, &parts.headers));
+			},
+			Err(_) => return Err(AIError::RequestTooLarge),
+		};
+		if encoding.is_some() {
+			parts.headers.remove(header::CONTENT_ENCODING);
+			parts.headers.remove(header::TRANSFER_ENCODING);
+		}
+
+		let mut req = if is_json {
+			let body = match cached {
+				Some(json::ParsedJson(value)) => Ok(value),
+				None => serde_json::from_slice(&bytes)
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err)),
 			};
+			let body = body.and_then(|mut body| {
+				// Make the path model available to policies without putting it on the wire.
+				if native_bedrock {
+					self.set_provider_request_model(&parts, &mut body, true)?;
+				}
+				match policies {
+					Some(p) => p.apply_request_body_mutations(body, log),
+					None => Ok(body),
+				}
+			});
+			match body {
+				Ok(body) => types::detect::Request::Json(body),
+				Err(err) if native_bedrock => return Err(err),
+				Err(_) => types::detect::Request::new_raw(bytes),
+			}
+		} else {
+			types::detect::Request::new_raw(bytes)
+		};
+
+		if native_bedrock && let types::detect::Request::Json(body) = &mut req {
 			let model = body.as_object_mut().and_then(|body| body.remove("model"));
 			let model = model
-				.and_then(|model| model.as_str().map(ToString::to_string))
+				.as_ref()
+				.and_then(serde_json::Value::as_str)
 				.ok_or_else(|| AIError::MissingField("model not specified".into()))?;
 			let model = policies
-				.and_then(|p| p.resolve_model_alias(&model))
+				.and_then(|p| p.resolve_model_alias(model))
 				.map(|m| m.as_str())
-				.unwrap_or(&model);
+				.unwrap_or(model);
 			if !agent_llm::model_path::is_safe_resource_name(model) {
 				return Err(AIError::UnsupportedModel);
 			}
@@ -2222,34 +2264,7 @@ impl AIProvider {
 			let mut uri = parts.uri.into_parts();
 			Self::set_path_and_query(&mut uri, &path).map_err(|_| AIError::UnsupportedModel)?;
 			parts.uri = ::http::Uri::from_parts(uri).map_err(|_| AIError::UnsupportedModel)?;
-			(parts, managed_body, types::detect::Request::Json(body))
-		} else {
-			let (parts, mut managed_body) = hreq.into_parts();
-			let cached = managed_body.remove_extension::<json::ParsedJson>();
-			let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
-				return Err(AIError::RequestTooLarge);
-			};
-
-			let req = if is_json {
-				if let Some(json::ParsedJson(value)) = cached {
-					match policies {
-						Some(p) => p.unmarshal_request_value(value, log),
-						None => Ok(types::detect::Request::Json(value)),
-					}
-				} else if let Some(p) = policies
-					&& p.has_request_body_mutations()
-				{
-					p.unmarshal_request(&bytes, log)
-				} else {
-					serde_json::from_slice(bytes.as_ref())
-						.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err))
-				}
-				.unwrap_or_else(|_| types::detect::Request::new_raw(bytes))
-			} else {
-				types::detect::Request::new_raw(bytes)
-			};
-			(parts, managed_body, req)
-		};
+		}
 
 		self
 			.process_non_chat_request(
