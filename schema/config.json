@@ -1472,7 +1472,21 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "default": null
+        },
+        "passthroughPorts": {
+          "description": "Ports on the proxy's own address that inbound HBONE CONNECTs may reach without a bind,\nforwarded to localhost. No bind-scoped policies apply. Defaults to none.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535
+          }
         }
       },
       "additionalProperties": false

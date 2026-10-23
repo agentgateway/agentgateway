@@ -142,6 +142,12 @@ spec:
           value: not.cluster.local
         - name: ADDITIONAL_TRUST_DOMAINS
           value: extra.domain.com,another.domain.com
+        - name: HBONE_PASSTHROUGH_PORTS
+          value: "15020"
+        - name: INSTANCE_IPS
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIPs
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:

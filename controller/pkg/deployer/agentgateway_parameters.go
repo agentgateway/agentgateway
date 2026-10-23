@@ -110,6 +110,9 @@ func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwC
 			gtw.Istio.TrustDomain = mc.MeshConfig.GetTrustDomain()
 		}
 	}
+	if gtw.Istio.PassthroughPorts == nil {
+		gtw.Istio.PassthroughPorts = &[]int32{15020}
+	}
 }
 
 // ResolveSpiffeIntegration finalizes the gateway's SPIFFE block. It runs after AGWP params are
@@ -175,6 +178,7 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 		if len(configs.Istio.AdditionalTrustDomains) > 0 {
 			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
 		}
+		setIfNonNil(&res.Istio.PassthroughPorts, configs.Istio.PassthroughPorts)
 	}
 	setIfNonNil(&res.Spiffe, configs.Spiffe)
 	setIfNonNil(&res.RawConfig, configs.RawConfig)

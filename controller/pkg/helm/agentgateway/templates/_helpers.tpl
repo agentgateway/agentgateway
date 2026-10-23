@@ -259,6 +259,16 @@ spec:
         - name: NETWORK
           value: {{ $gateway.istio.network | quote }}
         {{- end }}
+        {{- if and (not (hasKey $userEnvNames "HBONE_PASSTHROUGH_PORTS")) (hasKey $gateway "istio") $gateway.istio.passthroughPorts }}
+        - name: HBONE_PASSTHROUGH_PORTS
+          value: {{ $gateway.istio.passthroughPorts | join "," | quote }}
+        {{- if not (hasKey $userEnvNames "INSTANCE_IPS") }}
+        - name: INSTANCE_IPS
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIPs
+        {{- end }}
+        {{- end }}
       {{- /* User-specified env vars */}}
       {{- with $gateway.env }}
         {{- toYaml . | nindent 8 }}

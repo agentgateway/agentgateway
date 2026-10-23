@@ -205,6 +205,11 @@ pub struct AdmissionLabels {
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct HbonePassthroughLabels {
+	pub port: u16,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct SubstrateRouteLabels {
 	pub ate_router_outcome: EncodeDisplay<RouteOutcome>,
 	pub ate_router_resume: EncodeDisplay<ResumeDisposition>,
@@ -293,6 +298,7 @@ pub struct Metrics {
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
 	pub downstream_connections_shed: Family<AdmissionLabels, counter::Counter>,
 	pub requests_shed: Family<AdmissionLabels, counter::Counter>,
+	pub hbone_passthrough_connections: Family<HbonePassthroughLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
 	pub upstream_call_duration: Histogram<OutboundCallLabels>,
@@ -600,6 +606,11 @@ impl Metrics {
 				&mut registry,
 				"retries",
 				"The total number of request retries",
+			),
+			hbone_passthrough_connections: build(
+				&mut registry,
+				"hbone_passthrough_connections",
+				"The total number of inbound HBONE connections forwarded to a local passthrough port",
 			),
 		}
 	}

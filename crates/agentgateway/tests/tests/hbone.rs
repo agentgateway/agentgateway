@@ -1,8 +1,100 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use crate::common::gateway::AgentGateway;
-use crate::common::hbone_server::{HboneTestServer, Mode};
+use crate::common::hbone_server::{HboneTestServer, Mode, client_tls_config};
 use crate::common::mock_ca_server::start_mock_ca_server;
+
+#[tokio::test]
+async fn test_hbone_gateway_passthrough_ports() -> anyhow::Result<()> {
+	use bytes::Bytes;
+	use http::{Method, Request, StatusCode};
+	use tokio::net::{TcpListener, TcpStream};
+
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let ca_addr = start_mock_ca_server().await?;
+
+	let echo = TcpListener::bind("127.0.0.1:0").await?;
+	let echo_port = echo.local_addr()?.port();
+	tokio::spawn(async move {
+		while let Ok((mut stream, _)) = echo.accept().await {
+			tokio::spawn(async move {
+				let (mut r, mut w) = stream.split();
+				let _ = tokio::io::copy(&mut r, &mut w).await;
+			});
+		}
+	});
+	let closed_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+	let unlisted_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+
+	let gw_config = format!(
+		r#"config:
+  namespace: default
+  serviceAccount: default
+  trustDomain: cluster.local
+  caAddress: "http://{ca_addr}"
+  hbone:
+    passthroughPorts: [{echo_port}, {closed_port}]
+binds:
+- port: $PORT
+  tunnelProtocol: hboneGateway
+  listeners:
+  - name: default
+    protocol: TCP
+    tcpRoutes:
+    - name: default
+      backends:
+        - host: 127.0.0.1:{unlisted_port}
+"#
+	);
+	let gw = AgentGateway::new(gw_config).await?;
+
+	let tcp = TcpStream::connect(("127.0.0.1", gw.port())).await?;
+	let tls = tokio_rustls::TlsConnector::from(Arc::new(client_tls_config("prometheus")))
+		.connect(
+			rustls::pki_types::ServerName::IpAddress(std::net::Ipv4Addr::UNSPECIFIED.into()),
+			tcp,
+		)
+		.await?;
+	let (h2, conn) = h2::client::handshake(tls).await?;
+	tokio::spawn(conn);
+	let mut h2 = h2.ready().await?;
+
+	let mut connect = |authority: String| {
+		let req = Request::builder()
+			.method(Method::CONNECT)
+			.uri(authority)
+			.body(())
+			.unwrap();
+		h2.send_request(req, false).unwrap()
+	};
+
+	let (resp, mut send) = connect(format!("127.0.0.1:{echo_port}"));
+	let resp = resp.await?;
+	assert_eq!(resp.status(), StatusCode::OK);
+	let mut recv = resp.into_body();
+	send.send_data(Bytes::from_static(b"hello"), false)?;
+	let mut echoed = Vec::new();
+	while echoed.len() < 5 {
+		let chunk = tokio::time::timeout(std::time::Duration::from_secs(2), recv.data())
+			.await?
+			.expect("echo stream closed early")?;
+		echoed.extend_from_slice(&chunk);
+		recv.flow_control().release_capacity(chunk.len())?;
+	}
+	assert_eq!(echoed, b"hello");
+	send.send_data(Bytes::new(), true)?;
+
+	let (resp, _send) = connect(format!("127.0.0.1:{closed_port}"));
+	assert_eq!(resp.await?.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+	let (resp, _send) = connect(format!("127.0.0.1:{unlisted_port}"));
+	assert_eq!(resp.await?.status(), StatusCode::NOT_FOUND);
+
+	gw.shutdown().await;
+	Ok(())
+}
 
 #[tokio::test]
 async fn test_hbone() -> anyhow::Result<()> {
