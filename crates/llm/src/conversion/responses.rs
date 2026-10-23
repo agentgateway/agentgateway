@@ -483,6 +483,11 @@ pub mod from_messages {
 					add_prompt_cache_breakpoint(&mut part, image.cache_control, supports_cache);
 					parts.push(part);
 				},
+				messages::ContentBlock::Document(document) => {
+					let mut part = translate_document_source(&document.source, document.title.as_deref())?;
+					add_prompt_cache_breakpoint(&mut part, document.cache_control, supports_cache);
+					parts.push(part);
+				},
 				messages::ContentBlock::ToolResult {
 					tool_use_id,
 					content,
@@ -503,8 +508,7 @@ pub mod from_messages {
 						"status": status,
 					})));
 				},
-				messages::ContentBlock::Document(_)
-				| messages::ContentBlock::SearchResult(_)
+				messages::ContentBlock::SearchResult(_)
 				| messages::ContentBlock::ServerToolUse { .. }
 				| messages::ContentBlock::WebSearchToolResult { .. }
 				| messages::ContentBlock::Thinking { .. }
@@ -663,6 +667,80 @@ pub mod from_messages {
 		}
 	}
 
+	/// A Messages `document` becomes a Responses `input_file` (or `input_text` for a plain-text
+	/// document). A source Responses cannot carry is an error, never a silent drop: a model that
+	/// answers without the document it was given is worse than a rejected request.
+	fn translate_document_source(source: &Value, title: Option<&str>) -> Result<Value, AIError> {
+		let source_type = source.get("type").and_then(Value::as_str).ok_or_else(|| {
+			AIError::UnsupportedConversion(strng::literal!("messages document source missing type"))
+		})?;
+		match source_type {
+			"base64" => {
+				let media_type = source
+					.get("media_type")
+					.and_then(Value::as_str)
+					.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!(
+							"messages base64 document source missing media_type"
+						))
+					})?;
+				let data = source.get("data").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages base64 document source missing data"
+					))
+				})?;
+				// OpenAI requires a filename alongside inline file data.
+				let filename = match (title, media_type) {
+					(Some(title), _) => title.to_string(),
+					(None, "application/pdf") => "document.pdf".to_string(),
+					(None, _) => "document".to_string(),
+				};
+				Ok(json!({
+					"type": "input_file",
+					"filename": filename,
+					"file_data": format!("data:{media_type};base64,{data}"),
+				}))
+			},
+			"url" => {
+				let url = source.get("url").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages url document source missing url"
+					))
+				})?;
+				Ok(json!({
+					"type": "input_file",
+					"file_url": url,
+				}))
+			},
+			"file" => {
+				let file_id = source
+					.get("file_id")
+					.and_then(Value::as_str)
+					.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!(
+							"messages file document source missing file_id"
+						))
+					})?;
+				Ok(json!({
+					"type": "input_file",
+					"file_id": file_id,
+				}))
+			},
+			"text" => {
+				let data = source.get("data").and_then(Value::as_str).ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::literal!(
+						"messages text document source missing data"
+					))
+				})?;
+				Ok(json!({
+					"type": "input_text",
+					"text": data,
+				}))
+			},
+			_ => unsupported("messages document source cannot be represented by responses"),
+		}
+	}
+
 	fn translate_tool_result_content(
 		content: messages::ToolResultContent,
 		cache_control: Option<messages::CacheControlEphemeral>,
@@ -707,8 +785,19 @@ pub mod from_messages {
 							requires_array = true;
 							continue;
 						},
+						messages::ToolResultContentPart::Document {
+							source,
+							cache_control,
+							title,
+							..
+						} => {
+							let mut value = translate_document_source(&source, title.as_deref())?;
+							add_prompt_cache_breakpoint(&mut value, cache_control, supports_cache);
+							text_values.push(value);
+							requires_array = true;
+							continue;
+						},
 						messages::ToolResultContentPart::Unknown
-						| messages::ToolResultContentPart::Document { .. }
 						| messages::ToolResultContentPart::SearchResult { .. } => continue,
 					};
 					let mut value = json!({

@@ -230,6 +230,8 @@ mod requests {
 		("stop_sequences", &[COMPLETIONS, RESPONSES]),
 		("tool_result_empty", &[COMPLETIONS, RESPONSES]),
 		("tool_result_image", &[COMPLETIONS, RESPONSES]),
+		("document", &[ANTHROPIC, RESPONSES]),
+		("document_unsupported_source", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("namespace-tools", &[BEDROCK, GEMINI]),
