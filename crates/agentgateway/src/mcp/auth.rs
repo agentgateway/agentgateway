@@ -408,7 +408,7 @@ fn rewrite_authorization_server_metadata(
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(resp,&["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -422,7 +422,7 @@ fn rewrite_authorization_server_metadata(
 		Some(McpIDP::Okta {}) => {
 			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(resp,&["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
@@ -434,7 +434,7 @@ fn rewrite_authorization_server_metadata(
 
 			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(resp,&["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -444,7 +444,7 @@ fn rewrite_authorization_server_metadata(
 			// Management DCR endpoint likely lacks CORS — proxy it.
 			// Note: DCR requires a management key; recommend using clientId short-circuit instead.
 			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(resp,&["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
@@ -459,7 +459,7 @@ fn rewrite_authorization_server_metadata(
 			// https://github.com/keycloak/keycloak/issues/39629
 			// We can workaround this by proxying it
 			let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(resp,&["registration_endpoint"])
+				json::traverse_mut(resp, &["registration_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"registration_endpoint missing".to_string(),
@@ -488,14 +488,14 @@ fn rewrite_authorization_server_metadata(
 			// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010). Advertise
 			// gateway-proxied authorization/token endpoints that strip it before forwarding.
 			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(resp,&["authorization_endpoint"])
+				json::traverse_mut(resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"authorization_endpoint missing".to_string(),
 				));
 			};
 			*ae = format!("{current_uri}/authorize");
-			let Some(serde_json::Value::String(te)) = json::traverse_mut(resp,&["token_endpoint"])
+			let Some(serde_json::Value::String(te)) = json::traverse_mut(resp, &["token_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
 					"token_endpoint missing".to_string(),
@@ -1038,7 +1038,8 @@ mod tests {
 		for endpoint in gateway_endpoints(&provider) {
 			let value = metadata[endpoint].as_str().unwrap();
 			assert!(
-				value.starts_with("https://internal.example.com/.well-known/oauth-authorization-server/mcp/"),
+				value
+					.starts_with("https://internal.example.com/.well-known/oauth-authorization-server/mcp/"),
 				"{endpoint} = {value}"
 			);
 		}
