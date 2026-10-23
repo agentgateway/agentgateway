@@ -2749,15 +2749,28 @@ async fn rejected_empty_completions_reply_keeps_reported_usage() {
 	let without_usage: &[u8] = br#"{"id":"r","object":"chat.completion","created":0,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":null}}]}"#;
 	// (input, output, total, reasoning, cached), or no logged response at all.
 	type Usage = Option<(u64, u64, u64, u64, u64)>;
-	let cases: [(&[u8], Option<Usage>); 3] = [
-		(with_usage, Some(Some((31, 7, 38, 3, 5)))),
-		(without_usage, Some(None)),
-		(b"not json", None),
+	let cases: [(&[u8], Option<Usage>, u64); 3] = [
+		(with_usage, Some(Some((31, 7, 38, 3, 5))), 62),
+		(without_usage, Some(None), 90),
+		(b"not json", None, 90),
 	];
 
 	for input_format in [InputFormat::Messages, InputFormat::Responses] {
-		for (body, want) in cases {
-			let mut req = llm_request_with_tokens(None);
+		for (body, want, remaining) in cases {
+			let rate_limit = crate::http::localratelimit::RateLimit::try_from(
+				crate::http::localratelimit::RateLimitSpec {
+					max_tokens: 100,
+					tokens_per_fill: 100,
+					fill_interval: std::time::Duration::from_secs(60),
+					limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+					key: None,
+				},
+			)
+			.unwrap();
+			let plain = ::http::Request::builder().body(Body::empty()).unwrap();
+			let exec = cel::Executor::new_request(&plain);
+			let (_, bucket) = rate_limit.charge_tokens(Some(10), &exec).unwrap().unwrap();
+			let mut req = llm_request_with_tokens(Some(10));
 			req.input_format = input_format;
 			req.request_model = "gpt-4o".into();
 			req.streaming = false;
@@ -2766,7 +2779,10 @@ async fn rejected_empty_completions_reply_keeps_reported_usage() {
 				.process_response(
 					PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
 					req,
-					LLMResponsePolicies::default(),
+					LLMResponsePolicies {
+						local_rate_limit: vec![bucket.clone()],
+						..Default::default()
+					},
 					None,
 					LLMLogging {
 						response: log.clone(),
@@ -2793,6 +2809,7 @@ async fn rejected_empty_completions_reply_keeps_reported_usage() {
 				})
 			});
 			assert_eq!(logged, want, "{input_format:?}");
+			assert_eq!(bucket.available(), remaining, "{input_format:?}");
 		}
 	}
 }

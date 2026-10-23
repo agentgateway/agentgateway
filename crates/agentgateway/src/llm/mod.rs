@@ -2710,8 +2710,7 @@ impl AIProvider {
 			) {
 				Ok(resp) => resp,
 				Err(err) => {
-					// Empty replies may still report usage. Preserve it before returning the
-					// translation error, just as the streaming path does.
+					// A failed reply can still use tokens. Preserve its usage for logging and limits.
 					if matches!(err, AIError::IncompleteResponse)
 						&& self
 							.chat_translation(
@@ -2722,10 +2721,21 @@ impl AIProvider {
 							.is_ok_and(|t| t.output == ChatFormat::OpenAICompletions)
 						&& let Ok(upstream) = serde_json::from_slice::<types::completions::Response>(&bytes)
 					{
-						log.store(Some(LLMInfo::new(
+						let resp = Self::finalize_response(
+							parts,
+							bytes,
+							managed_body,
 							req,
 							upstream.to_llm_response(log_content),
-						)));
+							model_catalog,
+							&log,
+						);
+						if (!rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some())
+							&& let Some(llm_info) = log.load_clone()
+						{
+							let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+							amend_tokens(rate_limit, &llm_info, exec);
+						}
 					}
 					return Err(err);
 				},
