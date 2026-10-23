@@ -34,9 +34,11 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/krtxds"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/nack"
+	"github.com/agentgateway/agentgateway/controller/pkg/syncer/proxyfeedback"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -66,6 +68,11 @@ type Syncer struct {
 
 	// NACK handling
 	NackPublisher *nack.Publisher
+
+	// ProxyFeedback tracks the configuration problems reported by proxies connected to this replica.
+	ProxyFeedback *proxyfeedback.Tracker
+	// proxyDiagnostics holds what every replica's proxies reported, for policy status.
+	proxyDiagnostics proxyfeedback.Published
 
 	// features
 	Registrations []krtxds.Registration
@@ -100,6 +107,8 @@ func NewAgwSyncer(
 		client:                   client,
 		statusCollections:        status.NewStatusCollections(extraGVKs),
 		NackPublisher:            nack.NewPublisher(client),
+		ProxyFeedback:            proxyfeedback.NewTracker(),
+		proxyDiagnostics:         proxyfeedback.NewPublished(client, krtopts, namespaces.GetPodNamespace()),
 		gatewayCollectionOptions: []translator.GatewayCollectionConfigOption{
 			translator.WithGatewayTransformationFunc(cfg.GatewayTransformationFunc),
 		},
@@ -117,6 +126,11 @@ func NewAgwSyncer(
 
 func (s *Syncer) StatusCollections() *status.StatusCollections {
 	return s.statusCollections
+}
+
+// ProxyFeedbackWriter publishes the problems reported by proxies connected to this replica.
+func (s *Syncer) ProxyFeedbackWriter() *proxyfeedback.Writer {
+	return proxyfeedback.NewWriter(s.ProxyFeedback, s.client, namespaces.GetPodNamespace())
 }
 
 type OutputCollections struct {
@@ -719,7 +733,10 @@ func (s *Syncer) buildAgwResources(
 
 	// Phase 2: Build policies with the fully-populated reference index.
 	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, refGrants, krtopts)
-	for _, col := range policyStatuses {
+	for gk, col := range policyStatuses {
+		if gk == wellknown.AgentgatewayPolicyGVK.GroupKind() {
+			col = proxyfeedback.WithPolicyDiagnostics(col, s.proxyDiagnostics, s.controllerName, krtopts.ToOptions("proxyfeedback/AgentgatewayPolicyStatus")...)
+		}
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}
 
@@ -926,6 +943,8 @@ func (s *Syncer) setupSyncDependencies(
 		agwResources.HasSynced,
 		addresses.HasSynced,
 		s.NackPublisher.HasSynced,
+		// Status written before proxy diagnostics load would drop them until they do.
+		s.proxyDiagnostics.Collection.HasSynced,
 		additionalSync,
 	}
 }
