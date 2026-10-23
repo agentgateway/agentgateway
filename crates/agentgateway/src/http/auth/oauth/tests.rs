@@ -2659,3 +2659,43 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 		"upstream-token"
 	);
 }
+
+#[rstest]
+#[case::past(|now| Some(json!(now - 30)), true)]
+#[case::past_fractional(|now| Some(json!(now as f64 - 30.5)), true)]
+#[case::exactly_now(|now| Some(json!(now)), true)]
+#[case::future(|now| Some(json!(now + 600)), false)]
+#[case::future_fractional(|now| Some(json!(now as f64 + 600.5)), false)]
+#[case::missing_exp(|_| None, false)]
+#[case::nonnumeric_exp(|_| Some(json!("expired")), false)]
+fn rejects_only_expired_jwt_subject_tokens(
+	#[case] exp: fn(u64) -> Option<serde_json::Value>,
+	#[case] rejected: bool,
+) {
+	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
+	let mut req = incoming_request();
+	let mut payload = serde_json::Map::new();
+	if let Some(exp) = exp(jsonwebtoken::get_current_timestamp()) {
+		payload.insert("exp".into(), exp);
+	}
+	let token =
+		crate::http::jwt::tests::build_signed_token_with_payload("untrusted-key", payload.into());
+	req.headers_mut().insert(
+		::http::header::AUTHORIZATION,
+		format!("Bearer {token}").parse().unwrap(),
+	);
+	let result = auth.build_exchange_request(&req);
+	if rejected {
+		assert!(matches!(result, Err(ProxyError::JwtAuthenticationFailure(
+			crate::http::jwt::TokenError::Invalid(ref error)))
+			if *error.kind() == jsonwebtoken::errors::ErrorKind::ExpiredSignature));
+	} else {
+		assert!(result.is_ok());
+	}
+}
+
+#[test]
+fn allows_opaque_subject_token() {
+	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
+	assert!(auth.build_exchange_request(&incoming_request()).is_ok());
+}

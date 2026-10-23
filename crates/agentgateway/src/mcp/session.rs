@@ -407,7 +407,10 @@ impl Session {
 			Err(UpstreamError::Proxy(p)) => Err(p),
 			// Preserve backend-auth error classification through the MCP HTTP transport.
 			Err(UpstreamError::Http(ClientError::Proxy(
-				p @ (ProxyError::InvalidRequest | ProxyError::BackendAuthenticationFailed(_)),
+				p @ (ProxyError::InvalidRequest
+				| ProxyError::BackendAuthenticationFailed(_)
+				| ProxyError::JwtAuthenticationFailure(_)
+				| ProxyError::McpAuthenticationFailure(_, _)),
 			))) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,
