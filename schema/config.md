@@ -25,7 +25,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
-|`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
+|`config.modelCatalog[].inline.providers.*.models.*.rates.cacheWriteDetails`|object|Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
@@ -38,7 +38,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.output`|string|Cost per 1M output (completion) tokens.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheRead`|string|Cost per 1M tokens read from cache.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite`|string|Cost per 1M tokens written to cache.|
-|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWrite1h`|string|Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.|
+|`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.cacheWriteDetails`|object|Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
@@ -348,12 +348,12 @@
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`binds[].listeners[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`binds[].listeners[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`binds[].listeners[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`binds[].listeners[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -455,7 +455,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -1556,7 +1556,7 @@
 |`binds[].listeners[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`binds[].listeners[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -1906,12 +1906,12 @@
 |`policies[].policy.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`policies[].policy.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`policies[].policy.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`policies[].policy.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`policies[].policy.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`policies[].policy.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`policies[].policy.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`policies[].policy.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`policies[].policy.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`policies[].policy.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`policies[].policy.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -2013,7 +2013,7 @@
 |`policies[].policy.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`policies[].policy.apiKey.keys[].key`|string|API key value to accept.|
 |`policies[].policy.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`policies[].policy.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`policies[].policy.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`policies[].policy.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -3041,12 +3041,12 @@
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routeGroups[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routeGroups[].routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routeGroups[].routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routeGroups[].routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routeGroups[].routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routeGroups[].routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routeGroups[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routeGroups[].routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routeGroups[].routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3148,7 +3148,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`routeGroups[].routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -4221,7 +4221,7 @@
 |`gateways.*.listeners[].apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.listeners[].apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.listeners[].apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`gateways.*.listeners[].apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`gateways.*.listeners[].apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -4462,7 +4462,7 @@
 |`gateways.*.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`gateways.*.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`gateways.*.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`gateways.*.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -4667,12 +4667,12 @@
 |`routes[].policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routes[].policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routes[].policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`routes[].policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`routes[].policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`routes[].policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`routes[].policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`routes[].policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`routes[].policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -4774,7 +4774,7 @@
 |`routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`routes[].policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`routes[].policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`routes[].policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -6125,7 +6125,7 @@
 |`llm.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`llm.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`llm.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`llm.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`llm.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`llm.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -6151,7 +6151,7 @@
 |`llm.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`llm.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`llm.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`llm.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`llm.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`llm.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`llm.policies.remoteRateLimit.service`|object|Service reference. Service must be defined in the top level services list.|
 |`llm.policies.remoteRateLimit.service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -6381,12 +6381,12 @@
 |`mcp.policies.localRateLimit.conditional[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit.conditional[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit.conditional[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`mcp.policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`mcp.policies.localRateLimit.conditional[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`mcp.policies.localRateLimit[].maxTokens`|integer|Maximum number of tokens that can accumulate in the local bucket.|
 |`mcp.policies.localRateLimit[].tokensPerFill`|integer|Number of tokens added to the local bucket each fill interval.|
 |`mcp.policies.localRateLimit[].fillInterval`|string|How often the local bucket is refilled.|
 |`mcp.policies.localRateLimit[].type`|enum|Whether this limit counts requests or LLM tokens.<br>Possible values: `requests`, `tokens`.|
-|`mcp.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. The key<br>is evaluated where the rule is checked, so a token limit can also read the parsed LLM<br>request. Buckets are local to one proxy instance, which keeps a bounded number of them per<br>rule and drops the least used ones.|
+|`mcp.policies.localRateLimit[].key`|string|CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or<br>`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits<br>above. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets<br>are local to one proxy instance, which keeps a bounded number of them per rule and drops the<br>least used ones.|
 |`mcp.policies.remoteRateLimit`|object|Remote rate limit checks for incoming requests.|
 |`mcp.policies.remoteRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.remoteRateLimit.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6488,7 +6488,7 @@
 |`mcp.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`mcp.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`mcp.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`mcp.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`mcp.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`mcp.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|
@@ -6830,7 +6830,7 @@
 |`ui.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`ui.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`ui.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
-|`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
+|`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.<br>Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.|
 |`ui.policies.apiKey.keys[].budgets`|[]object|Independent budgets charged after LLM responses. A request is not charged when its provider<br>does not report the usage or cost required by the budget unit.|
 |`ui.policies.apiKey.keys[].budgets[].name`|string|Stable name for this budget within its owning API key.|
 |`ui.policies.apiKey.keys[].budgets[].limit`|object|Maximum usage allowed during the window.|

@@ -89,7 +89,7 @@ Examples:
 	cmd.Flags().StringVar(&f.overlay, "overlay", "", "YAML catalog to merge over imported data")
 	cmd.Flags().StringSliceVar(&f.providers, "providers", nil, "source provider ids to import (default: every provider the proxy supports)")
 	cmd.Flags().StringSliceVar(&f.excludeProviders, "exclude-providers", nil, "source provider ids to omit")
-	cmd.Flags().BoolVar(&f.legacy, "legacy", false, "include deprecated models")
+	cmd.Flags().BoolVar(&f.legacy, "legacy", true, "include deprecated models")
 	cmd.Flags().BoolVar(&f.pretty, "pretty", false, "pretty-print the output JSON")
 	cmd.Flags().StringVarP(&f.out, "out", "o", f.out, "output catalog path (default: stdout)")
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"k8s.io/client-go/pkg/apis/clientauthentication"
+	clientauthenticationv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 	"k8s.io/client-go/plugin/pkg/client/auth/exec"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/transport"
@@ -75,6 +76,9 @@ func loadGateway(name string) (*gatewayConfig, error) {
 func (g *gatewayConfig) transport() (http.RoundTripper, error) {
 	if g.Exec == nil {
 		return http.DefaultTransport, nil
+	}
+	if g.Exec.APIVersion == "" {
+		g.Exec.APIVersion = clientauthenticationv1.SchemeGroupVersion.String()
 	}
 	if g.Exec.InteractiveMode == "" {
 		g.Exec.InteractiveMode = clientcmdapi.IfAvailableExecInteractiveMode

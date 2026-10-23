@@ -27,11 +27,29 @@ func TestListenerConflictCopyOnWrite(t *testing.T) {
 			assert.Equal(t, conflict, listeners[1].Conflict)
 			assert.Empty(t, candidate.Conflict)
 
-			// Removing the winner lets the same collection-owned candidate recover.
+			// A fresh evaluation without the winner uses the unmodified candidate.
 			listeners = []*GatewayListener{&candidate.GatewayListener}
 			validateListenerConflicts(listeners)
 			assert.Same(t, &candidate.GatewayListener, listeners[0])
 			assert.Empty(t, listeners[0].Conflict)
+		})
+	}
+}
+
+func TestListenerDistinctHostnameSpecificity(t *testing.T) {
+	for _, protocol := range []gwv1.ProtocolType{gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType, gwv1.TLSProtocolType} {
+		t.Run(string(protocol), func(t *testing.T) {
+			var listeners []*GatewayListener
+			for _, hostname := range []string{"", "*.example.com", "*.sub.example.com", "api.example.com", "other.example.com"} {
+				listeners = append(listeners, &GatewayListener{ParentInfo: ParentInfo{
+					Port: 8080, Protocol: protocol, OriginalHostname: hostname,
+					Hostnames: []string{"tenant/" + hostname},
+				}})
+			}
+			validateListenerConflicts(listeners)
+			for _, listener := range listeners {
+				assert.Empty(t, listener.Conflict)
+			}
 		})
 	}
 }
@@ -64,62 +82,39 @@ func TestListenerConflictHTTPSAndTLS(t *testing.T) {
 }
 
 func TestListenerConflictSNIHostnameAcrossNamespaces(t *testing.T) {
-	listener := func(ns string, protocol gwv1.ProtocolType, hostname string) *GatewayListener {
-		key := hostname
-		if key == "" {
-			key = "*"
-		}
-		return &GatewayListener{ParentInfo: ParentInfo{
-			Port: 443, Protocol: protocol, Hostnames: []string{ns + "/" + key}, OriginalHostname: hostname,
-		}}
-	}
-	cases := []struct {
-		name   string
-		first  *GatewayListener
-		second *GatewayListener
-		want   ListenerConflict
-	}{
-		{
-			name:   "https then tls",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.TLSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "tls then https",
-			first:  listener("default", gwv1.TLSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "https then https",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPSProtocolType, "foo.example.com"),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "no hostname",
-			first:  listener("default", gwv1.HTTPSProtocolType, ""),
-			second: listener("team1", gwv1.TLSProtocolType, ""),
-			want:   ListenerConflictHostname,
-		},
-		{
-			name:   "different hostname",
-			first:  listener("default", gwv1.HTTPSProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.TLSProtocolType, "bar.example.com"),
-		},
-		{
-			name:   "http unchanged",
-			first:  listener("default", gwv1.HTTPProtocolType, "foo.example.com"),
-			second: listener("team1", gwv1.HTTPProtocolType, "foo.example.com"),
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			listeners := []*GatewayListener{tc.first, tc.second}
-			validateListenerConflicts(listeners)
-			assert.Empty(t, listeners[0].Conflict)
-			assert.Equal(t, tc.want, listeners[1].Conflict)
+	for _, protocols := range [][2]gwv1.ProtocolType{
+		{gwv1.HTTPSProtocolType, gwv1.TLSProtocolType},
+		{gwv1.TLSProtocolType, gwv1.HTTPSProtocolType},
+		{gwv1.HTTPSProtocolType, gwv1.HTTPSProtocolType},
+		{gwv1.HTTPProtocolType, gwv1.HTTPProtocolType},
+	} {
+		t.Run(string(protocols[0])+"/"+string(protocols[1]), func(t *testing.T) {
+			for _, hostname := range []string{"", "example.com", "*.example.com"} {
+				t.Run(hostname, func(t *testing.T) {
+					key := hostname
+					if key == "" {
+						key = "*"
+					}
+					first := &GatewayListener{ParentInfo: ParentInfo{
+						Port: 443, Protocol: protocols[0], OriginalHostname: hostname, Hostnames: []string{"*/" + key},
+					}}
+					second := &GatewayListener{ParentInfo: ParentInfo{
+						Port: 443, Protocol: protocols[1], OriginalHostname: hostname, Hostnames: []string{"tenant/" + key},
+					}}
+					listeners := []*GatewayListener{first, second}
+					validateListenerConflicts(listeners)
+					assert.Empty(t, listeners[0].Conflict)
+					assert.Equal(t, ListenerConflict(ListenerConflictHostname), listeners[1].Conflict)
+					assert.Empty(t, second.Conflict)
+
+					// Distinct served hostnames do not conflict even across namespaces.
+					second.ParentInfo.OriginalHostname = "other.example.com"
+					second.ParentInfo.Hostnames = []string{"tenant/other.example.com"}
+					listeners = []*GatewayListener{first, second}
+					validateListenerConflicts(listeners)
+					assert.Empty(t, listeners[1].Conflict)
+				})
+			}
 		})
 	}
 }

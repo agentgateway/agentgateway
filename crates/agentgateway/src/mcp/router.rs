@@ -85,7 +85,7 @@ impl App {
 					let be = t
 						.spec
 						.backend()
-						.map(|b| crate::proxy::resolve_simple_backend_with_policies(b, &pi))
+						.map(|b| crate::proxy::resolve_simple_backend_with_binds(b, &pi, Some(&binds)))
 						.transpose()?;
 					let inline_pols = be.as_ref().map(|pol| pol.inline_policies.as_slice());
 					let sub_backend_target = BackendTargetRef::Backend {

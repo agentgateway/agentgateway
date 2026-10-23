@@ -180,6 +180,7 @@ impl ResponseType for Response {
 
 		LLMResponse {
 			cache_creation_1h_input_tokens: None,
+			cache_creation_12h_input_tokens: None,
 			usage_lines: Vec::new(),
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
@@ -672,8 +673,7 @@ pub mod typed {
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
 		ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
-		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
-		ChatCompletionMessageToolCalls as MessageToolCalls,
+		ChatCompletionMessageCustomToolCall, ChatCompletionMessageToolCallChunk,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessageAudio as RequestAssistantMessageAudio,
 		ChatCompletionRequestAssistantMessageContent as RequestAssistantMessageContent,
@@ -702,6 +702,53 @@ pub mod typed {
 		ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct MessageToolCall {
+		pub id: String,
+		pub function: FunctionCall,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub extra_content: Option<ExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct ExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub google: Option<GoogleExtraContent>,
+	}
+
+	#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+	pub struct GoogleExtraContent {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub thought_signature: Option<String>,
+	}
+
+	impl MessageToolCall {
+		pub fn thought_signature(&self) -> Option<&str> {
+			self
+				.extra_content
+				.as_ref()?
+				.google
+				.as_ref()?
+				.thought_signature
+				.as_deref()
+		}
+
+		pub fn set_thought_signature(&mut self, signature: String) {
+			self.extra_content = Some(ExtraContent {
+				google: Some(GoogleExtraContent {
+					thought_signature: Some(signature),
+				}),
+			});
+		}
+	}
+
+	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	#[serde(tag = "type", rename_all = "snake_case")]
+	pub enum MessageToolCalls {
+		Function(MessageToolCall),
+		Custom(ChatCompletionMessageCustomToolCall),
+	}
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
 	///
@@ -776,7 +823,7 @@ pub mod typed {
 		pub usage: Option<Usage>,
 	}
 
-	#[derive(Debug, Deserialize, Clone, Serialize)]
+	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 	pub struct UsageCompletionDetails {
 		pub reasoning_tokens: Option<u64>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -785,7 +832,7 @@ pub mod typed {
 		pub rest: serde_json::Value,
 	}
 
-	#[derive(Debug, Deserialize, Clone, Serialize)]
+	#[derive(Default, Debug, Deserialize, Clone, Serialize)]
 	pub struct UsagePromptDetails {
 		pub cached_tokens: Option<u64>,
 		#[serde(skip_serializing_if = "Option::is_none")]
@@ -794,6 +841,23 @@ pub mod typed {
 		pub cache_write_tokens: Option<u64>,
 		#[serde(flatten, default)]
 		pub rest: serde_json::Value,
+	}
+
+	impl UsagePromptDetails {
+		/// Omit the details only when neither cache count was reported.
+		pub fn from_cache_tokens(
+			cached_tokens: Option<u64>,
+			cache_write_tokens: Option<u64>,
+		) -> Option<Self> {
+			match (cached_tokens, cache_write_tokens) {
+				(None, None) => None,
+				(cached_tokens, cache_write_tokens) => Some(Self {
+					cached_tokens,
+					cache_write_tokens,
+					..Default::default()
+				}),
+			}
+		}
 	}
 
 	// Forked typed from OpenAI to include custom cache token details other providers use.
@@ -859,12 +923,8 @@ pub mod typed {
 		pub usage: Option<Usage>,
 	}
 
-	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	#[derive(Default, Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
-		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
-		/// preserved so conversions can read them.
-		#[serde(flatten, default)]
-		pub rest: serde_json::Value,
 		/// The index of the choice in the list of choices.
 		#[serde(default)]
 		pub index: u32,
@@ -888,6 +948,26 @@ pub mod typed {
 		/// Log probability information for the choice.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub logprobs: Option<ChatChoiceLogprobs>,
+		/// Fields outside the standard schema (engine extensions such as vLLM's `stop_reason` or SGLang's `matched_stop`),
+		/// preserved so conversions can read them.
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
+	}
+
+	impl ChatChoiceStream {
+		pub fn with_delta(delta: StreamResponseDelta) -> Self {
+			Self {
+				delta,
+				..Default::default()
+			}
+		}
+
+		pub fn with_finish_reason(finish_reason: FinishReason) -> Self {
+			Self {
+				finish_reason: Some(finish_reason),
+				..Default::default()
+			}
+		}
 	}
 
 	/// A chat completion delta generated by streamed model responses.
@@ -1295,6 +1375,20 @@ pub mod typed {
 				_ => vec![],
 			}
 		}
+
+		/// Remove `extra_content` (Gemini thought signatures) from replayed tool calls,
+		/// for providers that would reject or mishandle the unknown field.
+		pub fn strip_tool_call_extra_content(&mut self) {
+			for message in &mut self.messages {
+				if let RequestMessage::Assistant(assistant) = message {
+					for call in assistant.tool_calls.iter_mut().flatten() {
+						if let MessageToolCalls::Function(call) = call {
+							call.extra_content = None;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	/// Reasoning text from `reasoning_content`, or `reasoning` (vLLM, OpenRouter).
@@ -1310,12 +1404,35 @@ pub mod typed {
 	}
 
 	impl ResponseMessage {
+		/// An empty assistant message.
+		#[allow(deprecated)]
+		pub fn assistant() -> Self {
+			Self {
+				content: None,
+				refusal: None,
+				tool_calls: None,
+				role: Role::Assistant,
+				function_call: None,
+				audio: None,
+				reasoning_content: None,
+				reasoning_signature: None,
+				extra: None,
+			}
+		}
+
 		pub fn reasoning(&self) -> Option<&str> {
 			reasoning_text(&self.reasoning_content, &self.extra)
 		}
 	}
 
 	impl StreamResponseDelta {
+		pub fn with_tool_calls(tool_calls: Vec<ChatCompletionMessageToolCallChunk>) -> Self {
+			Self {
+				tool_calls: Some(tool_calls),
+				..Default::default()
+			}
+		}
+
 		pub fn reasoning(&self) -> Option<&str> {
 			reasoning_text(&self.reasoning_content, &self.extra)
 		}

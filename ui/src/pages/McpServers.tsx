@@ -1,4 +1,4 @@
-import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Info, Pencil, Plus, Server, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { McpSettingsResource } from '@/api/configResourcesApi';
@@ -29,7 +29,7 @@ import {
 import { useStickyQueryParam } from '@/drawerRouteState';
 import { useDeleteConfigResource, useMcpConfigData, useUpsertConfigResource } from '@/hooks';
 import { BackendPoliciesField } from '@/policies/PolicyFormControls';
-import { PolicySection } from '@/policies/PolicyLayout';
+import { CollapsiblePolicySection, PolicySection } from '@/policies/PolicyLayout';
 import { parseYamlText, toYamlMappingText } from '@/policies/policyUtils';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
 import type {
@@ -44,9 +44,10 @@ import type {
 
 const targetKinds: McpTargetKind[] = ['mcp', 'sse', 'stdio', 'openapi'];
 
-type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port'>> & {
+type McpSettingsPatch = Partial<Omit<McpConfig, 'gateways' | 'port' | 'dnsRebindingProtection'>> & {
 	gateways?: McpConfig['gateways'] | null;
 	port?: number | null;
+	dnsRebindingProtection?: boolean | null;
 };
 
 export function McpServersPage() {
@@ -347,12 +348,26 @@ function McpSettings(props: {
 	const [failureMode, setFailureMode] = useState<McpFailureMode>(
 		props.mcp?.failureMode ?? 'failClosed'
 	);
+	const [sseKeepAlive, setSseKeepAlive] = useState(props.mcp?.sseKeepAlive ?? '');
+	const [server, setServer] = useState({
+		name: props.mcp?.server?.name ?? '',
+		version: props.mcp?.server?.version ?? '',
+		title: props.mcp?.server?.title ?? '',
+		instructions: props.mcp?.server?.instructions ?? ''
+	});
+	const serverOverrides = Object.fromEntries(
+		Object.entries(server).filter(([, value]) => value.trim())
+	);
+	const serverReadOnly = props.readOnlyFields?.has('server');
 	const patch: McpSettingsPatch = {
 		gateways: binding.gateways ?? [],
 		port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port,
 		statefulMode,
 		prefixMode: prefixMode === 'none' ? null : prefixMode,
-		failureMode
+		failureMode,
+		sseKeepAlive: sseKeepAlive.trim() || null,
+		dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
+		server: Object.keys(serverOverrides).length > 0 ? serverOverrides : null
 	};
 	const originalResourceValue = Object.fromEntries(
 		Object.entries({
@@ -360,7 +375,10 @@ function McpSettings(props: {
 			port: props.mcp?.port,
 			statefulMode: props.mcp?.statefulMode,
 			prefixMode: props.mcp?.prefixMode,
-			failureMode: props.mcp?.failureMode
+			failureMode: props.mcp?.failureMode,
+			sseKeepAlive: props.mcp?.sseKeepAlive,
+			dnsRebindingProtection: props.mcp?.dnsRebindingProtection || null,
+			server: props.mcp?.server
 		}).filter(([field, value]) => value != null && !props.readOnlyFields?.has(field))
 	);
 	const resourceValue = Object.fromEntries(
@@ -411,7 +429,7 @@ function McpSettings(props: {
 					/>
 				</div>
 			</PolicySection>
-			<PolicySection
+			<CollapsiblePolicySection
 				icon={<SlidersHorizontal size={17} />}
 				title="MCP behavior"
 				description="Choose session, tool-prefix, and failure behavior."
@@ -510,8 +528,80 @@ function McpSettings(props: {
 							onChange={setFailureMode}
 						/>
 					</FieldGroup>
+					<Field
+						label="SSE keep-alive"
+						tooltip={props.help.field<McpConfig>('LocalSimpleMcpConfig', 'sseKeepAlive')}
+					>
+						<input
+							value={sseKeepAlive}
+							disabled={props.readOnlyFields?.has('sseKeepAlive')}
+							onChange={event => setSseKeepAlive(event.target.value)}
+							placeholder="15s"
+						/>
+					</Field>
 				</div>
-			</PolicySection>
+			</CollapsiblePolicySection>
+			<CollapsiblePolicySection
+				icon={<Info size={17} />}
+				title="Server info"
+				description="Override the server info and instructions reported to clients when multiplexing targets."
+			>
+				<div className="form-grid">
+					<Field
+						label="Name"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'name'
+						)}
+					>
+						<input
+							value={server.name}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, name: event.target.value })}
+							placeholder="agentgateway"
+						/>
+					</Field>
+					<Field
+						label="Version"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'version'
+						)}
+					>
+						<input
+							value={server.version}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, version: event.target.value })}
+						/>
+					</Field>
+					<Field
+						label="Title"
+						tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+							'McpServerOverrides',
+							'title'
+						)}
+					>
+						<input
+							value={server.title}
+							disabled={serverReadOnly}
+							onChange={event => setServer({ ...server, title: event.target.value })}
+						/>
+					</Field>
+				</div>
+				<Field
+					label="Instructions"
+					tooltip={props.help.field<NonNullable<McpConfig['server']>>(
+						'McpServerOverrides',
+						'instructions'
+					)}
+				>
+					<textarea
+						value={server.instructions}
+						disabled={serverReadOnly}
+						onChange={event => setServer({ ...server, instructions: event.target.value })}
+					/>
+				</Field>
+			</CollapsiblePolicySection>
 			<ConfigDiffSaveActions
 				config={props.config}
 				diffTitle="MCP settings config diff"

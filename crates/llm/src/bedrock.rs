@@ -128,41 +128,59 @@ impl Provider {
 		}
 	}
 
-	/// Runtime's Anthropic Messages API, unlike InvokeModel and Mantle, rejects a `metadata.user_id`
-	/// outside the Converse requestMetadata pattern `[a-zA-Z0-9\s:_@$#=/+,.-]{0,256}`. Claude Code
-	/// sends JSON there, so strip the disallowed characters.
-	pub fn sanitize_messages_user_id(
+	/// Adjusts the inbound request for what Runtime's native APIs reject:
+	/// * `metadata` values outside the Converse requestMetadata pattern
+	///   `[a-zA-Z0-9\s:_@$#=/+,.-]{0,256}`, unlike InvokeModel and Mantle. Claude Code sends JSON as
+	///   `metadata.user_id`, which also flows into the metadata of a request translated to Responses,
+	///   so strip the disallowed characters. Completions `user` becomes `metadata.user_id` when
+	///   translated to Messages, so it gets the same treatment.
+	/// * Responses `web_search` tools, which Codex sends by default. Drop them like other server
+	///   tools Bedrock cannot execute.
+	pub fn sanitize_runtime_request(
 		&self,
 		req: &mut crate::types::ChatRequest,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) {
 		use crate::types::ChatRequest;
-		let model = match req {
-			ChatRequest::Messages(r) => r.model.as_deref(),
-			ChatRequest::Completions(r) => r.model.as_deref(),
-			_ => return,
+		let (model, rest) = match req {
+			ChatRequest::Messages(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Completions(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Responses(r) => (r.model.as_deref(), &mut r.rest),
+			ChatRequest::Gemini(_) => return,
 		};
-		if self.resolve_endpoint(super::RouteType::Messages, model, catalog) != BedrockEndpoint::Runtime
-		{
+		let endpoint = self.resolve_endpoint(super::RouteType::Messages, model, catalog);
+		if endpoint != BedrockEndpoint::Runtime || !self.native_chat(endpoint) {
 			return;
 		}
-		let user_id = match req {
-			ChatRequest::Messages(r) => match r
-				.rest
-				.get_mut("metadata")
-				.and_then(|m| m.get_mut("user_id"))
-			{
-				Some(serde_json::Value::String(s)) => Some(s),
-				_ => None,
-			},
-			ChatRequest::Completions(r) => r.user.as_mut(),
-			_ => None,
-		};
-		if let Some(user_id) = user_id {
-			user_id.retain(|c| {
+		let clean = |s: &mut String| {
+			s.retain(|c| {
 				c.is_ascii_alphanumeric() || c.is_ascii_whitespace() || ":_@$#=/+,.-".contains(c)
 			});
-			user_id.truncate(256);
+			s.truncate(256);
+		};
+		if let Some(serde_json::Value::Object(metadata)) = rest.get_mut("metadata") {
+			for value in metadata.values_mut() {
+				if let serde_json::Value::String(s) = value {
+					clean(s);
+				}
+			}
+		}
+		if let ChatRequest::Completions(r) = req
+			&& let Some(user) = r.user.as_mut()
+		{
+			clean(user);
+		}
+		if let ChatRequest::Responses(r) = req
+			&& let Some(serde_json::Value::Array(tools)) = r.rest.get_mut("tools")
+		{
+			tools.retain(|t| {
+				!t.get("type")
+					.and_then(|t| t.as_str())
+					.is_some_and(|t| t.starts_with("web_search"))
+			});
+			if tools.is_empty() {
+				r.rest.as_object_mut().map(|o| o.remove("tools"));
+			}
 		}
 	}
 

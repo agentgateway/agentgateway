@@ -478,12 +478,15 @@ pub(crate) struct PreparedResource {
 	pub value: Value,
 }
 
-pub(crate) const MCP_SETTINGS_FIELDS: [&str; 5] = [
+pub(crate) const MCP_SETTINGS_FIELDS: [&str; 8] = [
 	"gateways",
 	"port",
 	"statefulMode",
 	"prefixMode",
 	"failureMode",
+	"sseKeepAlive",
+	"dnsRebindingProtection",
+	"server",
 ];
 
 const API_KEY_METADATA_PREFIX: &str = "agentgateway.dev/";
@@ -2894,7 +2897,10 @@ mcp:
 				json!({
 					"statefulMode": "stateless",
 					"prefixMode": "always",
-					"failureMode": "failOpen"
+					"failureMode": "failOpen",
+					"sseKeepAlive": "15s",
+					"dnsRebindingProtection": true,
+					"server": {"name": "db-gateway", "version": "1.0.0", "instructions": "Use carefully"}
 				}),
 			),
 			test_resource(
@@ -2986,6 +2992,15 @@ mcp:
 		);
 		assert_eq!(value.pointer("/mcp/prefixMode"), Some(&json!("always")));
 		assert_eq!(value.pointer("/mcp/failureMode"), Some(&json!("failOpen")));
+		assert_eq!(value.pointer("/mcp/sseKeepAlive"), Some(&json!("15s")));
+		assert_eq!(
+			value.pointer("/mcp/dnsRebindingProtection"),
+			Some(&json!(true))
+		);
+		assert_eq!(
+			value.pointer("/mcp/server/name"),
+			Some(&json!("db-gateway"))
+		);
 		assert_eq!(value.pointer("/gateways/public/port"), Some(&json!(8080)));
 		assert_eq!(
 			value.pointer("/gateways/public/name"),

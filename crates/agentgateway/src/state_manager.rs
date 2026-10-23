@@ -380,8 +380,7 @@ async fn watch_self_workload(
 	// allow a cluster id mismatch as a very common misconfiguration is that the control plane and
 	// dataplane mismatch on this but if we do hit a conflict (should be rare) we use the cluster_id
 	// as a tiebreaker
-	let lookup = || {
-		let store = stores.discovery.read();
+	let lookup = |store: &crate::store::DiscoveryStore| {
 		store
 			.workloads
 			.find_by_name(&name, &namespace)
@@ -391,7 +390,7 @@ async fn watch_self_workload(
 
 	{
 		let store = stores.discovery.read();
-		if let Some(w) = lookup() {
+		if let Some(w) = lookup(&store) {
 			store.self_workload.set((*w).clone());
 			store.rebucket_all();
 			return;
@@ -414,7 +413,7 @@ async fn watch_self_workload(
 	loop {
 		{
 			let store = stores.discovery.read();
-			if let Some(w) = lookup() {
+			if let Some(w) = lookup(&store) {
 				store.self_workload.set((*w).clone());
 				store.rebucket_all();
 				return;

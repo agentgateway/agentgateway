@@ -344,6 +344,7 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		cache_read: dec("0"),
 		cache_write: dec("0"),
 		cache_write_1h: dec("0"),
+		cache_write_12h: dec("0.01"),
 		reasoning: dec("0"),
 		input_audio: dec("0"),
 		output_audio: dec("0"),
@@ -357,14 +358,26 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 		.cost_rates = Some(llm::catalog::CostRates {
 		input: Some(3.0),
 		per_page: Some(0.005),
+		cache_write_details: llm::catalog::CacheWriteRates {
+			ttl_12h: Some(2.5),
+			..Default::default()
+		},
 		..Default::default()
 	});
 	let executor = Executor::new_request(&req);
 
-	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.545").unwrap()));
+	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.total == 0.555").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.input == 0.5").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.pages == 0.02").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.cost.cacheRead == 0.0").unwrap()));
+	assert!(
+		executor
+			.eval_bool(&Expression::new_strict("llm.cost.cacheWriteDetails['12h'] == 0.01").unwrap())
+	);
+	assert!(
+		executor
+			.eval_bool(&Expression::new_strict("llm.costRates.cacheWriteDetails['12h'] == 2.5").unwrap())
+	);
 	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.input == 3.0").unwrap()));
 	assert!(executor.eval_bool(&Expression::new_strict("llm.costRates.perPage == 0.005").unwrap()));
 }

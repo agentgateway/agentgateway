@@ -47,10 +47,11 @@ func sampleAPI() map[string]modelsDevProvider {
 				Status: "deprecated",
 				Cost:   &modelsDevCost{Input: "30", Output: "60"},
 			},
+			"gpt-5.6": modelsDevSampleModel(`{"cost": {"input": 1, "output": 5, "cache_read": 0.1, "cache_write": 1.25, "tiers": [{"input": 2, "output": 10, "cache_write": 2.5, "tier": {"type": "context", "size": 200000}}]}, "experimental": {"modes": {"fast": {"cost": {"input": 2, "output": 10, "cache_write": 2.5}, "provider": {"body": {"service_tier": "priority"}}}}}}`),
 			"gpt-4o-mini": modelsDevSampleModel(`{
 				"name": "GPT-4o mini",
 				"release_date": "2024-07-18",
-				"cost": {"input": 0.15, "output": 0.6, "cache_read": 0.075},
+				"cost": {"input": 0.15, "output": 0.6, "cache_read": 0.075, "cache_write": 0.1875},
 				"reasoning": false,
 				"tool_call": true,
 				"temperature": true,

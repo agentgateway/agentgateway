@@ -1083,6 +1083,7 @@ test('hybrid MCP settings only lock file-owned fields', async ({ page }) => {
 	await page.goto('/mcp/servers');
 	await page.getByRole('button', { name: 'Settings' }).click();
 	await expect(page.getByRole('textbox', { name: /Port/ })).toBeDisabled();
+	await page.getByRole('button', { name: /MCP behavior/ }).click();
 	await expect(page.getByRole('combobox', { name: 'State mode' })).toBeEnabled();
 	await page.getByRole('combobox', { name: 'State mode' }).click();
 	await page.getByRole('option', { name: 'Stateful' }).click();

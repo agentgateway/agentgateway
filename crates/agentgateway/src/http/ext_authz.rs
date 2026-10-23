@@ -312,7 +312,7 @@ impl ExtAuthz {
 	}
 
 	/// Handle authorization failure with FailureMode configuration
-	fn handle_auth_failure(&self, error_msg: &str) -> Result<PolicyResponse, ProxyError> {
+	fn handle_auth_failure(&self) -> Result<PolicyResponse, ProxyError> {
 		match &self.failure_mode {
 			FailureMode::Allow => {
 				dtrace::pol_event!(
@@ -326,7 +326,11 @@ impl ExtAuthz {
 				let status = StatusCode::from_u16(*status_code).unwrap_or(StatusCode::FORBIDDEN);
 				let resp = ::http::Response::builder()
 					.status(status)
-					.body(http::Body::from(error_msg.to_string()))
+					.body(http::Body::from(
+						ProxyError::ExternalAuthorizationFailed(None)
+							.external_message()
+							.into_owned(),
+					))
 					.map_err(|e| ProxyError::Processing(e.into()))?;
 				Ok(PolicyResponse {
 					direct_response: Some(resp),
@@ -577,7 +581,7 @@ impl ExtAuthz {
 			Ok(response) => response,
 			Err(e) => {
 				warn!("ext_authz request failed: {}", e);
-				return self.handle_auth_failure("Authorization service unavailable");
+				return self.handle_auth_failure();
 			},
 		};
 		let cr = cr.into_inner();
@@ -838,7 +842,7 @@ impl ExtAuthz {
 			Ok(r) => r,
 			Err(e) => {
 				trace!("ext_authz failed {e}");
-				return self.handle_auth_failure(&e.to_string());
+				return self.handle_auth_failure();
 			},
 		};
 		if resp.status().is_success() {
@@ -857,7 +861,8 @@ impl ExtAuthz {
 				// response does not pass through the normal proxy response buffering hook,
 				// so inspect it whenever response metadata expressions are configured.
 				if let Err(e) = http::inspect_response_body(&mut resp).await {
-					return self.handle_auth_failure(&e.to_string());
+					warn!("ext_authz response body inspection failed: {e}");
+					return self.handle_auth_failure();
 				}
 				let m = metadata
 					.iter()

@@ -758,8 +758,7 @@ pub mod from_completions {
 	// Authoritative field list: google/ai/generativelanguage/v1beta/content.proto — Schema message.
 	// Cross-checked against litellm/types/llms/vertex_ai.py Schema TypedDict (both MIT-licensed).
 
-	/// Schema fields Gemini accepts. `format` is further pruned to enum/date-time and `enum` is
-	/// dropped on non-string types.
+	/// Schema fields Gemini accepts. `enum` is dropped on non-string types.
 	const ALLOWED_SCHEMA_FIELDS: &[&str] = &[
 		"type",
 		"format",
@@ -1083,15 +1082,6 @@ pub mod from_completions {
 			map.insert("type".to_string(), "object".into());
 		}
 
-		let drop_format = map
-			.get("format")
-			.and_then(Value::as_str)
-			.map(|f| f != "enum" && f != "date-time")
-			.unwrap_or(false);
-		if drop_format {
-			map.remove("format");
-		}
-
 		for_each_child_schema(map, |v| clean_schema_node(v, preserve_ap));
 		map.retain(|k, _| {
 			ALLOWED_SCHEMA_FIELDS.contains(&k.as_str()) && (preserve_ap || k != "additionalProperties")
@@ -1215,28 +1205,6 @@ pub mod to_completions {
 			.unwrap_or_else(|| format!("call_{seed}_{index}"))
 	}
 
-	fn assistant_message(
-		content: Option<String>,
-		reasoning_content: Option<String>,
-		tool_calls: Option<Vec<completions::MessageToolCalls>>,
-	) -> completions::ResponseMessage {
-		completions::ResponseMessage {
-			role: completions::Role::Assistant,
-			content,
-			reasoning_content,
-			// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
-			// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
-			// Tool-call signatures still round-trip via the tool_call id.
-			reasoning_signature: None,
-			tool_calls,
-			#[allow(deprecated)]
-			function_call: None,
-			refusal: None,
-			audio: None,
-			extra: None,
-		}
-	}
-
 	fn build_response(resp: &vg::GenerateContentResponse) -> completions::Response {
 		let model = resp.model_version.clone().unwrap_or_default();
 		let id = resp
@@ -1259,7 +1227,10 @@ pub mod to_completions {
 			vec![completions::ChatChoice {
 				rest: Default::default(),
 				index: 0,
-				message: assistant_message(Some(String::new()), None, None),
+				message: completions::ResponseMessage {
+					content: Some(String::new()),
+					..completions::ResponseMessage::assistant()
+				},
 				finish_reason: Some(finish),
 				logprobs: None,
 			}]
@@ -1309,6 +1280,7 @@ pub mod to_completions {
 						name: call.name.to_string(),
 						arguments: encode_args(call.args),
 					},
+					extra_content: None,
 				})
 			})
 			.collect();
@@ -1327,7 +1299,16 @@ pub mod to_completions {
 		completions::ChatChoice {
 			rest: Default::default(),
 			index,
-			message: assistant_message(content, reasoning, tool_calls),
+			message: completions::ResponseMessage {
+				content,
+				tool_calls,
+				reasoning_content: reasoning,
+				// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
+				// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
+				// Tool-call signatures still round-trip via the tool_call id.
+				reasoning_signature: None,
+				..completions::ResponseMessage::assistant()
+			},
 			finish_reason: Some(finish),
 			logprobs: None,
 		}
@@ -1487,11 +1468,9 @@ pub mod to_completions {
 				.map(build_usage);
 			let choices = if has_delta || finish.is_some() {
 				vec![completions::ChatChoiceStream {
-					rest: Default::default(),
-					index: 0,
 					delta,
 					finish_reason: finish,
-					logprobs: None,
+					..Default::default()
 				}]
 			} else {
 				vec![]
@@ -1661,20 +1640,16 @@ pub mod to_completions {
 			prompt_tokens_details: um.cached_content_token_count.map(|c| {
 				completions::UsagePromptDetails {
 					cached_tokens: Some(c),
-					audio_tokens: None,
-					cache_write_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
 			completion_tokens_details: um.thoughts_token_count.map(|t| {
 				completions::UsageCompletionDetails {
 					reasoning_tokens: Some(t),
-					audio_tokens: None,
-					rest: Value::Null,
+					..Default::default()
 				}
 			}),
-			cache_read_input_tokens: None,
-			cache_creation_input_tokens: None,
+			..Default::default()
 		}
 	}
 }

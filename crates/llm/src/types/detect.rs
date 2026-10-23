@@ -614,6 +614,23 @@ mod lookups {
 		// Bedrock invoke
 		&["metadata", "usage", "cacheWriteInputTokensCount"],
 	];
+	pub const CACHE_CREATION_12H_INPUT_TOKENS: [&[&str]; 2] = [
+		// Responses
+		&[
+			"usage",
+			"input_tokens_details",
+			"cache_write_tokens_details",
+			"ttl_12h_tokens",
+		],
+		// Responses streaming
+		&[
+			"response",
+			"usage",
+			"input_tokens_details",
+			"cache_write_tokens_details",
+			"ttl_12h_tokens",
+		],
+	];
 	pub const CACHED_INPUT_TOKENS: [&[&str]; 7] = [
 		// Message
 		&["usage", "cache_read_input_tokens"],
@@ -651,6 +668,8 @@ impl ResponseType for Response {
 		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());
 		crate::LLMResponse {
 			cache_creation_1h_input_tokens: None,
+			cache_creation_12h_input_tokens: self
+				.lookup(lookups::CACHE_CREATION_12H_INPUT_TOKENS, |v| v.as_u64()),
 			count_tokens: None, // We never tokenize these, so always empty
 			input_tokens,
 			input_image_tokens: self.lookup(lookups::INPUT_IMAGE_TOKENS, |v| v.as_u64()),
@@ -793,6 +812,12 @@ pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamRespo
 		lookups::CACHE_CREATION_INPUT_TOKENS,
 		|v| v.as_u64(),
 		|l, v| l.response.cache_creation_input_tokens = Some(v),
+	);
+	let _cache_creation_12h_input_tokens = f.set_if(
+		log,
+		lookups::CACHE_CREATION_12H_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.cache_creation_12h_input_tokens = Some(v),
 	);
 	let _cached_input_tokens = f.set_if(
 		log,

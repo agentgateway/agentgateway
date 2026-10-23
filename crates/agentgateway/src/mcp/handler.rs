@@ -1428,6 +1428,20 @@ impl Relay {
 		for (name, result) in fut_results {
 			match result {
 				Ok(_) => {},
+				// per spec, a 405 means the server does not allow clients to terminate sessions, and a
+				// 404 means the session is already gone. Either way there is nothing left to close.
+				Err(UpstreamError::Http(ClientError::Status(ref r)))
+					if matches!(
+						r.status(),
+						StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+					) =>
+				{
+					debug!(
+						"upstream '{}' returned {} for session deletion, skipping",
+						name,
+						r.status()
+					);
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!(
@@ -1999,6 +2013,7 @@ fn into_sse_stream(
 						Some(rpc)
 					},
 					Err(e) => {
+						warn!(error = %e, "upstream MCP stream failed");
 						*errored = true;
 						if *terminal_seen {
 							None
@@ -2008,7 +2023,10 @@ fn into_sse_stream(
 								Some(request_id.clone()),
 							);
 							*terminal_seen = capture_terminal_mcp_payload(mcp_log.as_ref(), &request_id, &msg);
-							Some(msg)
+							Some(ServerJsonRpcMessage::error(
+								ErrorData::internal_error("upstream stream failed", None),
+								Some(request_id.clone()),
+							))
 						}
 					},
 				};
@@ -2525,7 +2543,9 @@ mod tests {
 		assert_eq!(messages.len(), 1, "the transport error must end the stream");
 		assert!(matches!(
 			messages[0].message.as_ref(),
-			ServerJsonRpcMessage::Error(error) if error.id == Some(RequestId::Number(7))
+			ServerJsonRpcMessage::Error(error)
+				if error.id == Some(RequestId::Number(7))
+					&& error.error.message == "upstream stream failed"
 		));
 
 		let info = log.take().unwrap();

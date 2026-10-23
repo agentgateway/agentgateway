@@ -516,12 +516,14 @@ type PromptCachingConfig struct {
 
 	// Enables caching for tool definitions. Defaults to false.
 	// Inserts a cache point after all tool specifications.
+	// Ignored for Bedrock Nova models, which do not support caching tools.
 	// +optional
 	CacheTools bool `json:"cacheTools,omitempty"`
 
 	// Minimum estimated token count
 	// before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
-	// Defaults to 1024. Bedrock requires at least 1,024 tokens for caching to be effective.
+	// Applies to system prompt caching. Defaults to 1024; most models require at least
+	// 1,024 tokens for caching to be effective.
 	// +optional
 	// +kubebuilder:validation:Minimum=0
 	MinTokens *int `json:"minTokens,omitempty"`

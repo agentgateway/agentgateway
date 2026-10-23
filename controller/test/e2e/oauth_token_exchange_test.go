@@ -92,7 +92,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 		t.Send("oauth-token-exchange.com",
 			&testmatchers.HttpResponse{
 				StatusCode: http.StatusInternalServerError,
-				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
+				Body:       gomega.ContainSubstring("backend authentication failed"),
 			},
 			curl.WithHeader("Authorization", "Bearer subject-token"),
 			curl.WithHeader("X-Actor-Token", "actor-token"),
@@ -111,7 +111,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 		t.Send("invalid-oauth-token-exchange.com",
 			&testmatchers.HttpResponse{
 				StatusCode: http.StatusInternalServerError,
-				Body:       gomega.ContainSubstring("oauthTokenExchange configuration is invalid"),
+				Body:       gomega.ContainSubstring("backend authentication failed"),
 			},
 			curl.WithHeader("Authorization", "Bearer subject-token"),
 		)

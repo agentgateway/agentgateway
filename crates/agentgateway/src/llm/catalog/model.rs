@@ -377,9 +377,9 @@ pub struct Rates {
 	/// Cost per 1M tokens written to cache.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cache_write: Option<Money>,
-	/// Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub cache_write_1h: Option<Money>,
+	/// Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub cache_write_details: BTreeMap<String, Money>,
 	/// Cost per 1M reasoning tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub reasoning: Option<Money>,
@@ -410,7 +410,12 @@ impl Rates {
 			output: pick(&self.output, &delta.output),
 			cache_read: pick(&self.cache_read, &delta.cache_read),
 			cache_write: pick(&self.cache_write, &delta.cache_write),
-			cache_write_1h: pick(&self.cache_write_1h, &delta.cache_write_1h),
+			cache_write_details: self
+				.cache_write_details
+				.iter()
+				.chain(&delta.cache_write_details)
+				.map(|(k, v)| (k.clone(), v.clone()))
+				.collect(),
 			reasoning: pick(&self.reasoning, &delta.reasoning),
 			input_audio: pick(&self.input_audio, &delta.input_audio),
 			output_audio: pick(&self.output_audio, &delta.output_audio),
@@ -494,6 +499,7 @@ pub struct Usage {
 	pub cache_read: u64,
 	pub cache_write: u64,
 	pub cache_write_1h: u64,
+	pub cache_write_12h: u64,
 	pub output: u64,
 	pub reasoning: u64,
 	pub input_audio: u64,
@@ -508,6 +514,7 @@ impl Usage {
 			.saturating_add(self.cache_read)
 			.saturating_add(self.cache_write)
 			.saturating_add(self.cache_write_1h)
+			.saturating_add(self.cache_write_12h)
 			.saturating_add(self.input_audio)
 	}
 }
@@ -518,6 +525,7 @@ pub struct Breakdown {
 	pub cache_read: Decimal,
 	pub cache_write: Decimal,
 	pub cache_write_1h: Decimal,
+	pub cache_write_12h: Decimal,
 	pub output: Decimal,
 	pub reasoning: Decimal,
 	pub input_audio: Decimal,
@@ -531,6 +539,7 @@ impl std::ops::AddAssign for Breakdown {
 		self.cache_read += other.cache_read;
 		self.cache_write += other.cache_write;
 		self.cache_write_1h += other.cache_write_1h;
+		self.cache_write_12h += other.cache_write_12h;
 		self.output += other.output;
 		self.reasoning += other.reasoning;
 		self.input_audio += other.input_audio;
@@ -545,6 +554,7 @@ impl Breakdown {
 			+ self.cache_read
 			+ self.cache_write
 			+ self.cache_write_1h
+			+ self.cache_write_12h
 			+ self.output
 			+ self.reasoning
 			+ self.input_audio
@@ -561,12 +571,18 @@ impl Rates {
 		let reasoning_rate = self.reasoning.as_ref().or(self.output.as_ref());
 		let input_audio_rate = self.input_audio.as_ref().or(self.input.as_ref());
 		let output_audio_rate = self.output_audio.as_ref().or(self.output.as_ref());
-		let cache_write_1h_rate = self.cache_write_1h.as_ref().or(self.cache_write.as_ref());
+		let cache_write_rate = |ttl| {
+			self
+				.cache_write_details
+				.get(ttl)
+				.or(self.cache_write.as_ref())
+		};
 		Breakdown {
 			input: line(usage.input, self.input.as_ref()) / unit,
 			cache_read: line(usage.cache_read, self.cache_read.as_ref()) / unit,
 			cache_write: line(usage.cache_write, self.cache_write.as_ref()) / unit,
-			cache_write_1h: line(usage.cache_write_1h, cache_write_1h_rate) / unit,
+			cache_write_1h: line(usage.cache_write_1h, cache_write_rate("1h")) / unit,
+			cache_write_12h: line(usage.cache_write_12h, cache_write_rate("12h")) / unit,
 			output: line(usage.output, self.output.as_ref()) / unit,
 			reasoning: line(usage.reasoning, reasoning_rate) / unit,
 			input_audio: line(usage.input_audio, input_audio_rate) / unit,
@@ -867,7 +883,7 @@ mod tests {
 				output: Some(m("15")),
 				cache_read: Some(m("0.3")),
 				cache_write: Some(m("3.75")),
-				cache_write_1h: Some(m("6")),
+				cache_write_details: BTreeMap::from([("1h".into(), m("6")), ("12h".into(), m("7.5"))]),
 				reasoning: Some(m("15")),
 				input_audio: Some(m("40")),
 				output_audio: Some(m("80")),
@@ -881,6 +897,7 @@ mod tests {
 			cache_read: 2000,
 			cache_write: 500,
 			cache_write_1h: 300,
+			cache_write_12h: 200,
 			output: 500,
 			reasoning: 100,
 			input_audio: 50,
@@ -892,12 +909,13 @@ mod tests {
 		assert_eq!(b.cache_read, d("0.0006"));
 		assert_eq!(b.cache_write, d("0.001875"));
 		assert_eq!(b.cache_write_1h, d("0.0018"));
+		assert_eq!(b.cache_write_12h, d("0.0015"));
 		assert_eq!(b.output, d("0.0075"));
 		assert_eq!(b.reasoning, d("0.0015"));
 		assert_eq!(b.input_audio, d("0.002"));
 		assert_eq!(b.output_audio, d("0.002"));
 		assert_eq!(b.total(), e.price(&u));
-		assert_eq!(b.total(), d("0.020275"));
+		assert_eq!(b.total(), d("0.021775"));
 	}
 
 	#[test]
@@ -913,16 +931,20 @@ mod tests {
 	}
 
 	#[test]
-	fn cache_write_1h_overlays() {
+	fn cache_write_details_overlay() {
 		let mut base = rates("3", "15");
 		base.cache_write = Some(m("3.75"));
+		base.cache_write_details.insert("12h".into(), m("7.5"));
 		let delta = Rates {
-			cache_write_1h: Some(m("6")),
+			cache_write_details: BTreeMap::from([("1h".into(), m("6"))]),
 			..Default::default()
 		};
 		let r = base.overlay(&delta);
 		assert_eq!(r.cache_write, Some(m("3.75")));
-		assert_eq!(r.cache_write_1h, Some(m("6")));
+		assert_eq!(
+			r.cache_write_details,
+			BTreeMap::from([("1h".into(), m("6")), ("12h".into(), m("7.5"))])
+		);
 	}
 
 	#[test]

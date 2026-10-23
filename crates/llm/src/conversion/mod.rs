@@ -9,12 +9,22 @@ pub mod systemone;
 pub mod vertex;
 pub mod vertex_gemini;
 
+/// Rough token estimate (words x 1.3) used for the promptCaching policy's minTokens.
+pub(crate) fn estimate_tokens<'a>(texts: impl IntoIterator<Item = &'a str>) -> usize {
+	let word_count: usize = texts
+		.into_iter()
+		.map(|t| t.split_whitespace().count())
+		.sum();
+	(word_count * 13) / 10
+}
+
 #[derive(Default)]
 struct ProviderUsage {
 	input_tokens: u64,
 	total_tokens: u64,
 	reasoning_tokens: Option<u64>,
 	cache_creation_1h_input_tokens: Option<u64>,
+	cache_creation_12h_input_tokens: Option<u64>,
 	usage_lines: Vec<crate::UsageLine>,
 }
 
@@ -34,6 +44,9 @@ impl<T: crate::types::ResponseType> crate::types::ResponseType for ResponseWithP
 			response.cache_creation_1h_input_tokens = usage
 				.cache_creation_1h_input_tokens
 				.or(response.cache_creation_1h_input_tokens);
+			response.cache_creation_12h_input_tokens = usage
+				.cache_creation_12h_input_tokens
+				.or(response.cache_creation_12h_input_tokens);
 			response.usage_lines.clone_from(&usage.usage_lines);
 		}
 		response
@@ -89,6 +102,31 @@ pub(crate) fn tool_arguments_to_input(arguments: &str) -> serde_json::Value {
 	}
 	serde_json::from_str::<serde_json::Value>(arguments)
 		.unwrap_or_else(|_| serde_json::Value::String(arguments.to_string()))
+}
+
+// Keep provider state in the client API's opaque reasoning field so long signatures do not alter
+// public tool IDs. The embedded call ID preserves the association across parallel tool calls.
+const GEMINI_THOUGHT_SIGNATURE_PREFIX: &str = "agentgateway.gemini.thought-signature.v1:";
+
+/// Borrowed to encode, owned once decoded.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct GeminiThoughtSignature<S = String> {
+	call_id: S,
+	signature: S,
+}
+
+impl<'a> GeminiThoughtSignature<&'a str> {
+	fn encode(call_id: &'a str, signature: &'a str) -> String {
+		let json = serde_json::to_string(&Self { call_id, signature })
+			.expect("serializing two strings cannot fail");
+		format!("{GEMINI_THOUGHT_SIGNATURE_PREFIX}{json}")
+	}
+}
+
+impl GeminiThoughtSignature {
+	fn decode(carrier: &str) -> Option<Self> {
+		serde_json::from_str(carrier.strip_prefix(GEMINI_THOUGHT_SIGNATURE_PREFIX)?).ok()
+	}
 }
 
 #[cfg(test)]

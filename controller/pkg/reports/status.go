@@ -121,7 +121,7 @@ func (r *ReportMap) BuildGWStatus(ctx context.Context, gw gwv1.Gateway, attached
 	// If any listeners are invalid, Gateway Accepted depends on whether at least one
 	// listener remains accepted.
 	if len(invalidListeners) > 0 {
-		message := fmt.Sprintf("Some listeners are not accepted: %s", strings.Join(invalidMessages, "; "))
+		message := fmt.Sprintf("Some listeners are not accepted: %s", strings.Join(slices.FilterDuplicates(invalidMessages), "; "))
 		if len(invalidMessages) == 0 {
 			message = fmt.Sprintf("Some listeners are not accepted: %s", strings.Join(invalidListeners, ", "))
 		}

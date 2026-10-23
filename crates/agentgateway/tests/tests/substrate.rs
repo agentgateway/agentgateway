@@ -2522,11 +2522,7 @@ async fn substrate_egress_denies_http_upgrades_without_dialing(
 			let body = response
 				.split_at(response.windows(4).position(|b| b == b"\r\n\r\n").unwrap() + 4)
 				.1;
-			if upgrade.to_ascii_lowercase().contains("websocket") {
-				assert_eq!(body, b"WebSocket egress is not supported");
-			} else if upgrade == "CONNECT" {
-				assert_eq!(body, b"CONNECT egress is not supported");
-			}
+			assert_eq!(body, b"authorization failed");
 		}
 		if upgrading || !policy_allowed {
 			assert!(

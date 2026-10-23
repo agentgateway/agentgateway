@@ -90,7 +90,6 @@ authenticate with a kubectl credential plugin, using the kubeconfig exec schema:
     prod:
       url: https://agw.example.com
       exec:
-        apiVersion: client.authentication.k8s.io/v1
         command: kubectl
         args: [oidc-login, get-token, --oidc-issuer-url=https://issuer.example.com, --oidc-client-id=agctl]`,
 		Example: `  agctl standalone get llm.models

@@ -5297,6 +5297,35 @@ pub async fn convert_route(
 	let namespace = name.namespace.unwrap_or_else(|| strng::new("default"));
 	let key = strng::format!("{listener_key}/{namespace}/{route_name}");
 
+	let is_prefix = |p: Option<&crate::types::agent::PathRedirect>| {
+		matches!(p, Some(crate::types::agent::PathRedirect::Prefix(_)))
+	};
+	let uses_prefix_rewrite = policies.as_ref().is_some_and(|p| {
+		is_prefix(p.url_rewrite.as_ref().and_then(|r| r.path.as_ref()))
+			|| is_prefix(p.request_redirect.as_ref().and_then(|r| r.path.as_ref()))
+	}) || backends.iter().any(|b| {
+		is_prefix(
+			b.policies
+				.as_ref()
+				.and_then(|p| p.request_redirect.as_ref()?.path.as_ref()),
+		)
+	});
+	// Delegated routes apply the filter against the child route's match, which is not known here.
+	let delegates = backends
+		.iter()
+		.any(|b| matches!(b.backend, LocalBackend::RouteGroup(_)));
+	if uses_prefix_rewrite
+		&& !delegates
+		&& let Some(m) = matches
+			.iter()
+			.find(|m| !matches!(m.path, PathMatch::PathPrefix(_)))
+	{
+		bail!(
+			"route {route_name}: path prefix rewrite requires every match to be a path prefix match, got {:?}",
+			m.path
+		);
+	}
+
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
 	for (idx, b) in backends.iter().enumerate() {
@@ -5577,6 +5606,12 @@ pub(crate) async fn split_policies_for_target(
 
 	// Filters
 	if let Some(p) = direct_response {
+		match &p {
+			LocalExplicitOrConditional::Explicit(dr) => dr.validate()?,
+			LocalExplicitOrConditional::Conditional(c) => {
+				c.conditional.iter().try_for_each(|e| e.policy.validate())?
+			},
+		}
 		route_policies.push(TrafficPolicy::DirectResponse(p.into_policy()?));
 	}
 	if let Some(p) = cors {

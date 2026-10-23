@@ -83,6 +83,24 @@ where
 	}
 }
 
+pub struct SerAsHeaderValue;
+impl serde_with::SerializeAs<http::HeaderValue> for SerAsHeaderValue {
+	fn serialize_as<S>(source: &http::HeaderValue, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		ser_string_or_bytes(source, serializer)
+	}
+}
+impl<'de> serde_with::DeserializeAs<'de, http::HeaderValue> for SerAsHeaderValue {
+	fn deserialize_as<D>(deserializer: D) -> Result<http::HeaderValue, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		<SerAsStr as serde_with::DeserializeAs<'de, http::HeaderValue>>::deserialize_as(deserializer)
+	}
+}
+
 pub mod serde_instant_option {
 	use std::time::{Duration, Instant};
 

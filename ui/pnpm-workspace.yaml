@@ -9,4 +9,4 @@ pmOnFail: warn
 # Monaco and Ajv currently resolve vulnerable transitive releases.
 overrides:
   ajv>fast-uri: 3.1.8
-  monaco-editor>dompurify: 3.4.16
+  monaco-editor>dompurify: 3.4.17

@@ -41,7 +41,10 @@ export const mcpSettingsFields = [
 	'port',
 	'statefulMode',
 	'prefixMode',
-	'failureMode'
+	'failureMode',
+	'sseKeepAlive',
+	'dnsRebindingProtection',
+	'server'
 ] as const;
 
 export const providerNames: ProviderName[] = [

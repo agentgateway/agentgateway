@@ -1154,6 +1154,45 @@ async fn delete_reports_success_when_upstream_delete_fails() {
 }
 
 #[tokio::test]
+async fn upstream_delete_status_handling() {
+	use wiremock::matchers::{header, method, path};
+	use wiremock::{Mock, ResponseTemplate};
+
+	for (status, expect_ok) in [(200, true), (404, true), (405, true), (500, false)] {
+		let upstream = wiremock::MockServer::start().await;
+		Mock::given(method("DELETE"))
+			.and(path("/mcp"))
+			.and(header("mcp-session-id", "upstream-session"))
+			.respond_with(ResponseTemplate::new(status))
+			.expect(1)
+			.mount(&upstream)
+			.await;
+		let relay = Relay::new_for_request(
+			McpBackendGroup {
+				targets: vec![fake_streamable_target("a", *upstream.address())],
+				stateful: true,
+				failure_mode: FailureMode::FailClosed,
+				..Default::default()
+			},
+			empty_mcp_policies(),
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			&crate::mcp::upstream::IncomingRequestContext::empty(),
+		)
+		.unwrap();
+		relay
+			.upstreams
+			.get("a")
+			.unwrap()
+			.set_session_id(Some("upstream-session"), None);
+
+		let result = relay
+			.send_fanout_deletion(crate::mcp::upstream::IncomingRequestContext::empty())
+			.await;
+		assert_eq!(result.is_ok(), expect_ok, "DELETE answered with {status}");
+	}
+}
+
+#[tokio::test]
 async fn delete_on_replica_without_session_closes_upstream_session() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind_a, io_a) = setup_proxy(&mock, true, false).await;
@@ -1823,7 +1862,7 @@ async fn task_methods_respect_mcp_authorization_deny_policy() {
 	)
 	.await;
 	assert_eq!(get["error"]["code"], -32602);
-	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
+	assert_eq!(get["error"]["message"], "unknown resource");
 }
 
 /// Test that a policy keyed on mcp.methodName sees the right method for each
@@ -2748,11 +2787,7 @@ async fn streamable_http_oversized_body_returns_413_with_configured_limit() {
 	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
 
 	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
-	let text = resp.text().await.unwrap();
-	assert!(
-		text.contains(&limit.to_string()),
-		"expected configured limit {limit} in body: {text}"
-	);
+	assert_eq!(resp.text().await.unwrap(), "request body too large");
 }
 
 #[tokio::test]
@@ -2804,11 +2839,7 @@ async fn legacy_sse_post_oversized_body_returns_413_with_configured_limit() {
 	let resp = mcp_json_post(&client, &url, &body).send().await.unwrap();
 
 	assert_eq!(resp.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
-	let text = resp.text().await.unwrap();
-	assert!(
-		text.contains(&limit.to_string()),
-		"expected configured limit {limit} in body: {text}"
-	);
+	assert_eq!(resp.text().await.unwrap(), "request body too large");
 }
 
 #[tokio::test]
@@ -3142,7 +3173,7 @@ async fn stream_to_stream_single_tls() {
 }
 
 /// Test that calling a tool denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown tool: {tool_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_tool_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3165,7 +3196,7 @@ async fn authorization_denied_returns_unknown_tool_error() {
 
 	let client = mcp_streamable_client(io).await;
 
-	// Attempt to call a tool - should fail with "Unknown tool" error
+	// Attempt to call a tool - should fail with "unknown resource" error
 	let result = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
@@ -3199,8 +3230,8 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 	assert_eq!(
 		mcp_error.message.as_ref(),
-		"Unknown tool: echo",
-		"Expected error message 'Unknown tool: echo', got: {}",
+		"unknown resource",
+		"Expected error message 'unknown resource', got: {}",
 		mcp_error.message
 	);
 }
@@ -3523,7 +3554,7 @@ async fn persisted_stateful_session_cannot_cross_mcp_backends() {
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_prompt_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3568,8 +3599,8 @@ async fn authorization_denied_returns_unknown_prompt_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown prompt: example_prompt",
-				"Expected error message 'Unknown prompt: example_prompt', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -3621,7 +3652,7 @@ async fn authorization_by_method_name_allows_prompts_list_denies_prompts_get() {
 }
 
 /// Test that reading a resource denied by MCP authorization policy returns proper JSON-RPC error
-/// with INVALID_PARAMS error code (-32602) and message "Unknown resource: {resource_uri}"
+/// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
 async fn authorization_denied_returns_unknown_resource_error() {
 	let mock = mock_streamable_http_server(true).await;
@@ -3668,8 +3699,8 @@ async fn authorization_denied_returns_unknown_resource_error() {
 			);
 			assert_eq!(
 				mcp_error.message.as_ref(),
-				"Unknown resource: memo://insights",
-				"Expected error message 'Unknown resource: memo://insights', got: {}",
+				"unknown resource",
+				"Expected error message 'unknown resource', got: {}",
 				mcp_error.message
 			);
 		},
@@ -4103,7 +4134,7 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 
 	use ::http::{HeaderName, HeaderValue};
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 
@@ -4142,7 +4173,8 @@ async fn authorization_deny_with_request_header_filters_per_agent() {
 		let client_info = ClientConfig::new(
 			ClientCapabilities::default(),
 			Implementation::new(format!("test-{agent_name}"), "0.0.1"),
-		);
+		)
+		.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 		client_info
 			.serve(transport)
 			.await
@@ -5115,14 +5147,15 @@ pub async fn mcp_streamable_client(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport))
 		.await
@@ -5139,6 +5172,16 @@ struct ResourceUpdateClient {
 }
 
 impl rmcp::ClientHandler for ResourceUpdateClient {
+	fn get_info(&self) -> rmcp::model::ClientConfig {
+		use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
+
+		ClientConfig::new(
+			ClientCapabilities::default(),
+			Implementation::new("test client".to_string(), "0.0.1".to_string()),
+		)
+		.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE)
+	}
+
 	async fn on_resource_updated(
 		&self,
 		params: rmcp::model::ResourceUpdatedNotificationParam,
@@ -5758,7 +5801,9 @@ pub async fn mcp_streamable_client_with_ui(
 	s: SocketAddr,
 ) -> RunningService<RoleClient, InitializeRequestParams> {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation};
+	use rmcp::model::{
+		ClientCapabilities, ClientConfig, ExtensionCapabilities, Implementation, ProtocolVersion,
+	};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
@@ -5775,7 +5820,8 @@ pub async fn mcp_streamable_client_with_ui(
 			.enable_extensions_with(extensions)
 			.build(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport))
 		.await
@@ -7844,14 +7890,15 @@ async fn try_mcp_streamable_client(
 ) -> Result<RunningService<RoleClient, InitializeRequestParams>, rmcp::service::ClientInitializeError>
 {
 	use rmcp::ServiceExt;
-	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation};
+	use rmcp::model::{ClientCapabilities, ClientConfig, Implementation, ProtocolVersion};
 	use rmcp::transport::StreamableHttpClientTransport;
 	let transport =
 		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
 	let client_info = ClientConfig::new(
 		ClientCapabilities::default(),
 		Implementation::new("test client".to_string(), "0.0.1".to_string()),
-	);
+	)
+	.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE);
 
 	Box::pin(client_info.serve(transport)).await
 }
@@ -8764,7 +8811,7 @@ async fn mcp_guardrails_metadata_consumed_by_authz() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
-	assert_eq!(e.message.as_ref(), "Unknown tool: echo");
+	assert_eq!(e.message.as_ref(), "unknown resource");
 }
 
 // mcpGuardrails request-result metadata should be visible to access-log CEL
@@ -9173,7 +9220,7 @@ async fn mcp_guardrails_fail_closed_on_grpc_error() {
 		"gRPC failure should map to internal error"
 	);
 	assert!(
-		e.message.contains("mcpGuardrails checkRequest failed"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -9279,7 +9326,7 @@ async fn mcp_guardrails_protocol_violation_fails_closed() {
 		"protocol violation should map to internal error"
 	);
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);
@@ -9324,7 +9371,7 @@ async fn mcp_guardrails_non_object_mutation_is_protocol_violation() {
 		panic!("expected McpError, got {err:?}");
 	};
 	assert!(
-		e.message.contains("protocol violation"),
+		e.message == "guardrail check failed",
 		"unexpected message: {}",
 		e.message
 	);

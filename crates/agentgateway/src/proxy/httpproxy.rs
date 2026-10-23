@@ -607,8 +607,7 @@ async fn apply_llm_request_policies(
 	llm_req: &LLMRequest,
 	response_headers: &mut HeaderMap,
 ) -> Result<store::LLMResponsePolicies, ProxyResponse> {
-	// Token limits are settled here, where the parsed request gives the token count and, for a
-	// keyed rule, the `llm` context its key may read.
+	// Token limits are settled here, where the parsed request gives the token count.
 	let mut local_rate_limit = Vec::new();
 	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
 	let limits = policies
@@ -617,24 +616,7 @@ async fn apply_llm_request_policies(
 		.map(|limits| limits.as_slice())
 		.unwrap_or_default();
 	if !limits.is_empty() {
-		// The context costs a clone of the request, so it is only built for a key that reads it.
-		let reads_llm = |lrl: &http::localratelimit::RateLimit| {
-			lrl.spec.limit_type == http::localratelimit::RateLimitType::Tokens
-				&& lrl.spec.key.as_ref().is_some_and(|key| key.needs_llm())
-		};
-		let llm_ctx = limits.iter().any(reads_llm).then(|| {
-			cel::LLMContext::from_llm_info(
-				llm::LLMInfo {
-					request: llm_req.clone(),
-					response: Default::default(),
-				},
-				None,
-			)
-		});
-		let mut exec = cel::Executor::new_request(req);
-		if let Some(llm_ctx) = llm_ctx.as_ref() {
-			exec.llm = cel::LLMView::Context(llm_ctx);
-		}
+		let exec = cel::Executor::new_request(req);
 		let admitted = limits.iter().try_for_each(|lrl| {
 			if let Some((status, charged)) = lrl.charge_tokens(llm_req.input_tokens, &exec)? {
 				local_status =

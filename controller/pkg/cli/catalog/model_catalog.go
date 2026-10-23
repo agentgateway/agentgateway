@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -224,15 +225,16 @@ type BudgetTokens struct {
 }
 
 type Rates struct {
-	Input        Money `json:"input,omitempty"`
-	Output       Money `json:"output,omitempty"`
-	CacheRead    Money `json:"cacheRead,omitempty"`
-	CacheWrite   Money `json:"cacheWrite,omitempty"`
-	CacheWrite1h Money `json:"cacheWrite1h,omitempty"`
-	Reasoning    Money `json:"reasoning,omitempty"`
-	InputAudio   Money `json:"inputAudio,omitempty"`
-	OutputAudio  Money `json:"outputAudio,omitempty"`
-	PerPage      Money `json:"perPage,omitempty"`
+	Input      Money `json:"input,omitempty"`
+	Output     Money `json:"output,omitempty"`
+	CacheRead  Money `json:"cacheRead,omitempty"`
+	CacheWrite Money `json:"cacheWrite,omitempty"`
+	// CacheWriteDetails holds cache write rates for non-default TTLs, keyed by TTL (e.g. "1h").
+	CacheWriteDetails map[string]Money `json:"cacheWriteDetails,omitempty"`
+	Reasoning         Money            `json:"reasoning,omitempty"`
+	InputAudio        Money            `json:"inputAudio,omitempty"`
+	OutputAudio       Money            `json:"outputAudio,omitempty"`
+	PerPage           Money            `json:"perPage,omitempty"`
 }
 
 type Tier struct {
@@ -244,11 +246,18 @@ type Tier struct {
 type Money string
 
 func (r Rates) IsZero() bool {
-	return r == Rates{}
+	details := r.CacheWriteDetails
+	r.CacheWriteDetails = nil
+	return len(details) == 0 && reflect.ValueOf(r).IsZero()
 }
 
 func (r *Rates) overlayWith(overlay Rates) {
+	details := maps.Clone(r.CacheWriteDetails)
 	overlayNonZero(r, overlay)
+	if details != nil {
+		maps.Copy(details, overlay.CacheWriteDetails)
+		r.CacheWriteDetails = details
+	}
 }
 
 // overlayNonZero copies each non-zero field of overlay into dst.
@@ -323,6 +332,11 @@ func (m *Model) validate() error {
 }
 
 func (r *Rates) validate() error {
+	for _, ttl := range slices.Sorted(maps.Keys(r.CacheWriteDetails)) {
+		if err := r.CacheWriteDetails[ttl].validate(); err != nil {
+			return fmt.Errorf("rate cacheWriteDetails.%s: %w", ttl, err)
+		}
+	}
 	v := reflect.ValueOf(*r)
 	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {

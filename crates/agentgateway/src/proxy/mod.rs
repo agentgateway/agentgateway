@@ -7,7 +7,8 @@ pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
 
-use std::sync::Arc;
+use std::borrow::Cow;
+use std::sync::{Arc, LazyLock};
 
 use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
@@ -90,6 +91,7 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(mcp::Error::RateLimited { .. }) => ProxyResponseReason::RateLimit,
+			ProxyError::MCP(mcp::Error::Authorization(..)) => ProxyResponseReason::Authorization,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
 			ProxyError::AuthorizationFailed
 			| ProxyError::SubstrateEgressDenied(_)
@@ -176,6 +178,18 @@ impl Display for ProxyResponseReason {
 /// Marks responses whose rate-limit headers come from a denying policy.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RateLimitDenied;
+
+/// Unsafe, debugging only: return full internal error details to clients instead of generic messages.
+pub(crate) static EXPOSE_ERROR_DETAILS: LazyLock<bool> = LazyLock::new(|| {
+	let enabled =
+		std::env::var("AGENTGATEWAY_UNSAFE_EXPOSE_ERROR_DETAILS").is_ok_and(|v| v == "true");
+	if enabled {
+		warn!(
+			"AGENTGATEWAY_UNSAFE_EXPOSE_ERROR_DETAILS is enabled; internal error details are sent to clients"
+		);
+	}
+	enabled
+});
 
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyError {
@@ -392,6 +406,68 @@ impl ProxyError {
 		}
 	}
 
+	/// A client-safe message. Keep Display and Debug for logs and diagnostics.
+	pub fn external_message(&self) -> Cow<'static, str> {
+		let msg = match self {
+			ProxyError::MCP(e) => return e.external_message(),
+			_ if *EXPOSE_ERROR_DETAILS => return self.to_string().into(),
+			// Client request errors only describe the client's own request, so keep their detail.
+			ProxyError::AIRequest(e) if classify_ai_request(e).status.is_client_error() => {
+				return self.to_string().into();
+			},
+			ProxyError::StaleAssignment => "service unavailable",
+			ProxyError::AIRequest(_) => "failed to process LLM request",
+			ProxyError::AIResponse(_) => "failed to process LLM response",
+			ProxyError::SubstrateIngressFailed(..) => "ingress failed",
+			ProxyError::SubstrateEgressDenied(_) => "authorization failed",
+			ProxyError::SubstrateEgressUnavailable(_) => "service unavailable",
+			ProxyError::RequestLimitExceeded => "request limit exceeded",
+			ProxyError::GuardrailRejected { .. } => "request rejected by guardrail",
+			ProxyError::BudgetExceeded(_) => "budget exceeded",
+			ProxyError::RemoteRateLimitExceeded { .. } => "rate limit exceeded",
+			ProxyError::BindNotFound => "bind not found",
+			ProxyError::ListenerNotFound => "listener not found",
+			ProxyError::RouteNotFound => "route not found",
+			ProxyError::RouteCycleDetected => "route delegation cycle detected",
+			ProxyError::MisdirectedRequest => "misdirected request",
+			ProxyError::NoValidBackends
+			| ProxyError::NoHealthyEndpoints
+			| ProxyError::BackendDoesNotExist
+			| ProxyError::ServiceNotFound
+			| ProxyError::InvalidBackendType => "no backends available",
+			ProxyError::DnsResolution => "dns resolution failed",
+			ProxyError::FilterError(_) => "filter failed",
+			ProxyError::Policy(_) => "policy failed",
+			ProxyError::DynamicBackendLoopback => "backend not allowed",
+			ProxyError::BackendUnsupportedMirror
+			| ProxyError::Processing(_)
+			| ProxyError::ProcessingString(_) => "internal error",
+			ProxyError::APIKeyAuthenticationFailure(_)
+			| ProxyError::BasicAuthenticationFailure(_)
+			| ProxyError::OidcFailure(_)
+			| ProxyError::JwtAuthenticationFailure(_)
+			| ProxyError::McpAuthenticationFailure(_, _) => "authentication failed",
+			ProxyError::CsrfValidationFailed => "csrf validation failed",
+			ProxyError::ExternalAuthorizationFailed(_) | ProxyError::AuthorizationFailed => {
+				"authorization failed"
+			},
+			ProxyError::BackendAuthenticationFailed(_) => "backend authentication failed",
+			ProxyError::Body(_) => "request body error",
+			ProxyError::UpstreamCallFailed(e) => external_upstream_message(e),
+			ProxyError::UpstreamCallTimeout | ProxyError::RequestTimeout => "request timeout",
+			ProxyError::UpstreamTCPCallFailed(e) => external_upstream_message(e),
+			ProxyError::UpstreamTCPProxy(_) => "upstream connection failed",
+			ProxyError::Http(_) => "invalid http",
+			ProxyError::ExtProc(_) => "external processing failed",
+			ProxyError::RateLimitExceeded { .. } => "rate limit exceeded",
+			ProxyError::RateLimitFailed => "rate limit failed",
+			ProxyError::InvalidRequest => "invalid request",
+			ProxyError::UpgradeFailed(_, _) => "request upgrade failed",
+			ProxyError::MethodNotAllowed => "method not allowed",
+		};
+		msg.into()
+	}
+
 	fn http_status(&self) -> StatusCode {
 		match *self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
@@ -528,7 +604,7 @@ impl ProxyError {
 	}
 
 	pub fn into_response_with_grpc(self, is_grpc_request: bool) -> Response {
-		let msg = self.to_string();
+		let msg = self.external_message();
 		let code = self.http_status();
 		let this = match self {
 			ProxyError::RemoteRateLimitExceeded {
@@ -630,7 +706,7 @@ impl ProxyError {
 				.body(http::Body::from(
 					serde_json::json!({
 						"error": {
-							"message": exceeded.to_string(),
+							"message": msg,
 							"type": "rate_limit_error",
 							"code": "budget_exceeded",
 						}
@@ -681,7 +757,7 @@ impl ProxyError {
 		}
 
 		rb.header(hyper::header::CONTENT_TYPE, "text/plain")
-			.body(http::Body::from(msg))
+			.body(http::Body::from(msg.into_owned()))
 			.unwrap()
 	}
 }
@@ -726,6 +802,23 @@ impl From<ProxyError> for tonic::Status {
 		let code = proxy_error_to_grpc_status(&error, error.http_status());
 		tonic::Status::new(code, error.to_string())
 	}
+}
+
+fn external_upstream_message(error: &(dyn std::error::Error + 'static)) -> &'static str {
+	let mut current = Some(error);
+	while let Some(error) = current {
+		if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+			return match io_error.kind() {
+				std::io::ErrorKind::ConnectionRefused => "connection refused",
+				std::io::ErrorKind::ConnectionReset => "connection reset",
+				std::io::ErrorKind::ConnectionAborted => "connection aborted",
+				std::io::ErrorKind::TimedOut => "connection timed out",
+				_ => "upstream connection failed",
+			};
+		}
+		current = error.source();
+	}
+	"upstream call failed"
 }
 
 fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Code {
@@ -848,6 +941,15 @@ pub fn resolve_simple_backend_with_policies(
 	b: &SimpleBackendReference,
 	pi: &ProxyInputs,
 ) -> Result<SimpleBackendWithPolicies, ProxyError> {
+	resolve_simple_backend_with_binds(b, pi, None)
+}
+
+/// Like resolve_simple_backend_with_policies, but uses `binds` if the caller already holds the lock.
+pub fn resolve_simple_backend_with_binds(
+	b: &SimpleBackendReference,
+	pi: &ProxyInputs,
+	binds: Option<&store::BindStore>,
+) -> Result<SimpleBackendWithPolicies, ProxyError> {
 	let (backend, inline_policies) = match b {
 		SimpleBackendReference::Service { name, port } => {
 			let svc = pi
@@ -859,11 +961,11 @@ pub fn resolve_simple_backend_with_policies(
 			(SimpleBackend::Service(svc, *port), Vec::default())
 		},
 		SimpleBackendReference::Backend(name) => {
-			let be = pi
-				.stores
-				.read_binds()
-				.backend(name)
-				.ok_or(ProxyError::ServiceNotFound)?;
+			let be = match binds {
+				Some(binds) => binds.backend(name),
+				None => pi.stores.read_binds().backend(name),
+			}
+			.ok_or(ProxyError::ServiceNotFound)?;
 			(
 				SimpleBackend::try_from(be.backend.clone()).map_err(|_| ProxyError::InvalidBackendType)?,
 				be.inline_policies.clone(),
@@ -1089,7 +1191,7 @@ mod tests {
 		);
 		assert_eq!(
 			response.headers().get("grpc-message").unwrap(),
-			"no%20healthy%20backends"
+			"no%20backends%20available"
 		);
 	}
 
@@ -1132,5 +1234,79 @@ mod tests {
 			grpc.headers().get("grpc-status").unwrap(),
 			&i32::from(Code::Unavailable).to_string()
 		);
+	}
+
+	#[tokio::test]
+	async fn error_responses_keep_details_internal() {
+		use rmcp::model::RequestId;
+
+		for grpc in [false, true] {
+			for error in [
+				ProxyError::ProcessingString("secret backend detail".into()),
+				ProxyError::Processing(anyhow::anyhow!("secret backend detail")),
+				ProxyError::Body(http::Error::new(std::io::Error::other(
+					"secret backend detail",
+				))),
+				ProxyError::UpstreamTCPCallFailed(http::Error::new(std::io::Error::other(
+					"secret backend detail",
+				))),
+				ProxyError::SubstrateIngressFailed(
+					StatusCode::BAD_GATEWAY,
+					"secret backend detail".into(),
+					None,
+				),
+				ProxyError::SubstrateEgressDenied("secret backend detail".into()),
+				ProxyError::MCP(mcp::Error::SendError(None, "secret backend detail".into())),
+				ProxyError::MCP(mcp::Error::SendError(
+					Some(RequestId::Number(7)),
+					"secret backend detail".into(),
+				)),
+				ProxyError::MCP(mcp::Error::Unavailable(
+					Some(RequestId::Number(7)),
+					"secret backend detail".into(),
+				)),
+				ProxyError::MCP(mcp::Error::Authorization(
+					RequestId::Number(7),
+					"tool".into(),
+					"secret backend detail".into(),
+				)),
+			] {
+				assert!(error.to_string().contains("secret backend detail"));
+				let external = error.external_message();
+				assert!(!external.contains("secret"));
+				let response = error.into_response_with_grpc(grpc);
+				if grpc {
+					assert_eq!(response.status(), StatusCode::OK);
+					assert_eq!(
+						response.headers()["grpc-message"],
+						utf8_percent_encode(&external, GRPC_MESSAGE_ENCODE_SET).to_string()
+					);
+					assert!(http::read_resp_body(response).await.unwrap().is_empty());
+				} else {
+					assert!(response.status().is_client_error() || response.status().is_server_error());
+					let json = response.headers()[hyper::header::CONTENT_TYPE] == "application/json";
+					let body = http::read_resp_body(response).await.unwrap();
+					if json {
+						let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+						assert_eq!(body["jsonrpc"], "2.0");
+						assert_eq!(body["id"], 7);
+						assert_eq!(body["error"]["message"], external.as_ref());
+						assert!(body["error"].get("data").is_none());
+					} else {
+						assert_eq!(body.as_ref(), external.as_bytes());
+					}
+				}
+			}
+		}
+	}
+
+	#[test]
+	fn external_message_preserves_safe_io_error_kind() {
+		let err = ProxyError::UpstreamTCPCallFailed(crate::http::Error::new(std::io::Error::from(
+			std::io::ErrorKind::ConnectionRefused,
+		)));
+
+		assert_eq!(err.external_message(), "connection refused");
+		assert!(err.to_string().contains("connection refused"));
 	}
 }

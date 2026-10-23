@@ -2132,14 +2132,18 @@ impl StoreUpdater {
 	pub fn new(state: Arc<RwLock<Store>>) -> StoreUpdater {
 		Self { state }
 	}
-	pub fn read(&self) -> std::sync::RwLockReadGuard<'_, Store> {
-		self.state.read().expect("mutex acquired")
+	#[track_caller]
+	pub fn read(&self) -> crate::store::ReadGuard<'_, Store> {
+		thread_local! {
+			static BINDS_READ_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+		}
+		crate::store::ReadGuard::new(&self.state, &BINDS_READ_DEPTH)
 	}
 	pub fn write(&self) -> std::sync::RwLockWriteGuard<'_, Store> {
 		self.state.write().expect("mutex acquired")
 	}
 	pub fn dump(&self) -> Dump {
-		let store = self.state.read().expect("mutex");
+		let store = self.read();
 
 		// Services all have hostname, so use that as the key
 		let binds: Vec<_> = store
@@ -4381,8 +4385,12 @@ mod tests {
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
-					set: vec![(strng::new("x-foo"), strng::new("bar"))],
+					set: vec![(
+						::http::HeaderName::from_static("x-foo"),
+						::http::HeaderValue::from_static("bar"),
+					)],
 					remove: vec![],
+					invalid: None,
 				},
 			)),
 		};
@@ -4404,8 +4412,12 @@ mod tests {
 			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
 				HeaderModifier {
 					add: vec![],
-					set: vec![(strng::new("x-foo"), strng::new("bar3"))],
+					set: vec![(
+						::http::HeaderName::from_static("x-foo"),
+						::http::HeaderValue::from_static("bar3"),
+					)],
 					remove: vec![],
+					invalid: None,
 				},
 			)),
 		};
@@ -4415,8 +4427,12 @@ mod tests {
 		let backend_inline_policies = vec![BackendTrafficPolicy::RequestHeaderModifier(
 			HeaderModifier {
 				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar2"))],
+				set: vec![(
+					::http::HeaderName::from_static("x-foo"),
+					::http::HeaderValue::from_static("bar2"),
+				)],
 				remove: vec![],
+				invalid: None,
 			},
 		)];
 
@@ -4447,7 +4463,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar2")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar2")
+			),
 			"Inline policy (bar2) should win over backend attached policy (bar)"
 		);
 
@@ -4478,7 +4497,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar2")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar2")
+			),
 			"Inline policy (bar2) should win over section attached policy (bar3)"
 		);
 
@@ -4506,7 +4528,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar")
+			),
 			"Backend attached policy (bar) should be used when no inline policies exist"
 		);
 
@@ -4537,7 +4562,10 @@ mod tests {
 		);
 		assert_eq!(
 			modifier.set[0],
-			(strng::new("x-foo"), strng::new("bar3")),
+			(
+				::http::HeaderName::from_static("x-foo"),
+				::http::HeaderValue::from_static("bar3")
+			),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
 		);
 	}

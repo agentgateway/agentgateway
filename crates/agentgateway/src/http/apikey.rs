@@ -461,6 +461,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider
@@ -476,6 +477,7 @@ pub enum LocalAPIKey {
 		metadata: Option<UserMetadata>,
 		/// Model patterns this key is allowed to access.
 		/// Omitted means no additional constraint; an empty list denies all models.
+		/// Only the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.
 		#[serde(rename = "allowedModels", default)]
 		allowed_models: Option<Vec<String>>,
 		/// Independent budgets charged after LLM responses. A request is not charged when its provider

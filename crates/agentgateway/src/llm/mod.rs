@@ -375,13 +375,6 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 	const fn chat(input: InputFormat, output: ChatFormat) -> ChatTranslation {
 		ChatTranslation { input, output }
 	}
-	// AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS will be removed in v1.7.
-	let [messages_primary, messages_fallback] =
-		if std::env::var("AGENTGATEWAY_MESSAGES_PREFER_COMPLETIONS").is_ok_and(|v| v == "true") {
-			[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses]
-		} else {
-			[ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
-		};
 	vec![
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
@@ -399,8 +392,8 @@ static CHAT_TRANSLATIONS: LazyLock<Vec<ChatTranslation>> = LazyLock::new(|| {
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
 		// Messages
-		chat(InputFormat::Messages, messages_primary),
-		chat(InputFormat::Messages, messages_fallback),
+		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
+		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
@@ -421,12 +414,18 @@ fn render_openai_completions(
 		},
 		types::ChatRequest::Messages(req) => {
 			let mut translated = conversion::completions::from_messages::translate_request(&req)?;
+			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
+				translated.strip_tool_call_extra_content();
+			}
 			apply_openai_moderation(&mut translated.moderation, ctx)?;
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Responses(req) => {
 			let translated = conversion::openai_compat::from_responses::translate_request(&req)?;
 			let mut request = translated.request;
+			if !preserves_gemini_signatures(ctx.provider, req.model.as_deref()) {
+				request.strip_tool_call_extra_content();
+			}
 			let namespaces = translated.namespaces;
 			if !namespaces.is_empty() {
 				provider_state = Some(ProviderState::OpenAICompletions {
@@ -445,6 +444,21 @@ fn render_openai_completions(
 		body,
 		provider_state,
 	})
+}
+
+fn preserves_gemini_signatures(provider: &AIProvider, request_model: Option<&str>) -> bool {
+	match provider {
+		AIProvider::Gemini(_) => true,
+		AIProvider::Vertex(provider) => provider.is_gemini_model(
+			provider
+				.model_override
+				.as_ref()
+				.map(|model| model.as_str())
+				.or(request_model)
+				.unwrap_or_default(),
+		),
+		_ => false,
+	}
 }
 
 fn render_openai_responses(
@@ -483,13 +497,18 @@ fn apply_openai_moderation(
 
 fn render_anthropic_messages(
 	req: types::ChatRequest,
-	catalog: agent_llm::model_catalog::Catalog<'_>,
+	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+			conversion::messages::from_completions::translate(&req, ctx.prompt_caching, ctx.catalog)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Messages(mut req) => {
+			if let Some(caching) = ctx.prompt_caching {
+				conversion::messages::apply_prompt_caching(&mut req, caching);
+			}
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
@@ -534,9 +553,13 @@ fn render_bedrock_converse(
 			ctx.prompt_caching,
 			ctx.catalog,
 		),
-		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers), ctx.catalog)
-		},
+		types::ChatRequest::Messages(req) => conversion::bedrock::from_messages::translate(
+			&req,
+			provider,
+			Some(ctx.headers),
+			ctx.prompt_caching,
+			ctx.catalog,
+		),
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
 			&req,
 			provider,
@@ -586,19 +609,17 @@ impl ChatTranslation {
 		req: types::ChatRequest,
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
+		let mut req = req;
+		if let AIProvider::Bedrock(p) = ctx.provider {
+			p.sanitize_runtime_request(&mut req, ctx.catalog);
+		}
 		let body = match self.output {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
 			},
-			ChatFormat::AnthropicMessages => {
-				let mut req = req;
-				if let AIProvider::Bedrock(p) = ctx.provider {
-					p.sanitize_messages_user_id(&mut req, ctx.catalog);
-				}
-				render_anthropic_messages(req, ctx.catalog)
-			},
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -1729,6 +1750,24 @@ impl AIProvider {
 				if anthropic_native {
 					set_default_anthropic_version(&mut req.headers);
 					conversion::bedrock::filter_native_beta_header(&mut req.headers)?;
+				}
+				// Converse carries the guardrail in the body; the native APIs take it as headers.
+				if matches!(
+					route_type,
+					RouteType::Messages | RouteType::Responses | RouteType::Completions
+				) && bedrock_endpoint == Some(bedrock::BedrockEndpoint::Runtime)
+					&& provider.native_chat(bedrock::BedrockEndpoint::Runtime)
+					&& let (Some(identifier), Some(version)) =
+						(&provider.guardrail_identifier, &provider.guardrail_version)
+				{
+					req.headers.insert(
+						"x-amzn-bedrock-guardrailidentifier",
+						HeaderValue::from_str(identifier)?,
+					);
+					req.headers.insert(
+						"x-amzn-bedrock-guardrailversion",
+						HeaderValue::from_str(version)?,
+					);
 				}
 				Ok(())
 			}),

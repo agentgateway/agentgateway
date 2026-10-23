@@ -311,32 +311,47 @@ func modelsDevBuildModel(provider, model string, m modelsDevModel, warn func(for
 		entry.Tiers = append(entry.Tiers, Tier{ServiceTier: serviceTier, Rates: rates})
 	}
 
-	if claude {
-		deriveCacheWrite1h(&entry.Rates)
-		for i := range entry.Tiers {
-			deriveCacheWrite1h(&entry.Tiers[i].Rates)
+	// models.dev does not publish extended-TTL cache write rates, so derive them from input.
+	derive := func(r *Rates) {
+		ttl, multiplier := "", ""
+		switch {
+		case claude:
+			// Anthropic bills 1h writes at 2x input.
+			ttl, multiplier = "1h", "2"
+		case provider == "openai":
+			// OpenAI bills 12h writes at 2.5x input.
+			ttl, multiplier = "12h", "2.5"
+		default:
+			return
 		}
+		if rate := deriveCacheWrite(r, multiplier); rate != "" {
+			r.CacheWriteDetails = map[string]Money{ttl: rate}
+		}
+	}
+	derive(&entry.Rates)
+	for i := range entry.Tiers {
+		derive(&entry.Tiers[i].Rates)
 	}
 
 	return entry, nil
 }
 
-// deriveCacheWrite1h fills the 1h cache write rate, which models.dev does not publish. Anthropic
-// prices 1h writes at 2x input and 5m writes at 1.25x; only derive when the 5m rate follows that
-// rule, so a source with a different pricing scheme is left to fall back to cacheWrite.
-func deriveCacheWrite1h(r *Rates) {
+// deriveCacheWrite scales input by multiplier. Anthropic and OpenAI both price default-TTL writes at
+// 1.25x input; only derive when cacheWrite follows that rule, so a source with a different pricing
+// scheme is left to fall back to cacheWrite.
+func deriveCacheWrite(r *Rates, multiplier string) Money {
 	if r.CacheWrite == "" {
-		return
+		return ""
 	}
 	input, err := r.Input.Decimal()
 	if err != nil {
-		return
+		return ""
 	}
 	cacheWrite, err := r.CacheWrite.Decimal()
 	if err != nil || !cacheWrite.Equal(input.Mul(decimal.RequireFromString("1.25"))) {
-		return
+		return ""
 	}
-	r.CacheWrite1h = Money(input.Mul(decimal.NewFromInt(2)).String())
+	return Money(input.Mul(decimal.RequireFromString(multiplier)).String())
 }
 
 func modelsDevBuildTiers(src []modelsDevTier, label string, warn func(format string, args ...any)) ([]Tier, error) {

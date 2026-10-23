@@ -1296,9 +1296,17 @@ mod serde_path_regex {
 #[derive(Eq, PartialEq)]
 pub enum HostRedirect {
 	/// Replace the full authority, including host and optional port.
-	Full(Strng),
+	Full(
+		#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		::http::uri::Authority,
+	),
 	/// Replace only the host and preserve the effective port.
-	Host(Strng),
+	Host(
+		#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
+		#[cfg_attr(feature = "schema", schemars(with = "String"))]
+		::http::uri::Authority,
+	),
 	/// Replace only the port.
 	Port(NonZeroU16),
 	/// Use the selected backend host when possible.
@@ -1320,9 +1328,20 @@ pub enum HostRedirectOverride {
 #[derive(Eq, PartialEq)]
 pub enum PathRedirect {
 	/// Replace the full request path.
-	Full(Strng),
+	Full(#[serde(deserialize_with = "de_redirect_path")] Strng),
 	/// Replace only the matched path prefix.
-	Prefix(Strng),
+	Prefix(#[serde(deserialize_with = "de_redirect_path")] Strng),
+}
+
+fn de_redirect_path<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Strng, D::Error> {
+	let path = <std::borrow::Cow<'de, str> as serde::Deserialize>::deserialize(d)?;
+	if !path.is_empty() && !path.starts_with('/') {
+		return Err(serde::de::Error::custom(format!(
+			"path {path:?} must start with '/'"
+		)));
+	}
+	::http::uri::PathAndQuery::try_from(path.as_ref()).map_err(serde::de::Error::custom)?;
+	Ok(strng::new(path))
 }
 
 #[apply(schema_ser_schema!)]

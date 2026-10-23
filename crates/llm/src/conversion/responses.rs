@@ -69,6 +69,12 @@ pub fn passthrough_stream(
 							.input_tokens_details
 							.cache_write_tokens
 							.map(|tokens| tokens as u64);
+						r.response.cache_creation_12h_input_tokens = usage
+							.input_tokens_details
+							.cache_write_tokens_details
+							.as_ref()
+							.and_then(|d| d.ttl_12h_tokens)
+							.map(|t| t as u64);
 						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 					}
 				});
@@ -114,6 +120,12 @@ pub fn passthrough_stream(
 							.input_tokens_details
 							.cache_write_tokens
 							.map(|tokens| tokens as u64);
+						r.response.cache_creation_12h_input_tokens = usage
+							.input_tokens_details
+							.cache_write_tokens_details
+							.as_ref()
+							.and_then(|d| d.ttl_12h_tokens)
+							.map(|t| t as u64);
 						r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 					}
 					if let Some(c) = completion.take() {
@@ -186,6 +198,7 @@ pub mod from_messages {
 			metadata,
 			thinking,
 			output_config,
+			cache_control: _,
 		} = typed;
 
 		// Responses has no direct stop_sequences/top_k equivalent; these are
@@ -737,6 +750,12 @@ pub mod from_messages {
 			input_tokens: u.input_tokens as u64,
 			total_tokens: u.total_tokens as u64,
 			reasoning_tokens: Some(u.output_tokens_details.reasoning_tokens as u64),
+			cache_creation_12h_input_tokens: u
+				.input_tokens_details
+				.cache_write_tokens_details
+				.as_ref()
+				.and_then(|d| d.ttl_12h_tokens)
+				.map(|t| t as u64),
 			..Default::default()
 		});
 		let anthropic = translate_response_internal(resp)?;
@@ -805,11 +824,7 @@ pub mod from_messages {
 							},
 							responses::OutputMessageContent::Refusal(refusal) => {
 								saw_refusal = true;
-								content.push(messages::ContentBlock::Text(messages::ContentTextBlock {
-									text: refusal.refusal,
-									citations: None,
-									cache_control: None,
-								}));
+								content.push(messages::ContentBlock::text(refusal.refusal));
 							},
 						}
 					}
@@ -852,16 +867,10 @@ pub mod from_messages {
 			saw_refusal,
 		)?;
 		Ok(messages::MessagesResponse {
-			id: resp.id,
-			r#type: "message".to_string(),
-			role: messages::Role::Assistant,
 			content,
-			model: resp.model,
 			stop_reason: Some(stop_reason),
-			stop_sequence: None,
 			usage,
-			input_audio_tokens: None,
-			output_audio_tokens: None,
+			..messages::MessagesResponse::start(resp.id, resp.model)
 		})
 	}
 
@@ -923,26 +932,7 @@ pub mod from_messages {
 			push_event(
 				events,
 				messages::MessagesStreamEvent::MessageStart {
-					message: messages::MessagesResponse {
-						id,
-						r#type: "message".to_string(),
-						role: messages::Role::Assistant,
-						content: vec![],
-						model: model.clone(),
-						stop_reason: None,
-						stop_sequence: None,
-						usage: messages::Usage {
-							cache_creation: None,
-							input_tokens: 0,
-							output_tokens: 0,
-							cache_creation_input_tokens: None,
-							cache_read_input_tokens: None,
-							service_tier: None,
-							iterations: vec![],
-						},
-						input_audio_tokens: None,
-						output_audio_tokens: None,
-					},
+					message: messages::MessagesResponse::start(id, model.clone()),
 				},
 			);
 			if !model.is_empty() {
@@ -1087,11 +1077,7 @@ pub mod from_messages {
 					events,
 					messages::MessagesStreamEvent::ContentBlockStart {
 						index,
-						content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
-							text: String::new(),
-							citations: None,
-							cache_control: None,
-						}),
+						content_block: messages::ContentBlock::text(String::new()),
 					},
 				);
 			}
@@ -1165,6 +1151,12 @@ pub mod from_messages {
 					.input_tokens_details
 					.cache_write_tokens
 					.map(|tokens| tokens as u64);
+				r.response.cache_creation_12h_input_tokens = usage
+					.input_tokens_details
+					.cache_write_tokens_details
+					.as_ref()
+					.and_then(|d| d.ttl_12h_tokens)
+					.map(|t| t as u64);
 				r.response.reasoning_tokens = Some(usage.output_tokens_details.reasoning_tokens as u64);
 				if let Some(service_tier) = &service_tier {
 					r.response.service_tier = Some(strng::new(service_tier));
@@ -1611,13 +1603,8 @@ pub mod from_messages {
 	) -> messages::Usage {
 		let Some(usage) = usage else {
 			return messages::Usage {
-				cache_creation: None,
-				input_tokens: 0,
-				output_tokens: 0,
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
 				service_tier,
-				iterations: vec![],
+				..Default::default()
 			};
 		};
 		let cache_creation_input_tokens = usage
@@ -1629,7 +1616,6 @@ pub mod from_messages {
 			.checked_sub(0)
 			.filter(|tokens| *tokens > 0);
 		messages::Usage {
-			cache_creation: None,
 			input_tokens: (usage.input_tokens as usize)
 				.saturating_sub(cache_creation_input_tokens.unwrap_or_default())
 				.saturating_sub(cache_read_input_tokens.unwrap_or_default()),
@@ -1637,7 +1623,7 @@ pub mod from_messages {
 			cache_creation_input_tokens,
 			cache_read_input_tokens,
 			service_tier,
-			iterations: vec![],
+			..Default::default()
 		}
 	}
 
@@ -1646,12 +1632,11 @@ pub mod from_messages {
 	) -> messages::MessageDeltaUsage {
 		let usage = translate_usage(usage, None);
 		messages::MessageDeltaUsage {
-			cache_creation: None,
 			input_tokens: Some(usage.input_tokens),
 			output_tokens: Some(usage.output_tokens),
 			cache_creation_input_tokens: usage.cache_creation_input_tokens,
 			cache_read_input_tokens: usage.cache_read_input_tokens,
-			iterations: vec![],
+			..Default::default()
 		}
 	}
 

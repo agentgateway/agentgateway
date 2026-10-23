@@ -1,0 +1,131 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/cache_control_tool_outputs.json
+info:
+  model: gpt-5
+  input:
+    - type: function_call
+      call_id: call_1
+      name: get_weather
+      arguments: "{}"
+    - type: function_call_output
+      call_id: call_1
+      output:
+        - type: input_text
+          text: sunny
+          prompt_cache_breakpoint:
+            mode: explicit
+    - type: custom_tool_call
+      id: ctc_1
+      call_id: call_2
+      name: shell
+      input: ls
+    - type: custom_tool_call_output
+      call_id: call_2
+      output:
+        - type: input_text
+          text: notes.txt
+          prompt_cache_breakpoint:
+            mode: explicit
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_1",
+              "name": "get_weather",
+              "input": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_1",
+              "content": [
+                {
+                  "text": "sunny"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_2",
+              "name": "shell",
+              "input": {
+                "input": "ls"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_2",
+              "content": [
+                {
+                  "text": "notes.txt"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "agentgateway_dummy_do_not_call",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": []
+  }
+}

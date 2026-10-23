@@ -12,6 +12,7 @@ mod streamablehttp;
 mod subscriptions;
 mod upstream;
 
+use std::borrow::Cow;
 use std::fmt::{Display, Write};
 use std::io;
 use std::sync::Arc;
@@ -166,8 +167,7 @@ pub enum Error {
 	/// request was well-formed.
 	#[error("{1}")]
 	Unavailable(Option<RequestId>, String),
-	// Intentionally do NOT say its not authorized; we hide the existence of the tool
-	#[error("Unknown {1}: {2}")]
+	#[error("authorization denied for {1}: {2}")]
 	Authorization(RequestId, String, String),
 	#[error("mcpGuardrails rejected: {}", .rej.message)]
 	McpGuardrails {
@@ -217,6 +217,50 @@ fn tool_error_body(
 }
 
 impl Error {
+	/// A client-safe message; Display retains the internal diagnostic details.
+	pub fn external_message(&self) -> Cow<'static, str> {
+		let msg = match self {
+			// A denial is deliberately reported as "unknown resource", indistinguishable from a
+			// nonexistent one, so clients cannot probe which tools/prompts/resources exist. Display
+			// says "authorization denied" for logs, so this must stay ahead of EXPOSE_ERROR_DETAILS.
+			Error::Authorization(_, _, _) => "unknown resource",
+			_ if *crate::proxy::EXPOSE_ERROR_DETAILS => return self.to_string().into(),
+			// Client request errors only describe the client's own request, so keep their detail.
+			Error::MethodNotAllowed
+			| Error::GetStreamNotSupported
+			| Error::InvalidAccept
+			| Error::InvalidAcceptGet
+			| Error::InvalidContentType
+			| Error::Deserialize(_)
+			| Error::UnknownSession
+			| Error::MissingSessionHeader
+			| Error::SessionIdRequired
+			| Error::InvalidSessionIdHeader
+			| Error::InvalidSessionIdQuery
+			| Error::InvalidProtocolVersion
+			| Error::UnsupportedVersion { .. }
+			| Error::VersionMismatch(_)
+			| Error::HeaderBodyMismatch(_, _)
+			| Error::InvalidRoutingHeader(_, _)
+			| Error::MethodNotFound(_, _)
+			| Error::InvalidParams(_, _) => return self.to_string().into(),
+			Error::PayloadTooLarge(_) => "request body too large",
+			Error::Unavailable(_, _) => "service unavailable",
+			Error::McpGuardrails { .. } => "request rejected by guardrail",
+			Error::RateLimited { .. } => "rate limit exceeded",
+			Error::StartSession(_) => "failed to create session",
+			Error::Stdio(_) => "failed to start stdio server",
+			Error::SendError(_, _) => "failed to send message",
+			Error::EstablishGetStream(_) => "failed to establish stream",
+			Error::ForwardLegacySse(_) => "failed to forward message",
+			Error::CreateSseUrl(_) => "failed to create sse url",
+			Error::OpenAPI(_) => "failed to parse openapi",
+			Error::UpstreamError(_) => "upstream error",
+			Error::NoBackends => "no backends available",
+		};
+		msg.into()
+	}
+
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		match self {
 			Error::RateLimited {
@@ -248,18 +292,23 @@ impl Error {
 			_ => {},
 		}
 		let (id, error) = match self {
+			// Policy rejections are explicit client responses; retain their message and data.
 			Error::McpGuardrails {
 				request_id, rej, ..
 			} => (request_id.clone(), rej.clone()),
 			Error::RateLimited {
 				request_id: id,
 				status,
+				message,
 				..
 			} => (
 				id.clone(),
 				ErrorData {
 					code: RESOURCE_EXHAUSTED,
-					message: self.to_string().into(),
+					message: message
+						.clone()
+						.unwrap_or_else(|| self.external_message().into_owned())
+						.into(),
 					data: status.map(|s| {
 						serde_json::json!({
 							"limit": s.limit,
@@ -277,7 +326,7 @@ impl Error {
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
-					message: self.to_string().into(),
+					message: self.external_message(),
 					// This gate runs before backend selection, so it reports the gateway set.
 					// With single-server discover passthrough, SEP-2575's supported/discover
 					// correlation holds only when the upstream advertises a superset of this list.
@@ -306,7 +355,7 @@ impl Error {
 					id,
 					ErrorData {
 						code,
-						message: self.to_string().into(),
+						message: self.external_message(),
 						data: None,
 					},
 				)

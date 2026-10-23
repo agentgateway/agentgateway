@@ -711,16 +711,12 @@
             }
           ]
         },
-        "cacheWrite1h": {
-          "description": "Cost per 1M tokens written to cache with a 1h TTL (Anthropic). Falls back to cacheWrite if unset.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Money"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "cacheWriteDetails": {
+          "description": "Cost per 1M tokens written to cache, keyed by non-default TTL (`1h`, `12h`). TTLs not set fall back to cacheWrite.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Money"
+          }
         },
         "reasoning": {
           "description": "Cost per 1M reasoning tokens. Falls back to the output rate if unset.",
@@ -6382,7 +6378,7 @@
           "default": "requests"
         },
         "key": {
-          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. The key\nis evaluated where the rule is checked, so a token limit can also read the parsed LLM\nrequest. Buckets are local to one proxy instance, which keeps a bounded number of them per\nrule and drops the least used ones.",
+          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets\nare local to one proxy instance, which keeps a bounded number of them per rule and drops the\nleast used ones.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -6438,7 +6434,7 @@
           "default": "requests"
         },
         "key": {
-          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. The key\nis evaluated where the rule is checked, so a token limit can also read the parsed LLM\nrequest. Buckets are local to one proxy instance, which keeps a bounded number of them per\nrule and drops the least used ones.",
+          "description": "CEL expression selecting the bucket, for example `jwt.sub` for a per-user limit or\n`jwt.team` for a per-team limit. Each distinct value gets its own bucket with the limits\nabove. Requests without a key, or whose key cannot be evaluated, share one bucket. Buckets\nare local to one proxy instance, which keeps a bounded number of them per rule and drops the\nleast used ones.",
           "anyOf": [
             {
               "$ref": "#/$defs/Expression"
@@ -7213,7 +7209,7 @@
               "description": "Optional metadata attached to requests authenticated with this key."
             },
             "allowedModels": {
-              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.\nOnly the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.",
               "type": [
                 "array",
                 "null"
@@ -7247,7 +7243,7 @@
               "description": "Optional metadata attached to requests authenticated with this key."
             },
             "allowedModels": {
-              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.\nOnly the request's top-level model is checked; models used by provider server-side tools (such as the Anthropic advisor tool) are not.",
               "type": [
                 "array",
                 "null"

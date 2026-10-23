@@ -696,6 +696,15 @@ pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_write_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_write_tokens_details: Option<CacheWriteTokensDetails>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct CacheWriteTokensDetails {
+	pub ttl_12h_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -1198,6 +1207,12 @@ impl ResponseType for Response {
 
 		LLMResponse {
 			cache_creation_1h_input_tokens: None,
+			cache_creation_12h_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens_details.as_ref())
+					.and_then(|d| d.ttl_12h_tokens)
+			}),
 			usage_lines: Vec::new(),
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
@@ -1378,8 +1393,9 @@ pub mod typed {
 		ResponseFunctionCallArgumentsDoneEvent, ResponseInProgressEvent, ResponseIncompleteEvent,
 		ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent, ResponseReasoningTextDeltaEvent,
 		ResponseReasoningTextDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role,
+		ServiceTierResponses, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
+		ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 

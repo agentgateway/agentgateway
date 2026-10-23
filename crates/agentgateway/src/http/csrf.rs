@@ -54,9 +54,18 @@ impl Csrf {
 			return Ok(Default::default());
 		};
 
-		// 5. Check if Origin matches Host header
-		let target_origin = get_target_origin(req)?;
-		if origin == target_origin {
+		// 5. Check if Origin host matches Host header. The scheme is ignored, since a TLS-terminating
+		// proxy in front of us means we cannot know it. Old browsers lacking Sec-Fetch-Site can rely on HSTS.
+		let target_host = req.uri().authority().ok_or_else(|| {
+			filters::Error::InvalidFilterConfiguration("missing authority in URI".to_string())
+		})?;
+		let origin_uri = origin.parse::<::http::Uri>().ok();
+		if origin_uri
+			.as_ref()
+			.filter(|u| u.scheme().is_some())
+			.and_then(|u| u.authority())
+			== Some(target_host)
+		{
 			return Ok(Default::default());
 		}
 
@@ -67,8 +76,8 @@ impl Csrf {
 
 		// Log detailed reason internally for debugging
 		warn!(
-			"CSRF validation failed: Origin '{}' does not match target origin '{}'",
-			origin, target_origin
+			"CSRF validation failed: Origin '{}' does not match target host '{}'",
+			origin, target_host
 		);
 		// Request failed all checks - reject
 		self.create_forbidden_response()
@@ -118,12 +127,6 @@ fn get_origin_header(req: &Request) -> Result<Option<String>, filters::Error> {
 		let origin_str = origin_value.to_str().map_err(|_| {
 			filters::Error::InvalidFilterConfiguration("malformed origin header".to_string())
 		})?;
-
-		// Handle "null" origin as no origin
-		if origin_str == "null" {
-			return Ok(None);
-		}
-
 		return Ok(Some(origin_str.to_string()));
 	}
 	Ok(None)
@@ -138,13 +141,4 @@ fn get_sec_fetch_site_header(req: &Request) -> Result<Option<String>, filters::E
 		return Ok(Some(sec_fetch_site_str.to_string()));
 	}
 	Ok(None)
-}
-
-/// Extract the target origin from the request
-fn get_target_origin(req: &Request) -> Result<String, filters::Error> {
-	let authority = req.uri().authority().ok_or_else(|| {
-		filters::Error::InvalidFilterConfiguration("missing authority in URI".to_string())
-	})?;
-	let scheme = req.uri().scheme_str().unwrap_or("http");
-	Ok(format!("{}://{}", scheme, authority))
 }

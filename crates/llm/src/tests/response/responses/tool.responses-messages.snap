@@ -28,6 +28,9 @@ info:
     input_tokens_details:
       cached_tokens: 4
       cache_write_tokens: 6
+      cache_write_tokens_details:
+        ttl_30m_tokens: 2
+        ttl_12h_tokens: 4
     output_tokens: 5
     output_tokens_details:
       reasoning_tokens: 0
@@ -69,6 +72,7 @@ info:
     "total_tokens": 35,
     "reasoning_tokens": 0,
     "cache_creation_input_tokens": 6,
+    "cache_creation_12h_input_tokens": 4,
     "cached_input_tokens": 4,
     "service_tier": "default",
     "provider_model": "gpt-4.1-mini",

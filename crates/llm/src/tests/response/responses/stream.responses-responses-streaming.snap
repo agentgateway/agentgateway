@@ -33,7 +33,7 @@ event: response.output_item.done
 data: {"type":"response.output_item.done","sequence_number":10,"output_index":1,"item":{"type":"function_call","arguments":"{\"location\":\"San Francisco\"}","call_id":"call_xxx","name":"get_weather","id":"","status":"completed"}}
 
 event: response.completed
-data: {"type":"response.completed","sequence_number":11,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
+data: {"type":"response.completed","sequence_number":11,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":6,"cache_write_tokens_details":{"ttl_30m_tokens":4,"ttl_12h_tokens":2}},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
 
 data: [DONE]
 
@@ -44,6 +44,8 @@ data: [DONE]
   "output_tokens": 8,
   "total_tokens": 20,
   "reasoning_tokens": 0,
+  "cache_creation_input_tokens": 6,
+  "cache_creation_12h_input_tokens": 2,
   "cached_input_tokens": 0,
   "provider_model": "gpt-4.1-mini",
   "completion": [

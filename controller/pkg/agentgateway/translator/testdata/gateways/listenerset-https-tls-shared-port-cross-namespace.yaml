@@ -98,22 +98,6 @@ output:
           name: passthrough
           namespace: team1
       protocol: TLS
-- gateway:
-    Name: example
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 443/default/example
-      hostname: foo.example.com
-      key: team1/passthrough.tls-same-host
-      name:
-        gatewayName: example
-        gatewayNamespace: default
-        listenerName: tls-same-host
-        listenerSet:
-          name: passthrough
-          namespace: team1
-      protocol: TLS
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: ListenerSet

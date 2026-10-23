@@ -17,9 +17,9 @@ pub async fn handshake(
 	} else {
 		match target {
 			Target::Address(addr) => ServerName::IpAddress(addr.ip().into()),
-			Target::Hostname(host, _) => ServerName::DnsName(
-				DnsName::try_from(host.to_string()).expect("TODO: hostname conversion failed"),
-			),
+			Target::Hostname(host, _) => {
+				ServerName::DnsName(DnsName::try_from(host.to_string()).map_err(crate::http::Error::new)?)
+			},
 			Target::UnixSocket(_) => {
 				// Use a dummy IP address here; there is no "ServerName" for UDS.
 				ServerName::IpAddress(std::net::Ipv4Addr::new(0, 0, 0, 0).into())

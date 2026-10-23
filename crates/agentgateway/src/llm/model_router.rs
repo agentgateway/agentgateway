@@ -1470,10 +1470,25 @@ mod tests {
 		assert_eq!(resp.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 	}
 
-	#[test]
-	fn trace_templates_preserve_prefix_and_operation() {
-		let router = ModelRouter::new(vec![], vec![]).with_path_prefix("/foo".to_string());
+	#[rstest::rstest]
+	#[case("", "")]
+	#[case("/foo", "/foo")]
+	#[case("/foo", "")]
+	fn trace_templates_preserve_prefix_and_operation(
+		#[case] public_prefix: &str,
+		#[case] serving_prefix: &str,
+	) {
+		let router = ModelRouter::new(vec![], vec![]).with_path_prefix(serving_prefix.to_string());
 		for (path, template) in [
+			("/v1/models", "/v1/models"),
+			("/v1/messages", "/v1/messages"),
+			("/other/v1/messages", "/*"),
+			("/custom", "/*"),
+			(
+				"/v1beta/models/missing:generateContent",
+				"/v1beta/models/{model}:generateContent",
+			),
+			("/model/missing/converse", "/model/{model}/converse"),
 			(
 				"/v1alpha/models/gemini:streamGenerateContent",
 				"/v1alpha/models/{model}:streamGenerateContent",
@@ -1487,13 +1502,20 @@ mod tests {
 				"/model/{model}/invoke-with-response-stream",
 			),
 		] {
-			let req = ::http::Request::builder()
-				.uri(format!("/foo{path}?trace=1"))
+			let mut req = ::http::Request::builder()
+				.uri(format!("{serving_prefix}{path}?trace=1"))
 				.body(http::Body::empty())
 				.unwrap();
+			if public_prefix != serving_prefix {
+				req
+					.extensions_mut()
+					.insert(crate::http::filters::OriginalUrl(
+						format!("{public_prefix}{path}?trace=1").parse().unwrap(),
+					));
+			}
 			assert_eq!(
 				router.trace_path(&req).as_deref(),
-				Some(format!("/foo{template}").as_str())
+				Some(format!("{public_prefix}{template}").as_str())
 			);
 		}
 	}

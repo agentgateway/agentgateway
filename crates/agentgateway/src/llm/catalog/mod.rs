@@ -643,9 +643,9 @@ pub struct CostRates {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: Option<f64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[dynamic(rename = "cacheWrite1h")]
-	pub cache_write_1h: Option<f64>,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	#[dynamic(rename = "cacheWriteDetails")]
+	pub cache_write_details: CacheWriteRates,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning: Option<f64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -667,7 +667,10 @@ impl From<&Rates> for CostRates {
 			output: f(&r.output),
 			cache_read: f(&r.cache_read),
 			cache_write: f(&r.cache_write),
-			cache_write_1h: f(&r.cache_write_1h),
+			cache_write_details: CacheWriteRates {
+				ttl_1h: f(&r.cache_write_details.get("1h").cloned()),
+				ttl_12h: f(&r.cache_write_details.get("12h").cloned()),
+			},
 			reasoning: f(&r.reasoning),
 			input_audio: f(&r.input_audio),
 			output_audio: f(&r.output_audio),
@@ -676,25 +679,68 @@ impl From<&Rates> for CostRates {
 	}
 }
 
+#[apply(schema!)]
+#[derive(Copy, Default, PartialEq, ::cel::DynamicType)]
+pub struct CacheWriteRates {
+	#[serde(rename = "1h", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "1h")]
+	pub ttl_1h: Option<f64>,
+	#[serde(rename = "12h", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "12h")]
+	pub ttl_12h: Option<f64>,
+}
+
+#[apply(schema!)]
+#[derive(Copy, Default, PartialEq, ::cel::DynamicType)]
+pub struct CacheWriteCosts {
+	#[serde(
+		rename = "1h",
+		default,
+		skip_serializing_if = "crate::serdes::is_default"
+	)]
+	#[dynamic(rename = "1h")]
+	pub ttl_1h: f64,
+	#[serde(
+		rename = "12h",
+		default,
+		skip_serializing_if = "crate::serdes::is_default"
+	)]
+	#[dynamic(rename = "12h")]
+	pub ttl_12h: f64,
+}
+
 fn breakdown_f64(d: Decimal) -> f64 {
 	d.to_f64().unwrap_or_default()
 }
 
 impl Breakdown {
 	// (CEL field name, value) pairs. `total` is computed, the rest are stored.
-	fn components(&self) -> [(&'static str, Decimal); 10] {
+	fn components(&self) -> [(&'static str, Decimal); 9] {
 		[
 			("total", self.total()),
 			("input", self.input),
 			("output", self.output),
 			("cacheRead", self.cache_read),
 			("cacheWrite", self.cache_write),
-			("cacheWrite1h", self.cache_write_1h),
 			("reasoning", self.reasoning),
 			("inputAudio", self.input_audio),
 			("outputAudio", self.output_audio),
 			("pages", self.pages),
 		]
+	}
+
+	fn cache_write_details_value(&self) -> ::cel::Value<'static> {
+		let mut map = vector_map::VecMap::with_capacity(2);
+		for (name, value) in [("1h", self.cache_write_1h), ("12h", self.cache_write_12h)] {
+			if value.is_zero() {
+				continue;
+			}
+			map.insert(
+				::cel::objects::KeyRef::from(name),
+				::cel::Value::from(breakdown_f64(value)),
+			);
+		}
+		::cel::Value::Map(::cel::objects::MapValue::Borrow(map))
 	}
 }
 
@@ -708,8 +754,9 @@ pub struct CostBreakdown {
 	pub cache_read: f64,
 	#[dynamic(rename = "cacheWrite")]
 	pub cache_write: f64,
-	#[dynamic(rename = "cacheWrite1h")]
-	pub cache_write_1h: f64,
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	#[dynamic(rename = "cacheWriteDetails")]
+	pub cache_write_details: CacheWriteCosts,
 	pub reasoning: f64,
 	#[dynamic(rename = "inputAudio")]
 	pub input_audio: f64,
@@ -726,7 +773,10 @@ impl From<&Breakdown> for CostBreakdown {
 			output: breakdown_f64(b.output),
 			cache_read: breakdown_f64(b.cache_read),
 			cache_write: breakdown_f64(b.cache_write),
-			cache_write_1h: breakdown_f64(b.cache_write_1h),
+			cache_write_details: CacheWriteCosts {
+				ttl_1h: breakdown_f64(b.cache_write_1h),
+				ttl_12h: breakdown_f64(b.cache_write_12h),
+			},
 			reasoning: breakdown_f64(b.reasoning),
 			input_audio: breakdown_f64(b.input_audio),
 			output_audio: breakdown_f64(b.output_audio),
@@ -743,7 +793,8 @@ impl From<CostBreakdown> for Breakdown {
 			output: d(b.output),
 			cache_read: d(b.cache_read),
 			cache_write: d(b.cache_write),
-			cache_write_1h: d(b.cache_write_1h),
+			cache_write_1h: d(b.cache_write_details.ttl_1h),
+			cache_write_12h: d(b.cache_write_details.ttl_12h),
 			reasoning: d(b.reasoning),
 			input_audio: d(b.input_audio),
 			output_audio: d(b.output_audio),
@@ -754,18 +805,25 @@ impl From<CostBreakdown> for Breakdown {
 
 impl ::cel::types::dynamic::DynamicType for Breakdown {
 	fn materialize(&self) -> ::cel::Value<'_> {
-		let mut map = vector_map::VecMap::with_capacity(9);
+		let mut map = vector_map::VecMap::with_capacity(10);
 		for (name, value) in self.components() {
 			map.insert(
 				::cel::objects::KeyRef::from(name),
 				::cel::Value::from(breakdown_f64(value)),
 			);
 		}
+		map.insert(
+			::cel::objects::KeyRef::from("cacheWriteDetails"),
+			self.cache_write_details_value(),
+		);
 		::cel::Value::Map(::cel::objects::MapValue::Borrow(map))
 	}
 
 	// Lazy: a field is only converted to f64 when a CEL expression reads it.
 	fn field(&self, field: &str) -> Option<::cel::Value<'_>> {
+		if field == "cacheWriteDetails" {
+			return Some(self.cache_write_details_value());
+		}
 		self
 			.components()
 			.into_iter()
@@ -951,18 +1009,24 @@ fn usage_for(
 		.unwrap_or(0)
 		.saturating_sub(reasoning)
 		.saturating_sub(output_audio);
-	// 1h writes are a subset of cache_write; zero when writes are unpriced and folded into input.
+	// Extended-TTL writes are a subset of cache_write; zero when writes are unpriced and folded into input.
 	let cache_write_1h = resp
 		.cache_creation_1h_input_tokens
 		.unwrap_or(0)
 		.min(cache_write);
 	let cache_write = cache_write - cache_write_1h;
+	let cache_write_12h = resp
+		.cache_creation_12h_input_tokens
+		.unwrap_or(0)
+		.min(cache_write);
+	let cache_write = cache_write - cache_write_12h;
 
 	Usage {
 		input,
 		cache_read,
 		cache_write,
 		cache_write_1h,
+		cache_write_12h,
 		output,
 		reasoning,
 		input_audio,
@@ -1180,7 +1244,7 @@ mod tests {
 	#[test]
 	fn openai_prices_cache_writes_once() {
 		let snap = CatalogSnapshot::parse(
-			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","output":"0","cacheRead":"0.1","cacheWrite":"1.25"}}}}}}"#,
+			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","output":"0","cacheRead":"0.1","cacheWrite":"1.25","cacheWriteDetails":{"12h":"2.5"}}}}}}}"#,
 		)
 		.unwrap();
 		let completions = bytes::Bytes::from_static(include_bytes!(
@@ -1189,20 +1253,29 @@ mod tests {
 		let responses = bytes::Bytes::from_static(include_bytes!(
 			"../../../../llm/src/tests/response/responses/tool.json"
 		));
-		for (translated, expected_input, expected_read, expected_write, expected_total) in [
+		for (
+			translated,
+			expected_input,
+			expected_read,
+			expected_write,
+			expected_write_12h,
+			expected_total,
+		) in [
 			(
 				agent_llm::conversion::completions::from_messages::translate_response(&completions),
 				0.0005,
 				0.00003,
 				0.00025,
+				0.0,
 				0.00078,
 			),
 			(
 				agent_llm::conversion::responses::from_messages::translate_response(&responses),
 				0.00002,
 				0.0000004,
-				0.0000075,
-				0.0000279,
+				0.0000025,
+				0.00001,
+				0.0000329,
 			),
 		] {
 			let resp = translated
@@ -1218,6 +1291,7 @@ mod tests {
 			assert_eq!(cost.input.to_f64(), Some(expected_input));
 			assert_eq!(cost.cache_read.to_f64(), Some(expected_read));
 			assert_eq!(cost.cache_write.to_f64(), Some(expected_write));
+			assert_eq!(cost.cache_write_12h.to_f64(), Some(expected_write_12h));
 			assert_eq!(cost.total().to_f64(), Some(expected_total));
 		}
 	}
@@ -1252,19 +1326,21 @@ mod tests {
 
 	#[test]
 	fn anthropic_prices_1h_cache_writes_at_1h_rate() {
+		use agent_llm::conversion::{bedrock as br, messages};
 		use agent_llm::types::ResponseType;
+		use agent_llm::types::messages::Response;
+		use agent_llm::types::messages::typed::MessagesResponse;
+
 		let snap = CatalogSnapshot::parse(
-			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWrite1h":"10"}}}}}}"#,
+			r#"{"providers":{"anthropic":{"models":{"claude-opus-5":{"rates":{"input":"5","output":"25","cacheRead":"0.5","cacheWrite":"6.25","cacheWriteDetails":{"1h":"10"}}}}}}}"#,
 		)
 		.unwrap();
 		let body = r#"{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","stop_reason":"end_turn","stop_sequence":null,"content":[],"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":1000000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":400000,"ephemeral_1h_input_tokens":600000}}}"#;
 		let bedrock = br#"{"output":{"message":{"role":"assistant","content":[{"text":"hi"}]}},"stopReason":"end_turn","metrics":{"latencyMs":1},"usage":{"inputTokens":100,"outputTokens":0,"totalTokens":1000100,"cacheReadInputTokens":0,"cacheWriteInputTokens":1000000,"cacheDetails":[{"inputTokens":400000,"ttl":"5m"},{"inputTokens":600000,"ttl":"1h"}]}}"#;
-		let passthrough: agent_llm::types::messages::Response = serde_json::from_str(body).unwrap();
-		let typed: agent_llm::types::messages::typed::MessagesResponse =
-			serde_json::from_str(body).unwrap();
+		let passthrough: Response = serde_json::from_str(body).unwrap();
+		let typed: MessagesResponse = serde_json::from_str(body).unwrap();
 		let body = bytes::Bytes::from_static(body.as_bytes());
 		let bedrock = bytes::Bytes::from_static(bedrock);
-		use agent_llm::conversion::{bedrock as br, messages};
 		for resp in [
 			Box::new(passthrough) as Box<dyn ResponseType>,
 			Box::new(typed),
