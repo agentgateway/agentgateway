@@ -845,6 +845,16 @@ pub struct LocalLLMModels {
 	/// Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	final_transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// modelAliases rewrites the requested model name before the request is sent to the provider.
+	/// A key matches exactly, or as a pattern where it contains `*`, the longest pattern winning.
+	/// Applied after `params.model` and `transformation`, so an alias sees the name those leave
+	/// behind.
+	#[serde(
+		default,
+		rename = "modelAliases",
+		skip_serializing_if = "HashMap::is_empty"
+	)]
+	model_aliases: HashMap<Strng, Strng>,
 	/// requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.
 	/// Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4761,18 +4771,20 @@ async fn convert_llm_config(
 		}
 		let prompt_guard =
 			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone())?;
-		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
+		let mut ai = llm::Policy {
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
 			transformations: model_config.transformation.clone(),
 			final_transformations: model_config.final_transformation.clone(),
 			prompt_guard,
 			prompts: None,
-			model_aliases: Default::default(),
+			model_aliases: model_config.model_aliases.clone(),
 			wildcard_patterns: Arc::new(vec![]),
 			prompt_caching: model_config.prompt_caching.clone(),
 			routes: Default::default(),
-		})));
+		};
+		ai.compile_model_alias_patterns();
+		pols.push(BackendTrafficPolicy::AI(Arc::new(ai)));
 		let resolved_inline_policies = pols.clone();
 		let backend_with_policies = BackendWithPolicies {
 			backend: Backend::AI(local_name(backend_key.clone()), ai_backend),
