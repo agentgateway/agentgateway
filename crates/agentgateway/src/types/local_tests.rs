@@ -689,6 +689,54 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_model_aliases_normalize() {
+	let normalized = normalize_test_yaml(
+		r#"
+llm:
+  models:
+  - name: 'bedrock/claude-*'
+    provider: bedrock
+    params:
+      awsRegion: us-west-2
+    modelAliases:
+      claude-haiku-4-5: global.anthropic.claude-haiku-4-5-20251001-v1:0
+      'claude-opus-*': global.anthropic.claude-opus-4-8
+"#,
+	)
+	.await
+	.expect("model aliases should normalize");
+
+	let backend = normalized
+		.backends
+		.iter()
+		.find(|backend| matches!(backend.backend, Backend::AI(_, _)))
+		.expect("expected generated AI backend");
+	let policy = backend
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			BackendTrafficPolicy::AI(ai) => Some(ai.clone()),
+			_ => None,
+		})
+		.expect("expected an AI policy on the generated backend");
+
+	assert_eq!(
+		policy
+			.resolve_model_alias("claude-haiku-4-5")
+			.map(|model| model.as_str()),
+		Some("global.anthropic.claude-haiku-4-5-20251001-v1:0")
+	);
+	// A wildcard key only resolves once the patterns have been compiled.
+	assert_eq!(
+		policy
+			.resolve_model_alias("claude-opus-5")
+			.map(|model| model.as_str()),
+		Some("global.anthropic.claude-opus-4-8")
+	);
+	assert_eq!(policy.resolve_model_alias("gpt-5"), None);
+}
+
+#[tokio::test]
 async fn test_llm_provider_reference_config() {
 	test_config_parsing("llm_provider_reference").await;
 }

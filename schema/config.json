@@ -12900,6 +12900,13 @@
             "$ref": "#/$defs/Expression"
           }
         },
+        "modelAliases": {
+          "description": "modelAliases rewrites the requested model name before the request is sent to the provider.\nA key matches exactly, or as a pattern where it contains `*`, the longest pattern winning.\nApplied after `params.model` and `transformation`, so an alias sees the name those leave\nbehind.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
         "requestTransformation": {
           "description": "requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.\nUnlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.",
           "anyOf": [

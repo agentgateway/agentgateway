@@ -5817,6 +5817,7 @@
 |`llm.models[].overrides.*`|any||
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>This operates on fields of the LLM request payload; to modify the HTTP request (headers, metadata, etc), use `requestTransformation`.|
 |`llm.models[].finalTransformation`|object|final_transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.|
+|`llm.models[].modelAliases`|object|modelAliases rewrites the requested model name before the request is sent to the provider.<br>A key matches exactly, or as a pattern where it contains `*`, the longest pattern winning.<br>Applied after `params.model` and `transformation`, so an alias sees the name those leave<br>behind.|
 |`llm.models[].requestTransformation`|object|requestTransformation modifies the HTTP request to the LLM provider (headers, metadata, etc) using CEL expressions.<br>Unlike `transformation`, which sets fields in the LLM request payload, this operates on the HTTP request itself.|
 |`llm.models[].requestTransformation.add`|object|Headers to append using CEL expressions for values.|
 |`llm.models[].requestTransformation.set`|object|Headers to set using CEL expressions for values.|
