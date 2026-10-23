@@ -31,7 +31,8 @@ use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
-	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+	ConnectAuthority, ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo,
+	TLSConnectionInfo,
 };
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
@@ -743,12 +744,12 @@ impl Gateway {
 					crate::http::mark_sensitive_headers(&mut req, &inputs.cfg.sensitive_headers);
 					let connect_headers = req.headers().clone();
 					let authority = match req.uri().authority() {
-						Some(authority) => authority.as_str(),
+						Some(authority) => authority.clone(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
 					};
 					let (target_address, bind) = {
 						let binds = inputs.stores.read_binds();
-						if let Ok(addr) = authority.parse::<SocketAddr>() {
+						if let Ok(addr) = authority.as_str().parse::<SocketAddr>() {
 							// CONNECT re-entry must not expose a bind scoped to a concrete address
 							// (for example, a loopback-only listener). Match only an unspecified-address
 							// bind for this port; otherwise fall back to the explicit internal wildcard
@@ -828,6 +829,7 @@ impl Gateway {
 							downstream.ext_mut().insert(policy);
 						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
+						downstream.ext_mut().insert(ConnectAuthority(authority));
 						if let Some(buffer) = buffer {
 							downstream.ext_mut().insert(BufferLimit::new(buffer));
 						}

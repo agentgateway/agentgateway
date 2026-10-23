@@ -746,6 +746,7 @@ impl HTTPProxy {
 			req.extensions_mut().insert(protocol);
 		}
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
+		connection.copy::<crate::transport::stream::ConnectAuthority>(req.extensions_mut());
 		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
 		req

@@ -574,6 +574,10 @@ pub enum Extension {
 #[derive(Clone, Debug, Default)]
 pub struct ConnectHeaders(pub http::HeaderMap);
 
+/// Original CONNECT request target, independent of HTTP version and Host headers.
+#[derive(Clone, Debug)]
+pub struct ConnectAuthority(pub http::uri::Authority);
+
 impl Default for Extension {
 	fn default() -> Self {
 		Self::new()
