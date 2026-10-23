@@ -446,10 +446,11 @@ pub fn parse_config(
 		parse_port_list("HBONE_PASSTHROUGH_PORTS")?
 			.or(raw.hbone.as_ref().and_then(|h| h.passthrough_ports.clone()))
 			.unwrap_or_default(),
-		ENV
-			.instance_ip
-			.as_deref()
-			.and_then(|ip| ip.parse::<IpAddr>().ok()),
+		parse::<String>("INSTANCE_IPS")?
+			.or(ENV.instance_ip.clone())
+			.unwrap_or_default()
+			.split(',')
+			.filter_map(|ip| ip.trim().parse::<IpAddr>().ok()),
 	);
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -2019,6 +2020,29 @@ config:
 			config
 				.hbone_passthrough
 				.allows("127.0.0.1:15000".parse().unwrap())
+		);
+	}
+
+	#[test]
+	fn hbone_passthrough_accepts_every_instance_ip() {
+		let _env = lock_env();
+		let _ports = TempEnvVar::set("HBONE_PASSTHROUGH_PORTS", "15020");
+		let _ips = TempEnvVar::set("INSTANCE_IPS", "10.0.0.5,fd00::5");
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(
+			config
+				.hbone_passthrough
+				.allows("10.0.0.5:15020".parse().unwrap())
+		);
+		assert!(
+			config
+				.hbone_passthrough
+				.allows("[fd00::5]:15020".parse().unwrap())
+		);
+		assert!(
+			!config
+				.hbone_passthrough
+				.allows("10.0.0.6:15020".parse().unwrap())
 		);
 	}
 

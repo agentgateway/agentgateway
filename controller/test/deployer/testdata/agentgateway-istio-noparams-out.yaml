@@ -146,6 +146,10 @@ spec:
           value: network-1
         - name: HBONE_PASSTHROUGH_PORTS
           value: "15020"
+        - name: INSTANCE_IPS
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIPs
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:

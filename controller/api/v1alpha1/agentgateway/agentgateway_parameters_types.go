@@ -271,6 +271,8 @@ type IstioSpec struct {
 	// 15020. Set to an empty list to disable.
 	//
 	// +optional
+	// +kubebuilder:validation:items:Minimum=1
+	// +kubebuilder:validation:items:Maximum=65535
 	PassthroughPorts *[]int32 `json:"passthroughPorts,omitempty"`
 }
 

@@ -534,6 +534,8 @@ spec:
                       15020. Set to an empty list to disable.
                     items:
                       format: int32
+                      maximum: 65535
+                      minimum: 1
                       type: integer
                     type: array
                   trustDomain:
