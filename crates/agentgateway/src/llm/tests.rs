@@ -2054,16 +2054,6 @@ async fn native_bedrock_resolves_model_before_forwarding() {
 					.header(::http::header::CONTENT_TYPE, "application/json")
 					.body(Body::from(body.to_string()))
 					.unwrap();
-				if mode == "override" {
-					let compressed =
-						crate::http::compression::encode_body(body.to_string().as_bytes(), "gzip")
-							.await
-							.unwrap();
-					req.replace_body_bytes(compressed);
-					req
-						.headers_mut()
-						.insert(header::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-				}
 				if transform {
 					req
 						.body_mut()
@@ -2080,7 +2070,6 @@ async fn native_bedrock_resolves_model_before_forwarding() {
 				else {
 					panic!("expected forwarded request")
 				};
-				assert!(!request.headers().contains_key(header::CONTENT_ENCODING));
 				assert_eq!(llm_request.request_model, target);
 				assert_eq!(llm_request.streaming, operation.ends_with("stream"));
 				provider

@@ -2199,27 +2199,9 @@ impl AIProvider {
 			&& types::detect::extract_model_from_path(hreq.uri().path()).is_some();
 		let (mut parts, mut managed_body) = hreq.into_parts();
 		let cached = managed_body.remove_extension::<json::ParsedJson>();
-		let ce = (native_bedrock && is_json)
-			.then(|| parts.headers.typed_get::<ContentEncoding>())
-			.flatten();
-		let (encoding, bytes) = match http::compression::to_bytes_with_decompression(
-			managed_body.take_content(),
-			ce.as_ref(),
-			buffer,
-		)
-		.await
-		{
-			Ok(v) => v,
-			Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
-			Err(e) if native_bedrock && is_json => {
-				return Err(map_request_compression_error(e, &parts.headers));
-			},
-			Err(_) => return Err(AIError::RequestTooLarge),
+		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
+			return Err(AIError::RequestTooLarge);
 		};
-		if encoding.is_some() {
-			parts.headers.remove(header::CONTENT_ENCODING);
-			parts.headers.remove(header::TRANSFER_ENCODING);
-		}
 
 		let mut req = if is_json {
 			let body = match cached {
