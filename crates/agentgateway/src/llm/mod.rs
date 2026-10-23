@@ -2703,11 +2703,43 @@ impl AIProvider {
 			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(
+			let mut resp = match self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
 				model_catalog.map(|c| c.as_handle()),
-			)?;
+			) {
+				Ok(resp) => resp,
+				Err(err) => {
+					// A failed reply can still use tokens. Preserve its usage for logging and limits.
+					if matches!(err, AIError::IncompleteResponse)
+						&& self
+							.chat_translation(
+								req.input_format,
+								&req.request_model,
+								model_catalog.map(|c| c.as_handle()),
+							)
+							.is_ok_and(|t| t.output == ChatFormat::OpenAICompletions)
+						&& let Ok(upstream) = serde_json::from_slice::<types::completions::Response>(&bytes)
+					{
+						let resp = Self::finalize_response(
+							parts,
+							bytes,
+							managed_body,
+							req,
+							upstream.to_llm_response(log_content),
+							model_catalog,
+							&log,
+						);
+						if (!rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some())
+							&& let Some(llm_info) = log.load_clone()
+						{
+							let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+							amend_tokens(rate_limit, &llm_info, exec);
+						}
+					}
+					return Err(err);
+				},
+			};
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 

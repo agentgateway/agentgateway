@@ -928,6 +928,7 @@ impl ResponseType for Response {
 			cached_input_tokens: usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
 			usage_lines: usage_lines(&self.usage.iterations),
+			stream_error: None,
 			completion: if log_content.completion {
 				Some(
 					self
@@ -1804,6 +1805,7 @@ pub mod typed {
 				cached_input_tokens: usage.cache_read_input_tokens,
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				usage_lines: super::usage_lines(&self.usage.iterations),
+				stream_error: None,
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
 				completion: if log_content.completion {
