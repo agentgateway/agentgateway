@@ -31,6 +31,13 @@ info:
           text: "6"
     - role: user
       content: Continue.
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Nothing to add.
+          signature: ""
+    - role: user
+      content: Are you there?
 ---
 {
   "request": {
@@ -76,13 +83,6 @@ info:
         "role": "assistant",
         "content": [
           {
-            "reasoningContent": {
-              "reasoningText": {
-                "text": "Three plus three is six."
-              }
-            }
-          },
-          {
             "text": "6"
           }
         ]
@@ -92,6 +92,9 @@ info:
         "content": [
           {
             "text": "Continue."
+          },
+          {
+            "text": "Are you there?"
           }
         ]
       }
@@ -129,6 +132,14 @@ info:
       {
         "role": "user",
         "content": "Continue."
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": "Are you there?"
       }
     ]
   }
