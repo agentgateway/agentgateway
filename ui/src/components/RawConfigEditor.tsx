@@ -174,10 +174,3 @@ function findYamlPathPosition(model: Monaco.editor.ITextModel, path: string[]) {
 function escapeRegExp(value: string) {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-
-declare global {
-	interface Window {
-		__rawConfigEditor?: Monaco.editor.IStandaloneCodeEditor;
-		__rawConfigMonaco?: typeof Monaco;
-	}
-}

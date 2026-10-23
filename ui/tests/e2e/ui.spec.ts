@@ -10,7 +10,7 @@ import {
 	xdsDump,
 	xdsDumpModels,
 	xdsWildcardModel
-} from './fixtures';
+} from '../fixtures';
 
 const pages = [
 	['/', 'Gateway Overview'],
