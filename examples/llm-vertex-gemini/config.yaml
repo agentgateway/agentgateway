@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Vertex AI native Gemini (generateContent / streamGenerateContent)
+#
+# Prerequisites:
+#   export VERTEX_PROJECT=<your-gcp-project-id>
+#   gcloud auth application-default login
+#
+# The gateway listens on port 4000 and forwards /v1/chat/completions requests
+# to the Vertex AI native Gemini endpoint, matching the model from the request.
+#
+# Non-streaming:
+#   curl http://localhost:4000/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"gemini-2.5-flash","messages":[
+#           {"role":"user","content":"hello"},
+#           {"role":"assistant","content":"hi"},
+#           {"role":"user","content":"what did i say first?"}]}'
+#
+# Streaming:
+#   curl http://localhost:4000/v1/chat/completions \
+#     -H "Content-Type: application/json" \
+#     -d '{"model":"gemini-2.5-flash","stream":true,"messages":[
+#           {"role":"user","content":"hello"},
+#           {"role":"assistant","content":"hi"},
+#           {"role":"user","content":"what did i say first?"}]}'
+
+llm:
+  port: 4000
+  models:
+  - name: 'gemini-*'
+    provider: vertex
+    params:
+      vertexProject: $VERTEX_PROJECT
+      vertexRegion: global
