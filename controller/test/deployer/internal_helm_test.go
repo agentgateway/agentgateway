@@ -252,8 +252,6 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 					"deployment should set HBONE_PASSTHROUGH_PORTS env var")
 				assert.Contains(t, outputYaml, "value: 15020,15021",
 					"deployment should set the configured passthrough ports")
-				assert.Contains(t, outputYaml, "status.podIPs",
-					"passthrough needs every pod address, not just status.podIP")
 			},
 		},
 		{

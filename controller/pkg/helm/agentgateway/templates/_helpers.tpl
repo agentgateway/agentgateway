@@ -233,6 +233,12 @@ spec:
             fieldRef:
               fieldPath: status.podIP
         {{- end }}
+        {{- if not (hasKey $userEnvNames "INSTANCE_IPS") }}
+        - name: INSTANCE_IPS
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIPs
+        {{- end }}
         {{- if not (hasKey $userEnvNames "SERVICE_ACCOUNT") }}
         - name: SERVICE_ACCOUNT
           valueFrom:
@@ -262,12 +268,6 @@ spec:
         {{- if and (not (hasKey $userEnvNames "HBONE_PASSTHROUGH_PORTS")) (hasKey $gateway "istio") $gateway.istio.passthroughPorts }}
         - name: HBONE_PASSTHROUGH_PORTS
           value: {{ $gateway.istio.passthroughPorts | join "," | quote }}
-        {{- if not (hasKey $userEnvNames "INSTANCE_IPS") }}
-        - name: INSTANCE_IPS
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIPs
-        {{- end }}
         {{- end }}
       {{- /* User-specified env vars */}}
       {{- with $gateway.env }}
