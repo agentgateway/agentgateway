@@ -14844,7 +14844,8 @@
             }
           },
           "tags": [
-            "legacy_thinking"
+            "legacy_thinking",
+            "adaptive_thinking"
           ],
           "limits": {
             "context": 1000000,
@@ -15950,6 +15951,40 @@
               "high",
               "xhigh",
               "max"
+            ]
+          }
+        },
+        "inclusionai/ling-3.1-flash:free": {
+          "name": "Ling 3.1 Flash",
+          "status": "deprecated",
+          "released": "2026-09-29",
+          "rates": {
+            "input": "0",
+            "output": "0",
+            "cacheRead": "0"
+          },
+          "limits": {
+            "context": 262144,
+            "output": 32768
+          },
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolCall": true,
+            "temperature": true
+          },
+          "reasoning": {
+            "effort": [
+              "low",
+              "medium",
+              "high"
             ]
           }
         },
