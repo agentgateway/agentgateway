@@ -170,6 +170,14 @@ pub fn classify_route(path: &str) -> Option<llm::RouteType> {
 	None
 }
 
+fn default_passthrough(path: &str) -> llm::RouteType {
+	if path.starts_with("/model/") && llm::types::detect::extract_model_from_path(path).is_some() {
+		llm::RouteType::Detect
+	} else {
+		llm::RouteType::Passthrough
+	}
+}
+
 #[apply(schema_ser_schema!)]
 pub struct VirtualModelRoute {
 	pub name: String,
@@ -508,7 +516,8 @@ impl ModelRouter {
 			VirtualModelRouting::Failover { backend } => {
 				return ResolveResult::Backend(ResolvedBackend {
 					backend: backend.clone(),
-					route_type: classify_route(req.uri().path()).unwrap_or(llm::RouteType::Passthrough),
+					route_type: classify_route(req.uri().path())
+						.unwrap_or_else(|| default_passthrough(req.uri().path())),
 					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
@@ -642,7 +651,7 @@ impl ModelRouter {
 				model
 					.policies
 					.passthrough
-					.unwrap_or(llm::RouteType::Passthrough),
+					.unwrap_or_else(|| default_passthrough(req.uri().path())),
 			),
 			llm_policy: model.policies.llm.clone(),
 		}))
@@ -985,7 +994,7 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 	Ok(())
 }
 
-fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
+pub(crate) fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		return rewrite_publishers_path_model(path, target);
 	}

@@ -111,11 +111,16 @@ impl AgentGateway {
 			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination
+			let shutdown = app.shutdown.trigger();
+			let termination = app.wait_termination();
+			tokio::pin!(termination);
 			tokio::select! {
 				_ = shutdown_rx => {
 					info!("graceful shutdown requested");
+					shutdown.shutdown_now().await;
+					termination.await.unwrap();
 				}
-				_ = app.wait_termination() => {
+				_ = &mut termination => {
 					info!("app terminated");
 				}
 			}
