@@ -449,7 +449,7 @@ impl RemoteRateLimit {
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&resp);
 		}
-		trace!("check response: {:?}", resp);
+		trace!("check response: {}", rate_limit_response_summary(&resp));
 		if let Err(ref error) = resp {
 			let ignore = self.failure_mode == FailureMode::FailOpen;
 			warn!(
@@ -585,6 +585,28 @@ impl crate::store::RequestPolicyTrait for RemoteRateLimit {
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
 		RemoteRateLimit::expressions(self)
 	}
+}
+
+/// Summarizes a rate limit response for trace logging, keeping header names but not values.
+fn rate_limit_response_summary(
+	resp: &Result<tonic::Response<proto::RateLimitResponse>, tonic::Status>,
+) -> String {
+	let cr = match resp {
+		Ok(r) => r.get_ref(),
+		Err(e) => return format!("error: code={:?}, message={:?}", e.code(), e.message()),
+	};
+	format!(
+		"overall_code={:?}, statuses={:?}, response_headers_to_add={:?}, request_headers_to_add={:?}, raw_body_len={}",
+		cr.overall_code(),
+		cr.statuses,
+		header_names(&cr.response_headers_to_add),
+		header_names(&cr.request_headers_to_add),
+		cr.raw_body.len(),
+	)
+}
+
+fn header_names(headers: &[proto::HeaderValue]) -> Vec<&str> {
+	headers.iter().map(|h| h.key.as_str()).collect()
 }
 
 fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {

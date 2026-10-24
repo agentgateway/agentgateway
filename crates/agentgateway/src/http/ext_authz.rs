@@ -576,7 +576,7 @@ impl ExtAuthz {
 			span.record_grpc_result(&resp);
 		}
 
-		trace!("check response: {:?}", resp);
+		trace!("check response: {}", check_response_summary(&resp));
 		let cr = match resp {
 			Ok(response) => response,
 			Err(e) => {
@@ -1449,6 +1449,46 @@ fn process_headers(
 
 		envoy_proto_common::apply_header_option(&mut rr, header)
 	}
+}
+
+/// Summarizes a Check response for trace logging. The authorization server can return credentials
+/// in header values (for example, an Authorization header for the backend), so only names are logged.
+fn check_response_summary(
+	resp: &Result<tonic::Response<proto::CheckResponse>, tonic::Status>,
+) -> String {
+	let cr = match resp {
+		Ok(r) => r.get_ref(),
+		Err(e) => return format!("error: code={:?}, message={:?}", e.code(), e.message()),
+	};
+	let status = cr.status.as_ref().map(|s| s.code).unwrap_or(0);
+	match &cr.http_response {
+		Some(HttpResponse::OkResponse(ok)) => format!(
+			"status={status}, ok_response: headers={:?}, headers_to_remove={:?}, response_headers_to_add={:?}, query_parameters_to_set={:?}, query_parameters_to_remove={:?}",
+			header_names(&ok.headers),
+			ok.headers_to_remove,
+			header_names(&ok.response_headers_to_add),
+			ok.query_parameters_to_set
+				.iter()
+				.map(|q| q.key.as_str())
+				.collect::<Vec<_>>(),
+			ok.query_parameters_to_remove,
+		),
+		Some(HttpResponse::DeniedResponse(denied)) => format!(
+			"status={status}, denied_response: http_status={:?}, headers={:?}, body_len={}",
+			denied.status.as_ref().map(|s| s.code),
+			header_names(&denied.headers),
+			denied.body.len(),
+		),
+		None => format!("status={status}"),
+	}
+}
+
+fn header_names(headers: &[HeaderValueOption]) -> Vec<&str> {
+	headers
+		.iter()
+		.filter_map(|h| h.header.as_ref())
+		.map(|h| h.key.as_str())
+		.collect()
 }
 
 fn process_raw_headers(hm: &mut HeaderMap, headers: Vec<HeaderValueOption>) {
