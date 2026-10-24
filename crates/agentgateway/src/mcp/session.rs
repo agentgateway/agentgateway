@@ -406,14 +406,15 @@ impl Session {
 				Err(mcp::Error::UpstreamError(Box::new(http::SyncResponse::new(*resp))).into())
 			},
 			Err(UpstreamError::Proxy(p)) => Err(p),
-			// Preserve backend-auth error classification, and responses from backend policies (such
-			// as an ext_authz deny), through the MCP HTTP transport.
+			// Preserve backend-auth and unknown-session classification, and responses from backend
+			// policies (such as an ext_authz deny), through the MCP HTTP transport.
 			Err(UpstreamError::Http(ClientError::Proxy(
 				p @ (ProxyError::InvalidRequest
 				| ProxyError::BackendAuthenticationFailed(_)
 				| ProxyError::JwtAuthenticationFailure(_)
 				| ProxyError::McpAuthenticationFailure(_, _)
-				| ProxyError::DirectResponse { .. }),
+				| ProxyError::DirectResponse { .. }
+				| ProxyError::MCP(mcp::Error::UnknownSession)),
 			))) => Err(p),
 			Err(UpstreamError::Authorization {
 				resource_type,
