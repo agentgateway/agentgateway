@@ -68,6 +68,7 @@ pub enum ProviderPreset {
 	Meta,
 	Perplexity,
 	Typesafe,
+	Commandcode,
 }
 
 impl ProviderPreset {
@@ -89,6 +90,7 @@ impl ProviderPreset {
 			Self::Meta => "https://api.meta.ai/v1",
 			Self::Perplexity => "https://api.perplexity.ai/v1",
 			Self::Typesafe => "https://api.typesafe.ai/v1",
+			Self::Commandcode => "https://api.commandcode.ai/provider/v1",
 		}
 	}
 
@@ -194,6 +196,15 @@ impl ProviderPreset {
 			),
 			Self::Perplexity => ("perplexity", vec![format(Responses, None)]),
 			Self::Typesafe => ("typesafe", vec![format(SystemOne, None)]),
+			Self::Commandcode => (
+				"commandcode",
+				vec![
+					format(Completions, None),
+					format(Responses, None),
+					format(Messages, None),
+					format(SystemOne, None),
+				],
+			),
 		};
 		Provider {
 			model_override: model,
@@ -336,5 +347,29 @@ mod tests {
 				.provider(None)
 				.supports(ProviderFormat::Responses)
 		);
+		assert_eq!(
+			serde_json::to_string(&ProviderPreset::Commandcode).unwrap(),
+			"\"commandcode\""
+		);
+		assert_eq!(
+			ProviderPreset::Commandcode.base_url(),
+			"https://api.commandcode.ai/provider/v1"
+		);
+		let commandcode = ProviderPreset::Commandcode.provider(None);
+		assert_eq!(
+			commandcode.provider_override.as_deref(),
+			Some("commandcode")
+		);
+		// OpenAI-style endpoints append to the baseUrl path, Messages uses the
+		// Anthropic default suffix — all without path overrides.
+		for format in [
+			ProviderFormat::Completions,
+			ProviderFormat::Responses,
+			ProviderFormat::Messages,
+			ProviderFormat::SystemOne,
+		] {
+			assert!(commandcode.supports(format), "{format:?}");
+			assert_eq!(commandcode.path_for(format), None);
+		}
 	}
 }

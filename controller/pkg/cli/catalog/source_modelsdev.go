@@ -40,6 +40,7 @@ var modelsDevProviderIDs = map[string]string{
 	"cohere":           "cohere",
 	"baseten":          "baseten",
 	"cerebras":         "cerebras",
+	"commandcode":      "commandcode",
 	"deepinfra":        "deepinfra",
 	"deepseek":         "deepseek",
 	"groq":             "groq",

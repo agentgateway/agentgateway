@@ -5,6 +5,7 @@ import basetenIcon from '@/assets/providers/baseten.svg';
 import bedrockIcon from '@/assets/providers/bedrock.svg';
 import cerebrasIcon from '@/assets/providers/cerebras.svg';
 import cohereIcon from '@/assets/providers/cohere.svg';
+import commandcodeIcon from '@/assets/providers/commandcode.svg';
 import copilotIcon from '@/assets/providers/copilot.svg';
 import deepinfraIcon from '@/assets/providers/deepinfra.svg';
 import deepseekIcon from '@/assets/providers/deepseek.svg';
@@ -51,6 +52,7 @@ const providerIcons: Record<string, string> = {
 	fireworks: fireworksIcon,
 	meta: metaIcon,
 	perplexity: perplexityIcon,
+	commandcode: commandcodeIcon,
 	custom: agwIcon
 };
 

@@ -120,6 +120,7 @@ fn provider_preset_from_proto(
 		ProviderPreset::Meta => Ok(llm::custom::ProviderPreset::Meta),
 		ProviderPreset::Perplexity => Ok(llm::custom::ProviderPreset::Perplexity),
 		ProviderPreset::Typesafe => Ok(llm::custom::ProviderPreset::Typesafe),
+		ProviderPreset::Commandcode => Ok(llm::custom::ProviderPreset::Commandcode),
 		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
 			"AI backend provider at index {provider_idx} requires a provider preset"
 		))),
@@ -6434,6 +6435,61 @@ mod tests {
 		);
 		assert_eq!(provider.path_prefix.as_deref(), Some("/v2"));
 		assert_eq!(provider.inline_policies.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_commandcode_preset_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::ProviderPreset;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/commandcode-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "commandcode-backend".to_string(),
+				namespace: "test-ns".to_string(),
+				kind: None,
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "commandcode".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						base_url: None,
+						model_override: None,
+						provider_backend: None,
+						provider: Some(Provider::ProviderPreset(ProviderPreset::Commandcode as i32)),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Custom(custom) = &provider.provider else {
+			panic!("Expected AIProvider::Custom");
+		};
+		assert_eq!(
+			custom.provider_override.as_deref(),
+			Some("commandcode")
+		);
+		assert!(custom.supports(llm::custom::ProviderFormat::Completions));
+		assert!(custom.supports(llm::custom::ProviderFormat::Messages));
+		assert!(custom.supports(llm::custom::ProviderFormat::Responses));
+		assert!(custom.supports(llm::custom::ProviderFormat::SystemOne));
+		assert_eq!(
+			provider.host_override,
+			Some(Target::from(("api.commandcode.ai", 443)))
+		);
+		assert_eq!(provider.path_prefix.as_deref(), Some("/provider/v1"));
 		Ok(())
 	}
 

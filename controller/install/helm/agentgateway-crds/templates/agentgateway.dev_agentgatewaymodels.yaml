@@ -5272,6 +5272,7 @@ spec:
                 - Bedrock
                 - Cerebras
                 - Cohere
+                - Commandcode
                 - Copilot
                 - Custom
                 - Deepinfra

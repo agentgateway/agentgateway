@@ -12669,7 +12669,8 @@
         "fireworks",
         "meta",
         "perplexity",
-        "typesafe"
+        "typesafe",
+        "commandcode"
       ]
     },
     "LocalLLMProviderDefaults": {
