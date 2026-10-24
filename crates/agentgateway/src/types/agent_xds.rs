@@ -6477,10 +6477,7 @@ mod tests {
 		let AIProvider::Custom(custom) = &provider.provider else {
 			panic!("Expected AIProvider::Custom");
 		};
-		assert_eq!(
-			custom.provider_override.as_deref(),
-			Some("commandcode")
-		);
+		assert_eq!(custom.provider_override.as_deref(), Some("commandcode"));
 		assert!(custom.supports(llm::custom::ProviderFormat::Completions));
 		assert!(custom.supports(llm::custom::ProviderFormat::Messages));
 		assert!(custom.supports(llm::custom::ProviderFormat::Responses));
