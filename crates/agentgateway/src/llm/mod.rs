@@ -2190,11 +2190,10 @@ impl AIProvider {
 		// Unfortunately we buffer just due to how our interface works. Ideally we could not when
 		// it is not even JSON
 		let buffer = http::buffer_limit(&hreq);
-		let is_json = hreq
-			.headers()
-			.typed_get::<headers::ContentType>()
-			.map(|v| v == headers::ContentType::json())
-			.unwrap_or_default();
+		let is_json = matches!(
+			http::classify_content_type(hreq.headers()),
+			http::WellKnownContentTypes::Json
+		);
 		let native_bedrock = hreq.uri().path().starts_with("/model/")
 			&& types::detect::extract_model_from_path(hreq.uri().path()).is_some();
 		let (mut parts, mut managed_body) = hreq.into_parts();

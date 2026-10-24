@@ -1138,6 +1138,7 @@ async fn llm_virtual_model_rewrites_native_bedrock_path(
 	#[case] model: &str,
 	#[case] target: &str,
 	#[case] transform: bool,
+	#[values("application/json", "application/json; charset=utf-8")] content_type: &str,
 ) {
 	let provider = if provider == "custom" {
 		r#"
@@ -1198,6 +1199,7 @@ llm:
 				Method::POST,
 				&format!("http://lo/model/gpt-5.6-luna/{operation}?trace=true"),
 			)
+			.header("content-type", content_type)
 			.json(&body)
 			.send(io.clone())
 			.await
