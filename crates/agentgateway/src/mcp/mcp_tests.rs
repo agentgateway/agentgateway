@@ -3553,6 +3553,183 @@ async fn persisted_stateful_session_cannot_cross_mcp_backends() {
 	assert_eq!(own.status(), reqwest::StatusCode::OK);
 }
 
+const MCP_SERVICE: &str = "mcp.default.svc.cluster.local";
+
+/// Routes every request to an MCP backend whose one streamable HTTP target is port 80 of the
+/// Service `MCP_SERVICE`; its pods are set with `set_mcp_service_pods`.
+fn with_mcp_service_backend(bind: TestBind, stateful: bool) -> TestBind {
+	use crate::types::agent::{
+		Backend, BackendWithPolicies, McpBackend, McpTargetSpec, ResourceName, SimpleBackendReference,
+		StreamableHTTPTargetSpec,
+	};
+	let backend = Backend::MCP(
+		ResourceName::new(strng::literal!("mcp-svc"), "".into()),
+		McpBackend {
+			targets: vec![Arc::new(crate::types::agent::McpTarget {
+				name: "mcp".into(),
+				condition: None,
+				spec: McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
+					backend: SimpleBackendReference::Service {
+						name: crate::types::discovery::NamespacedHostname {
+							namespace: strng::literal!("default"),
+							hostname: strng::new(MCP_SERVICE),
+						},
+						port: 80,
+					},
+					path: "/mcp".to_string(),
+				}),
+			})],
+			stateful,
+			prefix_mode: Default::default(),
+			failure_mode: FailureMode::FailClosed,
+			session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+			sse_keep_alive: None,
+			dns_rebinding_protection: false,
+			server: None,
+		},
+	);
+	bind.pi.stores.binds.write().insert_backend(
+		backend.name(),
+		BackendWithPolicies {
+			backend,
+			inline_policies: vec![],
+		},
+	);
+	bind
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::literal!("/mcp-svc")))
+}
+
+/// Makes `pods` the endpoints of `MCP_SERVICE`, replacing the previous set.
+fn set_mcp_service_pods(
+	pi: &ProxyInputs,
+	pods: &[(&str, SocketAddr)],
+	prev: crate::store::DiscoveryPreviousState,
+) -> crate::store::DiscoveryPreviousState {
+	use crate::store::LocalWorkload;
+	use crate::types::discovery::{NetworkAddress, Service, Workload};
+	let svc = Service {
+		name: strng::literal!("mcp"),
+		namespace: strng::literal!("default"),
+		hostname: strng::new(MCP_SERVICE),
+		vips: vec![NetworkAddress {
+			network: strng::EMPTY,
+			address: "10.0.0.1".parse().unwrap(),
+		}],
+		ports: std::collections::HashMap::from([(80, 0)]),
+		..Default::default()
+	};
+	let workloads = pods
+		.iter()
+		.map(|(name, addr)| LocalWorkload {
+			workload: Workload {
+				uid: strng::new(name),
+				name: strng::new(name),
+				namespace: strng::literal!("default"),
+				workload_ips: vec![addr.ip()],
+				..Default::default()
+			},
+			services: std::collections::HashMap::from([(
+				format!("default/{MCP_SERVICE}"),
+				std::collections::HashMap::from([(80, addr.port())]),
+			)]),
+		})
+		.collect();
+	pi.stores
+		.discovery
+		.sync_local(vec![svc], workloads, prev)
+		.unwrap()
+}
+
+async fn initialize_session(client: &reqwest::Client, io: SocketAddr) -> String {
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "pin-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(client, &format!("http://{io}/mcp"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned()
+}
+
+async fn list_tools(client: &reqwest::Client, io: SocketAddr, sid: &str) -> reqwest::StatusCode {
+	let list = serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}});
+	mcp_json_post(client, &format!("http://{io}/mcp"), &list)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap()
+		.status()
+}
+
+// A stateful session through a Service lives on the pod it is pinned to. Once that pod has left
+// the Service, the gateway answers the session 404 and the client's new session lands on a live pod.
+// https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#session-management
+#[tokio::test]
+async fn stateful_service_session_is_not_found_once_its_pod_left_the_service() {
+	let pod_a = mock_streamable_http_server(true).await;
+	let pod_b = mock_streamable_http_server(true).await;
+	let bind = with_mcp_service_backend(setup_proxy_test("{}").unwrap(), true);
+	let prev = set_mcp_service_pods(&bind.pi, &[("pod-a", pod_a.addr)], Default::default());
+	let io = bind.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let sid = initialize_session(&client, io).await;
+	assert_eq!(list_tools(&client, io, &sid).await, reqwest::StatusCode::OK);
+	assert_eq!(pod_a.init_count().await, 1);
+
+	set_mcp_service_pods(&bind.pi, &[("pod-b", pod_b.addr)], prev);
+	assert_eq!(
+		list_tools(&client, io, &sid).await,
+		reqwest::StatusCode::NOT_FOUND
+	);
+
+	let sid = initialize_session(&client, io).await;
+	assert_eq!(list_tools(&client, io, &sid).await, reqwest::StatusCode::OK);
+	assert_eq!(pod_b.init_count().await, 1);
+}
+
+// A pinned pod that is still an endpoint of the Service keeps the session even when it cannot be
+// reached: a transient failure is not answered as the end of the session.
+#[tokio::test]
+async fn stateful_service_session_survives_an_unreachable_pod_that_is_still_listed() {
+	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	config.session_encoder = http::sessionpersistence::Encoder::aes(
+		"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+	)
+	.unwrap();
+	let pod_a = mock_streamable_http_server(true).await;
+	let pod_a_addr = pod_a.addr;
+	let first = with_mcp_service_backend(setup_proxy_test_with_config(config.clone()), true);
+	set_mcp_service_pods(&first.pi, &[("pod-a", pod_a_addr)], Default::default());
+	let first_io = first.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let sid = initialize_session(&client, first_io).await;
+	drop(pod_a);
+
+	// A fresh gateway has no pooled connection to the pod, so it dials the pinned endpoint anew.
+	let restarted = with_mcp_service_backend(setup_proxy_test_with_config(config), true);
+	set_mcp_service_pods(&restarted.pi, &[("pod-a", pod_a_addr)], Default::default());
+	let restarted_io = restarted.serve_real_listener(BIND_KEY).await;
+	assert_eq!(
+		list_tools(&client, restarted_io, &sid).await,
+		reqwest::StatusCode::INTERNAL_SERVER_ERROR
+	);
+}
+
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "unknown resource"
 #[tokio::test]
