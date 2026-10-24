@@ -53,6 +53,7 @@ impl McpHttpClient {
 			));
 		let client = self.client.with_parent(&req);
 		let mut policies = self.base_policies.clone();
+		let mut pinned_endpoint = None;
 
 		if self.stateful
 			&& policies.override_dest.is_none()
@@ -65,6 +66,7 @@ impl McpHttpClient {
 				"using pinned backend endpoint"
 			);
 			policies.override_dest = Some(pinned.0);
+			pinned_endpoint = Some(pinned.0);
 		}
 
 		let resp = Box::pin(
@@ -75,7 +77,21 @@ impl McpHttpClient {
 				// target, and tool name. Tracing this HTTP transport would create a duplicate span.
 				.call_with_explicit_policies_untraced(req, &self.backend, policies),
 		)
-		.await?;
+		.await
+		.map_err(|e| match (e, pinned_endpoint) {
+			// The pinned endpoint is gone from the service, so the upstream session is gone too.
+			// Return UnknownSession so the client starts a new session.
+			(ProxyError::NoHealthyEndpoints, Some(endpoint)) => {
+				tracing::debug!(
+					target = %self.target_name,
+					backend = %self.backend,
+					%endpoint,
+					"pinned backend endpoint is no longer part of the service"
+				);
+				ProxyError::MCP(crate::mcp::Error::UnknownSession)
+			},
+			(e, _) => e,
+		})?;
 
 		// Capture resolved destination on first request if stateful
 		if self.stateful
