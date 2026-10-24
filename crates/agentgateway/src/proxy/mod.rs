@@ -104,6 +104,7 @@ impl ProxyError {
 			| ProxyError::BackendAuthenticationFailed(
 				http::auth::BackendAuthError::CredentialProvider(_),
 			)
+			| ProxyError::SubstrateEgressFailed(_)
 			| ProxyError::UpstreamTCPProxy(_) => ProxyResponseReason::UpstreamFailure,
 			ProxyError::RequestTimeout | ProxyError::UpstreamCallTimeout => ProxyResponseReason::Timeout,
 			ProxyError::ExtProc(_) => ProxyResponseReason::ExtProc,
@@ -273,6 +274,8 @@ pub enum ProxyError {
 	SubstrateEgressDenied(String),
 	#[error("{0}")]
 	SubstrateEgressUnavailable(String),
+	#[error("{0}")]
+	SubstrateEgressFailed(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -519,6 +522,7 @@ impl ProxyError {
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
 			ProxyError::SubstrateEgressDenied(_) => StatusCode::FORBIDDEN,
 			ProxyError::SubstrateEgressUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::SubstrateEgressFailed(_) => StatusCode::BAD_GATEWAY,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
