@@ -1491,6 +1491,72 @@ test('MCP playground initializes, lists tools, and calls a tool', async ({ page 
 	);
 });
 
+test('MCP playground displays tool execution errors', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/mcp', async route => {
+		const body = route.request().postDataJSON() as { method?: string };
+		if (body.method !== 'tools/call') {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 3,
+				result: {
+					content: [{ type: 'text', text: 'tool failed' }],
+					isError: true
+				}
+			})
+		});
+	});
+	await page.goto('/mcp/playground');
+
+	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+	await page.getByLabel('text *').fill('hello');
+	await page.getByRole('button', { name: 'Call tool' }).click();
+
+	const status = page.locator('.mcp-result-status .badge');
+	await expect(status).toHaveText('tool error');
+	await expect(status).toHaveClass(/bad/);
+	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
+	await expect(page.locator('.mcp-text-output')).toHaveText('tool failed');
+});
+
+test('MCP playground displays empty tool execution errors', async ({ page }) => {
+	await mockGateway(page);
+	await page.route('**/mcp', async route => {
+		const body = route.request().postDataJSON() as { method?: string };
+		if (body.method !== 'tools/call') {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 3,
+				result: { isError: true }
+			})
+		});
+	});
+	await page.goto('/mcp/playground');
+
+	await page.getByRole('button', { name: 'Initialize', exact: true }).click();
+	await page.getByLabel('text *').fill('hello');
+	await page.getByRole('button', { name: 'Call tool' }).click();
+
+	const status = page.locator('.mcp-result-status .badge');
+	await expect(status).toHaveText('tool error');
+	await expect(status).toHaveClass(/bad/);
+	const card = page.locator('.mcp-result-card');
+	await expect(page.locator('.mcp-result-card > strong')).toHaveText('Tool error');
+	await expect(card.locator('.json-block')).toContainText('"isError": true');
+});
+
 test('MCP playground uses relative requests when UI shares the gateway', async ({ page }) => {
 	await mockGateway(page, sameOriginGatewayConfig());
 	await page.goto('/mcp/playground');
