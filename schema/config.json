@@ -5300,7 +5300,7 @@
       ]
     },
     "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. A configured issuer and non-empty audience\nlist independently require `iss` and `aud`, respectively. Standard claims\nlike `exp` and `nbf` have their values validated independently (e.g., expiry\nis always checked when the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "description": "JWT validation options controlling required claims and remote signing-key trust.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. A configured issuer and non-empty audience\nlist independently require `iss` and `aud`, respectively. Standard claims\nlike `exp` and `nbf` have their values validated independently (e.g., expiry\nis always checked when the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
       "type": "object",
       "properties": {
         "requiredClaims": {
@@ -5312,6 +5312,13 @@
           },
           "default": [
             "exp"
+          ]
+        },
+        "maxJwksAge": {
+          "description": "Maximum time since the remote keyset was successfully fetched. When set,\nverification fails after this age even if a reload retains older config.\nUnset preserves the existing behavior. Requires a remote JWKS source.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       },

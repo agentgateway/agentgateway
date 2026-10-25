@@ -1,6 +1,7 @@
 // Inspired by https://github.com/cdriehuys/axum-jwks/blob/main/axum-jwks/src/jwks.rs (MIT license)
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::time::Duration;
 
 use ::cel::types::dynamic::DynamicType;
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
@@ -33,6 +34,9 @@ pub enum TokenError {
 
 	#[error("the token header does not specify a `kid`")]
 	MissingKeyId,
+
+	#[error("the trusted signing keys have exceeded their maximum age")]
+	ExpiredSigningKeys,
 
 	#[error("token uses the unknown key {0:?}")]
 	UnknownKeyId(String),
@@ -80,6 +84,8 @@ pub struct Jwt {
 pub struct Provider {
 	issuer: String,
 	keys: HashMap<String, Jwk>,
+	maximum_key_age: Option<Duration>,
+	key_freshness: Option<crate::resource_manager::ResourceFreshness>,
 }
 
 // TODO: can we give anything useful here?
@@ -116,10 +122,17 @@ impl serde::Serialize for Provider {
 		pub struct Serde<'a> {
 			issuer: &'a str,
 			keys: Vec<&'a str>,
+			#[serde(
+				rename = "maxJwksAge",
+				skip_serializing_if = "Option::is_none",
+				with = "crate::serde_dur_option"
+			)]
+			maximum_key_age: Option<Duration>,
 		}
 		Serde {
 			issuer: &self.issuer,
 			keys: self.keys.keys().map(|x| x.as_str()).collect::<Vec<_>>(),
+			maximum_key_age: self.maximum_key_age,
 		}
 		.serialize(serializer)
 	}
@@ -262,7 +275,7 @@ pub enum Mode {
 	Permissive,
 }
 
-/// JWT validation options controlling which claims must be present in a token.
+/// JWT validation options controlling required claims and remote signing-key trust.
 ///
 /// The `required_claims` set specifies which RFC 7519 registered claims must
 /// exist in the token payload before validation proceeds. Only the following
@@ -286,6 +299,16 @@ pub struct JWTValidationOptions {
 	/// those implied by the configured issuer and audiences.
 	#[serde(default = "default_required_claims")]
 	pub required_claims: HashSet<String>,
+	/// Maximum time since the remote keyset was successfully fetched. When set,
+	/// verification fails after this age even if a reload retains older config.
+	/// Unset preserves the existing behavior. Requires a remote JWKS source.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "crate::serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_jwks_age: Option<Duration>,
 }
 
 fn default_required_claims() -> HashSet<String> {
@@ -312,6 +335,7 @@ impl Default for JWTValidationOptions {
 	fn default() -> Self {
 		Self {
 			required_claims: default_required_claims(),
+			max_jwks_age: None,
 		}
 	}
 }
@@ -351,12 +375,29 @@ impl LocalJwtConfig {
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
 		for pc in providers_cfg {
-			let jwks: JwkSet = pc
-				.jwks
-				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
-				.await
-				.map_err(JwkError::JwkLoadError)?;
-			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			let (jwks, freshness) = if let Some(maximum_age) = pc.jwt_validation_options.max_jwks_age {
+				if maximum_age.is_zero() {
+					return Err(JwkError::JwkLoadError(anyhow::anyhow!(
+						"maximum JWKS age must be positive"
+					)));
+				}
+				let (jwks, freshness) = pc
+					.jwks
+					.load_with_freshness::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+					.await
+					.map_err(JwkError::JwkLoadError)?;
+				(jwks, Some(freshness))
+			} else {
+				let jwks = pc
+					.jwks
+					.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+					.await
+					.map_err(JwkError::JwkLoadError)?;
+				(jwks, None)
+			};
+			let mut provider =
+				Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
+			provider.key_freshness = freshness;
 			providers.push(provider);
 		}
 		Ok(Jwt {
@@ -476,7 +517,12 @@ impl Provider {
 			);
 		}
 
-		Ok(Provider { issuer, keys })
+		Ok(Provider {
+			issuer,
+			keys,
+			maximum_key_age: jwt_validation_options.max_jwks_age,
+			key_freshness: None,
+		})
 	}
 }
 
@@ -654,13 +700,21 @@ impl Jwt {
 			TokenError::MissingKeyId
 		})?;
 
-		let decode_with = |key: &Jwk| {
-			decode::<Map<String, Value>>(token, &key.decoding, &key.validation).map(|decoded_token| {
-				Claims {
+		let decode_with = |provider: &Provider, key: &Jwk| {
+			if let Some(maximum_age) = provider.maximum_key_age
+				&& provider
+					.key_freshness
+					.as_ref()
+					.is_none_or(|freshness| freshness.is_expired(maximum_age))
+			{
+				return Err(TokenError::ExpiredSigningKeys);
+			}
+			decode::<Map<String, Value>>(token, &key.decoding, &key.validation)
+				.map(|decoded_token| Claims {
 					inner: decoded_token.claims,
 					jwt: SecretString::new(token.into()),
-				}
-			})
+				})
+				.map_err(TokenError::Invalid)
 		};
 
 		// A kid is only unique within one issuer's JWKS, so different issuers can share a kid (Entra tenants share keys; unrelated IdPs can collide)
@@ -678,7 +732,7 @@ impl Jwt {
 			let Some(key) = provider.keys.get(kid) else {
 				continue;
 			};
-			match decode_with(key) {
+			match decode_with(provider, key) {
 				Ok(claims) => return Ok(claims),
 				Err(error) => {
 					debug!(?error, issuer = %provider.issuer, "Token is malformed or does not pass validation.");
@@ -687,26 +741,24 @@ impl Jwt {
 			}
 		}
 		if let Some(error) = first_error {
-			return Err(TokenError::Invalid(error));
+			return Err(error);
 		}
 
 		// No provider has both the token's iss and kid.
 		// Covers: unknown issuer, iss missing or not a string, and iss matches but kid doesn't.
 		// Falls back to the original, first provider that has the kid so that the same errors are produced.
-		let key = self
+		let (provider, key) = self
 			.providers
 			.iter()
-			.find_map(|provider| provider.keys.get(kid))
+			.find_map(|provider| provider.keys.get(kid).map(|key| (provider, key)))
 			.ok_or_else(|| {
 				debug!(%kid, "Token refers to an unknown key.");
 
 				TokenError::UnknownKeyId(kid.to_owned())
 			})?;
 
-		decode_with(key).map_err(|error| {
+		decode_with(provider, key).inspect_err(|error| {
 			debug!(?error, "Token is malformed or does not pass validation.");
-
-			TokenError::Invalid(error)
 		})
 	}
 }

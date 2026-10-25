@@ -73,6 +73,30 @@ pub struct ResourceFetcher {
 	tracking: Arc<std::sync::Mutex<Option<HashSet<ResourceRef>>>>,
 }
 
+/// Freshness of one exact version of a remotely fetched resource.
+/// Clones share successful refreshes only while the resource bytes are unchanged.
+#[derive(Clone, Debug)]
+pub(crate) struct ResourceFreshness(Arc<Mutex<Instant>>);
+
+impl ResourceFreshness {
+	pub(crate) fn now() -> Self {
+		Self(Arc::new(Mutex::new(Instant::now())))
+	}
+
+	fn refresh(&self) {
+		*self.0.lock().expect("resource freshness mutex poisoned") = Instant::now();
+	}
+
+	pub(crate) fn is_expired(&self, maximum_age: Duration) -> bool {
+		self
+			.0
+			.lock()
+			.expect("resource freshness mutex poisoned")
+			.elapsed()
+			>= maximum_age
+	}
+}
+
 pub struct ResourceFetchScope<'a> {
 	fetcher: &'a ResourceFetcher,
 	active: bool,
@@ -87,6 +111,53 @@ enum ResourceFetcherMode {
 }
 
 impl ResourceFetcher {
+	/// Load bytes and the freshness of those same bytes without resetting cache age.
+	pub(crate) async fn fetch_with_freshness(
+		&self,
+		resource: ResourceRef,
+	) -> anyhow::Result<(Bytes, ResourceFreshness)> {
+		let resource = normalize_resource(resource)?;
+		if let ResourceFetcherMode::Managed(manager) | ResourceFetcherMode::CachedOrDirect(manager) =
+			&self.mode
+		{
+			let cached = {
+				let entries = manager
+					.inner
+					.entries
+					.lock()
+					.expect("resource cache mutex poisoned");
+				entries
+					.get(&resource)
+					.map(|entry| (entry.content.clone(), entry.freshness.clone()))
+			};
+			if let Some(cached) = cached {
+				if matches!(&self.mode, ResourceFetcherMode::Managed(_)) {
+					self.track_resource(resource);
+				}
+				return Ok(cached);
+			}
+		}
+		let content = self.fetch(resource.clone()).await?;
+		let freshness = match &self.mode {
+			ResourceFetcherMode::Managed(manager) | ResourceFetcherMode::CachedOrDirect(manager) => {
+				let entries = manager
+					.inner
+					.entries
+					.lock()
+					.expect("resource cache mutex poisoned");
+				match entries.get(&resource) {
+					Some(entry) if entry.content == content => entry.freshness.clone(),
+					Some(_) => anyhow::bail!("resource changed during configuration loading"),
+					None if matches!(&self.mode, ResourceFetcherMode::CachedOrDirect(_)) => {
+						ResourceFreshness::now()
+					},
+					None => anyhow::bail!("resource removed during configuration loading"),
+				}
+			},
+			ResourceFetcherMode::Direct(_) | ResourceFetcherMode::FilesOnly => ResourceFreshness::now(),
+		};
+		Ok((content, freshness))
+	}
 	/// Uses the manager cache and starts refresh/watch behavior for runtime config dependencies.
 	pub fn managed(manager: ResourceManager) -> Self {
 		Self {
@@ -258,6 +329,24 @@ struct Inner {
 struct Entry {
 	content: Bytes,
 	next_refresh: Option<Instant>,
+	freshness: ResourceFreshness,
+}
+
+impl Entry {
+	fn refreshed(content: Bytes, next_refresh: Option<Instant>, previous: Option<&Entry>) -> Self {
+		let freshness = match previous {
+			Some(entry) if entry.content == content => {
+				entry.freshness.refresh();
+				entry.freshness.clone()
+			},
+			_ => ResourceFreshness::now(),
+		};
+		Self {
+			content,
+			next_refresh,
+			freshness,
+		}
+	}
 }
 
 struct FileWatch {
@@ -467,18 +556,15 @@ impl ResourceManager {
 	}
 
 	fn store(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) {
-		self
-			.inner
-			.entries
-			.lock()
-			.expect("resource cache mutex poisoned")
-			.insert(
-				resource.clone(),
-				Entry {
-					content,
-					next_refresh: next,
-				},
-			);
+		{
+			let mut entries = self
+				.inner
+				.entries
+				.lock()
+				.expect("resource cache mutex poisoned");
+			let entry = Entry::refreshed(content, next, entries.get(&resource));
+			entries.insert(resource.clone(), entry);
+		}
 		if let Some(at) = next {
 			tracing::debug!(
 				resource = %resource_key(&resource),
@@ -543,13 +629,8 @@ impl ResourceManager {
 			let changed = entries
 				.get(&resource)
 				.is_none_or(|entry| entry.content != content);
-			entries.insert(
-				resource.clone(),
-				Entry {
-					content,
-					next_refresh: next,
-				},
-			);
+			let entry = Entry::refreshed(content, next, entries.get(&resource));
+			entries.insert(resource.clone(), entry);
 			changed
 		};
 		if let Some(at) = next {
@@ -669,13 +750,8 @@ impl ResourceManager {
 			let changed = entries
 				.get(&resource)
 				.is_none_or(|entry| entry.content != content);
-			entries.insert(
-				resource.clone(),
-				Entry {
-					content,
-					next_refresh: None,
-				},
-			);
+			let entry = Entry::refreshed(content, None, entries.get(&resource));
+			entries.insert(resource.clone(), entry);
 			changed
 		};
 		if changed {
@@ -765,6 +841,9 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				)
 				.await
 				.with_context(|| format!("fetch {url}"))?;
+			if matches!(kind, ResourceKind::Jwks) && !resp.status().is_success() {
+				anyhow::bail!("JWKS fetch returned HTTP {}", resp.status());
+			}
 			let ttl = ttl_from_headers(resp.headers(), kind.default_ttl());
 			let body = crate::http::read_resp_body(resp).await?;
 			Ok(FetchResult {
@@ -823,6 +902,70 @@ mod tests {
 	use http::header::CACHE_CONTROL;
 
 	use super::*;
+
+	#[tokio::test(start_paused = true)]
+	async fn unchanged_refresh_renews_only_the_same_resource_version() {
+		let first = Entry::refreshed(Bytes::from_static(b"first"), None, None);
+		let retained = first.freshness.clone();
+		tokio::time::advance(Duration::from_secs(9)).await;
+		let renewed = Entry::refreshed(Bytes::from_static(b"first"), None, Some(&first));
+		tokio::time::advance(Duration::from_secs(2)).await;
+		assert!(!retained.is_expired(Duration::from_secs(10)));
+		let replacement = Entry::refreshed(Bytes::from_static(b"different"), None, Some(&renewed));
+		tokio::time::advance(Duration::from_secs(8)).await;
+		assert!(retained.is_expired(Duration::from_secs(10)));
+		assert!(!replacement.freshness.is_expired(Duration::from_secs(10)));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn cached_configuration_load_does_not_extend_resource_trust() {
+		let manager = ResourceManager::new(test_client()).unwrap();
+		let resource = ResourceRef::Http {
+			url: "http://unused.invalid/jwks".parse().unwrap(),
+			kind: ResourceKind::Jwks,
+		};
+		manager.store(resource.clone(), Bytes::from_static(b"cached"), None);
+		let fetcher = ResourceFetcher::managed(manager);
+		let (_, original) = fetcher
+			.fetch_with_freshness(resource.clone())
+			.await
+			.unwrap();
+		tokio::time::advance(Duration::from_secs(9)).await;
+		let (_, reloaded) = fetcher.fetch_with_freshness(resource).await.unwrap();
+		tokio::time::advance(Duration::from_secs(1)).await;
+		assert!(original.is_expired(Duration::from_secs(10)));
+		assert!(reloaded.is_expired(Duration::from_secs(10)));
+	}
+
+	#[tokio::test]
+	async fn jwks_http_error_is_not_a_successful_key_refresh() {
+		use tokio::io::{AsyncReadExt, AsyncWriteExt};
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let address = listener.local_addr().unwrap();
+		let server = tokio::spawn(async move {
+			let (mut socket, _) = listener.accept().await.unwrap();
+			let mut request = [0; 4096];
+			let mut length = 0;
+			while !request[..length].ends_with(b"\r\n\r\n") {
+				assert!(length < request.len());
+				socket
+					.read_exact(&mut request[length..length + 1])
+					.await
+					.unwrap();
+				length += 1;
+			}
+			socket.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"keys\":[]}").await.unwrap();
+		});
+		let resource = ResourceRef::Http {
+			url: format!("http://{address}/jwks").parse().unwrap(),
+			kind: ResourceKind::Jwks,
+		};
+		let Err(error) = fetch_direct(&test_client(), &resource).await else {
+			panic!("HTTP 503 must not count as a successful key fetch");
+		};
+		assert!(error.to_string().contains("503"));
+		server.await.unwrap();
+	}
 
 	fn test_client() -> Client {
 		Client::new(
@@ -1035,6 +1178,11 @@ mod tests {
 			Bytes::from_static(b"v1"),
 			Some(far_future),
 		);
+		let freshness = {
+			let entries = manager.inner.entries.lock().unwrap();
+			entries.get(&resource).unwrap().freshness.clone()
+		};
+		*freshness.0.lock().unwrap() = Instant::now() - Duration::from_secs(3600);
 
 		// This is the periodic scheduler's refresh attempt firing, exactly as
 		// `start_http_scheduler` invokes it -- it hits the closed port above.
@@ -1050,6 +1198,10 @@ mod tests {
 		let entry = entries.get(&resource).expect("entry should remain cached");
 		// A failed refresh must not touch the last-known-good content.
 		assert_eq!(entry.content, Bytes::from_static(b"v1"));
+		assert!(
+			freshness.is_expired(Duration::from_secs(60)),
+			"failed refresh must not renew trust"
+		);
 		// The retry scheduled after the failure must be reflected in the cached
 		// entry's `next_refresh`, because `should_refresh` gates the scheduler's
 		// eventual retry on that value matching exactly. Before the fix,

@@ -563,6 +563,7 @@ fn mcp_authentication_from_proto(
 		.as_ref()
 		.map(|vo| http::jwt::JWTValidationOptions {
 			required_claims: vo.required_claims.iter().cloned().collect(),
+			..Default::default()
 		})
 		.unwrap_or_default();
 	let jwt_provider = jwt_provider_from_inline_jwks_or_warn(
@@ -2873,6 +2874,7 @@ fn traffic_policy_from_proto(
 						.as_ref()
 						.map(|vo| http::jwt::JWTValidationOptions {
 							required_claims: vo.required_claims.iter().cloned().collect(),
+							..Default::default()
 						})
 						.unwrap_or_default();
 					Ok(jwt_provider_from_inline_jwks_or_warn(

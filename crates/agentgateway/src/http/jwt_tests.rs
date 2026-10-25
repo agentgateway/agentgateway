@@ -12,6 +12,84 @@ fn bearer_location() -> crate::http::auth::AuthorizationLocation {
 	crate::http::auth::AuthorizationLocation::bearer_header()
 }
 
+#[test]
+fn maximum_jwks_age_is_an_opt_in_duration() {
+	let options: JWTValidationOptions = serde_json::from_value(json!({"maxJwksAge": "10s"})).unwrap();
+	assert_eq!(
+		options.max_jwks_age,
+		Some(std::time::Duration::from_secs(10))
+	);
+	assert_eq!(JWTValidationOptions::default().max_jwks_age, None);
+}
+
+#[tokio::test]
+async fn maximum_jwks_age_refuses_non_remote_sources_and_zero_duration() {
+	for age in ["0s", "10s"] {
+		let config: LocalJwtConfig = serde_json::from_value(json!({
+			"mode": "strict", "issuer": "https://issuer.invalid", "jwks": "{\"keys\":[]}",
+			"jwtValidationOptions": {"maxJwksAge": age}
+		}))
+		.unwrap();
+		assert!(
+			config
+				.try_into(&crate::resource_manager::ResourceFetcher::files_only())
+				.await
+				.is_err()
+		);
+	}
+}
+
+#[tokio::test(start_paused = true)]
+async fn retained_validator_rejects_keys_after_maximum_age() {
+	let (mut verifier, kid, issuer, audience) = setup_test_jwt();
+	let token = build_signed_token(kid, issuer, audience, 4_000_000_000);
+	verifier.providers[0].maximum_key_age = Some(std::time::Duration::from_secs(10));
+	verifier.providers[0].key_freshness = Some(crate::resource_manager::ResourceFreshness::now());
+	assert!(verifier.validate_claims(&token).is_ok());
+	let retained = verifier.clone();
+	tokio::time::advance(std::time::Duration::from_secs(10)).await;
+	assert_eq!(
+		retained.validate_claims(&token).unwrap_err(),
+		TokenError::ExpiredSigningKeys
+	);
+}
+
+#[tokio::test(start_paused = true)]
+async fn unspecified_maximum_age_preserves_existing_validation() {
+	let (verifier, kid, issuer, audience) = setup_test_jwt();
+	let token = build_signed_token(kid, issuer, audience, 4_000_000_000);
+	tokio::time::advance(std::time::Duration::from_secs(86400)).await;
+	assert!(verifier.validate_claims(&token).is_ok());
+}
+
+#[test]
+fn expired_provider_does_not_disable_an_independent_fresh_provider() {
+	let (mut verifier, first, second) = setup_test_multi_jwt();
+	verifier.providers[0].maximum_key_age = Some(std::time::Duration::from_secs(10));
+	// A bounded provider without freshness evidence must deny.
+	assert_eq!(
+		verifier
+			.validate_claims(&build_signed_token(
+				first.0,
+				first.1,
+				first.2,
+				4_000_000_000
+			))
+			.unwrap_err(),
+		TokenError::ExpiredSigningKeys
+	);
+	assert!(
+		verifier
+			.validate_claims(&build_signed_token(
+				second.0,
+				second.1,
+				second.2,
+				4_000_000_000
+			))
+			.is_ok()
+	);
+}
+
 // Deserialization: missing jwtValidationOptions defaults required_claims to ["exp"]
 #[test]
 fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
@@ -375,7 +453,10 @@ fn setup_test_jwt_with_required_claims(
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
-		JWTValidationOptions { required_claims },
+		JWTValidationOptions {
+			required_claims,
+			..Default::default()
+		},
 	)
 	.unwrap();
 
@@ -1075,6 +1156,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::new(),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(
@@ -1179,6 +1261,7 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::new(),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(
@@ -1230,6 +1313,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 
 	let jwt_validation_options = JWTValidationOptions {
 		required_claims: HashSet::from(["exp".to_owned(), "nbf".to_owned()]),
+		..Default::default()
 	};
 
 	let provider = Provider::from_jwks(

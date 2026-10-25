@@ -294,6 +294,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -407,6 +408,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -414,6 +416,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`binds[].listeners[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`binds[].listeners[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`binds[].listeners[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -1390,6 +1393,7 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -1397,6 +1401,7 @@
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -1852,6 +1857,7 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.mcpAuthentication.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -1965,6 +1971,7 @@
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`policies[].policy.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`policies[].policy.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -1972,6 +1979,7 @@
 |`policies[].policy.jwtAuth.jwks.url`|string||
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`policies[].policy.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`policies[].policy.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`policies[].policy.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -2987,6 +2995,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -3100,6 +3109,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routeGroups[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -3107,6 +3117,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routeGroups[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`routeGroups[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`routeGroups[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -4055,6 +4066,7 @@
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.listeners[].jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.listeners[].jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -4062,6 +4074,7 @@
 |`gateways.*.listeners[].jwtAuth.jwks.url`|string||
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.listeners[].jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`gateways.*.listeners[].authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.listeners[].authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.listeners[].authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -4296,6 +4309,7 @@
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -4303,6 +4317,7 @@
 |`gateways.*.jwtAuth.jwks.url`|string||
 |`gateways.*.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`gateways.*.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -4613,6 +4628,7 @@
 |`routes[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.mcpAuthentication.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -4726,6 +4742,7 @@
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -4733,6 +4750,7 @@
 |`routes[].policies.jwtAuth.jwks.url`|string||
 |`routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -5959,6 +5977,7 @@
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`llm.policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`llm.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`llm.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -5966,6 +5985,7 @@
 |`llm.policies.jwtAuth.jwks.url`|string||
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`llm.policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -6327,6 +6347,7 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.mcpAuthentication.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
@@ -6440,6 +6461,7 @@
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`mcp.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`mcp.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -6447,6 +6469,7 @@
 |`mcp.policies.jwtAuth.jwks.url`|string||
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`mcp.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`mcp.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`mcp.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -6741,6 +6764,7 @@
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`ui.policies.jwtAuth.providers[].jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`ui.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`ui.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -6748,6 +6772,7 @@
 |`ui.policies.jwtAuth.jwks.url`|string||
 |`ui.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`ui.policies.jwtAuth.jwtValidationOptions.maxJwksAge`|string|Maximum time since the remote keyset was successfully fetched. When set,<br>verification fails after this age even if a reload retains older config.<br>Unset preserves the existing behavior. Requires a remote JWKS source.|
 |`ui.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`ui.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`ui.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|

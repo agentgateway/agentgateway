@@ -41,6 +41,19 @@ pub enum FileInlineOrRemote {
 }
 
 impl FileInlineOrRemote {
+	pub(crate) async fn load_with_freshness<T: DeserializeOwned>(
+		&self,
+		resources: &ResourceFetcher,
+		kind: ResourceKind,
+	) -> anyhow::Result<(T, crate::resource_manager::ResourceFreshness)> {
+		let resource = match self {
+			Self::Remote { .. } => self.as_resource_ref(kind).expect("remote resource ref"),
+			_ => anyhow::bail!("maximum JWKS age requires a remote JWKS source"),
+		};
+		let (content, freshness) = resources.fetch_with_freshness(resource).await?;
+		Ok((serde_json::from_slice(&content)?, freshness))
+	}
+
 	pub async fn load<T: DeserializeOwned>(
 		&self,
 		resources: &ResourceFetcher,
