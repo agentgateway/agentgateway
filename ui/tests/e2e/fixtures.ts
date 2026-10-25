@@ -463,6 +463,12 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 			return;
 		}
 		if (route.request().method() === 'POST') {
+			// Cross-origin YAML writes require a CORS preflight.
+			const contentType = route.request().headers()['content-type'] ?? '';
+			if (!contentType.startsWith('application/yaml')) {
+				await route.fulfill({ status: 415, body: 'unsupported media type' });
+				return;
+			}
 			rawConfig = route.request().postData() ?? '';
 			config = load(rawConfig) as TestConfig;
 			postedRawConfigs.push(rawConfig);
