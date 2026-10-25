@@ -857,3 +857,50 @@ async fn basic_tcp() {
 	let body = read_body(res.into_body()).await;
 	assert_eq!(body.method, Method::POST);
 }
+
+#[rstest::rstest]
+// No maxBufferSize: a 100 KiB body is over the 64 KiB default, so the 503 is returned without a retry.
+#[case(None, StatusCode::SERVICE_UNAVAILABLE, 1)]
+// maxBufferSize larger than the body: the request is buffered and the retry succeeds.
+#[case(Some(256 * 1024), StatusCode::OK, 2)]
+// maxBufferSize smaller than the body: same as the default, no retry.
+#[case(Some(1024), StatusCode::SERVICE_UNAVAILABLE, 1)]
+#[tokio::test]
+async fn retry_max_buffer_size(
+	#[case] max_buffer_size: Option<usize>,
+	#[case] want_status: StatusCode,
+	#[case] want_requests: usize,
+) {
+	let mock = wiremock::MockServer::start().await;
+	// Fail the first attempt, succeed on the next.
+	wiremock::Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(wiremock::ResponseTemplate::new(503))
+		.up_to_n_times(1)
+		.with_priority(1)
+		.mount(&mock)
+		.await;
+	wiremock::Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(|req: &wiremock::Request| {
+			wiremock::ResponseTemplate::new(200).set_body_string(req.body.len().to_string())
+		})
+		.with_priority(2)
+		.mount(&mock)
+		.await;
+
+	let (mock, mut bind, io) = setup_mock(mock);
+	let mut retry = json!({"attempts": 2, "codes": [503]});
+	if let Some(max) = max_buffer_size {
+		retry["maxBufferSize"] = json!(max);
+	}
+	bind.attach_route_policy(json!({ "retry": retry })).await;
+
+	let body = vec![b'a'; 100 * 1024];
+	let res = send_request_body(io, Method::POST, "http://lo/p", &body).await;
+	assert_eq!(res.status(), want_status);
+	if want_status == StatusCode::OK {
+		// The replayed body must be complete.
+		let got = res.into_body().collect().await.unwrap().to_bytes();
+		assert_eq!(got, body.len().to_string().as_bytes());
+	}
+	assert_eq!(mock.received_requests().await.unwrap().len(), want_requests);
+}

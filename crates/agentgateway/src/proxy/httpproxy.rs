@@ -1148,8 +1148,11 @@ impl HTTPProxy {
 		);
 		let route_llm = route_policies.llm.select("llm", &req);
 		let (head, body) = req.into_parts();
-		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
 		let retries = route_retry;
+		let max_buffered_bytes = retries
+			.as_ref()
+			.map(|r| r.max_buffer_size())
+			.unwrap_or(http::retry::DEFAULT_MAX_BUFFER_SIZE);
 
 		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
 		// request-policy flow. Conditional rate-limit expressions are evaluated only once there;
@@ -1173,13 +1176,13 @@ impl HTTPProxy {
 			.and_then(|t| t.request_timeout);
 		let mut replay_state = None;
 		let body = if max_retries > 0
-			&& http_body::Body::size_hint(&body).lower() <= MAX_BUFFERED_BYTES as u64
+			&& http_body::Body::size_hint(&body).lower() <= max_buffered_bytes as u64
 		{
 			// If we are going to attempt a retry we will need to track the incoming bytes for replay
 			let (content, state) = body.into_replay_parts();
 			replay_state = Some(state);
 			Ok(
-				http::retry::ReplayBody::try_new(content, MAX_BUFFERED_BYTES)
+				http::retry::ReplayBody::try_new(content, max_buffered_bytes)
 					.expect("body size was checked before separating replay state"),
 			)
 		} else {
@@ -4061,6 +4064,7 @@ mod tests {
 			precondition: None,
 			condition: condition
 				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
+			max_buffer_size: None,
 		}
 	}
 
