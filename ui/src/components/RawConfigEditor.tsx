@@ -9,12 +9,14 @@ import {
 	rawConfigModelPath
 } from '@/configMonaco';
 import { getGatewayConfigValidationErrors } from '@/configValidation';
+import type { LineEnding } from '@/lineEnding';
 import { configureConfigMonacoWorkers } from '@/monacoWorkers';
 import { parseYamlText } from '@/policies/policyUtils';
 import type { GatewayConfig } from '@/types';
 
 interface RawConfigEditorProps {
 	invalid: boolean;
+	lineEnding: LineEnding;
 	onChange: (value: string) => void;
 	onSave: () => void;
 	value: string;
@@ -22,8 +24,17 @@ interface RawConfigEditorProps {
 
 configureConfigMonacoWorkers();
 
-export function RawConfigEditor({ invalid, onChange, onSave, value }: RawConfigEditorProps) {
+export function RawConfigEditor({
+	invalid,
+	lineEnding,
+	onChange,
+	onSave,
+	value
+}: RawConfigEditorProps) {
 	const saveRef = useRef(onSave);
+	// onMount runs once, so read the latest line ending from a ref
+	const lineEndingRef = useRef(lineEnding);
+	lineEndingRef.current = lineEnding;
 	const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
 	const monacoRef = useRef<typeof Monaco | null>(null);
 	const validationRun = useRef(0);
@@ -31,6 +42,12 @@ export function RawConfigEditor({ invalid, onChange, onSave, value }: RawConfigE
 	useEffect(() => {
 		saveRef.current = onSave;
 	}, [onSave]);
+
+	useEffect(() => {
+		const monaco = monacoRef.current;
+		const model = editorRef.current?.getModel();
+		if (monaco && model) applyLineEnding(model, monaco, lineEnding);
+	}, [lineEnding]);
 
 	useEffect(() => {
 		const editor = editorRef.current;
@@ -56,6 +73,7 @@ export function RawConfigEditor({ invalid, onChange, onSave, value }: RawConfigE
 		installYamlKeySuggest(editor);
 		const model = editor.getModel();
 		if (model) {
+			applyLineEnding(model, monaco, lineEndingRef.current);
 			void validateEditorText(value, model, monaco).then(markers => {
 				monaco.editor.setModelMarkers(model, 'agentgateway-config', markers);
 			});
@@ -90,6 +108,18 @@ export function RawConfigEditor({ invalid, onChange, onSave, value }: RawConfigE
 				}}
 			/>
 		</div>
+	);
+}
+
+function applyLineEnding(
+	model: Monaco.editor.ITextModel,
+	monaco: typeof Monaco,
+	lineEnding: LineEnding
+) {
+	model.setEOL(
+		lineEnding === 'CRLF'
+			? monaco.editor.EndOfLineSequence.CRLF
+			: monaco.editor.EndOfLineSequence.LF
 	);
 }
 

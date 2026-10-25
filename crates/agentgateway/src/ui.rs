@@ -93,6 +93,10 @@ pub fn router(
 		.route("/api/auth/login", get(|| async { Redirect::to("/ui") }))
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
+		.route(
+			"/api/config/raw",
+			get(get_raw_config).post(write_raw_config),
+		)
 		.route("/api/config/effective", get(get_effective_config))
 		.route("/api/config/resources", get(list_config_resources))
 		.route(
@@ -487,18 +491,27 @@ async fn write_config(
 	))
 }
 
-async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
-	let config_source = app.cfg()?;
+/// Returns the configuration file exactly as it is on disk, comments included.
+async fn get_raw_config(State(app): State<App>) -> Result<String, ErrorResponse> {
+	Ok(app.cfg()?.read_to_string().await?)
+}
 
-	let file_path = match &config_source {
-		ConfigSource::File(path) => path,
-		ConfigSource::Static(_) => {
-			return Err(ErrorResponse::String(
-				"Cannot write to static config".to_string(),
-			));
-		},
-	};
-	let current = fs_err::tokio::read_to_string(file_path)
+/// Writes the request body verbatim as the configuration file after validating it.
+async fn write_raw_config(
+	State(app): State<App>,
+	body: String,
+) -> Result<Json<Value>, ErrorResponse> {
+	app.ensure_writable()?;
+	let file_path = config_file_path(&app)?;
+	write_validated_config(&app, &file_path, body).await?;
+	Ok(Json(
+		serde_json::json!({"status": "success", "message": "Configuration written successfully"}),
+	))
+}
+
+async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), ErrorResponse> {
+	let file_path = config_file_path(app)?;
+	let current = fs_err::tokio::read_to_string(&file_path)
 		.await
 		.map_err(anyhow::Error::from)?;
 	let yaml_file_content = {
@@ -519,12 +532,28 @@ async fn persist_file_config(app: &App, config_json: &Value) -> Result<(), Error
 			format!("{CONFIG_SCHEMA_HEADER}{content}")
 		}
 	};
+	write_validated_config(app, &file_path, yaml_file_content).await
+}
 
+fn config_file_path(app: &App) -> Result<std::path::PathBuf, ErrorResponse> {
+	match app.cfg()? {
+		ConfigSource::File(path) => Ok(path),
+		ConfigSource::Static(_) => Err(ErrorResponse::String(
+			"Cannot write to static config".to_string(),
+		)),
+	}
+}
+
+/// Validates the full YAML text and writes it to the configuration file only if it loads.
+async fn write_validated_config(
+	app: &App,
+	file_path: &std::path::Path,
+	yaml_file_content: String,
+) -> Result<(), ErrorResponse> {
 	if let Err(e) = validate_config_in_task(app, yaml_file_content.clone()).await {
 		return Err(ErrorResponse::String(e.to_string()));
 	}
 
-	// Write the YAML content to the file
 	fs_err::tokio::write(file_path, yaml_file_content)
 		.await
 		.map_err(|e| ErrorResponse::Anyhow(e.into()))?;
@@ -1515,6 +1544,57 @@ mod tests {
 			);
 			assert_eq!(fs_err::read_to_string(&path).unwrap(), written);
 		}
+	}
+
+	#[tokio::test]
+	async fn raw_config_round_trips_file_text_and_validates_before_writing() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		let mut app = test_app(false);
+		Arc::get_mut(&mut app.state).unwrap().xds.local_config = Some(ConfigSource::File(path.clone()));
+
+		let original = "# yaml-language-server: $schema=./custom-schema.json\n# My gateway\nbinds:\n- port: 8080 # inline\n  listeners: []\n";
+		fs_err::write(&path, original).unwrap();
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), original);
+
+		// A comment-only change is written byte for byte.
+		let commented = format!("{original}# typed in the raw editor\n");
+		let _ = write_raw_config(State(app.clone()), commented.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), commented);
+
+		// Line endings are kept as well.
+		let crlf = commented.replace('\n', "\r\n");
+		let _ = write_raw_config(State(app.clone()), crlf.clone())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), crlf);
+		assert_eq!(get_raw_config(State(app.clone())).await.unwrap(), crlf);
+
+		// The written text is not rewritten: no schema header is added and formatting is kept.
+		let unformatted = "binds:\n-   port: 9090\n    listeners: []\n";
+		let _ = write_raw_config(State(app.clone()), unformatted.to_string())
+			.await
+			.unwrap();
+		assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+
+		// Invalid configuration is rejected without touching the file.
+		for invalid in ["binds:\n- port: invalid\n", "binds: [\n"] {
+			assert!(
+				write_raw_config(State(app.clone()), invalid.to_string())
+					.await
+					.is_err()
+			);
+			assert_eq!(fs_err::read_to_string(&path).unwrap(), unformatted);
+		}
+
+		let read_only = test_app(true);
+		assert!(
+			write_raw_config(State(read_only), unformatted.to_string())
+				.await
+				.is_err()
+		);
 	}
 
 	#[tokio::test]

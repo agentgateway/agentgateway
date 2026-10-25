@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test';
+import { dump, load } from 'js-yaml';
 
 import { mcpSettingsFields } from '../../src/config';
 import type { DumpModel, StoresDump } from '../../src/gateway-admin';
@@ -409,7 +410,9 @@ export async function mockXdsGateway(page: Page, dump: StoresDump = xdsDump()) {
 
 export async function mockGateway(page: Page, initialConfig: TestConfig = populatedConfig()) {
 	let config = structuredClone(initialConfig);
+	let rawConfig: string | null = null;
 	const postedConfigs: TestConfig[] = [];
+	const postedRawConfigs: string[] = [];
 	const chatRequests: Array<Record<string, unknown>> = [];
 	const chatUrls: string[] = [];
 	const mcpRequests: Array<Record<string, unknown>> = [];
@@ -441,6 +444,28 @@ export async function mockGateway(page: Page, initialConfig: TestConfig = popula
 		}
 		if (route.request().method() === 'POST') {
 			config = route.request().postDataJSON() as TestConfig;
+			rawConfig = null;
+			postedConfigs.push(structuredClone(config));
+			await json(route, { status: 'ok', message: 'saved' });
+			return;
+		}
+		await route.fallback();
+	});
+
+	// The raw editor reads and writes the file text; the gateway validates it before saving.
+	await page.route('**/api/config/raw', async route => {
+		if (route.request().method() === 'GET') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/plain',
+				body: rawConfig ?? dump(config, { noRefs: true })
+			});
+			return;
+		}
+		if (route.request().method() === 'POST') {
+			rawConfig = route.request().postData() ?? '';
+			config = load(rawConfig) as TestConfig;
+			postedRawConfigs.push(rawConfig);
 			postedConfigs.push(structuredClone(config));
 			await json(route, { status: 'ok', message: 'saved' });
 			return;
@@ -715,6 +740,7 @@ ${Array.from({ length: 24 }, (_, index) => `/workspace/path-${index + 1}`).join(
 
 	return {
 		postedConfigs,
+		postedRawConfigs,
 		chatRequests,
 		chatUrls,
 		mcpRequests,
