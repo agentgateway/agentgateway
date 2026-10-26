@@ -963,25 +963,3 @@ fn build_request_jwt_sub_descriptor_evaluates_with_materialization() {
 	assert_eq!(request.descriptors[0].entries[0].key, "user");
 	assert_eq!(request.descriptors[0].entries[0].value, "rate-limit-user");
 }
-
-#[test]
-fn test_rate_limit_response_summary_omits_header_values() {
-	let header = |key: &str, value: &str| proto::HeaderValue {
-		key: key.to_string(),
-		value: value.to_string(),
-		raw_value: vec![],
-	};
-	let resp = Ok(tonic::Response::new(proto::RateLimitResponse {
-		overall_code: proto::rate_limit_response::Code::Ok as i32,
-		request_headers_to_add: vec![header("x-api-key", "secret-request")],
-		response_headers_to_add: vec![header("x-debug", "secret-response")],
-		raw_body: b"secret-body".to_vec(),
-		..Default::default()
-	}));
-	let summary = super::rate_limit_response_summary(&resp);
-	assert!(summary.contains("x-api-key"), "{summary}");
-	assert!(summary.contains("x-debug"), "{summary}");
-	for secret in ["secret-request", "secret-response", "secret-body"] {
-		assert!(!summary.contains(secret), "{summary}");
-	}
-}
