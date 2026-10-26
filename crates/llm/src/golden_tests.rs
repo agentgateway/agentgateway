@@ -1081,6 +1081,7 @@ mod responses {
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_BEDROCK),
 		("tool", ALL_BEDROCK),
+		("tool_no_args", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
 		("reasoning_redacted", ALL_BEDROCK),
 	];

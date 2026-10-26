@@ -1,0 +1,42 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/tool_no_args.bin
+---
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"role":"assistant"}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"tooluse_NoArgs0123456789abcd","type":"function","function":{"name":"get_server_time"}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":""}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"request_id","choices":[],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":120,"completion_tokens":30,"total_tokens":150}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 120,
+  "output_tokens": 30,
+  "total_tokens": 150,
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "tooluse_NoArgs0123456789abcd",
+          "name": "get_server_time",
+          "arguments": {}
+        }
+      ],
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

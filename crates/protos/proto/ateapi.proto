@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ateapi;
+package substrate.ateapi.v1;
 
 // Minimal wire-compatible subset of the Substrate control API used by
 // agentgateway's actor policies.

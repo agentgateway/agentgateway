@@ -355,10 +355,10 @@ impl SubstrateIngress {
 					let mut span = client.start_grpc_span(
 						&mut request,
 						self.target.target.as_ref(),
-						"/ateapi.Control/ResumeActor",
+						"/substrate.ateapi.v1.Control/ResumeActor",
 					);
 					if let Some(span) = span.as_deref_mut() {
-						span.rename_span("ateapi.Control/ResumeActor");
+						span.rename_span("substrate.ateapi.v1.Control/ResumeActor");
 					}
 					let response = dtrace::scope_future(
 						Some(TRACE_POLICY_KIND),

@@ -477,7 +477,7 @@ async fn actor_ingress_propagates_trace_context_to_resume_actor() {
 	let spans = spans.lock().unwrap();
 	let resume_actor = spans
 		.iter()
-		.find(|span| span.name == "ateapi.Control/ResumeActor")
+		.find(|span| span.name == "substrate.ateapi.v1.Control/ResumeActor")
 		.expect("ResumeActor client span should be exported");
 	let request = spans
 		.iter()
@@ -3165,8 +3165,8 @@ async fn substrate_egress_propagates_trace_context_to_policy_and_credential_call
 		.expect("request span should be exported");
 	for (method, tp) in &seen {
 		let path = match *method {
-			"GetActorEgressPolicy" => "/ateapi.Control/GetActorEgressPolicy",
-			"FetchSecret" => "/credprovider.CredentialProvider/FetchSecret",
+			"GetActorEgressPolicy" => "/substrate.ateapi.v1.Control/GetActorEgressPolicy",
+			"FetchSecret" => "/substrate.credprovider.v1.CredentialProvider/FetchSecret",
 			other => panic!("unexpected method {other}"),
 		};
 		let span = spans
