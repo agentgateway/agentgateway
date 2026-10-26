@@ -60,6 +60,32 @@ fn set_default_anthropic_version(headers: &mut HeaderMap) {
 		.or_insert(HeaderValue::from_static(anthropic::ANTHROPIC_VERSION));
 }
 
+/// Merge `betas` into the outgoing `anthropic-beta` header, keeping any
+/// features the client already requested and skipping duplicates.
+fn append_anthropic_beta(headers: &mut HeaderMap, betas: &[&'static str]) {
+	if betas.is_empty() {
+		return;
+	}
+	let existing = headers
+		.get("anthropic-beta")
+		.and_then(|value| value.to_str().ok())
+		.unwrap_or_default();
+	let mut merged: Vec<String> = existing
+		.split(',')
+		.map(str::trim)
+		.filter(|feature| !feature.is_empty())
+		.map(str::to_string)
+		.collect();
+	for beta in betas {
+		if !merged.iter().any(|feature| feature == beta) {
+			merged.push((*beta).to_string());
+		}
+	}
+	if let Ok(value) = HeaderValue::from_str(&merged.join(",")) {
+		headers.insert("anthropic-beta", value);
+	}
+}
+
 #[cfg(test)]
 mod anthropic_tests;
 #[cfg(test)]
@@ -328,10 +354,13 @@ struct ChatTranslation {
 ///
 /// `body` is the upstream request payload. `provider_state` carries any
 /// conversion state needed to translate the later response/stream back to the
-/// original `InputFormat`; most providers do not need it.
+/// original `InputFormat`; most providers do not need it. `append_beta` lists
+/// `anthropic-beta` features the rendered body requires (e.g. fast mode), which
+/// the caller merges into the outgoing headers.
 struct RenderedChatRequest {
 	body: Vec<u8>,
 	provider_state: Option<ProviderState>,
+	append_beta: Vec<&'static str>,
 }
 
 // Context provider to each request translation
@@ -444,6 +473,7 @@ fn render_openai_completions(
 	Ok(RenderedChatRequest {
 		body,
 		provider_state,
+		append_beta: Vec::new(),
 	})
 }
 
@@ -499,24 +529,52 @@ fn apply_openai_moderation(
 fn render_anthropic_messages(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
-) -> Result<Vec<u8>, AIError> {
-	match req {
+) -> Result<RenderedChatRequest, AIError> {
+	let (body, fast) = match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, ctx.prompt_caching, ctx.catalog)
+			// OpenAI `service_tier: "priority"` maps to Anthropic `speed: "fast"`.
+			let fast = req
+				.rest
+				.get("service_tier")
+				.and_then(serde_json::Value::as_str)
+				== Some("priority");
+			(
+				conversion::messages::from_completions::translate(&req, ctx.prompt_caching, ctx.catalog)?,
+				fast,
+			)
 		},
 		types::ChatRequest::Messages(mut req) => {
+			let fast = req.rest.get("speed").and_then(serde_json::Value::as_str) == Some("fast");
 			if let Some(caching) = ctx.prompt_caching {
 				conversion::messages::apply_prompt_caching(&mut req, caching);
 			}
-			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+			(
+				serde_json::to_vec(&req).map_err(AIError::RequestMarshal)?,
+				fast,
+			)
 		},
-		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"responses to messages"
-		))),
-		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"gemini to messages"
-		))),
-	}
+		types::ChatRequest::Responses(_) => {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"responses to messages"
+			)));
+		},
+		types::ChatRequest::Gemini(_) => {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"gemini to messages"
+			)));
+		},
+	};
+	// Fast mode rides on a beta header; make sure it is requested even when the
+	// client format had no place to carry it (#4076).
+	Ok(RenderedChatRequest {
+		body,
+		provider_state: None,
+		append_beta: if fast {
+			vec!["fast-mode-2026-02-01"]
+		} else {
+			Vec::new()
+		},
+	})
 }
 
 fn render_vertex_gemini(
@@ -583,6 +641,7 @@ fn render_bedrock_converse(
 	Ok(RenderedChatRequest {
 		body: bedrock.body,
 		provider_state,
+		append_beta: Vec::new(),
 	})
 }
 
@@ -616,9 +675,20 @@ impl ChatTranslation {
 		}
 		let body = match self.output {
 			ChatFormat::OpenAICompletions => return render_openai_completions(req, ctx),
-			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
+			ChatFormat::OpenAIResponses => {
+				render_openai_responses(req, ctx).map(|body| RenderedChatRequest {
+					body,
+					provider_state: None,
+					append_beta: Vec::new(),
+				})
+			},
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx)?)
+				let rendered = render_anthropic_messages(req, ctx)?;
+				vertex::prepare_anthropic_message_body(rendered.body).map(|body| RenderedChatRequest {
+					body,
+					provider_state: rendered.provider_state,
+					append_beta: rendered.append_beta,
+				})
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
@@ -626,13 +696,11 @@ impl ChatTranslation {
 				return Ok(RenderedChatRequest {
 					body: render_vertex_gemini(req, ctx)?,
 					provider_state: Some(ProviderState::VertexGemini),
+					append_beta: Vec::new(),
 				});
 			},
 		}?;
-		Ok(RenderedChatRequest {
-			body,
-			provider_state: None,
-		})
+		Ok(body)
 	}
 
 	fn render_response(
@@ -2523,6 +2591,7 @@ impl AIProvider {
 			Some(p) => p.apply_final_transformations(rendered.body, log)?,
 			None => rendered.body,
 		};
+		append_anthropic_beta(&mut parts.headers, &rendered.append_beta);
 		parts.headers.remove(header::CONTENT_LENGTH);
 		managed_body.replace_bytes(body.into());
 		parts.headers.remove(header::TRANSFER_ENCODING);

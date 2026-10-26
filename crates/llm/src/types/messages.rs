@@ -1291,6 +1291,11 @@ pub mod typed {
 		/// Automatic caching: marks the last cacheable block of the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
+
+		/// Ask for faster processing (`fast`). Requires the `fast-mode` beta
+		/// header on the wire; other values pass through unchanged.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub speed: Option<String>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Default)]

@@ -1956,6 +1956,11 @@ pub mod from_messages {
 			upsert_additional_field("top_k", top_k.into());
 		}
 
+		// Preserve the Anthropic fast-mode request.
+		if let Some(speed) = &req.speed {
+			upsert_additional_field("speed", speed.clone().into());
+		}
+
 		// Preserve explicit output_config in Anthropic's model-specific envelope.
 		if let Some(output_config) = requested_output_config_json {
 			upsert_additional_field("output_config", output_config);
@@ -3860,6 +3865,7 @@ mod helpers {
 		"dev-full-thinking-2025-05-14",
 		"effort-2025-11-24",
 		"fallback-credit-2026-06-01",
+		"fast-mode-2026-02-01",
 		"fine-grained-tool-streaming-2025-05-14",
 		"interleaved-thinking-2025-05-14",
 		"mid-conversation-output-config-2026-07-01",

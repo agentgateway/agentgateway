@@ -1,0 +1,10 @@
+{
+  "model": "replaceme",
+  "service_tier": "priority",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the name of the LLM provider?"
+    }
+  ]
+}
