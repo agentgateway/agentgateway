@@ -10239,3 +10239,25 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`<Guardrails>.response[].rejection.headers.remove`|[]string|Header names to remove.|
 |`<Guardrails>.response[].scope`|[]enum|Which parts of the response this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
+
+## Config resources
+
+Values accepted by the `/api/config/resources/{kind}` API. The JSON schema for each kind is the definition of the same name, such as `config.json#/$defs/llm.provider`. For policies, select the schema option whose title matches the item ID.
+
+|Kind|Value|ID|Collection `PUT`|
+|-|-|-|-|
+|`modelCatalog`|`base` and `custom` catalogs, merged ahead of `config.modelCatalog[]`|`default`|Yes|
+|`llm.provider`|An item of `llm.providers[]`|`name`|Yes|
+|`llm.model`|An item of `llm.models[]`|`id`, or `name` if unset|Yes|
+|`llm.virtualModel`|An item of `llm.virtualModels[]`|`name`|Yes|
+|`llm.apiKey`|An item of `llm.policies.apiKey.keys[]`. Metadata prefixed with `agentgateway.dev/` is managed by agentgateway|Generated, and stored in `metadata` under `agentgateway.dev/id`|Yes. Each request creates a new key.|
+|`llm.policy`|`llm.policies.<id>`. Manage `apiKey.keys` through `llm.apiKey`|Field name, such as `apiKey`|Use item `PUT`|
+|`mcp.target`|An item of `mcp.targets[]`|`name`|Yes|
+|`mcp.policy`|`mcp.policies.<id>`|Field name|Use item `PUT`|
+|`llm.settings`|`llm.gateways`, `llm.port`, `llm.tls`|`default`|Yes|
+|`mcp.settings`|`mcp.gateways`, `mcp.port`, `mcp.statefulMode`, `mcp.prefixMode`, `mcp.failureMode`, `mcp.sseKeepAlive`, `mcp.dnsRebindingProtection`, `mcp.server`|`default`|Yes|
+|`traffic.gateway`|`gateways.<id>` with a required `name` field|`name`|Yes|
+|`traffic.route`|An item of `routes[]` with a required `name` field|`name`|Yes|
+|`traffic.tcpRoute`|An item of `tcpRoutes[]` with a required `name` field|`name`|Yes|
+|`ui.policy`|`ui.policies.<id>`|Field name|Use item `PUT`|
+|`frontend.policy`|`frontendPolicies.<id>`|Field name|Use item `PUT`|
