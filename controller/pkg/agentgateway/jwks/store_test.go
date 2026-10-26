@@ -483,7 +483,7 @@ func testRemotePolicy(name, uri string, ttl time.Duration) *agentgateway.Agentga
 			Traffic: &agentgateway.Traffic{
 				JWTAuthentication: &agentgateway.JWTAuthentication{
 					Providers: []agentgateway.JWTProvider{{
-						JWKS: agentgateway.JWKS{
+						JWKS: &agentgateway.JWKS{
 							Remote: &agentgateway.RemoteJWKS{
 								JwksPath:      longStringPtr(uri),
 								CacheDuration: &agentgateway.Duration{Duration: ttl},
@@ -517,7 +517,7 @@ func testBackend(name, uri string, ttl time.Duration) *agentgateway.Agentgateway
 			Policies: &agentgateway.BackendFull{
 				MCP: &agentgateway.BackendMCP{
 					Authentication: &agentgateway.MCPAuthentication{
-						JWKS: agentgateway.RemoteJWKS{
+						JWKS: &agentgateway.RemoteJWKS{
 							JwksPath:      longStringPtr(uri),
 							CacheDuration: &agentgateway.Duration{Duration: ttl},
 						},
