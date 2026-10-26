@@ -1147,12 +1147,10 @@ impl HTTPProxy {
 			&req,
 		);
 		let route_llm = route_policies.llm.select("llm", &req);
+		// Bodies up to the request buffer limit can be retried; `precondition` can opt out sooner.
+		let max_buffered_bytes = http::buffer_limit(&req);
 		let (head, body) = req.into_parts();
 		let retries = route_retry;
-		let max_buffered_bytes = retries
-			.as_ref()
-			.map(|r| r.max_buffer_size())
-			.unwrap_or(http::retry::DEFAULT_MAX_BUFFER_SIZE);
 
 		// LLM token rate limiting reuses the rate-limit policy selected above in the normal
 		// request-policy flow. Conditional rate-limit expressions are evaluated only once there;
@@ -4064,7 +4062,6 @@ mod tests {
 			precondition: None,
 			condition: condition
 				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
-			max_buffer_size: None,
 		}
 	}
 

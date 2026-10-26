@@ -37,19 +37,6 @@ pub struct Policy {
 	/// is retried when its status code is in `codes` *or* this expression evaluates to `true`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub condition: Option<Arc<Expression>>,
-	/// Maximum request body size, in bytes, buffered so the request can be replayed on retry.
-	/// Requests with larger bodies are sent once without retries. Defaults to 64 KiB.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub max_buffer_size: Option<usize>,
-}
-
-/// Default for `max_buffer_size` when it is not set.
-pub const DEFAULT_MAX_BUFFER_SIZE: usize = 64 * 1024;
-
-impl Policy {
-	pub fn max_buffer_size(&self) -> usize {
-		self.max_buffer_size.unwrap_or(DEFAULT_MAX_BUFFER_SIZE)
-	}
 }
 
 impl HasExpressions for Policy {
@@ -82,23 +69,6 @@ fn default_attempts() -> u8 {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	#[test]
-	fn max_buffer_size_defaults_and_overrides() {
-		let pol: Policy = serde_json::from_value(serde_json::json!({ "codes": [503] })).unwrap();
-		assert_eq!(pol.max_buffer_size, None);
-		assert_eq!(pol.max_buffer_size(), DEFAULT_MAX_BUFFER_SIZE);
-
-		let pol: Policy =
-			serde_json::from_value(serde_json::json!({ "codes": [503], "maxBufferSize": 1048576 }))
-				.unwrap();
-		assert_eq!(pol.max_buffer_size(), 1048576);
-		// Round-trips through serialization under the same name.
-		assert_eq!(
-			serde_json::to_value(&pol).unwrap()["maxBufferSize"],
-			1048576
-		);
-	}
 
 	#[test]
 	fn parses_pre_and_post_conditions() {

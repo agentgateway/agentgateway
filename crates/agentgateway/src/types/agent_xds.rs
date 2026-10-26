@@ -2786,7 +2786,6 @@ fn traffic_policy_from_proto(
 				codes: codes.into_boxed_slice(),
 				precondition,
 				condition,
-				max_buffer_size: None,
 			})
 		},
 		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(http::delay::Policy {
