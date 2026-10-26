@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use agentgateway::test_helpers::{ateapimock, credprovidermock, oteltracemock};
-use agentgateway::transport::stream::TLSConnectionInfo;
+use agentgateway::transport::stream::{SocketType, TLSConnectionInfo};
 use agentgateway::transport::tls::TlsInfo;
 use agentgateway::types::agent::{Backend, BackendWithPolicies, BindMode, TunnelProtocol};
 use protos::ateapi::{
@@ -1369,8 +1369,11 @@ async fn actor_ingress_reports_no_resume_when_the_resume_fails() {
 	assert_eq!(resumes, vec!["none"], "{events:#?}");
 }
 
+#[rstest::rstest]
+#[case(false)]
+#[case(true)]
 #[tokio::test]
-async fn actor_ingress_uses_the_original_connect_target_actor() {
+async fn actor_ingress_uses_the_original_connect_target_actor(#[case] http2: bool) {
 	let actor = simple_mock().await;
 	let calls = Arc::new(AtomicUsize::new(0));
 	let api = ateapimock::AteApiMock::new({
@@ -1409,31 +1412,56 @@ async fn actor_ingress_uses_the_original_connect_target_actor() {
 		}))
 		.await;
 
-	let mut io = gateway.serve_tunnel(strng::literal!("outer"));
+	let mut io = SocketType::Memory(gateway.serve_tunnel(strng::literal!("outer")));
 	let connect_target = "application.example:9090";
-	io.write_all(
+	let mut connection = None;
+	if http2 {
+		let (mut sender, driver) =
+			hyper::client::conn::http2::Builder::new(hyper_util::rt::TokioExecutor::new())
+				.handshake(hyper_util::rt::TokioIo::new(io))
+				.await
+				.unwrap();
+		connection = Some(tokio::spawn(driver));
+		let mut response = sender
+			.send_request(
+				::http::Request::builder()
+					.method(Method::CONNECT)
+					.uri(connect_target)
+					.header("ate-target-actor", "demo/my-actor")
+					.body(Body::empty())
+					.unwrap(),
+			)
+			.await
+			.unwrap();
+		assert_eq!(response.status(), StatusCode::OK);
+		io = SocketType::Upgraded(hyper_util::rt::TokioIo::new(
+			hyper::upgrade::on(&mut response).await.unwrap(),
+		));
+	} else {
+		io.write_all(
 	format!(
-		"CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\nate-target-actor: demo/my-actor\r\n\r\n"
+		"CONNECT {connect_target} HTTP/1.1\r\nHost: unrelated.example:8080\r\nate-target-actor: demo/my-actor\r\n\r\n"
 	)
 	.as_bytes(),
 	)
 	.await
 	.unwrap();
-	let mut response = Vec::new();
-	loop {
-		let mut chunk = [0; 1024];
-		let n = io.read(&mut chunk).await.unwrap();
-		assert!(n > 0, "CONNECT response unexpectedly closed");
-		response.extend_from_slice(&chunk[..n]);
-		if response.windows(4).any(|window| window == b"\r\n\r\n") {
-			break;
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|window| window == b"\r\n\r\n") {
+				break;
+			}
 		}
+		assert!(
+			String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {}",
+			String::from_utf8_lossy(&response),
+		);
 	}
-	assert!(
-		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
-		"unexpected CONNECT response: {}",
-		String::from_utf8_lossy(&response),
-	);
 
 	// The re-entered request's Host is unrelated to the actor. Native ingress
 	// must use the original CONNECT routing header retained in SourceContext.
@@ -1456,6 +1484,9 @@ async fn actor_ingress_uses_the_original_connect_target_actor() {
 		actor_requests[0].headers.get("x-ate-target-port").unwrap(),
 		"9090"
 	);
+	if let Some(connection) = connection {
+		connection.abort();
+	}
 }
 
 #[tokio::test]

@@ -190,7 +190,9 @@ pub enum InputFormat {
 	Realtime,
 	/// Anthropic-shaped /v1/messages/count_tokens body
 	CountTokens,
-	Detect,
+	/// Forwarded as-is, with usage inspected from the response. The operation is what the model
+	/// router recognizes the request path as, if anything.
+	Detect(Option<DetectedOperation>),
 	Rerank,
 	Decisions,
 	SystemOne,
@@ -223,10 +225,23 @@ impl InputFormat {
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
 			InputFormat::GeminiCountTokens => false,
-			InputFormat::Detect => false,
+			InputFormat::Detect(_) => false,
 			InputFormat::Rerank => false,
 		}
 	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum DetectedOperation {
+	Chat,
+	GenerateContent,
+	Embeddings,
+	CountTokens,
+	Rerank,
+	Decisions,
+	Image,
+	Ocr,
+	Compaction,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

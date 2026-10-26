@@ -64,88 +64,113 @@ enum EndpointMatch {
 	Regex(regex::Regex),
 }
 
+struct ServingEndpoint {
+	matcher: EndpointMatch,
+	route_type: Option<llm::RouteType>,
+	operation: Option<llm::DetectedOperation>,
+	template: &'static str,
+}
+
 // Model serving has its own endpoint recognition. Backend policy `routes` retain suffix matching.
-static SERVING_ENDPOINTS: LazyLock<Vec<(EndpointMatch, Option<llm::RouteType>, &'static str)>> =
-	LazyLock::new(|| {
-		use llm::RouteType::*;
-		let mut endpoints = [
-			("/v1/models", Some(Models)),
-			("/models", Some(Models)),
-			("/v1/messages/count_tokens", Some(AnthropicTokenCount)),
-			("/v1/chat/completions", Some(Completions)),
-			("/v1/messages", Some(Messages)),
-			("/v1/responses", Some(Responses)),
-			("/v1/responses/compact", Some(Detect)),
-			("/v1/images/generations", Some(Detect)),
-			("/v1/images/edits", Some(Detect)),
-			("/v1/images/variations", Some(Detect)),
-			("/v1/audio/transcriptions", None),
-			("/v1/ocr", Some(Detect)),
-			("/v1/systemone", Some(SystemOne)),
-			("/v1/decisions", Some(Decisions)),
-			("/v1/embeddings", Some(Embeddings)),
-			("/v1/rerank", Some(Rerank)),
-			("/v2/rerank", Some(Rerank)),
-		]
-		.into_iter()
-		.map(|(path, kind)| (EndpointMatch::Exact(strng::new(path)), kind, path))
-		.collect::<Vec<_>>();
-		for (suffix, kind, gemini) in [
-			("rawPredict|streamRawPredict", Messages, false),
-			(
-				"generateContent|streamGenerateContent",
-				GenerateContent,
-				true,
-			),
-			("countTokens", GeminiCountTokens, true),
-		] {
-			endpoints.push((EndpointMatch::Regex(regex::Regex::new(&format!(
-			r"^/(?P<version>v(?:[0-9]+|[0-9]+beta[0-9]+))/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?P<operation>{suffix})$"
-		)).expect("valid Vertex model route regex")), Some(kind), "/${version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:${operation}"));
-			if gemini {
-				endpoints.push((
-					EndpointMatch::Regex(
-						regex::Regex::new(&format!(
-							r"^/(?P<version>v[0-9]+(?:(?:alpha|beta)[0-9]*)?)/models/[^/]+:(?P<operation>{suffix})$"
-						))
-						.expect("valid Gemini model route regex"),
-					),
-					Some(kind),
-					"/${version}/models/{model}:${operation}",
-				));
-			}
+static SERVING_ENDPOINTS: LazyLock<Vec<ServingEndpoint>> = LazyLock::new(|| {
+	use llm::DetectedOperation as Op;
+	use llm::RouteType::*;
+	let mut endpoints = [
+		("/v1/models", Some(Models), None),
+		("/models", Some(Models), None),
+		(
+			"/v1/messages/count_tokens",
+			Some(AnthropicTokenCount),
+			Some(Op::CountTokens),
+		),
+		("/v1/chat/completions", Some(Completions), Some(Op::Chat)),
+		("/v1/messages", Some(Messages), Some(Op::Chat)),
+		("/v1/responses", Some(Responses), Some(Op::Chat)),
+		("/v1/responses/compact", Some(Detect), Some(Op::Compaction)),
+		("/v1/images/generations", Some(Detect), Some(Op::Image)),
+		("/v1/images/edits", Some(Detect), Some(Op::Image)),
+		("/v1/images/variations", Some(Detect), Some(Op::Image)),
+		("/v1/audio/transcriptions", None, None),
+		("/v1/ocr", Some(Detect), Some(Op::Ocr)),
+		("/v1/systemone", Some(SystemOne), Some(Op::Decisions)),
+		("/v1/decisions", Some(Decisions), Some(Op::Decisions)),
+		("/v1/embeddings", Some(Embeddings), Some(Op::Embeddings)),
+		("/v1/rerank", Some(Rerank), Some(Op::Rerank)),
+		("/v2/rerank", Some(Rerank), Some(Op::Rerank)),
+	]
+	.into_iter()
+	.map(|(path, route_type, operation)| ServingEndpoint {
+		matcher: EndpointMatch::Exact(strng::new(path)),
+		route_type,
+		operation,
+		template: path,
+	})
+	.collect::<Vec<_>>();
+	for (suffix, route_type, operation, gemini) in [
+		("rawPredict|streamRawPredict", Messages, Op::Chat, false),
+		(
+			"generateContent|streamGenerateContent",
+			GenerateContent,
+			Op::GenerateContent,
+			true,
+		),
+		("countTokens", GeminiCountTokens, Op::CountTokens, true),
+	] {
+		endpoints.push(ServingEndpoint {
+			matcher: EndpointMatch::Regex(regex::Regex::new(&format!(
+				r"^/(?P<version>v(?:[0-9]+|[0-9]+beta[0-9]+))/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?P<operation>{suffix})$"
+			)).expect("valid Vertex model route regex")),
+			route_type: Some(route_type),
+			operation: Some(operation),
+			template: "/${version}/projects/{project}/locations/{location}/publishers/{publisher}/models/{model}:${operation}",
+		});
+		if gemini {
+			endpoints.push(ServingEndpoint {
+				matcher: EndpointMatch::Regex(
+					regex::Regex::new(&format!(
+						r"^/(?P<version>v[0-9]+(?:(?:alpha|beta)[0-9]*)?)/models/[^/]+:(?P<operation>{suffix})$"
+					))
+					.expect("valid Gemini model route regex"),
+				),
+				route_type: Some(route_type),
+				operation: Some(operation),
+				template: "/${version}/models/{model}:${operation}",
+			});
 		}
-		// After the Gemini routes, so `/v1/models/{model}:generateContent` is classified as Gemini.
-		for (pattern, template) in [
-			(r"^/v1/models/.+$", "/v1/models/{model}"),
-			(r"^/models/.+$", "/models/{model}"),
-		] {
-			endpoints.push((
-				EndpointMatch::Regex(regex::Regex::new(pattern).expect("valid model route regex")),
-				Some(Models),
-				template,
-			));
-		}
-		endpoints.push((
-			EndpointMatch::Regex(
-				regex::Regex::new(
-					r"^/model/[^/]+/(?P<operation>invoke-with-response-stream|invoke|converse-stream|converse)$",
-				)
-				.expect("valid Bedrock model route regex"),
-			),
-			None,
-			"/model/{model}/${operation}",
-		));
-		endpoints
+	}
+	// After the Gemini routes, so `/v1/models/{model}:generateContent` is classified as Gemini.
+	for (pattern, template) in [
+		(r"^/v1/models/.+$", "/v1/models/{model}"),
+		(r"^/models/.+$", "/models/{model}"),
+	] {
+		endpoints.push(ServingEndpoint {
+			matcher: EndpointMatch::Regex(regex::Regex::new(pattern).expect("valid model route regex")),
+			route_type: Some(Models),
+			operation: None,
+			template,
+		});
+	}
+	endpoints.push(ServingEndpoint {
+		matcher: EndpointMatch::Regex(
+			regex::Regex::new(
+				r"^/model/[^/]+/(?P<operation>invoke-with-response-stream|invoke|converse-stream|converse)$",
+			)
+			.expect("valid Bedrock model route regex"),
+		),
+		route_type: None,
+		operation: None,
+		template: "/model/{model}/${operation}",
 	});
+	endpoints
+});
 
 /// Matches for the implicit route created for listener-attached models.
 pub fn serving_route_matches() -> Vec<crate::types::agent::RouteMatch> {
 	use crate::types::agent::{PathMatch, RouteMatch};
 	SERVING_ENDPOINTS
 		.iter()
-		.map(|(matcher, _, _)| RouteMatch {
-			path: match matcher {
+		.map(|endpoint| RouteMatch {
+			path: match &endpoint.matcher {
 				EndpointMatch::Exact(path) => PathMatch::Exact(path.clone()),
 				EndpointMatch::Regex(regex) => PathMatch::Regex(regex.clone()),
 			},
@@ -156,18 +181,24 @@ pub fn serving_route_matches() -> Vec<crate::types::agent::RouteMatch> {
 		.collect()
 }
 
-pub fn classify_route(path: &str) -> Option<llm::RouteType> {
-	for (matcher, kind, _) in SERVING_ENDPOINTS.iter() {
-		let matched = match matcher {
+fn serving_endpoint(path: &str) -> Option<&'static ServingEndpoint> {
+	SERVING_ENDPOINTS
+		.iter()
+		.find(|endpoint| match &endpoint.matcher {
 			EndpointMatch::Exact(expected) => expected.as_str() == path,
 			EndpointMatch::Regex(regex) => regex.is_match(path),
-		};
-		if matched {
-			// Audio and Bedrock endpoints deliberately select the model's passthrough mode.
-			return *kind;
-		}
-	}
-	None
+		})
+}
+
+pub fn classify_route(path: &str) -> Option<llm::RouteType> {
+	// Audio and Bedrock endpoints deliberately select the model's passthrough mode.
+	serving_endpoint(path).and_then(|endpoint| endpoint.route_type)
+}
+
+/// The operation a request path serves, independent of how it is routed (e.g. `passthrough: detect`
+/// on /v1/chat/completions is still chat).
+pub fn classify_operation(path: &str) -> Option<llm::DetectedOperation> {
+	serving_endpoint(path).and_then(|endpoint| endpoint.operation)
 }
 
 fn default_passthrough(path: &str) -> llm::RouteType {
@@ -289,12 +320,10 @@ impl ModelRouter {
 		// HTTPRoute prefix rewrites remove the serving prefix before reaching the router.
 		// If another rewrite changed the endpoint itself, retain the HTTP route's trace match.
 		let prefix = original_path.strip_suffix(path)?;
-		let template = SERVING_ENDPOINTS
-			.iter()
-			.find_map(|(matcher, _, template)| match matcher {
-				EndpointMatch::Exact(expected) if expected.as_str() == path => Some((*template).into()),
-				EndpointMatch::Regex(regex) if regex.is_match(path) => Some(regex.replace(path, *template)),
-				_ => None,
+		let template = serving_endpoint(path)
+			.map(|endpoint| match &endpoint.matcher {
+				EndpointMatch::Exact(_) => endpoint.template.into(),
+				EndpointMatch::Regex(regex) => regex.replace(path, endpoint.template),
 			})
 			.unwrap_or(std::borrow::Cow::Borrowed("/*"));
 		Some(strng::format!("{prefix}{template}"))
@@ -1052,7 +1081,7 @@ fn encode_model_path_segment(model: &str) -> String {
 	utf8_percent_encode(model, MODEL_SEGMENT).to_string()
 }
 
-fn multipart_boundary(req: &Request) -> Option<String> {
+pub fn multipart_boundary(req: &Request) -> Option<String> {
 	req
 		.headers()
 		.get(::http::header::CONTENT_TYPE)
@@ -1076,7 +1105,7 @@ pub(crate) async fn rewrite_multipart_request_model(
 	Ok(())
 }
 
-async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
+pub(crate) async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
 	let mut multipart = multer::Multipart::new(stream, boundary);
 	while let Some(field) = multipart.next_field().await.map_err(|err| {
@@ -1105,7 +1134,7 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 	)))
 }
 
-async fn rewrite_multipart_body_model(
+pub(crate) async fn rewrite_multipart_body_model(
 	body: &Bytes,
 	boundary: &str,
 	target: &str,

@@ -8,10 +8,11 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens, preload_tokenizers};
 pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
-	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
-	RequestType, ResponseText, ResponseType, RouteType, SimpleChatCompletionMessage, TokenGapSummary,
-	anthropic, conversion, copilot, custom, gemini, logged_response_parsing, openai, types,
+	AIError, CacheTokenConvention, ChatFormat, ContentScope, DetectedOperation, InputFormat, LLMInfo,
+	LLMRequest, LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider,
+	ProviderState, RequestType, ResponseText, ResponseType, RouteType, SimpleChatCompletionMessage,
+	TokenGapSummary, anthropic, conversion, copilot, custom, gemini, logged_response_parsing, openai,
+	types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -1198,7 +1199,7 @@ impl AIProvider {
 					.into_iter()
 					.find(|f| self.supports_format(*f, request_model));
 			},
-			InputFormat::Detect
+			InputFormat::Detect(_)
 			| InputFormat::Completions
 			| InputFormat::Messages
 			| InputFormat::Responses
@@ -2196,6 +2197,8 @@ impl AIProvider {
 		);
 		let native_bedrock = hreq.uri().path().starts_with("/model/")
 			&& types::detect::extract_model_from_path(hreq.uri().path()).is_some();
+		let multipart_boundary = model_router::multipart_boundary(&hreq);
+		let operation = model_router::classify_operation(hreq.uri().path());
 		let (mut parts, mut managed_body) = hreq.into_parts();
 		let cached = managed_body.remove_extension::<json::ParsedJson>();
 		let Ok(bytes) = http::read_body_with_limit(managed_body.take_content(), buffer).await else {
@@ -2206,7 +2209,7 @@ impl AIProvider {
 			let body = match cached {
 				Some(json::ParsedJson(value)) => Ok(value),
 				None => serde_json::from_slice(&bytes)
-					.map_err(|err| AIError::RequestParsing(InputFormat::Detect, err)),
+					.map_err(|err| AIError::RequestParsing(InputFormat::Detect(operation), err)),
 			};
 			let body = body.and_then(|mut body| {
 				// Make the path model available to policies without putting it on the wire.
@@ -2223,6 +2226,34 @@ impl AIProvider {
 				Err(err) if native_bedrock => return Err(err),
 				Err(_) => types::detect::Request::new_raw(bytes),
 			}
+		} else if let Some(boundary) = multipart_boundary {
+			// Multipart bodies (e.g. audio transcriptions, image edits) are forwarded as-is, but we still
+			// read `model` so it can be logged and transformed like a JSON request's.
+			let mut body = bytes;
+			let mut model = model_router::multipart_model(&body, &boundary).await.ok();
+			// Body mutations (`transformation`, `overrides`, `defaults`) are defined over a JSON object,
+			// such as `model: llmRequest.model.stripPrefix("openai/")`. To reuse them, we evaluate them
+			// against a stand-in object holding only the form's `model`. Of the result we only take
+			// `model` back: other form fields are opaque, so mutations to them cannot apply here.
+			if let Some(p) = policies
+				&& p.has_request_body_mutations()
+				&& let Some(original) = &model
+			{
+				let mutated =
+					p.apply_request_body_mutations(serde_json::json!({ "model": original }), log)?;
+				// Rewrite only the `model` form field, leaving the rest (such as the uploaded file)
+				// byte-for-byte intact. A body we cannot parse is forwarded unchanged, as Detect does
+				// with malformed JSON.
+				if let Some(target) = mutated.get("model").and_then(serde_json::Value::as_str)
+					&& target != original
+					&& let Ok(Some(rewritten)) =
+						model_router::rewrite_multipart_body_model(&body, &boundary, target).await
+				{
+					body = rewritten;
+					model = Some(target.to_string());
+				}
+			}
+			types::detect::Request::Multipart { body, model }
 		} else {
 			types::detect::Request::new_raw(bytes)
 		};
@@ -2251,14 +2282,15 @@ impl AIProvider {
 			.process_non_chat_request(
 				backend_info,
 				policies,
-				InputFormat::Detect,
+				InputFormat::Detect(operation),
 				req,
 				parts,
 				managed_body,
 				false,
 				log,
 				|_, req, _, _| match req {
-					types::detect::Request::Raw(bytes) => Ok(bytes.to_vec()),
+					types::detect::Request::Raw(bytes)
+					| types::detect::Request::Multipart { body: bytes, .. } => Ok(bytes.to_vec()),
 					types::detect::Request::Json(value) => {
 						serde_json::to_vec(value).map_err(AIError::RequestMarshal)
 					},
@@ -2415,7 +2447,8 @@ impl AIProvider {
 
 		let mut llm_info =
 			req.to_llm_request(self.provider(), tokenize && guardrail_rejection.is_none())?;
-		if original_format == InputFormat::Detect {
+		if matches!(original_format, InputFormat::Detect(_)) {
+			llm_info.input_format = original_format;
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
 		llm_info.cache_convention = cache_convention_for(
@@ -2544,7 +2577,7 @@ impl AIProvider {
 	{
 		// Detect is raw passthrough and keeps its client-facing route type upstream.
 		let provider_format = match original_format {
-			InputFormat::Detect => None,
+			InputFormat::Detect(_) => None,
 			_ => Some(
 				self
 					.non_chat_provider_format_for(
@@ -2615,13 +2648,43 @@ impl AIProvider {
 	pub async fn process_response(
 		&self,
 		client: PolicyClient,
-		req: LLMRequest,
+		mut req: LLMRequest,
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		logging: LLMLogging,
 		model_catalog: Option<&Arc<catalog::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
+		// Detect requests are opaque, so the response decides how it is handled: event streams are
+		// inspected as they pass, JSON is buffered, and anything else (e.g. audio) has no usage to read.
+		if matches!(req.input_format, InputFormat::Detect(_))
+			&& !req.streaming
+			&& resp.status().is_success()
+			&& resp.headers().contains_key(header::CONTENT_TYPE)
+		{
+			match http::classify_content_type(resp.headers()) {
+				http::WellKnownContentTypes::Sse => req.streaming = true,
+				http::WellKnownContentTypes::Json => {},
+				http::WellKnownContentTypes::Unknown => {
+					let (mut parts, body) = resp.into_parts();
+					let llm_info = LLMInfo::new(req, LLMResponse::default());
+					parts
+						.extensions
+						.insert(crate::cel::LLMContext::from_llm_info(
+							llm_info.clone(),
+							model_catalog.map(Arc::as_ref),
+						));
+					let resp = Response::from_parts(parts, body);
+					// There is no usage to read, but remote rate limits with a `cost` expression still charge.
+					if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
+						let exec = cel::Executor::new_response(req_snapshot.as_deref(), &resp);
+						amend_tokens(rate_limit, &llm_info, exec);
+					}
+					logging.response.store(Some(llm_info));
+					return Ok(resp);
+				},
+			}
+		}
 		// Non-success responses are plain JSON, not event-stream data.
 		// Only enter the streaming path for successful responses; errors
 		// fall through to the buffered path where process_error translates them.
@@ -3120,7 +3183,7 @@ impl AIProvider {
 		bytes: &Bytes,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		if req.input_format == InputFormat::Detect {
+		if matches!(req.input_format, InputFormat::Detect(_)) {
 			return Ok(Box::new(
 				serde_json::from_slice::<types::detect::Response>(bytes)
 					.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
@@ -3204,7 +3267,7 @@ impl AIProvider {
 		);
 
 		let resp = Response::from_parts(parts, body);
-		let resp = if matches!(input_format, InputFormat::Detect) {
+		let resp = if matches!(input_format, InputFormat::Detect(_)) {
 			resp
 		} else {
 			normalize_sse_response_headers(resp)
@@ -3216,7 +3279,7 @@ impl AIProvider {
 		// wire format differs from SSE. Detect paths are raw pass-throughs; skip them.
 		let evaluators = if response_policies.streaming_prompt_guard_enabled
 			&& !response_policies.prompt_guard.is_empty()
-			&& !matches!(input_format, InputFormat::Detect)
+			&& !matches!(input_format, InputFormat::Detect(_))
 		{
 			use policy::PromptGuard;
 			let temp_guard = PromptGuard {
@@ -3263,10 +3326,10 @@ impl AIProvider {
 			)
 		} else {
 			match (self, input_format) {
-				(AIProvider::Bedrock(_), InputFormat::Detect) => {
+				(AIProvider::Bedrock(_), InputFormat::Detect(_)) => {
 					types::detect::passthrough_aws_stream(logger, resp)
 				},
-				(_, InputFormat::Detect) => types::detect::passthrough_stream(logger, resp),
+				(_, InputFormat::Detect(_)) => types::detect::passthrough_stream(logger, resp),
 				(_, InputFormat::Realtime) => {
 					return Err(AIError::UnsupportedConversion(strng::literal!(
 						"realtime does not use streaming codepath"
@@ -3458,7 +3521,7 @@ impl AIProvider {
 				// Passthrough; Vertex embeddings endpoint already returns OpenAI-compatible errors.
 				Ok(bytes.clone())
 			},
-			(_, InputFormat::Detect | InputFormat::Decisions | InputFormat::SystemOne) => {
+			(_, InputFormat::Detect(_) | InputFormat::Decisions | InputFormat::SystemOne) => {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},

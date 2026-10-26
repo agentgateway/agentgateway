@@ -29,6 +29,11 @@ fn lookup<'a, T, const C: usize>(
 pub enum Request {
 	Raw(Bytes),
 	Json(serde_json::Value),
+	/// A multipart/form-data body, forwarded as-is; `model` comes from its form field.
+	Multipart {
+		body: Bytes,
+		model: Option<String>,
+	},
 }
 
 impl<'de> Deserialize<'de> for Request {
@@ -49,7 +54,7 @@ impl Request {
 		f: impl Fn(&'a Value) -> Option<T>,
 	) -> Option<T> {
 		match &self {
-			Self::Raw(_) => None,
+			Self::Raw(_) | Self::Multipart { .. } => None,
 			Self::Json(b) => lookup(b, path, f),
 		}
 	}
@@ -57,7 +62,7 @@ impl Request {
 
 impl RequestType for Request {
 	fn input_format() -> crate::InputFormat {
-		crate::InputFormat::Detect
+		crate::InputFormat::Detect(None)
 	}
 	fn supports_model(&self) -> bool {
 		false
@@ -70,6 +75,7 @@ impl RequestType for Request {
 	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
 		match self {
 			Self::Raw(body) => serde_json::from_slice(body),
+			Self::Multipart { .. } => Ok(Value::Null),
 			Self::Json(body) => Ok(body.clone()),
 		}
 	}
@@ -90,12 +96,13 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			// We never tokenize these, so always empty
 			input_tokens: None,
-			input_format: InputFormat::Detect,
+			input_format: InputFormat::Detect(None),
 			cache_convention: crate::CacheTokenConvention::pending(),
-			request_model: self
-				.lookup(lookups::MODEL, |v| v.as_str())
-				.map(Into::into)
-				.unwrap_or_default(),
+			request_model: match self {
+				Self::Multipart { model, .. } => model.as_deref().map(Into::into),
+				_ => self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
+			}
+			.unwrap_or_default(),
 			provider,
 			streaming: self
 				.lookup(lookups::STREAM, |v| v.as_bool())
@@ -200,7 +207,7 @@ mod tests {
 	fn llm_request() -> LLMRequest {
 		LLMRequest {
 			input_tokens: None,
-			input_format: crate::InputFormat::Detect,
+			input_format: crate::InputFormat::Detect(None),
 			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
 			provider: strng::new("aws.bedrock"),

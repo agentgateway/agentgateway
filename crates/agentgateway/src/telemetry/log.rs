@@ -33,8 +33,8 @@ use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::substrate::ateattr;
 use crate::http::substrate::ateattr::{ResumeDisposition, RouteOutcome};
 use crate::http::{Request, health};
-use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
+use crate::llm::{DetectedOperation, InputFormat};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
@@ -1390,8 +1390,19 @@ fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 		InputFormat::Rerank => "rerank",
 		InputFormat::Decisions | InputFormat::SystemOne => "decisions",
 		InputFormat::CountTokens | InputFormat::GeminiCountTokens => "count_tokens",
-		// Detection has not identified the operation; do not assume it is chat.
-		InputFormat::Detect => "unknown",
+		InputFormat::Detect(Some(operation)) => match operation {
+			DetectedOperation::Chat => "chat",
+			DetectedOperation::GenerateContent => "generate_content",
+			DetectedOperation::Embeddings => "embeddings",
+			DetectedOperation::CountTokens => "count_tokens",
+			DetectedOperation::Rerank => "rerank",
+			DetectedOperation::Decisions => "decisions",
+			DetectedOperation::Image => "image_generation",
+			DetectedOperation::Ocr => "ocr",
+			DetectedOperation::Compaction => "compaction",
+		},
+		// The path is not a known serving endpoint; do not assume it is chat.
+		InputFormat::Detect(None) => "unknown",
 	}
 }
 
@@ -3319,7 +3330,8 @@ mod tests {
 			(InputFormat::Decisions, "decisions"),
 			(InputFormat::CountTokens, "count_tokens"),
 			(InputFormat::GeminiCountTokens, "count_tokens"),
-			(InputFormat::Detect, "unknown"),
+			(InputFormat::Detect(None), "unknown"),
+			(InputFormat::Detect(Some(DetectedOperation::Chat)), "chat"),
 		] {
 			for streaming in [false, true] {
 				for has_response in [false, true] {
