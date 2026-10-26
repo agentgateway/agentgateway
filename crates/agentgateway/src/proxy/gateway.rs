@@ -28,7 +28,7 @@ use tracing::{Instrument, debug, error, event, info, info_span, warn};
 use crate::http::substrate::{self, ActorIdentity, EgressTlsMode};
 use crate::proxy::{ProxyError, WaypointService, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
-use crate::telemetry::metrics::{AdmissionLabels, HbonePassthroughLabels, TCPLabels};
+use crate::telemetry::metrics::{AdmissionLabels, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
@@ -1728,10 +1728,6 @@ impl Gateway {
 			warn!("failed to send response");
 			return;
 		};
-		pi.metrics
-			.hbone_passthrough_connections
-			.get_or_create(&HbonePassthroughLabels { port })
-			.inc();
 		let mut con = agent_hbone::RWStream {
 			stream: resp,
 			buf: Bytes::new(),

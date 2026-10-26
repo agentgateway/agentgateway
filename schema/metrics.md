@@ -57,6 +57,5 @@
 | `agentgateway_atenet_router_route_duration_seconds` | Histogram | seconds | Time from receiving a Substrate request to resolving its worker endpoint. |
 | `agentgateway_build_info` | Info | — | Agentgateway build information. |
 | `agentgateway_config_synchronized` | Gauge | — | Whether the last configuration load/reload was successful or not, being synchronized with the on-disk configuration. |
-| `agentgateway_hbone_passthrough_connections_total` | Counter | — | The total number of inbound HBONE connections forwarded to a local passthrough port. |
 | `agentgateway_substrate_request_parking_active` | Gauge | — | Number of requests waiting for a Substrate actor to become routable. |
 | `agentgateway_upstream_call_duration_seconds` | Histogram | seconds | Duration of outbound calls made by agentgateway (seconds). |
