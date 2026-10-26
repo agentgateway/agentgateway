@@ -1895,16 +1895,18 @@ async fn open_actor_egress_tunnel_protocol(
 
 #[cfg(feature = "crypto-aws-lc")]
 #[rstest::rstest]
-#[case(false, false, false)]
-#[case(false, true, false)]
-#[case(true, false, false)]
-#[case(true, true, false)]
-#[case(false, true, true)]
+#[case(false, false, false, None)]
+#[case(false, true, false, None)]
+#[case(false, true, false, Some("0s"))]
+#[case(true, false, false, None)]
+#[case(true, true, false, None)]
+#[case(false, true, true, None)]
 #[tokio::test]
 async fn substrate_egress_replaces_only_requested_credentials(
 	#[case] https: bool,
 	#[case] placeholder: bool,
 	#[case] actor_jwt: bool,
+	#[case] cache_ttl: Option<&str>,
 	#[values(ActorState::Running, ActorState::Resuming)] state: ActorState,
 	#[values(false, true)] outer_http2: bool,
 ) {
@@ -2068,14 +2070,18 @@ async fn substrate_egress_replaces_only_requested_credentials(
 			}
 		}))
 		.await;
+	let mut credential_provider_config = json!({
+		"uriAuthority": "kubernetes.io",
+		"target": { "host": credential_provider.address.to_string() }
+	});
+	if let Some(ttl) = cache_ttl {
+		credential_provider_config["cacheTtl"] = json!(ttl);
+	}
 	gateway
 		.attach_route_policy(json!({
 			"substrateEgress": {
 				"host": api.address.to_string(),
-				"credentialProviders": [{
-					"uriAuthority": "kubernetes.io",
-					"target": { "host": credential_provider.address.to_string() }
-				}]
+				"credentialProviders": [credential_provider_config]
 			}
 		}))
 		.await;
@@ -2143,10 +2149,20 @@ async fn substrate_egress_replaces_only_requested_credentials(
 		exchange(io, &request).await;
 		assert_eq!(mint_calls.load(Ordering::Relaxed), 2);
 	}
+	// A second request reuses the cached credential unless the provider's TTL is zero.
+	let repeated = placeholder && !actor_jwt && !https;
+	if repeated {
+		let io = open_actor_egress_tunnel_protocol(&gateway, port, outer_http2).await;
+		exchange(io, &request).await;
+		assert_eq!(
+			credential_calls.load(Ordering::Relaxed),
+			1 + usize::from(cache_ttl == Some("0s"))
+		);
+	}
 	let upstream_requests = upstream.received_requests().await.unwrap();
 	assert_eq!(
 		upstream_requests.len(),
-		if delayed_actor_jwt { 2 } else { 1 }
+		if delayed_actor_jwt || repeated { 2 } else { 1 }
 	);
 	assert_eq!(
 		upstream_requests[0]

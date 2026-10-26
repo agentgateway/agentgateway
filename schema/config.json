@@ -8460,6 +8460,13 @@
         "target": {
           "description": "Backend that resolves credentials and policies used when connecting to it.",
           "$ref": "#/$defs/SimpleBackendReferenceWithPolicies"
+        },
+        "cacheTtl": {
+          "description": "How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,

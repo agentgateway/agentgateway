@@ -605,6 +605,7 @@
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`binds[].listeners[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`binds[].listeners[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`binds[].listeners[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -2163,6 +2164,7 @@
 |`policies[].policy.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`policies[].policy.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`policies[].policy.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`policies[].policy.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`policies[].policy.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`policies[].policy.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -3298,6 +3300,7 @@
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routeGroups[].routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routeGroups[].routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routeGroups[].routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -4924,6 +4927,7 @@
 |`routes[].policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`routes[].policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`routes[].policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`routes[].policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`routes[].policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`routes[].policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routes[].policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -6638,6 +6642,7 @@
 |`mcp.policies.substrateEgress.credentialProviders[].target.host`|string|Hostname or IP address|
 |`mcp.policies.substrateEgress.credentialProviders[].target.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`mcp.policies.substrateEgress.credentialProviders[].target.policies`|[`<BackendPolicies>`](#backendpolicies)|Backend policies used when connecting to the service.|
+|`mcp.policies.substrateEgress.credentialProviders[].cacheTtl`|string|How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.|
 |`mcp.policies.transformations`|object|Modify request and response headers, bodies, or metadata.|
 |`mcp.policies.transformations.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.transformations.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|

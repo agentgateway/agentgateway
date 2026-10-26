@@ -19,6 +19,7 @@ use crate::{cel, *};
 
 const DEFAULT_CREDENTIAL_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CREDENTIAL_CACHE_TTL: Duration = Duration::from_secs(300);
+const CREDENTIAL_FETCH_TIMEOUT: Duration = Duration::from_secs(4);
 
 /// The inner HTTP transport, independent of the actor's CONNECT transport or URI scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +53,14 @@ pub struct CredentialProvider {
 	pub uri_authority: String,
 	/// Backend that resolves credentials and policies used when connecting to it.
 	pub target: SimpleBackendReferenceWithPolicies,
+	/// How long to reuse a fetched credential. Defaults to 5 minutes; `0s` disables caching.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub cache_ttl: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -281,11 +290,8 @@ impl SubstrateEgress {
 			actor_uid: identity.actor_uid.clone(),
 			uri: uri.to_owned(),
 		};
-		if let Some(secret) =
-			self
-				.credential_cache
-				.get(&key, Instant::now(), DEFAULT_CREDENTIAL_CACHE_TTL)
-		{
+		let ttl = provider.cache_ttl.unwrap_or(DEFAULT_CREDENTIAL_CACHE_TTL);
+		if let Some(secret) = self.credential_cache.get(&key, Instant::now(), ttl) {
 			return Ok(secret);
 		}
 
@@ -303,7 +309,9 @@ impl SubstrateEgress {
 		);
 		let mut provider =
 			protos::credprovider::credential_provider_client::CredentialProviderClient::new(channel);
-		let response = provider.fetch_secret(request).await;
+		let response = tokio::time::timeout(CREDENTIAL_FETCH_TIMEOUT, provider.fetch_secret(request))
+			.await
+			.unwrap_or_else(|_| Err(tonic::Status::deadline_exceeded("FetchSecret timed out")));
 		if let Some(span) = span.as_deref_mut() {
 			span.record_grpc_result(&response);
 		}
@@ -312,9 +320,11 @@ impl SubstrateEgress {
 			.map_err(|status| credential_provider_error(uri, status))?
 			.into_inner();
 		let secret = credential_secret(response.opaque_bytes)?;
-		self
-			.credential_cache
-			.insert(key, secret.clone(), Instant::now());
+		if !ttl.is_zero() {
+			self
+				.credential_cache
+				.insert(key, secret.clone(), Instant::now());
+		}
 		Ok(secret)
 	}
 
