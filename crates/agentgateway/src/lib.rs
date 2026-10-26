@@ -428,57 +428,6 @@ pub struct RawHBONE {
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
-	/// Ports on the proxy's own address that inbound HBONE CONNECTs may reach without a bind,
-	/// forwarded to localhost. No bind-scoped policies apply. Defaults to none.
-	passthrough_ports: Option<Vec<u16>>,
-}
-
-#[derive(serde::Serialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct HbonePassthrough {
-	ports: std::collections::BTreeSet<u16>,
-	local_ips: Vec<IpAddr>,
-}
-
-impl HbonePassthrough {
-	pub fn new(
-		ports: impl IntoIterator<Item = u16>,
-		local_ips: impl IntoIterator<Item = IpAddr>,
-	) -> Self {
-		Self {
-			ports: ports.into_iter().collect(),
-			local_ips: local_ips.into_iter().collect(),
-		}
-	}
-
-	pub fn allows(&self, target: SocketAddr) -> bool {
-		self.ports.contains(&target.port())
-			&& (target.ip().is_loopback() || self.local_ips.contains(&target.ip()))
-	}
-}
-
-#[cfg(test)]
-mod hbone_passthrough_tests {
-	use super::*;
-
-	fn addr(s: &str) -> SocketAddr {
-		s.parse().unwrap()
-	}
-
-	#[test]
-	fn allows_listed_port_on_own_addresses_only() {
-		let pt = HbonePassthrough::new([15020], [addr("10.0.0.5:0").ip()]);
-		assert!(pt.allows(addr("127.0.0.1:15020")));
-		assert!(pt.allows(addr("[::1]:15020")));
-		assert!(pt.allows(addr("10.0.0.5:15020")));
-		assert!(!pt.allows(addr("10.0.0.6:15020")));
-		assert!(!pt.allows(addr("127.0.0.1:15021")));
-	}
-
-	#[test]
-	fn empty_allows_nothing() {
-		assert!(!HbonePassthrough::default().allows(addr("127.0.0.1:15020")));
-	}
 }
 
 #[apply(schema_de!)]
@@ -761,7 +710,6 @@ pub struct Config {
 	// For waypoint identification
 	pub self_addr: Option<types::discovery::WaypointIdentity>,
 	pub hbone: Arc<agent_hbone::Config>,
-	pub hbone_passthrough: HbonePassthrough,
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,
 	pub ca: Option<caclient::Config>,
@@ -967,6 +915,7 @@ pub struct ProxyInputs {
 	pub model_catalog: Arc<llm::catalog::ModelCatalog>,
 
 	pub admin: Option<management::admin::AdminService>,
+	pub stats: Option<management::metrics_server::MetricsService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
@@ -997,6 +946,7 @@ impl ProxyInputs {
 			metrics,
 			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
 			admin: None,
+			stats: None,
 			mcp_state,
 			ca,
 			spiffe,
@@ -1077,6 +1027,14 @@ impl Address {
 			Address::Off | Address::UnixSocket(_) => 0,
 			Address::Localhost(_, port) => *port,
 			Address::SocketAddr(s) => s.port(),
+		}
+	}
+
+	pub fn tcp_port(&self) -> Option<u16> {
+		match self {
+			Address::Off | Address::UnixSocket(_) => None,
+			Address::Localhost(_, port) => Some(*port),
+			Address::SocketAddr(s) => Some(s.port()),
 		}
 	}
 

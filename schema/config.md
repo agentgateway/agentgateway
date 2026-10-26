@@ -144,7 +144,6 @@
 |`config.hbone.frameSize`|integer|HTTP/2 maximum frame size in bytes. Defaults to 1 MiB.|
 |`config.hbone.poolMaxStreamsPerConn`|integer|Maximum concurrent streams per pooled connection. Defaults to 100.|
 |`config.hbone.poolUnusedReleaseTimeout`|string|Duration after which unused pooled connections are released.|
-|`config.hbone.passthroughPorts`|[]integer|Ports on the proxy's own address that inbound HBONE CONNECTs may reach without a bind,<br>forwarded to localhost. No bind-scoped policies apply. Defaults to none.|
 |`binds`|[]object|binds defines the low-level API for configuring the proxy.<br>Each bind represents a single port the proxy listens on, as well as the full set of configuration<br>(listeners, routes, backends) for that port.<br>Deprecated; usage of `gateways` and `routes` is recommended instead.|
 |`binds[].port`|integer|Port to bind on. Omit it for an internal wildcard bind (which serves any destination port<br>via in-process routing). A numeric port is required unless `mode` is `internal`.|
 |`binds[].protocol`|enum|Protocol handling for the entire bind. When omitted, it is inferred from the listeners.<br>Possible values: `HTTP`, `TLS`, `TCP`, `AUTO`.|

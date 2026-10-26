@@ -132,10 +132,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: INSTANCE_IPS
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIPs
         - name: SERVICE_ACCOUNT
           valueFrom:
             fieldRef:
@@ -148,8 +144,6 @@ spec:
           value: cluster-1
         - name: NETWORK
           value: network-1
-        - name: HBONE_PASSTHROUGH_PORTS
-          value: "15020"
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:

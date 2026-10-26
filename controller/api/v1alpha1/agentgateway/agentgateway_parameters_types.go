@@ -265,15 +265,6 @@ type IstioSpec struct {
 	//
 	// +optional
 	Network string `json:"network,omitempty"`
-	// Ports on the gateway pod that in-mesh callers may reach over HBONE although no listener
-	// serves them. istiod advertises an HBONE-terminating pod as HBONE for every port, so without
-	// this the metrics port is unreachable from an in-mesh scraper. Defaults to the metrics port,
-	// 15020. Set to an empty list to disable.
-	//
-	// +optional
-	// +kubebuilder:validation:items:Minimum=1
-	// +kubebuilder:validation:items:Maximum=65535
-	PassthroughPorts *[]int32 `json:"passthroughPorts,omitempty"`
 }
 
 // SpiffeSpec configures gateway-wide SPIFFE Workload API integration: where the Workload API

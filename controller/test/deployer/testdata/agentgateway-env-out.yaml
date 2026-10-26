@@ -126,10 +126,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-        - name: INSTANCE_IPS
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIPs
         - name: SERVICE_ACCOUNT
           valueFrom:
             fieldRef:

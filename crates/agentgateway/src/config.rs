@@ -442,16 +442,6 @@ pub fn parse_config(
 	}
 
 	let hbone_defaults = agent_hbone::Config::default();
-	let hbone_passthrough = crate::HbonePassthrough::new(
-		parse_port_list("HBONE_PASSTHROUGH_PORTS")?
-			.or(raw.hbone.as_ref().and_then(|h| h.passthrough_ports.clone()))
-			.unwrap_or_default(),
-		parse::<String>("INSTANCE_IPS")?
-			.or(ENV.instance_ip.clone())
-			.unwrap_or_default()
-			.split(',')
-			.filter_map(|ip| ip.trim().parse::<IpAddr>().ok()),
-	);
 	Ok(crate::Config {
 		ipv6_enabled,
 		network: network.clone().into(),
@@ -460,7 +450,6 @@ pub fn parse_config(
 		stats_addr,
 		readiness_addr,
 		self_addr,
-		hbone_passthrough,
 		xds,
 		ca,
 		spiffe,
@@ -752,23 +741,6 @@ where
 	<T as FromStr>::Err: std::error::Error + Sync + Send,
 {
 	parse(env).map(|v| v.unwrap_or(default))
-}
-
-fn parse_port_list(env: &str) -> anyhow::Result<Option<Vec<u16>>> {
-	parse::<String>(env)?
-		.map(|list| {
-			list
-				.split(',')
-				.map(str::trim)
-				.filter(|port| !port.is_empty())
-				.map(|port| {
-					port
-						.parse::<u16>()
-						.map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, list, e))
-				})
-				.collect()
-		})
-		.transpose()
 }
 
 fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
@@ -1964,93 +1936,5 @@ config:
 			.spiffe
 			.expect("spiffe.endpoint should enable the SPIFFE Workload API");
 		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
-	}
-
-	#[test]
-	fn hbone_passthrough_defaults_to_nothing() {
-		let _env = lock_env();
-		let config = parse_config("{}".to_string(), None).expect("config should parse");
-		assert!(
-			!config
-				.hbone_passthrough
-				.allows("127.0.0.1:15020".parse().unwrap())
-		);
-	}
-
-	#[test]
-	fn hbone_passthrough_ports_from_config_file() {
-		let _env = lock_env();
-		let config = parse_config(
-			"config:\n  hbone:\n    passthroughPorts: [15020]\n".to_string(),
-			None,
-		)
-		.expect("config should parse");
-		assert!(
-			config
-				.hbone_passthrough
-				.allows("127.0.0.1:15020".parse().unwrap())
-		);
-		assert!(
-			!config
-				.hbone_passthrough
-				.allows("127.0.0.1:15021".parse().unwrap())
-		);
-	}
-
-	#[test]
-	fn hbone_passthrough_ports_env_overrides_config_file() {
-		let _env = lock_env();
-		let _ports = TempEnvVar::set("HBONE_PASSTHROUGH_PORTS", "15021, 15000,");
-		let config = parse_config(
-			"config:\n  hbone:\n    passthroughPorts: [15020]\n".to_string(),
-			None,
-		)
-		.expect("config should parse");
-		assert!(
-			!config
-				.hbone_passthrough
-				.allows("127.0.0.1:15020".parse().unwrap())
-		);
-		assert!(
-			config
-				.hbone_passthrough
-				.allows("127.0.0.1:15021".parse().unwrap())
-		);
-		assert!(
-			config
-				.hbone_passthrough
-				.allows("127.0.0.1:15000".parse().unwrap())
-		);
-	}
-
-	#[test]
-	fn hbone_passthrough_accepts_every_instance_ip() {
-		let _env = lock_env();
-		let _ports = TempEnvVar::set("HBONE_PASSTHROUGH_PORTS", "15020");
-		let _ips = TempEnvVar::set("INSTANCE_IPS", "10.0.0.5,fd00::5");
-		let config = parse_config("{}".to_string(), None).expect("config should parse");
-		assert!(
-			config
-				.hbone_passthrough
-				.allows("10.0.0.5:15020".parse().unwrap())
-		);
-		assert!(
-			config
-				.hbone_passthrough
-				.allows("[fd00::5]:15020".parse().unwrap())
-		);
-		assert!(
-			!config
-				.hbone_passthrough
-				.allows("10.0.0.6:15020".parse().unwrap())
-		);
-	}
-
-	#[test]
-	fn hbone_passthrough_ports_env_rejects_non_port() {
-		let _env = lock_env();
-		let _ports = TempEnvVar::set("HBONE_PASSTHROUGH_PORTS", "15020,metrics");
-		let err = parse_config("{}".to_string(), None).expect_err("non-numeric port should fail");
-		assert!(err.to_string().contains("HBONE_PASSTHROUGH_PORTS"));
 	}
 }

@@ -1507,6 +1507,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 		)),
 		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,
+		stats: None,
 		upstream: client.clone(),
 		ca: None,
 		spiffe,

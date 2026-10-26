@@ -6,7 +6,7 @@ use crate::common::hbone_server::{HboneTestServer, Mode, client_tls_config};
 use crate::common::mock_ca_server::start_mock_ca_server;
 
 #[tokio::test]
-async fn test_hbone_gateway_passthrough_ports() -> anyhow::Result<()> {
+async fn test_hbone_gateway_serves_metrics() -> anyhow::Result<()> {
 	use bytes::Bytes;
 	use http::{Method, Request, StatusCode};
 	use tokio::net::{TcpListener, TcpStream};
@@ -14,19 +14,8 @@ async fn test_hbone_gateway_passthrough_ports() -> anyhow::Result<()> {
 	agent_core::telemetry::testing::setup_test_logging();
 
 	let ca_addr = start_mock_ca_server().await?;
-
-	let echo = TcpListener::bind("127.0.0.1:0").await?;
-	let echo_port = echo.local_addr()?.port();
-	tokio::spawn(async move {
-		while let Ok((mut stream, _)) = echo.accept().await {
-			tokio::spawn(async move {
-				let (mut r, mut w) = stream.split();
-				let _ = tokio::io::copy(&mut r, &mut w).await;
-			});
-		}
-	});
-	let closed_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
-	let unlisted_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+	let stats_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
+	let other_port = TcpListener::bind("127.0.0.1:0").await?.local_addr()?.port();
 
 	let gw_config = format!(
 		r#"config:
@@ -34,8 +23,7 @@ async fn test_hbone_gateway_passthrough_ports() -> anyhow::Result<()> {
   serviceAccount: default
   trustDomain: cluster.local
   caAddress: "http://{ca_addr}"
-  hbone:
-    passthroughPorts: [{echo_port}, {closed_port}]
+  statsAddr: 127.0.0.1:{stats_port}
 binds:
 - port: $PORT
   tunnelProtocol: hboneGateway
@@ -45,7 +33,7 @@ binds:
     tcpRoutes:
     - name: default
       backends:
-        - host: 127.0.0.1:{unlisted_port}
+        - host: 127.0.0.1:{other_port}
 "#
 	);
 	let gw = AgentGateway::new(gw_config).await?;
@@ -70,26 +58,27 @@ binds:
 		h2.send_request(req, false).unwrap()
 	};
 
-	let (resp, mut send) = connect(format!("127.0.0.1:{echo_port}"));
+	let (resp, mut send) = connect(format!("127.0.0.1:{stats_port}"));
 	let resp = resp.await?;
 	assert_eq!(resp.status(), StatusCode::OK);
 	let mut recv = resp.into_body();
-	send.send_data(Bytes::from_static(b"hello"), false)?;
-	let mut echoed = Vec::new();
-	while echoed.len() < 5 {
-		let chunk = tokio::time::timeout(std::time::Duration::from_secs(2), recv.data())
-			.await?
-			.expect("echo stream closed early")?;
-		echoed.extend_from_slice(&chunk);
+	send.send_data(
+		Bytes::from_static(b"GET /metrics HTTP/1.1\r\nHost: agentgateway\r\nConnection: close\r\n\r\n"),
+		true,
+	)?;
+	let mut body = Vec::new();
+	while let Some(chunk) =
+		tokio::time::timeout(std::time::Duration::from_secs(5), recv.data()).await?
+	{
+		let chunk = chunk?;
 		recv.flow_control().release_capacity(chunk.len())?;
+		body.extend_from_slice(&chunk);
 	}
-	assert_eq!(echoed, b"hello");
-	send.send_data(Bytes::new(), true)?;
+	let text = String::from_utf8_lossy(&body);
+	assert!(text.starts_with("HTTP/1.1 200"), "{text}");
+	assert!(text.contains("agentgateway_build_info"), "{text}");
 
-	let (resp, _send) = connect(format!("127.0.0.1:{closed_port}"));
-	assert_eq!(resp.await?.status(), StatusCode::SERVICE_UNAVAILABLE);
-
-	let (resp, _send) = connect(format!("127.0.0.1:{unlisted_port}"));
+	let (resp, _send) = connect(format!("127.0.0.1:{other_port}"));
 	assert_eq!(resp.await?.status(), StatusCode::NOT_FOUND);
 
 	gw.shutdown().await;

@@ -59,10 +59,12 @@ impl AgentGateway {
 			Value::String("adminAddr".to_string()),
 			Value::String("127.0.0.1:0".to_string()),
 		);
-		config.insert(
-			Value::String("statsAddr".to_string()),
-			Value::String("127.0.0.1:0".to_string()),
-		);
+		if !config.contains_key(Value::String("statsAddr".to_string())) {
+			config.insert(
+				Value::String("statsAddr".to_string()),
+				Value::String("127.0.0.1:0".to_string()),
+			);
+		}
 		config.insert(
 			Value::String("readinessAddr".to_string()),
 			Value::String("127.0.0.1:0".to_string()),

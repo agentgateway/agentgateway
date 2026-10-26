@@ -161,12 +161,21 @@ pub async fn run_with_ui_assets(
 		info!("serving UI at {}", ui_url(config.as_ref()).await);
 	}
 
+	let metrics_server = crate::management::metrics_server::Server::new(
+		config.stats_addr.clone(),
+		drain_rx.clone(),
+		registry,
+	)
+	.await
+	.context("stats server starts")?;
+
 	let pi = ProxyInputs {
 		cfg: config.clone(),
 		stores: stores.clone(),
 		metrics: metrics_handle.clone(),
 		model_catalog,
 		admin: Some(admin_server.service()),
+		stats: Some(metrics_server.service()),
 		upstream: client.clone(),
 		ca,
 		spiffe,
@@ -195,14 +204,6 @@ pub async fn run_with_ui_assets(
 	// Run the admin server in the current tokio worker pool.
 	admin_server.spawn();
 
-	// Create and start the metrics server.
-	let metrics_server = crate::management::metrics_server::Server::new(
-		config.stats_addr.clone(),
-		drain_rx.clone(),
-		registry,
-	)
-	.await
-	.context("stats server starts")?;
 	// Run the metrics sever in the current tokio worker pool.
 	metrics_server.spawn();
 	Ok(Bound {

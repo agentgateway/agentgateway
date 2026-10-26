@@ -526,18 +526,6 @@ spec:
                     description: Istio network this gateway runs in. If unset, defaults
                       to the empty network.
                     type: string
-                  passthroughPorts:
-                    description: |-
-                      Ports on the gateway pod that in-mesh callers may reach over HBONE although no listener
-                      serves them. istiod advertises an HBONE-terminating pod as HBONE for every port, so without
-                      this the metrics port is unreachable from an in-mesh scraper. Defaults to the metrics port,
-                      15020. Set to an empty list to disable.
-                    items:
-                      format: int32
-                      maximum: 65535
-                      minimum: 1
-                      type: integer
-                    type: array
                   trustDomain:
                     description: |-
                       Istio trust domain. If not set, defaults to `cluster.local`, or the default
