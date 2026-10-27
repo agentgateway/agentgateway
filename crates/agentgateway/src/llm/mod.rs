@@ -324,19 +324,6 @@ struct ChatTranslation {
 	output: ChatFormat,
 }
 
-fn completions_response_with_model(bytes: &Bytes, model: &str) -> Result<Bytes, AIError> {
-	let mut response: std::collections::HashMap<String, &serde_json::value::RawValue> =
-		serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
-	if response.contains_key("model") {
-		return Ok(bytes.clone());
-	}
-	let model = serde_json::value::to_raw_value(&model).map_err(AIError::ResponseParsing)?;
-	response.insert("model".to_string(), &model);
-	serde_json::to_vec(&response)
-		.map(Bytes::from)
-		.map_err(AIError::ResponseParsing)
-}
-
 /// Result of translating a chat request before it is sent upstream.
 ///
 /// `body` is the upstream request payload. `provider_state` carries any
@@ -654,31 +641,21 @@ impl ChatTranslation {
 		ctx: &ChatResponseContext<'_>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		match self.output {
-			ChatFormat::OpenAICompletions => {
-				let response_bytes = match self.input {
-					InputFormat::Completions | InputFormat::Messages | InputFormat::Responses => {
-						completions_response_with_model(bytes, ctx.model)?
-					},
-					_ => bytes.clone(),
-				};
-				match self.input {
-					InputFormat::Completions => {
-						AIProvider::parse_response::<types::completions::Response>(&response_bytes)
-					},
-					InputFormat::Messages => {
-						conversion::completions::from_messages::translate_response(&response_bytes)
-					},
-					InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
-						&response_bytes,
-						ctx.model,
-						ctx.namespaces,
-					),
-					_ => Err(AIError::UnsupportedConversion(strng::format!(
-						"from {:?} to {:?}",
-						self.output,
-						self.input
-					))),
-				}
+			ChatFormat::OpenAICompletions => match self.input {
+				InputFormat::Completions => {
+					AIProvider::parse_response::<types::completions::Response>(bytes)
+				},
+				InputFormat::Messages => conversion::completions::from_messages::translate_response(bytes),
+				InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
+					bytes,
+					ctx.model,
+					ctx.namespaces,
+				),
+				_ => Err(AIError::UnsupportedConversion(strng::format!(
+					"from {:?} to {:?}",
+					self.output,
+					self.input
+				))),
 			},
 			ChatFormat::OpenAIResponses => match self.input {
 				InputFormat::Responses => AIProvider::parse_response::<types::responses::Response>(bytes),
