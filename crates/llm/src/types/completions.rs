@@ -86,6 +86,7 @@ pub struct StreamOptions {
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
+	#[serde(default)]
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub service_tier: Option<String>,
@@ -809,6 +810,7 @@ pub mod typed {
 		#[serde(default)]
 		pub created: u32,
 		/// The model used for the chat completion.
+		#[serde(default)]
 		pub model: String,
 		/// The service tier used for processing the request. This field is only included if the `service_tier` parameter is specified in the request.
 		#[serde(skip_serializing_if = "Option::is_none")]

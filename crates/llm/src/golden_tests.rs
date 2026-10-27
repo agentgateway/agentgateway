@@ -981,6 +981,10 @@ mod responses {
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
 		("content_filter", &[COMPLETIONS_TO_MESSAGES]),
 		("basic", ALL_COMPLETIONS),
+		(
+			"missing_model",
+			&[COMPLETIONS_TO_MESSAGES, COMPLETIONS_TO_RESPONSES],
+		),
 		("stop_sequence", &[COMPLETIONS_TO_MESSAGES]),
 		("audio", ALL_COMPLETIONS),
 		(
@@ -1311,7 +1315,7 @@ mod responses {
 							.map_err(AIError::ResponseParsing)
 					}),
 					COMPLETIONS_TO_MESSAGES => test_response(provider, &path, |i| {
-						conversion::completions::from_messages::translate_response(&i)
+						conversion::completions::from_messages::translate_response(&i, "input-model")
 					}),
 					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
 						conversion::openai_compat::to_responses::translate_response(&i, "input-model", None)

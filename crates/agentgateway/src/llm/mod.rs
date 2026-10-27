@@ -643,9 +643,16 @@ impl ChatTranslation {
 		match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
 				InputFormat::Completions => {
-					AIProvider::parse_response::<types::completions::Response>(bytes)
+					let mut resp = serde_json::from_slice::<types::completions::Response>(bytes)
+						.map_err(logged_response_parsing(bytes))?;
+					if resp.model.is_empty() {
+						resp.model = ctx.model.to_string();
+					}
+					Ok(Box::new(resp))
 				},
-				InputFormat::Messages => conversion::completions::from_messages::translate_response(bytes),
+				InputFormat::Messages => {
+					conversion::completions::from_messages::translate_response(bytes, ctx.model)
+				},
 				InputFormat::Responses => conversion::openai_compat::to_responses::translate_response(
 					bytes,
 					ctx.model,

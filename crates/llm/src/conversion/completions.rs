@@ -113,9 +113,12 @@ pub mod from_messages {
 		Ok(translate_internal(typed))
 	}
 
-	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp = serde_json::from_slice::<completions::Response>(bytes)
+	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+		let mut resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
+		if resp.model.is_empty() {
+			resp.model = model.to_string();
+		}
 		let provider_usage = resp.usage.as_ref().map(|u| super::super::ProviderUsage {
 			input_tokens: u.prompt_tokens as u64,
 			total_tokens: u.total_tokens as u64,

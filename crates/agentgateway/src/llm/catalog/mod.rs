@@ -1276,7 +1276,7 @@ mod tests {
 			expected_total,
 		) in [
 			(
-				agent_llm::conversion::completions::from_messages::translate_response(&completions),
+				agent_llm::conversion::completions::from_messages::translate_response(&completions, ""),
 				0.0005,
 				0.00003,
 				0.00025,
