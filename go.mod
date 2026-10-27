@@ -16,7 +16,7 @@ require (
 	github.com/envoyproxy/go-control-plane/envoy v1.40.1-0.20261017072358-cded3a6731eb
 	github.com/gdamore/tcell/v2 v2.13.10
 	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32
-	github.com/go-jose/go-jose/v4 v4.1.5
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/go-logr/logr v1.4.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang/mock v1.7.0-rc.1
