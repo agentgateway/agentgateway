@@ -2631,6 +2631,32 @@ impl OtelAccessLogger {
 			);
 		}
 
+		let text = |v: &ValueBag| -> String {
+			v.to_str()
+				.map(|s| s.into_owned())
+				.or_else(|| v.to_i64().map(|i| i.to_string()))
+				.or_else(|| v.to_f64().map(|f| f.to_string()))
+				.unwrap_or_else(|| v.to_string())
+		};
+		let mut method = String::new();
+		let mut path = String::new();
+		let mut status = String::new();
+		for (k, v) in kv {
+			let Some(v) = v else { continue };
+			match *k {
+				"http.request.method" => method = text(v),
+				"url.path" => path = text(v),
+				"http.response.status_code" => status = text(v),
+				_ => {},
+			}
+		}
+		let body = format!("{method} {path} {status}");
+		let body = body.trim();
+		if !body.is_empty() {
+			record.set_body(AnyValue::String(body.to_string().into()));
+		}
+		record.set_timestamp(std::time::SystemTime::now());
+
 		self.inner.logger.emit(record);
 	}
 }
@@ -2950,6 +2976,35 @@ mod tests {
 		assert_eq!(scope.name(), "agentgateway.access");
 		// opentelemetry-proto uses a record target as the wire scope name when one is set.
 		assert!(record.target().is_none());
+	}
+
+	#[test]
+	fn otlp_access_log_carries_a_body_and_timestamp() {
+		let exporter = RecordingLogExporter::default();
+		let provider = SdkLoggerProvider::builder()
+			.with_simple_exporter(exporter.clone())
+			.build();
+		let logger = OtelAccessLogger::from_provider(provider);
+
+		let kv = [
+			("http.request.method", Some(ValueBag::from("POST"))),
+			("url.path", Some(ValueBag::from("/v1/messages"))),
+			("http.response.status_code", Some(ValueBag::from(200_i64))),
+		];
+		logger.emit("info", "request", &kv);
+		logger.inner.provider.force_flush().unwrap();
+
+		let records = exporter.records.lock().unwrap();
+		let (record, _) = &records[0];
+		match record.body() {
+			Some(AnyValue::String(body)) => assert_eq!(body.as_ref(), "POST /v1/messages 200"),
+			other => panic!("unexpected body: {other:?}"),
+		}
+		assert!(
+			record
+				.timestamp()
+				.is_some_and(|t| t > std::time::SystemTime::UNIX_EPOCH)
+		);
 	}
 
 	#[derive(Clone, Debug, Default)]
