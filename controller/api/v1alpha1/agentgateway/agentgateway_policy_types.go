@@ -1066,6 +1066,10 @@ type Traffic struct {
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
 
+	// Compresses responses sent to the client and decompresses request bodies before forwarding.
+	// +optional
+	Compression *Compression `json:"compression,omitempty"`
+
 	// Injects artificial latency before forwarding requests, for
 	// fault-injection testing.
 	// +optional
@@ -1561,6 +1565,50 @@ type Buffer struct {
 	// Response body buffering settings.
 	// +optional
 	Response *BufferBody `json:"response,omitempty"`
+}
+
+// +kubebuilder:validation:AtLeastOneFieldSet
+type Compression struct {
+	// Compresses response bodies when the client advertises support in Accept-Encoding.
+	// Only textual content types (JSON, HTML, CSS, JavaScript, XML, plain text, SVG) are compressed.
+	// +optional
+	Response *ResponseCompression `json:"response,omitempty"`
+	// Decompresses request bodies before body-aware policies (rate limiting, ext_proc,
+	// transformations) run and before forwarding to the backend. Authentication and
+	// authorization run first and observe the encoded body.
+	// +optional
+	Request *RequestDecompression `json:"request,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Gzip;Brotli;Deflate;Zstd
+type CompressionAlgorithm string
+
+const (
+	CompressionAlgorithmGzip    CompressionAlgorithm = "Gzip"
+	CompressionAlgorithmBrotli  CompressionAlgorithm = "Brotli"
+	CompressionAlgorithmDeflate CompressionAlgorithm = "Deflate"
+	CompressionAlgorithmZstd    CompressionAlgorithm = "Zstd"
+)
+
+type ResponseCompression struct {
+	// Algorithms that may be negotiated with the client's Accept-Encoding header.
+	// If unset, defaults to Gzip.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	Algorithms []CompressionAlgorithm `json:"algorithms,omitempty"`
+}
+
+type RequestDecompression struct {
+	// Algorithms decoded from request bodies. Bodies using any other (or more than one) encoding
+	// are forwarded untouched.
+	// If unset, defaults to Gzip.
+	// +optional
+	// +listType=set
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	AcceptedAlgorithms []CompressionAlgorithm `json:"acceptedAlgorithms,omitempty"`
 }
 
 type SecretSelector struct {

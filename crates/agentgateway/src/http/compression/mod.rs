@@ -15,6 +15,11 @@ const DEFLATE: &str = "deflate";
 const BR: &str = "br";
 const ZSTD: &str = "zstd";
 
+mod policy;
+pub use policy::{
+	Compression, CompressionAlgorithm, RequestDecompression, ResponseCompression, ResponseCompressor,
+};
+
 /// Errors that can occur during compression/decompression operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

@@ -302,6 +302,18 @@ async fn apply_request_policies(
 		.apply_without_response("substrate ingress", c, l, req, rp.headers())
 		.await?;
 
+	// Decompression runs after authentication and authorization so denied requests never pay for
+	// it; those earlier policies observe the encoded body. Every later body-aware policy sees the
+	// decoded body. Installing the decoder replaced the body content, dropping any inspection cached
+	// from the encoded bytes, so re-buffer for CEL here.
+	let compression = pol
+		.compression
+		.apply_selected("compression", c, l, req, rp.headers())
+		.await?;
+	l.cel.ctx().maybe_buffer_request_body(req).await;
+	// Capture Accept-Encoding before the request header modifier may strip it for the upstream.
+	rp.response_compressor = compression.and_then(|c| c.response.as_ref()?.for_request(req));
+
 	let mut route_retry = pol.retry.select("retry", req);
 	// Evaluate the retry precondition (if any) against the request before it is consumed.
 	if let Some(retry) = route_retry.as_ref()
@@ -786,6 +798,9 @@ impl HTTPProxy {
 		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
 		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
 		llm::encode_deferred_response(&mut resp);
+		if let Some(compressor) = response_policies.response_compressor.take() {
+			compressor.apply(&mut resp);
+		}
 		if let Some(log) = log.as_mut() {
 			dtrace::snapshot!(Response, "final response", log, &resp);
 		}
@@ -4991,6 +5006,8 @@ struct ResponsePolicies {
 	rate_limit_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	// Applied after every response policy, see `ResponseCompressor::apply`.
+	response_compressor: Option<http::compression::ResponseCompressor>,
 	// Populated by the standard request-policy flow after conditional rate-limit policies are
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,

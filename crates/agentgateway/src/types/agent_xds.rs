@@ -3254,6 +3254,48 @@ fn traffic_policy_from_proto(
 				response: to_body(buffer.response),
 			}))
 		},
+		Some(tps::Kind::Compression(compression)) => {
+			use proto::agent::traffic_policy_spec::compression::Algorithm;
+
+			use crate::http::compression::CompressionAlgorithm;
+
+			let algorithms = |values: &[i32]| -> Result<Vec<_>, ProtoError> {
+				if values.is_empty() {
+					return Ok(vec![CompressionAlgorithm::Gzip]);
+				}
+				values
+					.iter()
+					.map(|v| {
+						Ok(match Algorithm::try_from(*v)? {
+							Algorithm::Gzip => CompressionAlgorithm::Gzip,
+							Algorithm::Brotli => CompressionAlgorithm::Brotli,
+							Algorithm::Deflate => CompressionAlgorithm::Deflate,
+							Algorithm::Zstd => CompressionAlgorithm::Zstd,
+						})
+					})
+					.collect()
+			};
+			TrafficPolicy::Compression(RequestPolicy::single(http::compression::Compression {
+				response: compression
+					.response
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::ResponseCompression {
+							algorithms: algorithms(&r.algorithms)?,
+						})
+					})
+					.transpose()?,
+				request: compression
+					.request
+					.as_ref()
+					.map(|r| -> Result<_, ProtoError> {
+						Ok(http::compression::RequestDecompression {
+							accepted_algorithms: algorithms(&r.accepted_algorithms)?,
+						})
+					})
+					.transpose()?,
+			}))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -4098,6 +4140,7 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
 		TrafficPolicy::Buffer(_) => build!(Buffer),
+		TrafficPolicy::Compression(_) => build!(Compression),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)
@@ -4133,6 +4176,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
 		TrafficPolicy::Buffer(_) => "buffer",
+		TrafficPolicy::Compression(_) => "compression",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }

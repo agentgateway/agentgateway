@@ -1272,6 +1272,26 @@ message TrafficPolicySpec {
     optional BufferBody response = 2;
   }
 
+  message Compression {
+    enum Algorithm {
+      GZIP = 0;
+      BROTLI = 1;
+      DEFLATE = 2;
+      ZSTD = 3;
+    }
+
+    message ResponseCompression {
+      repeated Algorithm algorithms = 1;
+    }
+
+    message RequestDecompression {
+      repeated Algorithm accepted_algorithms = 1;
+    }
+
+    optional ResponseCompression response = 1;
+    optional RequestDecompression request = 2;
+  }
+
   oneof kind {
     Timeout timeout = 2;
     Retry retry = 3;
@@ -1295,6 +1315,7 @@ message TrafficPolicySpec {
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
     Delay delay = 23;
+    Compression compression = 24;
   }
 }
 
