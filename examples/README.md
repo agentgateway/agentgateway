@@ -24,7 +24,7 @@ span more than one agentgateway traffic type.
 * [mcp-multiplex](mcp-multiplex/README.md): multiplex multiple MCP targets on a single listener.
 * [mcp-guardrails/expression](mcp-guardrails/expression/README.md): deny MCP calls and mask request/response text with CEL guardrails.
 * [mcp-authorization](mcp-authorization/README.md): apply JWT authentication and MCP authorization policies to incoming requests.
-* [mcp-keyed-rate-limit](mcp-keyed-rate-limit/README.md): give each authenticated client a separate tool-call allowance, shared across its credentials and sessions.
+* [mcp-keyed-rate-limit](mcp-keyed-rate-limit/README.md): allow each client its own allowance for each tool on each server.
 * [mcp-authzen](mcp-authzen/README.md): authorize MCP tool calls based OpenID [AuthZEN](https://openid.net/specs/openid-authzen-authorization-api-1_0-ID1.html) standard.
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
