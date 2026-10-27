@@ -255,10 +255,20 @@ pub mod from_completions {
 		let mut call_meta: std::collections::HashMap<String, (String, usize)> = Default::default();
 		let mut system_text: Vec<String> = Vec::new();
 		let mut contents: Vec<vg::Content> = Vec::new();
+		let mut leading_system = true;
 		for m in messages {
+			leading_system &= matches!(m.role.as_str(), "system" | "developer");
 			match m.role.as_str() {
-				"system" | "developer" => {
+				"system" | "developer" if leading_system => {
 					system_text.extend(content_text(&m.content).filter(|t| !t.is_empty()));
+				},
+				"system" | "developer" => {
+					let reminder: Vec<vg::Part> = content_text(&m.content)
+						.filter(|t| !t.is_empty())
+						.map(|t| text_part(&format!("<system-reminder>\n{t}\n</system-reminder>")))
+						.into_iter()
+						.collect();
+					push_content(&mut contents, "user", reminder);
 				},
 				"user" => push_content(&mut contents, "user", user_parts(&m.content)?),
 				"assistant" => {
