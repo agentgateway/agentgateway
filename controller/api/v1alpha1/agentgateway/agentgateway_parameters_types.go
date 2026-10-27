@@ -278,6 +278,15 @@ type SpiffeSpec struct {
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
+	// AllowAdditionalTrustDomains controls whether this gateway may accept additional (federated,
+	// non-local) SPIFFE trust domains — the local trust domain is always implicitly accepted — in
+	// per-flow `additionalTrustDomains` lists (listener option or backend policy). It does not
+	// control which bundles are delivered - SPIRE decides that via `federatesWith`. When false or
+	// unset, only the local trust domain may be accepted.
+	//
+	// +optional
+	AllowAdditionalTrustDomains *bool `json:"allowAdditionalTrustDomains,omitempty"`
+
 	// Volume source for the SPIFFE Workload API socket. When omitted (i.e. `spiffe: {}`),
 	// the socket is sourced from the SPIFFE CSI driver with default settings.
 	//

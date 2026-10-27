@@ -573,6 +573,12 @@ pub struct RawLoggingFields {
 pub struct RawSpiffeConfig {
 	/// SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).
 	endpoint: Option<String>,
+	/// Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in
+	/// per-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when
+	/// false, only the local trust domain may be accepted. Invalid entries and unavailable or
+	/// unusable non-local bundles are skipped with a warning; the local bundle is required.
+	#[serde(default)]
+	allow_additional_trust_domains: bool,
 }
 
 #[derive(Clone, Debug)]

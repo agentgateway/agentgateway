@@ -75,6 +75,7 @@
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
 |`config.spiffe`|object|Local SPIFFE Workload API configuration<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
 |`config.spiffe.endpoint`|string|SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).|
+|`config.spiffe.allowAdditionalTrustDomains`|boolean|Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in<br>per-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when<br>false, only the local trust domain may be accepted. Invalid entries and unavailable or<br>unusable non-local bundles are skipped with a warning; the local bundle is required.|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|
@@ -160,6 +161,7 @@
 |`binds[].listeners[].tls.key`|string|Path to the TLS private key file.|
 |`binds[].listeners[].tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
 |`binds[].listeners[].tls.spiffe`|object|Source the serving identity from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`.|
+|`binds[].listeners[].tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;<br>the local trust domain is always implicit.|
 |`binds[].listeners[].tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
 |`binds[].listeners[].tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
 |`binds[].listeners[].tls.minTlsVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
@@ -333,6 +335,7 @@
 |`binds[].listeners[].routes[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].routes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].routes[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].routes[].policies.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -786,6 +789,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -996,6 +1000,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -1168,6 +1173,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].routes[].backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].routes[].backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -1319,6 +1325,7 @@
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].tcpRoutes[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].tcpRoutes[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].tcpRoutes[].backends`|[]object|Weighted backends this TCP route forwards traffic to.|
 |`binds[].listeners[].tcpRoutes[].backends[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`binds[].listeners[].tcpRoutes[].backends[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -1340,6 +1347,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -1892,6 +1900,7 @@
 |`policies[].policy.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`policies[].policy.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`policies[].policy.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`policies[].policy.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`policies[].policy.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
 |`policies[].policy.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`policies[].policy.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -2345,6 +2354,7 @@
 |`backends[].ai.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`backends[].ai.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`backends[].ai.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -2555,6 +2565,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].ai.groups[].providers[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`backends[].ai.groups[].providers[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`backends[].ai.groups[].providers[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -2725,6 +2736,7 @@
 |`backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`backends[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -3028,6 +3040,7 @@
 |`routeGroups[].routes[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routeGroups[].routes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routeGroups[].routes[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routeGroups[].routes[].policies.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`routeGroups[].routes[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -3481,6 +3494,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routeGroups[].routes[].backends[].ai.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -3691,6 +3705,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -3863,6 +3878,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routeGroups[].routes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routeGroups[].routes[].backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routeGroups[].routes[].backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routeGroups[].routes[].backends[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routeGroups[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -4011,6 +4027,7 @@
 |`gateways.*.listeners[].tls.key`|string|Path to the TLS private key file.|
 |`gateways.*.listeners[].tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
 |`gateways.*.listeners[].tls.spiffe`|object|Source the serving identity from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`.|
+|`gateways.*.listeners[].tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;<br>the local trust domain is always implicit.|
 |`gateways.*.listeners[].tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
 |`gateways.*.listeners[].tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
 |`gateways.*.listeners[].tls.minTlsVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
@@ -4252,6 +4269,7 @@
 |`gateways.*.tls.key`|string|Path to the TLS private key file.|
 |`gateways.*.tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
 |`gateways.*.tls.spiffe`|object|Source the serving identity from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`.|
+|`gateways.*.tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;<br>the local trust domain is always implicit.|
 |`gateways.*.tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
 |`gateways.*.tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
 |`gateways.*.tls.minTlsVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
@@ -4655,6 +4673,7 @@
 |`routes[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routes[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routes[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routes[].policies.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
 |`routes[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`routes[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -5108,6 +5127,7 @@
 |`routes[].backends[].ai.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routes[].backends[].ai.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routes[].backends[].ai.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routes[].backends[].ai.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routes[].backends[].ai.policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -5318,6 +5338,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -5490,6 +5511,7 @@
 |`routes[].backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`routes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`routes[].backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`routes[].backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`routes[].backends[].policies.backendAuth`|[`<BackendAuth>`](#backendauth)|Authentication credentials sent to this backend.|
 |`routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -5642,6 +5664,7 @@
 |`tcpRoutes[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`tcpRoutes[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`tcpRoutes[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`tcpRoutes[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`tcpRoutes[].backends`|[]object|Weighted backends this TCP route forwards traffic to.|
 |`tcpRoutes[].backends[].service`|object|Service reference. Service must be defined in the top level services list.|
 |`tcpRoutes[].backends[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
@@ -5663,6 +5686,7 @@
 |`tcpRoutes[].backends[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`tcpRoutes[].backends[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`tcpRoutes[].backends[].policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`tcpRoutes[].backends[].policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`tcpRoutes[].backends[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`tcpRoutes[].backends[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -5683,6 +5707,7 @@
 |`llm.tls.key`|string|Path to the TLS private key file.|
 |`llm.tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
 |`llm.tls.spiffe`|object|Source the serving identity from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`.|
+|`llm.tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose inbound client SVIDs are accepted;<br>the local trust domain is always implicit.|
 |`llm.tls.cipherSuites`|[]string|Optional cipher suite allowlist (order is preserved).|
 |`llm.tls.minTLSVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
 |`llm.tls.minTlsVersion`|enum|Minimum supported TLS version (only TLS 1.2 and 1.3 are supported).<br>Possible values: `TLS_V1_0`, `TLS_V1_1`, `TLS_V1_2`, `TLS_V1_3`.|
@@ -5748,6 +5773,7 @@
 |`llm.providers[].defaults.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`llm.providers[].defaults.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.providers[].defaults.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`llm.providers[].defaults.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`llm.providers[].defaults.tls`|object|TLS configuration for connecting to the LLM provider.|
 |`llm.providers[].defaults.tls.cert`|string|Client certificate file to present to the backend.|
 |`llm.providers[].defaults.tls.key`|string|Private key file for the client certificate.|
@@ -5759,6 +5785,7 @@
 |`llm.providers[].defaults.tls.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`llm.providers[].defaults.tls.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.providers[].defaults.tls.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`llm.providers[].defaults.tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`llm.providers[].defaults.auth`|[`<BackendAuth>`](#backendauth)|Authentication configuration for connecting to the LLM provider.|
 |`llm.providers[].defaults.health`|object|Outlier detection and health checking for this provider backend.|
 |`llm.providers[].defaults.health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
@@ -5849,6 +5876,7 @@
 |`llm.models[].backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`llm.models[].backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`llm.models[].backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`llm.models[].tls`|object|tls configures TLS when connecting to the LLM provider.|
 |`llm.models[].tls.cert`|string|Client certificate file to present to the backend.|
 |`llm.models[].tls.key`|string|Private key file for the client certificate.|
@@ -5860,6 +5888,7 @@
 |`llm.models[].tls.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`llm.models[].tls.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`llm.models[].tls.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`llm.models[].tls.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`llm.models[].auth`|[`<BackendAuth>`](#backendauth)|auth configures authentication when connecting to the LLM provider.|
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
@@ -6370,6 +6399,7 @@
 |`mcp.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`mcp.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`mcp.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`mcp.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`mcp.policies.backendTunnel`|object|Tunnel settings used when connecting to the backend.|
 |`mcp.policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
 |`mcp.policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6898,6 +6928,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendPolicies>.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<BackendPolicies>.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<BackendPolicies>.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<BackendPolicies>.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<BackendPolicies>.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<BackendPolicies>.backendAuth.key`|object||
 |`<BackendPolicies>.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -7264,6 +7295,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.oauthTokenExchange.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<BackendAuth>.oauthTokenExchange.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<BackendAuth>.oauthTokenExchange.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<BackendAuth>.oauthTokenExchange.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<BackendAuth>.oauthTokenExchange.policies.backendAuth`|any|Authentication credentials sent to this backend.|
 |`<BackendAuth>.oauthTokenExchange.policies.http`|object|HTTP protocol settings for this backend.|
 |`<BackendAuth>.oauthTokenExchange.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -7381,6 +7413,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<BackendAuth>.crossAppAccess.identityProvider.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.backendAuth`|any|Authentication credentials sent to this backend.|
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.http`|object|HTTP protocol settings for this backend.|
 |`<BackendAuth>.crossAppAccess.identityProvider.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -7456,6 +7489,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.backendAuth`|any|Authentication credentials sent to this backend.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http`|object|HTTP protocol settings for this backend.|
 |`<BackendAuth>.crossAppAccess.resourceAuthorizationServer.policies.http.version`|string|HTTP version to use when connecting to the backend.|
@@ -7575,6 +7609,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].webhook.target.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.request[].webhook.target.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.request[].webhook.target.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.request[].webhook.target.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -7863,6 +7898,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].openAIModeration.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.request[].openAIModeration.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.request[].openAIModeration.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.request[].openAIModeration.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].openAIModeration.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -8145,6 +8181,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.request[].bedrockGuardrails.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -8427,6 +8464,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.request[].googleModelArmor.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -8707,6 +8745,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.request[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.request[].azureContentSafety.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key`|object||
 |`<Guardrails>.request[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -9011,6 +9050,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].webhook.target.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.response[].webhook.target.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.response[].webhook.target.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.response[].webhook.target.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].webhook.target.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -9301,6 +9341,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.response[].bedrockGuardrails.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].bedrockGuardrails.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -9583,6 +9624,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].googleModelArmor.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.response[].googleModelArmor.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].googleModelArmor.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
@@ -9863,6 +9905,7 @@ These types are used by many fields. Fields of these types link here instead of 
 |`<Guardrails>.response[].azureContentSafety.policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendTLS.spiffe`|object|Get the gateway's client identity and trust roots from the SPIFFE Workload API.<br>Mutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.<br>Pin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);<br>If `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted|
+|`<Guardrails>.response[].azureContentSafety.policies.backendTLS.spiffe.additionalTrustDomains`|[]string|Federated trust domains (beyond the gateway's own) whose upstream SVIDs are accepted; the<br>local trust domain is always implicit. Combine with `subjectAltNames` to pin exact IDs.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth`|object|Authentication credentials sent to this backend.|
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key`|object||
 |`<Guardrails>.response[].azureContentSafety.policies.backendAuth.key.file`|string|Path to a file on disk to load the value from.|
