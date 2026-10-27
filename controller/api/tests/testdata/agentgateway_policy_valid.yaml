@@ -269,6 +269,49 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: azure-content-safety-full
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            failureMode: FailOpen
+            action: Audit
+            analyzeText:
+              severityThreshold: 4
+              apiVersion: "2024-09-01"
+              blocklistNames: [my-blocklist]
+              haltOnBlocklistHit: true
+            detectJailbreak: {}
+            policies:
+              auth:
+                azure:
+                  workloadIdentity: {}
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            detectJailbreak:
+              apiVersion: "2024-02-15-preview"
+        response:
+        - azureContentSafety:
+            endpoint: my-resource.cognitiveservices.azure.com
+            analyzeText: {}
+            policies:
+              auth:
+                secretRef:
+                  name: content-safety-key
+                location:
+                  header:
+                    name: Ocp-Apim-Subscription-Key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: frontend-http
 spec:
   targetRefs:

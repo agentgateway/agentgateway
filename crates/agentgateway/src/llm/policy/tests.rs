@@ -2454,6 +2454,81 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 }
 
 #[cfg(test)]
+fn azure_content_safety_with_policies(
+	policies: Vec<crate::types::agent::BackendTrafficPolicy>,
+) -> AzureContentSafety {
+	AzureContentSafety {
+		failure_mode: FailureMode::FailClosed,
+		endpoint: strng::new("test.cognitiveservices.azure.com"),
+		action: RejectAuditAction::Reject,
+		policies,
+		cached_azure_auth: Default::default(),
+		analyze_text: Some(AnalyzeTextConfig {
+			severity_threshold: None,
+			api_version: None,
+			blocklist_names: None,
+			halt_on_blocklist_hit: None,
+		}),
+		detect_jailbreak: None,
+	}
+}
+
+#[test]
+fn test_azure_content_safety_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
+	use crate::store::BindStore;
+	use crate::types::agent::BackendTrafficPolicy;
+
+	let acs = azure_content_safety_with_policies(vec![BackendTrafficPolicy::backend_auth(
+		BackendAuthKind::Key {
+			value: SecretString::new("user-provided-api-key".into()).into(),
+			location: None,
+		},
+	)]);
+
+	let pols = azure_content_safety::build_policies(&acs);
+	let resolved = BindStore::default().inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Key { .. }),
+				..
+			})
+		),
+		"Expected user-provided Key auth to take precedence over \
+		 the implicit Azure fallback, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
+fn test_azure_content_safety_implicit_auth_used_when_no_user_credentials() {
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
+	use crate::store::BindStore;
+
+	let acs = azure_content_safety_with_policies(vec![]);
+
+	let pols = azure_content_safety::build_policies(&acs);
+	let resolved = BindStore::default().inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Azure(_)),
+				..
+			})
+		),
+		"Expected implicit Azure auth when no user credentials are provided, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[cfg(test)]
 #[derive(Clone, Copy)]
 enum ChatFmt {
 	Anthropic,
