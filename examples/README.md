@@ -58,6 +58,7 @@ span more than one agentgateway traffic type.
 * [traffic-oauth2-proxy](traffic-oauth2-proxy/README.md): integrate with an external `oauth2-proxy` deployment.
 * [fault-injection](fault-injection/README.md): inject synthetic latency and aborts into a subset of traffic for fault-injection testing.
 * [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
+* [traffic-compression](traffic-compression/README.md): compress responses and decompress request bodies.
 * [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
 * [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.
 * [traffic-spiffe](traffic-spiffe/README.md): source the gateway's mTLS identity from the local SPIFFE Workload API, for both serving and upstream connections.
