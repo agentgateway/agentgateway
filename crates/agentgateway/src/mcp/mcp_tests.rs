@@ -7528,6 +7528,114 @@ async fn mcp_local_ratelimit() {
 }
 
 #[tokio::test]
+async fn mcp_local_ratelimit_per_client_and_tool() {
+	use ::http::{HeaderName, HeaderValue};
+	use rmcp::ServiceExt;
+	use rmcp::model::{
+		CallToolRequestParams, ClientCapabilities, ClientConfig, Implementation, ProtocolVersion,
+	};
+	use rmcp::transport::StreamableHttpClientTransport;
+	use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+
+	let first = mock_streamable_http_server(true).await;
+	let second = mock_streamable_http_server(true).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("first", first.addr, false), ("second", second.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	t.attach_route_policy(serde_json::json!({
+		"apiKey": {
+			"mode": "strict",
+			"keys": [
+				{"key": "alice-key", "metadata": {"client": "alice"}},
+				{"key": "alice-rotated-key", "metadata": {"client": "alice"}},
+				{"key": "bob-key", "metadata": {"client": "bob"}}
+			]
+		},
+		"localRateLimit": {
+			"conditional": [{
+				"condition": "mcp.methodName == 'tools/call'",
+				"maxTokens": 3,
+				"tokensPerFill": 3,
+				"fillInterval": "1h",
+				"type": "requests",
+				"key": "apiKey.client + '/' + mcp.tool.target + '/' + mcp.tool.name"
+			}]
+		}
+	}))
+	.await;
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let connect = |key: &'static str| async move {
+		let config = StreamableHttpClientTransportConfig::with_uri(format!("http://{io}/mcp"))
+			.custom_headers(std::collections::HashMap::from([(
+				HeaderName::from_static("authorization"),
+				HeaderValue::from_str(&format!("Bearer {key}")).unwrap(),
+			)]));
+		ClientConfig::new(
+			ClientCapabilities::default(),
+			Implementation::new("test", "1"),
+		)
+		.with_protocol_version(ProtocolVersion::LATEST_WITH_INITIALIZE)
+		.serve(StreamableHttpClientTransport::from_config(config))
+		.await
+		.unwrap()
+	};
+	let alice = connect("alice-key").await;
+	for expected in ["1", "2", "3"] {
+		let result = alice
+			.call_tool(CallToolRequestParams::new("first_increment"))
+			.await
+			.unwrap();
+		assert_ne!(result.is_error, Some(true));
+		assert_eq!(result.content[0].as_text().unwrap().text, expected);
+	}
+	let rotated = connect("alice-rotated-key").await;
+	let reconnected = connect("alice-key").await;
+	for (client, expected) in [(&alice, "3"), (&rotated, "0"), (&reconnected, "0")] {
+		let result = client
+			.call_tool(CallToolRequestParams::new("first_increment"))
+			.await
+			.unwrap();
+		assert_eq!(result.is_error, Some(true));
+		assert!(
+			result.content[0]
+				.as_text()
+				.unwrap()
+				.text
+				.contains("rate limit")
+		);
+		assert!(!client.list_tools(None).await.unwrap().tools.is_empty());
+		let value = client
+			.call_tool(CallToolRequestParams::new("first_get_value"))
+			.await
+			.unwrap();
+		assert_ne!(value.is_error, Some(true));
+		assert_eq!(value.content[0].as_text().unwrap().text, expected);
+	}
+	let other_target = alice
+		.call_tool(CallToolRequestParams::new("second_increment"))
+		.await
+		.unwrap();
+	assert_ne!(other_target.is_error, Some(true));
+	assert_eq!(other_target.content[0].as_text().unwrap().text, "1");
+	let bob = connect("bob-key").await;
+	let result = bob
+		.call_tool(CallToolRequestParams::new("first_increment"))
+		.await
+		.unwrap();
+	assert_ne!(result.is_error, Some(true));
+	assert_eq!(result.content[0].as_text().unwrap().text, "1");
+	for client in [alice, rotated, reconnected, bob] {
+		client.cancel().await.unwrap();
+	}
+}
+
+#[tokio::test]
 async fn mcp_context_refreshed_after_body_transformation() {
 	let mock = mock_streamable_http_server(true).await;
 	let deny_increment = crate::types::agent::Authorization(Arc::new(RuleSet::new(PolicySet::new(
