@@ -190,12 +190,13 @@ pub struct MCPCall {
 #[derive(
 	Clone, Copy, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
 )]
+#[allow(non_camel_case_types)]
 pub enum MCPOutcome {
-	Success,
-	ToolError,
-	ProtocolError,
-	GatewayError,
-	Unknown,
+	success,
+	tool_error,
+	protocol_error,
+	gateway_error,
+	unknown,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]

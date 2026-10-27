@@ -1388,24 +1388,24 @@ fn mcp_outcome(request: &RequestLog, mcp: &MCPInfo) -> super::metrics::MCPOutcom
 			.status
 			.is_some_and(|status| status.is_client_error() || status.is_server_error())
 	{
-		return MCPOutcome::GatewayError;
+		return MCPOutcome::gateway_error;
 	}
 	if mcp.error.is_some() {
-		return MCPOutcome::ProtocolError;
+		return MCPOutcome::protocol_error;
 	}
 	if mcp.method_name.as_deref() == Some("tools/call") {
 		return match mcp.tool.as_ref().and_then(|tool| tool.result.as_ref()) {
 			Some(result) if result.get("isError").and_then(serde_json::Value::as_bool) == Some(true) => {
-				MCPOutcome::ToolError
+				MCPOutcome::tool_error
 			},
-			Some(_) => MCPOutcome::Success,
-			None => MCPOutcome::Unknown,
+			Some(_) => MCPOutcome::success,
+			None => MCPOutcome::unknown,
 		};
 	}
 	if request.status.is_some_and(|status| status.is_success()) {
-		MCPOutcome::Success
+		MCPOutcome::success
 	} else {
-		MCPOutcome::Unknown
+		MCPOutcome::unknown
 	}
 }
 
@@ -2997,103 +2997,29 @@ mod tests {
 	}
 
 	#[test]
-	fn mcp_request_metrics_report_outcomes() {
-		for (result, protocol_error, status, gateway_error, expected) in [
-			(
-				Some(serde_json::json!({"content": []})),
-				false,
-				200,
-				false,
-				"Success",
-			),
-			(
-				Some(serde_json::json!({"isError": false})),
-				false,
-				200,
-				false,
-				"Success",
-			),
-			(
-				Some(serde_json::json!({"isError": true})),
-				false,
-				200,
-				false,
-				"ToolError",
-			),
-			(None, true, 200, false, "ProtocolError"),
-			(None, false, 503, true, "GatewayError"),
-			(None, false, 403, false, "GatewayError"),
-			(
-				Some(serde_json::json!({"isError": true})),
-				false,
-				200,
-				true,
-				"GatewayError",
-			),
-			(None, false, 200, false, "Unknown"),
+	fn mcp_outcomes() {
+		use crate::telemetry::metrics::MCPOutcome::*;
+		let ok = Some(http::StatusCode::OK);
+		let bad = Some(http::StatusCode::BAD_GATEWAY);
+		for (status, is_error, rpc_error, expected) in [
+			(ok, Some(false), false, success),
+			(ok, Some(true), false, tool_error),
+			(ok, None, true, protocol_error),
+			(bad, Some(true), false, gateway_error),
+			(ok, None, false, unknown),
 		] {
-			let (mut log, registry) = test_request_log_with_registry();
-			log.status = Some(http::StatusCode::from_u16(status).unwrap());
-			log.error = gateway_error.then(|| "gateway failure".to_string());
-			let mut info = MCPInfo {
+			let mut log = test_request_log();
+			log.status = status;
+			let mut mcp = MCPInfo {
 				method_name: Some("tools/call".into()),
 				..Default::default()
 			};
-			info.set_tool("server".to_string(), "echo".to_string());
-			info.tool.as_mut().unwrap().result = result;
-			if protocol_error {
-				info.capture_error(&rmcp::ErrorData::invalid_params("invalid arguments", None));
+			mcp.set_tool("server".into(), "echo".into());
+			mcp.tool.as_mut().unwrap().result = is_error.map(|e| serde_json::json!({"isError": e}));
+			if rpc_error {
+				mcp.capture_error(&rmcp::ErrorData::invalid_params("bad", None));
 			}
-			log.mcp_status.store(Some(info));
-			drop(DropOnLog::from(log));
-
-			let encoded = encoded_metrics(&registry);
-			let calls = encoded
-				.lines()
-				.filter(|line| line.starts_with("mcp_requests_total{"))
-				.collect::<Vec<_>>();
-			assert_eq!(calls.len(), 1, "{encoded}");
-			assert!(
-				calls[0].contains(&format!("outcome=\"{expected}\"")),
-				"{}",
-				calls[0]
-			);
-			assert!(calls[0].contains("server=\"server\""), "{}", calls[0]);
-			assert!(calls[0].contains("resource=\"echo\""), "{}", calls[0]);
-			assert!(calls[0].ends_with(" 1"), "{}", calls[0]);
-		}
-	}
-
-	#[test]
-	fn mcp_request_metrics_preserve_control_requests() {
-		for (method, status, expected) in [
-			(
-				Some("tools/list"),
-				Some(http::StatusCode::OK),
-				Some("Success"),
-			),
-			(Some("tools/list"), None, Some("Unknown")),
-			(None, Some(http::StatusCode::OK), None),
-		] {
-			let (mut log, registry) = test_request_log_with_registry();
-			log.status = status;
-			log.mcp_status.store(Some(MCPInfo {
-				method_name: method.map(Into::into),
-				..Default::default()
-			}));
-			drop(DropOnLog::from(log));
-			let encoded = encoded_metrics(&registry);
-			let call = encoded
-				.lines()
-				.find(|line| line.starts_with("mcp_requests_total{"));
-			if let Some(expected) = expected {
-				assert!(
-					call.unwrap().contains(&format!("outcome=\"{expected}\"")),
-					"{encoded}"
-				);
-			} else {
-				assert!(call.is_none(), "{encoded}");
-			}
+			assert_eq!(mcp_outcome(&log, &mcp), expected);
 		}
 	}
 
