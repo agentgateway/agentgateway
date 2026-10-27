@@ -8,7 +8,7 @@ Name|Version|License
 [go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.40.1-0.20261017072358-cded3a6731eb|Apache License 2.0
 [tcell/v2](https://github.com/gdamore/tcell)|v2.13.10|Apache License 2.0
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
-[go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.5|Apache License 2.0
+[go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.6|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.4|Apache License 2.0
 [jwt/v5](https://github.com/golang-jwt/jwt)|v5.3.1|MIT License
 [google/cel-go](https://github.com/google/cel-go)|v0.29.2|Apache License 2.0
