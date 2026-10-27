@@ -174,6 +174,7 @@ pub struct CostCatalogLookupLabels {
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPCall {
 	pub method: DefaultedUnknown<RichStrng>,
+	pub outcome: MCPOutcome,
 
 	pub resource_type: DefaultedUnknown<MCPOperation>,
 	pub server: DefaultedUnknown<RichStrng>,
@@ -184,6 +185,17 @@ pub struct MCPCall {
 
 	#[prometheus(flatten)]
 	pub custom: CustomField,
+}
+
+#[derive(
+	Clone, Copy, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
+)]
+pub enum MCPOutcome {
+	Success,
+	ToolError,
+	ProtocolError,
+	GatewayError,
+	Unknown,
 }
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]

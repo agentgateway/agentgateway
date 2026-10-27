@@ -1380,6 +1380,35 @@ fn gen_ai_operation_failed(request: &RequestLog) -> bool {
 		})
 }
 
+fn mcp_outcome(request: &RequestLog, mcp: &MCPInfo) -> super::metrics::MCPOutcome {
+	use super::metrics::MCPOutcome;
+
+	if request.error.is_some()
+		|| request
+			.status
+			.is_some_and(|status| status.is_client_error() || status.is_server_error())
+	{
+		return MCPOutcome::GatewayError;
+	}
+	if mcp.error.is_some() {
+		return MCPOutcome::ProtocolError;
+	}
+	if mcp.method_name.as_deref() == Some("tools/call") {
+		return match mcp.tool.as_ref().and_then(|tool| tool.result.as_ref()) {
+			Some(result) if result.get("isError").and_then(serde_json::Value::as_bool) == Some(true) => {
+				MCPOutcome::ToolError
+			},
+			Some(_) => MCPOutcome::Success,
+			None => MCPOutcome::Unknown,
+		};
+	}
+	if request.status.is_some_and(|status| status.is_success()) {
+		MCPOutcome::Success
+	} else {
+		MCPOutcome::Unknown
+	}
+}
+
 fn gen_ai_operation_name(input_format: InputFormat) -> &'static str {
 	match input_format {
 		InputFormat::Completions | InputFormat::Messages | InputFormat::Responses => "chat",
@@ -1598,6 +1627,7 @@ impl Drop for DropOnLog {
 					.mcp_requests
 					.get_or_create(&MCPCall {
 						method: mcp.method_name.clone().map(RichStrng::from).into(),
+						outcome: mcp_outcome(&log, mcp),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
 						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
@@ -2964,6 +2994,107 @@ mod tests {
 		let mut encoded = String::new();
 		encode(&mut encoded, registry).unwrap();
 		encoded
+	}
+
+	#[test]
+	fn mcp_request_metrics_report_outcomes() {
+		for (result, protocol_error, status, gateway_error, expected) in [
+			(
+				Some(serde_json::json!({"content": []})),
+				false,
+				200,
+				false,
+				"Success",
+			),
+			(
+				Some(serde_json::json!({"isError": false})),
+				false,
+				200,
+				false,
+				"Success",
+			),
+			(
+				Some(serde_json::json!({"isError": true})),
+				false,
+				200,
+				false,
+				"ToolError",
+			),
+			(None, true, 200, false, "ProtocolError"),
+			(None, false, 503, true, "GatewayError"),
+			(None, false, 403, false, "GatewayError"),
+			(
+				Some(serde_json::json!({"isError": true})),
+				false,
+				200,
+				true,
+				"GatewayError",
+			),
+			(None, false, 200, false, "Unknown"),
+		] {
+			let (mut log, registry) = test_request_log_with_registry();
+			log.status = Some(http::StatusCode::from_u16(status).unwrap());
+			log.error = gateway_error.then(|| "gateway failure".to_string());
+			let mut info = MCPInfo {
+				method_name: Some("tools/call".into()),
+				..Default::default()
+			};
+			info.set_tool("server".to_string(), "echo".to_string());
+			info.tool.as_mut().unwrap().result = result;
+			if protocol_error {
+				info.capture_error(&rmcp::ErrorData::invalid_params("invalid arguments", None));
+			}
+			log.mcp_status.store(Some(info));
+			drop(DropOnLog::from(log));
+
+			let encoded = encoded_metrics(&registry);
+			let calls = encoded
+				.lines()
+				.filter(|line| line.starts_with("mcp_requests_total{"))
+				.collect::<Vec<_>>();
+			assert_eq!(calls.len(), 1, "{encoded}");
+			assert!(
+				calls[0].contains(&format!("outcome=\"{expected}\"")),
+				"{}",
+				calls[0]
+			);
+			assert!(calls[0].contains("server=\"server\""), "{}", calls[0]);
+			assert!(calls[0].contains("resource=\"echo\""), "{}", calls[0]);
+			assert!(calls[0].ends_with(" 1"), "{}", calls[0]);
+		}
+	}
+
+	#[test]
+	fn mcp_request_metrics_preserve_control_requests() {
+		for (method, status, expected) in [
+			(
+				Some("tools/list"),
+				Some(http::StatusCode::OK),
+				Some("Success"),
+			),
+			(Some("tools/list"), None, Some("Unknown")),
+			(None, Some(http::StatusCode::OK), None),
+		] {
+			let (mut log, registry) = test_request_log_with_registry();
+			log.status = status;
+			log.mcp_status.store(Some(MCPInfo {
+				method_name: method.map(Into::into),
+				..Default::default()
+			}));
+			drop(DropOnLog::from(log));
+			let encoded = encoded_metrics(&registry);
+			let call = encoded
+				.lines()
+				.find(|line| line.starts_with("mcp_requests_total{"));
+			if let Some(expected) = expected {
+				assert!(
+					call.unwrap().contains(&format!("outcome=\"{expected}\"")),
+					"{encoded}"
+				);
+			} else {
+				assert!(call.is_none(), "{encoded}");
+			}
+		}
 	}
 
 	#[test]
