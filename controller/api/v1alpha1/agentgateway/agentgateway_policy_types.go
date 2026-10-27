@@ -1933,8 +1933,10 @@ func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
 //   - `openAIModeration`: `key` or `secretRef`.
 //   - `bedrockGuardrails`: `key`, `secretRef`, or `aws`.
 //   - `googleModelArmor`: `gcp`.
+//   - `azureContentSafety`: `key`, `secretRef`, or `azure`. When unset, implicit
+//     Azure authentication is used.
 //
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws;gcp
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws;gcp;azure
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
 type PromptGuardAuth struct {
 	// Inline key. This option is the least secure; usage of a `Secret` is
@@ -1964,6 +1966,11 @@ type PromptGuardAuth struct {
 	// credential discovery.
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
+
+	// Azure authentication method. Use `azure: {}` for implicit Azure
+	// credential discovery.
+	// +optional
+	Azure *AzureAuth `json:"azure,omitempty"`
 }
 
 func (a *PromptGuardAuth) BackendAuth() *BackendAuth {
@@ -1976,6 +1983,7 @@ func (a *PromptGuardAuth) BackendAuth() *BackendAuth {
 		Location:  a.Location,
 		AWS:       a.AWS,
 		GCP:       a.GCP,
+		Azure:     a.Azure,
 	}
 }
 

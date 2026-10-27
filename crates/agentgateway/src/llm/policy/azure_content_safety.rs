@@ -139,12 +139,16 @@ fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
 }
 
 /// Build the common set of backend policies from the root config.
-fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
-	let mut pols = vec![
-		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(root.cached_azure_auth.clone())),
-	];
-	pols.extend(root.policies.iter().cloned());
+/// User-provided policies come first so they take precedence during resolution;
+/// system TLS and implicit Azure auth are appended as fallbacks.
+pub(crate) fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
+	let mut pols: Vec<BackendTrafficPolicy> = root.policies.to_vec();
+	pols.push(BackendTrafficPolicy::BackendTLS(
+		crate::http::backendtls::SYSTEM_TRUST.clone(),
+	));
+	pols.push(BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(
+		root.cached_azure_auth.clone(),
+	)));
 	pols
 }
 
