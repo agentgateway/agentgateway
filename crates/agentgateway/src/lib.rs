@@ -393,6 +393,9 @@ mod defaults {
 	pub fn h2_keepalive_timeout() -> Duration {
 		Duration::from_secs(5)
 	}
+	pub fn storage_resync_interval() -> Duration {
+		Duration::from_secs(300)
+	}
 
 	pub fn max_buffer_size() -> usize {
 		2_097_152
@@ -490,10 +493,26 @@ pub struct RawLogging {
 }
 
 #[apply(schema_de!)]
-#[derive(Default)]
 pub struct RawStorageConfig {
 	#[serde(default)]
 	mode: ConfigStoreMode,
+	/// Interval for periodic full config resyncs from the database, in addition to change
+	/// notifications. Bounds how long a replica can serve stale config after silently losing
+	/// store change notifications (for example, a Postgres `LISTEN` connection dropped by a
+	/// failover without the close reaching the replica). Set to "0s" to disable.
+	/// Defaults to 5 minutes.
+	#[serde(default = "defaults::storage_resync_interval", with = "serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	resync_interval: Duration,
+}
+
+impl Default for RawStorageConfig {
+	fn default() -> Self {
+		Self {
+			mode: ConfigStoreMode::default(),
+			resync_interval: defaults::storage_resync_interval(),
+		}
+	}
 }
 
 #[apply(schema!)]
@@ -762,6 +781,10 @@ pub struct ModelCatalogConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StorageConfig {
 	pub mode: ConfigStoreMode,
+	/// Interval for periodic full config resyncs from the database. `Duration::ZERO` disables
+	/// the periodic resync, leaving only store change notifications.
+	#[serde(with = "serde_dur")]
+	pub resync_interval: Duration,
 }
 
 /// Outcome of standalone configuration reloads. `Config` carries this so the

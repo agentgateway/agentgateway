@@ -423,11 +423,15 @@ pub fn parse_config(
 	}
 	let logging_database = explicit_logging_database.or_else(|| database.clone());
 
-	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
+	let raw_storage = raw.storage.clone().unwrap_or_default();
+	let mut storage_mode = raw_storage.mode;
 	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
 		storage_mode = ConfigStoreMode::ReadOnly;
 	};
-	let storage = StorageConfig { mode: storage_mode };
+	let storage = StorageConfig {
+		mode: storage_mode,
+		resync_interval: raw_storage.resync_interval,
+	};
 	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
 		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
 	}
@@ -1539,6 +1543,62 @@ config:
 				.to_string()
 				.contains("config.storage.mode=hybrid requires config.database.url"),
 			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn storage_resync_interval_defaults_to_five_minutes() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("hybrid config should parse");
+
+		assert_eq!(
+			config.storage.resync_interval,
+			std::time::Duration::from_secs(300)
+		);
+	}
+
+	#[test]
+	fn storage_resync_interval_defaults_without_storage_section() {
+		let _env_lock = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(
+			config.storage.resync_interval,
+			std::time::Duration::from_secs(300)
+		);
+	}
+
+	#[test]
+	fn storage_resync_interval_is_configurable() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+    resyncInterval: "30s"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("hybrid config should parse");
+
+		assert_eq!(
+			config.storage.resync_interval,
+			std::time::Duration::from_secs(30)
 		);
 	}
 

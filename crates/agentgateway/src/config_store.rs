@@ -1,5 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
+use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,7 @@ use sqlx::postgres::PgListener;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Sqlite, SqlitePool, Transaction};
 use tokio::sync::watch;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::database::DatabasePool;
 use crate::telemetry::log_store;
@@ -221,11 +222,39 @@ pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStor
 
 impl ConfigResourceStore {
 	async fn connect(url: &str, max_connections: Option<u32>) -> anyhow::Result<Self> {
-		Self::from_pool(DatabasePool::connect_with_max_connections(url, max_connections).await?).await
+		Self::from_pool(
+			DatabasePool::connect_with_max_connections(url, max_connections).await?,
+			Duration::ZERO,
+		)
+		.await
 	}
 
-	pub async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
+	/// Builds a store on an existing pool.
+	///
+	/// `resync_interval` bounds how long this replica can serve stale config after silently
+	/// losing store change notifications (e.g. a Postgres `LISTEN` connection dropped by a
+	/// failover without the close reaching us, which `try_recv` alone never observes): every
+	/// interval, subscribers are signalled to reload the config from the store even when no
+	/// notification arrived. `Duration::ZERO` disables the periodic resync.
+	pub async fn from_pool(pool: DatabasePool, resync_interval: Duration) -> anyhow::Result<Self> {
 		let (change_tx, _) = watch::channel(());
+		if resync_interval > Duration::ZERO {
+			let resync_tx = change_tx.clone();
+			tokio::spawn(async move {
+				let mut tick = tokio::time::interval(resync_interval);
+				tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+				// The first tick completes immediately; the config was just loaded at startup.
+				tick.tick().await;
+				loop {
+					tick.tick().await;
+					debug!("periodic config resync interval elapsed; reloading config");
+					// Ignore send errors: no subscriber may exist yet (the store is
+					// constructed before the reload loop subscribes), and the resync
+					// must keep running for subscribers that arrive later.
+					let _ = resync_tx.send(());
+				}
+			});
+		}
 		match &pool {
 			DatabasePool::Sqlite(pool) => {
 				sqlx::raw_sql(SQLITE_SCHEMA).execute(pool).await?;
@@ -2387,6 +2416,66 @@ mod tests {
 			err.downcast_ref::<ConfigResourceError>(),
 			Some(ConfigResourceError::GenerationConflict { .. })
 		)
+	}
+
+	#[tokio::test]
+	async fn periodic_resync_signals_subscribers_without_writes() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let url = format!("sqlite://{}", dir.path().join("config.db").display());
+		let pool = DatabasePool::connect_with_max_connections(&url, None)
+			.await
+			.expect("connect pool");
+		let store = ConfigResourceStore::from_pool(pool, std::time::Duration::from_millis(50))
+			.await
+			.expect("store with periodic resync");
+
+		let mut changes = store.subscribe_changes();
+		tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+			.await
+			.expect("periodic resync should signal subscribers even without writes")
+			.expect("change channel should stay open");
+	}
+
+	#[tokio::test]
+	async fn periodic_resync_survives_ticks_before_first_subscriber() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let url = format!("sqlite://{}", dir.path().join("config.db").display());
+		let pool = DatabasePool::connect_with_max_connections(&url, None)
+			.await
+			.expect("connect pool");
+		let store = ConfigResourceStore::from_pool(pool, std::time::Duration::from_millis(5))
+			.await
+			.expect("store with periodic resync");
+
+		// Let resync ticks fire while no subscriber exists yet; the resync task must
+		// not stop because of that.
+		tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+		let mut changes = store.subscribe_changes();
+		tokio::time::timeout(std::time::Duration::from_secs(10), changes.changed())
+			.await
+			.expect("resync must keep signalling after ticks with no subscribers")
+			.expect("change channel should stay open");
+	}
+
+	#[tokio::test]
+	async fn zero_resync_interval_never_signals_spontaneously() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let url = format!("sqlite://{}", dir.path().join("config.db").display());
+		let pool = DatabasePool::connect_with_max_connections(&url, None)
+			.await
+			.expect("connect pool");
+		let store = ConfigResourceStore::from_pool(pool, std::time::Duration::ZERO)
+			.await
+			.expect("store without periodic resync");
+
+		let mut changes = store.subscribe_changes();
+		assert!(
+			tokio::time::timeout(std::time::Duration::from_millis(300), changes.changed())
+				.await
+				.is_err(),
+			"a disabled resync must not signal change subscribers"
+		);
 	}
 
 	#[tokio::test]
