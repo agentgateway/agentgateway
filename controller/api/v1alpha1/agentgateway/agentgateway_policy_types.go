@@ -596,11 +596,15 @@ type BackendTLS struct {
 	// them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
 	// deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
 	// domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-	// is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+	// is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+	// unusable additional bundles are skipped without affecting other trust domains.
 	//
 	// +optional
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:MaxLength=255
+	// +kubebuilder:validation:items:Pattern=`^[A-Za-z0-9._-]+$`
 	// +listType=set
 	AdditionalTrustDomains []string `json:"additionalTrustDomains,omitempty"`
 

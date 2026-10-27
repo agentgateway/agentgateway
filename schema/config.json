@@ -1023,7 +1023,7 @@
           ]
         },
         "allowAdditionalTrustDomains": {
-          "description": "Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in\nper-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when\nfalse, only the local trust domain may be accepted.",
+          "description": "Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in\nper-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when\nfalse, only the local trust domain may be accepted. Invalid entries and unavailable or\nunusable non-local bundles are skipped with a warning; the local bundle is required.",
           "type": "boolean",
           "default": false
         }

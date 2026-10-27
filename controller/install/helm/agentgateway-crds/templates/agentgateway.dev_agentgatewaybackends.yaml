@@ -1180,8 +1180,12 @@ spec:
                                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                                unusable additional bundles are skipped without affecting other trust domains.
                                                               items:
+                                                                maxLength: 255
+                                                                minLength: 1
+                                                                pattern: ^[A-Za-z0-9._-]+$
                                                                 type: string
                                                               maxItems: 64
                                                               minItems: 1
@@ -1762,8 +1766,12 @@ spec:
                                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                                unusable additional bundles are skipped without affecting other trust domains.
                                                               items:
+                                                                maxLength: 255
+                                                                minLength: 1
+                                                                pattern: ^[A-Za-z0-9._-]+$
                                                                 type: string
                                                               maxItems: 64
                                                               minItems: 1
@@ -2364,8 +2372,12 @@ spec:
                                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                                unusable additional bundles are skipped without affecting other trust domains.
                                                               items:
+                                                                maxLength: 255
+                                                                minLength: 1
+                                                                pattern: ^[A-Za-z0-9._-]+$
                                                                 type: string
                                                               maxItems: 64
                                                               minItems: 1
@@ -3416,8 +3428,12 @@ spec:
                                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                                unusable additional bundles are skipped without affecting other trust domains.
                                                               items:
+                                                                maxLength: 255
+                                                                minLength: 1
+                                                                pattern: ^[A-Za-z0-9._-]+$
                                                                 type: string
                                                               maxItems: 64
                                                               minItems: 1
@@ -3998,8 +4014,12 @@ spec:
                                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                                unusable additional bundles are skipped without affecting other trust domains.
                                                               items:
+                                                                maxLength: 255
+                                                                minLength: 1
+                                                                pattern: ^[A-Za-z0-9._-]+$
                                                                 type: string
                                                               maxItems: 64
                                                               minItems: 1
@@ -6876,8 +6896,12 @@ spec:
                                           them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                           deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                           domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                          is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                          is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                          unusable additional bundles are skipped without affecting other trust domains.
                                         items:
+                                          maxLength: 255
+                                          minLength: 1
+                                          pattern: ^[A-Za-z0-9._-]+$
                                           type: string
                                         maxItems: 64
                                         minItems: 1
@@ -10167,8 +10191,12 @@ spec:
                                         them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                         deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                         domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                        is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                        is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                        unusable additional bundles are skipped without affecting other trust domains.
                                       items:
+                                        maxLength: 255
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9._-]+$
                                         type: string
                                       maxItems: 64
                                       minItems: 1
@@ -11087,8 +11115,12 @@ spec:
                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                unusable additional bundles are skipped without affecting other trust domains.
                                               items:
+                                                maxLength: 255
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9._-]+$
                                                 type: string
                                               maxItems: 64
                                               minItems: 1
@@ -11586,8 +11618,12 @@ spec:
                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                unusable additional bundles are skipped without affecting other trust domains.
                                               items:
+                                                maxLength: 255
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9._-]+$
                                                 type: string
                                               maxItems: 64
                                               minItems: 1
@@ -12109,8 +12145,12 @@ spec:
                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                unusable additional bundles are skipped without affecting other trust domains.
                                               items:
+                                                maxLength: 255
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9._-]+$
                                                 type: string
                                               maxItems: 64
                                               minItems: 1
@@ -13030,8 +13070,12 @@ spec:
                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                unusable additional bundles are skipped without affecting other trust domains.
                                               items:
+                                                maxLength: 255
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9._-]+$
                                                 type: string
                                               maxItems: 64
                                               minItems: 1
@@ -13529,8 +13573,12 @@ spec:
                                                 them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                                                 deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                                                 domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                                                is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                                                unusable additional bundles are skipped without affecting other trust domains.
                                               items:
+                                                maxLength: 255
+                                                minLength: 1
+                                                pattern: ^[A-Za-z0-9._-]+$
                                                 type: string
                                               maxItems: 64
                                               minItems: 1
@@ -16890,8 +16938,12 @@ spec:
                           them (the gateway must set `spiffe.allowAdditionalTrustDomains` and the Workload API must
                           deliver the bundle, otherwise the connection fails closed). When empty, only the local trust
                           domain is accepted. Combine with `verifySubjectAltNames` to pin exact SPIFFE IDs. Each entry
-                          is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`).
+                          is a trust domain name without the `spiffe://` prefix (e.g. `prod.example.com`). Unavailable or
+                          unusable additional bundles are skipped without affecting other trust domains.
                         items:
+                          maxLength: 255
+                          minLength: 1
+                          pattern: ^[A-Za-z0-9._-]+$
                           type: string
                         maxItems: 64
                         minItems: 1

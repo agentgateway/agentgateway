@@ -75,7 +75,7 @@
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
 |`config.spiffe`|object|Local SPIFFE Workload API configuration<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
 |`config.spiffe.endpoint`|string|SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).|
-|`config.spiffe.allowAdditionalTrustDomains`|boolean|Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in<br>per-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when<br>false, only the local trust domain may be accepted.|
+|`config.spiffe.allowAdditionalTrustDomains`|boolean|Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in<br>per-flow `additionalTrustDomains` lists. Does not control which bundles SPIRE delivers; when<br>false, only the local trust domain may be accepted. Invalid entries and unavailable or<br>unusable non-local bundles are skipped with a warning; the local bundle is required.|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|

@@ -24,7 +24,8 @@ pub struct Config {
 	/// Whether this gateway may accept additional (federated, non-local) SPIFFE trust domains in
 	/// per-listener/backend `additionalTrustDomains` lists. This does NOT control which bundles are
 	/// delivered (SPIRE decides that via `federatesWith`); when false, only the local trust domain
-	/// may be accepted. Domains whose bundles are unavailable are skipped with a warning.
+	/// may be accepted. Invalid domains and unavailable or unusable non-local bundles are skipped
+	/// with a warning.
 	#[serde(default)]
 	pub allow_additional_trust_domains: bool,
 }
@@ -49,8 +50,6 @@ pub enum Error {
 	InvalidSan(String),
 	#[error("no SPIFFE trust bundle available for local trust domain {0:?}")]
 	MissingLocalBundle(String),
-	#[error("invalid SPIFFE trust domain {0:?}: {1}")]
-	InvalidTrustDomain(String, String),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -178,7 +177,7 @@ impl SpiffeClient {
 		alpns: Vec<Vec<u8>>,
 		additional_trust_domains: Vec<String>,
 	) -> Result<Arc<ServerConfig>, Error> {
-		let additional: Vec<TrustDomain> = normalize_trust_domains(&additional_trust_domains)?;
+		let additional = normalize_trust_domains(&additional_trust_domains);
 		let seq = self.updates.last();
 		let key = ServerConfigKey {
 			alpns: alpns.clone(),
@@ -237,7 +236,7 @@ impl SpiffeClient {
 		verify_sans: Vec<String>,
 		additional_trust_domains: Vec<String>,
 	) -> Result<Arc<ClientConfig>, Error> {
-		let additional = normalize_trust_domains(&additional_trust_domains)?;
+		let additional = normalize_trust_domains(&additional_trust_domains);
 		// Sequence sampled before the SVID read; see server_config.
 		let seq = self.updates.last();
 		let key = ClientConfigCacheKey {
@@ -297,18 +296,24 @@ fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
 }
 
 /// Parse, validate, de-duplicate and canonically order trust domain names. `TrustDomain` lowercases
-/// names, so the result is a stable cache key regardless of input case or order.
-fn normalize_trust_domains(names: &[String]) -> Result<Vec<TrustDomain>, Error> {
+/// names, so the result is a stable cache key regardless of input case or order. Invalid entries
+/// are skipped so they cannot disrupt traffic in other trust domains.
+fn normalize_trust_domains(names: &[String]) -> Vec<TrustDomain> {
 	let mut tds: Vec<TrustDomain> = Vec::with_capacity(names.len());
 	for name in names {
-		let td =
-			TrustDomain::new(name).map_err(|e| Error::InvalidTrustDomain(name.clone(), e.to_string()))?;
+		let td = match TrustDomain::new(name) {
+			Ok(td) => td,
+			Err(error) => {
+				warn!(trust_domain = %name, error = %error, "invalid SPIFFE trust domain; skipping");
+				continue;
+			},
+		};
 		if !tds.contains(&td) {
 			tds.push(td);
 		}
 	}
 	tds.sort();
-	Ok(tds)
+	tds
 }
 
 fn trust_domain_names(tds: &[TrustDomain]) -> Vec<String> {
@@ -368,15 +373,19 @@ fn roots_by_trust_domain(
 			);
 			continue;
 		};
-		let mut roots = rustls::RootCertStore::empty();
-		for authority in bundle.authorities() {
-			roots
-				.add(CertificateDer::from(authority.as_bytes().to_vec()))
-				.map_err(Error::Rustls)?;
-		}
-		if roots.is_empty() {
-			return Err(Error::EmptyBundle);
-		}
+		let roots = match bundle_roots(&bundle) {
+			Ok(roots) => roots,
+			Err(error) if td != local_td => {
+				warn!(
+					purpose,
+					trust_domain = %td,
+					error = %error,
+					"unusable SPIFFE trust bundle; skipping trust domain"
+				);
+				continue;
+			},
+			Err(error) => return Err(error),
+		};
 		by_td.insert(td, Arc::new(roots));
 	}
 	debug!(
@@ -385,6 +394,17 @@ fn roots_by_trust_domain(
 		"loaded SPIFFE trust bundles"
 	);
 	Ok(by_td)
+}
+
+fn bundle_roots(bundle: &::spiffe::X509Bundle) -> Result<rustls::RootCertStore, Error> {
+	let mut roots = rustls::RootCertStore::empty();
+	for authority in bundle.authorities() {
+		roots.add(CertificateDer::from(authority.as_bytes().to_vec()))?;
+	}
+	if roots.is_empty() {
+		return Err(Error::EmptyBundle);
+	}
+	Ok(roots)
 }
 
 /// Inbound: one `WebPkiClientVerifier` per accepted trust domain, wrapped in a dispatcher that
@@ -978,7 +998,7 @@ mod tests {
 		.await;
 		let ctx = client.source.x509_context().unwrap();
 		let now = UnixTime::now();
-		let additional = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
+		let additional = normalize_trust_domains(&["federated.example".to_string()]);
 
 		let fed_peer = CertificateDer::from(
 			fed
@@ -1036,7 +1056,7 @@ mod tests {
 		.await;
 		let ctx = client.source.x509_context().unwrap();
 		let now = UnixTime::now();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
+		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
 
 		let v = build_client_verifier(&ctx, &accepted, false, transport::tls::provider())
 			.expect("verifier must build with local-only roots when federation is disabled");
@@ -1103,7 +1123,7 @@ mod tests {
 			let ctx = client.source.x509_context().unwrap();
 			let now = UnixTime::now();
 			let additional = if declare {
-				normalize_trust_domains(&["federated.example".to_string()]).unwrap()
+				normalize_trust_domains(&["federated.example".to_string()])
 			} else {
 				vec![]
 			};
@@ -1153,6 +1173,150 @@ mod tests {
 		handle.abort();
 	}
 
+	#[test]
+	fn spiffe_normalizes_valid_domains_and_skips_invalid_entries() {
+		let names = [
+			"Z.example",
+			"bad domain",
+			"",
+			"a_example",
+			"z.EXAMPLE",
+			"bad/domain",
+		]
+		.map(String::from);
+		assert_eq!(
+			trust_domain_names(&normalize_trust_domains(&names)),
+			["a_example", "z.example"]
+		);
+		assert!(normalize_trust_domains(&["bad domain".to_string()]).is_empty());
+	}
+
+	#[tokio::test]
+	async fn spiffe_invalid_additional_domains_do_not_break_configs() {
+		let local = TestCa::new();
+		let fed = TestCa::new();
+		let (client, _dir, handle) = connect_with_federated(
+			"spiffe://example.org/ns/default/sa/gateway",
+			&local,
+			HashMap::from([("federated.example".to_string(), fed.cert_der.clone())]),
+			true,
+		)
+		.await;
+
+		for valid in [vec![], vec!["federated.example".to_string()]] {
+			let mut mixed = valid.clone();
+			mixed.extend(["bad domain".to_string(), String::new()]);
+			let alpns = vec![b"h2".to_vec()];
+			let server = client.server_config(alpns.clone(), mixed.clone()).unwrap();
+			assert!(Arc::ptr_eq(
+				&server,
+				&client.server_config(alpns.clone(), valid.clone()).unwrap()
+			));
+			let upstream = client.client_config(alpns.clone(), vec![], mixed).unwrap();
+			assert!(Arc::ptr_eq(
+				&upstream,
+				&client.client_config(alpns, vec![], valid).unwrap()
+			));
+		}
+		handle.abort();
+	}
+
+	#[test]
+	fn spiffe_unusable_federated_bundle_preserves_other_domains() {
+		let local = TestCa::new();
+		let fed = TestCa::new();
+		let local_td = TrustDomain::new("example.org").unwrap();
+		let fed_td = TrustDomain::new("federated.example").unwrap();
+		let empty_td = TrustDomain::new("empty.example").unwrap();
+		let invalid_td = TrustDomain::new("invalid.example").unwrap();
+		// SPIFFE can parse a v2 certificate, but WebPKI does not accept it as a trust anchor.
+		let mut invalid_der = fed.cert_der.clone();
+		let version = invalid_der
+			.windows(5)
+			.position(|bytes| bytes == [0xa0, 0x03, 0x02, 0x01, 0x02])
+			.unwrap();
+		invalid_der[version + 4] = 1;
+		let invalid_bundle = ::spiffe::X509Bundle::parse_from_der(invalid_td, &invalid_der).unwrap();
+		assert!(matches!(
+			bundle_roots(&invalid_bundle),
+			Err(Error::Rustls(_))
+		));
+		let gateway = local.issue("spiffe://example.org/ns/default/sa/gateway");
+		let svid = Arc::new(X509Svid::parse_from_der(&gateway.leaf_der, &gateway.key_der).unwrap());
+		let mut bundles = ::spiffe::X509BundleSet::new();
+		bundles
+			.add_bundle(::spiffe::X509Bundle::parse_from_der(local_td.clone(), &local.cert_der).unwrap());
+		bundles
+			.add_bundle(::spiffe::X509Bundle::parse_from_der(fed_td.clone(), &fed.cert_der).unwrap());
+		bundles.add_bundle(::spiffe::X509Bundle::new(empty_td));
+		bundles.add_bundle(invalid_bundle);
+		let ctx = X509Context::new([svid.clone()], bundles);
+		let additional = normalize_trust_domains(
+			&[
+				"empty.example",
+				"invalid.example",
+				"missing.example",
+				"federated.example",
+			]
+			.map(String::from),
+		);
+		let roots = roots_by_trust_domain(&ctx, &additional, true, "test").unwrap();
+		assert_eq!(roots.len(), 2);
+		assert!(roots.contains_key(&local_td));
+		assert!(roots.contains_key(&fed_td));
+
+		let inbound =
+			build_client_verifier(&ctx, &additional, true, transport::tls::provider()).unwrap();
+		let outbound = build_server_verifier(&ctx, vec![], &additional, true).unwrap();
+		let sni = ServerName::try_from("unused.example").unwrap();
+		for (ca, domain, accepted) in [
+			(&local, "example.org", true),
+			(&fed, "federated.example", true),
+			(&fed, "empty.example", false),
+			(&fed, "invalid.example", false),
+			(&fed, "missing.example", false),
+		] {
+			let peer = CertificateDer::from(ca.issue(&format!("spiffe://{domain}/peer")).leaf_der);
+			assert_eq!(
+				inbound
+					.verify_client_cert(&peer, &[], UnixTime::now())
+					.is_ok(),
+				accepted,
+				"inbound peer in {domain}"
+			);
+			assert_eq!(
+				outbound
+					.verify_server_cert(&peer, &[], &sni, &[], UnixTime::now())
+					.is_ok(),
+				accepted,
+				"outbound peer in {domain}"
+			);
+		}
+
+		let missing_local = X509Context::new([svid.clone()], ::spiffe::X509BundleSet::new());
+		assert!(matches!(
+			roots_by_trust_domain(&missing_local, &additional, true, "test"),
+			Err(Error::MissingLocalBundle(_))
+		));
+		let mut empty_local = ::spiffe::X509BundleSet::new();
+		empty_local.add_bundle(::spiffe::X509Bundle::new(local_td));
+		let empty_local = X509Context::new([svid.clone()], empty_local);
+		assert!(matches!(
+			roots_by_trust_domain(&empty_local, &additional, true, "test"),
+			Err(Error::EmptyBundle)
+		));
+		let mut invalid_local = ::spiffe::X509BundleSet::new();
+		invalid_local.add_bundle(
+			::spiffe::X509Bundle::parse_from_der(TrustDomain::new("example.org").unwrap(), &invalid_der)
+				.unwrap(),
+		);
+		let invalid_local = X509Context::new([svid], invalid_local);
+		assert!(matches!(
+			roots_by_trust_domain(&invalid_local, &additional, true, "test"),
+			Err(Error::Rustls(_))
+		));
+	}
+
 	/// An accepted federated trust domain whose bundle the Workload API has not delivered is skipped
 	/// rather than preventing configuration from being built.
 	#[tokio::test]
@@ -1166,7 +1330,7 @@ mod tests {
 		)
 		.await;
 		let ctx = client.source.x509_context().unwrap();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
+		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
 		build_client_verifier(&ctx, &accepted, true, transport::tls::provider())
 			.expect("an accepted domain with no delivered bundle should be skipped");
 		handle.abort();
@@ -1189,7 +1353,7 @@ mod tests {
 		let ctx = client.source.x509_context().unwrap();
 		let now = UnixTime::now();
 		let sni = ServerName::try_from("federated.example").unwrap();
-		let accepted = normalize_trust_domains(&["federated.example".to_string()]).unwrap();
+		let accepted = normalize_trust_domains(&["federated.example".to_string()]);
 
 		let upstream_id = "spiffe://federated.example/ns/default/sa/upstream";
 		let upstream = CertificateDer::from(fed.issue(upstream_id).leaf_der);
@@ -1394,10 +1558,10 @@ mod tests {
 				key: LISTENER_KEY,
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
-				protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::spiffe(vec![
-					b"h2".to_vec(),
-					b"http/1.1".to_vec(),
-				], vec![])),
+				protocol: ListenerProtocol::HTTPS(crate::types::agent::ServerTLSConfig::spiffe(
+					vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+					vec![],
+				)),
 				..Default::default()
 			}])),
 		}
