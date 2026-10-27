@@ -1,31 +1,17 @@
 ## MCP keyed local rate limiting
 
-I use my MCP gateway across multiple clients and servers, and I don't want one
-client to use up the allowance for everyone. This setup allows each client its
-own allowance for each tool on each server. Two credentials belonging to the
-same client still share the allowance.
+This example gives each API key client its own allowance for each tool on each MCP target, so
+one busy client cannot use up the allowance for everyone else.
 
-When a client reaches its limit, its calls to that particular tool are temporarily
-rejected. This does not affect other tools or other clients' allowances. Changing
-credentials or reconnecting does not provide a fresh allowance. The client can
-still list the available tools.
+The `localRateLimit` rule in [config.yaml](config.yaml) only counts `tools/call` requests, so clients
+can still initialize and list tools after reaching a limit. Its `key` combines the client from the
+API key metadata with the tool's target and name, and each distinct value gets its own bucket. Two
+credentials with the same `client` metadata share an allowance, and reconnecting does not reset
+it. A call whose key cannot be evaluated, such as one to an unknown tool, uses a single bucket
+shared by all clients.
 
-```yaml
-localRateLimit:
-  conditional:
-  - condition: 'mcp.methodName == "tools/call"'
-    type: requests
-    maxTokens: 2
-    tokensPerFill: 2
-    fillInterval: 60s
-    key: 'apiKey.client + "/" + mcp.tool.target + "/" + mcp.tool.name'
-```
-
-In this example, it starts with an allowance of two calls per client, server, and
-tool. Every 60 seconds, it adds two calls back, up to a maximum of two. The counters
-live inside one gateway process. If the process is restarted, the counters reset.
-Gateway replicas have separate counters, and a shared limit requires an external
-rate-limit service, which this example does not use.
+Buckets live in the proxy instance that created them, so they reset on restart and each replica
+holds the configured limit. Use `remoteRateLimit` for a quota shared across a fleet.
 
 ### Try it
 
