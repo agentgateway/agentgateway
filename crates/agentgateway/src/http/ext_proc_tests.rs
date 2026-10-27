@@ -5750,6 +5750,44 @@ mod body_streaming_and_trailers {
 		assert_eq!(collected.trailers(), Some(&trailers));
 		assert_eq!(collected.to_bytes().as_ref(), b"upstream-response");
 	}
+
+	#[tokio::test]
+	async fn full_duplex_response_drops_upstream_body_when_downstream_is_dropped() {
+		let tracker = MetadataTracker::new();
+		let ext_proc = ExtProcMock::new(move || tracker.clone()).spawn().await;
+		let processing_options = ext_proc::ProcessingOptions {
+			request_body_mode: ext_proc::BodySendMode::None,
+			response_body_mode: ext_proc::BodySendMode::FullDuplexStreamed,
+			request_header_mode: ext_proc::HeaderSendMode::Send,
+			response_header_mode: ext_proc::HeaderSendMode::Send,
+			request_trailer_mode: ext_proc::TrailerSendMode::Skip,
+			response_trailer_mode: ext_proc::TrailerSendMode::Send,
+			..Default::default()
+		};
+		let mut ext_proc_request =
+			build_ext_proc_request_for_test(ext_proc.address, processing_options);
+
+		let (upstream_tx, upstream_rx) = mpsc::channel::<Result<Frame<Bytes>, Infallible>>(1);
+		upstream_tx
+			.send(Ok(Frame::data(Bytes::from_static(b"data: 1\n\n"))))
+			.await
+			.unwrap();
+		let mut resp = http::Response::new(Body::new(http_body_util::StreamBody::new(
+			tokio_stream::wrappers::ReceiverStream::new(upstream_rx),
+		)));
+		let _ = ext_proc_request
+			.mutate_response(&mut resp, None)
+			.await
+			.unwrap();
+		let mut body = resp.into_body();
+		let first = body.frame().await.unwrap().unwrap().into_data().unwrap();
+		assert_eq!(first.as_ref(), b"data: 1\n\n");
+
+		drop(body);
+		tokio::time::timeout(Duration::from_secs(5), upstream_tx.closed())
+			.await
+			.expect("upstream body should be dropped once the downstream body is dropped");
+	}
 }
 
 // CEL metadata_context and ext_proc request/response attribute evaluation.
