@@ -184,6 +184,18 @@ impl Display for ProxyResponseReason {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct RateLimitDenied;
 
+/// JSON error body for a rate-limit denial that has no body of its own.
+fn rate_limit_exceeded_body() -> String {
+	serde_json::json!({
+		"error": {
+			"message": "Rate limit exceeded",
+			"type": "rate_limit_exceeded",
+			"code": "rate_limit_exceeded",
+		}
+	})
+	.to_string()
+}
+
 /// Unsafe, debugging only: return full internal error details to clients instead of generic messages.
 pub(crate) static EXPOSE_ERROR_DETAILS: LazyLock<bool> = LazyLock::new(|| {
 	let enabled =
@@ -636,6 +648,17 @@ impl ProxyError {
 				if let Some(hm) = rb.headers_mut() {
 					*hm = *response_headers;
 				}
+				let raw_body = if raw_body.is_empty() {
+					if let Some(hm) = rb.headers_mut() {
+						hm.insert(
+							hyper::header::CONTENT_TYPE,
+							HeaderValue::from_static("application/json"),
+						);
+					}
+					rate_limit_exceeded_body().into_bytes()
+				} else {
+					raw_body
+				};
 				return rb
 					.body(http::Body::from(raw_body))
 					.expect("static response must build");
@@ -713,6 +736,13 @@ impl ProxyError {
 				)
 				.body(http::Body::empty())
 				.unwrap();
+		}
+
+		if let ProxyError::RateLimitExceeded { .. } = &this {
+			return rb
+				.header(hyper::header::CONTENT_TYPE, "application/json")
+				.body(http::Body::from(rate_limit_exceeded_body()))
+				.expect("rate limit exceeded response is valid");
 		}
 
 		if let ProxyError::BudgetExceeded(exceeded) = &this {
