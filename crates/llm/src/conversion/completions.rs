@@ -494,19 +494,20 @@ pub mod from_messages {
 				return;
 			}
 			let stop_reason = match state.pending_stop_reason.take() {
-				Some(stop_reason) => stop_reason,
-				None if force => messages::StopReason::EndTurn,
+				Some(stop_reason) => Some(stop_reason),
+				None if force && state.next_block_index > 0 => Some(messages::StopReason::EndTurn),
+				None if force => None,
 				None => return,
 			};
 			let usage = match state.pending_usage.take() {
 				Some(usage) => Some(usage),
 				None if force => None,
 				None => {
-					state.pending_stop_reason = Some(stop_reason);
+					state.pending_stop_reason = stop_reason;
 					return;
 				},
 			};
-			let finish_reason = crate::types::serialize_str(&stop_reason);
+			let finish_reason = stop_reason.as_ref().and_then(crate::types::serialize_str);
 
 			close_thinking_block(state, events);
 			close_text_block(state, events);
@@ -538,23 +539,35 @@ pub mod from_messages {
 				})
 				.unwrap_or((0, 0));
 
-			push_event(
-				events,
-				messages::MessagesStreamEvent::MessageDelta {
-					delta: messages::MessageDelta {
-						stop_reason: Some(stop_reason),
-						stop_sequence: state.pending_stop_sequence.take(),
+			if let Some(stop_reason) = stop_reason {
+				push_event(
+					events,
+					messages::MessagesStreamEvent::MessageDelta {
+						delta: messages::MessageDelta {
+							stop_reason: Some(stop_reason),
+							stop_sequence: state.pending_stop_sequence.take(),
+						},
+						usage: messages::MessageDeltaUsage {
+							input_tokens: Some(input_tokens),
+							output_tokens: Some(output_tokens),
+							cache_creation_input_tokens,
+							cache_read_input_tokens,
+							..Default::default()
+						},
 					},
-					usage: messages::MessageDeltaUsage {
-						input_tokens: Some(input_tokens),
-						output_tokens: Some(output_tokens),
-						cache_creation_input_tokens,
-						cache_read_input_tokens,
-						..Default::default()
+				);
+				push_event(events, messages::MessagesStreamEvent::MessageStop);
+			} else {
+				push_event(
+					events,
+					messages::MessagesStreamEvent::Error {
+						error: messages::MessagesError {
+							r#type: "api_error".to_string(),
+							message: "upstream response ended without content or a finish reason".to_string(),
+						},
 					},
-				},
-			);
-			push_event(events, messages::MessagesStreamEvent::MessageStop);
+				);
+			}
 			state.sent_message_stop = true;
 
 			if let Some(usage) = usage {

@@ -1736,6 +1736,44 @@ data: [DONE]
 	}
 
 	#[tokio::test]
+	async fn completions_stream_empty_response_fails_on_done() {
+		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}],"model":"gpt-5","usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105}}
+
+data: [DONE]
+
+"#;
+
+		let messages = conversion::completions::from_messages::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let messages = String::from_utf8(messages.to_vec()).unwrap();
+		assert!(messages.contains("event: error"), "{messages}");
+		assert!(!messages.contains("message_stop"), "{messages}");
+
+		let responses = conversion::openai_compat::to_responses::translate_stream(
+			agent_http::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+			None,
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+		let responses = String::from_utf8(responses.to_vec()).unwrap();
+		assert!(responses.contains("response.failed"), "{responses}");
+		assert!(!responses.contains("response.completed"), "{responses}");
+	}
+
+	#[tokio::test]
 	async fn completions_to_messages_stream_reports_matched_stop_sequence() {
 		let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop","matched_stop":"STOPPROBE"}],"model":"gpt-5","usage":null}
 
