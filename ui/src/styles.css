@@ -4349,6 +4349,7 @@ tbody tr:hover {
 .target-resolved-composite {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
+	position: relative;
 	align-items: stretch;
 	margin-top: 2px;
 }
@@ -5152,6 +5153,7 @@ textarea {
 }
 
 .target-resolved-composite .freeform-combobox {
+	position: static;
 	min-width: 0;
 }
 
@@ -5220,9 +5222,11 @@ textarea {
 
 .freeform-combobox-option span {
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+}
+
+.freeform-combobox-option svg {
+	flex-shrink: 0;
 }
 
 .freeform-combobox-option.active {
