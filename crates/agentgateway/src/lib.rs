@@ -1030,11 +1030,11 @@ impl Address {
 		}
 	}
 
-	pub fn tcp_port(&self) -> Option<u16> {
+	/// The port when bound on all interfaces, which is what a meshed caller could reach.
+	pub fn wildcard_port(&self) -> Option<u16> {
 		match self {
-			Address::Off | Address::UnixSocket(_) => None,
-			Address::Localhost(_, port) => Some(*port),
-			Address::SocketAddr(s) => Some(s.port()),
+			Address::SocketAddr(s) if s.ip().is_unspecified() => Some(s.port()),
+			_ => None,
 		}
 	}
 

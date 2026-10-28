@@ -1717,7 +1717,7 @@ impl Gateway {
 	fn stats_for_port(pi: &ProxyInputs, port: u16) -> Option<MetricsService> {
 		pi.stats
 			.clone()
-			.filter(|_| pi.cfg.stats_addr.tcp_port() == Some(port))
+			.filter(|_| pi.cfg.stats_addr.wildcard_port() == Some(port))
 	}
 
 	/// Serves the metrics endpoint over an HBONE tunnel addressed to the stats port, as ztunnel

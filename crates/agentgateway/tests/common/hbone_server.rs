@@ -213,7 +213,6 @@ fn generate_test_certs(name: &str) -> rustls::ServerConfig {
 }
 
 /// mTLS client config for connecting to an HBONE server, as a meshed workload named `name` would.
-#[allow(dead_code)]
 pub fn client_tls_config(name: &str) -> rustls::ClientConfig {
 	let (cert_der, key_der) = test_identity(name);
 	let provider = agentgateway::transport::tls::provider();

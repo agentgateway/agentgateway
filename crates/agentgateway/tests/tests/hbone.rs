@@ -23,7 +23,7 @@ async fn test_hbone_gateway_serves_metrics() -> anyhow::Result<()> {
   serviceAccount: default
   trustDomain: cluster.local
   caAddress: "http://{ca_addr}"
-  statsAddr: 127.0.0.1:{stats_port}
+  statsAddr: 0.0.0.0:{stats_port}
 binds:
 - port: $PORT
   tunnelProtocol: hboneGateway
