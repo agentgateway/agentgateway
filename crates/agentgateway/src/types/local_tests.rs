@@ -861,6 +861,21 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_model_accepts_display_name() {
+	normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: "*"
+    displayName: Gemini (us-east5)
+    provider: ollama
+"#,
+	)
+	.await
+	.expect("model displayName should be accepted");
+}
+
+#[tokio::test]
 async fn test_llm_model_rejects_duplicate_id() {
 	let err = normalize_test_config(
 		r#"

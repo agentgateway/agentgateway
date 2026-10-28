@@ -821,6 +821,10 @@ pub struct LocalLLMModels {
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
+	/// displayName is an optional label shown in the UI in place of name. It does not affect matching.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[allow(dead_code)]
+	display_name: Option<String>,
 	/// visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).
 	#[serde(
 		default,

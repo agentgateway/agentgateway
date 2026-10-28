@@ -4135,6 +4135,12 @@ tbody tr:hover {
 	font-weight: 700;
 }
 
+.model-name-pattern {
+	color: var(--muted);
+	font-size: 13px;
+	font-weight: 400;
+}
+
 .badge {
 	display: inline-flex;
 	align-items: center;

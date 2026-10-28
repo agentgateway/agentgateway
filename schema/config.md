@@ -5785,6 +5785,7 @@
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
+|`llm.models[].displayName`|string|displayName is an optional label shown in the UI in place of name. It does not affect matching.|
 |`llm.models[].visibility`|enum|visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).<br>Possible values: `public`, `internal`.|
 |`llm.models[].params`|object|params customizes parameters for the outgoing request|
 |`llm.models[].params.model`|string|The model to send to the provider.<br>If unset, the same model will be used from the request.|

@@ -37,6 +37,7 @@ import {
 	makeEmptyModel,
 	makeEmptyVirtualModel,
 	modelIdentity,
+	modelLabel,
 	modelWarnings,
 	providerDisplayName,
 	providerLabel,
@@ -453,7 +454,12 @@ function ModelsEditorPage() {
 									);
 									return (
 										<tr key={`model:${modelIdentity(model)}`}>
-											<td className="strong">{model.name}</td>
+											<td className="strong">
+												{modelLabel(model)}
+												{model.displayName?.trim() ? (
+													<div className="model-name-pattern">{model.name}</div>
+												) : null}
+											</td>
 											{hybrid ? (
 												<td>
 													<span className="badge">{databaseBacked ? 'Database' : 'File'}</span>
@@ -785,6 +791,23 @@ function ModelEditor(props: {
 							});
 						}}
 						placeholder={model.provider ? defaultIncomingModelMatch(model.provider) : 'openai/*'}
+					/>
+				</Field>
+				<Field
+					label="Display name"
+					path="displayName"
+					tooltip={props.help.field<LlmModel>(
+						'LocalLLMModels',
+						'displayName',
+						'Optional label for lists and pickers. Matching still uses the incoming model match.'
+					)}
+				>
+					<input
+						value={model.displayName ?? ''}
+						onChange={event =>
+							update({ model: { ...model, displayName: event.target.value || undefined } })
+						}
+						placeholder="Defaults to the model match"
 					/>
 				</Field>
 			</div>

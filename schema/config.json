@@ -12848,6 +12848,13 @@
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"
         },
+        "displayName": {
+          "description": "displayName is an optional label shown in the UI in place of name. It does not affect matching.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "visibility": {
           "description": "visibility controls whether clients can request this model directly (rather than only via a `virtualModel`).",
           "$ref": "#/$defs/ModelVisibility"

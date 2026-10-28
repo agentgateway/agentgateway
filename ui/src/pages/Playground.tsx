@@ -28,7 +28,7 @@ import {
 } from '@/components/Primitives';
 import { ProviderIcon } from '@/components/ProviderIcon';
 import { WildcardModelSelector } from '@/components/WildcardModelSelector';
-import { providerLabel } from '@/config';
+import { modelLabel, providerLabel } from '@/config';
 import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy, waitForLlmCors } from '@/cors';
 import { hasKeyValue, keyLabel } from '@/credentialDisplay';
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from '@/gatewayUrls';
@@ -573,8 +573,13 @@ export function PlaygroundPage() {
 									searchable
 									options={modelOptions.map(item => ({
 										value: item.name,
-										label: item.name,
-										description: item.kind === 'virtual' ? 'Virtual model' : undefined,
+										label: item.kind === 'model' ? modelLabel(item.config) : item.name,
+										description:
+											item.kind === 'virtual'
+												? 'Virtual model'
+												: item.config.displayName?.trim()
+													? item.name
+													: undefined,
 										icon: item.icon,
 										searchText: item.searchText
 									}))}
