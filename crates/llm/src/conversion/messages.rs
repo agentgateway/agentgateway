@@ -819,13 +819,17 @@ pub mod from_completions {
 			&& capabilities.legacy
 		{
 			(
-				super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
-					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+				super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens).map(|budget_tokens| {
+					messages::ThinkingInput::Enabled {
+						budget_tokens,
+						display: None,
+					}
+				}),
 				None,
 			)
 		} else if (explicit_budget.is_some() || effort.is_some()) && capabilities.adaptive {
 			(
-				Some(messages::ThinkingInput::Adaptive {}),
+				Some(messages::ThinkingInput::Adaptive { display: None }),
 				Some(effort.unwrap_or(messages::ThinkingEffort::High)),
 			)
 		} else {
@@ -836,7 +840,10 @@ pub mod from_completions {
 					.and_then(|budget_tokens| {
 						super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens)
 					})
-					.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens }),
+					.map(|budget_tokens| messages::ThinkingInput::Enabled {
+						budget_tokens,
+						display: None,
+					}),
 				None,
 			)
 		};

@@ -858,7 +858,7 @@ pub mod from_messages {
 			.as_ref()
 			.and_then(|cfg| cfg.effort)
 			.or_else(|| {
-				if let Some(messages::ThinkingInput::Enabled { budget_tokens }) = &thinking {
+				if let Some(messages::ThinkingInput::Enabled { budget_tokens, .. }) = &thinking {
 					Some(crate::types::anthropic_effort_for_thinking_budget(
 						*budget_tokens,
 					))
@@ -868,7 +868,7 @@ pub mod from_messages {
 			});
 		let reasoning_requested = match thinking {
 			Some(messages::ThinkingInput::Disabled {}) => false,
-			Some(messages::ThinkingInput::Adaptive {}) => true,
+			Some(messages::ThinkingInput::Adaptive { .. }) => true,
 			_ => output_effort.is_some(),
 		};
 		let reasoning_effort =

@@ -272,7 +272,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		top_p: Some(0.8),
 		tools: None,
 		tool_choice: None,
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: Some(messages::typed::OutputConfig {
 			effort: None,
 			format: None,
@@ -331,6 +331,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		tool_choice: None,
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
+			display: None,
 		}),
 		output_config: Some(messages::typed::OutputConfig {
 			effort: Some(messages::typed::ThinkingEffort::High),
@@ -403,7 +404,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 			name: "lookup".to_string(),
 			disable_parallel_tool_use: None,
 		}),
-		thinking: Some(messages::typed::ThinkingInput::Adaptive {}),
+		thinking: Some(messages::typed::ThinkingInput::Adaptive { display: None }),
 		output_config: None,
 		cache_control: None,
 	};
@@ -525,6 +526,7 @@ fn enabled_thinking_request_with_tool_choice(
 		tool_choice,
 		thinking: Some(messages::typed::ThinkingInput::Enabled {
 			budget_tokens: 1024,
+			display: None,
 		}),
 		output_config: None,
 		cache_control: None,
@@ -2064,5 +2066,76 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 			.to_string()
 			.contains("document format could not be determined"),
 		"unexpected error: {err}"
+	);
+}
+
+fn bedrock_thinking_for(
+	thinking: serde_json::Value,
+	catalog: crate::model_catalog::Catalog<'_>,
+) -> serde_json::Value {
+	let provider = Provider {
+		model_override: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		endpoint_preference: Default::default(),
+	};
+	let req: messages::typed::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-7",
+		"max_tokens": 2048,
+		"messages": [{"role": "user", "content": "hi"}],
+		"thinking": thinking
+	}))
+	.unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None, catalog).unwrap();
+	out.additional_model_request_fields.unwrap()["thinking"].clone()
+}
+
+#[test]
+fn test_adaptive_thinking_display_is_forwarded() {
+	assert_eq!(
+		bedrock_thinking_for(json!({"type": "adaptive", "display": "summarized"}), None),
+		json!({"type": "adaptive", "display": "summarized"})
+	);
+}
+
+#[test]
+fn test_enabled_thinking_display_is_forwarded() {
+	assert_eq!(
+		bedrock_thinking_for(
+			json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"}),
+			None
+		),
+		json!({"type": "enabled", "budget_tokens": 1024, "display": "omitted"})
+	);
+}
+
+#[test]
+fn test_enabled_thinking_upgraded_to_adaptive_keeps_display() {
+	let cat = crate::model_catalog::TestCatalog::new([(
+		"claude-opus-4-7",
+		&[crate::model_catalog::tags::ADAPTIVE_THINKING][..],
+	)]);
+	assert_eq!(
+		bedrock_thinking_for(
+			json!({"type": "enabled", "budget_tokens": 1024, "display": "summarized"}),
+			Some(&cat)
+		),
+		json!({"type": "adaptive", "display": "summarized"})
+	);
+}
+
+#[test]
+fn test_thinking_display_round_trips_through_typed_request() {
+	let req: messages::typed::Request = serde_json::from_value(json!({
+		"model": "claude-opus-4-7",
+		"max_tokens": 1024,
+		"messages": [{"role": "user", "content": "hi"}],
+		"thinking": {"type": "adaptive", "display": "summarized"}
+	}))
+	.unwrap();
+	assert_eq!(
+		serde_json::to_value(&req).unwrap()["thinking"],
+		json!({"type": "adaptive", "display": "summarized"})
 	);
 }

@@ -1534,11 +1534,11 @@ pub mod from_messages {
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let capabilities = crate::model_catalog::anthropic_thinking_capabilities(&req.model, catalog);
-		if matches!(req.thinking, Some(messages::ThinkingInput::Enabled { .. }))
+		if let Some(messages::ThinkingInput::Enabled { display, .. }) = req.thinking
 			&& capabilities.adaptive
 			&& !capabilities.legacy
 		{
-			req.thinking = Some(messages::ThinkingInput::Adaptive {});
+			req.thinking = Some(messages::ThinkingInput::Adaptive { display });
 			req
 				.output_config
 				.get_or_insert_default()
@@ -1966,18 +1966,33 @@ pub mod from_messages {
 
 		// Build Anthropic model-specific fields under Converse's additionalModelRequestFields.
 		let mut additional_fields = requested_thinking.map(|thinking| {
-			let thinking_json = match thinking {
-				messages::ThinkingInput::Enabled { budget_tokens } => serde_json::json!({
-					"type": "enabled",
-					"budget_tokens": budget_tokens
-				}),
-				messages::ThinkingInput::Disabled {} => serde_json::json!({
-					"type": "disabled"
-				}),
-				messages::ThinkingInput::Adaptive {} => serde_json::json!({
-					"type": "adaptive"
-				}),
+			let (mut thinking_json, display) = match thinking {
+				messages::ThinkingInput::Enabled {
+					budget_tokens,
+					display,
+				} => (
+					serde_json::json!({
+						"type": "enabled",
+						"budget_tokens": budget_tokens
+					}),
+					*display,
+				),
+				messages::ThinkingInput::Disabled {} => (
+					serde_json::json!({
+						"type": "disabled"
+					}),
+					None,
+				),
+				messages::ThinkingInput::Adaptive { display } => (
+					serde_json::json!({
+						"type": "adaptive"
+					}),
+					*display,
+				),
 			};
+			if let Some(display) = display {
+				thinking_json["display"] = serde_json::json!(display);
+			}
 			serde_json::json!({ "thinking": thinking_json })
 		});
 		let mut upsert_additional_field = |key: &str, value: serde_json::Value| {
