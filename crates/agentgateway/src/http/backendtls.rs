@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use agent_core::strng;
@@ -239,6 +239,12 @@ pub struct BackendTLSInfo {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub root: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cert_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub key_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub root_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub hostname: Option<String>,
 	#[serde(default, skip_serializing_if = "is_false")]
 	pub insecure: bool,
@@ -261,6 +267,9 @@ impl BackendTLSInfo {
 		Self {
 			cert: tls.cert.as_ref().map(pem_to_string),
 			root: tls.root.as_ref().map(pem_to_string),
+			cert_path: tls.cert_path.as_deref().map(path_to_string),
+			key_path: tls.key_path.as_deref().map(path_to_string),
+			root_path: tls.root_path.as_deref().map(path_to_string),
 			hostname: tls.hostname.clone(),
 			insecure: tls.insecure,
 			insecure_host: tls.insecure_host,
@@ -271,6 +280,10 @@ impl BackendTLSInfo {
 			key_exchange_groups: tls.key_exchange_groups.clone(),
 		}
 	}
+}
+
+fn path_to_string(path: &std::path::Path) -> String {
+	path.to_string_lossy().into_owned()
 }
 
 fn pem_to_string(pem: impl AsRef<[u8]>) -> Strng {
@@ -388,14 +401,7 @@ fn build_client_config(
 			let private_key = parse_key(&key)?;
 			ccb.with_client_auth_cert(cert_chain, private_key)?
 		},
-		(None, None) => ccb.with_no_client_auth(),
-		// A cert without its key (or the reverse) would silently drop client auth.
-		(Some(_), None) => {
-			anyhow::bail!("backend TLS client certificate was set without a matching private key")
-		},
-		(None, Some(_)) => {
-			anyhow::bail!("backend TLS private key was set without a matching client certificate")
-		},
+		_ => ccb.with_no_client_auth(),
 	};
 	if settings.insecure_host {
 		let inner =
@@ -426,26 +432,97 @@ fn build_client_config(
 	Ok((cc, allow_custom_alpn))
 }
 
+/// Directories that file-sourced backend TLS material must live under, from the gateway config.
+/// Empty means no file may be used.
+static ALLOWED_FILE_DIRS: Lazy<ArcSwap<Vec<PathBuf>>> = Lazy::new(|| ArcSwap::from_pointee(vec![]));
+
+pub fn set_allowed_file_dirs(dirs: Vec<PathBuf>) {
+	ALLOWED_FILE_DIRS.store(Arc::new(dirs));
+}
+
+pub fn allowed_file_dirs() -> Arc<Vec<PathBuf>> {
+	ALLOWED_FILE_DIRS.load_full()
+}
+
+/// Reads `path` if it is under one of `allowed_dirs`, after resolving symlinks.
+fn read_allowed_file(path: &Path, allowed_dirs: &[PathBuf]) -> anyhow::Result<Vec<u8>> {
+	let not_allowed = || {
+		anyhow::anyhow!(
+			"backend TLS file {} is not under a directory allowed by config.allowedBackendTlsFileDirs",
+			path.display()
+		)
+	};
+	// Checked before touching the filesystem, so paths outside the allowed directories can't be probed.
+	if !path.is_absolute()
+		|| path.components().any(|c| c == Component::ParentDir)
+		|| !allowed_dirs.iter().any(|dir| path.starts_with(dir))
+	{
+		return Err(not_allowed());
+	}
+	// A symlink inside an allowed directory must not lead outside of it.
+	let resolved = fs_err::canonicalize(path)?;
+	if !allowed_dirs
+		.iter()
+		.filter_map(|dir| fs_err::canonicalize(dir).ok())
+		.any(|dir| resolved.starts_with(dir))
+	{
+		return Err(not_allowed());
+	}
+	Ok(fs_err::read(resolved)?)
+}
+
+/// Files a config reads its cert, key and root from, and the directories they must be under.
+#[derive(Clone)]
+struct FileSources {
+	cert: Option<PathBuf>,
+	key: Option<PathBuf>,
+	root: Option<PathBuf>,
+	allowed_dirs: Vec<PathBuf>,
+}
+
+impl FileSources {
+	fn is_empty(&self) -> bool {
+		self.cert.is_none() && self.key.is_none() && self.root.is_none()
+	}
+
+	fn paths(&self) -> Vec<PathBuf> {
+		[&self.cert, &self.key, &self.root]
+			.into_iter()
+			.flatten()
+			.cloned()
+			.collect()
+	}
+
+	fn read(&self) -> anyhow::Result<CertMaterial> {
+		anyhow::ensure!(
+			self.cert.is_some() == self.key.is_some(),
+			"backend TLS cert_path and key_path must be set together"
+		);
+		let read = |path: &Option<PathBuf>| {
+			path
+				.as_deref()
+				.map(|path| read_allowed_file(path, &self.allowed_dirs))
+				.transpose()
+		};
+		Ok(CertMaterial {
+			cert: read(&self.cert)?,
+			key: read(&self.key)?,
+			root: read(&self.root)?,
+		})
+	}
+}
+
 fn reload_client_config(
-	cert_path: &Option<PathBuf>,
-	key_path: &Option<PathBuf>,
-	root_path: &Option<PathBuf>,
+	files: &FileSources,
 	settings: &TlsSettings,
 ) -> anyhow::Result<(ClientConfig, bool)> {
-	let material = CertMaterial {
-		cert: cert_path.as_deref().map(fs_err::read).transpose()?,
-		key: key_path.as_deref().map(fs_err::read).transpose()?,
-		root: root_path.as_deref().map(fs_err::read).transpose()?,
-	};
-	build_client_config(material, settings)
+	build_client_config(files.read()?, settings)
 }
 
 /// Reloads the config when the files change; rotation doesn't produce a new xDS resource.
 fn spawn_cert_file_watcher(
 	config: &PerAlpnConfig,
-	cert_path: Option<PathBuf>,
-	key_path: Option<PathBuf>,
-	root_path: Option<PathBuf>,
+	files: FileSources,
 	settings: TlsSettings,
 ) -> PerAlpnConfig {
 	// Plain unit tests have no Tokio runtime; skip the watcher there.
@@ -453,11 +530,7 @@ fn spawn_cert_file_watcher(
 		trace!("skipping backend TLS cert/key/root file watch: no Tokio runtime available");
 		return config.clone();
 	};
-	let paths: Vec<PathBuf> = [&cert_path, &key_path, &root_path]
-		.into_iter()
-		.flatten()
-		.cloned()
-		.collect();
+	let paths = files.paths();
 	let data = config.data_handle();
 	let task = rt.spawn(async move {
 		// Retry on watch errors (e.g. inotify limits) so hot-reload isn't lost for good.
@@ -484,7 +557,7 @@ fn spawn_cert_file_watcher(
 					warn!("backend TLS cert/key/root file watch closed unexpectedly, re-establishing");
 					break;
 				};
-				match reload_client_config(&cert_path, &key_path, &root_path, &settings) {
+				match reload_client_config(&files, &settings) {
 					Ok((cc, allow_custom_alpn)) => {
 						store_into(&data, Arc::new(cc), allow_custom_alpn);
 						info!("reloaded backend TLS config after cert/key/root file change");
@@ -504,6 +577,11 @@ fn spawn_cert_file_watcher(
 
 impl ResolvedBackendTLS {
 	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
+		self.try_into_with(&allowed_file_dirs())
+	}
+
+	/// Like `try_into`, with `allowed_file_dirs` limiting where `cert_path`/`key_path`/`root_path` may point.
+	fn try_into_with(self, allowed_file_dirs: &[PathBuf]) -> anyhow::Result<BackendTLS> {
 		let metadata = BackendTLSInfo::from_resolved(&self);
 		let hostname_override = self.hostname.map(|s| s.try_into()).transpose()?;
 
@@ -527,8 +605,13 @@ impl ResolvedBackendTLS {
 				verify_sans: self.subject_alt_names.unwrap_or_default(),
 			})
 		} else {
-			let should_watch =
-				self.cert_path.is_some() || self.key_path.is_some() || self.root_path.is_some();
+			let files = FileSources {
+				cert: self.cert_path,
+				key: self.key_path,
+				root: self.root_path,
+				allowed_dirs: allowed_file_dirs.to_vec(),
+			};
+			let should_watch = !files.is_empty();
 			// Files are re-read on every reload, so inline values would be lost.
 			if should_watch && (self.cert.is_some() || self.key.is_some() || self.root.is_some()) {
 				anyhow::bail!(
@@ -544,7 +627,7 @@ impl ResolvedBackendTLS {
 			};
 
 			let (cc, allow_custom_alpn) = if should_watch {
-				reload_client_config(&self.cert_path, &self.key_path, &self.root_path, &settings)?
+				reload_client_config(&files, &settings)?
 			} else {
 				build_client_config(
 					CertMaterial {
@@ -557,13 +640,7 @@ impl ResolvedBackendTLS {
 			};
 			let config = PerAlpnConfig::new(Arc::new(cc), allow_custom_alpn);
 			let config = if should_watch {
-				spawn_cert_file_watcher(
-					&config,
-					self.cert_path,
-					self.key_path,
-					self.root_path,
-					settings,
-				)
+				spawn_cert_file_watcher(&config, files, settings)
 			} else {
 				config
 			};
@@ -645,29 +722,51 @@ mod hot_reload_tests {
 		(cert.pem().into_bytes(), key.serialize_pem().into_bytes())
 	}
 
+	fn write_cert_key(dir: &Path) -> (PathBuf, PathBuf) {
+		let (cert, key) = self_signed_cert_key();
+		let (cert_path, key_path) = (dir.join("cert.pem"), dir.join("key.pem"));
+		std::fs::write(&cert_path, cert).unwrap();
+		std::fs::write(&key_path, key).unwrap();
+		(cert_path, key_path)
+	}
+
+	fn from_files(allowed: &[&Path], cert: &Path, key: &Path) -> anyhow::Result<BackendTLS> {
+		ResolvedBackendTLS {
+			insecure: true,
+			cert_path: Some(cert.to_path_buf()),
+			key_path: Some(key.to_path_buf()),
+			..Default::default()
+		}
+		.try_into_with(&allowed.iter().map(|d| d.to_path_buf()).collect::<Vec<_>>())
+	}
+
+	/// Polls until the config differs from `previous` (reloads are debounced by 250ms).
+	async fn next_config(tls: &BackendTLS, previous: &Arc<ClientConfig>) -> Arc<ClientConfig> {
+		let mut current = tls.base_config().config;
+		for _ in 0..50 {
+			if !Arc::ptr_eq(previous, &current) {
+				break;
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+			current = tls.base_config().config;
+		}
+		current
+	}
+
 	#[test]
 	fn inline_cert_with_file_based_root_is_rejected() {
 		let dir = tempfile::tempdir().unwrap();
-		let root_path = dir.path().join("root.pem");
+		let (cert_path, _) = write_cert_key(dir.path());
 		let (cert, key) = self_signed_cert_key();
-		std::fs::write(&root_path, &cert).unwrap();
 
 		let err = ResolvedBackendTLS {
+			insecure: true,
 			cert: Some(cert),
 			key: Some(key),
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: None,
-			key_path: None,
-			root_path: Some(root_path),
-			spiffe: false,
+			root_path: Some(cert_path),
+			..Default::default()
 		}
-		.try_into()
+		.try_into_with(&[dir.path().to_path_buf()])
 		.expect_err("inline cert/key alongside a file-based root must be rejected");
 		assert!(
 			err
@@ -677,99 +776,67 @@ mod hot_reload_tests {
 	}
 
 	#[test]
-	fn cert_without_key_fails_instead_of_dropping_client_auth() {
-		let (cert, _key) = self_signed_cert_key();
+	fn cert_path_and_key_path_must_be_set_together() {
+		let dir = tempfile::tempdir().unwrap();
+		let (cert_path, key_path) = write_cert_key(dir.path());
 
-		let err = ResolvedBackendTLS {
-			cert: Some(cert),
-			key: None,
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: None,
-			key_path: None,
-			root_path: None,
-			spiffe: false,
+		for (cert, key) in [(Some(cert_path), None), (None, Some(key_path))] {
+			let err = ResolvedBackendTLS {
+				insecure: true,
+				cert_path: cert,
+				key_path: key,
+				..Default::default()
+			}
+			.try_into_with(&[dir.path().to_path_buf()])
+			.expect_err("a cert without a key (or the reverse) must be rejected");
+			assert!(err.to_string().contains("must be set together"));
 		}
-		.try_into()
-		.expect_err("cert without a matching key must be rejected, not silently dropped");
-		assert!(err.to_string().contains("private key"));
 	}
 
 	#[test]
-	fn key_without_cert_fails_instead_of_dropping_client_auth() {
-		let (_cert, key) = self_signed_cert_key();
+	fn files_must_be_under_an_allowed_dir() {
+		let dir = tempfile::tempdir().unwrap();
+		let other = tempfile::tempdir().unwrap();
+		let (cert_path, key_path) = write_cert_key(dir.path());
 
-		let err = ResolvedBackendTLS {
-			cert: None,
-			key: Some(key),
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: None,
-			key_path: None,
-			root_path: None,
-			spiffe: false,
+		from_files(&[dir.path()], &cert_path, &key_path).expect("file under an allowed dir");
+		for allowed in [&[][..], &[other.path()][..]] {
+			let err = from_files(allowed, &cert_path, &key_path).expect_err("file outside allowed dirs");
+			assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
 		}
-		.try_into()
-		.expect_err("key without a matching cert must be rejected, not silently dropped");
-		assert!(err.to_string().contains("client certificate"));
+
+		let traversal = dir.path().join("../").join(dir.path().file_name().unwrap());
+		let err = from_files(&[dir.path()], &traversal.join("cert.pem"), &key_path)
+			.expect_err("`..` must be rejected");
+		assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn symlink_out_of_an_allowed_dir_is_rejected() {
+		let dir = tempfile::tempdir().unwrap();
+		let outside = tempfile::tempdir().unwrap();
+		let (_, key_path) = write_cert_key(dir.path());
+		let (outside_cert, _) = write_cert_key(outside.path());
+		let link = dir.path().join("link.pem");
+		std::os::unix::fs::symlink(&outside_cert, &link).unwrap();
+
+		let err = from_files(&[dir.path()], &link, &key_path).expect_err("symlink escapes");
+		assert!(err.to_string().contains("allowedBackendTlsFileDirs"));
 	}
 
 	#[tokio::test]
 	async fn reloads_client_cert_on_file_change() {
 		let dir = tempfile::tempdir().unwrap();
-		let cert_path = dir.path().join("cert.pem");
-		let key_path = dir.path().join("key.pem");
-
-		let (cert1, key1) = self_signed_cert_key();
-		std::fs::write(&cert_path, &cert1).unwrap();
-		std::fs::write(&key_path, &key1).unwrap();
-
-		let tls: BackendTLS = ResolvedBackendTLS {
-			cert: None,
-			key: None,
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: Some(cert_path.clone()),
-			key_path: Some(key_path.clone()),
-			root_path: None,
-			spiffe: false,
-		}
-		.try_into()
-		.unwrap();
-
+		let (cert_path, key_path) = write_cert_key(dir.path());
+		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
 		let before = tls.base_config().config;
 
 		// Let the watcher register before the files are rewritten.
 		tokio::time::sleep(Duration::from_millis(300)).await;
+		write_cert_key(dir.path());
 
-		let (cert2, key2) = self_signed_cert_key();
-		std::fs::write(&cert_path, &cert2).unwrap();
-		std::fs::write(&key_path, &key2).unwrap();
-
-		// Debounced by 250ms, so poll.
-		let mut after = tls.base_config().config;
-		for _ in 0..50 {
-			if !Arc::ptr_eq(&before, &after) {
-				break;
-			}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-			after = tls.base_config().config;
-		}
+		let after = next_config(&tls, &before).await;
 		assert!(
 			!Arc::ptr_eq(&before, &after),
 			"expected backend TLS config to hot-reload after cert/key file rotation"
@@ -779,49 +846,16 @@ mod hot_reload_tests {
 	#[tokio::test]
 	async fn keeps_reloading_after_a_delete_and_recreate_rotation() {
 		let dir = tempfile::tempdir().unwrap();
-		let cert_path = dir.path().join("cert.pem");
-		let key_path = dir.path().join("key.pem");
-
-		let (cert1, key1) = self_signed_cert_key();
-		std::fs::write(&cert_path, &cert1).unwrap();
-		std::fs::write(&key_path, &key1).unwrap();
-
-		let tls: BackendTLS = ResolvedBackendTLS {
-			cert: None,
-			key: None,
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: Some(cert_path.clone()),
-			key_path: Some(key_path.clone()),
-			root_path: None,
-			spiffe: false,
-		}
-		.try_into()
-		.unwrap();
-
+		let (cert_path, key_path) = write_cert_key(dir.path());
+		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
 		let initial = tls.base_config().config;
 		tokio::time::sleep(Duration::from_millis(300)).await;
 
 		// Delete and recreate, so the watcher has to re-establish its watch.
-		let (cert2, key2) = self_signed_cert_key();
 		std::fs::remove_file(&cert_path).unwrap();
 		std::fs::remove_file(&key_path).unwrap();
-		std::fs::write(&cert_path, &cert2).unwrap();
-		std::fs::write(&key_path, &key2).unwrap();
-
-		let mut after_recreate = tls.base_config().config;
-		for _ in 0..50 {
-			if !Arc::ptr_eq(&initial, &after_recreate) {
-				break;
-			}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-			after_recreate = tls.base_config().config;
-		}
+		write_cert_key(dir.path());
+		let after_recreate = next_config(&tls, &initial).await;
 		assert!(
 			!Arc::ptr_eq(&initial, &after_recreate),
 			"expected reload after delete-and-recreate rotation"
@@ -829,60 +863,47 @@ mod hot_reload_tests {
 
 		// Let the re-established watch settle before the next rotation.
 		tokio::time::sleep(Duration::from_millis(300)).await;
-
-		let (cert3, key3) = self_signed_cert_key();
-		std::fs::write(&cert_path, &cert3).unwrap();
-		std::fs::write(&key_path, &key3).unwrap();
-
-		let mut after_second_rotation = tls.base_config().config;
-		for _ in 0..50 {
-			if !Arc::ptr_eq(&after_recreate, &after_second_rotation) {
-				break;
-			}
-			tokio::time::sleep(Duration::from_millis(100)).await;
-			after_second_rotation = tls.base_config().config;
-		}
+		write_cert_key(dir.path());
+		let after_second_rotation = next_config(&tls, &after_recreate).await;
 		assert!(
 			!Arc::ptr_eq(&after_recreate, &after_second_rotation),
 			"watcher must still be running after a delete-and-recreate rotation, not stopped"
 		);
 	}
 
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn reload_keeps_previous_config_if_a_file_leaves_the_allowed_dir() {
+		let dir = tempfile::tempdir().unwrap();
+		let outside = tempfile::tempdir().unwrap();
+		let (cert_path, key_path) = write_cert_key(dir.path());
+		let (outside_cert, _) = write_cert_key(outside.path());
+		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
+		let before = tls.base_config().config;
+		tokio::time::sleep(Duration::from_millis(300)).await;
+
+		std::fs::remove_file(&cert_path).unwrap();
+		std::os::unix::fs::symlink(&outside_cert, &cert_path).unwrap();
+
+		let after = next_config(&tls, &before).await;
+		assert!(
+			Arc::ptr_eq(&before, &after),
+			"a disallowed file must not be loaded"
+		);
+	}
+
 	#[tokio::test]
 	async fn watcher_task_stops_once_config_is_dropped() {
 		let dir = tempfile::tempdir().unwrap();
-		let cert_path = dir.path().join("cert.pem");
-		let key_path = dir.path().join("key.pem");
-		let (cert, key) = self_signed_cert_key();
-		std::fs::write(&cert_path, &cert).unwrap();
-		std::fs::write(&key_path, &key).unwrap();
+		let (cert_path, key_path) = write_cert_key(dir.path());
+		let tls = from_files(&[dir.path()], &cert_path, &key_path).unwrap();
 
-		let tls: BackendTLS = ResolvedBackendTLS {
-			cert: None,
-			key: None,
-			root: None,
-			hostname: None,
-			insecure: true,
-			insecure_host: false,
-			alpn: None,
-			subject_alt_names: None,
-			key_exchange_groups: None,
-			cert_path: Some(cert_path),
-			key_path: Some(key_path),
-			root_path: None,
-			spiffe: false,
-		}
-		.try_into()
-		.unwrap();
-
-		let weak = {
-			let BackendTLSSource::Static(config) = &tls.source else {
-				panic!("file-sourced backend TLS must be static");
-			};
-			config
-				.watcher_weak()
-				.expect("watcher should be attached while the config is alive")
+		let BackendTLSSource::Static(config) = &tls.source else {
+			panic!("expected a static backend TLS source");
 		};
+		let weak = config
+			.watcher_weak()
+			.expect("watcher should be attached while the config is alive");
 		assert!(
 			weak.upgrade().is_some(),
 			"watcher guard should still be alive"
@@ -894,6 +915,21 @@ mod hot_reload_tests {
 			weak.upgrade().is_none(),
 			"dropping every clone of BackendTLS must drop (and abort) its watcher guard"
 		);
+	}
+
+	#[test]
+	fn info_reports_file_paths_instead_of_pem() {
+		let info = BackendTLSInfo::from_resolved(&ResolvedBackendTLS {
+			cert_path: Some("/certs/tls.crt".into()),
+			key_path: Some("/certs/tls.key".into()),
+			root_path: Some("/certs/ca.crt".into()),
+			..Default::default()
+		});
+		assert_eq!(info.cert_path.as_deref(), Some("/certs/tls.crt"));
+		assert_eq!(info.key_path.as_deref(), Some("/certs/tls.key"));
+		assert_eq!(info.root_path.as_deref(), Some("/certs/ca.crt"));
+		assert!(info.cert.is_none() && info.root.is_none());
+		assert!(!info.system_roots);
 	}
 }
 
